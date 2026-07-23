@@ -7,12 +7,15 @@ reconciliation) and [`roadmap.md`](roadmap.md) (release sequence beyond this MVP
 
 ## What the MVP is (and isn't)
 
-**It is** a deployed web app with realistic seed data demonstrating the Layer-A (camp ⇄
-AfrikaBurn) V1 golden paths end-to-end, the AB-staff side of each, **and the offline QR
-attestation handshake live between two devices** — the answer to the room's inevitable
-"but there's no signal at the Burn" question. **It isn't** production software: no real
-payments, no real emails, no data migration, no full offline hardening. Every mocked
-seam sits behind an interface a real implementation slots into later.
+**It is** two deployed apps — the **participant app** (`apps/web`) and the **org app**
+(`apps/org`, a separate deployment so nobody administers from inside the normal app) —
+with realistic seed data demonstrating the participant journey (Burner Bio → camp →
+registration) and the org review side end-to-end. **It isn't** production software: no
+payments processing (payment *details + reference tracking* only), no data migration,
+no offline hardening, and per Ryan (23 Jul 2026) **no containers** (that becomes its
+own app for the big camps — hinted at with a disabled tile only) and **no attestation
+demo** (keypairs are generated and stored on the user profile for future QR flows;
+nothing else yet).
 
 The camp-internal topics from the Quagga doc (onboarding, camper list, shifts,
 budgets…) appear as stub pages labelled as *topics under exploration* — visible, honest,
@@ -23,24 +26,26 @@ and the demo narrative should say so out loud.
 ### Demo walkthrough (the script for the meeting)
 
 1. **Fresh participant sign-up** — new account → **Burner Bio onboarding** (short, self-serve, privacy-flagged fields, Camp 404 questionnaire pattern) → land as a plain burner. Browse the **group directory** (registered camps are public, each badged *accepting new members* or *invite-only*), then create a camp on the spot: it exists immediately as a **free camp** — members can join via invite link, internal features work, no AB involvement.
-2. **Switch to a seeded registered camp** (e.g. *Mad Hatters*, lead account) — same camp concept but with the per-edition **registered/approved attribute**, which is what unlocks the entitlement tiles: registration status, containers, and greyed-out cards for Water / Ice / Gas ("V2 — pending AfrikaBurn input"), placement & art grants ("entitlement — process TBC with AB"), plus topic cards (Shifts · Budget · Layout — "topics under exploration"). The free-camp-vs-registered contrast *is* the product story: anyone can organise; registration earns entitlements.
-3. **Registration wizard** — the six real sections from the 2026 Google Form, any order, save-and-return, 60-word counter, layout upload. Submit → status changes.
-4. **AB staff view** — registrations dashboard, filters; open a camp, section-by-section review, request changes on one section; camp resubmits; approve.
-5. **Container booking** — registry (codes, sizes, good standing, storage), booking wizard → photos → post-event storage → priority → capacity-aware slot picker → collection person → bundled price breakdown → **payment step: mock checkout / "pay by EFT with reference" + coordinator mark-as-paid** (provider decision deferred — the platform never holds funds) → booked.
-6. **AB container coordinator** — slot/convoy config, bookings by day/slot, convoy assignment, printable manifest.
-7. **Delivery day — the offline moment.** Two phones, wifi off. Driver's device shows a QR for "JAV-1 delivered to ERF GOW"; collection person scans, verifies, countersigns — both hold cryptographic proof, zero network. Reconnect one device → attestation syncs → the coordinator dashboard flips the booking to *Delivered*. This is the "no signal at the Burn" answer, live.
+2. **Switch to a seeded registered camp** (*Mad Hatters* or *Camp 404*, lead account) — same camp concept but with the per-edition **registered/approved attribute**, which is what unlocks the entitlement tiles: registration status plus disabled hint cards — Containers ("separate app — coming for large camps"), Water / Ice / Gas ("pending AfrikaBurn input"), placement & art grants ("entitlement — process TBC with AB"), topic cards (Shifts · Budget · Layout). The free-camp-vs-registered contrast *is* the product story: anyone can organise; registration earns entitlements.
+3. **Registration wizard** — the six real sections from the 2026 Google Form, any order, save-and-return, 60-word counter, layout upload, and Section 6's suppliers as a **structured picker seeded from AB's real public Suppliers List**. Submit → status changes.
+4. **The org app** (separate deployment) — registrations dashboard, filters; open a camp, section-by-section review, request changes on one section; camp resubmits; approve. Also shown: the admin panel where god/org users **elevate accounts** (no seeded staff — the working group gets elevated live in the meeting, which is itself a nice demo beat).
+5. **Payment pattern** — wherever money will eventually apply, the standard **payment details + reference + status block** (no gateway, no checkout — "we track, AB collects").
 
-Everything except step 7's mechanism comes straight from the V1 scope documents; step 7
-implements Ryan's offline directive.
+Everything comes straight from the scope documents and the working group's decisions;
+containers and attestations are deliberately visible-but-parked.
 
 ### Explicitly out of the MVP
 
-- Real payment processing — the MVP does payment-*status* tracking behind a `PaymentProvider` seam (mock checkout + EFT-reference + mark-as-paid). Gateway choice is deferred to AB discovery; requirement if integrated: SA-based, accepts international Visa/Mastercard (candidates: Paystack, Peach Payments, PayFast)
-- Real email (dev inbox in MVP; Resend later)
-- Full offline/PWA hardening — the attestation flow works offline-on-the-spot in the demo, but service-worker app-shell caching, pack-for-site sync, and recovery flows are R2
-- Water/Ice/Gas beyond stubs (R3 — needs AB discovery input)
-- Everything on the candidate/topic track: camp-people tools, budgets, layout designer, villages, compliance, artworks/MVs (see [`roadmap.md`](roadmap.md))
+- **Container transport** — becomes its **own app** for the large camps that use it (Ryan, 23 Jul 2026); Finlay's detailed container scope is that app's spec. Hint tile only. Driver manifest: parked as "disabled, pending need" (likely an anti-pattern — inventories are rarely known).
+- **Attestation flows** — keypair on the user profile only; QR handshake, sync, and offline flows come with the container/logistics apps
+- Payment processing of any kind — the pattern everywhere is a **payment details + reference + status** block ("we track, AB collects"); gateway talk is for later, if ever (requirement if integrated: SA-based, accepts international Visa/Mastercard — Paystack / Peach / PayFast)
+- Water/Ice/Gas — separate app territory entirely (Ryan); disabled hint cards only
+- Full offline/PWA hardening
+- Everything on the candidate/topic track: camp-people tools, budgets, layout designer, collectives (né villages), compliance, artworks/MVs (see [`roadmap.md`](roadmap.md))
 - Registration data migration, Capacitor mobile builds, WhatsApp/SMS
+
+Real email **is** in: Resend handles auth/magic-link/notification delivery from day one
+(Ryan, 23 Jul 2026).
 
 ## Offline & attestation architecture (built in from day one)
 
@@ -50,6 +55,11 @@ implements Ryan's offline directive.
 - **On-site (offline):** the app serves reads from pre-synced local data, and writes are either queued or — where proof of a two-party interaction matters — **attestations**.
 
 **The attestation primitive:**
+
+**Status (Ryan, 23 Jul 2026): low priority.** The MVP only generates a keypair and
+stores it **on the user profile** (reproducible — users never manage keys manually;
+used for nothing except future QR flows). The full handshake below is the design the
+schema anticipates, built when containers/logistics need it:
 
 1. **Device enrolment.** At login the device generates a keypair (WebCrypto ECDSA P-256, private key non-extractable, in IndexedDB). Public key registers server-side against the user or token identity. Lightweight roles (collection person, driver) enrol via their magic link.
 2. **Handshake.** Party A renders a QR of a compact signed payload: `{type, subject ids, edition, nonce, keyId, sig}`. Party B scans (BarcodeDetector API, jsQR fallback), verifies A's signature against the **pre-synced public key set**, countersigns the whole thing, stores it locally; optionally displays a receipt QR back so both devices hold the double-signed record.
@@ -73,15 +83,15 @@ doesn't apply, plus the attestation toolkit.
 
 | Layer | Choice | Notes vs Camp 404 |
 |---|---|---|
-| Monorepo | Turborepo + pnpm workspaces, Node ≥ 22 | Same |
+| Monorepo | Turborepo + pnpm workspaces, Node ≥ 22; **`apps/web` (participants) + `apps/org` (admin/org — separate deployment)**; future separate apps: containers, water, suppliers portal | Extends Camp 404's layout; package namespace `@quagga/` |
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui | Same |
 | DB | Neon Postgres + Drizzle ORM | Same patterns: schema.ts source of truth, append-only generated migrations, HTTP driver for handlers / pooled for jobs |
 | Auth | Neon Auth (Better Auth) — email + Google OAuth | Same; plus magic-link/PIN token identities for handover roles; MFA for privileged roles later (R1) |
 | Offline crypto | WebCrypto (ECDSA P-256), qrcode render, BarcodeDetector/jsQR scan | New — no external service; all client-side by design |
 | Async tasks | Plain route handlers in MVP; **Inngest optional, added when a real async need lands (~R1: reminders, webhook processing, notification fan-out)** | Nice-to-have, not a spine dependency; would dodge the Vercel daily-cron cap |
-| Payments | Status tracking behind a `PaymentProvider` seam (mock checkout + EFT reference + mark-as-paid) | **Never holds funds.** Gateway TBD with AB — must be SA-based and accept international Visa/Mastercard; candidates: Paystack, Peach Payments, PayFast |
+| Payments | **Payment details + reference + status block** wherever money applies — no checkout, no gateway, no mock | **Never holds funds; "we track, AB collects."** If a gateway ever happens: SA-based, international Visa/Mastercard (Paystack / Peach / PayFast) |
 | Storage | Vercel Blob | Container photos, layout uploads |
-| Email | Dev inbox in MVP; Resend at R1 | |
+| Email | **Resend from day one** (auth, magic links, notifications) | Per Ryan, 23 Jul 2026 |
 | Hosting | Vercel | Same |
 | Mobile | Responsive web; PWA at R2 | Capacitor not planned |
 | Not carried over | FCM push, Telegram, AI providers, Groq | No current requirement (AI reappears ~Quagga Phase 3) |
@@ -142,14 +152,12 @@ Phase 0 sequential; the lanes then parallelise with worktree isolation. Agent po
 
 | Phase | Work | Depends on |
 |---|---|---|
-| **0 — Scaffold** | Monorepo skeleton adapted from Camp 404 (strip Telegram/FCM/AI/Capacitor; **keep and port the questionnaire spine**), Neon + Drizzle + Auth wired, CI gate green, deployed to Vercel | — |
-| **0b — Participant spine** | Burner Bio onboarding (questionnaire pattern, privacy-flagged fields), self-serve camp creation, **group directory with accepting-members/invite-only badge + one-time invite links**, free-camp vs registered attribute on the dashboard | 0 |
-| **1a — Registration (camp side)** | Six-section wizard, draft/save/return, submission, status view, feedback loop — flips the approval attribute and lights up entitlement tiles | 0b |
-| **1b — Registration (AB side)** | Staff dashboard, filters, section reviews, approve/request-changes/reject, notification events to the dev inbox | 0 (merges with 1a) |
-| **2a — Containers (camp side)** | Registry, booking wizard, slot picker, photos, payment step (mock checkout / EFT reference), bundled pricing | 0b; entitlement-gated on 1a's approval attribute |
-| **2b — Containers (AB/ops side)** | Edition config, coordinator dashboard, manifests (printable), 12-state lifecycle, collection-person magic-link flow, driver view | 0 (merges with 2a) |
-| **2c — Attestation primitive** | Device-key enrolment, sign/QR-render, scan/verify/countersign, local store + sync endpoint, delivery sign-off wired into 2b's lifecycle | 0; integrates with 2b |
-| **3 — Demo dressing** | Seed data (~15 camps incl. *Mad Hatters* & *Javaburn*, containers MAH-1/JAV-1 etc., 2027 edition config, obviously-placeholder prices), roadmap stub pages, polish, demo dry run incl. two-device attestation rehearsal | all |
+| **0 — Scaffold** | Monorepo skeleton adapted from Camp 404 (strip Telegram/FCM/AI/Capacitor; **keep and port the questionnaire spine**): `apps/web` + `apps/org` (separate deployments), Neon + Drizzle + Auth (email + Google) wired, Resend for auth emails, `GOD_EMAILS` bootstrap, CI gate green, both apps deployed to Vercel | — |
+| **0b — Participant spine** | Burner Bio onboarding (fields mirrored from Camp 404's burner profile; per-field privacy with hard-locked never-public classes like ID/passport), profile keypair generation, self-serve camp creation with case-insensitive + similarity duplicate checks, **group directory with accepting-members/invite-only badge + one-time invite links** (join, leave, lead-transfer via invite; no kick), free-camp vs registered attribute on the dashboard | 0 |
+| **1a — Registration (camp side)** | Six-section wizard, draft/save/return, all-six-complete submit gate, status view, feedback loop — flips the approval attribute and lights up entitlement tiles; Section 6 suppliers picker | 0b |
+| **1b — Org app (review + admin)** | Registrations dashboard, filters, section reviews, approve/request-changes/reject; **account elevation panel** (god elevates org users — no seeded staff); Resend notification events | 0 (merges with 1a) |
+| **2a — Supplier repository** | Import AB's public Suppliers List Google Sheet as the seeded directory; declaration picker wiring; vetting-status field | 0; feeds 1a's Section 6 |
+| **3 — Demo dressing** | Seed data (*Mad Hatters*, *Camp 404*, + fictional camps; **AfrikaBurn 2027 edition: 26 April – 2 May 2027**), disabled hint tiles (Containers "separate app" · Water/Ice/Gas · placement · art grants · topics), payment-details block pattern, polish, demo dry run | all |
 
 Seed flavour deliberately uses the scope docs' own examples — the authors should
 recognise their own data in the demo.

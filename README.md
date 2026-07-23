@@ -59,7 +59,7 @@ flowchart TB
 
     subgraph V1["V1 — committed, detailed scope (R0–R1)"]
         REG["Theme Camp Registration<br/>6-section wizard + AB review"]
-        CON["Container Transport<br/>registry, booking, slots, convoys,<br/>12-state lifecycle, manifests"]
+        CON["Container Transport — SEPARATE APP<br/>(large camps only; Finlay's scope = its spec)<br/>hint tile in the standard app"]
         SUPP["Supplier repository (R1)<br/>register · vet · declare · feedback<br/>(deep portal = separate sub-project)"]
     end
 
@@ -166,7 +166,10 @@ flowchart LR
     NEXT -.-> GW
 ```
 
-Monorepo: Turborepo + pnpm (`apps/web`, `packages/{ui,db,types,...}`), patterned on
+Monorepo: Turborepo + pnpm — **`apps/web`** (participants) + **`apps/org`** (admin/org,
+separate deployment; account elevation, review, allocations), with future separate apps
+for containers and water; `packages/{ui,db,types,...}` under the `@quagga/` namespace —
+patterned on
 [Camp 404](https://github.com/ryry79261/camp-404). CI gate:
 `turbo run lint typecheck test build`.
 
@@ -372,13 +375,15 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    R0["R0 — Kickoff MVP<br/>spine + V1 golden paths<br/>+ attestation demo"]
-    R1["R1 — Registration season<br/>payments decision with AB, real email,<br/>year-to-year carry-forward"]
-    R2["R2 — On-site readiness<br/>PWA offline, pack-for-site,<br/>live attestations"]
-    R3["R3 — Logistics V2<br/>water / ice / gas<br/>(after AB discovery)"]
+    R0["R0 — Kickoff MVP (28 Jul)<br/>web + org apps, Burner Bio,<br/>camps + registration + review"]
+    R1["R1 — Registration season<br/>hardening, carry-forward,<br/>wrangler board, supplier vetting"]
+    CAPP["Container app — separate<br/>(Finlay's scope; before build week)"]
+    R2["R2 — On-site readiness<br/>offline + attestations<br/>(low priority until container app)"]
+    R3["R3 — Logistics<br/>water / ice / gas — separate apps<br/>(after AB discovery)"]
     T["Topic track<br/>shifts · budget · layout ·<br/>villages · compliance · creative"]
 
-    R0 --> R1 --> R2 --> R3
+    R0 --> R1 --> R3
+    R1 --> CAPP --> R2
     R3 -.->|"demand-validated only"| T
 
     style T stroke-dasharray: 5 5
@@ -395,11 +400,11 @@ Full detail in [`docs/roadmap.md`](docs/roadmap.md).
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui |
 | DB | Neon Postgres + Drizzle ORM |
 | Auth | Neon Auth (Better Auth): email + Google OAuth; magic-link/PIN tokens for handover roles |
-| Async | Route handlers in MVP; Inngest optional from R1 if the async workload justifies it |
-| Payments | Status tracking via `PaymentProvider` seam; never holds funds; gateway TBD (SA base, intl Visa/MC — Paystack / Peach Payments / PayFast) |
+| Async | Route handlers in MVP; Inngest optional later if the workload justifies it |
+| Payments | Payment details + reference + status blocks only — no processing, never holds funds ("we track, AB collects") |
 | Offline crypto | WebCrypto ECDSA P-256 + QR (BarcodeDetector / jsQR) — client-side only |
 | Storage | Vercel Blob |
-| Email | Dev inbox → Resend (R1) |
+| Email | Resend from day one (auth, magic links, notifications) |
 | Hosting | Vercel |
 
 ## The Quaggapedia mirror — how it was built

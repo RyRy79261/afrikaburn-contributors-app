@@ -99,6 +99,22 @@ The base unit is the **participant**, not the camp:
 - **Requests are questionnaires; fulfillment is attestations (Ryan, 22 Jul 2026):** when a camp needs something — water delivery sign-up, a supplier service, an extra allocation — it files a **request built on the questionnaire spine**. Requests land in a queue owned by an **org-level person** (coordinator) or a **specific supplier**, who works them; where the fulfilment happens on site (a delivery, a handover), it closes with a **QR attestation**. One pattern covers water sign-up, gas orders, ice allocations, and supplier bookings without bespoke plumbing per workflow.
 - **Explicitly out of the platform (Ryan, 22 Jul 2026):** **ticketing** (stays entirely with Quicket — we only ever *note* status, never touch tickets) and **placement maps** (no structured geo data exists; the map is a PDF that arrives late and the layout changes every year — nothing reliable to build against yet).
 
+### Decisions locked 23 Jul 2026 (Ryan)
+
+- **Kickoff: 28 July 2026** — working group + possibly 1–2 AB org people. Product name stays neutral; MVP live at a URL beforehand.
+- **Repo is public, MIT licensed**; history rewritten clean (originals preserved on a local archive branch only).
+- **Containers are a separate app** — only the biggest camps use them; the standard app shows a hint tile. Finlay's container scope = that app's spec. Water likewise separate. Driver manifest: disabled, pending need.
+- **The org/admin side is its own app** (`apps/org`, separate deployment) — account elevation, review dashboards, allocations, wrangler roles. No org business inside the participant app; no seeded staff — god (Ryan) elevates accounts live.
+- **Attestations: low priority.** MVP only generates a reproducible keypair stored on the user profile (never user-managed); QR flows arrive with the logistics apps.
+- **Payments = a standard payment-details + reference + status block** wherever money applies. Nothing fancier. "We track, AB collects."
+- **Burner Bio fields and profile mirror Camp 404's** burner profile. **Per-field privacy** with hard-locked never-public classes (ID/passport etc. — "we can't allow people to be stupid").
+- **Group names: no duplicates** — case-insensitive uniqueness plus similarity checking. Artwork/MV kinds visible but disabled. Membership: join, leave, invite, lead-transfer via invite; no kick.
+- **"Villages" renamed → collectives** (a camp of camps); questionable feature, parked.
+- **All six registration sections required to submit.** Edition seeded as **AfrikaBurn 2027: 26 April – 2 May 2027** (from afrikaburn.org).
+- **Supplier repository seeds from AB's real public [Suppliers List sheet](https://docs.google.com/spreadsheets/d/1XU2gAt5E9GczVHZWpcD0_CsEeE--iX9aWmnWd19bgMI/edit)**.
+- **Seed camps: real Mad Hatters + Camp 404**, plus fictional filler. Email via **Resend from day one**. Infra on Ryan's Vercel/Neon; namespace `@quagga/`; no Storybook/pencil tooling; vitest on core logic; palette drawn from AfrikaBurn's sites, minimal, non-corporate.
+- **Contribution policy:** working group only for now; deliberately restricted — no drive-by AI-assisted contributors.
+
 | Family | Roles | Notes |
 |---|---|---|
 | Burners | Everyone — Burner Bio onboarding; zero or more group memberships | Free campers = burners without a camp; "camper" = burner + camp membership; capabilities derive from memberships (Camp 404 stance) |

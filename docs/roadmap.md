@@ -17,14 +17,16 @@ by deadline pressure: registration season drives R1, the event itself drives R2.
 
 ## Committed track
 
-### R0 — Kickoff MVP *(now; scope in [`mvp-proposal.md`](mvp-proposal.md))*
-Shared spine (auth, **participant Burner Bio onboarding via the ported Camp 404
-questionnaire engine**, self-registered projects with the free-camp vs
-registered-attribute model, editions as root namespace, memberships) + Finlay V1 golden
-paths (registration wizard + AB review; container registry + booking + coordinator ops)
-+ **attestation primitive with a live two-device QR sign-off demo** + topic stub pages
-so the wider vision is visible without being promised. Mock payments, dev-inbox emails,
-seeded data.
+### R0 — Kickoff MVP *(now; kickoff 28 July 2026; scope in [`mvp-proposal.md`](mvp-proposal.md))*
+Two apps: **`apps/web`** (participants) + **`apps/org`** (admin/review, separate
+deployment). Shared spine (email+Google auth, Resend, **Burner Bio onboarding via the
+ported Camp 404 questionnaire engine** with per-field privacy, profile keypairs,
+self-registered camps with duplicate/similarity checks, directory + invites, editions
+as root namespace) + the registration wizard and org review flow end-to-end + supplier
+repository seeded from AB's public Suppliers List + payment-details/reference blocks +
+disabled hint tiles for everything parked (containers, water/ice/gas, placement, art
+grants, topics). Seeded edition: **AfrikaBurn 2027, 26 April – 2 May 2027**. No
+container flows, no attestation flows, no payment processing.
 
 ### R1 — Registration season readiness *(deadline: 2027 registration opening — date TBC)*
 Make Layer A real for camps and AB staff:
@@ -35,9 +37,17 @@ Make Layer A real for camps and AB staff:
 - Staff-assigned ERFs + camp codes on profiles (unblocks container booking without any placement tool)
 - **Wrangler assignments + wrangler board**: assign wranglers (org role) to registered camps per edition; board shows per-camp progress (registration status, bookings, milestones as they get defined)
 - **Supplier repository v1**: supplier self-registration at a dedicated URL (account-linked to a burner profile when emails match), directory with vetting status, structured supplier declarations in camp registration (replaces free text), org-side feedback capture
-- Container booking end-to-end with real payments; registry migration from AB's existing data (format TBC)
+### The container app *(separate application — Ryan, 23 Jul 2026)*
+Container transport serves only the largest camps, so it becomes **its own app** in the
+monorepo rather than part of the standard participant app. Finlay's detailed V1
+container scope (registry, booking wizard, slots/convoys, 12-state lifecycle,
+coordinator ops) is this app's spec, riding the same spine (auth, groups, editions,
+entitlements, payment-reference blocks). Registry migration from AB's existing data
+(format TBC). Deadline pressure: bookings must exist before build week 2027. The driver
+manifest ships **disabled/pending-need** — likely an anti-pattern (inventories are
+rarely actually known).
 
-### R2 — On-site readiness *(deadline: build week 2027)*
+### R2 — On-site readiness *(deadline: build week 2027; low priority until the container app exists)*
 The offline milestone:
 - PWA + service worker; "pack for site" pre-event sync (bookings, manifests, camp lists, public keys); local store + outbound queue
 - Attestation flows live: container delivery + post-event collection sign-off (driver ⇄ collection person), offline issue-flagging
@@ -64,7 +74,7 @@ justified. Listed roughly by how plausibly they'd graduate.*
 - **Compliance / anti-plug-and-play review** — worth adopting as a *value*; implement as progressive disclosure triggered for the few camps that match (>20 participants, >R100k dues, turnkey services), only if AB confirms it acts on this.
 - **Supplier portal (`apps/suppliers`)** — the supplier-side deep workflow: AB's onboarding steps, meetings, deposit tracking, vetting workflow. Explicitly a separate sub-project in the monorepo, built once AB's actual procedure is known (blocker table). The camp-facing repository (R1) doesn't wait for it.
 - **Placement & layout tooling** — **explicitly deferred (Ryan, 22 Jul 2026)**: no structured geo data exists, the official map is a PDF that arrives late, and the layout changes every year — nothing reliable to build against. Staff-assigned codes/locations on camp profiles (R1) cover what other workflows need. The layout designer / erf-fit ideas stay parked until AB's map process changes.
-- **Villages** — shared shifts/budgets/lists across camps; needs real village demand (the Mad Hatters connection makes this worth *asking about* at kickoff).
+- **Collectives** (formerly "villages" — a camp of camps, e.g. Mad Hatters) — shared shifts/budgets/lists across member camps; a questionable feature until real demand shows (the Mad Hatters connection makes this worth *asking about* at kickoff).
 - **Creative Project Mode** (artworks/MVs) — unlocked by AB's scope answer; cheap if the `projects` generalisation held from R0.
 - **Distant**: WhatsApp/SMS notifications, AI assists (budget/scheduling), supplier/asset tracking.
 - **Out, permanently (Ryan, 22 Jul 2026)**: **ticketing** — it stays entirely with Quicket; the platform records status at most and never issues, transfers, or integrates tickets.
