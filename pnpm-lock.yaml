@@ -198,6 +198,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
+      '@quagga/core':
+        specifier: workspace:*
+        version: link:../core
       '@quagga/types':
         specifier: workspace:*
         version: link:../types

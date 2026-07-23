@@ -140,10 +140,13 @@ export const SOUND_LEVELS = [
 ] as const;
 export type SoundLevel = (typeof SOUND_LEVELS)[number];
 
+// Labels mirror the canonical SOUND_SCALE in @quagga/core (Level 1 = car
+// stereo). The console buckets the free-ish stored string into these for the
+// registrations filter; the wizard writes the matching level string.
 export const SOUND_LEVEL_LABELS: Record<SoundLevel, string> = {
   none: "No amplified sound",
-  level_1: "Level 1 — ambient",
-  level_2: "Level 2 — car stereo",
+  level_1: "Level 1 — car stereo",
+  level_2: "Level 2 — party speakers",
   level_3: "Level 3 — small rig",
   level_4: "Level 4 — large rig",
   unspecified: "Unspecified",

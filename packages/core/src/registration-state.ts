@@ -47,6 +47,41 @@ export function assertRegistrationTransition(
   return to;
 }
 
+// --- Camp-side actions ---------------------------------------------------
+// The three actions a camp can take on its own registration, each resolved
+// through the SAME state machine the org console uses (single source of truth
+// for legal transitions — build-spec §Core logic). The wizard's server actions
+// call these instead of hard-coding target statuses.
+
+export const CAMP_ACTIONS = ["submit", "resubmit", "withdraw"] as const;
+export type CampAction = (typeof CAMP_ACTIONS)[number];
+
+/** Whether the camp may submit/resubmit from the current status. Both `submit`
+ * (from draft) and `resubmit` (from changes_requested) target `submitted`. The
+ * all-six-complete gate is enforced separately (`isSubmittable`). */
+export function canCampSubmit(from: RegistrationStatus): boolean {
+  return canTransitionRegistration(from, "submitted");
+}
+
+/** Whether the camp may withdraw from the current status. */
+export function canCampWithdraw(from: RegistrationStatus): boolean {
+  return canTransitionRegistration(from, "withdrawn");
+}
+
+/**
+ * Resolve a camp action to its target status, asserting the transition against
+ * the state machine (throws on an illegal move). `submit`/`resubmit` both go to
+ * `submitted`; `withdraw` goes to `withdrawn`.
+ */
+export function resolveCampAction(
+  from: RegistrationStatus,
+  action: CampAction,
+): RegistrationStatus {
+  const target: RegistrationStatus =
+    action === "withdraw" ? "withdrawn" : "submitted";
+  return assertRegistrationTransition(from, target);
+}
+
 /** Legal next-states for a per-section review thread. */
 export const SECTION_REVIEW_TRANSITIONS: Record<
   SectionReviewStatus,

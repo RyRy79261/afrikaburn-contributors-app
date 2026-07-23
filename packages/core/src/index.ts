@@ -12,7 +12,12 @@
 //     SIMILARITY_WARN_THRESHOLD (./name-dedupe)
 //   - word count: countWords, isWithinWordLimit, wordsRemaining,
 //     CAMP_DESCRIPTION_WORD_LIMIT (./word-count)
-//   - registration + review state machines (./registration-state)
+//   - registration + review state machines + camp-side action resolution
+//     (canCampSubmit, canCampWithdraw, resolveCampAction) (./registration-state)
+//   - per-section completeness predicates: isSectionComplete,
+//     completedSectionsFor (./registration-sections)
+//   - sound scale (SOUND_SCALE, isNoAmplifiedSound) (./sound)
+//   - placement zones per edition (getPlacementZones) (./placement-zones)
 //   - privacy hard-lock: HARD_LOCKED_PRIVATE_FIELDS, enforcePrivacyFlags,
 //     privacyViolations, canBePublic (./privacy)
 //   - payment references: generatePaymentReference, deriveSubjectCode
@@ -23,14 +28,19 @@
 //     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
 //   - invite redemption: canRedeemInvite(As), single-use logic (./invite)
 //   - god-email bootstrap parsing: parseGodEmails, isGodEmailIn (./god-emails)
+//   - supplier CSV import: parseCsv, parseSuppliersCsv (./supplier-import)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
 export * from "./word-count";
 export * from "./registration-state";
+export * from "./registration-sections";
+export * from "./sound";
+export * from "./placement-zones";
 export * from "./privacy";
 export * from "./payment-reference";
 export * from "./bio";
 export * from "./questionnaire-engine";
 export * from "./invite";
 export * from "./god-emails";
+export * from "./supplier-import";

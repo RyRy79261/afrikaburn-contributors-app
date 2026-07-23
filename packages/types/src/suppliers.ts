@@ -23,12 +23,16 @@ export type SupplierSource = z.infer<typeof SupplierSource>;
 
 /**
  * Shape of a single supplier as parsed from the AB public sheet CSV/JSON
- * snapshot. The import parser (@quagga/core, wave 2) normalises rows into this.
+ * snapshot. The import parser (@quagga/core `parseSuppliersCsv`) normalises
+ * rows into this. `vettingStatus` is derived from the sheet's own "Status"
+ * column (e.g. "In Good Standing" → `registered`; blank → `listed`) — the org
+ * app can still hand-edit it after import.
  */
 export const SupplierImportRow = z.object({
   name: z.string().min(1),
   services: z.string().default(""),
   contact: z.string().default(""),
   website: z.string().default(""),
+  vettingStatus: VettingStatus.default("listed"),
 });
 export type SupplierImportRow = z.infer<typeof SupplierImportRow>;
