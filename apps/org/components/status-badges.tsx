@@ -13,7 +13,7 @@ const REGISTRATION_STYLE: Record<
 > = {
   draft: { label: "Draft", variant: "outline" },
   submitted: { label: "Submitted", variant: "default" },
-  under_review: { label: "Under review", variant: "warning" },
+  under_review: { label: "Under review", variant: "default" },
   changes_requested: { label: "Changes requested", variant: "warning" },
   approved: { label: "Approved", variant: "success" },
   rejected: { label: "Rejected", variant: "destructive" },

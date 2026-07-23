@@ -13,7 +13,15 @@ file wins. Reference implementation: the Camp 404 clone at
 4. Apps must **boot without env/DB** to a landing page (graceful "not configured" state); DB-backed routes may error clearly but must not crash the build.
 5. Schema below is **frozen** — feature agents do not add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
 6. TypeScript strict; Zod validation at every boundary; no `any` in committed code. Vitest for core logic. CI gate: `pnpm turbo run lint typecheck test build`.
-7. UI: minimal, dusty, non-corporate. Tokens: sand `#E7DAC2`, bone `#F4EEE2`, rust `#C2431F` (accent), ochre `#D98324`, charcoal `#211D19`, night `#141210`. Dark-mode-first, light supported. System font stack or one clean grotesk. No lorem ipsum anywhere — realistic copy.
+7. UI: **"Tankwa Night" hybrid, approved 23 Jul 2026 — brand colours sampled from afrikaburn.org Elementor kit.** Dark-mode-first app shell dressed in AfrikaBurn's real brand colours; light supported via a `.light` class on `<html>`.
+   - **Brand ramp** (raw, usable directly as e.g. `text-ab-teal`): teal `#2D7696`, teal-deep `#235C75`, apricot `#F4B672`, peach `#FFBC7D`, sage `#B6D090`, olive `#7D9953`, charcoal `#333333`, warm white `#FFFAF2`.
+   - **Dark semantic tokens (default):** background `#17191B`, foreground `#F4F0E8`, card/popover `#1F2326`, muted `#262B2F`, muted-foreground `#ADB6B3`, border/input `#323A3F`, primary `#2D7696` (fg `#F4F0E8`), secondary `#26333B` (fg `#DCE8ED`), accent `#F4B672` (fg `#17191B`), ring `#2D7696`, destructive `#C24438` (fg `#F4F0E8`), success `#B6D090` (fg `#17191B`), warning `#F4B672` (fg `#17191B`). `--radius` `0.5rem`.
+   - **Light (`.light`):** background `#FFFAF2`, foreground `#333333`, card/popover `#FFFFFF`, muted `#F1E9DB`, muted-foreground `#6E6558`, border/input `#E5DBC9`, primary `#2D7696` (fg `#FFFAF2`), secondary `#EAF0F3` (fg `#235C75`), accent `#F4B672` (fg `#333333`), ring `#2D7696`, destructive `#B23A2E`, success `#7D9953` (fg `#1F2A12`), warning `#D98A2B` (fg `#332006`) — dark foregrounds on the mid-tone fills because white text fails WCAG AA on them.
+   - **`.org-accent` skin** (org app applies it on `<html>` alongside the theme): primary → `#F4B672` (fg `#17191B`), ring → `#F4B672`; in `.light.org-accent` primary → `#D98A2B` (fg `#332006`, dark for AA) — so the console's interactive colour is apricot, the participant app's teal.
+   - **Status mapping:** approved → success (sage), changes_requested → warning (apricot), rejected → destructive, submitted/under_review → primary (teal), draft → muted/outline.
+   - **Typography:** Montserrat via `next/font/google` (weights 500/600/700/800, `--font-brand`, display swap). Body 500; `@layer base` treats `h1,h2` as 800 UPPERCASE (`letter-spacing 0.01em`) and `h3` as 700.
+   - **Identity motif:** original `QuiltBand` component — a repeating band of brand-triad diamonds (teal/apricot/sage/transparent) echoing AfrikaBurn's geometric quilt, on each app-shell header top edge and as a landing/auth divider. Per-app favicons are original 3-diamond clusters (web teal-dominant, org apricot-dominant). The AfrikaBurn logo and San-hand emblem are NOT copied — brand blessing pending; original geometry only.
+   - Non-corporate, warm, no lorem ipsum anywhere — realistic copy.
 
 ## Monorepo layout
 

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Tent, Flame, ShieldCheck } from "lucide-react";
 import { firstBlockingAction } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
+import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import {
   Card,
   CardContent,
@@ -82,6 +83,8 @@ export default async function HomePage() {
             </Button>
           </div>
         </header>
+
+        <QuiltBand opacity={0.55} className="rounded-full" />
 
         <section className="grid gap-4 sm:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, body }) => (

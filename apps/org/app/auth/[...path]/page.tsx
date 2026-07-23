@@ -1,5 +1,6 @@
 import { AuthView } from "@neondatabase/auth/react/ui";
 import { Card, CardContent } from "@quagga/ui/components/card";
+import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { ShieldCheck } from "lucide-react";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
 
@@ -27,6 +28,7 @@ export default async function AuthPage({
         </p>
       </div>
       <NotConfiguredBanner />
+      <QuiltBand opacity={0.55} className="rounded-full" />
       <Card className="overflow-hidden">
         <CardContent className="p-6">
           <AuthView path={view} />

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AfrikaBurn Organiser Console">
+  <!-- Original 3-diamond cluster echoing AfrikaBurn's quilt motif. Apricot-dominant
+       for the organiser console. Not the AfrikaBurn logo or San-hand emblem. -->
+  <rect width="64" height="64" rx="12" fill="#17191B"/>
+  <polygon points="32,6 46,20 32,34 18,20" fill="#F4B672"/>
+  <polygon points="18,30 32,44 18,58 4,44" fill="#FFBC7D"/>
+  <polygon points="46,30 60,44 46,58 32,44" fill="#2D7696"/>
+</svg>

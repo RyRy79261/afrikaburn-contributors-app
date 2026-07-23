@@ -112,7 +112,7 @@ export function LayoutUploads({
                 type="button"
                 onClick={() => remove(url)}
                 aria-label={`Remove layout ${i + 1}`}
-                className="absolute right-1 top-1 rounded-md bg-night/70 p-1 text-bone opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                className="absolute right-1 top-1 rounded-md bg-ab-charcoal/70 p-1 text-ab-warmwhite opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

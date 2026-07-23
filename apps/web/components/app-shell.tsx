@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Flame, Compass, TentTree, UserRound } from "lucide-react";
+import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getActiveEdition } from "@/lib/edition";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -48,6 +49,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+        <QuiltBand />
         <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold">
             <Flame className="h-5 w-5 text-primary" aria-hidden />

@@ -6,50 +6,60 @@
 @source "../components/**/*.{ts,tsx}";
 
 /* ===========================================================================
-   Quagga Portal design tokens (build-spec §7). Minimal, dusty, non-corporate.
-   Palette: sand #E7DAC2 · bone #F4EEE2 · rust #C2431F (accent) · ochre #D98324
-   · charcoal #211D19 · night #141210. DARK-MODE-FIRST; light supported via a
-   `.light` class on <html>. System / clean-grotesk font stack.
+   Quagga Portal design tokens (build-spec §7) — "Tankwa Night" hybrid.
+   DARK-MODE-FIRST app shell dressed in AfrikaBurn's real brand colours.
+   Brand palette sampled from afrikaburn.org's Elementor kit (approved
+   23 Jul 2026): teal #2D7696 · apricot #F4B672 · peach #FFBC7D · sage
+   #B6D090 · olive #7D9953 · charcoal #333333 · warm white #FFFAF2.
+   Light supported via a `.light` class on <html>; the org app additionally
+   wears `.org-accent` so its interactive colour is apricot, not teal.
+   Brand font: Montserrat (headings 800 UPPERCASE, body 500).
    =========================================================================== */
 
 @theme {
-  /* Raw brand ramp (usable directly, e.g. text-rust / bg-sand). */
-  --color-sand: #e7dac2;
-  --color-bone: #f4eee2;
-  --color-rust: #c2431f;
-  --color-ochre: #d98324;
-  --color-charcoal: #211d19;
-  --color-night: #141210;
+  /* Raw brand ramp — usable directly (e.g. text-ab-teal / bg-ab-sage). */
+  --color-ab-teal: #2d7696;
+  --color-ab-teal-deep: #235c75;
+  --color-ab-apricot: #f4b672;
+  --color-ab-peach: #ffbc7d;
+  --color-ab-sage: #b6d090;
+  --color-ab-olive: #7d9953;
+  --color-ab-charcoal: #333333;
+  --color-ab-warmwhite: #fffaf2;
 
   /* Semantic tokens — DARK defaults (dark-mode-first). */
-  --color-background: #141210; /* night */
-  --color-foreground: #f4eee2; /* bone */
-  --color-card: #211d19; /* charcoal */
-  --color-card-foreground: #f4eee2;
-  --color-popover: #211d19;
-  --color-popover-foreground: #f4eee2;
-  --color-muted: #2a2520;
-  --color-muted-foreground: #cabfa6; /* dusted sand */
-  --color-primary: #c2431f; /* rust — the accent */
-  --color-primary-foreground: #f4eee2;
-  --color-secondary: #2e2822;
-  --color-secondary-foreground: #e7dac2;
-  --color-accent: #d98324; /* ochre */
-  --color-accent-foreground: #141210;
-  --color-border: #38312a;
-  --color-input: #38312a;
-  --color-ring: #d98324;
-  --color-destructive: #9e2b1a;
-  --color-destructive-foreground: #f4eee2;
-  --color-success: #7d8a4a; /* dusty olive */
-  --color-success-foreground: #141210;
-  --color-warning: #d98324; /* ochre */
-  --color-warning-foreground: #141210;
+  --color-background: #17191b;
+  --color-foreground: #f4f0e8;
+  --color-card: #1f2326;
+  --color-card-foreground: #f4f0e8;
+  --color-popover: #1f2326;
+  --color-popover-foreground: #f4f0e8;
+  --color-muted: #262b2f;
+  --color-muted-foreground: #adb6b3;
+  --color-primary: #2d7696; /* AfrikaBurn teal — the participant accent */
+  --color-primary-foreground: #f4f0e8;
+  --color-secondary: #26333b;
+  --color-secondary-foreground: #dce8ed;
+  --color-accent: #f4b672; /* apricot */
+  --color-accent-foreground: #17191b;
+  --color-border: #323a3f;
+  --color-input: #323a3f;
+  --color-ring: #2d7696;
+  --color-destructive: #c24438;
+  --color-destructive-foreground: #f4f0e8;
+  --color-success: #b6d090; /* sage */
+  --color-success-foreground: #17191b;
+  --color-warning: #f4b672; /* apricot */
+  --color-warning-foreground: #17191b;
 
   --radius: 0.5rem;
 
-  /* One clean grotesk with a system fallback stack. `--font-brand` face is
-     supplied by the app via next/font; falls through until then. */
+  /* Modal / upload dimming scrim — background-derived, not a palette colour.
+     Consume as bg-[var(--overlay)]. */
+  --overlay: oklch(from var(--color-background) l c h / 0.55);
+
+  /* Brand face — Montserrat, supplied by each app via next/font as
+     `--font-brand`. Falls through to the system stack until then. */
   --font-sans:
     var(--font-brand), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -60,29 +70,48 @@
 
 /* Light theme — opt-in via <html class="light">. Warm paper, not clinical. */
 .light {
-  --color-background: #f4eee2; /* bone */
-  --color-foreground: #211d19; /* charcoal */
-  --color-card: #fcfaf4;
-  --color-card-foreground: #211d19;
-  --color-popover: #fcfaf4;
-  --color-popover-foreground: #211d19;
-  --color-muted: #e7dac2; /* sand */
-  --color-muted-foreground: #6b5e4b;
-  --color-primary: #c2431f; /* rust */
-  --color-primary-foreground: #f4eee2;
-  --color-secondary: #e7dac2;
-  --color-secondary-foreground: #211d19;
-  --color-accent: #d98324; /* ochre */
-  --color-accent-foreground: #141210;
-  --color-border: #d8c9ae;
-  --color-input: #d8c9ae;
-  --color-ring: #c2431f;
-  --color-destructive: #b23a2a;
-  --color-destructive-foreground: #f4eee2;
-  --color-success: #5f6c33;
-  --color-success-foreground: #f4eee2;
-  --color-warning: #b8701f;
-  --color-warning-foreground: #f4eee2;
+  --color-background: #fffaf2; /* warm white */
+  --color-foreground: #333333; /* charcoal */
+  --color-card: #ffffff;
+  --color-card-foreground: #333333;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #333333;
+  --color-muted: #f1e9db;
+  --color-muted-foreground: #6e6558;
+  --color-primary: #2d7696; /* teal */
+  --color-primary-foreground: #fffaf2;
+  --color-secondary: #eaf0f3;
+  --color-secondary-foreground: #235c75;
+  --color-accent: #f4b672; /* apricot */
+  --color-accent-foreground: #333333;
+  --color-border: #e5dbc9;
+  --color-input: #e5dbc9;
+  --color-ring: #2d7696;
+  --color-destructive: #b23a2e;
+  --color-destructive-foreground: #fffaf2;
+  /* Dark text on the mid-tone fills: white-on-olive is 3.1:1 and
+     white-on-apricot 2.65:1 — both fail AA; charcoal clears 4.5:1. */
+  --color-success: #7d9953; /* olive */
+  --color-success-foreground: #1f2a12;
+  --color-warning: #d98a2b; /* deepened apricot */
+  --color-warning-foreground: #332006;
+}
+
+/* Org-console accent skin — applied on <html> alongside the theme class so the
+   organiser app's interactive colour is apricot, visually distinct from the
+   participant app's teal. Only interactive tokens shift; surfaces stay shared. */
+.org-accent {
+  --color-primary: #f4b672; /* apricot */
+  --color-primary-foreground: #17191b;
+  --color-ring: #f4b672;
+}
+
+.light.org-accent {
+  /* White text on this orange is 2.65:1 (AA fail) — the org app's default
+     buttons would be near-illegible in light mode. Dark text clears 4.5:1. */
+  --color-primary: #d98a2b; /* deepened apricot */
+  --color-primary-foreground: #332006;
+  --color-ring: #d98a2b;
 }
 
 @layer base {
@@ -95,6 +124,17 @@
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
+  }
+  /* Montserrat brand treatment: display headings 800 UPPERCASE, sub-heads 700.
+     Utilities still win, so a call site can opt a specific heading out. */
+  h1,
+  h2 {
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+  h3 {
+    font-weight: 700;
   }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="time"]::-webkit-calendar-picker-indicator {
