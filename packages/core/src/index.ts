@@ -17,6 +17,12 @@
 //     privacyViolations, canBePublic (./privacy)
 //   - payment references: generatePaymentReference, deriveSubjectCode
 //     (./payment-reference)
+//   - burner bio code questionnaire: buildBurnerBioQuestionnaire, mapping
+//     helpers, BIO_PRIVACY_FIELDS, defaultPrivacyFlags, isBioComplete (./bio)
+//   - questionnaire engine: code-side registry + gating helpers
+//     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
+//   - invite redemption: canRedeemInvite(As), single-use logic (./invite)
+//   - god-email bootstrap parsing: parseGodEmails, isGodEmailIn (./god-emails)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -24,3 +30,7 @@ export * from "./word-count";
 export * from "./registration-state";
 export * from "./privacy";
 export * from "./payment-reference";
+export * from "./bio";
+export * from "./questionnaire-engine";
+export * from "./invite";
+export * from "./god-emails";

@@ -24,15 +24,24 @@ importers:
 
   apps/org:
     dependencies:
+      '@neondatabase/auth':
+        specifier: 0.4.1-beta
+        version: 0.4.1-beta(fe00081d8d5ea534f89665cb20b4a629)
       '@quagga/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@quagga/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@quagga/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@quagga/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@neondatabase/serverless@1.1.0)(kysely@0.28.17)
       lucide-react:
         specifier: ^1.16.0
         version: 1.26.0(react@19.2.8)
@@ -45,6 +54,12 @@ importers:
       react-dom:
         specifier: ^19.2.6
         version: 19.2.8(react@19.2.8)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@quagga/eslint-config':
         specifier: workspace:*
@@ -76,6 +91,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.10(@types/node@25.9.5)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
 
   apps/web:
     dependencies:

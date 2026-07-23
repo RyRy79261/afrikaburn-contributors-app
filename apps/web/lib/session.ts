@@ -1,0 +1,144 @@
+import "server-only";
+
+import { redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import {
+  BURNER_BIO_ACTION_KEY,
+  firstBlockingAction,
+  isGodEmailIn,
+  parseGodEmails,
+} from "@quagga/core";
+import { db, schema } from "./db";
+import { isDatabaseConfigured } from "./config";
+import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
+import { ensureRequiredAction, listRequiredActions } from "./required-actions";
+
+/** The camp-side user row (joins to Neon Auth via auth_user_id). */
+export interface CampUser {
+  id: string;
+  authUserId: string;
+  email: string | null;
+}
+
+/** The single seeded org group ("AfrikaBurn"), or null if not seeded. */
+export async function getOrgGroup(): Promise<{ id: string } | null> {
+  const rows = await db()
+    .select({ id: schema.groups.id })
+    .from(schema.groups)
+    .where(eq(schema.groups.kind, "org"))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * On the first authenticated request, grant god membership on the org group to
+ * any email in GOD_EMAILS (build-spec §Env `GOD_EMAILS`). Idempotent; a no-op
+ * when the org group isn't seeded yet or the email isn't listed.
+ */
+async function bootstrapGod(user: CampUser): Promise<void> {
+  if (!isGodEmailIn(user.email, parseGodEmails(process.env.GOD_EMAILS))) return;
+  const org = await getOrgGroup();
+  if (!org) return;
+  const existing = await db()
+    .select({ id: schema.memberships.id, role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, user.id),
+        eq(schema.memberships.groupId, org.id),
+      ),
+    )
+    .limit(1);
+  if (!existing[0]) {
+    await db()
+      .insert(schema.memberships)
+      .values({ userId: user.id, groupId: org.id, role: "god" })
+      .onConflictDoNothing({
+        target: [schema.memberships.userId, schema.memberships.groupId],
+      });
+  } else if (existing[0].role !== "god") {
+    await db()
+      .update(schema.memberships)
+      .set({ role: "god" })
+      .where(eq(schema.memberships.id, existing[0].id));
+  }
+}
+
+/**
+ * Upsert the camp-side `users` row for an authenticated Neon Auth user, run the
+ * GOD_EMAILS bootstrap, and ensure the blocking Burner Bio required action
+ * exists. Returns the camp user, or null when the DB isn't configured.
+ */
+export async function ensureCampUser(
+  authUser: AuthenticatedUser,
+): Promise<CampUser | null> {
+  if (!isDatabaseConfigured()) return null;
+
+  await db()
+    .insert(schema.users)
+    .values({ authUserId: authUser.id, email: authUser.primaryEmail })
+    .onConflictDoNothing({ target: schema.users.authUserId });
+
+  const rows = await db()
+    .select({
+      id: schema.users.id,
+      authUserId: schema.users.authUserId,
+      email: schema.users.email,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.authUserId, authUser.id))
+    .limit(1);
+  const campUser = rows[0];
+  if (!campUser) return null;
+
+  // Keep the email fresh (it may have been null at insert or changed upstream).
+  if (authUser.primaryEmail && campUser.email !== authUser.primaryEmail) {
+    await db()
+      .update(schema.users)
+      .set({ email: authUser.primaryEmail })
+      .where(eq(schema.users.id, campUser.id));
+    campUser.email = authUser.primaryEmail;
+  }
+
+  await bootstrapGod(campUser);
+  await ensureRequiredAction({
+    userId: campUser.id,
+    actionKey: BURNER_BIO_ACTION_KEY,
+    type: "questionnaire",
+    title: "Complete your Burner Bio",
+  });
+
+  return campUser;
+}
+
+/** The current camp user (upserted + bootstrapped), or null when signed out /
+ * unconfigured. Never throws. */
+export async function getCurrentCampUser(): Promise<CampUser | null> {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) return null;
+  try {
+    return await ensureCampUser(authUser);
+  } catch {
+    return null;
+  }
+}
+
+/** Require a signed-in camp user; redirect to sign-in otherwise. */
+export async function requireCampUser(): Promise<CampUser> {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) redirect("/auth/sign-in");
+  const campUser = await ensureCampUser(authUser);
+  if (!campUser) redirect("/auth/sign-in");
+  return campUser;
+}
+
+/**
+ * Require a signed-in, fully-onboarded camp user. Redirects to /onboarding when
+ * the Burner Bio (or any blocking action) is still pending — the app-wide gate.
+ */
+export async function requireOnboardedUser(): Promise<CampUser> {
+  const campUser = await requireCampUser();
+  const actions = await listRequiredActions(campUser.id);
+  if (firstBlockingAction(actions)) redirect("/onboarding");
+  return campUser;
+}

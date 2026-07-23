@@ -9,16 +9,23 @@
     "vercel-build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@neondatabase/auth": "0.4.1-beta",
     "@quagga/core": "workspace:*",
+    "@quagga/db": "workspace:*",
     "@quagga/types": "workspace:*",
     "@quagga/ui": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",
     "next": "^16.2.6",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
@@ -30,6 +37,7 @@
     "eslint": "^10.4.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }
