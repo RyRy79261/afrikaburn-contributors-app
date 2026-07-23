@@ -1,0 +1,33 @@
+--- page 1 ---
+AfricaBurn App | Ice Delivery [V2] PRELIMINARY SCOPE | May 2026
+Ice Delivery
+V2 Scope Document | Preliminary | May 2026
+Overview
+AfricaBurn operates an ice sales system on site. Theme camps get priority access and can book daily ice ticket
+allocations. The current system is clunky and should be integrated into the app.
+User Stories
+Theme Camp Lead
+n I want to book my camp's daily ice allocation
+n I want to see how many ice tickets we get per day
+n I want to nominate who can collect ice on behalf of the camp
+n I want to pay for ice through the app if there's a cost
+n I want to request additional ice beyond allocation if possible
+AfricaBurn Staff
+n I want to manage daily ice capacity across all camps
+n I want to see which camps have collected and which haven't
+n I want to adjust allocations based on supply
+Business Rules & Constraints
+n How many tickets per camp per day? Based on what?
+n Is ice free for theme camps or is there a cost?
+n Physical tickets or digital check-in?
+n Ice delivered to camps or collected from central point?
+n What happens to uncollected allocations?
+Open Questions for AfricaBurn
+n What does the current ice booking system look like?
+n What's broken about it?
+n How much ice is available per day? Does supply ever run out?
+Page 1
+--- page 2 ---
+AfricaBurn App | Ice Delivery [V2] PRELIMINARY SCOPE | May 2026
+n Distinction between camp allocation and general public sales?
+Page 2

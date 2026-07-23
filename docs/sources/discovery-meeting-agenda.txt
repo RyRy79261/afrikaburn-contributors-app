@@ -1,0 +1,92 @@
+AfrikaBurn App
+Discovery Meeting Agenda
+Prepared by Finlay Kettlewell  •  May 2026  •  ~1 hour
+
+Purpose of This Meeting
+Building on the success of last year’s container transport app, this meeting is to explore whether a broader platform could serve AfrikaBurn’s needs, bringing theme camp registration, container logistics, and on-site services (water, ice, gas) under one roof.
+
+The goal is to understand how things work today, where the pain points are, and what would make the biggest difference, so we can scope the right thing before building anything.
+
+No technical decisions have been made. This is about understanding AfrikaBurn’s needs, pain points, and whether an app could/would serve a useful purpose.
+
+What We Already Understand
+A brief summary of what we’ve pieced together, to be corrected and expanded in this meeting.
+
+Theme camps currently manage their obligations through a patchwork of systems: Custom Online Forms for registration, Quicket for water and ice payments, WhatsApp and email for coordination, and manual processes for ice, gas, and much of the logistics.
+
+From the theme camp side, we’ve mapped the registration form (all fields and sections), the container transport lifecycle (storage, booking, delivery, collection), and the general shape of water, ice, and gas delivery. We have preliminary scope documents for each.
+
+What we don’t have is the AfrikaBurn side of the picture; how your team reviews registrations, manages logistics, coordinates with contractors, and handles the day-to-day operations that the current tools support (or fail to support).
+
+Agenda
+Introductions & Context
+Quick intros. Brief recap of last year’s container app and the opportunity for something broader.
+
+How Things Work Today 
+The most important part of the meeting. We want to hear from you.
+
+Walk us through how AfrikaBurn currently manages the relationship with theme camps across the year. We’re looking for the full picture — not just the tools, but the people, the processes, and where things break down.
+
+Some threads we’d love to pull on:
+What does a theme camp’s journey look like from AB’s perspective? (First contact through to post-event)
+Which processes are the most painful or time-consuming for your team right now?
+Where do things fall through the cracks? (Late registrations, unpaid bookings, miscommunication with contractors, etc.)
+How does information flow between your team? Is there a shared system, or is it spreadsheets and WhatsApp?
+What’s working well that we should be careful not to break?
+
+Who Does This Serve? 
+We’ve been thinking of this as a “theme camp app,” but from the 2026 data we can see there are roughly 120 theme camps and 100 artworks, both with assigned codes and map locations.
+
+We need to understand:
+Do artworks use the same services as theme camps? (Containers, water, ice, gas)
+Do artworks go through a similar registration process?
+What about mutant vehicles?
+Is this an app for theme camps, or for all registered projects at AfrikaBurn?
+
+The answer shapes what we build; a focused theme camp tool vs a broader project management platform.
+
+Your Team & Roles
+We need to understand the AB side of the app — who does what, and what they need.
+
+What staff roles interact with theme camps? (Liaison, logistics, finance, placement, volunteers?)
+Is it the same people across registration, containers, water, ice, gas — or different teams per workflow?
+How does the placement process work? Does it happen in a separate tool, or could it live in this app?
+How do you coordinate with contractors (transport companies, water delivery, etc.)?
+
+Priorities & Quick Wins
+Given everything we’ve discussed:
+
+If you could fix one thing tomorrow, what would it be?
+Theme camp registration and container transport feel like the strongest V1 candidates — does that match your sense of priority?
+Are there any hard deadlines or events that should drive the timeline? (e.g. when does 2027 registration open?)
+Is there anything we haven’t mentioned that should be on our radar?
+
+Next Steps  (5 min)
+Agree on what happens after this meeting:
+
+Who from AB should we work with for detailed scoping sessions? (registration, containers, water/ice/gas separately)
+Can we get access to the current Google Form, any spreadsheets or registries, and the site map?
+Timeline for follow-up deep-dives
+
+Reference: Scope Documents
+We have prepared detailed preliminary scope documents that we can share after this meeting or use as the basis for follow-up sessions:
+
+Workflow
+Priority
+Status
+Container Transport
+V1
+Detailed scope: entities, lifecycle, user stories, booking flow. Built from last year’s experience.
+Theme Camp Registration
+V1
+Detailed scope: all form fields mapped from 2026 submission, review workflow, design opportunities.
+Water Delivery
+V2
+Preliminary: theme camp side outlined, AB side and current process TBD.
+Ice Delivery
+V2
+Preliminary: high-level user stories, current process unknown.
+Gas Delivery
+V2
+Preliminary: high-level user stories, current process unknown.
+

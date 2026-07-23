@@ -1,0 +1,87 @@
+--- page 1 ---
+AfricaBurn App | Master Brief PRELIMINARY SCOPE | May 2026
+AfricaBurn App
+Master Project Brief | Preliminary Scope | May 2026
+The Problem
+AfricaBurn theme camps currently manage their obligations and logistics through a patchwork of Google Forms,
+Quicket payments, WhatsApp messages, and manual coordination. This creates friction for everyone — theme
+camp leads struggle with clunky, unresponsive forms; AfricaBurn staff spend time chasing information instead of
+managing the event; and contractors lack clear, structured workflows for deliveries and logistics.
+Last year, a standalone container transport app was built and went well — proving that a purpose-built tool can
+improve at least one of these workflows. The opportunity now is to bring all theme camp logistics under one roof:
+registration, container transport, water, ice, gas, and potentially more.
+What this replaces:
+(cid:127) Google Forms for theme camp registration
+(cid:127) Quicket / manual systems for water delivery payments
+(cid:127) Ad hoc coordination for ice and gas delivery
+(cid:127) The previous standalone container transport app (fresh start)
+User Families
+There are three broad families of users. Within each family, there are specific roles with different permissions
+and needs.
+1. AfricaBurn Organisation Staff
+The people who run AfricaBurn and need to manage, approve, and oversee everything. Specific staff roles are
+still to be confirmed with AB.
+2. Participants
+People who attend AfricaBurn and manage a registered entity. Theme camps are the primary focus for V1.
+Role Description Key Needs
+Theme Camp Lead Primary contact / admin for the Registration, container booking, water/ice/gas
+camp ordering, managing camp details, comms with AB
+Alternative Contact Backup admin Same access as lead, acts as fallback
+Container Collection Mandated to receive the Delivery time, sign-off, lightweight offline-capable
+Person container on site experience
+Mutant Vehicle Owners and Artwork Admins are noted as future user types (V3) but not scoped here.
+Page 1
+--- page 2 ---
+AfricaBurn App | Master Brief PRELIMINARY SCOPE | May 2026
+3. Contractors
+External service providers who fulfil logistics on behalf of AfricaBurn or directly for theme camps.
+Role Description Key Needs
+Container Truck Driver Delivers/collects containers Delivery schedule, drop-off location, contact
+to/from site person, sign-off
+Water Delivery Driver Delivers water to camps Delivery schedule, drop-off location, sign-off
+Stretch Tent Supplier Provides stretch tents for camps Schedule, camp list, tent sizes booked
+and support structures
+Workflow Map
+V1 Build First
+Workflow Description
+Container Transport Full lifecycle: booking, payment, storage, drop-off scheduling, collection,
+year-to-year storage
+Theme Camp Replaces Google Forms. Camp details, noise, zone preference, member count,
+Registration responsibilities
+V2 Definitely Useful, Needs AB Input
+Workflow Description
+Water Delivery Order and pay for water delivery based on camp size. Replaces Quicket + manual
+coordination
+Ice Delivery Book daily ice ticket allocations. Priority access for theme camps
+Gas Delivery Order 9kg/18kg gas bottles for delivery to site
+V3 Future / Needs Engagement
+(cid:127) Mutant vehicle registration
+(cid:127) Artwork registration
+Cross-Cutting Concerns
+Things that apply across all workflows and will need decisions.
+(cid:127) Authentication & identity — Users log in via email or OAuth (Google). Fairly standard auth setup.
+(cid:127) Payments — Multiple workflows involve payment. Yoco is the likely payment provider. Refund handling,
+payment plans TBD.
+(cid:127) Notifications — Email confirmations for key actions (bookings, payments, schedule changes).
+Page 2
+--- page 3 ---
+AfricaBurn App | Master Brief PRELIMINARY SCOPE | May 2026
+(cid:127) Year-to-year continuity — Camps should be able to carry forward previous registrations or start fresh.
+Both options needed.
+(cid:127) Mobile-first — On-site usage is phone-based. Pre-event usage may be desktop.
+(cid:127) Offline / low connectivity — There is NO signal at the AB site (no cellular, no wifi) except a single wifi box
+at the centre. Any on-site app interaction requires walking to this point. This is a hard constraint.
+Priority Questions for AfricaBurn
+These questions affect the fundamental shape of the app and should be answered early.
+n Do artworks use the same logistics services as theme camps? (containers, water, ice, gas) — if yes, the
+app serves ~220 registered projects, not just ~120 theme camps.
+n Do artworks go through a similar registration form? — if comparable, we build one registration flow with
+project-type variations rather than separate systems.
+n Is the site map grid shared across theme camps and artworks? — both lists show code + location format. If
+shared, placement is one unified process.
+n Does placement happen inside this app or in a separate tool? — AB assigns camp codes and ERFs. If they
+want to do that here, it's a significant feature.
+n What about mutant vehicles? — do MVs also register and use logistics services?
+Scale from 2026 data: ~120 theme camps, ~100 artworks. Both have codes and map locations assigned by
+AB.
+Page 3

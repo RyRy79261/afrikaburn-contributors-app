@@ -1,0 +1,169 @@
+--- page 1 ---
+AfricaBurn App | Container Transport [V1] PRELIMINARY SCOPE | May 2026
+Container Transport
+V1 Scope Document | Preliminary | May 2026
+Overview
+Theme camps ship supplies to AfricaBurn in storage containers. These containers are stored year-round at
+various locations in and around the Tankwa, and are transported to a specific spot on-site during build week
+before the event.
+There are two journey patterns depending on where a container is stored:
+(cid:127) Quaggafontein containers (good standing only): One journey — Quagga Storage fi Site
+(cid:127) Off-site containers (Danie's, Frans', Cape Town): Two-stage — Original Storage fi Quagga Storage (in
+advance), then Quagga fi Site (during build week)
+After the event, the reverse happens: Site fi storage location.
+Entities
+1. Container (permanent record)
+A physical asset that persists year to year, belonging to a theme camp.
+Field Description Example
+Container Name Human-readable name Javaburn Main
+Project (Camp) Theme camp this container belongs to Javaburn
+Code Unique code painted on the side JAV-1, MAH-1, MAH-2
+Size Physical size 6m or 12m
+Storage Location Where it lives between events See Storage Locations
+Good Standing 2 active years + cammo paint = Quagga access Yes / No
+Photos Each side, code close-up, inside Image uploads
+2. Transport Booking (per-year record)
+Field Description Example
+Container Link to permanent container record JAV-1
+Year / Edition Which AfricaBurn edition 2027
+Pickup Location Where container is collected from Danie's Yard
+Drop-off ERF ERF on the AB site map ERF GOW
+Drop-off Code Code on the AB map DHA, 2ish Binnekring
+Page 1
+--- page 2 ---
+AfricaBurn App | Container Transport [V1] PRELIMINARY SCOPE | May 2026
+Field Description Example
+Post-event Location Where it goes after the event Quagga Storage
+Delivery Slot Booked time window during build week Wednesday 09:30–11:00
+Collection Person Name + phone of mandated receiver [example contact redacted]
+3. Delivery Status Lifecycle
+# Status Description
+1 Not being used at AB this year Container exists but camp not bringing it
+2 Transport Booked — Unpaid Camp has booked a slot but hasn't paid
+3 Transport Booked — Paid Paid for delivery + collection + storage via Yoco
+4 Ready for Pickup — Off-site Off-site containers only: ready to move to Quagga
+5 In Transit to Quagga Off-site only: driver heading to Quagga staging
+6 Ready for Pickup — Quagga At Quagga, waiting for booked delivery slot
+7 In Transit to Site Driver heading from Quagga to camp's ERF
+8 Ready for Drop-off Driver at drop-off, waiting for collection person
+9 Delivered Collection person confirmed receipt
+10 Scheduled for Collection Post-event, waiting to be picked up
+11 In Transit — Post-event Being moved back to storage
+12 Returned to Storage Back at storage location. Year rolls over.
+4. Storage Locations
+Location Annual Cost Notes
+Quaggafontein Storage FREE Only for containers in good standing
+Danie's Yard R ___ (set by AB) Nearby farm
+Frans' Yard R ___ (set by AB)
+Cape Town R ___ (set by AB) Long-distance — higher transport cost
+5. Journeys (routes & pricing)
+Each route has a cost set by AB admins. Camp sees a single bundled price: transport to + from event + storage.
+Route To-event Cost From-event Cost
+Quagga Storage fi Site R ___ R ___
+Danie's Yard fi Site (via Quagga) R ___ R ___
+Frans' Yard fi Site (via Quagga) R ___ R ___
+Cape Town fi Site (via Quagga) R ___ R ___
+6. Transport Convoys & Delivery Slots
+Page 2
+--- page 3 ---
+AfricaBurn App | Container Transport [V1] PRELIMINARY SCOPE | May 2026
+Convoys are groups of trucks running together. Capacity measured in 6m units (a 12m container = 2 units).
+Delivery slots are time windows across build week (Mon–Fri), defined by AB admins before bookings open.
+Camps pick a time slot; AB assigns them to convoys behind the scenes.
+Users Involved
+Role What they do
+Theme Camp Lead / Admin Registers container, books delivery slot, pays via Yoco, uploads photos,
+manages details
+Collection Person Walks to wifi point, marks 'ready to receive', meets driver on site, signs off
+delivery
+AB Container Coordinator Defines slots/convoys, approves bookings, manages manifest, sets pricing
+Truck Driver Picks up containers, marks status transitions, confirms delivery with collection
+person
+User Stories
+Theme Camp Admin
+n I want a container section on my TC dashboard to see and manage all my camp's containers
+n I want to see container details and current status (storage location, good standing, delivery status)
+n I want to book delivery slots for all my containers at once — preferably same convoy, option to split
+n I want to declare a priority reason for my preferred slot (e.g. 'Tent setup', 'Perishable goods')
+n I want to pay for everything in one Yoco transaction — delivery + collection + storage
+n I want to upload required photos (each side, code close-up, inside)
+n I want a clear walkthrough / wizard guiding me through the booking step by step
+n I want my ERF to be pulled automatically from my camp profile
+n I want to nominate a mandated collection person with name and phone
+n I want to cancel or change my booking and understand the payment implications
+Container Collection Person
+n I want to mark myself as 'ready to receive' from the wifi point at the centre of AB
+n I want to see my delivery time slot so I know when to expect the truck
+n I want to confirm delivery / sign off when the container arrives
+n I want to report a problem if the container is damaged or in the wrong spot
+AB Container Coordinator
+n I want a delivery dashboard showing all bookings organised by slot and day
+n I want to define delivery slots and convoy capacity for build week
+n I want to assign containers to convoys within each slot
+Page 3
+--- page 4 ---
+AfricaBurn App | Container Transport [V1] PRELIMINARY SCOPE | May 2026
+n I want to approve bookings or suggest alternative slots if requested one is full
+n I want to generate a delivery manifest per convoy per slot
+n I want to set and update pricing for routes and storage
+n I want to track payment status across all bookings
+n I want to manage the container registry — new containers, good standing, storage
+Truck Driver
+n I want to see my delivery manifest for each slot
+n I want to mark status transitions as I go (picked up fi in transit fi delivered)
+n I want to contact the collection person by phone if needed
+n I want to flag issues (camp not present, access blocked, damage)
+The Booking Flow
+From the theme camp admin's perspective:
+1. Go to container section of TC dashboard
+2. See all camp containers with current details and storage locations
+3. Click 'Book transport for [Edition Year]'
+4. Walkthrough wizard: select containers, confirm details, upload photos, choose post-event storage,
+declare priority, choose delivery slot
+5. ERF auto-populated from camp profile (if placement confirmed)
+6. Nominate mandated collection person (name + phone)
+7. Review bundled pricing breakdown per container, pay via Yoco
+8. Booking confirmed — all containers show on dashboard with statuses
+Confirmed Business Rules
+(cid:127) Container sizes: 6m or 12m. Identified by painted code (e.g. JAV-1)
+(cid:127) Good standing = 2 active years + cammo paint fi unlocks free Quagga storage
+(cid:127) Payment bundled: to-event + from-event + next year's storage, all via Yoco in one transaction
+(cid:127) Camp chooses post-event storage location at booking time
+(cid:127) A camp can have multiple containers (no limit) — sequential codes (MAH-1, MAH-2, MAH-3)
+(cid:127) Camps prefer same convoy but can split across slots
+(cid:127) ERF pulled from camp profile (from placement), not entered manually at booking
+(cid:127) Theme camp registration must be completed before container booking
+(cid:127) Mandated collection person proactively signals 'ready to receive' from central wifi point
+(cid:127) Collection person can be the camp lead or alt contact — lightweight access (magic link / PIN)
+Page 4
+--- page 5 ---
+AfricaBurn App | Container Transport [V1] PRELIMINARY SCOPE | May 2026
+(cid:127) Driver needs both printable manifest and app for live status updates
+(cid:127) Post-event collection: same sign-off process, but no slot booking by camp — AB manages schedule
+(cid:127) No signal at AB site except central wifi box — hard constraint on on-site UX
+Open Questions for AfricaBurn
+Pricing & Payments
+n Exact pricing for each journey route and storage location?
+n Cancellation / refund policy?
+n What happens if a camp books but doesn't pay by deadline?
+n Is Yoco already set up for AfricaBurn?
+Booking & Scheduling
+n When do bookings open relative to the event? Deadline?
+n Can a camp change their delivery slot after booking?
+n How is convoy composition determined — automatic or manual?
+Container Registry
+n How does a new container first enter the system? Camp registers or AB creates?
+n What format is the existing registry in? (for data migration)
+n Who owns the containers — the camps or AB?
+n What triggers good standing being revoked?
+n What happens to a container when a camp takes a gap year?
+On-Site & Driver Experience
+n Do drivers currently use an app or paper manifests?
+n Does the driver need to capture photos at delivery?
+n 'Ready to receive' mechanism — advance ping or real-time?
+n What happens if the collection person isn't there?
+n Road/access constraints affecting which ERFs are reachable per slot?
+Last Year's App
+n What worked well? What specifically didn't?
+n Any missing features?
+Page 5

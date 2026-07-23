@@ -1,0 +1,149 @@
+--- page 1 ---
+AfricaBurn App | Theme Camp Registration [V1] PRELIMINARY SCOPE | May 2026
+Theme Camp Registration
+V1 Scope Document | Preliminary | May 2026
+Overview
+Every theme camp must register with AfricaBurn. Registration captures what the camp is, what they'll provide,
+how big they are, where they'd like to be placed, and what infrastructure/noise/safety considerations apply.
+Currently this is a Google Form — unresponsive, hard to update after submission, and painful on both sides.
+We have a complete copy of the actual Google Form (filled in for 2025/2026). The scope below is structured
+around the real fields.
+Registration Data — What Gets Captured
+Based on the actual Google Form, grouped into logical sections.
+Section 1: Camp Identity
+Field Type Notes
+Camp name Text
+Contact email Email Camp lead's email
+Camp description Long text 60-word limit enforced
+Section 2: Leave No Trace (LNT)
+Field Type Notes
+LNT policy details Long text MOOP plan, grey water, waste streams
+LNT Lead name Text Separate person from camp lead
+LNT Lead phone Phone
+LNT Lead email Email
+Section 3: Participation & Gifting
+Field Type Notes
+Participation plan Long text Free-form — can be 500+ words
+Operating hours Multi-select Morning / Day / Night / Late Night
+Schedule detail Long text Optional extra detail
+Gifting food? Yes/No
+Page 1
+--- page 2 ---
+AfricaBurn App | Theme Camp Registration [V1] PRELIMINARY SCOPE | May 2026
+Section 4: Camp Size & Logistics
+Field Type Notes
+Expected population Number e.g. 45
+First arrival date Date When first member arrives on site
+Work Access Passes Number WAPs for early access (separate allocation process)
+Camp area dimensions Text Width x depth in metres
+Layout uploads Images (max 4) Camp layout sketches/plans
+Section 5: Sound & Placement
+Field Type Notes
+Amplified music? Select Multiple levels (e.g. Level 2 — car stereo)
+Sound plan details Long text Equipment, times, volume
+Placement — 1st choice Select Zone + position (configurable per year)
+Placement — 2nd choice Select Zone + position
+Neighbour request Text Name other camps to be near
+Family-friendly? Select Yes / No / Maybe with detail
+Section 6: Suppliers & Commerce
+Field Type Notes
+Suppliers list Text External suppliers (e.g. stretch tents)
+Paid performers? Yes/No
+Camp fee structure Long text How the camp funds itself
+Expected budget Number (ZAR) Overall camp budget
+Plug & Play policy Checkbox Acknowledgement + anti-commerce commitment
+What's Wrong With the Google Form
+(cid:127) No save and return — close the tab, lose everything
+(cid:127) No updates after submission — can't amend if camp size changes or schedule finalises
+(cid:127) No status visibility — submit and get silence until someone contacts you
+(cid:127) No structure for AB reviewers — likely a spreadsheet of responses
+(cid:127) Long free-text fields are hard to review — 500+ words of participation plans per camp
+(cid:127) No connection to other workflows — registration data doesn't flow into container booking, water, etc.
+(cid:127) No year-to-year continuity — returning camps start from scratch
+(cid:127) Placement preferences are just text selections — no visual map
+Page 2
+--- page 3 ---
+AfricaBurn App | Theme Camp Registration [V1] PRELIMINARY SCOPE | May 2026
+User Stories
+Theme Camp Lead
+Registration flow
+n I want to start my registration and save progress so I can come back later
+n I want to see what information is needed before I start
+n I want to fill in sections in any order
+n I want to upload camp layout images
+n I want to carry forward last year's registration and just update what changed
+Post-submission
+n I want to see my registration status — draft, submitted, under review, approved, changes requested
+n I want to update my registration after submission
+n I want to receive section-specific feedback from AB
+n I want to resubmit after making changes
+n I want to see my approved registration as a shareable summary
+Camp management
+n I want to hand over camp leadership via nomination or one-time invite link
+n I want to add or change the alternative contact
+n I want to access container, water, ice, gas workflows from my dashboard once registered
+AfricaBurn Staff
+n I want to see all registrations in a dashboard — filterable by status, size, sound, placement, new vs returning
+n I want to review each registration with section-by-section comments
+n I want to approve, request changes, or reject with reasons
+n I want to compare returning camps to last year
+n I want to track completion rate and overdue registrations
+n I want to export data for placement planning
+n I want to see placement preferences on a map with sound levels and neighbour requests
+n I want to assign ERFs to camps and have it flow into the camp profile
+Registration States
+State Description
+Draft Camp has started, can save and return
+Submitted Camp has completed and submitted
+Under Review AB staff is reviewing
+Approved Camp is confirmed for this year's edition
+Page 3
+--- page 4 ---
+AfricaBurn App | Theme Camp Registration [V1] PRELIMINARY SCOPE | May 2026
+State Description
+Changes Requested AB sends section-specific feedback fi camp updates fi resubmits
+Rejected With reason (hopefully rare)
+Withdrawn Camp cancels voluntarily
+Key Design Opportunities (vs Google Form)
+1. Save and return — draft state, resume where you left off
+2. Section-by-section review — AB can approve parts and request changes on others
+3. Year-to-year pre-fill — returning camps start with last year's data pre-loaded
+4. Connected camp profile — registration data feeds into containers, water, ice, placement
+5. Visual placement map — show the site map instead of text dropdowns
+6. Status and comms — camps see where their registration is, get feedback, respond — all in one place
+7. Dashboard & filtering — AB gets a proper management view instead of a spreadsheet
+Confirmed Business Rules
+(cid:127) Camp description: 60-word limit
+(cid:127) Placement zones change year to year — must be configurable per edition
+(cid:127) Camp codes assigned by AB at placement, not chosen by camp
+(cid:127) Camp entity is persistent — yearly registrations hang off a permanent camp record
+(cid:127) Camp lead handover supported via nomination or one-time invite link
+(cid:127) Registration and ticketing are completely separate
+(cid:127) Only lead, alt contact, and LNT lead tracked — population is just a number
+(cid:127) LNT lead: contact details only, no app role
+(cid:127) WAPs: separate allocation process, registration just captures the request
+(cid:127) Registration is upstream of all other workflows — must be completed first
+Open Questions for AfricaBurn
+n Can we access the Google Form itself (not just the confirmation) to see all validation rules?
+n What's painful about reviewing registrations on the AB side?
+n Registration deadline — hard or soft?
+n Full list of sound level options?
+n Mandatory vs optional fields?
+n What triggers approval — manual review or auto-approve if complete?
+n Can a camp be conditionally approved?
+Page 4
+--- page 5 ---
+AfricaBurn App | Theme Camp Registration [V1] PRELIMINARY SCOPE | May 2026
+n Different tiers of theme camps (established vs first-time)?
+n How does registration data feed into placement today?
+n What does AB do with financial information (budget, camp fees)?
+Relationship to Other Workflows
+Registration is upstream of everything. It creates the camp profile that other workflows depend on:
+(cid:127) Container Transport needs: camp profile, ERF, contacts
+(cid:127) Water Delivery needs: camp profile, population
+(cid:127) Ice Delivery needs: camp profile, population
+(cid:127) Gas Delivery needs: camp profile
+(cid:127) Placement needs: preferences, sound level, area, neighbour requests
+Important open question: Artworks and possibly mutant vehicles may also access these downstream services.
+If so, the upstream entity is not strictly 'theme camp' but a broader 'registered project.' Needs AB clarification.
+Page 5

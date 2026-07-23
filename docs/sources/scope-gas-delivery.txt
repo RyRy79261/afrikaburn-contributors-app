@@ -1,0 +1,33 @@
+--- page 1 ---
+AfricaBurn App | Gas Delivery [V2] PRELIMINARY SCOPE | May 2026
+Gas Delivery
+V2 Scope Document | Preliminary | May 2026
+Overview
+Theme camps can order LPG gas bottles (9kg and 18kg) for delivery to site. This is the least-scoped V2
+workflow and needs the most input from AfricaBurn.
+User Stories
+Theme Camp Lead
+n I want to order gas bottles (9kg / 18kg) for my camp
+n I want to pay for gas through the app
+n I want to schedule delivery or understand when gas will arrive
+n I want to order additional gas during the event if we run out
+n I want to return empty bottles and understand the process
+AfricaBurn Staff
+n I want to see total gas demand to plan supply
+n I want to track orders and payments
+n I want to manage delivery logistics
+Business Rules & Constraints
+n Sizes available? (9kg, 18kg, others?)
+n Pricing per bottle?
+n Pre-ordered or ordered on-site, or both?
+n Deposit on bottles? Return process?
+n Limit on how much a camp can order?
+Open Questions for AfricaBurn
+n How is gas ordering handled today?
+n Who is the gas supplier?
+n How big is this workflow? (camps using it, volume)
+Page 1
+--- page 2 ---
+AfricaBurn App | Gas Delivery [V2] PRELIMINARY SCOPE | May 2026
+n Is this a pain point, or just something that could be tidier?
+Page 2

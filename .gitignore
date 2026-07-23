@@ -1,0 +1,13 @@
+# WSL download metadata
+*Zone.Identifier
+
+# Byte-identical duplicate of the root scope documents (verified by checksum)
+AfrikaBurn App/
+
+# Original scope PDFs stay out of main (one contains an unredactable example
+# contact); preserved in full on the archive/source-documents branch
+/AfricaBurn-*.pdf
+
+node_modules/
+.env
+.env.local

@@ -1,0 +1,36 @@
+--- page 1 ---
+AfricaBurn App | Water Delivery [V2] PRELIMINARY SCOPE | May 2026
+Water Delivery
+V2 Scope Document | Preliminary | May 2026
+Overview
+Theme camps can apply for water delivery to site based on camp size. Currently managed through Quicket and
+manual coordination — clunky and in need of integration into the main app.
+User Stories
+Theme Camp Lead
+n I want to apply for water delivery based on my camp's registered size
+n I want to see how much water my camp is allocated
+n I want to pay for water through the app instead of Quicket
+n I want to choose or understand the delivery schedule
+n I want to request additional water beyond my allocation if possible
+n I want to track my water deliveries during the event
+AfricaBurn Staff
+n I want to see total water demand across all camps
+n I want to manage allocations based on camp size and availability
+n I want to track payments for water across all camps
+n I want to generate a delivery schedule for the water contractor
+Business Rules & Constraints
+n How is water allocation calculated? (litres per person per day?)
+n What's the pricing model?
+n Daily delivery or one-time bulk?
+n Can camps exceed their allocation at extra cost?
+n Is water delivery tied to registration?
+Open Questions for AfricaBurn
+n How much water is typically delivered per event?
+Page 1
+--- page 2 ---
+AfricaBurn App | Water Delivery [V2] PRELIMINARY SCOPE | May 2026
+n How many camps use the water delivery service?
+n Is there a water delivery contractor, or does AB manage it directly?
+n What does the current Quicket ordering/payment process look like?
+n What's specifically broken about it?
+Page 2
