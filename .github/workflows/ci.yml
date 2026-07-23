@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # No committed lockfile on the first CI run — allow pnpm to resolve and
+      # write one. Switch this to `--frozen-lockfile` once pnpm-lock.yaml is
+      # committed (which pins the resolution the gate below verifies).
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: CI gate
+        run: pnpm turbo run lint typecheck test build

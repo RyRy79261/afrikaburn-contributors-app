@@ -8,6 +8,16 @@ AfrikaBurn App/
 # contact); preserved in full on the archive/source-documents branch
 /AfricaBurn-*.pdf
 
+# --- Node / monorepo build artefacts ---
 node_modules/
+.next/
+.turbo/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+
+# --- Env files (all variants; .env.example is committed) ---
 .env
-.env.local
+.env.*
+!.env.example

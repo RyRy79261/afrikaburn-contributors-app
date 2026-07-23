@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* Tailwind v4 only scans the consuming project by default, so the apps would
+   miss the utilities baked into this package's CVA variants. Point at the
+   components dir so those classes get generated. */
+@source "../components/**/*.{ts,tsx}";
+
+/* ===========================================================================
+   Quagga Portal design tokens (build-spec §7). Minimal, dusty, non-corporate.
+   Palette: sand #E7DAC2 · bone #F4EEE2 · rust #C2431F (accent) · ochre #D98324
+   · charcoal #211D19 · night #141210. DARK-MODE-FIRST; light supported via a
+   `.light` class on <html>. System / clean-grotesk font stack.
+   =========================================================================== */
+
+@theme {
+  /* Raw brand ramp (usable directly, e.g. text-rust / bg-sand). */
+  --color-sand: #e7dac2;
+  --color-bone: #f4eee2;
+  --color-rust: #c2431f;
+  --color-ochre: #d98324;
+  --color-charcoal: #211d19;
+  --color-night: #141210;
+
+  /* Semantic tokens — DARK defaults (dark-mode-first). */
+  --color-background: #141210; /* night */
+  --color-foreground: #f4eee2; /* bone */
+  --color-card: #211d19; /* charcoal */
+  --color-card-foreground: #f4eee2;
+  --color-popover: #211d19;
+  --color-popover-foreground: #f4eee2;
+  --color-muted: #2a2520;
+  --color-muted-foreground: #cabfa6; /* dusted sand */
+  --color-primary: #c2431f; /* rust — the accent */
+  --color-primary-foreground: #f4eee2;
+  --color-secondary: #2e2822;
+  --color-secondary-foreground: #e7dac2;
+  --color-accent: #d98324; /* ochre */
+  --color-accent-foreground: #141210;
+  --color-border: #38312a;
+  --color-input: #38312a;
+  --color-ring: #d98324;
+  --color-destructive: #9e2b1a;
+  --color-destructive-foreground: #f4eee2;
+  --color-success: #7d8a4a; /* dusty olive */
+  --color-success-foreground: #141210;
+  --color-warning: #d98324; /* ochre */
+  --color-warning-foreground: #141210;
+
+  --radius: 0.5rem;
+
+  /* One clean grotesk with a system fallback stack. `--font-brand` face is
+     supplied by the app via next/font; falls through until then. */
+  --font-sans:
+    var(--font-brand), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    var(--font-brand-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+}
+
+/* Light theme — opt-in via <html class="light">. Warm paper, not clinical. */
+.light {
+  --color-background: #f4eee2; /* bone */
+  --color-foreground: #211d19; /* charcoal */
+  --color-card: #fcfaf4;
+  --color-card-foreground: #211d19;
+  --color-popover: #fcfaf4;
+  --color-popover-foreground: #211d19;
+  --color-muted: #e7dac2; /* sand */
+  --color-muted-foreground: #6b5e4b;
+  --color-primary: #c2431f; /* rust */
+  --color-primary-foreground: #f4eee2;
+  --color-secondary: #e7dac2;
+  --color-secondary-foreground: #211d19;
+  --color-accent: #d98324; /* ochre */
+  --color-accent-foreground: #141210;
+  --color-border: #d8c9ae;
+  --color-input: #d8c9ae;
+  --color-ring: #c2431f;
+  --color-destructive: #b23a2a;
+  --color-destructive-foreground: #f4eee2;
+  --color-success: #5f6c33;
+  --color-success-foreground: #f4eee2;
+  --color-warning: #b8701f;
+  --color-warning-foreground: #f4eee2;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+  }
+}

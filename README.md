@@ -1,6 +1,6 @@
 # AfrikaBurn Contributors App
 
-*Working name candidate: **Quagga Portal***
+_Working name candidate: **Quagga Portal**_
 
 A unified platform for AfrikaBurn theme camps — annual registration, container
 transport, and on-site services (water / ice / gas) — serving camps, AfrikaBurn staff,
@@ -21,18 +21,18 @@ proof-of-interaction uses an offline two-party QR signature handshake ("attestat
 with lazy sync afterwards.
 
 **Money stance — the platform never holds funds.** No camp fees, no camp treasuries.
-The only money in scope is AfrikaBurn-side logistics fees, tracked as payment *status*
+The only money in scope is AfrikaBurn-side logistics fees, tracked as payment _status_
 first; integrated checkout happens only if AB wants it, via an SA-based gateway that
 accepts international Visa/Mastercard.
 
 ## Documents
 
-| Doc | What it holds |
-|---|---|
-| [`docs/synthesis.md`](docs/synthesis.md) | Correlated requirements from all sources: buildable scope vs ideation topics, users, domain model, tensions, open questions |
-| [`docs/mvp-proposal.md`](docs/mvp-proposal.md) | Kickoff MVP: demo script, scope, offline/attestation architecture, stack, data model, build plan |
-| [`docs/roadmap.md`](docs/roadmap.md) | Committed releases R0–R3 + candidate topic track |
-| [`docs/sources/`](docs/sources/) | Extracted text of every source document (originals at repo root) |
+| Doc                                                              | What it holds                                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/synthesis.md`](docs/synthesis.md)                         | Correlated requirements from all sources: buildable scope vs ideation topics, users, domain model, tensions, open questions                                                                                            |
+| [`docs/mvp-proposal.md`](docs/mvp-proposal.md)                   | Kickoff MVP: demo script, scope, offline/attestation architecture, stack, data model, build plan                                                                                                                       |
+| [`docs/roadmap.md`](docs/roadmap.md)                             | Committed releases R0–R3 + candidate topic track                                                                                                                                                                       |
+| [`docs/sources/`](docs/sources/)                                 | Extracted text of every source document (originals at repo root)                                                                                                                                                       |
 | [`docs/sources/quaggapedia/`](docs/sources/quaggapedia/INDEX.md) | Full mirror of Quaggapedia (AB's official event wiki): 68 pages + 21 files — supplier depot rules, SOOP sound levels, WAP/ticket rules, DMV process, LNT/fire/generator rules, event & sound maps, STAR onboarding PDF |
 
 Sources: Finlay Kettlewell's Master Brief + five scope docs + discovery agenda (the
@@ -92,16 +92,16 @@ until registered.
 
 ### Burners, groups & entitlements
 
-| Term | Meaning |
-|---|---|
-| **Burner** | Any user — every account onboards a Burner Bio |
-| **Camper** | A burner who is a member of a camp |
-| **Group** | Anything joinable: the org, theme camps, art projects, mutant vehicle teams. Multi-membership allowed (camp + art project + MV team) |
-| **Project** | Any non-org group — the kind that registers and earns entitlements |
-| **Org** | The AfrikaBurn organisation as a group; staff roles are org memberships |
-| **God admin** | System-wide maximum privileges; the first user bootstraps into it |
-| **Supplier** | Camp-hired service provider (tent builds, electricity). Registers via a dedicated URL/procedure — not burner sign-up — optionally linked to a burner account by email. Camps declare suppliers from the repository; org vets and collects feedback |
-| **Contractor** | Works for AB fulfilling logistics (truck/water drivers) — token access, not accounts |
+| Term           | Meaning                                                                                                                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Burner**     | Any user — every account onboards a Burner Bio                                                                                                                                                                                                     |
+| **Camper**     | A burner who is a member of a camp                                                                                                                                                                                                                 |
+| **Group**      | Anything joinable: the org, theme camps, art projects, mutant vehicle teams. Multi-membership allowed (camp + art project + MV team)                                                                                                               |
+| **Project**    | Any non-org group — the kind that registers and earns entitlements                                                                                                                                                                                 |
+| **Org**        | The AfrikaBurn organisation as a group; staff roles are org memberships                                                                                                                                                                            |
+| **God admin**  | System-wide maximum privileges; the first user bootstraps into it                                                                                                                                                                                  |
+| **Supplier**   | Camp-hired service provider (tent builds, electricity). Registers via a dedicated URL/procedure — not burner sign-up — optionally linked to a burner account by email. Camps declare suppliers from the repository; org vets and collects feedback |
+| **Contractor** | Works for AB fulfilling logistics (truck/water drivers) — token access, not accounts                                                                                                                                                               |
 
 ```mermaid
 flowchart TD
@@ -116,7 +116,7 @@ immediately as free camps. Completing the annual registration flips a per-editio
 **approval attribute** that unlocks entitlements; it never guarantees allocation.
 
 Registered groups (all kinds) are **public and indexable** in a group directory, badged
-*accepting new members* or *invite-only* (one-time invite links, Camp 404 pattern);
+_accepting new members_ or _invite-only_ (one-time invite links, Camp 404 pattern);
 unregistered groups may stay private. Finer privacy settings are schema-reserved but
 deliberately unbuilt until needed. **Wranglers** (org role) are assigned per edition to
 registered camps and get a board tracking each camp's progress.
@@ -319,7 +319,7 @@ flowchart LR
 
 The platform **never holds funds**. Camp dues/treasuries are permanently out of scope
 (no reason to be a payment intermediary for ~120 camp treasuries). Even AB-side fees
-start as *status tracking* — a booking gets a payment reference, AB reconciles, the
+start as _status tracking_ — a booking gets a payment reference, AB reconciles, the
 coordinator (or a webhook, if a gateway is ever integrated) marks it paid. Whether AB
 wants in-app checkout at all is a discovery question; Finlay's docs assume Yoco, which
 is domestically focused — the standing requirement if we integrate is an SA-based
@@ -394,18 +394,18 @@ Full detail in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Stack summary
 
-| Layer | Choice |
-|---|---|
-| Monorepo | Turborepo + pnpm, Node ≥ 22 |
-| Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui |
-| DB | Neon Postgres + Drizzle ORM |
-| Auth | Neon Auth (Better Auth): email + Google OAuth; magic-link/PIN tokens for handover roles |
-| Async | Route handlers in MVP; Inngest optional later if the workload justifies it |
-| Payments | Payment details + reference + status blocks only — no processing, never holds funds ("we track, AB collects") |
-| Offline crypto | WebCrypto ECDSA P-256 + QR (BarcodeDetector / jsQR) — client-side only |
-| Storage | Vercel Blob |
-| Email | Resend from day one (auth, magic links, notifications) |
-| Hosting | Vercel |
+| Layer          | Choice                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| Monorepo       | Turborepo + pnpm, Node ≥ 22                                                                                   |
+| Web            | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui                                                     |
+| DB             | Neon Postgres + Drizzle ORM                                                                                   |
+| Auth           | Neon Auth (Better Auth): email + Google OAuth; magic-link/PIN tokens for handover roles                       |
+| Async          | Route handlers in MVP; Inngest optional later if the workload justifies it                                    |
+| Payments       | Payment details + reference + status blocks only — no processing, never holds funds ("we track, AB collects") |
+| Offline crypto | WebCrypto ECDSA P-256 + QR (BarcodeDetector / jsQR) — client-side only                                        |
+| Storage        | Vercel Blob                                                                                                   |
+| Email          | Resend from day one (auth, magic links, notifications)                                                        |
+| Hosting        | Vercel                                                                                                        |
 
 ## The Quaggapedia mirror — how it was built
 
@@ -416,7 +416,7 @@ a point-in-time mirror — the wiki will drift; re-run the process below to refr
 
 **Method** (fully automated, reproducible):
 
-1. **Enumeration** — the wiki's open MediaWiki API (`/api.php`, `list=allpages`) was queried across *every* namespace, proving completeness rather than assuming it: 123 main-namespace pages (no continuation, zero redirects), ~1,500 Translate-extension fragments, 221 files, 10 trivial talk stubs. The site blocks default HTTP clients (403) — a browser User-Agent is required.
+1. **Enumeration** — the wiki's open MediaWiki API (`/api.php`, `list=allpages`) was queried across _every_ namespace, proving completeness rather than assuming it: 123 main-namespace pages (no continuation, zero redirects), ~1,500 Translate-extension fragments, 221 files, 10 trivial talk stubs. The site blocks default HTTP clients (403) — a browser User-Agent is required.
 2. **Filtering** — language-variant duplicates (`/en-gb`, `/ru`, `/af`) and junk pages were excluded, leaving 68 canonical content pages.
 3. **Fan-out capture** — a Claude Code agent workflow fetched raw wikitext for all 68 pages in parallel (9 Claude Sonnet agents, ~8 pages each), converted each to clean markdown with provenance frontmatter, and wrote them to the repo.
 4. **Asset harvest** — the 21 informative binaries (event maps 2022–2026, sound maps, supplier rules, the STAR theme-camp onboarding PDF, WTF guide) were pulled via the API's `imageinfo` URLs; ~200 event photos were left behind.
@@ -424,16 +424,16 @@ a point-in-time mirror — the wiki will drift; re-run the process below to refr
 
 **Run metrics:**
 
-| Metric | Value |
-|---|---|
-| Pages mirrored / total on wiki | 68 / 123 (55 translation variants + junk excluded) |
-| Binary assets captured | 21 |
-| Agents | 10 (9× Sonnet fetch, 1× Opus mining) |
-| Tool calls | 199 |
-| Subagent tokens | 585,452 |
-| Wall-clock time | 7 min 37 s |
-| Agent failures | 0 |
-| Open questions answered / narrowed | 7 fully, 3 partially (of 10) |
+| Metric                             | Value                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| Pages mirrored / total on wiki     | 68 / 123 (55 translation variants + junk excluded) |
+| Binary assets captured             | 21                                                 |
+| Agents                             | 10 (9× Sonnet fetch, 1× Opus mining)               |
+| Tool calls                         | 199                                                |
+| Subagent tokens                    | 585,452                                            |
+| Wall-clock time                    | 7 min 37 s                                         |
+| Agent failures                     | 0                                                  |
+| Open questions answered / narrowed | 7 fully, 3 partially (of 10)                       |
 
 ## Repo notes
 

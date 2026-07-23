@@ -1,0 +1,20 @@
+{
+  "name": "@quagga/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "next.js"
+  ],
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "typescript-eslint": "^8.59.4"
+  },
+  "peerDependencies": {
+    "eslint": "^10"
+  }
+}
