@@ -7,8 +7,26 @@ transport, and on-site services (water / ice / gas) — serving camps, AfrikaBur
 and contractors. It replaces a patchwork of Google Forms, Quicket payments, WhatsApp
 threads, and last year's standalone container app.
 
-**Status:** planning complete; next step is building a raw MVP of the two V1 workflows
-(registration + container transport) for the project kickoff meeting.
+**Status:** MVP built and CI-green — `apps/web` (participant app: Burner Bio onboarding,
+camp directory/creation/invites, six-section registration wizard) and `apps/org`
+(organiser console: review workflow, account elevation, suppliers, payment
+reconciliation) — awaiting first deployment (see [`docs/deploy.md`](docs/deploy.md)).
+Kickoff demo: 28 July 2026.
+
+## Development
+
+```bash
+pnpm install
+pnpm turbo run lint typecheck test build   # the full CI gate
+pnpm --filter @quagga/web dev              # participant app :3000
+pnpm --filter @quagga/org dev              # organiser console :3001
+```
+
+Both apps boot without any environment variables (graceful "not configured" state).
+`cp .env.example .env` and fill in what you have. Database changes: edit
+`packages/db/src/schema.ts` → `pnpm --filter @quagga/db db:generate` (never hand-edit
+migrations; never wire migrations into a build script — they are applied manually via
+`db:migrate` once a database exists).
 
 **Core product principle — fewer forms, not more.** The problem being solved is that
 people don't fill out forms. Every feature must reduce net administrative burden:
