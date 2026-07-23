@@ -21,3 +21,21 @@ export function isGodEmailIn(
   if (!email) return false;
   return godEmails.includes(email.trim().toLowerCase());
 }
+
+/**
+ * Whether an authenticated session may be bootstrapped to `god`. The email must
+ * be on the GOD_EMAILS list AND *verified* by the auth provider — a listed
+ * address alone is not enough. Without the verified gate, any flow that lets a
+ * user assert an unverified email (self-service sign-up, an unverified
+ * email-change, or an OIDC provider asserting an attacker-controlled `email`
+ * claim) matching a not-yet-registered god address would silently elevate an
+ * attacker to the highest privilege in the system.
+ */
+export function canBootstrapGod(
+  email: string | null | undefined,
+  emailVerified: boolean,
+  godEmails: readonly string[],
+): boolean {
+  if (!emailVerified) return false;
+  return isGodEmailIn(email, godEmails);
+}

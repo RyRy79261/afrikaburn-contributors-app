@@ -8,9 +8,16 @@ export interface AuthenticatedUser {
   id: string;
   primaryEmail: string | null;
   displayName: string | null;
+  /** Whether the auth provider has verified `primaryEmail`. Gates god bootstrap. */
+  emailVerified: boolean;
 }
 
-type SessionUser = { id: string; email?: string | null; name?: string | null };
+type SessionUser = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  emailVerified?: boolean | null;
+};
 
 function toAuthenticatedUser(
   user: SessionUser | null | undefined,
@@ -20,6 +27,7 @@ function toAuthenticatedUser(
     id: user.id,
     primaryEmail: user.email ?? null,
     displayName: user.name ?? null,
+    emailVerified: user.emailVerified === true,
   };
 }
 

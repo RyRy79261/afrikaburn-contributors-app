@@ -6,7 +6,8 @@ import {
   BURNER_BIO_VERSION,
   buildBurnerBioQuestionnaire,
   defaultPrivacyFlags,
-  enforcePrivacyFlags,
+  initialPrivacyFlags,
+  resolvePrivacyFlagsUpdate,
   isBioComplete,
   mapBioToResponses,
   mapResponsesToBio,
@@ -108,13 +109,6 @@ export async function saveBio(input: {
     return { ok: false, errors: { displayName: "A display name is required." } };
   }
 
-  // Privacy flags: merge onto defaults, then force every hard-locked field
-  // private — the last line before persistence.
-  const privacyFlags = enforcePrivacyFlags({
-    ...defaultPrivacyFlags(),
-    ...(input.rawPrivacyFlags ?? {}),
-  });
-
   const saIdEncrypted =
     fields.idType === "sa_id" ? safeEncrypt(fields.idNumber) : null;
   const passportEncrypted =
@@ -123,7 +117,10 @@ export async function saveBio(input: {
   const now = new Date();
   const completedAt = input.final ? now : null;
 
-  const values = {
+  // Column values shared by insert + update — EXCLUDING privacy_flags, which are
+  // owned by the dedicated privacy editor. A plain bio-text save (no
+  // rawPrivacyFlags) must not reset a user's deliberate privacy choices.
+  const baseValues = {
     userId: input.userId,
     editionId: input.editionId,
     displayName: fields.displayName,
@@ -139,18 +136,27 @@ export async function saveBio(input: {
     medicalNotes: fields.medicalNotes,
     saIdEncrypted,
     passportEncrypted,
-    privacyFlags,
     version: BURNER_BIO_VERSION,
     updatedAt: now,
   };
 
   await db()
     .insert(schema.burnerBios)
-    .values({ ...values, completedAt })
+    .values({
+      ...baseValues,
+      // A brand-new row still needs an initial privacy_flags value.
+      privacyFlags: initialPrivacyFlags(input.rawPrivacyFlags),
+      completedAt,
+    })
     .onConflictDoUpdate({
       target: [schema.burnerBios.userId, schema.burnerBios.editionId],
-      // On an update, only stamp completedAt when finalising — never unset it.
-      set: input.final ? { ...values, completedAt } : values,
+      set: {
+        ...baseValues,
+        // Only touch privacy_flags when the caller explicitly supplied them.
+        ...resolvePrivacyFlagsUpdate(input.rawPrivacyFlags),
+        // On an update, only stamp completedAt when finalising — never unset it.
+        ...(input.final ? { completedAt } : {}),
+      },
     });
 
   await ensureProfileKeypair(input.userId);
@@ -168,10 +174,7 @@ export async function savePrivacyFlags(
   editionId: string,
   rawPrivacyFlags: Record<string, boolean>,
 ): Promise<void> {
-  const privacyFlags = enforcePrivacyFlags({
-    ...defaultPrivacyFlags(),
-    ...rawPrivacyFlags,
-  });
+  const privacyFlags = initialPrivacyFlags(rawPrivacyFlags);
   await db()
     .update(schema.burnerBios)
     .set({ privacyFlags, updatedAt: new Date() })

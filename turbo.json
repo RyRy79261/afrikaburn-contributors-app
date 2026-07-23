@@ -10,7 +10,8 @@
     "RESEND_API_KEY",
     "GOD_EMAILS",
     "BLOB_READ_WRITE_TOKEN",
-    "PGCRYPTO_KEY"
+    "PGCRYPTO_KEY",
+    "NEON_LOCAL_PROXY"
   ],
   "tasks": {
     "build": {

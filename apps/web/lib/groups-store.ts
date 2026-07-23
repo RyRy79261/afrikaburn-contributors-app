@@ -7,6 +7,7 @@ import {
   isExactNormalizedMatch,
   isSimilarName,
   trigramSimilarity,
+  publicMemberName,
   CAMP_DESCRIPTION_WORD_LIMIT,
   isWithinWordLimit,
 } from "@quagga/core";
@@ -181,12 +182,14 @@ export async function getCampBySlug(
     .limit(1);
   const registrationStatus = regs[0]?.status ?? null;
 
+  // NB: never select the account email here — this list renders on the public
+  // (registered) camp page, and email is POPIA-relevant PII. Public display
+  // names fall back to a neutral placeholder, never to email.
   const memberRows = await db()
     .select({
       userId: schema.memberships.userId,
       role: schema.memberships.role,
       displayName: schema.burnerBios.displayName,
-      email: schema.users.email,
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
@@ -202,7 +205,7 @@ export async function getCampBySlug(
   const members: CampMember[] = memberRows.map((m) => ({
     userId: m.userId,
     role: m.role,
-    displayName: m.displayName ?? m.email ?? "Unnamed burner",
+    displayName: publicMemberName(m.displayName),
     isViewer: m.userId === viewerId,
   }));
   const roleRank: Record<MembershipRole, number> = {
@@ -261,6 +264,19 @@ export type CreateCampResult =
   | { ok: true; slug: string }
   | { ok: false; error: string };
 
+/** Postgres unique-violation SQLSTATE. The Neon driver surfaces it as `.code`. */
+const UNIQUE_VIOLATION = "23505";
+
+/** Whether an unknown error is a Postgres unique-constraint violation. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === UNIQUE_VIOLATION
+  );
+}
+
 /** Create a project group (instant free camp); the creator becomes its lead. */
 export async function createCamp(input: {
   creatorId: string;
@@ -302,18 +318,34 @@ export async function createCamp(input: {
     slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
-  const inserted = await db()
-    .insert(schema.groups)
-    .values({
-      kind: input.kind,
-      name,
-      nameNormalized: normalizeName(name),
-      slug,
-      description: input.description,
-      joinability: input.joinability,
-      createdByUserId: input.creatorId,
-    })
-    .returning({ id: schema.groups.id, slug: schema.groups.slug });
+  // checkCampName above is a SELECT-then-decide with a TOCTOU window: two
+  // concurrent creates with the same normalized name can both pass it. The
+  // unique index groups_kind_name_normalized_idx is the real guarantee — catch
+  // its violation and surface the same graceful message rather than a 500. A
+  // slug collision that survives the retry loop maps to the same handling.
+  let inserted: { id: string; slug: string }[];
+  try {
+    inserted = await db()
+      .insert(schema.groups)
+      .values({
+        kind: input.kind,
+        name,
+        nameNormalized: normalizeName(name),
+        slug,
+        description: input.description,
+        joinability: input.joinability,
+        createdByUserId: input.creatorId,
+      })
+      .returning({ id: schema.groups.id, slug: schema.groups.slug });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return {
+        ok: false,
+        error: "A camp of this kind already uses that name. Pick another.",
+      };
+    }
+    throw err;
+  }
   const group = inserted[0];
   if (!group) return { ok: false, error: "Could not create the camp." };
 

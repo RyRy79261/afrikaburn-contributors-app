@@ -7,11 +7,23 @@
 // whose email is on this list is ensured a `god` membership on the seeded org
 // group.
 
-import { isGodEmailIn, parseGodEmails } from "@quagga/core";
+import { canBootstrapGod, isGodEmailIn, parseGodEmails } from "@quagga/core";
 
-export { parseGodEmails, isGodEmailIn };
+export { parseGodEmails, isGodEmailIn, canBootstrapGod };
 
 /** Convenience: reads `process.env.GOD_EMAILS`. */
 export function isGodEmail(email: string | null | undefined): boolean {
   return isGodEmailIn(email, parseGodEmails(process.env.GOD_EMAILS));
+}
+
+/**
+ * Convenience: whether a session may be bootstrapped to god — the email must be
+ * VERIFIED and on `process.env.GOD_EMAILS`. Gates the highest privilege in the
+ * system against unverified / attacker-asserted email claims.
+ */
+export function canBootstrapGodEmail(
+  email: string | null | undefined,
+  emailVerified: boolean,
+): boolean {
+  return canBootstrapGod(email, emailVerified, parseGodEmails(process.env.GOD_EMAILS));
 }

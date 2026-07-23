@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   firstBlockingAction,
-  isGodEmailIn,
+  canBootstrapGod,
   parseGodEmails,
 } from "@quagga/core";
 import { db, schema } from "./db";
@@ -30,13 +30,35 @@ export async function getOrgGroup(): Promise<{ id: string } | null> {
   return rows[0] ?? null;
 }
 
+/** Record the god elevation in `audit_events` (build-spec §audit_events:
+ * "Written on: elevation"). Self-actor — the grant is driven by GOD_EMAILS. */
+async function auditGodElevation(user: CampUser): Promise<void> {
+  await db()
+    .insert(schema.auditEvents)
+    .values({
+      actorId: user.id,
+      action: "account.elevate",
+      subject: user.id,
+      meta: { email: user.email, role: "god", via: "god_emails" },
+    });
+}
+
 /**
  * On the first authenticated request, grant god membership on the org group to
- * any email in GOD_EMAILS (build-spec §Env `GOD_EMAILS`). Idempotent; a no-op
- * when the org group isn't seeded yet or the email isn't listed.
+ * any GOD_EMAILS-listed user whose email the auth provider has VERIFIED
+ * (build-spec §Env `GOD_EMAILS`). Idempotent; a no-op when the org group isn't
+ * seeded, the email isn't listed, or it is unverified. Writes an audit event
+ * when a god membership is actually created or changed.
  */
-async function bootstrapGod(user: CampUser): Promise<void> {
-  if (!isGodEmailIn(user.email, parseGodEmails(process.env.GOD_EMAILS))) return;
+async function bootstrapGod(
+  user: CampUser,
+  emailVerified: boolean,
+): Promise<void> {
+  if (
+    !canBootstrapGod(user.email, emailVerified, parseGodEmails(process.env.GOD_EMAILS))
+  ) {
+    return;
+  }
   const org = await getOrgGroup();
   if (!org) return;
   const existing = await db()
@@ -50,17 +72,21 @@ async function bootstrapGod(user: CampUser): Promise<void> {
     )
     .limit(1);
   if (!existing[0]) {
-    await db()
+    const inserted = await db()
       .insert(schema.memberships)
       .values({ userId: user.id, groupId: org.id, role: "god" })
       .onConflictDoNothing({
         target: [schema.memberships.userId, schema.memberships.groupId],
-      });
+      })
+      .returning({ id: schema.memberships.id });
+    // Only audit when the insert actually created the god row (no conflict).
+    if (inserted[0]) await auditGodElevation(user);
   } else if (existing[0].role !== "god") {
     await db()
       .update(schema.memberships)
       .set({ role: "god" })
       .where(eq(schema.memberships.id, existing[0].id));
+    await auditGodElevation(user);
   }
 }
 
@@ -100,7 +126,7 @@ export async function ensureCampUser(
     campUser.email = authUser.primaryEmail;
   }
 
-  await bootstrapGod(campUser);
+  await bootstrapGod(campUser, authUser.emailVerified);
   await ensureRequiredAction({
     userId: campUser.id,
     actionKey: BURNER_BIO_ACTION_KEY,

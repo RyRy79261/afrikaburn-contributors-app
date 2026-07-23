@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   BIO_PRIVACY_FIELDS,
   defaultPrivacyFlags,
+  initialPrivacyFlags,
+  resolvePrivacyFlagsUpdate,
+  publicMemberName,
   buildBurnerBioQuestionnaire,
   mapResponsesToBio,
   mapBioToResponses,
@@ -42,6 +45,66 @@ describe("bio privacy registry ↔ hard-lock", () => {
     const safe = enforcePrivacyFlags(tampered);
     expect(safe.phone).toBe(false);
     expect(safe.passport).toBe(false);
+  });
+});
+
+describe("privacy-flags write helpers (regression: bio edit must not reset flags)", () => {
+  it("initialPrivacyFlags merges defaults, overlays input, and enforces the lock", () => {
+    // A brand-new row: caller marks a default-public field private.
+    const flags = initialPrivacyFlags({ displayName: false, phone: true });
+    expect(flags.displayName).toBe(false); // caller choice honoured
+    expect(flags.homeCity).toBe(true); // default retained
+    expect(flags.phone).toBe(false); // hard-lock wins over illegal input
+  });
+
+  it("initialPrivacyFlags falls back to plain defaults when nothing supplied", () => {
+    expect(initialPrivacyFlags()).toEqual(defaultPrivacyFlags());
+  });
+
+  it("resolvePrivacyFlagsUpdate returns an EMPTY patch when flags are omitted", () => {
+    // The core of the leak fix: a bio-text save (no rawPrivacyFlags) must leave
+    // the stored privacy_flags untouched rather than resetting them to defaults.
+    const patch = resolvePrivacyFlagsUpdate(undefined);
+    expect(patch).toEqual({});
+    expect("privacyFlags" in patch).toBe(false);
+  });
+
+  it("resolvePrivacyFlagsUpdate returns enforced flags when explicitly supplied", () => {
+    const patch = resolvePrivacyFlagsUpdate({ displayName: false, saId: true });
+    expect(patch).toEqual({
+      privacyFlags: initialPrivacyFlags({ displayName: false, saId: true }),
+    });
+    // Confirm the user's private choice survives and the lock still applies.
+    if ("privacyFlags" in patch) {
+      expect(patch.privacyFlags.displayName).toBe(false);
+      expect(patch.privacyFlags.saId).toBe(false);
+    }
+  });
+
+  it("an empty explicit map is still a WRITE (distinct from omission)", () => {
+    // {} means "reset to defaults on purpose"; undefined means "leave as-is".
+    expect(resolvePrivacyFlagsUpdate({})).toEqual({
+      privacyFlags: defaultPrivacyFlags(),
+    });
+  });
+});
+
+describe("publicMemberName (regression: never leak account email)", () => {
+  it("uses the display name when present", () => {
+    expect(publicMemberName("Dusty Prototype")).toBe("Dusty Prototype");
+  });
+
+  it("falls back to a neutral placeholder — never to email — when absent", () => {
+    expect(publicMemberName(null)).toBe("Unnamed burner");
+    expect(publicMemberName(undefined)).toBe("Unnamed burner");
+    expect(publicMemberName("")).toBe("Unnamed burner");
+    expect(publicMemberName("   ")).toBe("Unnamed burner");
+    // The placeholder must never look like an email address.
+    expect(publicMemberName(null)).not.toContain("@");
+  });
+
+  it("trims surrounding whitespace on a real name", () => {
+    expect(publicMemberName("  Ember  ")).toBe("Ember");
   });
 });
 

@@ -7,7 +7,8 @@ import type { MembershipRole } from "@quagga/types";
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getDb, schema } from "@/lib/db";
-import { isGodEmail } from "@/lib/god";
+import { canBootstrapGodEmail } from "@/lib/god";
+import { writeAuditEvent } from "@/lib/audit";
 
 /** A staff member who has cleared the gate. */
 export interface OrgSession {
@@ -70,15 +71,36 @@ export async function resolveOrgSession(): Promise<OrgSessionState> {
       .limit(1);
     if (!orgGroup) return { kind: "not_ready", user };
 
-    // GOD_EMAILS bootstrap — grant / re-affirm god on first login.
-    if (isGodEmail(user.primaryEmail)) {
-      await db
-        .insert(schema.memberships)
-        .values({ userId: dbUser.id, groupId: orgGroup.id, role: "god" })
-        .onConflictDoUpdate({
-          target: [schema.memberships.userId, schema.memberships.groupId],
-          set: { role: "god" },
+    // GOD_EMAILS bootstrap — grant god on first login, but ONLY when the auth
+    // provider has verified the email. A listed-but-unverified address (e.g. an
+    // OIDC provider asserting an attacker-controlled `email` claim) must never
+    // elevate. Audited when a god membership is actually created or changed.
+    if (canBootstrapGodEmail(user.primaryEmail, user.emailVerified)) {
+      const [existingGod] = await db
+        .select({ role: schema.memberships.role })
+        .from(schema.memberships)
+        .where(
+          and(
+            eq(schema.memberships.userId, dbUser.id),
+            eq(schema.memberships.groupId, orgGroup.id),
+          ),
+        )
+        .limit(1);
+      if (existingGod?.role !== "god") {
+        await db
+          .insert(schema.memberships)
+          .values({ userId: dbUser.id, groupId: orgGroup.id, role: "god" })
+          .onConflictDoUpdate({
+            target: [schema.memberships.userId, schema.memberships.groupId],
+            set: { role: "god" },
+          });
+        await writeAuditEvent(db, {
+          actorId: dbUser.id,
+          action: "account.elevate",
+          subject: dbUser.id,
+          meta: { email: user.primaryEmail, role: "god", via: "god_emails" },
         });
+      }
     }
 
     const [membership] = await db

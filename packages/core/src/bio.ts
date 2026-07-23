@@ -7,7 +7,7 @@
 // (`idType`/`idNumber`); apps/web encrypts before storage.
 
 import type { Questionnaire, QuestionnaireResponses } from "@quagga/types";
-import { HARD_LOCKED_PRIVATE_FIELDS } from "./privacy";
+import { HARD_LOCKED_PRIVATE_FIELDS, enforcePrivacyFlags } from "./privacy";
 
 /** Bump when the questionnaire SHAPE changes (a question added/removed or a
  * required flag flipped). Stored on `burner_bios.version`. */
@@ -114,6 +114,49 @@ export function defaultPrivacyFlags(): Record<string, boolean> {
     flags[field.key] = field.locked ? false : field.defaultPublic;
   }
   return flags;
+}
+
+/**
+ * The privacy-flags value for a brand-NEW bio row: defaults overlaid with any
+ * caller-supplied flags, then hard-locked fields forced private. Use this only
+ * for the INSERT path — an existing row's flags are owned by the privacy editor
+ * (see `resolvePrivacyFlagsUpdate`).
+ */
+export function initialPrivacyFlags(
+  rawPrivacyFlags?: Record<string, boolean>,
+): Record<string, boolean> {
+  return enforcePrivacyFlags({
+    ...defaultPrivacyFlags(),
+    ...(rawPrivacyFlags ?? {}),
+  });
+}
+
+/**
+ * The privacy-flags patch for an UPDATE to an existing bio. Privacy flags are
+ * owned by the dedicated privacy editor — a plain bio-text save (which omits
+ * `rawPrivacyFlags`) must NOT touch them, or a user's deliberate private→public
+ * choices silently reset to defaults, re-exposing default-public fields they had
+ * marked private. Returns an EMPTY patch to leave the stored flags untouched, or
+ * the enforced flags when the caller explicitly supplies them. Spread the result
+ * into the update `set`.
+ */
+export function resolvePrivacyFlagsUpdate(
+  rawPrivacyFlags: Record<string, boolean> | undefined,
+): { privacyFlags: Record<string, boolean> } | Record<string, never> {
+  if (rawPrivacyFlags === undefined) return {};
+  return { privacyFlags: initialPrivacyFlags(rawPrivacyFlags) };
+}
+
+/**
+ * A member's PUBLIC-facing display name. Falls back to a neutral placeholder —
+ * NEVER to the account email, which is POPIA-relevant PII that must not leak
+ * onto public camp pages or the directory.
+ */
+export function publicMemberName(
+  displayName: string | null | undefined,
+): string {
+  const trimmed = displayName?.trim();
+  return trimmed ? trimmed : "Unnamed burner";
 }
 
 // --- Previous-burn buckets ----------------------------------------------
