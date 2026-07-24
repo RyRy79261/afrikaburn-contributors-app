@@ -92,3 +92,11 @@ justified. Listed roughly by how plausibly they'd graduate.*
 | Full-camper-list vs minimal-contacts decision (default: minimal) | Data posture across the board | AB |
 | Supplier deposit/fee amounts, Supplier Agreement text, vetting criteria (procedure itself now documented — see `docs/sources/quaggapedia/supplier-depot.md`) | Supplier portal; repository vetting fields | AB |
 | Confirm current water process (public wiki documents no delivery service; Finlay's scope says Quicket-based delivery exists — one is stale) | R3 water workflow | AB |
+
+### Platform-as-backend: public API + MCP server *(Ryan's idea, 24 Jul 2026 — after the design pass)*
+Make the platform a formal backend others can build on: a public API + an MCP server as
+their own app/project in the monorepo. Camp-specific apps (e.g. Camp 404) authenticate
+against it and reuse the shared spine — one Burner Bio per human across every camp app,
+memberships/entitlements queried rather than duplicated. Slots naturally into the
+existing architecture (the org/participant apps already consume the same packages).
+Explicitly parked until after the design pass lands.
