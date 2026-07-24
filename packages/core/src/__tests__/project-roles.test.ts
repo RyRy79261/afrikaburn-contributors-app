@@ -7,7 +7,25 @@ import {
   roleNameConflicts,
   dedupeRoleNames,
   defaultProjectRoleRows,
+  PROJECT_ROLE_CAP,
+  roleCapReached,
 } from "../project-roles";
+
+// Regression guard for the missing 20-role cap (spec §"Custom project roles
+// CRUD": "cap 20 roles/project"). createRole (roles-store) must refuse once the
+// project holds PROJECT_ROLE_CAP roles.
+describe("roleCapReached", () => {
+  it("caps a project at 20 roles", () => {
+    expect(PROJECT_ROLE_CAP).toBe(20);
+  });
+
+  it("is false below the cap and true at/over it", () => {
+    expect(roleCapReached(0)).toBe(false);
+    expect(roleCapReached(PROJECT_ROLE_CAP - 1)).toBe(false);
+    expect(roleCapReached(PROJECT_ROLE_CAP)).toBe(true);
+    expect(roleCapReached(PROJECT_ROLE_CAP + 5)).toBe(true);
+  });
+});
 
 describe("DEFAULT_PROJECT_ROLES", () => {
   it("is Captain, Team lead, Burn member in order", () => {

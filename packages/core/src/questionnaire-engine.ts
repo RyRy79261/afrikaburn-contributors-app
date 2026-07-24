@@ -5,7 +5,7 @@
 // concrete routes stays in apps/web (it owns its route table); everything here
 // is pure and unit-testable.
 
-import type { Questionnaire } from "@quagga/types";
+import type { AudienceSpec, Questionnaire } from "@quagga/types";
 import { buildBurnerBioQuestionnaire } from "./bio";
 
 /** The Burner Bio's `required_actions.action_key` — the one code questionnaire
@@ -53,4 +53,19 @@ export function hasPendingBlocker(
   actions: readonly RequiredActionLike[],
 ): boolean {
   return firstBlockingAction(actions) !== null;
+}
+
+/**
+ * Whether an activation may surface in the PARTICIPANT app (the hard gate, the
+ * fill page, and the pending-questionnaires list). Org-INTERNAL activations
+ * (`audience.kind === "org_internal"`) gate the ORG CONSOLE only and must NEVER
+ * leak into the participant app — even when the targeted user is also a camp
+ * user (an org_staff/god who is also a burner). Spec §"Authoring levels":
+ * org-internal appears "never in the participant app". A row with no audience
+ * (the code-side Burner Bio spine) is participant-facing.
+ */
+export function isParticipantFacingActivation(
+  audience: AudienceSpec | null | undefined,
+): boolean {
+  return audience?.kind !== "org_internal";
 }

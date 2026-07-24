@@ -343,15 +343,17 @@ function ManageRolesDialog({
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${r.name}`}
-                      onClick={() => remove(r.id)}
-                      disabled={isPending}
-                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {!r.isDefault && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${r.name}`}
+                        onClick={() => remove(r.id)}
+                        disabled={isPending}
+                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </>
                 )}
               </li>

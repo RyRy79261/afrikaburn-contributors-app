@@ -2,7 +2,11 @@ import "server-only";
 
 import { and, asc, eq } from "drizzle-orm";
 import type { RequiredActionLike } from "@quagga/core";
-import { BURNER_BIO_ACTION_KEY, parseActivationActionKey } from "@quagga/core";
+import {
+  BURNER_BIO_ACTION_KEY,
+  isParticipantFacingActivation,
+  parseActivationActionKey,
+} from "@quagga/core";
 import { db, schema } from "./db";
 
 // The code-side action-key → route registry (build-spec: the DB stores the key,
@@ -63,7 +67,14 @@ export async function completeRequiredAction(
     );
 }
 
-/** All of a user's required actions, oldest first — the gating spine reads this. */
+/**
+ * All of a user's required actions, oldest first — the participant-app gating
+ * spine reads this. Org-INTERNAL questionnaire activations are excluded: they
+ * gate the org console only and must never gate/route the participant app, even
+ * for an org_staff/god who is also a camp user (spec §"Authoring levels").
+ * Rows with no activation (the Burner Bio) are kept via the LEFT JOIN + null
+ * audience.
+ */
 export async function listRequiredActions(
   userId: string,
 ): Promise<RequiredActionLike[]> {
@@ -72,9 +83,23 @@ export async function listRequiredActions(
       actionKey: schema.requiredActions.actionKey,
       blocking: schema.requiredActions.blocking,
       status: schema.requiredActions.status,
+      audience: schema.questionnaireActivations.audience,
     })
     .from(schema.requiredActions)
+    .leftJoin(
+      schema.questionnaireActivations,
+      eq(
+        schema.questionnaireActivations.id,
+        schema.requiredActions.activationId,
+      ),
+    )
     .where(eq(schema.requiredActions.userId, userId))
     .orderBy(asc(schema.requiredActions.createdAt));
-  return rows;
+  return rows
+    .filter((r) => isParticipantFacingActivation(r.audience))
+    .map(({ actionKey, blocking, status }) => ({
+      actionKey,
+      blocking,
+      status,
+    }));
 }

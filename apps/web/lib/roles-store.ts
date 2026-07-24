@@ -6,6 +6,8 @@ import {
   defaultProjectRoleRows,
   isValidRoleName,
   normalizeRoleName,
+  PROJECT_ROLE_CAP,
+  roleCapReached,
   roleNameConflicts,
 } from "@quagga/core";
 import { db, schema } from "./db";
@@ -101,6 +103,12 @@ export async function createRole(
     return { ok: false, error: "Give the role a short, non-empty name." };
   }
   const existing = await listRoles(groupId);
+  if (roleCapReached(existing.length)) {
+    return {
+      ok: false,
+      error: `A camp can have at most ${PROJECT_ROLE_CAP} roles. Remove one before adding another.`,
+    };
+  }
   if (roleNameConflicts(existing.map((r) => r.name), name)) {
     return { ok: false, error: "A role with that name already exists." };
   }
@@ -162,11 +170,23 @@ export async function renameRole(
   return { ok: true };
 }
 
-/** Remove a role (its assignments cascade via the FK). */
+/**
+ * Remove a CUSTOM role (its assignments cascade via the FK). Default roles
+ * (Captain / Team lead / Burn member) are permanent fixtures and cannot be
+ * deleted (questionnaire-spec §"Custom project roles CRUD" + §"Role kinds") —
+ * deleting one is unrecoverable because `ensureDefaultRoles` never re-seeds once
+ * any role exists.
+ */
 export async function removeRole(
   groupId: string,
   roleId: string,
 ): Promise<RoleMutationResult> {
+  const existing = await listRoles(groupId);
+  const target = existing.find((r) => r.id === roleId);
+  if (!target) return { ok: false, error: "That role no longer exists." };
+  if (target.isDefault) {
+    return { ok: false, error: "Default roles can't be deleted." };
+  }
   await db()
     .delete(schema.projectRoles)
     .where(

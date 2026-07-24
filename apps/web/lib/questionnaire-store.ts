@@ -4,6 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   activationRequiredActionKey,
   buildActivationRequiredActions,
+  isParticipantFacingActivation,
   parseActivationActionKey,
   resolveAudience,
   tallyActivationCompletion,
@@ -12,6 +13,7 @@ import {
 import {
   flattenQuestions,
   validateResponses,
+  type AudienceSpec,
   type ProjectAudience,
   type Questionnaire,
   type QuestionnaireResponses,
@@ -303,6 +305,7 @@ export interface ActivationRow {
   authoredScope: "org" | "group";
   groupId: string | null;
   editionId: string | null;
+  audience: AudienceSpec | null;
   definition: Questionnaire;
 }
 
@@ -322,6 +325,7 @@ export async function getActivation(
       authoredScope: schema.questionnaireActivations.authoredScope,
       groupId: schema.questionnaireActivations.groupId,
       editionId: schema.questionnaireActivations.editionId,
+      audience: schema.questionnaireActivations.audience,
       definition: schema.questionnaireDefinitions.definition,
     })
     .from(schema.questionnaireActivations)
@@ -438,6 +442,9 @@ export async function getFillView(
 ): Promise<FillView | null> {
   const activation = await getActivation(activationId);
   if (!activation) return null;
+  // Org-internal questionnaires gate the console only — never serve their fill
+  // page in the participant app, even to an org member who is also a burner.
+  if (!isParticipantFacingActivation(activation.audience)) return null;
 
   const actionRows = await db()
     .select({ status: schema.requiredActions.status })
@@ -498,8 +505,16 @@ export async function listPendingQuestionnaires(
       blocking: schema.requiredActions.blocking,
       dueAt: schema.requiredActions.dueAt,
       createdAt: schema.requiredActions.createdAt,
+      audience: schema.questionnaireActivations.audience,
     })
     .from(schema.requiredActions)
+    .leftJoin(
+      schema.questionnaireActivations,
+      eq(
+        schema.questionnaireActivations.id,
+        schema.requiredActions.activationId,
+      ),
+    )
     .where(
       and(
         eq(schema.requiredActions.userId, userId),
@@ -511,6 +526,8 @@ export async function listPendingQuestionnaires(
 
   const out: PendingQuestionnaire[] = [];
   for (const r of rows) {
+    // Org-internal sends never show in the participant's pending list.
+    if (!isParticipantFacingActivation(r.audience)) continue;
     const activationId = parseActivationActionKey(r.actionKey);
     if (!activationId) continue; // skips the code-side Burner Bio action
     out.push({
@@ -536,6 +553,12 @@ export async function submitResponse(input: {
   const activation = await getActivation(input.activationId);
   if (!activation) {
     return { ok: false, errors: { _form: "This questionnaire no longer exists." } };
+  }
+  // Org-internal questionnaires are submitted through the console gate, never
+  // the participant flow — reject them here defensively (the fill page for them
+  // is already withheld by getFillView).
+  if (!isParticipantFacingActivation(activation.audience)) {
+    return { ok: false, errors: { _form: "This questionnaire isn't available here." } };
   }
 
   const actionKey = activationRequiredActionKey(input.activationId);

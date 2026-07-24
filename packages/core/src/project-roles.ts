@@ -30,6 +30,15 @@ export const DEFAULT_PROJECT_ROLES: readonly DefaultProjectRole[] = [
 /** Max length of a custom role label (UI + boundary guard). */
 export const PROJECT_ROLE_NAME_MAX = 60;
 
+/** Max number of roles a single project may hold (questionnaire-spec §"Custom
+ * project roles CRUD": "cap 20 roles/project"). Counts defaults + custom. */
+export const PROJECT_ROLE_CAP = 20;
+
+/** True when a project is already at (or over) the role cap and may not add more. */
+export function roleCapReached(existingCount: number): boolean {
+  return existingCount >= PROJECT_ROLE_CAP;
+}
+
 /**
  * Canonical uniqueness key for a role name — case/space/punct-insensitive,
  * matching the group-name normalizer. "Team Lead", "team-lead" and "teamlead"
