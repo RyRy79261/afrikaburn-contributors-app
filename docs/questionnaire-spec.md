@@ -99,6 +99,38 @@ role (one concept, not two); audience scoping that includes the baseline role me
 "may target the whole camp". Aliases display everywhere (chips, audiences, completion
 tables) — the kind stays stable underneath.
 
+### Officer roles — org-defined, condition-triggered (Ryan, 24 Jul; corpus-grounded)
+
+AB already instructs camps to appoint specific responsible people (Quaggapedia receipts):
+"Nominate a safety officer to manage the safety aspects of your camp"
+(personal-safety); "Designate a camp member as Safety Baron responsible for fire
+safety and locating extinguishers" (fire-fire-safety); "Elect a Trash Officer to take
+care of separating waste" (camping); "Safety Monitors on duty, multiple and visible"
+(STAR theme-camp resources); LNT Lead is already a mandatory registration contact
+(Finlay's form). We formalize these as a new role kind:
+
+- **`officer` kind**: org-defined catalog (per edition), each with a **stable key**
+  (org targeting anchor), seeded display name/emoji/color (camps may alias — the key
+  never changes), and a **trigger condition** over the camp's registration data:
+  | Key | Seeded as | Trigger |
+  |---|---|---|
+  | `lnt_officer` | LNT Lead ♻️ | always **required** (upgrades Finlay's contact-only LNT lead into an assignable role — deliberate supersession of the "no app role" rule; non-member contact fields remain as fallback) |
+  | `safety_officer` | Safety Officer ⛑️ | always recommended |
+  | `fire_safety_officer` | Safety Baron 🔥 | **required** when registration declares generators, open-flame gifting, or large fuel/gas storage; else recommended |
+  | `sound_officer` | Sound Officer 🔊 | **required** when sound level ≥ 2 |
+  | `safety_monitor` | Safety Monitor 🛡️ | recommended (STAR: "multiple and visible") |
+- **Trigger mechanics**: when a camp's registration matches a trigger, the officer role
+  appears in the camp's role system tagged *required* or *recommended*. Requirement is
+  **soft-enforced**: the registration review (org side) and the camp dashboard show
+  "Sound Officer — not yet assigned" as a completeness flag; approval gating on it is
+  an org decision later, not hard-coded now.
+- **Org questionnaire audiences extend** with `officer:<key>` selectors — e.g. **"All
+  registered Sound Officers"** resolves to every member assigned `sound_officer` in a
+  registered camp, regardless of camp-level aliases. This is the payoff: org can brief
+  exactly the responsible people across all camps.
+- Officer roles behave like `default` kind otherwise (undeletable while triggered,
+  privileges editable per camp, assignable by `assign_roles` holders).
+
 Authoring rights update: project questionnaires may be authored/sent by lead/admin **or
 any member holding `manage_questionnaires`** (authz predicate + tests updated to match).
 
