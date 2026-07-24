@@ -63,7 +63,7 @@ Roles carry **rights**, an **emoji icon**, and a **color**:
   gates *camp-held* data only, never bio privacy.
   Defaults: Captain 🎩 apricot = all privileges (questionnaires: all audiences,
   may_block); Team lead 🔧 teal = manage_questionnaires scoped to Burn-member
-  audiences, no blocking + view_member_details; Burn member 🔥 sage = none.
+  audiences, no blocking + view_member_details; Burner 🔥 sage = none.
 - **Structural roles are the permission backstop**: `lead`/`admin` implicitly hold every
   project permission and this cannot be revoked — so no permission edit can ever strand
   a camp (no self-lockout class of bugs, by construction). Custom-role permissions are
@@ -90,7 +90,7 @@ Roles carry **rights**, an **emoji icon**, and a **color**:
 | Kind | Seeded as | Rename | Icon/color | Permissions | Delete | Assignment |
 |---|---|---|---|---|---|---|
 | `captain` | Captain 🎩 | ✅ (alias) | ✅ | ❌ **locked to all** — UI shows disabled toggles + "Captains can do everything — that's what makes them captains" | ❌ | normal |
-| `baseline` | Burn member 🔥 | ✅ (alias — e.g. Mad Hatters rename theirs to "Hatters") | ✅ | ✅ editable (a camp may grant everyone something) | ❌ | **implicit — every member of the camp holds it, always**; cannot be unassigned. Not stored per member: derived (baseline = all members), so it can never drift |
+| `baseline` | **Burner** 🔥 | ✅ (alias — a camp may call its people anything; the DESIGN shows the default "Burner" with a rename affordance, not a pre-aliased example) | ✅ | ✅ editable (a camp may grant everyone something) | ❌ | **implicit — every member of the camp holds it, always**; cannot be unassigned. Not stored per member: derived (baseline = all members), so it can never drift |
 | `default` | Team lead 🔧 | ✅ | ✅ | ✅ | ❌ | normal |
 | `custom` | — | ✅ | ✅ | ✅ | ✅ (cascade) | normal |
 
@@ -128,8 +128,23 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
   registered Sound Officers"** resolves to every member assigned `sound_officer` in a
   registered camp, regardless of camp-level aliases. This is the payoff: org can brief
   exactly the responsible people across all camps.
-- Officer roles behave like `default` kind otherwise (undeletable while triggered,
-  privileges editable per camp, assignable by `assign_roles` holders).
+- **Officers are ALSO registrations (Ryan, 24 Jul):** assigning an officer is an
+  **officer registration with the Org** — the org gains access to that officer's
+  contact details (name, email, phone) for the function. Because phone is otherwise
+  hard-locked private, **acceptance is a consent moment**: the member must accept the
+  officer assignment, with explicit copy that their contact details are shared with
+  AfrikaBurn for this role (POPIA consent-based processing). Declining leaves the slot
+  unassigned.
+- **Officers cannot be aliased** — org-facing vocabulary stays uniform across all camps
+  (unlike defaults/baseline). Display name/emoji/color fixed by the org catalog.
+- Camp-side **privileges for officer-role holders are settable as usual** by the camp.
+- **Surface: a Camp Settings page** (`/camps/[slug]/settings`) hosting officer
+  registrations (assign/accept state, org-shared contact preview) alongside the role
+  system management; the members-card popover remains for quick role assignment.
+- **Free camps: officers are entirely optional** — triggers/requirements apply only to
+  camps with an in-flight or approved registration; a free camp may still assign
+  officers voluntarily (nothing flags, nothing is required, org targeting only ever
+  reaches officers of REGISTERED camps).
 
 Authoring rights update: project questionnaires may be authored/sent by lead/admin **or
 any member holding `manage_questionnaires`** (authz predicate + tests updated to match).
