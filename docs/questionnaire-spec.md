@@ -232,3 +232,62 @@ any member holding `manage_questionnaires`** (authz predicate + tests updated to
 3. "Camp Questionnaires — /camps/[slug]/questionnaires · Dark" (lead view: list + builder entry + member completion)
 4. "Questionnaire Gate — fill view · Dark" (member answering a blocking questionnaire; runner + "this unlocks your dashboard" framing)
 5. Members card variant with role chips + role management popover (can be an added state on the Camp Dashboard frame or a small dedicated frame)
+
+## Builder v2 — Google Forms parity (Ryan, 24 Jul 2026; researched)
+
+Target: the input/structure feature set of Google Forms, minus what our platform makes
+irrelevant. The current builder (5 field kinds, flat single page) grows to:
+
+### Content & structure blocks
+| Block | Notes |
+|---|---|
+| **Section / page break** | Each section = a page in the runner (title + description); progress indicator across pages |
+| **Info text block** | Standalone title+body text, no answer — "just there for information" |
+| **Image block** | Standalone image (Vercel Blob upload) + optional images attached to a question or to individual choice options |
+| Video block | EXCLUDED for now — no-connectivity culture + weight; revisit only on demand |
+
+### Question types (target set)
+| Type | Status | Notes |
+|---|---|---|
+| Short answer | ✅ have (`short_text`) | gains validation rules |
+| Paragraph | ✅ have (`long_text`) | gains length limits |
+| Multiple choice (radio) | ✅ have (`single_select`) | gains "Other…" free-text option + option images |
+| Checkboxes (multi) | ✅ have (`multi_select`) | gains "Other…", min/max selections |
+| Dropdown | NEW render variant of single_select (long option lists) |
+| Yes/No | ✅ have (`boolean`) | kept (our addition; Forms models it as MC) |
+| Linear scale | NEW — min/max 0–10 with end labels |
+| Rating | NEW — 3–10 steps, star/heart/number glyph |
+| Multiple-choice grid | NEW — rows × columns, single per row |
+| Checkbox grid | NEW — rows × columns, multi per row |
+| Date | NEW | edition-aware defaults (e.g. build-week picker variant) |
+| Time | NEW |
+| Number | NEW (Forms does this via validation; first-class for us) |
+| File upload | NEW — Vercel Blob, type/size/count limits |
+
+### Logic & validation
+- Required per question (have) · **response validation** on text/number (length, regex,
+  numeric range, email/url presets) · **"Other" option** on choice questions ·
+  min/max selection counts on checkboxes · **branching**: "go to section based on
+  answer" on radio/dropdown (per-option → section target | submit) · option shuffle
+  (minor, last).
+
+### Respondent (runner) UX
+Multi-page navigation with progress bar · per-page validation · draft autosave (have)
+· author-set **confirmation message** on submit · **edit-after-submit** toggle ·
+author **preview mode** before sending.
+
+### Author/admin features
+Duplicate questionnaire as template · manual close/reopen (close exists) + due_at
+(have) · **response summary view with per-question charts** (choice counts as bars,
+scale histograms — dataviz per our chart standards) · **CSV export** of responses ·
+per-question response breakdown alongside the existing per-user table.
+
+### Explicitly EXCLUDED (platform makes them irrelevant or Ryan cut them)
+Email collection/receipts/notify-by-email lists (accounts + gates + Resend cover it) ·
+quiz mode, points, answer keys · collaborator sharing (org/camp roles cover it) ·
+themes (brand is fixed) · prefilled-link generation · add-ons/scripts · embedding.
+
+### Sequencing
+Implementation queues behind Roles v2 (same code surfaces). Design pass required:
+builder v2 (block palette, section/page rails, branching UI, validation editors),
+runner multi-page states, and the response-summary charts view.
