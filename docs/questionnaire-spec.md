@@ -38,8 +38,13 @@ audience resolution, custom project roles, and the gate/notification loop.*
 - A member can hold **multiple** custom roles (many-to-many).
 - Schema: `project_roles` (group_id, name, is_default, sort) unique(group_id, name-normalized);
   `member_role_assignments` (membership_id × project_role_id).
-- UI: managed inline in the camp dashboard members area (assign via a small
-  multi-select per member; role chips shown on member rows).
+- UI split (Ryan, 24 Jul — definition vs assignment are different activities):
+  **role/officer DEFINITION lives on its own dedicated screen** —
+  `/camps/[slug]/settings/roles` ("Camp Settings · Roles & Officers"), a full page,
+  set-and-forget: create/edit roles with the complete privilege panel, color/emoji,
+  officer registrations, deletion. NOT a sidebar or popover. The members area keeps
+  only the frequent operations: role chips on member rows + a quick assign
+  multi-select per member + a "Manage roles →" link to the settings screen.
 
 ### Roles v2 — permissions, color, emoji (Ryan, 24 Jul)
 
