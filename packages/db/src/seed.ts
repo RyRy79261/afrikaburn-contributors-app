@@ -757,10 +757,10 @@ async function main(): Promise<void> {
 
     // A single SUSPENDED demo supplier so the console + camp picker exercise the
     // suspended state and the notes drawer. Deliberately a FICTIONAL business
-    // ("Wolfkop") with an obviously-generic note — never a real listed supplier,
+    // ("LosKop Catering") with an obviously-generic note — never a real listed supplier,
     // so nothing here reads as a real allegation.
     const wolfkop = await ensureSupplier(db, {
-      name: "Wolfkop",
+      name: "LosKop Catering",
       services: "Stretch tents (demo)",
       contact: "",
       website: "",
