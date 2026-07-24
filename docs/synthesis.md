@@ -99,6 +99,27 @@ The base unit is the **participant**, not the camp:
 - **Requests are questionnaires; fulfillment is attestations (Ryan, 22 Jul 2026):** when a camp needs something — water delivery sign-up, a supplier service, an extra allocation — it files a **request built on the questionnaire spine**. Requests land in a queue owned by an **org-level person** (coordinator) or a **specific supplier**, who works them; where the fulfilment happens on site (a delivery, a handover), it closes with a **QR attestation**. One pattern covers water sign-up, gas orders, ice allocations, and supplier bookings without bespoke plumbing per workflow.
 - **Explicitly out of the platform (Ryan, 22 Jul 2026):** **ticketing** (stays entirely with Quicket — we only ever *note* status, never touch tickets) and **placement maps** (no structured geo data exists; the map is a PDF that arrives late and the layout changes every year — nothing reliable to build against yet).
 
+### The real two-form registration process (afrikaburn.org Theme Camps Guide, fetched 24 Jul 2026 → [`sources/theme-camps-guide.md`](sources/theme-camps-guide.md))
+
+AB's actual process is **two forms released at different times**, which our single
+six-section wizard currently conflates:
+
+- **Form 1 (September–February)**: register online, "state your grand intentions" — identity/theme/intent. The **Theme Camp Committee meets every 2 weeks** and responds with approval or suggestions. On acceptance the camp is **assigned a Theme Camp Wrangler** ("a dusty guardian angel to guide ya") — note: wrangler assignment happens at Form-1 acceptance, EARLIER than our current post-approval model.
+- **Form 2 (January)**: "the other stuff" — camp size, placement requests, sound setup, gifting — **plus a mandatory camp layout diagram** (interactive area, private camping, ablutions, water & fuel storage, parking, camp name on the diagram; special water-placement requests must be evident on it).
+- **March**: WAP requests open for build crews. Water sales start February, ordering unlocked once registration is complete and approved. The Committee visits camps on site during the event.
+
+**Architectural mapping (the elegant part):** Form 1 = our core registration (approval
+flips the registered attribute + triggers wrangler assignment). **Form 2 — and any
+future "Form N" — is exactly an org-authored questionnaire sent to
+`registered_camp_leads` at a scheduled time** — the questionnaire builder + audience
+targeting + due dates + gates we just built. No new machinery: AB's real multi-form,
+staggered-release process is the questionnaire feature's flagship use case. Split our
+six sections accordingly: identity/intent sections belong to Form 1; size, placement,
+sound, and the layout upload migrate to a Form-2 questionnaire template.
+
+**Timeline implication:** for AfrikaBurn 2027, Form 1 opens ~**September 2026** — that
+is the real R1 deadline, roughly six weeks after kickoff.
+
 ### Decisions locked 24 Jul 2026 (Ryan)
 
 - **No camp payments for registration — ever.** AfrikaBurn never receives payments from theme camps for registering. Registration is free; payment references/blocks must not appear anywhere in registration flows, the camp dashboard, or the org review screen. (Money only ever relates to future logistics service apps — containers etc. — and even those are reference-tracking, not processing.)

@@ -28,7 +28,8 @@ disabled hint tiles for everything parked (containers, water/ice/gas, placement,
 grants, topics). Seeded edition: **AfrikaBurn 2027, 26 April – 2 May 2027**. No
 container flows, no attestation flows, no payment processing.
 
-### R1 — Registration season readiness *(deadline: 2027 registration opening — date TBC)*
+### R1 — Registration season readiness *(deadline: ~September 2026 — Form 1 opens Sept per the Theme Camps Guide)*
+- **Two-form model**: Form 1 (Sept, intent/identity → Committee reviews biweekly → approval + wrangler assigned) is the core registration; **Form 2 (Jan: size/placement/sound/gifting + mandatory layout diagram) ships as an org questionnaire targeting registered_camp_leads** — the questionnaire feature's flagship use case. Wrangler assignment moves to Form-1 acceptance.
 Make Layer A real for camps and AB staff:
 - Production auth, real email (Resend), reminder/deadline jobs (introduce Inngest here if the async workload justifies it)
 - **Payment collection decision with AB**: either keep AB's existing channels (Quicket/EFT) with in-app references + reconciliation, or integrate a gateway — SA-based, accepting international Visa/Mastercard (candidates: Paystack, Peach Payments, PayFast). Either way the platform never holds funds
