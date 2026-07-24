@@ -23,12 +23,17 @@
  * Run via `pnpm --filter @quagga/db db:seed` once `DATABASE_URL` is set. This
  * script is NEVER part of any build step and must not run at import time.
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import {
   normalizeName,
   completedSectionsFor,
   getPlacementZones,
   defaultPrivacyFlags,
+  disambiguateCampPrefix,
+  establishedCampPrefix,
+  formatMemberRefCode,
+  nextMemberSequence,
+  parseMemberRefCode,
   BURNER_BIO_VERSION,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
@@ -181,8 +186,8 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.alice.id,
     });
-    await ensureMembership(db, users.alice.id, madHatters.id, "lead");
-    await ensureMembership(db, users.jabu.id, madHatters.id, "member");
+    await ensureMembership(db, users.alice.id, madHatters, "lead");
+    await ensureMembership(db, users.jabu.id, madHatters, "member");
 
     const madHattersReg = await ensureRegistration(db, madHatters, {
       groupId: madHatters.id,
@@ -245,8 +250,8 @@ async function main(): Promise<void> {
       joinability: "invite_only",
       createdByUserId: users.ren.id,
     });
-    await ensureMembership(db, users.ren.id, camp404.id, "lead");
-    await ensureMembership(db, users.script.id, camp404.id, "member");
+    await ensureMembership(db, users.ren.id, camp404, "lead");
+    await ensureMembership(db, users.script.id, camp404, "member");
 
     const camp404Reg = await ensureRegistration(db, camp404, {
       groupId: camp404.id,
@@ -303,7 +308,7 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.sizwe.id,
     });
-    await ensureMembership(db, users.sizwe.id, saltEmber.id, "lead");
+    await ensureMembership(db, users.sizwe.id, saltEmber, "lead");
     await ensureRegistration(db, saltEmber, {
       groupId: saltEmber.id,
       editionId: edition.id,
@@ -325,7 +330,7 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.greta.id,
     });
-    await ensureMembership(db, users.greta.id, tinkerers.id, "lead");
+    await ensureMembership(db, users.greta.id, tinkerers, "lead");
     await ensureRegistration(db, tinkerers, {
       groupId: tinkerers.id,
       editionId: edition.id,
@@ -364,7 +369,7 @@ async function main(): Promise<void> {
       joinability: "invite_only",
       createdByUserId: users.luna.id,
     });
-    await ensureMembership(db, users.luna.id, velvetMirage.id, "lead");
+    await ensureMembership(db, users.luna.id, velvetMirage, "lead");
     const velvetMirageReg = await ensureRegistration(db, velvetMirage, {
       groupId: velvetMirage.id,
       editionId: edition.id,
@@ -413,7 +418,7 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.kabelo.id,
     });
-    await ensureMembership(db, users.kabelo.id, quietStatic.id, "lead");
+    await ensureMembership(db, users.kabelo.id, quietStatic, "lead");
     await ensureRegistration(db, quietStatic, {
       groupId: quietStatic.id,
       editionId: edition.id,
@@ -448,7 +453,7 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.priya.id,
     });
-    await ensureMembership(db, users.priya.id, borrowedHorizon.id, "lead");
+    await ensureMembership(db, users.priya.id, borrowedHorizon, "lead");
 
     const windrowCollective = await ensureGroup(db, {
       kind: "theme_camp",
@@ -458,7 +463,7 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.theo.id,
     });
-    await ensureMembership(db, users.theo.id, windrowCollective.id, "lead");
+    await ensureMembership(db, users.theo.id, windrowCollective, "lead");
 
     // --- Suppliers ---------------------------------------------------------------
     let supplierCount = 0;
@@ -607,20 +612,73 @@ async function ensureGroup(db: Db, spec: GroupSpec): Promise<GroupRow> {
 async function ensureMembership(
   db: Db,
   userId: string,
-  groupId: string,
+  group: Pick<GroupRow, "id" | "name">,
   role: (typeof schema.memberships.$inferInsert)["role"],
 ) {
+  // Idempotent: keep an existing row's camp-scoped ref code stable, only refresh
+  // the role. Assign a fresh ref code on first insert.
+  const existing = await db
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberships.groupId, group.id),
+      ),
+    )
+    .limit(1);
+  const existingRow = existing[0];
+  if (existingRow) {
+    return firstOrThrow(
+      await db
+        .update(schema.memberships)
+        .set({ role })
+        .where(eq(schema.memberships.id, existingRow.id))
+        .returning(),
+      `membership ${userId}/${group.id}`,
+    );
+  }
+
+  const refCode = await nextSeedMemberRefCode(db, group.id, group.name);
   return firstOrThrow(
     await db
       .insert(schema.memberships)
-      .values({ userId, groupId, role })
-      .onConflictDoUpdate({
-        target: [schema.memberships.userId, schema.memberships.groupId],
-        set: { role },
-      })
+      .values({ userId, groupId: group.id, role, refCode })
       .returning(),
-    `membership ${userId}/${groupId}`,
+    `membership ${userId}/${group.id}`,
   );
+}
+
+/** Compute the next camp-scoped member ref code (seed-side twin of
+ * groups-store's `nextMemberRefCode`, using the pooled db). */
+async function nextSeedMemberRefCode(
+  db: Db,
+  groupId: string,
+  groupName: string,
+): Promise<string> {
+  const rows = await db
+    .select({ refCode: schema.memberships.refCode })
+    .from(schema.memberships)
+    .where(eq(schema.memberships.groupId, groupId));
+  const existing = rows
+    .map((r) => r.refCode)
+    .filter((c): c is string => c !== null);
+
+  let prefix = establishedCampPrefix(existing);
+  if (!prefix) {
+    const others = await db
+      .select({ refCode: schema.memberships.refCode })
+      .from(schema.memberships)
+      .where(ne(schema.memberships.groupId, groupId));
+    const taken = new Set<string>();
+    for (const r of others) {
+      if (!r.refCode) continue;
+      const parsed = parseMemberRefCode(r.refCode);
+      if (parsed) taken.add(parsed.prefix);
+    }
+    prefix = disambiguateCampPrefix(groupName, taken);
+  }
+  return formatMemberRefCode(prefix, nextMemberSequence(existing));
 }
 
 type RegistrationInput = Omit<

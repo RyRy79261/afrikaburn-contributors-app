@@ -22,6 +22,9 @@
 //     privacyViolations, canBePublic (./privacy)
 //   - payment references: generatePaymentReference, deriveSubjectCode
 //     (./payment-reference)
+//   - camp-scoped member ref codes: deriveCampPrefix, disambiguateCampPrefix,
+//     formatMemberRefCode, parseMemberRefCode, nextMemberSequence
+//     (./member-ref-code)
 //   - burner bio code questionnaire: buildBurnerBioQuestionnaire, mapping
 //     helpers, BIO_PRIVACY_FIELDS, defaultPrivacyFlags, isBioComplete (./bio)
 //   - questionnaire engine: code-side registry + gating helpers
@@ -39,6 +42,7 @@ export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
 export * from "./payment-reference";
+export * from "./member-ref-code";
 export * from "./bio";
 export * from "./questionnaire-engine";
 export * from "./invite";

@@ -30,6 +30,7 @@ import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
 import { LeaveCampButton } from "@/components/leave-camp-button";
+import { MemberRefCode } from "@/components/member-ref-code";
 import {
   createInviteAction,
   leaveCampAction,
@@ -105,6 +106,8 @@ export default async function CampPage({
     ? STATUS_LABEL[camp.registrationStatus as RegistrationStatus]
     : "Not started";
 
+  const myRefCode = camp.members.find((m) => m.isViewer)?.refCode ?? null;
+
   return (
     <AppShell>
       <div className="flex flex-col gap-6">
@@ -133,6 +136,8 @@ export default async function CampPage({
             <LeaveCampButton slug={camp.slug} action={leaveCampAction} />
           )}
         </header>
+
+        {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Members */}
@@ -165,17 +170,22 @@ export default async function CampPage({
                         <span className="ml-1.5 text-xs text-accent">(you)</span>
                       )}
                     </span>
-                    <Badge
-                      variant={
-                        m.role === "lead"
-                          ? "default"
-                          : m.role === "admin"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {ROLE_LABEL[m.role]}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {isAdmin && m.refCode && (
+                        <MemberRefCode code={m.refCode} />
+                      )}
+                      <Badge
+                        variant={
+                          m.role === "lead"
+                            ? "default"
+                            : m.role === "admin"
+                              ? "secondary"
+                              : "outline"
+                        }
+                      >
+                        {ROLE_LABEL[m.role]}
+                      </Badge>
+                    </div>
                   </li>
                 ))}
               </ul>

@@ -5,7 +5,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { canRedeemInviteAs, inviteRejectionMessage } from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
 import { db, schema } from "./db";
-import { getViewerRole } from "./groups-store";
+import { getViewerRole, ensureMembershipWithRefCode } from "./groups-store";
 
 export interface InviteRow {
   id: string;
@@ -149,8 +149,10 @@ export async function redeemInvite(
   if (!check.ok && check.reason) {
     // A self_member redeeming a plain member invite: already in — send them in.
     if (check.reason === "self_member") {
-      const g = await groupSlug(invite.groupId);
-      return g ? { ok: true, slug: g } : { ok: false, error: "Camp not found." };
+      const g = await groupNameAndSlug(invite.groupId);
+      return g
+        ? { ok: true, slug: g.slug }
+        : { ok: false, error: "Camp not found." };
     }
     return { ok: false, error: inviteRejectionMessage(check.reason) };
   }
@@ -170,6 +172,9 @@ export async function redeemInvite(
     };
   }
 
+  const group = await groupNameAndSlug(invite.groupId);
+  if (!group) return { ok: false, error: "Camp not found." };
+
   if (invite.kind === "lead_transfer") {
     // Demote existing leads to admin, then make the redeemer the lead.
     await db()
@@ -182,6 +187,7 @@ export async function redeemInvite(
         ),
       );
     if (currentRole) {
+      // Already a member (keeps their existing ref code) — just take the lead.
       await db()
         .update(schema.memberships)
         .set({ role: "lead" })
@@ -192,32 +198,32 @@ export async function redeemInvite(
           ),
         );
     } else {
-      await db()
-        .insert(schema.memberships)
-        .values({ groupId: invite.groupId, userId, role: "lead" })
-        .onConflictDoUpdate({
-          target: [schema.memberships.userId, schema.memberships.groupId],
-          set: { role: "lead" },
-        });
+      await ensureMembershipWithRefCode({
+        userId,
+        groupId: invite.groupId,
+        groupName: group.name,
+        role: "lead",
+      });
     }
   } else {
-    await db()
-      .insert(schema.memberships)
-      .values({ groupId: invite.groupId, userId, role: "member" })
-      .onConflictDoNothing({
-        target: [schema.memberships.userId, schema.memberships.groupId],
-      });
+    await ensureMembershipWithRefCode({
+      userId,
+      groupId: invite.groupId,
+      groupName: group.name,
+      role: "member",
+    });
   }
 
-  const g = await groupSlug(invite.groupId);
-  return g ? { ok: true, slug: g } : { ok: false, error: "Camp not found." };
+  return { ok: true, slug: group.slug };
 }
 
-async function groupSlug(groupId: string): Promise<string | null> {
+async function groupNameAndSlug(
+  groupId: string,
+): Promise<{ name: string; slug: string } | null> {
   const rows = await db()
-    .select({ slug: schema.groups.slug })
+    .select({ name: schema.groups.name, slug: schema.groups.slug })
     .from(schema.groups)
     .where(eq(schema.groups.id, groupId))
     .limit(1);
-  return rows[0]?.slug ?? null;
+  return rows[0] ?? null;
 }

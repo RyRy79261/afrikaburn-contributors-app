@@ -10,6 +10,11 @@ import {
   publicMemberName,
   publicBioView,
   defaultPrivacyFlags,
+  disambiguateCampPrefix,
+  establishedCampPrefix,
+  formatMemberRefCode,
+  nextMemberSequence,
+  parseMemberRefCode,
   CAMP_DESCRIPTION_WORD_LIMIT,
   isWithinWordLimit,
   type BurnerBioFields,
@@ -144,6 +149,82 @@ export interface CampMember {
   role: MembershipRole;
   displayName: string;
   isViewer: boolean;
+  /** Camp-scoped EFT reference code, e.g. `MAH-M017`. Null for legacy rows. */
+  refCode: string | null;
+}
+
+/**
+ * Compute the next camp-scoped member reference code for a group. Reuses the
+ * camp's already-established prefix when it has coded members; otherwise derives
+ * a fresh prefix made unique against every OTHER camp's prefix (deterministic).
+ * The `memberships_group_ref_code_idx` unique index is the real guarantee — the
+ * caller retries on a unique violation.
+ */
+export async function nextMemberRefCode(
+  groupId: string,
+  groupName: string,
+): Promise<string> {
+  const rows = await db()
+    .select({ refCode: schema.memberships.refCode })
+    .from(schema.memberships)
+    .where(eq(schema.memberships.groupId, groupId));
+  const existing = rows
+    .map((r) => r.refCode)
+    .filter((c): c is string => c !== null);
+
+  let prefix = establishedCampPrefix(existing);
+  if (!prefix) {
+    // First coded member of this camp — pick a prefix distinct from all others.
+    const otherRows = await db()
+      .select({ refCode: schema.memberships.refCode })
+      .from(schema.memberships)
+      .where(ne(schema.memberships.groupId, groupId));
+    const takenPrefixes = new Set<string>();
+    for (const r of otherRows) {
+      if (!r.refCode) continue;
+      const parsed = parseMemberRefCode(r.refCode);
+      if (parsed) takenPrefixes.add(parsed.prefix);
+    }
+    prefix = disambiguateCampPrefix(groupName, takenPrefixes);
+  }
+
+  return formatMemberRefCode(prefix, nextMemberSequence(existing));
+}
+
+/**
+ * Insert a membership (no-op if the user is already a member of the group),
+ * assigning a fresh camp-scoped ref code on creation. Retries on the
+ * `memberships_group_ref_code_idx` unique-index race so two concurrent joins
+ * can't collide on a sequence.
+ */
+export async function ensureMembershipWithRefCode(input: {
+  userId: string;
+  groupId: string;
+  groupName: string;
+  role: MembershipRole;
+}): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const refCode = await nextMemberRefCode(input.groupId, input.groupName);
+    try {
+      await db()
+        .insert(schema.memberships)
+        .values({
+          userId: input.userId,
+          groupId: input.groupId,
+          role: input.role,
+          refCode,
+        })
+        .onConflictDoNothing({
+          target: [schema.memberships.userId, schema.memberships.groupId],
+        });
+      return;
+    } catch (err) {
+      // A ref-code collision (different unique index) — recompute and retry.
+      if (isUniqueViolation(err)) continue;
+      throw err;
+    }
+  }
+  throw new Error("Could not assign a member reference code.");
 }
 
 export interface CampDetail {
@@ -193,6 +274,7 @@ export async function getCampBySlug(
     .select({
       userId: schema.memberships.userId,
       role: schema.memberships.role,
+      refCode: schema.memberships.refCode,
       displayName: schema.burnerBios.displayName,
     })
     .from(schema.memberships)
@@ -209,6 +291,7 @@ export async function getCampBySlug(
   const members: CampMember[] = memberRows.map((m) => ({
     userId: m.userId,
     role: m.role,
+    refCode: m.refCode,
     displayName: publicMemberName(m.displayName),
     isViewer: m.userId === viewerId,
   }));
@@ -485,10 +568,12 @@ export async function createCamp(input: {
   const group = inserted[0];
   if (!group) return { ok: false, error: "Could not create the camp." };
 
+  const refCode = await nextMemberRefCode(group.id, name);
   await db().insert(schema.memberships).values({
     userId: input.creatorId,
     groupId: group.id,
     role: "lead",
+    refCode,
   });
 
   return { ok: true, slug: group.slug };

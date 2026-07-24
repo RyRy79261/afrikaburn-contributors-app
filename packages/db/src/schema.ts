@@ -296,6 +296,11 @@ export const memberships = pgTable(
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
     role: membershipRoleEnum("role").notNull().default("member"),
+    // Camp-scoped member reference code, e.g. `MAH-M017` — a stable identifier a
+    // camp quotes for its OWN off-platform EFT reconciliation (camper → camp's
+    // bank account). NOT an AfrikaBurn payment; the platform never moves money.
+    // Nullable: org/god memberships carry none. Unique per group.
+    refCode: text("ref_code"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (m) => ({
@@ -304,6 +309,10 @@ export const memberships = pgTable(
       m.groupId,
     ),
     groupIdx: index("memberships_group_idx").on(m.groupId),
+    groupRefCodeUniq: uniqueIndex("memberships_group_ref_code_idx").on(
+      m.groupId,
+      m.refCode,
+    ),
   }),
 );
 
