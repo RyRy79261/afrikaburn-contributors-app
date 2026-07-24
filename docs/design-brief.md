@@ -115,7 +115,14 @@ Sampled from afrikaburn.org's Elementor kit. Full token file:
 
 ## 6. Naming & seed cast (use in mocks)
 
-Product name candidate: **Quagga Portal** (undecided — design a neutral lockup: wordmark-friendly but works as "AfrikaBurn Contributors"). Apps: participant app has no sub-name; org app is the **"Organiser Console"**. Edition string everywhere: **AfrikaBurn 2027 · 26 April – 2 May 2027**. Seed camps for mocks: **Mad Hatters** (approved/registered), **Camp 404** (under review), fictional: *Dust Bunnies* (draft), *Karoo Kombuis* (changes requested), *The Long Drop Inn* (free camp), etc. Seed humans are obviously fictional (`dusty.prototype@example.com`, "Ren Notfound", "Alice Hatter"). Payment refs: `QP-2027-MAH-001`.
+Product name candidate: **Quagga Portal** (undecided — design a neutral lockup: wordmark-friendly but works as "AfrikaBurn Contributors").
+
+**Future logo exploration (Ryan, 24 Jul 2026):** once the name lands, derive a **Quagga
+Portal logo from the AfrikaBurn logo language** — same quilt-diamond geometry and blocky
+cutout letterforms, with a quagga motif in place of the San-hand (the quagga's signature
+is stripes fading into solid — quilt diamonds dissolving into quagga stripes is the
+obvious play, and reads as "part of the AfrikaBurn family, its own animal"). Same
+teal/apricot/sage triad + black/white. Timing: after kickoff confirms the name. Apps: participant app has no sub-name; org app is the **"Organiser Console"**. Edition string everywhere: **AfrikaBurn 2027 · 26 April – 2 May 2027**. Seed camps for mocks: **Mad Hatters** (approved/registered), **Camp 404** (under review), fictional: *Dust Bunnies* (draft), *Karoo Kombuis* (changes requested), *The Long Drop Inn* (free camp), etc. Seed humans are obviously fictional (`dusty.prototype@example.com`, "Ren Notfound", "Alice Hatter"). Payment refs: `QP-2027-MAH-001`.
 
 ## 7. The component system
 
