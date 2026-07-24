@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, ilike, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull } from "drizzle-orm";
 import {
   deriveOnboardingProgress,
   type SupplierOnboardingProgress,
@@ -79,6 +79,18 @@ async function resolveActiveEdition(
 }
 
 /**
+ * Escape LIKE/ILIKE wildcards (`%`, `_`) and the escape char (`\`) so an
+ * interpolated string is matched LITERALLY. Both `%` and `_` are legal
+ * email local-part characters (underscore especially common), so without this
+ * a verified address like `a_b@x.com` would widen the pattern (`_` matching any
+ * single char) beyond the exact address. Backslash is Postgres' default LIKE
+ * escape character, so no explicit ESCAPE clause is needed.
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
  * Resolve (and, when found by email, link) the supplier row for a signed-in
  * user. Preference order:
  *   1. an existing row already linked by `user_id`;
@@ -86,6 +98,9 @@ async function resolveActiveEdition(
  *      claimed by setting `user_id` (the "email overlap links a burner account"
  *      rule). Only VERIFIED emails may claim a row, so an unverified/asserted
  *      email can never hijack an imported supplier.
+ * The verified address is matched as a LITERAL substring (wildcards escaped) and
+ * selection is deterministic (oldest row first) so a repeat sign-in always
+ * claims the same row rather than an arbitrary one.
  * Returns null when nothing matches — the caller shows the register form.
  */
 async function resolveSupplierForUser(
@@ -119,9 +134,10 @@ async function resolveSupplierForUser(
     .where(
       and(
         isNull(schema.suppliers.userId),
-        ilike(schema.suppliers.contact, `%${email}%`),
+        ilike(schema.suppliers.contact, `%${escapeLikePattern(email)}%`),
       ),
     )
+    .orderBy(asc(schema.suppliers.createdAt), asc(schema.suppliers.id))
     .limit(1);
   if (!candidate) return null;
 

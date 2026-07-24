@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   completedSectionsFor,
   deriveOnboardingProgress,
@@ -364,7 +364,15 @@ export async function saveRegistrationDraft(input: {
   return { ok: true, completedSections: completed, created };
 }
 
-/** Replace the supplier declarations for a registration with the given ids. */
+/**
+ * Replace the supplier declarations for a registration with the given ids.
+ *
+ * Defense-in-depth: the picker hides suspended suppliers via `filterPickerEligible`
+ * at display time, but the client is never trusted — a camp admin could POST a
+ * suspended supplier's id directly. So we re-check standing at this write boundary
+ * through the same core predicate and drop any ineligible (suspended) ids before
+ * persisting, rather than inserting whatever ids arrived.
+ */
 async function replaceSupplierDeclarations(
   registrationId: string,
   supplierIds: string[],
@@ -374,9 +382,22 @@ async function replaceSupplierDeclarations(
     .where(eq(schema.supplierDeclarations.registrationId, registrationId));
   const unique = [...new Set(supplierIds)];
   if (unique.length === 0) return;
+
+  // Re-filter against standing (suspended excluded) at the write boundary. Only
+  // standing gates eligibility here; onboarding completeness merely tags a row,
+  // so pass `isOnboarded: true` (it never changes the eligible verdict).
+  const rows = await db()
+    .select({ id: schema.suppliers.id, standing: schema.suppliers.standing })
+    .from(schema.suppliers)
+    .where(inArray(schema.suppliers.id, unique));
+  const eligible = filterPickerEligible(
+    rows.map((r) => ({ id: r.id, standing: r.standing, isOnboarded: true })),
+  ).map((r) => r.id);
+  if (eligible.length === 0) return;
+
   await db()
     .insert(schema.supplierDeclarations)
-    .values(unique.map((supplierId) => ({ registrationId, supplierId })))
+    .values(eligible.map((supplierId) => ({ registrationId, supplierId })))
     .onConflictDoNothing();
 }
 
