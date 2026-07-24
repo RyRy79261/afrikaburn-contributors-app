@@ -118,3 +118,30 @@ Storybook/pencil · carry-forward between editions (single seeded edition).
 - **Ranger section** (all optional, inquiry-framed): `ranger_training` (completed Dust Ranger training), `ranger_curious` (interested in doing ranger shifts), `green_dot_training` (Green Dot Ranger training — the emotional-support specialisation). Info links: the Rangers info/training page (facebook.com/afrikaburn.rangers) and rangers@afrikaburn.com exist today; anything else renders as a disabled "info coming" placeholder.
 - **Future org audiences** (cheap resolver additions, note only): `ranger_curious`, `volunteers_interested:<portfolio>` — the whole point of asking is that org can later questionnaire exactly these people.
 - Schema: appended migration; all new fields nullable; privacy flags extended (none hard-locked — this is all self-promotional data); onboarding gains a "Your burns & volunteering" step before the privacy step; profile + third-party public view render whatever is public.
+
+## Camp categories ("theme topics") — org-defined directory taxonomy (Ryan, 24 Jul)
+
+- **Org CRUD** on a per-edition category catalog (name, emoji optional, sort); camps
+  pick theirs (multi-select, suggest ≤4) on the camp profile/registration; the
+  **directory gains filter chips** by category.
+- No formal taxonomy exists in the corpus — the survival-guide/WTF vocabulary plus
+  registration fields ground this **proposed seed set** (org can edit freely):
+  Family-friendly 🧸 · Food & drink 🍲 · Bar 🍹 · Music & sound 🔊 · Performance 🎭 ·
+  Workshops & talks 🛠️ · Art & making 🎨 · Wellness & chill 🌿 · Games & play 🎲 ·
+  Late night 🌙 · Quiet camp 🤫 · Inclusive space 🌈.
+  (Family-friendly, food-gifting, operating-hours, and sound level already exist as
+  registration data — categories complement rather than duplicate them; the directory
+  may ALSO filter on those registration-derived facts, e.g. family-friendly comes free.)
+
+## Org stats dashboard — the console landing page (Ryan, 24 Jul)
+
+Replace the org overview with a proper **status board for running the burn** (current
+edition): registered burners in the app (+ bios completed), camps by registration
+status (draft/submitted/under review/changes requested/approved) with a funnel bar,
+free vs registered camps, questionnaire completion rates for active sends, officer
+coverage across registered camps (assigned vs outstanding), supplier onboarding
+progress distribution + standings, MV/art registrations when they exist, recent
+activity feed (audit events). Time-series where meaningful (registrations over the
+weeks). Charts follow the dataviz standards (load the dataviz skill before authoring
+any chart). This page IS the org landing — glanceable, no scrolling required for the
+headline numbers.
