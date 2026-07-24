@@ -12,7 +12,11 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { Questionnaire, QuestionnaireResponses } from "@quagga/types";
+import type {
+  Questionnaire,
+  QuestionnaireResponses,
+  AudienceSpec,
+} from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). FROZEN per
 // docs/build-spec.md §Schema — feature agents do not add or alter tables.
@@ -130,6 +134,13 @@ export const questionnaireStatusEnum = pgEnum("questionnaire_status", [
   "published",
   "unpublished",
 ]);
+
+// Where an activation was authored — the hard boundary results never cross.
+// `org` = Organiser Console (org_staff/god); `group` = a project's dashboard.
+export const questionnaireAuthoredScopeEnum = pgEnum(
+  "questionnaire_authored_scope",
+  ["org", "group"],
+);
 
 // --- Users ---------------------------------------------------------------
 // Camp-specific identity join. Minimal by design: NO role columns — every role
@@ -316,6 +327,58 @@ export const memberships = pgTable(
   }),
 );
 
+// --- Project roles -------------------------------------------------------
+// Per-project CUSTOM roles (questionnaire-builder feature) — labels used for
+// organisation + questionnaire audiences, distinct from the structural
+// `memberships.role` ladder (which governs permissions). Defaults seeded on
+// project creation: Captain, Team lead, Burn member. Leads/admins add/rename/
+// remove. `name_normalized` is unique per group (case/space/punct-insensitive;
+// the normalizer lives in @quagga/core, `normalizeRoleName`).
+
+export const projectRoles = pgTable(
+  "project_roles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameNormalized: text("name_normalized").notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (pr) => ({
+    groupNameUniq: uniqueIndex("project_roles_group_name_normalized_idx").on(
+      pr.groupId,
+      pr.nameNormalized,
+    ),
+    groupIdx: index("project_roles_group_idx").on(pr.groupId),
+  }),
+);
+
+// --- Member role assignments ---------------------------------------------
+// Many-to-many: a membership may hold multiple custom project roles. Composite
+// PK (membership_id × project_role_id) makes each assignment unique.
+
+export const memberRoleAssignments = pgTable(
+  "member_role_assignments",
+  {
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "cascade" }),
+    projectRoleId: uuid("project_role_id")
+      .notNull()
+      .references(() => projectRoles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (mra) => ({
+    pk: primaryKey({ columns: [mra.membershipId, mra.projectRoleId] }),
+    roleIdx: index("member_role_assignments_role_idx").on(mra.projectRoleId),
+  }),
+);
+
 // --- Invites -------------------------------------------------------------
 // One-time links. `kind` = member | lead_transfer.
 
@@ -410,6 +473,11 @@ export const registrations = pgTable(
     s6ExpectedBudgetZar: integer("s6_expected_budget_zar"),
     s6PlugAndPlayAck: boolean("s6_plug_and_play_ack"),
 
+    // Grant-interest flag (questionnaire-builder feature). Nullable tri-state:
+    // null = not asked yet (no MV/art grant flow), true/false once declared.
+    // Drives the `mv_grant_requesters` / `art_grant_requesters` audiences.
+    grantsInterest: boolean("grants_interest"),
+
     // Which of the six sections the wizard has marked complete.
     completedSections: jsonb("completed_sections")
       .$type<string[]>()
@@ -491,6 +559,21 @@ export const questionnaireActivations = pgTable(
     blocking: boolean("blocking").notNull().default(true),
     status: activationStatusEnum("status").notNull().default("draft"),
     dueAt: timestamp("due_at", { mode: "date" }),
+    // Audience-targeting columns (questionnaire-builder feature). `authoredScope`
+    // + `groupId` are the results-visibility boundary; `audience` is the jsonb
+    // spec resolved at send time (@quagga/core resolveAudience); `editionId`
+    // scopes edition-relative selectors. All nullable so pre-feature rows (the
+    // Burner Bio spine) are untouched.
+    authoredScope: questionnaireAuthoredScopeEnum("authored_scope")
+      .notNull()
+      .default("org"),
+    groupId: uuid("group_id").references(() => groups.id, {
+      onDelete: "cascade",
+    }),
+    editionId: uuid("edition_id").references(() => editions.id, {
+      onDelete: "cascade",
+    }),
+    audience: jsonb("audience").$type<AudienceSpec>(),
     activatedByUserId: uuid("activated_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -502,6 +585,8 @@ export const questionnaireActivations = pgTable(
   (a) => ({
     keyIdx: index("questionnaire_activations_key_idx").on(a.questionnaireKey),
     statusIdx: index("questionnaire_activations_status_idx").on(a.status),
+    groupIdx: index("questionnaire_activations_group_idx").on(a.groupId),
+    editionIdx: index("questionnaire_activations_edition_idx").on(a.editionId),
   }),
 );
 

@@ -29,6 +29,18 @@
 //     helpers, BIO_PRIVACY_FIELDS, defaultPrivacyFlags, isBioComplete (./bio)
 //   - questionnaire engine: code-side registry + gating helpers
 //     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
+//   - custom project roles: DEFAULT_PROJECT_ROLES, normalizeRoleName,
+//     roleNameConflicts, dedupeRoleNames, defaultProjectRoleRows
+//     (./project-roles)
+//   - audience resolution: resolveAudience + AudienceContext row-set types
+//     (./audience)
+//   - activation lifecycle: activationRequiredActionKey,
+//     buildActivationRequiredActions, completeRequiredAction,
+//     isActivationResponseComplete, tallyActivationCompletion
+//     (./questionnaire-activation)
+//   - questionnaire authz: isOrgAuthor, isProjectAdmin, canAuthorAudience,
+//     canActivateAudience, canViewActivationResults, canManageProjectRoles
+//     (./questionnaire-authz)
 //   - invite redemption: canRedeemInvite(As), single-use logic (./invite)
 //   - god-email bootstrap parsing: parseGodEmails, isGodEmailIn (./god-emails)
 //   - supplier CSV import: parseCsv, parseSuppliersCsv (./supplier-import)
@@ -45,6 +57,10 @@ export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";
 export * from "./questionnaire-engine";
+export * from "./project-roles";
+export * from "./audience";
+export * from "./questionnaire-activation";
+export * from "./questionnaire-authz";
 export * from "./invite";
 export * from "./god-emails";
 export * from "./supplier-import";

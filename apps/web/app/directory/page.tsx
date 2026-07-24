@@ -5,12 +5,14 @@ import { Badge } from "@quagga/ui/components/badge";
 import { Input } from "@quagga/ui/components/input";
 import { Button } from "@quagga/ui/components/button";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCurrentCampUser } from "@/lib/session";
+import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { listDirectory } from "@/lib/groups-store";
+import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
+import { PendingQuestionnaires } from "@/components/questionnaire/pending-questionnaires";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,13 @@ export default async function DirectoryPage({
 
   const authUser = await getAuthenticatedUser();
   const campUser = authUser ? await getCurrentCampUser() : null;
+  // The signed-in landing: a pending blocking action gates the app here too.
+  if (campUser) await enforceGate(campUser.id);
   const edition = await getActiveEdition();
+
+  const pending = campUser
+    ? await listPendingQuestionnaires(campUser.id)
+    : [];
 
   const entries = edition
     ? await listDirectory({
@@ -58,6 +66,8 @@ export default async function DirectoryPage({
             Tankwa. Free camps you belong to show here too.
           </p>
         </header>
+
+        {pending.length > 0 && <PendingQuestionnaires items={pending} />}
 
         <form method="get" className="flex gap-2">
           <div className="relative flex-1">

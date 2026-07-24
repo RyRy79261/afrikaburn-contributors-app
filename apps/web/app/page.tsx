@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Tent, Flame, ShieldCheck } from "lucide-react";
-import { firstBlockingAction } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import {
@@ -12,8 +11,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCurrentCampUser } from "@/lib/session";
-import { listRequiredActions } from "@/lib/required-actions";
+import { getCurrentCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
 import { AppShell } from "@/components/app-shell";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
@@ -48,8 +46,8 @@ export default async function HomePage() {
   if (user && isDatabaseConfigured()) {
     const campUser = await getCurrentCampUser();
     if (campUser) {
-      const actions = await listRequiredActions(campUser.id);
-      redirect(firstBlockingAction(actions) ? "/onboarding" : "/directory");
+      const gate = await pendingBlockingRoute(campUser.id);
+      redirect(gate ?? "/directory");
     }
   }
 

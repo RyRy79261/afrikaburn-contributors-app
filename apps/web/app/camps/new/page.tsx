@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser } from "@/lib/session";
-import { listRequiredActions } from "@/lib/required-actions";
-import { firstBlockingAction } from "@quagga/core";
+import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -31,9 +29,9 @@ export default async function NewCampPage() {
       </AppShell>
     );
   }
-  // Onboarding gates everything else.
-  const actions = await listRequiredActions(user.id);
-  if (firstBlockingAction(actions)) redirect("/onboarding");
+  // Onboarding (and any blocking questionnaire) gates everything else.
+  const gate = await pendingBlockingRoute(user.id);
+  if (gate) redirect(gate);
 
   return (
     <AppShell>

@@ -11,7 +11,11 @@ import {
 import { db, schema } from "./db";
 import { isDatabaseConfigured } from "./config";
 import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
-import { ensureRequiredAction, listRequiredActions } from "./required-actions";
+import {
+  actionRoute,
+  ensureRequiredAction,
+  listRequiredActions,
+} from "./required-actions";
 
 /** The camp-side user row (joins to Neon Auth via auth_user_id). */
 export interface CampUser {
@@ -159,12 +163,43 @@ export async function requireCampUser(): Promise<CampUser> {
 }
 
 /**
- * Require a signed-in, fully-onboarded camp user. Redirects to /onboarding when
- * the Burner Bio (or any blocking action) is still pending — the app-wide gate.
+ * The route a user is currently GATED to, or null when nothing blocks them. The
+ * first pending blocking `required_action` (creation order = priority) maps to
+ * its fill route: the Burner Bio → /onboarding; a questionnaire activation →
+ * /questionnaires/<id>. This is the hard-gate spine (questionnaire-spec
+ * §"Engine mechanics"): while it returns non-null, the app routes the user
+ * there before anything else. Falls back to /onboarding for an unroutable key.
+ */
+export async function pendingBlockingRoute(
+  userId: string,
+): Promise<string | null> {
+  const actions = await listRequiredActions(userId);
+  const blocker = firstBlockingAction(actions);
+  if (!blocker) return null;
+  return actionRoute(blocker.actionKey) ?? "/onboarding";
+}
+
+/**
+ * Enforce the hard gate for a signed-in camp user: if a blocking action is
+ * pending, redirect to its fill route unless the caller is ALREADY on that
+ * route (`currentPath`) — so the fill page itself renders instead of looping.
+ * Every gated participant surface calls this.
+ */
+export async function enforceGate(
+  userId: string,
+  currentPath?: string,
+): Promise<void> {
+  const route = await pendingBlockingRoute(userId);
+  if (route && route !== currentPath) redirect(route);
+}
+
+/**
+ * Require a signed-in, fully-onboarded camp user. Redirects to the pending
+ * blocking action's fill route (the Burner Bio → /onboarding, a questionnaire
+ * → its fill page) when anything still blocks — the app-wide gate.
  */
 export async function requireOnboardedUser(): Promise<CampUser> {
   const campUser = await requireCampUser();
-  const actions = await listRequiredActions(campUser.id);
-  if (firstBlockingAction(actions)) redirect("/onboarding");
+  await enforceGate(campUser.id);
   return campUser;
 }

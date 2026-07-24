@@ -34,9 +34,13 @@ import {
   formatMemberRefCode,
   nextMemberSequence,
   parseMemberRefCode,
+  defaultProjectRoleRows,
+  normalizeRoleName,
+  activationRequiredActionKey,
   BURNER_BIO_VERSION,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
+import type { AudienceSpec, Questionnaire } from "@quagga/types";
 import { createPooledDb } from "./index";
 import * as schema from "./schema";
 import suppliersDataRaw from "./data/suppliers.json" with { type: "json" };
@@ -186,8 +190,20 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.alice.id,
     });
-    await ensureMembership(db, users.alice.id, madHatters, "lead");
-    await ensureMembership(db, users.jabu.id, madHatters, "member");
+    const aliceMembership = await ensureMembership(
+      db,
+      users.alice.id,
+      madHatters,
+      "lead",
+    );
+    // Jabu co-organises Mad Hatters (admin) so the registered_camp_leads
+    // audience has a second target for the seeded org questionnaire.
+    const jabuMembership = await ensureMembership(
+      db,
+      users.jabu.id,
+      madHatters,
+      "admin",
+    );
 
     const madHattersReg = await ensureRegistration(db, madHatters, {
       groupId: madHatters.id,
@@ -464,6 +480,186 @@ async function main(): Promise<void> {
       createdByUserId: users.theo.id,
     });
     await ensureMembership(db, users.theo.id, windrowCollective, "lead");
+
+    // --- Custom project roles ----------------------------------------------------
+    // Seed the default role set (Captain / Team lead / Burn member) for every
+    // theme camp so the members area + questionnaire audiences have roles to
+    // work with. Idempotent via the unique(group_id, name_normalized) index.
+    const camps = [
+      madHatters,
+      camp404,
+      saltEmber,
+      tinkerers,
+      velvetMirage,
+      quietStatic,
+      borrowedHorizon,
+      windrowCollective,
+    ];
+    for (const camp of camps) {
+      await ensureProjectRoles(db, camp.id);
+    }
+    console.log(`[seed] project roles seeded for ${camps.length} camps`);
+
+    // A couple of role assignments on Mad Hatters: Alice = Captain, Jabu =
+    // Team lead (the latter is the target of the seeded camp questionnaire).
+    const madHattersRoles = await getProjectRolesByName(db, madHatters.id);
+    const captainRole = madHattersRoles.get(normalizeRoleName("Captain"));
+    const teamLeadRole = madHattersRoles.get(normalizeRoleName("Team lead"));
+    if (!captainRole || !teamLeadRole) {
+      throw new Error("[seed] expected default Mad Hatters roles to exist");
+    }
+    await ensureRoleAssignment(db, aliceMembership.id, captainRole.id);
+    await ensureRoleAssignment(db, jabuMembership.id, teamLeadRole.id);
+
+    // --- Questionnaires ----------------------------------------------------------
+    // (1) Org OUTBOUND questionnaire → registered_camp_leads. Mad Hatters is the
+    // only approved camp, so its lead (Alice) + admin (Jabu) are the audience.
+    // Seeded state: Alice completed, Jabu still pending.
+    const orgQuestionnaire: Questionnaire = {
+      version: "1",
+      pages: [
+        {
+          id: "safety",
+          kind: "questions",
+          title: "Pre-event safety check-in",
+          questions: [
+            {
+              id: "extinguishers",
+              kind: "boolean",
+              prompt: "Will you have fire extinguishers on site?",
+              required: true,
+            },
+            {
+              id: "fire_lead",
+              kind: "short_text",
+              prompt: "Who is your camp's fire-safety point of contact?",
+              maxLength: 120,
+              required: true,
+            },
+            {
+              id: "notes",
+              kind: "long_text",
+              prompt: "Anything the AfrikaBurn safety team should know?",
+              maxLength: 1000,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const orgDef = await ensureQuestionnaireDefinition(db, {
+      key: "org-safety-checkin-2027",
+      title: "Pre-event safety check-in",
+      definition: orgQuestionnaire,
+      version: "1",
+      createdByUserId: null,
+    });
+    const orgAudience: AudienceSpec = {
+      kind: "org_outbound",
+      selectors: ["registered_camp_leads"],
+    };
+    const orgActivation = await ensureActivation(db, {
+      questionnaireKey: orgDef.key,
+      version: "1",
+      title: "Pre-event safety check-in",
+      description:
+        "A short safety check-in for every registered camp lead ahead of the burn.",
+      authoredScope: "org",
+      groupId: null,
+      editionId: edition.id,
+      audience: orgAudience,
+      blocking: false,
+      status: "open",
+      dueAt: daysBeforeEdition(21),
+    });
+    // Alice: completed.
+    await ensureRequiredAction(db, {
+      userId: users.alice.id,
+      activation: orgActivation,
+      completed: true,
+    });
+    await ensureResponse(db, {
+      userId: users.alice.id,
+      definitionKey: orgDef.key,
+      definitionVersion: "1",
+      activationId: orgActivation.id,
+      responses: {
+        extinguishers: true,
+        fire_lead: "Marike Koekemoer",
+        notes:
+          "Two 9kg DCP extinguishers at The Church stage; our LNT lead doubles as fire marshal.",
+      },
+      completed: true,
+    });
+    // Jabu: still pending (no response row).
+    await ensureRequiredAction(db, {
+      userId: users.jabu.id,
+      activation: orgActivation,
+      completed: false,
+    });
+    console.log(`[seed] org questionnaire activation: ${orgActivation.id}`);
+
+    // (2) Mad Hatters PROJECT questionnaire → the Team lead custom role (Jabu).
+    const campQuestionnaire: Questionnaire = {
+      version: "1",
+      pages: [
+        {
+          id: "crew",
+          kind: "questions",
+          title: "Mad Hatters crew briefing",
+          questions: [
+            {
+              id: "arrival",
+              kind: "date",
+              prompt: "Which day do you arrive to help build?",
+              required: true,
+            },
+            {
+              id: "shift",
+              kind: "single_select",
+              prompt: "Which bar shift suits you best?",
+              options: [
+                { value: "afternoon", label: "Afternoon tea (15:00–18:00)" },
+                { value: "evening", label: "Evening sets (18:00–22:00)" },
+              ],
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    const campDef = await ensureQuestionnaireDefinition(db, {
+      key: "madhatters-crew-briefing-2027",
+      title: "Mad Hatters crew briefing",
+      definition: campQuestionnaire,
+      version: "1",
+      createdByUserId: users.alice.id,
+    });
+    const campAudience: AudienceSpec = {
+      kind: "project",
+      groupId: madHatters.id,
+      mode: "roles",
+      roleIds: [teamLeadRole.id],
+    };
+    const campActivation = await ensureActivation(db, {
+      questionnaireKey: campDef.key,
+      version: "1",
+      title: "Mad Hatters crew briefing",
+      description: "Team leads: confirm your build arrival and bar shift.",
+      authoredScope: "group",
+      groupId: madHatters.id,
+      editionId: edition.id,
+      audience: campAudience,
+      blocking: false,
+      status: "open",
+      dueAt: daysBeforeEdition(14),
+    });
+    await ensureRequiredAction(db, {
+      userId: users.jabu.id,
+      activation: campActivation,
+      completed: false,
+    });
+    console.log(`[seed] camp questionnaire activation: ${campActivation.id}`);
 
     // --- Suppliers ---------------------------------------------------------------
     let supplierCount = 0;
@@ -859,6 +1055,218 @@ async function ensureAuditEvent(
       .returning(),
     `audit event ${input.action}/${input.subject}`,
   );
+}
+
+// --- Project role + questionnaire upsert helpers -------------------------------
+
+type ProjectRoleRow = typeof schema.projectRoles.$inferSelect;
+
+/** Seed the default custom roles for a group (idempotent per unique index). */
+async function ensureProjectRoles(db: Db, groupId: string): Promise<void> {
+  const rows = defaultProjectRoleRows(groupId);
+  for (const row of rows) {
+    await db
+      .insert(schema.projectRoles)
+      .values(row)
+      .onConflictDoNothing({
+        target: [
+          schema.projectRoles.groupId,
+          schema.projectRoles.nameNormalized,
+        ],
+      });
+  }
+}
+
+/** Map of normalized-name → role row for a group. */
+async function getProjectRolesByName(
+  db: Db,
+  groupId: string,
+): Promise<Map<string, ProjectRoleRow>> {
+  const rows = await db
+    .select()
+    .from(schema.projectRoles)
+    .where(eq(schema.projectRoles.groupId, groupId));
+  return new Map(rows.map((r) => [r.nameNormalized, r]));
+}
+
+/** Assign a custom role to a membership (idempotent via composite PK). */
+async function ensureRoleAssignment(
+  db: Db,
+  membershipId: string,
+  projectRoleId: string,
+): Promise<void> {
+  await db
+    .insert(schema.memberRoleAssignments)
+    .values({ membershipId, projectRoleId })
+    .onConflictDoNothing();
+}
+
+type DefinitionRow = typeof schema.questionnaireDefinitions.$inferSelect;
+
+async function ensureQuestionnaireDefinition(
+  db: Db,
+  input: {
+    key: string;
+    title: string;
+    definition: Questionnaire;
+    version: string;
+    createdByUserId: string | null;
+  },
+): Promise<DefinitionRow> {
+  return firstOrThrow(
+    await db
+      .insert(schema.questionnaireDefinitions)
+      .values({
+        key: input.key,
+        title: input.title,
+        definition: input.definition,
+        status: "published",
+        version: input.version,
+        createdByUserId: input.createdByUserId,
+      })
+      .onConflictDoUpdate({
+        target: schema.questionnaireDefinitions.key,
+        set: {
+          title: input.title,
+          definition: input.definition,
+          status: "published",
+          version: input.version,
+        },
+      })
+      .returning(),
+    `questionnaire definition ${input.key}`,
+  );
+}
+
+type ActivationRow = typeof schema.questionnaireActivations.$inferSelect;
+
+/** Upsert an activation keyed on (questionnaireKey, editionId) — one seeded
+ * activation per definition per edition. No DB unique constraint exists, so
+ * this is a find-then-write. */
+async function ensureActivation(
+  db: Db,
+  input: {
+    questionnaireKey: string;
+    version: string;
+    title: string;
+    description: string;
+    authoredScope: (typeof schema.questionnaireActivations.$inferInsert)["authoredScope"];
+    groupId: string | null;
+    editionId: string;
+    audience: AudienceSpec;
+    blocking: boolean;
+    status: (typeof schema.questionnaireActivations.$inferInsert)["status"];
+    dueAt: Date | null;
+  },
+): Promise<ActivationRow> {
+  const existing = await db
+    .select()
+    .from(schema.questionnaireActivations)
+    .where(
+      and(
+        eq(
+          schema.questionnaireActivations.questionnaireKey,
+          input.questionnaireKey,
+        ),
+        eq(schema.questionnaireActivations.editionId, input.editionId),
+      ),
+    )
+    .limit(1);
+  const existingRow = existing[0];
+  const values = {
+    questionnaireKey: input.questionnaireKey,
+    version: input.version,
+    title: input.title,
+    description: input.description,
+    authoredScope: input.authoredScope,
+    groupId: input.groupId,
+    editionId: input.editionId,
+    audience: input.audience,
+    blocking: input.blocking,
+    status: input.status,
+    dueAt: input.dueAt,
+    openedAt: input.status === "open" ? daysBeforeEdition(28) : null,
+  };
+  if (existingRow) {
+    return firstOrThrow(
+      await db
+        .update(schema.questionnaireActivations)
+        .set(values)
+        .where(eq(schema.questionnaireActivations.id, existingRow.id))
+        .returning(),
+      `activation ${input.questionnaireKey}`,
+    );
+  }
+  return firstOrThrow(
+    await db.insert(schema.questionnaireActivations).values(values).returning(),
+    `activation ${input.questionnaireKey}`,
+  );
+}
+
+/** Upsert a required_action for an activation target (unique user × key). */
+async function ensureRequiredAction(
+  db: Db,
+  input: { userId: string; activation: ActivationRow; completed: boolean },
+): Promise<void> {
+  const actionKey = activationRequiredActionKey(input.activation.id);
+  const completedAt = input.completed ? daysBeforeEdition(20) : null;
+  await db
+    .insert(schema.requiredActions)
+    .values({
+      userId: input.userId,
+      type: "questionnaire",
+      actionKey,
+      version: input.activation.version,
+      activationId: input.activation.id,
+      title: input.activation.title,
+      blocking: input.activation.blocking,
+      status: input.completed ? "completed" : "pending",
+      dueAt: input.activation.dueAt,
+      completedAt,
+    })
+    .onConflictDoUpdate({
+      target: [schema.requiredActions.userId, schema.requiredActions.actionKey],
+      set: {
+        status: input.completed ? "completed" : "pending",
+        completedAt,
+      },
+    });
+}
+
+/** Upsert a questionnaire response (unique user × definitionKey). */
+async function ensureResponse(
+  db: Db,
+  input: {
+    userId: string;
+    definitionKey: string;
+    definitionVersion: string;
+    activationId: string;
+    responses: Record<string, unknown>;
+    completed: boolean;
+  },
+): Promise<void> {
+  const completedAt = input.completed ? daysBeforeEdition(20) : null;
+  await db
+    .insert(schema.questionnaireResponses)
+    .values({
+      userId: input.userId,
+      definitionKey: input.definitionKey,
+      definitionVersion: input.definitionVersion,
+      responses: input.responses as (typeof schema.questionnaireResponses.$inferInsert)["responses"],
+      activationId: input.activationId,
+      completedAt,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.questionnaireResponses.userId,
+        schema.questionnaireResponses.definitionKey,
+      ],
+      set: {
+        responses: input.responses as (typeof schema.questionnaireResponses.$inferInsert)["responses"],
+        activationId: input.activationId,
+        completedAt,
+      },
+    });
 }
 
 main().catch((err) => {

@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TicketCheck } from "lucide-react";
-import { firstBlockingAction } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser } from "@/lib/session";
-import { listRequiredActions } from "@/lib/required-actions";
+import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getInvitePreview } from "@/lib/invites-store";
 import { AppShell } from "@/components/app-shell";
@@ -43,9 +41,10 @@ export default async function JoinPage({
     );
   }
 
-  // Onboarding gates joining — the link survives the round trip.
-  const actions = await listRequiredActions(user.id);
-  if (firstBlockingAction(actions)) redirect("/onboarding");
+  // Onboarding (and any blocking questionnaire) gates joining — the link
+  // survives the round trip.
+  const gate = await pendingBlockingRoute(user.id);
+  if (gate) redirect(gate);
 
   const preview = await getInvitePreview(token);
 

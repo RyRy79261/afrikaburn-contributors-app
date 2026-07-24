@@ -8,6 +8,7 @@ import {
   Wallet,
   LayoutGrid,
   FileCheck2,
+  ClipboardList,
 } from "lucide-react";
 import type { GroupKind, MembershipRole, RegistrationStatus } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
@@ -21,20 +22,28 @@ import {
 } from "@quagga/ui/components/card";
 import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCurrentCampUser } from "@/lib/session";
+import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getCampBySlug } from "@/lib/groups-store";
 import { listInvites } from "@/lib/invites-store";
+import { listRoles, getRoleAssignments } from "@/lib/roles-store";
+import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
+import { CampMembers } from "@/components/camp-members";
+import { PendingQuestionnaires } from "@/components/questionnaire/pending-questionnaires";
 import { LeaveCampButton } from "@/components/leave-camp-button";
 import { MemberRefCode } from "@/components/member-ref-code";
 import {
   createInviteAction,
   leaveCampAction,
   revokeInviteAction,
+  createRoleAction,
+  renameRoleAction,
+  removeRoleAction,
+  setMemberRolesAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -99,8 +108,33 @@ export default async function CampPage({
     notFound();
   }
 
+  // Signed-in members are subject to the hard gate — a pending blocking action
+  // (Burner Bio or a required questionnaire) sends them to fill it first.
+  if (campUser) await enforceGate(campUser.id);
+
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
+  const isMember = camp.viewerRole !== null;
   const invites = isAdmin ? await listInvites(camp.id) : [];
+
+  // Custom project roles + assignments (chips + lead-only management).
+  const roles = isMember ? await listRoles(camp.id) : [];
+  const assignments = isMember
+    ? await getRoleAssignments(camp.id)
+    : new Map<string, string[]>();
+  const memberVMs = camp.members.map((m) => ({
+    membershipId: m.membershipId,
+    userId: m.userId,
+    displayName: m.displayName,
+    role: m.role,
+    refCode: m.refCode,
+    isViewer: m.isViewer,
+    roleIds: assignments.get(m.membershipId) ?? [],
+  }));
+
+  // Pending questionnaires for the viewer (non-blocking card; org + project).
+  const pending = campUser
+    ? await listPendingQuestionnaires(campUser.id)
+    : [];
 
   const statusLabel = camp.registrationStatus
     ? STATUS_LABEL[camp.registrationStatus as RegistrationStatus]
@@ -139,6 +173,8 @@ export default async function CampPage({
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
+        {pending.length > 0 && <PendingQuestionnaires items={pending} />}
+
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Members */}
           <Card className="lg:col-span-2">
@@ -153,47 +189,56 @@ export default async function CampPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="flex flex-col divide-y divide-border">
-                {camp.members.map((m) => (
-                  <li
-                    key={m.userId}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <span className="min-w-0 truncate text-sm">
-                      <Link
-                        href={`/burners/${m.userId}`}
-                        className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {isMember ? (
+                <CampMembers
+                  slug={camp.slug}
+                  canManage={isAdmin}
+                  showRefCodes={isAdmin}
+                  roles={roles.map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    isDefault: r.isDefault,
+                  }))}
+                  members={memberVMs}
+                  createRoleAction={createRoleAction}
+                  renameRoleAction={renameRoleAction}
+                  removeRoleAction={removeRoleAction}
+                  setMemberRolesAction={setMemberRolesAction}
+                />
+              ) : (
+                <>
+                  <ul className="flex flex-col divide-y divide-border">
+                    {camp.members.map((m) => (
+                      <li
+                        key={m.userId}
+                        className="flex items-center justify-between gap-3 py-2.5"
                       >
-                        {m.displayName}
-                      </Link>
-                      {m.isViewer && (
-                        <span className="ml-1.5 text-xs text-accent">(you)</span>
-                      )}
-                    </span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {isAdmin && m.refCode && (
-                        <MemberRefCode code={m.refCode} />
-                      )}
-                      <Badge
-                        variant={
-                          m.role === "lead"
-                            ? "default"
-                            : m.role === "admin"
-                              ? "secondary"
-                              : "outline"
-                        }
-                      >
-                        {ROLE_LABEL[m.role]}
-                      </Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
-              {!camp.viewerRole && (
-                <p className="mt-4 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-                  Ask a camp lead for an invite link to join.
-                </p>
+                        <span className="min-w-0 truncate text-sm">
+                          <Link
+                            href={`/burners/${m.userId}`}
+                            className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {m.displayName}
+                          </Link>
+                        </span>
+                        <Badge
+                          variant={
+                            m.role === "lead"
+                              ? "default"
+                              : m.role === "admin"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {ROLE_LABEL[m.role]}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+                    Ask a camp lead for an invite link to join.
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>
@@ -227,6 +272,29 @@ export default async function CampPage({
               )}
             </CardContent>
           </Card>
+
+          {/* Questionnaires — lead/admin only */}
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="h-4 w-4 text-accent" aria-hidden />
+                  Questionnaires
+                </CardTitle>
+                <CardDescription>
+                  Ask your members what you need — target by role, track who
+                  has answered.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild size="sm" variant="secondary" className="w-full">
+                  <Link href={`/camps/${camp.slug}/questionnaires`}>
+                    Manage questionnaires
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Invites — lead/admin only */}

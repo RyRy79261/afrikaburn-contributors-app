@@ -7,7 +7,7 @@ import { PreviewNotice } from "@/components/preview-notice";
 import { RegistrationWizard } from "@/components/registration/registration-wizard";
 import { RegistrationSummary } from "@/components/registration/registration-summary";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCurrentCampUser } from "@/lib/session";
+import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import {
@@ -82,6 +82,8 @@ export default async function RegistrationPage({
   if (!authUser) redirect("/auth/sign-in");
   const campUser = await getCurrentCampUser();
   if (!campUser) redirect("/auth/sign-in");
+  // Hard gate: a pending blocking action must be cleared before the workspace.
+  await enforceGate(campUser.id);
 
   const edition = await getActiveEdition();
   if (!edition) {

@@ -145,6 +145,8 @@ export async function listDirectory(input: {
 }
 
 export interface CampMember {
+  /** The `memberships.id` — the key custom project-role assignments hang off. */
+  membershipId: string;
   userId: string;
   role: MembershipRole;
   displayName: string;
@@ -272,6 +274,7 @@ export async function getCampBySlug(
   // names fall back to a neutral placeholder, never to email.
   const memberRows = await db()
     .select({
+      membershipId: schema.memberships.id,
       userId: schema.memberships.userId,
       role: schema.memberships.role,
       refCode: schema.memberships.refCode,
@@ -289,6 +292,7 @@ export async function getCampBySlug(
     .where(eq(schema.memberships.groupId, group.id));
 
   const members: CampMember[] = memberRows.map((m) => ({
+    membershipId: m.membershipId,
     userId: m.userId,
     role: m.role,
     refCode: m.refCode,

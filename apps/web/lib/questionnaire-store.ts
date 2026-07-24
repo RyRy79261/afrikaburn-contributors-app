@@ -1,0 +1,585 @@
+import "server-only";
+
+import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  activationRequiredActionKey,
+  buildActivationRequiredActions,
+  parseActivationActionKey,
+  resolveAudience,
+  tallyActivationCompletion,
+  type AudienceContext,
+} from "@quagga/core";
+import {
+  flattenQuestions,
+  validateResponses,
+  type ProjectAudience,
+  type Questionnaire,
+  type QuestionnaireResponses,
+  type SaveResult,
+} from "@quagga/types";
+import { db, schema } from "./db";
+import { completeRequiredAction } from "./required-actions";
+import { sendEmail } from "./email";
+
+// Persistence + activation service for the questionnaire builder
+// (questionnaire-spec §"Engine mechanics"). Project questionnaires are stored
+// in the shared `questionnaire_definitions`/`_activations`/`_responses` spine;
+// a project definition is namespaced by its key so a camp's builder can list
+// only its own. Audience resolution is delegated to @quagga/core's pure
+// `resolveAudience`; this layer just loads the rows and performs the writes.
+
+const DEFINITION_VERSION = "1";
+
+/** Key prefix that scopes a definition to a project group. */
+function projectDefinitionKey(groupId: string): string {
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `proj:${groupId}:${rand}`;
+}
+
+/** True when a definition key belongs to the given project group. */
+export function isProjectDefinitionKey(key: string, groupId: string): boolean {
+  return key.startsWith(`proj:${groupId}:`);
+}
+
+// --- Builder + activation (create & send, project scope) -----------------
+
+export interface CreateProjectQuestionnaireInput {
+  groupId: string;
+  editionId: string;
+  createdByUserId: string;
+  title: string;
+  description: string | null;
+  definition: Questionnaire;
+  audience: ProjectAudience;
+  blocking: boolean;
+  dueAt: Date | null;
+}
+
+export interface CreateProjectQuestionnaireResult {
+  activationId: string;
+  sent: number;
+  emailDelivered: boolean;
+}
+
+/**
+ * Create a project questionnaire definition and activate it in one step: write
+ * the definition, resolve the audience (members + custom roles) to user ids,
+ * insert one `required_actions` row per target, and email each target. Returns
+ * the new activation id and how many were targeted.
+ */
+export async function createAndActivateProjectQuestionnaire(
+  input: CreateProjectQuestionnaireInput,
+): Promise<CreateProjectQuestionnaireResult> {
+  const key = projectDefinitionKey(input.groupId);
+
+  await db().insert(schema.questionnaireDefinitions).values({
+    key,
+    title: input.title,
+    definition: input.definition,
+    status: "published",
+    version: DEFINITION_VERSION,
+    createdByUserId: input.createdByUserId,
+  });
+
+  const inserted = await db()
+    .insert(schema.questionnaireActivations)
+    .values({
+      questionnaireKey: key,
+      version: DEFINITION_VERSION,
+      title: input.title,
+      description: input.description,
+      scope: "everyone",
+      blocking: input.blocking,
+      status: "open",
+      dueAt: input.dueAt,
+      authoredScope: "group",
+      groupId: input.groupId,
+      editionId: input.editionId,
+      audience: input.audience,
+      activatedByUserId: input.createdByUserId,
+      openedAt: new Date(),
+    })
+    .returning({ id: schema.questionnaireActivations.id });
+  const activationId = inserted[0]!.id;
+
+  const userIds = await resolveProjectTargets(
+    input.groupId,
+    input.editionId,
+    input.audience,
+  );
+
+  const rows = buildActivationRequiredActions(
+    { id: activationId, title: input.title, blocking: input.blocking, dueAt: input.dueAt },
+    userIds,
+  );
+  if (rows.length > 0) {
+    await db()
+      .insert(schema.requiredActions)
+      .values(
+        rows.map((r) => ({
+          userId: r.userId,
+          type: r.type,
+          actionKey: r.actionKey,
+          activationId: r.activationId,
+          title: r.title,
+          blocking: r.blocking,
+          status: r.status,
+          dueAt: r.dueAt,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [
+          schema.requiredActions.userId,
+          schema.requiredActions.actionKey,
+        ],
+      });
+  }
+
+  const emailDelivered = await notifyTargets(userIds, {
+    activationId,
+    title: input.title,
+    blocking: input.blocking,
+  });
+
+  return { activationId, sent: userIds.length, emailDelivered };
+}
+
+/**
+ * Resolve a project audience to user ids using the pure core resolver. Only the
+ * group's own memberships + custom-role assignments are loaded — a project
+ * audience never reads org/registration/bio rows.
+ */
+async function resolveProjectTargets(
+  groupId: string,
+  editionId: string,
+  audience: ProjectAudience,
+): Promise<string[]> {
+  const memberships = await db()
+    .select({
+      membershipId: schema.memberships.id,
+      userId: schema.memberships.userId,
+      groupId: schema.memberships.groupId,
+      role: schema.memberships.role,
+    })
+    .from(schema.memberships)
+    .where(eq(schema.memberships.groupId, groupId));
+
+  const roleAssignments = await db()
+    .select({
+      membershipId: schema.memberRoleAssignments.membershipId,
+      projectRoleId: schema.memberRoleAssignments.projectRoleId,
+    })
+    .from(schema.memberRoleAssignments)
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
+    )
+    .where(eq(schema.memberships.groupId, groupId));
+
+  const ctx: AudienceContext = {
+    editionId,
+    orgGroupId: "",
+    memberships,
+    groups: [],
+    registrations: [],
+    bios: [],
+    roleAssignments,
+  };
+  return resolveAudience(audience, ctx);
+}
+
+/** Email each targeted user their pending-questionnaire notice (console
+ * fallback when Resend is unset). Returns whether delivery actually happened. */
+async function notifyTargets(
+  userIds: readonly string[],
+  activation: { activationId: string; title: string; blocking: boolean },
+): Promise<boolean> {
+  if (userIds.length === 0) return false;
+  const users = await db()
+    .select({ id: schema.users.id, email: schema.users.email })
+    .from(schema.users)
+    .where(inArray(schema.users.id, [...userIds]));
+  const emails = users
+    .map((u) => u.email)
+    .filter((e): e is string => Boolean(e));
+  if (emails.length === 0) return false;
+
+  const urgency = activation.blocking
+    ? "It's required — it blocks the app until you complete it."
+    : "It's optional, but the camp would appreciate your answer.";
+  const result = await sendEmail({
+    to: emails,
+    subject: `Please complete: ${activation.title}`,
+    text:
+      `A camp questionnaire is waiting for you: "${activation.title}".\n\n` +
+      `${urgency}\n\n` +
+      `Open it here: /questionnaires/${activation.activationId}\n\n` +
+      `Every question is one someone in the desert has to answer — thanks for taking the time.`,
+  });
+  return result.ok && result.delivered;
+}
+
+// --- Author-side: list + results (project dashboard) ---------------------
+
+export interface ProjectQuestionnaireListItem {
+  activationId: string;
+  key: string;
+  title: string;
+  description: string | null;
+  blocking: boolean;
+  dueAt: Date | null;
+  status: string;
+  questionCount: number;
+  createdAt: Date;
+  sent: number;
+  completed: number;
+}
+
+/** List a project's questionnaires (one row per activation) with completion. */
+export async function listProjectQuestionnaires(
+  groupId: string,
+): Promise<ProjectQuestionnaireListItem[]> {
+  const rows = await db()
+    .select({
+      activationId: schema.questionnaireActivations.id,
+      key: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+      description: schema.questionnaireActivations.description,
+      blocking: schema.questionnaireActivations.blocking,
+      dueAt: schema.questionnaireActivations.dueAt,
+      status: schema.questionnaireActivations.status,
+      createdAt: schema.questionnaireActivations.createdAt,
+      definition: schema.questionnaireDefinitions.definition,
+    })
+    .from(schema.questionnaireActivations)
+    .innerJoin(
+      schema.questionnaireDefinitions,
+      eq(
+        schema.questionnaireDefinitions.key,
+        schema.questionnaireActivations.questionnaireKey,
+      ),
+    )
+    .where(
+      and(
+        eq(schema.questionnaireActivations.groupId, groupId),
+        eq(schema.questionnaireActivations.authoredScope, "group"),
+      ),
+    )
+    .orderBy(desc(schema.questionnaireActivations.createdAt));
+
+  const out: ProjectQuestionnaireListItem[] = [];
+  for (const r of rows) {
+    const actions = await db()
+      .select({ status: schema.requiredActions.status })
+      .from(schema.requiredActions)
+      .where(eq(schema.requiredActions.activationId, r.activationId));
+    const tally = tallyActivationCompletion(actions);
+    out.push({
+      activationId: r.activationId,
+      key: r.key,
+      title: r.title,
+      description: r.description,
+      blocking: r.blocking,
+      dueAt: r.dueAt,
+      status: r.status,
+      questionCount: flattenQuestions(r.definition).length,
+      createdAt: r.createdAt,
+      sent: tally.sent,
+      completed: tally.completed,
+    });
+  }
+  return out;
+}
+
+/** A trimmed activation row for authz + rendering. */
+export interface ActivationRow {
+  id: string;
+  questionnaireKey: string;
+  title: string;
+  description: string | null;
+  blocking: boolean;
+  dueAt: Date | null;
+  status: string;
+  authoredScope: "org" | "group";
+  groupId: string | null;
+  editionId: string | null;
+  definition: Questionnaire;
+}
+
+/** Load an activation and its definition, or null if unknown. */
+export async function getActivation(
+  activationId: string,
+): Promise<ActivationRow | null> {
+  const rows = await db()
+    .select({
+      id: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+      description: schema.questionnaireActivations.description,
+      blocking: schema.questionnaireActivations.blocking,
+      dueAt: schema.questionnaireActivations.dueAt,
+      status: schema.questionnaireActivations.status,
+      authoredScope: schema.questionnaireActivations.authoredScope,
+      groupId: schema.questionnaireActivations.groupId,
+      editionId: schema.questionnaireActivations.editionId,
+      definition: schema.questionnaireDefinitions.definition,
+    })
+    .from(schema.questionnaireActivations)
+    .innerJoin(
+      schema.questionnaireDefinitions,
+      eq(
+        schema.questionnaireDefinitions.key,
+        schema.questionnaireActivations.questionnaireKey,
+      ),
+    )
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export interface ActivationRespondent {
+  userId: string;
+  displayName: string;
+  status: string;
+  completedAt: Date | null;
+  responses: QuestionnaireResponses | null;
+}
+
+export interface ActivationResults {
+  activation: ActivationRow;
+  respondents: ActivationRespondent[];
+}
+
+/**
+ * The author-side results for an activation: every targeted user with their
+ * completion status and (once submitted) their answers. Privacy boundary is
+ * enforced by the CALLER via `canViewActivationResults`; this loader assumes it
+ * has already passed.
+ */
+export async function getActivationResults(
+  activationId: string,
+  editionId: string,
+): Promise<ActivationResults | null> {
+  const activation = await getActivation(activationId);
+  if (!activation) return null;
+
+  const actionRows = await db()
+    .select({
+      userId: schema.requiredActions.userId,
+      status: schema.requiredActions.status,
+      completedAt: schema.requiredActions.completedAt,
+      displayName: schema.burnerBios.displayName,
+    })
+    .from(schema.requiredActions)
+    .leftJoin(
+      schema.burnerBios,
+      and(
+        eq(schema.burnerBios.userId, schema.requiredActions.userId),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    )
+    .where(eq(schema.requiredActions.activationId, activationId));
+
+  const userIds = actionRows.map((r) => r.userId);
+  const responseRows =
+    userIds.length === 0
+      ? []
+      : await db()
+          .select({
+            userId: schema.questionnaireResponses.userId,
+            responses: schema.questionnaireResponses.responses,
+            activationId: schema.questionnaireResponses.activationId,
+          })
+          .from(schema.questionnaireResponses)
+          .where(
+            and(
+              eq(
+                schema.questionnaireResponses.definitionKey,
+                activation.questionnaireKey,
+              ),
+              inArray(schema.questionnaireResponses.userId, userIds),
+            ),
+          );
+  const responseByUser = new Map<string, QuestionnaireResponses>();
+  for (const r of responseRows) {
+    if (r.activationId === activationId) responseByUser.set(r.userId, r.responses);
+  }
+
+  const respondents: ActivationRespondent[] = actionRows
+    .map((r) => ({
+      userId: r.userId,
+      displayName: r.displayName ?? "Unnamed burner",
+      status: r.status,
+      completedAt: r.completedAt,
+      responses: responseByUser.get(r.userId) ?? null,
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  return { activation, respondents };
+}
+
+// --- Member-side: fill + pending list ------------------------------------
+
+export interface FillView {
+  activation: ActivationRow;
+  /** The user's required-action status for this activation (null = not targeted). */
+  actionStatus: "pending" | "completed" | "waived" | "expired" | null;
+  initialResponses: QuestionnaireResponses;
+}
+
+/**
+ * Load everything the fill page needs for a user, or null when the user was not
+ * targeted (no `required_actions` row). Works identically for project- and
+ * org-authored activations — the fill flow is scope-agnostic.
+ */
+export async function getFillView(
+  activationId: string,
+  userId: string,
+): Promise<FillView | null> {
+  const activation = await getActivation(activationId);
+  if (!activation) return null;
+
+  const actionRows = await db()
+    .select({ status: schema.requiredActions.status })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(
+          schema.requiredActions.actionKey,
+          activationRequiredActionKey(activationId),
+        ),
+      ),
+    )
+    .limit(1);
+  const actionStatus = actionRows[0]?.status ?? null;
+  if (!actionStatus) return null;
+
+  const responseRows = await db()
+    .select({ responses: schema.questionnaireResponses.responses })
+    .from(schema.questionnaireResponses)
+    .where(
+      and(
+        eq(schema.questionnaireResponses.userId, userId),
+        eq(
+          schema.questionnaireResponses.definitionKey,
+          activation.questionnaireKey,
+        ),
+      ),
+    )
+    .limit(1);
+
+  return {
+    activation,
+    actionStatus,
+    initialResponses: responseRows[0]?.responses ?? {},
+  };
+}
+
+export interface PendingQuestionnaire {
+  activationId: string;
+  title: string;
+  blocking: boolean;
+  dueAt: Date | null;
+}
+
+/**
+ * A user's pending questionnaire activations (excludes the Burner Bio, which
+ * has its own onboarding gate). Drives the "Pending questionnaires" card on the
+ * dashboard + landing, and covers BOTH org-outbound and project sends.
+ */
+export async function listPendingQuestionnaires(
+  userId: string,
+): Promise<PendingQuestionnaire[]> {
+  const rows = await db()
+    .select({
+      actionKey: schema.requiredActions.actionKey,
+      title: schema.requiredActions.title,
+      blocking: schema.requiredActions.blocking,
+      dueAt: schema.requiredActions.dueAt,
+      createdAt: schema.requiredActions.createdAt,
+    })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.type, "questionnaire"),
+        eq(schema.requiredActions.status, "pending"),
+      ),
+    )
+    .orderBy(desc(schema.requiredActions.createdAt));
+
+  const out: PendingQuestionnaire[] = [];
+  for (const r of rows) {
+    const activationId = parseActivationActionKey(r.actionKey);
+    if (!activationId) continue; // skips the code-side Burner Bio action
+    out.push({
+      activationId,
+      title: r.title,
+      blocking: r.blocking,
+      dueAt: r.dueAt,
+    });
+  }
+  return out;
+}
+
+/**
+ * Validate + persist a member's response, then flip the required action to
+ * completed. Rejects a user who was never targeted. Idempotent on re-submit
+ * (upsert on user × definition).
+ */
+export async function submitResponse(input: {
+  userId: string;
+  activationId: string;
+  rawResponses: unknown;
+}): Promise<SaveResult> {
+  const activation = await getActivation(input.activationId);
+  if (!activation) {
+    return { ok: false, errors: { _form: "This questionnaire no longer exists." } };
+  }
+
+  const actionKey = activationRequiredActionKey(input.activationId);
+  const actionRows = await db()
+    .select({ id: schema.requiredActions.id })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.userId, input.userId),
+        eq(schema.requiredActions.actionKey, actionKey),
+      ),
+    )
+    .limit(1);
+  if (!actionRows[0]) {
+    return { ok: false, errors: { _form: "This questionnaire wasn't sent to you." } };
+  }
+
+  const validated = validateResponses(activation.definition, input.rawResponses);
+  if (!validated.ok) return { ok: false, errors: validated.errors };
+
+  const now = new Date();
+  await db()
+    .insert(schema.questionnaireResponses)
+    .values({
+      userId: input.userId,
+      definitionKey: activation.questionnaireKey,
+      definitionVersion: DEFINITION_VERSION,
+      responses: validated.responses,
+      activationId: input.activationId,
+      completedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.questionnaireResponses.userId,
+        schema.questionnaireResponses.definitionKey,
+      ],
+      set: {
+        responses: validated.responses,
+        activationId: input.activationId,
+        completedAt: now,
+        updatedAt: now,
+      },
+    });
+
+  await completeRequiredAction(input.userId, actionKey);
+  return { ok: true };
+}

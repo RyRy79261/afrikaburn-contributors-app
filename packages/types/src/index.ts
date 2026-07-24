@@ -4,3 +4,4 @@ export * from "./registration";
 export * from "./payments";
 export * from "./suppliers";
 export * from "./questionnaire";
+export * from "./audience";

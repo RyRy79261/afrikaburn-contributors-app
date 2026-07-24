@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, eq } from "drizzle-orm";
 import type { RequiredActionLike } from "@quagga/core";
-import { BURNER_BIO_ACTION_KEY } from "@quagga/core";
+import { BURNER_BIO_ACTION_KEY, parseActivationActionKey } from "@quagga/core";
 import { db, schema } from "./db";
 
 // The code-side action-key → route registry (build-spec: the DB stores the key,
@@ -11,8 +11,15 @@ const ACTION_ROUTES: Record<string, string> = {
   [BURNER_BIO_ACTION_KEY]: "/onboarding",
 };
 
-/** Route that satisfies a required-action key, or null if none is built. */
+/**
+ * Route that satisfies a required-action key, or null if none is built. Static
+ * keys (the Burner Bio) come from the registry; questionnaire-activation keys
+ * (`questionnaire:<id>`) route dynamically to the shared fill page — this is
+ * what lets BOTH org-outbound and project-authored activations gate/land here.
+ */
 export function actionRoute(actionKey: string): string | null {
+  const activationId = parseActivationActionKey(actionKey);
+  if (activationId) return `/questionnaires/${activationId}`;
   return ACTION_ROUTES[actionKey] ?? null;
 }
 

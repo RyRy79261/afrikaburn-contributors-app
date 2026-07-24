@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser } from "@/lib/session";
+import { ensureCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio, getKeyFingerprint } from "@/lib/bio-store";
@@ -80,6 +80,10 @@ export default async function ProfilePage({
       </AppShell>
     );
   }
+
+  // Hard gate: a pending blocking questionnaire keeps the profile out of reach
+  // until it's done (the Burner Bio redirect below covers the onboarding case).
+  await enforceGate(user.id);
 
   const bio = await getBio(user.id, edition.id);
   if (!bio?.completedAt) redirect("/onboarding");
