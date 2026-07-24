@@ -10,38 +10,41 @@ import {
   SelectValue,
 } from "@quagga/ui/components/select";
 import { toast } from "@quagga/ui/components/toast";
-import { VettingStatus, type VettingStatus as VettingStatusT } from "@quagga/types";
-import { setSupplierVetting } from "@/lib/actions/suppliers";
+import {
+  SupplierStanding,
+  type SupplierStanding as SupplierStandingT,
+} from "@quagga/types";
+import { SUPPLIER_STANDINGS, standingLabel } from "@quagga/core";
+import { setSupplierStanding } from "@/lib/actions/suppliers";
 
-const LABELS: Record<VettingStatusT, string> = {
-  listed: "Listed",
-  registered: "Registered",
-  flagged: "Flagged",
-};
-
-/** Inline vetting-status editor for a supplier row. */
-export function SupplierVettingSelect({
+/**
+ * Inline standing editor for a supplier row (good / watch / suspended). The
+ * single org verdict — visible to camps via the picker, so a change is
+ * consequential and audited server-side.
+ */
+export function SupplierStandingSelect({
   supplierId,
   value,
 }: {
   supplierId: string;
-  value: VettingStatusT;
+  value: SupplierStandingT;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   function onChange(next: string) {
-    const parsed = VettingStatus.parse(next);
+    const parsed = SupplierStanding.parse(next);
+    if (parsed === value) return;
     startTransition(async () => {
-      const result = await setSupplierVetting({
+      const result = await setSupplierStanding({
         supplierId,
-        vettingStatus: parsed,
+        standing: parsed,
       });
       if (result.ok) {
-        toast.success(`Marked ${LABELS[parsed].toLowerCase()}.`);
+        toast.success(`Standing set to ${standingLabel(parsed).toLowerCase()}.`);
         router.refresh();
       } else {
-        toast.error("Could not update vetting", {
+        toast.error("Could not update standing", {
           description: result.error,
         });
       }
@@ -50,13 +53,13 @@ export function SupplierVettingSelect({
 
   return (
     <Select value={value} onValueChange={onChange} disabled={pending}>
-      <SelectTrigger className="h-9 w-[9rem] text-sm">
+      <SelectTrigger className="h-9 w-[10.5rem] text-sm">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {VettingStatus.options.map((s) => (
+        {SUPPLIER_STANDINGS.map((s) => (
           <SelectItem key={s} value={s}>
-            {LABELS[s]}
+            {standingLabel(s)}
           </SelectItem>
         ))}
       </SelectContent>

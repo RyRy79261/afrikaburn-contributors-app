@@ -135,6 +135,25 @@
   --color-ring: #d98a2b;
 }
 
+/* Supplier-portal accent skin — the third app (apps/suppliers) wears this on
+   <html> alongside the theme class, exactly as the org app wears `.org-accent`.
+   Its interactive colour is AfrikaBurn's sage/olive, so the supplier portal is
+   never mistaken for the participant (teal) or organiser (apricot) apps. Only
+   the interactive tokens shift; the shared surfaces stay identical. */
+.supplier-accent {
+  --color-primary: #b6d090; /* sage */
+  --color-primary-foreground: #17191b; /* dark text — white on sage fails AA */
+  --color-ring: #b6d090;
+}
+
+.light.supplier-accent {
+  /* Pale sage is too low-contrast as a light-mode button fill; olive with dark
+     text mirrors the light `--color-success` token (4.5:1+). */
+  --color-primary: #7d9953; /* olive */
+  --color-primary-foreground: #1f2a12;
+  --color-ring: #7d9953;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

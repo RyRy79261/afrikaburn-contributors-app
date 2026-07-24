@@ -26,18 +26,21 @@ describe("parseSuppliersCsv (real AB Suppliers List sample)", () => {
     expect(rows.length).toBe(20);
   });
 
-  it("parses a fully-populated block: name, category, business contact, vetting status", () => {
+  it("parses a fully-populated block: name, category, business contact", () => {
     const dimensions = rows.find((r) => r.name === "Dimensions Bedouin Stretch Tent Hire (Pty) Ltd");
     expect(dimensions).toBeDefined();
     expect(dimensions?.services).toContain("Stretch Tents");
     expect(dimensions?.contact).toContain("Heather Dreyer");
     expect(dimensions?.contact).toContain("heather@dimensionstents.com");
-    expect(dimensions?.vettingStatus).toBe("registered"); // "In Good Standing"
   });
 
-  it("maps a blank Status cell to listed", () => {
-    const bedouinMasterz = rows.find((r) => r.name === "BedouinTent Masterz");
-    expect(bedouinMasterz?.vettingStatus).toBe("listed");
+  it("does not carry a standing/vetting field — the sheet Status column is ignored", () => {
+    // Supplier standing is org-set in the console, never inferred from the
+    // public sheet (docs/supplier-spec.md).
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("vettingStatus");
+      expect(row).not.toHaveProperty("standing");
+    }
   });
 
   it("NEVER retains a phone number or postal address in the contact field", () => {
@@ -61,7 +64,6 @@ describe("parseSuppliersCsv (real AB Suppliers List sample)", () => {
       expect(typeof row.services).toBe("string");
       expect(typeof row.contact).toBe("string");
       expect(row.website).toBe("");
-      expect(["listed", "registered", "flagged"]).toContain(row.vettingStatus);
     }
   });
 });

@@ -7,7 +7,8 @@ import {
   SECTION_KEYS,
   SECTION_LABELS,
   PaymentStatus,
-  VettingStatus,
+  SupplierStanding,
+  SupplierNoteKind,
   validateOne,
 } from "../index";
 
@@ -35,7 +36,19 @@ describe("shared enums", () => {
     expect(RegistrationStatus.safeParse("approved").success).toBe(true);
     expect(RegistrationStatus.safeParse("cancelled").success).toBe(false);
     expect(PaymentStatus.safeParse("reconciled").success).toBe(true);
-    expect(VettingStatus.safeParse("flagged").success).toBe(true);
+  });
+
+  it("locks the supplier standing + note-kind vocabularies", () => {
+    for (const s of ["good", "watch", "suspended"]) {
+      expect(SupplierStanding.safeParse(s).success).toBe(true);
+    }
+    // The dead v1 vetting vocabulary must not survive.
+    expect(SupplierStanding.safeParse("flagged").success).toBe(false);
+    expect(SupplierStanding.safeParse("registered").success).toBe(false);
+    for (const k of ["infraction", "blessing", "note"]) {
+      expect(SupplierNoteKind.safeParse(k).success).toBe(true);
+    }
+    expect(SupplierNoteKind.safeParse("praise").success).toBe(false);
   });
 });
 

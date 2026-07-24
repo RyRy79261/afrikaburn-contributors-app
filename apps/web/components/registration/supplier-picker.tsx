@@ -7,12 +7,6 @@ import { Input } from "@quagga/ui/components/input";
 import type { SupplierOption } from "@/lib/registration-store";
 import { TextAreaField } from "./field-kit";
 
-const VETTING_LABEL: Record<string, { label: string; variant: "success" | "warning" | "outline" }> = {
-  registered: { label: "Vetted", variant: "success" },
-  flagged: { label: "Flagged", variant: "warning" },
-  listed: { label: "Listed", variant: "outline" },
-};
-
 // Section 6 supplier picker: multi-select from the AB suppliers repository plus
 // a free-text note for anything not on the list (build-spec §apps/web).
 
@@ -96,7 +90,6 @@ export function SupplierPicker({
             )}
             {filtered.map((s) => {
               const on = selected.has(s.id);
-              const vet = VETTING_LABEL[s.vettingStatus] ?? VETTING_LABEL.listed!;
               return (
                 <li key={s.id}>
                   <button
@@ -121,7 +114,12 @@ export function SupplierPicker({
                         <span className="text-sm font-medium text-foreground">
                           {s.name}
                         </span>
-                        <Badge variant={vet.variant}>{vet.label}</Badge>
+                        {s.caution && (
+                          <Badge variant="warning">Watch</Badge>
+                        )}
+                        {!s.onboardingComplete && (
+                          <Badge variant="outline">Onboarding incomplete</Badge>
+                        )}
                       </span>
                       {s.services && (
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">

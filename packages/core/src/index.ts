@@ -49,6 +49,11 @@
 //   - invite redemption: canRedeemInvite(As), single-use logic (./invite)
 //   - god-email bootstrap parsing: parseGodEmails, isGodEmailIn (./god-emails)
 //   - supplier CSV import: parseCsv, parseSuppliersCsv (./supplier-import)
+//   - supplier onboarding: SUPPLIER_ONBOARDING_STEPS, deriveOnboardingProgress,
+//     validateStepTransition, applyStepTransition, defaultOnboardingSteps,
+//     step-flow guards (./supplier-onboarding)
+//   - supplier standing: SUPPLIER_STANDINGS, standing helpers,
+//     supplierPickerEligibility, filterPickerEligible (./supplier-standing)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -71,3 +76,5 @@ export * from "./questionnaire-authz";
 export * from "./invite";
 export * from "./god-emails";
 export * from "./supplier-import";
+export * from "./supplier-onboarding";
+export * from "./supplier-standing";

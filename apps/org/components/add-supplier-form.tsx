@@ -18,7 +18,7 @@ import {
 import { toast } from "@quagga/ui/components/toast";
 import { addSupplier } from "@/lib/actions/suppliers";
 
-/** Manual supplier add — a dialog form. Source is recorded as `manual`. */
+/** Manual supplier add — a dialog form. New suppliers start in good standing. */
 export function AddSupplierForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -66,7 +66,7 @@ export function AddSupplierForm() {
           <DialogTitle>Add a supplier</DialogTitle>
           <DialogDescription>
             Hand-add a supplier that isn&apos;t in the imported list. It starts
-            as &ldquo;listed&rdquo; and can be vetted from the table.
+            in good standing; set standing and onboarding from the table.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">

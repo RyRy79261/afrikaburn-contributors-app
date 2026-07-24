@@ -31,7 +31,7 @@ import { PageHeading } from "@/components/page-heading";
 import {
   CohortBadge,
   RegistrationStatusBadge,
-  VettingStatusBadge,
+  SupplierStandingBadge,
 } from "@/components/status-badges";
 import { FieldList, yesNo, type FieldSpec } from "@/components/field-list";
 import { DecisionPanel } from "@/components/decision-panel";
@@ -282,9 +282,7 @@ function buildSectionFields(
           <span key={s.supplierId} className="flex flex-col gap-0.5">
             <span className="flex items-center gap-2">
               <span className="font-medium text-foreground">{s.name}</span>
-              <VettingStatusBadge
-                status={s.vettingStatus as "listed" | "registered" | "flagged"}
-              />
+              <SupplierStandingBadge standing={s.standing} />
             </span>
             {s.services && (
               <span className="text-xs text-muted-foreground">

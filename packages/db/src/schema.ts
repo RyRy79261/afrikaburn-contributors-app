@@ -18,6 +18,7 @@ import type {
   AudienceSpec,
   ProjectPermissions,
   CampHistoryEntry,
+  SupplierOnboardingSteps,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). FROZEN per
@@ -116,15 +117,20 @@ export const sectionReviewStatusEnum = pgEnum("section_review_status", [
   "resolved",
 ]);
 
-export const vettingStatusEnum = pgEnum("vetting_status", [
-  "listed",
-  "registered",
-  "flagged",
+// Supplier model v2 (docs/supplier-spec.md). `vetting_status` + `source` are
+// dead; `standing` is the org's single verdict, `supplier_note_kind` types the
+// org-internal timeline. Step states are stored as jsonb (not an enum column)
+// on `supplier_onboarding`.
+export const supplierStandingEnum = pgEnum("supplier_standing", [
+  "good",
+  "watch",
+  "suspended",
 ]);
 
-export const supplierSourceEnum = pgEnum("supplier_source", [
-  "ab_sheet",
-  "manual",
+export const supplierNoteKindEnum = pgEnum("supplier_note_kind", [
+  "infraction",
+  "blessing",
+  "note",
 ]);
 
 export const paymentStatusEnum = pgEnum("payment_status", [
@@ -718,8 +724,11 @@ export const requiredActions = pgTable(
 );
 
 // --- Suppliers -----------------------------------------------------------
-// Imported from AfrikaBurn's public Suppliers List (source `ab_sheet`) or
-// hand-added (`manual`). Vetting status is editable in the org app.
+// Supplier model v2 (docs/supplier-spec.md). `source`/`vetting_status` are
+// gone; the org sees three things only — did they onboard (derived from
+// `supplier_onboarding`), what `standing` are they in, and the notes trail
+// (`supplier_notes`). `userId` optionally links a supplier to a burner account
+// (matched by email overlap) so a supplier can sign into their own portal.
 
 export const suppliers = pgTable(
   "suppliers",
@@ -729,17 +738,74 @@ export const suppliers = pgTable(
     services: text("services"),
     contact: text("contact"),
     website: text("website"),
-    vettingStatus: vettingStatusEnum("vetting_status")
-      .notNull()
-      .default("listed"),
-    source: supplierSourceEnum("source").notNull().default("manual"),
+    // Org-set verdict, visible everywhere (org console + camp-side picker).
+    standing: supplierStandingEnum("standing").notNull().default("good"),
+    // Optional account link (email overlap). Nullable — most imported rows have
+    // no signed-in supplier yet.
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     importedAt: timestamp("imported_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (s) => ({
     nameIdx: index("suppliers_name_idx").on(s.name),
-    vettingIdx: index("suppliers_vetting_idx").on(s.vettingStatus),
+    standingIdx: index("suppliers_standing_idx").on(s.standing),
+    userIdx: index("suppliers_user_idx").on(s.userId),
+  }),
+);
+
+// --- Supplier onboarding -------------------------------------------------
+// Per supplier × edition onboarding checklist state. The seven steps + their
+// completion/confirmation semantics are a code catalog
+// (@quagga/core SUPPLIER_ONBOARDING_STEPS); `steps` is the jsonb state map
+// (stepKey → status). Progress (n/7) and "onboarded properly" derive in core.
+
+export const supplierOnboarding = pgTable(
+  "supplier_onboarding",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    steps: jsonb("steps")
+      .$type<SupplierOnboardingSteps>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (so) => ({
+    supplierEditionUniq: uniqueIndex("supplier_onboarding_supplier_edition_idx").on(
+      so.supplierId,
+      so.editionId,
+    ),
+    editionIdx: index("supplier_onboarding_edition_idx").on(so.editionId),
+  }),
+);
+
+// --- Supplier notes ------------------------------------------------------
+// Org-internal timeline about a supplier (infraction / blessing / note). Never
+// visible to the supplier or to camps. POPIA-relevant — audit-logged upstream.
+
+export const supplierNotes = pgTable(
+  "supplier_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    kind: supplierNoteKindEnum("kind").notNull().default("note"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (sn) => ({
+    supplierIdx: index("supplier_notes_supplier_idx").on(sn.supplierId),
   }),
 );
 

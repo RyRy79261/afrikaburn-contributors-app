@@ -3,6 +3,8 @@ import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import {
   completedSectionsFor,
+  deriveOnboardingProgress,
+  filterPickerEligible,
   isSubmittable,
   resolveCampAction,
   type CampAction,
@@ -12,6 +14,7 @@ import type {
   MembershipRole,
   RegistrationStatus,
   SectionReviewStatus,
+  SupplierStanding,
 } from "@quagga/types";
 import { db, schema } from "./db";
 
@@ -141,20 +144,56 @@ export interface SupplierOption {
   id: string;
   name: string;
   services: string | null;
-  vettingStatus: string;
+  standing: SupplierStanding;
+  /** `watch` standing — render a subtle caution. */
+  caution: boolean;
+  /** Onboarded properly for this edition (drives the "incomplete" tag). */
+  onboardingComplete: boolean;
 }
 
-/** The suppliers repository, for the Section 6 multi-select picker. */
-export async function listSuppliersForPicker(): Promise<SupplierOption[]> {
-  return db()
+/**
+ * The suppliers repository for the Section 6 multi-select picker, keyed off the
+ * supplier model v2: standing drives visibility (`suspended` excluded here via
+ * @quagga/core `filterPickerEligible`), and onboarding completeness for the
+ * given edition is surfaced as a tag. The old vetting labels are gone.
+ */
+export async function listSuppliersForPicker(
+  editionId: string,
+): Promise<SupplierOption[]> {
+  const rows = await db()
     .select({
       id: schema.suppliers.id,
       name: schema.suppliers.name,
       services: schema.suppliers.services,
-      vettingStatus: schema.suppliers.vettingStatus,
+      standing: schema.suppliers.standing,
+      steps: schema.supplierOnboarding.steps,
     })
     .from(schema.suppliers)
+    .leftJoin(
+      schema.supplierOnboarding,
+      and(
+        eq(schema.supplierOnboarding.supplierId, schema.suppliers.id),
+        eq(schema.supplierOnboarding.editionId, editionId),
+      ),
+    )
     .orderBy(asc(schema.suppliers.name));
+
+  const withOnboarding = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    services: r.services,
+    standing: r.standing,
+    isOnboarded: deriveOnboardingProgress(r.steps ?? {}).isOnboarded,
+  }));
+
+  return filterPickerEligible(withOnboarding).map((r) => ({
+    id: r.id,
+    name: r.name,
+    services: r.services,
+    standing: r.standing,
+    caution: r.eligibility.caution,
+    onboardingComplete: r.eligibility.onboardingComplete,
+  }));
 }
 
 /** The supplier ids declared on a registration. */

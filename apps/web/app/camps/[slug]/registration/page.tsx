@@ -104,7 +104,7 @@ export default async function RegistrationPage({
 
   const registration = await getRegistration(context.group.id, context.editionId);
   const status = registration?.status ?? "draft";
-  const suppliers = await listSuppliersForPicker();
+  const suppliers = await listSuppliersForPicker(context.editionId);
 
   const header = (
     <header className="mb-6 flex flex-col gap-2">

@@ -6,7 +6,7 @@ import { schema } from "@/lib/db";
 /**
  * Append an audit event. Written on the transitions build-spec §audit_events
  * names — elevation, approval/rejection, payment reconciliation — plus the
- * console's other consequential writes (supplier vetting, review threads) for a
+ * console's other consequential writes (supplier standing/onboarding, review threads) for a
  * complete trail. `actorId` is the acting staff member's `users.id`.
  */
 export async function writeAuditEvent(

@@ -58,7 +58,7 @@ export default async function OverviewPage() {
       icon: Package,
       label: "Suppliers",
       value: counts.suppliers,
-      sub: "In the vetting repository",
+      sub: "Onboarding + standing",
     },
   ] as const;
 

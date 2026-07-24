@@ -17,7 +17,7 @@
 // cell-phone numbers of individuals; only the business name, the contact
 // person's NAME, and business email are retained.
 
-import type { SupplierImportRow, VettingStatus } from "@quagga/types";
+import type { SupplierImportRow } from "@quagga/types";
 
 /**
  * Minimal RFC4180-ish CSV parser: handles quoted fields, doubled `""`
@@ -79,11 +79,6 @@ function cell(row: string[] | undefined, index: number): string {
   return (row?.[index] ?? "").trim();
 }
 
-/** Map the sheet's free-text "Status" column to our vetting-status enum. */
-function mapVettingStatus(status: string): VettingStatus {
-  return status.trim() === "" ? "listed" : "registered";
-}
-
 /**
  * Parse AfrikaBurn's public Suppliers List CSV export into normalised
  * `SupplierImportRow`s. Blank names, and the trailing "notes" rows Google
@@ -117,7 +112,9 @@ export function parseSuppliersCsv(csvText: string): SupplierImportRow[] {
     const name = cell(block[0], 0);
     if (!name) continue;
 
-    const status = cell(block[0], 2);
+    // Column C ("Status") is intentionally ignored: supplier standing is
+    // org-set in the console (docs/supplier-spec.md), never inferred from the
+    // public sheet. Imported rows land as plain listings.
     const contactPerson = cell(block[0], 1);
 
     const categories = new Set<string>();
@@ -162,7 +159,6 @@ export function parseSuppliersCsv(csvText: string): SupplierImportRow[] {
       services: servicesParts.join(" — "),
       contact: contactParts.join(" "),
       website: "",
-      vettingStatus: mapVettingStatus(status),
     });
   }
 

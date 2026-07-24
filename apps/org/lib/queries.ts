@@ -1,7 +1,12 @@
 import "server-only";
 
-import { and, asc, desc, eq, ilike, inArray, lt } from "drizzle-orm";
-import type { RegistrationStatus } from "@quagga/types";
+import { and, asc, count, desc, eq, ilike, inArray, lt, sql } from "drizzle-orm";
+import type {
+  RegistrationStatus,
+  SupplierNoteKind,
+  SupplierOnboardingSteps,
+  SupplierStanding,
+} from "@quagga/types";
 
 import { getDb, schema } from "@/lib/db";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
@@ -221,7 +226,7 @@ export interface SupplierDeclarationRow {
   supplierId: string;
   name: string;
   services: string | null;
-  vettingStatus: string;
+  standing: SupplierStanding;
   note: string | null;
 }
 
@@ -298,7 +303,7 @@ export async function getRegistrationDetail(
       supplierId: schema.suppliers.id,
       name: schema.suppliers.name,
       services: schema.suppliers.services,
-      vettingStatus: schema.suppliers.vettingStatus,
+      standing: schema.suppliers.standing,
       note: schema.supplierDeclarations.note,
     })
     .from(schema.supplierDeclarations)
@@ -452,11 +457,98 @@ export async function getRegistrationDecisionLog(
   return rows;
 }
 
-export type SupplierRow = typeof schema.suppliers.$inferSelect;
+export interface SupplierOverviewRow {
+  id: string;
+  name: string;
+  services: string | null;
+  contact: string | null;
+  website: string | null;
+  standing: SupplierStanding;
+  /** Onboarding step-state map for the active edition ({} when none yet). */
+  steps: SupplierOnboardingSteps;
+  notesCount: number;
+}
 
-/** All suppliers, alphabetical. */
-export async function getSuppliers(): Promise<SupplierRow[]> {
+/**
+ * Supplier repository rows for the console table: standing, the onboarding
+ * step-state map for `editionId` (empty when there's no onboarding row yet),
+ * and a notes count. Progress (n/7) is derived in-component via @quagga/core.
+ * Caller must have cleared the gate.
+ */
+export async function getSuppliersOverview(
+  editionId: string | null,
+): Promise<SupplierOverviewRow[]> {
   const db = getDb();
-  return db.select().from(schema.suppliers).orderBy(asc(schema.suppliers.name));
+
+  const rows = await db
+    .select({
+      id: schema.suppliers.id,
+      name: schema.suppliers.name,
+      services: schema.suppliers.services,
+      contact: schema.suppliers.contact,
+      website: schema.suppliers.website,
+      standing: schema.suppliers.standing,
+      steps: schema.supplierOnboarding.steps,
+    })
+    .from(schema.suppliers)
+    .leftJoin(
+      schema.supplierOnboarding,
+      editionId
+        ? and(
+            eq(schema.supplierOnboarding.supplierId, schema.suppliers.id),
+            eq(schema.supplierOnboarding.editionId, editionId),
+          )
+        : sql`false`,
+    )
+    .orderBy(asc(schema.suppliers.name));
+
+  const noteCounts = await db
+    .select({
+      supplierId: schema.supplierNotes.supplierId,
+      total: count(),
+    })
+    .from(schema.supplierNotes)
+    .groupBy(schema.supplierNotes.supplierId);
+  const countBySupplier = new Map(
+    noteCounts.map((n) => [n.supplierId, Number(n.total)]),
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    services: r.services,
+    contact: r.contact,
+    website: r.website,
+    standing: r.standing,
+    steps: r.steps ?? {},
+    notesCount: countBySupplier.get(r.id) ?? 0,
+  }));
+}
+
+export interface SupplierNoteRow {
+  id: string;
+  kind: SupplierNoteKind;
+  body: string;
+  authorEmail: string | null;
+  createdAt: Date;
+}
+
+/** Org-internal notes timeline for a supplier, newest first. */
+export async function getSupplierNotes(
+  supplierId: string,
+): Promise<SupplierNoteRow[]> {
+  const db = getDb();
+  return db
+    .select({
+      id: schema.supplierNotes.id,
+      kind: schema.supplierNotes.kind,
+      body: schema.supplierNotes.body,
+      authorEmail: schema.users.email,
+      createdAt: schema.supplierNotes.createdAt,
+    })
+    .from(schema.supplierNotes)
+    .leftJoin(schema.users, eq(schema.users.id, schema.supplierNotes.authorId))
+    .where(eq(schema.supplierNotes.supplierId, supplierId))
+    .orderBy(desc(schema.supplierNotes.createdAt));
 }
 
