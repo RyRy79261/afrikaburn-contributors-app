@@ -83,8 +83,9 @@ wall. `/` overview · `/accounts` (search users; god elevates/demotes org_staff;
 logged) · `/registrations` (table: status/sound/new-vs-returning filters) ·
 `/registrations/[id]` (full submission read; per-section comment + open/resolve;
 actions: approve / request changes / reject — approve flips the entitlement predicate) ·
-`/suppliers` (imported list, vetting status editing, manual add) · `/payments`
-(references list, mark reconciled/waived).
+`/suppliers` (imported list, vetting status editing, manual add). There is NO
+/payments section (Ryan, 24 Jul: "we don't do payments") — the payments table and
+PaymentDetailsBlock survive only for future logistics apps.
 
 ## Seeds (`packages/db/src/seed.ts`, runnable script, idempotent)
 
