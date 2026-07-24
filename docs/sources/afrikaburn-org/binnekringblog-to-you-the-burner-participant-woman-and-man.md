@@ -1,0 +1,30 @@
+---
+title: "To You the burner, participant, woman and man"
+source: https://www.afrikaburn.org/binnekringblog/to-you-the-burner-participant-woman-and-man/
+fetched: 2026-07-24
+---
+
+# To You the burner, participant, woman and man
+
+(words: Skeleton Leaf of Change Crew / photos: as per credit)
+* * *
+  
+We the ladies of [The Skeleton Leaf of Change](https://www.facebook.com/skeletonleafofchange/) would like to share a bit of our experience from AfrikaBurn: Working title (2018) with you. The burn can be misunderstood and, in a way, remains in its own bubble; we would like to break away from this notion and speak up for and to you, the community, about an incident of spiking that we feel is important to share.  
+As much as the burn is its own world, it is also a setting of real-life experiences, that can change a person’s life with events that can be both wonderful and challenging.  
+We set out to be an all-female artwork build at AfrikaBurn, to bring the essence of the mother nature to the festival by channeling our feminine energies and strength into the artwork, Skeleton Leaf of Change. The experience was liberating and empowering as we met our challenges and filled the roles of both feminine and masculine in our processes of building. This experience of male and female conventional gender boundaries was present within us and our camp itself, which was run by a small group of men who took on the role of cooking and cleaning and maintaining our home with great humility, bringing balance to feminine and masculine archetypes that facilitated and created this project as a whole.  
+Support from the community of other artists from other builds such as our brothers of Fine Balance that we shared camp with were incredibly significant to this experience. Words are limited in expressing the sheer magnitude of this project within each one of our personal experiences of the sisterhood among the strong women co-creating in harsh desert conditions in an alternate universe where conventional boundaries of normal life no longer exist.
+The sculptures energy rippled through the African atmosphere of AfrikaBurn: Working Title, gifting more than we could have known. On the Saturday the day before our burn, the project was asked to stay as part of the Tankwa Artscape land art sculpture garden. It was an honour to have this requested even though conflicting emotions arose about not burning, swiftly realising the irony of being attached to the idea of burning the piece.  
+We decided to have our woven nest like creation remain standing on this sacred land, and to have a water ceremony instead of burning it. This allowed for its meaning to physically remain an emblem of connection to the earth and strength of the divine feminine. Unfortunately, later that night something shocking and unbelievable happened: one of our sister’s drinks got spiked.  
+
+  
+She was on a solo photography mission, enjoying the lights of Tankwa town at night and in the spirit of gifting she was offered a drink at a pop-up desert party amongst friendly art cars and burners. She knew something wasn’t right when she noticed that another girl whom she had connected with wasn’t doing so well, quickly realising they had both been spiked. Harrowingly she managed to carry the girl back to her campsite and then made her way back to our campsite. We informed the appropriate burner staff immediately and got the help that she needed. This was a traumatic experience for all of us and our campsite family. We were stunned, how any man, woman or person could be spiking drinks in a place that we have known to call home from the weeks we spent in the desert.  
+We continued with our plans to facilitate our water ceremony where we announced the leaf would remain. Consciously remaining aware of the strength and dedication that went into this build and not allowing this incident to take away from that. The ceremony was guided by our intuition while the sunset to a full moon rise. It was a powerful and meaningful moment that evoked a heartfelt message of spiritual connection to the earth but on a personal level one of women’s strength.  
+
+  
+There have been a small number of reports of drinks being spiked over the years (with various motivations – not necessarily in order to commit sexual assault), and the operations team understand it is sadly a problem and a risk at festivals and parties around the world, and therefore something that we need to be aware of at AfrikaBurn too.  
+AfrikaBurn and all Burns are a social experiment, and within this framework of ‘gifting’ unfortunately there are some out there that might take advantage of this. If the spiker was under the impression that gifting a drink may give a sense of euphoria… still, drugging anyone is still inexcusable and disturbing. Our community want to find strategies that can prevent it from happening again. If you want to help AfrikaBurn further with prevention, please feel open and safe to talk as we did and contact the operations time by email on **sanctuary@afrikaburn.com**  
+By sharing our experience, we hope to bring strength and awareness to you as you participate in situations where your guard may be down, to know yourself well enough to remain safe. We feel it is important to stress here that as burners it should be in our human nature to be informed of what we are gifting and inform others while sharing. As we do by the principles of the Burn, we encourage Radical Self-Reliance, Radical Self-Expression and Radical Inclusion of people of all types. So, you can be your free freaky self with everyone sharing in a similar self-discovery in a conscious and safe space. With your spirit prepared and being aware of what you may give or take in these environments, we can all lead by example – Each One Teach One.  
+We hope that you feel our care and want you to know that we are here as a community to help, hear and look out for one another.  
+Thank you for you, and your time.  
+Love from,  
+The Ladies of Skeleton Leaf of Change

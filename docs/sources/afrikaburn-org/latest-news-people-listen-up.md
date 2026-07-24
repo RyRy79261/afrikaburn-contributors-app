@@ -1,0 +1,21 @@
+---
+title: "People, Listen Up"
+source: https://www.afrikaburn.org/latest-news/people-listen-up/
+fetched: 2026-07-24
+---
+
+# People, Listen Up
+
+People, listen up. Something happened in the last couple of days and we’d like to bring your attention to something that we, as a community, need to look at and consider very seriously.
+
+A fundraiser in KZN over the weekend was held at NMR (Natal Mounted Rifles) in Durban, which is a military museum. The venue featured artefacts from WWII and photos of military units. One of the items displayed was a Nazi flag, captured in battle. The flag did not carry any contextual explanation – and one of the attendees of the fundraiser was deeply upset and expressed her hurt and outrage online that an AfrikaBurn-associated event had been staged in the presence of the flag and other military items. After the event, when she expressed her deep discomfort online on the Precombustion 2016 event page, the response she faced from some commentors was criticism and a dismissive ‘get over it’ attitude best described as ‘white myopia’.
+
+We’re really disappointed that there was little constructive engagement with someone who was expressing deep discomfort about a very serious subject in our country. We’re stating here for the record that that kind of response is to us completely unacceptable. It’s not how we build community, a better world or uphold the ideal of inclusion, which is especially relevant in the South African context. It’s our feeling as AfrikaBurn that we as a community need to do some reflection, so that incidents like this don’t happen again and so that we don’t turn our principles into glib statements empty of real substance.
+
+Let’s be clear: if you stage a fundraiser or any other project, you need to be 100% aware that you represent the ethos of AfrikaBurn and are a custodian of our culture – and that means you need to be sensitive to a wide range of cultural nuances. We’re a diverse community, and one in which we welcome the stranger – and we need to understand that in the context of our South African history, this means we have a lot of work to do in recognising each other, embracing diversity and acknowledging the deep pain that our history has caused, and continues to cause.
+
+To the participant, and any other who experienced pain as a result of this incident, we’d like to express our deepest apologies: that an event associated with the AfrikaBurn community would cause hurt and pain has never been our intention, or for that matter of any crew that organises a fundraiser. More than that, we’d like to remind everyone reading this that it’s completely unacceptable to be dismissive of anyone’s concerns when it comes to their expression of hurt. White myopia needs to be addressed – and it starts with you. Don’t assume that what’s OK to you is OK to everyone else: wake up, and wake those around you. That’s what we as AfrikaBurners do – and what we need to communicate to others if they’re not aware enough. After all, we’re all involved in an experiment to help each other be better humans – and that’s a job that takes active participation, kindness and empathy, no matter where you’re located, be it at a fundraiser or at our main event. Or for that matter, online. Trolling someone that expresses a legitimate concern is not on – don’t be dismissive: listen.
+
+To this end, we’re kickstarting a series of blogposts called Hard Questions – and hard questions they’re going to be. Look out for those – we’re going to take a close look at some of the shadow aspects of our event and its context in South Africa. Some of the content will make some people uncomfortable – but then AfrikaBurn was never designed to be comfortable or easy. So lets engage with this deeply and with care and diligence, as it’s an exceptionally important issue. As with all things AfrikaBurn, the door is open, if you have any input and ideas around how to accelerate progress in this mission, please email us on feedback@afrikaburn.com
+
+If you’re looking to respond to this post, please engage constructively by reading the original thread (linked above), and please be aware that hate speech and personal attacks won’t be tolerated. Be cautious and considerate with your words: we’re all in this together, and the only way we move forward is through listening generously.
