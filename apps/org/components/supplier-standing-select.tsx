@@ -53,7 +53,7 @@ export function SupplierStandingSelect({
 
   return (
     <Select value={value} onValueChange={onChange} disabled={pending}>
-      <SelectTrigger className="h-9 w-[10.5rem] text-sm">
+      <SelectTrigger className="h-9 w-[13.5rem] text-sm">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -104,8 +104,20 @@ function SupplierRows({
           </button>
         </TableCell>
         <TableCell className="font-medium align-top">
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             <span>{s.name}</span>
+            {(s.category || s.returning) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {s.category && (
+                  <Badge variant="secondary">{s.category}</Badge>
+                )}
+                {s.returning && (
+                  <Badge variant="outline">
+                    {s.returning === "returning" ? "Returning" : "Newbie"}
+                  </Badge>
+                )}
+              </div>
+            )}
             {s.services && (
               <span className="max-w-xs truncate text-xs text-muted-foreground">
                 {s.services}

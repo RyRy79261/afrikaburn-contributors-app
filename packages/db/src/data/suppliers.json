@@ -1,128 +1,246 @@
 {
   "source": "ab_sheet",
   "sourceUrl": "https://docs.google.com/spreadsheets/d/1XU2gAt5E9GczVHZWpcD0_CsEeE--iX9aWmnWd19bgMI/export?format=csv",
-  "importedAt": "2026-07-23T00:00:00.000Z",
-  "note": "Fetched from AfrikaBurn's public Suppliers List Google Sheet (CSV export). Contact-column phone numbers and postal addresses were scrubbed at parse time; only business names, contact-person names, and business emails are retained.",
+  "importedAt": "2026-07-24T00:00:00.000Z",
+  "note": "Fetched from AfrikaBurn's public Suppliers List Google Sheet (CSV export) and normalised by @quagga/core parseSuppliersCsv v2. Status → standing, Category normalised, Returning Supplier? → returning, and the fees/crew-pass progress phrases pre-populate the onboarding step map. Contact-column phone numbers and postal addresses were scrubbed at parse time; only business names, contact-person names, and business emails are retained.",
   "suppliers": [
     {
       "name": "Dimensions Bedouin Stretch Tent Hire (Pty) Ltd",
       "services": "Stretch Tents",
       "contact": "Heather Dreyer heather@dimensionstents.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed",
+        "inventory_submitted": "completed"
+      }
     },
     {
       "name": "BedouinTent Masterz",
       "services": "Stretch Tents",
       "contact": "Patrick Muchemwa info@bedouintentmasterz.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Jenquan Logistics",
       "services": "Transportation",
       "contact": "Quan Roberts jenquanlogistics@outlook.com",
-      "website": ""
+      "website": "",
+      "category": "Transport",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Day Star stretch tents",
       "services": "Stretch Tents",
       "contact": "Michael daystarstrechtents@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "adapting",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Cairo Stretch Tents",
       "services": "Stretch Tents",
       "contact": "Yusufu Musa cairostretchtents@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Axis event solutions",
       "services": "Stretch Tents",
       "contact": "Shawn Visser tents@axisevents.co.za",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Expo Connection",
       "services": "Generators/Power Supply",
       "contact": "Peter Sydow peter@expoconnection.co.za",
-      "website": ""
+      "website": "",
+      "category": "Generators/Power Supply",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Deharn Stretch Tents",
       "services": "Stretch Tents",
       "contact": "Lenny deharnstretchtents85@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed",
+        "crew_details_submitted": "completed"
+      }
     },
     {
       "name": "Poswa Logistics and Services",
       "services": "Transport",
       "contact": "Zizipho Gcasamba z.gcasamba@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Transport",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Godfrey Family Farms",
       "services": "FIREWOOD DELIVERY / Transport — Tankwa local farmer",
       "contact": "Horatio Godfrey horatiogodfrey1@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Firewood Delivery / Transport",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Classic Cape Stretch Tents",
       "services": "Stretch Tents",
       "contact": "Tatenda (Saint) classiccapestretchtents@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "SLAVE DISTRIBUTORS CC",
       "services": "Sound & Lighting",
       "contact": "MARCEL ZANDBERG info@slavedistributors.com",
-      "website": ""
+      "website": "",
+      "category": "Sound & Lighting",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Easy Magnificent Tents",
       "services": "Stretch Tents",
       "contact": "Stanley Mutikani stanlymutikani@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {
+        "deposit_paid": "completed",
+        "agreement_signed": "completed"
+      }
     },
     {
       "name": "Tentex Stretch Tents",
       "services": "Stretch Tents",
       "contact": "Terrance Jakopo tentexstretchtents@yahoo.com",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {}
     },
     {
       "name": "Aurras Group (Pty) Ltd",
       "services": "Sound & Lighting / Generators/Power Supply",
       "contact": "Oscar Arnott Oscar@aurrasgroup.co.za, justin@aurrasgroup.co.za",
-      "website": ""
+      "website": "",
+      "category": "Sound & Lighting / Generators/Power Supply",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {}
     },
     {
       "name": "DOS Tents pty ltd",
       "services": "Stretch Tents",
       "contact": "Dean Farham dean@dostents.co.za",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {}
     },
     {
       "name": "Chariots Transport",
       "services": "Transport — Transporting of:; Mutant vehicles; Containers; Water tanks/water",
       "contact": "Frans van Kraaienburg fransvk@me.com",
-      "website": ""
+      "website": "",
+      "category": "Transport",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {}
     },
     {
       "name": "Luyolo Service Provider PTY Ltd",
       "services": "FIREWOOD DELIVERY",
       "contact": "Lofty Baadjies / Lizelle Baadjies lizelletitus@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Firewood Delivery",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {}
     },
     {
       "name": "TENTICKLE STRETCH TENTS",
       "services": "Stretch Tents",
       "contact": "Wesley hire@tentickle.co.za",
-      "website": ""
+      "website": "",
+      "category": "Stretch Tents",
+      "returning": "newbie",
+      "standing": "diligent_first_timer",
+      "onboarding": {}
     },
     {
       "name": "GK Transport",
       "services": "Transport — containers",
       "contact": "George gkavukutu@gmail.com",
-      "website": ""
+      "website": "",
+      "category": "Transport",
+      "returning": "returning",
+      "standing": "good",
+      "onboarding": {}
     }
   ]
 }

@@ -5,25 +5,44 @@ import {
   standingRequiresCaution,
   standingLabel,
   standingDescription,
+  standingTone,
   supplierPickerEligibility,
   filterPickerEligible,
 } from "../supplier-standing";
 
 describe("supplier standing helpers", () => {
-  it("enumerates good / watch / suspended in severity order", () => {
-    expect([...SUPPLIER_STANDINGS]).toEqual(["good", "watch", "suspended"]);
+  it("enumerates all five standings, positives first, in display order", () => {
+    expect([...SUPPLIER_STANDINGS]).toEqual([
+      "good",
+      "diligent_first_timer",
+      "adapting",
+      "absolute_beginner",
+      "watch",
+      "suspended",
+    ]);
   });
 
   it("suspended is suspended; nothing else is", () => {
     expect(isSuspended("suspended")).toBe(true);
     expect(isSuspended("watch")).toBe(false);
     expect(isSuspended("good")).toBe(false);
+    expect(isSuspended("diligent_first_timer")).toBe(false);
+    expect(isSuspended("adapting")).toBe(false);
   });
 
-  it("only watch requires caution", () => {
+  it("only watch requires caution (the new positive standings do not)", () => {
     expect(standingRequiresCaution("watch")).toBe(true);
     expect(standingRequiresCaution("good")).toBe(false);
     expect(standingRequiresCaution("suspended")).toBe(false);
+    expect(standingRequiresCaution("diligent_first_timer")).toBe(false);
+    expect(standingRequiresCaution("adapting")).toBe(false);
+    expect(standingRequiresCaution("absolute_beginner")).toBe(false);
+  });
+
+  it("gives the new standings their real sheet/policy labels", () => {
+    expect(standingLabel("diligent_first_timer")).toBe("Diligent First Timer");
+    expect(standingLabel("adapting")).toBe("Able & Willing To Adapt");
+    expect(standingLabel("absolute_beginner")).toBe("Absolute Beginners");
   });
 
   it("labels and supplier-facing descriptions exist for every standing", () => {
@@ -31,6 +50,15 @@ describe("supplier standing helpers", () => {
       expect(standingLabel(s).length).toBeGreaterThan(0);
       expect(standingDescription(s).length).toBeGreaterThan(0);
     }
+  });
+
+  it("maps positive standings to a success tone, watch → warning, suspended → destructive", () => {
+    expect(standingTone("good")).toBe("success");
+    expect(standingTone("diligent_first_timer")).toBe("success");
+    expect(standingTone("adapting")).toBe("success");
+    expect(standingTone("absolute_beginner")).toBe("success");
+    expect(standingTone("watch")).toBe("warning");
+    expect(standingTone("suspended")).toBe("destructive");
   });
 });
 
@@ -48,6 +76,18 @@ describe("supplierPickerEligibility", () => {
     expect(e.eligible).toBe(true);
     expect(e.caution).toBe(false);
     expect(e.tags).toEqual([]);
+  });
+
+  it("the new positive standings are eligible with no caution", () => {
+    for (const standing of [
+      "diligent_first_timer",
+      "adapting",
+      "absolute_beginner",
+    ] as const) {
+      const e = supplierPickerEligibility({ standing, isOnboarded: true });
+      expect(e.eligible).toBe(true);
+      expect(e.caution).toBe(false);
+    }
   });
 
   it("watch is eligible but flagged with caution", () => {

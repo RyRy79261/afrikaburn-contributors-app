@@ -5,6 +5,7 @@ import type {
   RegistrationStatus,
   SupplierNoteKind,
   SupplierOnboardingSteps,
+  SupplierReturning,
   SupplierStanding,
 } from "@quagga/types";
 
@@ -463,6 +464,10 @@ export interface SupplierOverviewRow {
   services: string | null;
   contact: string | null;
   website: string | null;
+  /** Normalised category chip (from the imported sheet), null when unset. */
+  category: string | null;
+  /** Returning vs newbie (from the imported sheet), null when unset. */
+  returning: SupplierReturning | null;
   standing: SupplierStanding;
   /** Onboarding step-state map for the active edition ({} when none yet). */
   steps: SupplierOnboardingSteps;
@@ -487,6 +492,8 @@ export async function getSuppliersOverview(
       services: schema.suppliers.services,
       contact: schema.suppliers.contact,
       website: schema.suppliers.website,
+      category: schema.suppliers.category,
+      returning: schema.suppliers.returning,
       standing: schema.suppliers.standing,
       steps: schema.supplierOnboarding.steps,
     })
@@ -519,6 +526,8 @@ export async function getSuppliersOverview(
     services: r.services,
     contact: r.contact,
     website: r.website,
+    category: r.category,
+    returning: r.returning,
     standing: r.standing,
     steps: r.steps ?? {},
     notesCount: countBySupplier.get(r.id) ?? 0,

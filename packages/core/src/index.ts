@@ -52,8 +52,11 @@
 //   - supplier onboarding: SUPPLIER_ONBOARDING_STEPS, deriveOnboardingProgress,
 //     validateStepTransition, applyStepTransition, defaultOnboardingSteps,
 //     step-flow guards (./supplier-onboarding)
-//   - supplier standing: SUPPLIER_STANDINGS, standing helpers,
-//     supplierPickerEligibility, filterPickerEligible (./supplier-standing)
+//   - supplier standing: SUPPLIER_STANDINGS, standing helpers (standingLabel,
+//     standingDescription, standingTone), supplierPickerEligibility,
+//     filterPickerEligible (./supplier-standing)
+//   - supplier import mappers: mapStatusToStanding, mapReturning,
+//     normalizeCategory, feePhraseToStepKey (./supplier-import)
 
 export * from "./entitlements";
 export * from "./name-dedupe";

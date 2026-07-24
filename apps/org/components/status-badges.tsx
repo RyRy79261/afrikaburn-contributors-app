@@ -1,4 +1,5 @@
 import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
+import { standingLabel, standingTone } from "@quagga/core";
 import type { RegistrationStatus, SupplierStanding } from "@quagga/types";
 
 type Variant = BadgeProps["variant"];
@@ -25,22 +26,16 @@ export function RegistrationStatusBadge({
   return <Badge variant={s.variant}>{s.label}</Badge>;
 }
 
-const STANDING_STYLE: Record<
-  SupplierStanding,
-  { label: string; variant: Variant }
-> = {
-  good: { label: "Good standing", variant: "success" },
-  watch: { label: "Watch", variant: "warning" },
-  suspended: { label: "Suspended", variant: "destructive" },
-};
-
 export function SupplierStandingBadge({
   standing,
 }: {
   standing: SupplierStanding;
 }) {
-  const s = STANDING_STYLE[standing];
-  return <Badge variant={s.variant}>{s.label}</Badge>;
+  // Standing label + tone are the single source of truth in @quagga/core, so
+  // the five-value vocabulary (incl. Diligent First Timer / Able & Willing To
+  // Adapt) renders consistently here and in the supplier portal.
+  const variant: Variant = standingTone(standing);
+  return <Badge variant={variant}>{standingLabel(standing)}</Badge>;
 }
 
 export function CohortBadge({ cohort }: { cohort: "new" | "returning" }) {

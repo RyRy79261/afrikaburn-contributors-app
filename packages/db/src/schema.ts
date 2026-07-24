@@ -125,6 +125,16 @@ export const supplierStandingEnum = pgEnum("supplier_standing", [
   "good",
   "watch",
   "suspended",
+  "diligent_first_timer",
+  "adapting",
+  "absolute_beginner",
+]);
+
+// Whether an imported supplier is returning or a newbie (sheet "Returning
+// Supplier?" column). Nullable on the row — blank sheet cells carry none.
+export const supplierReturningEnum = pgEnum("supplier_returning", [
+  "newbie",
+  "returning",
 ]);
 
 export const supplierNoteKindEnum = pgEnum("supplier_note_kind", [
@@ -738,6 +748,14 @@ export const suppliers = pgTable(
     services: text("services"),
     contact: text("contact"),
     website: text("website"),
+    // Normalised category chip ported from the sheet's Category column
+    // (Transportation→Transport, FIREWOOD DELIVERY→Firewood Delivery, title-
+    // cased; multiple joined with " / "). Nullable — hand-added suppliers may
+    // carry none.
+    category: text("category"),
+    // Returning vs newbie, ported from the sheet's "Returning Supplier?"
+    // column. Nullable — blank sheet cells / hand-added rows carry none.
+    returning: supplierReturningEnum("returning"),
     // Org-set verdict, visible everywhere (org console + camp-side picker).
     standing: supplierStandingEnum("standing").notNull().default("good"),
     // Optional account link (email overlap). Nullable — most imported rows have

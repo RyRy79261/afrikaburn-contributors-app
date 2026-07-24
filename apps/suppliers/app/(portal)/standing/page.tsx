@@ -6,31 +6,35 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { cn } from "@quagga/ui/lib/utils";
-import { standingDescription, standingLabel } from "@quagga/core";
-import type { SupplierStanding } from "@quagga/types";
+import {
+  standingDescription,
+  standingLabel,
+  standingTone,
+} from "@quagga/core";
 import { guardPortal } from "@/lib/gate";
 import { PageHeading } from "@/components/page-heading";
 
 export const dynamic = "force-dynamic";
 
-// Plain-language framing per standing. The org-internal notes trail
+// Plain-language framing per standing tone. The org-internal notes trail
 // (infractions / blessings) is NEVER surfaced here — suppliers see only their
-// standing verdict and what it means for them.
-const STANDING_META: Record<
-  SupplierStanding,
+// standing verdict and what it means for them. The positive standings (good /
+// diligent_first_timer / adapting) all share the `success` tone.
+const TONE_META: Record<
+  ReturnType<typeof standingTone>,
   { icon: React.ReactNode; tone: string; ring: string }
 > = {
-  good: {
+  success: {
     icon: <CircleCheck className="h-6 w-6" aria-hidden />,
     tone: "text-success",
     ring: "border-success/40 bg-success/10",
   },
-  watch: {
+  warning: {
     icon: <Eye className="h-6 w-6" aria-hidden />,
     tone: "text-warning",
     ring: "border-warning/40 bg-warning/10",
   },
-  suspended: {
+  destructive: {
     icon: <OctagonX className="h-6 w-6" aria-hidden />,
     tone: "text-destructive",
     ring: "border-destructive/40 bg-destructive/10",
@@ -43,7 +47,8 @@ export default async function StandingPage() {
   const { session } = guard;
 
   const standing = session.supplier.standing;
-  const meta = STANDING_META[standing] ?? STANDING_META.good;
+  const tone = standingTone(standing);
+  const meta = TONE_META[tone];
 
   return (
     <div>
@@ -67,9 +72,9 @@ export default async function StandingPage() {
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StandingLegend
-          active={standing === "good"}
+          active={tone === "success"}
           label="Good standing"
-          body="You appear normally to creative projects choosing suppliers."
+          body="You appear normally to creative projects choosing suppliers. This includes Diligent First Timer and Able & Willing To Adapt."
           tone="text-success"
         />
         <StandingLegend

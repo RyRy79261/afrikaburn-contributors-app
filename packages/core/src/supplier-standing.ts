@@ -6,9 +6,13 @@
 
 import type { SupplierStanding } from "@quagga/types";
 
-/** Standing values in display/severity order. */
+/** Standing values in display order: the positive standings first, then the
+ * caution, then suspended. */
 export const SUPPLIER_STANDINGS: readonly SupplierStanding[] = [
   "good",
+  "diligent_first_timer",
+  "adapting",
+  "absolute_beginner",
   "watch",
   "suspended",
 ];
@@ -32,6 +36,12 @@ export function standingLabel(standing: SupplierStanding): string {
       return "Watch";
     case "suspended":
       return "Suspended";
+    case "diligent_first_timer":
+      return "Diligent First Timer";
+    case "adapting":
+      return "Able & Willing To Adapt";
+    case "absolute_beginner":
+      return "Absolute Beginners";
   }
 }
 
@@ -47,6 +57,31 @@ export function standingDescription(standing: SupplierStanding): string {
       return "AfrikaBurn has flagged your account for attention. You can still be selected by creative projects — please get in touch with the Supplier Team.";
     case "suspended":
       return "Your account is suspended. You won't appear to creative projects until this is resolved — contact suppliers@afrikaburn.com.";
+    case "diligent_first_timer":
+      return "You're a Diligent First Timer — a newbie doing everything right. You're in good standing and appear normally to creative projects.";
+    case "adapting":
+      return "Able & Willing To Adapt — AfrikaBurn values your flexibility. You're in good standing and appear normally to creative projects.";
+    case "absolute_beginner":
+      return "You're an Absolute Beginner — brand new to AfrikaBurn, in your first cycle. You're in good standing and appear normally to creative projects.";
+  }
+}
+
+/** Badge/UI tone for a standing — the single source of truth for colour
+ * mapping across the org console and supplier portal. The positive standings
+ * (good / diligent_first_timer / adapting) all read as `success`. */
+export type SupplierStandingTone = "success" | "warning" | "destructive";
+
+export function standingTone(standing: SupplierStanding): SupplierStandingTone {
+  switch (standing) {
+    case "good":
+    case "diligent_first_timer":
+    case "adapting":
+    case "absolute_beginner":
+      return "success";
+    case "watch":
+      return "warning";
+    case "suspended":
+      return "destructive";
   }
 }
 

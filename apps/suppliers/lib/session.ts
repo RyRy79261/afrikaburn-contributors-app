@@ -5,7 +5,11 @@ import {
   deriveOnboardingProgress,
   type SupplierOnboardingProgress,
 } from "@quagga/core";
-import type { SupplierOnboardingSteps, SupplierStanding } from "@quagga/types";
+import type {
+  SupplierOnboardingSteps,
+  SupplierReturning,
+  SupplierStanding,
+} from "@quagga/types";
 
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -26,6 +30,8 @@ export interface SupplierIdentity {
   services: string | null;
   contact: string | null;
   website: string | null;
+  category: string | null;
+  returning: SupplierReturning | null;
   standing: SupplierStanding;
 }
 
@@ -114,6 +120,8 @@ async function resolveSupplierForUser(
     services: schema.suppliers.services,
     contact: schema.suppliers.contact,
     website: schema.suppliers.website,
+    category: schema.suppliers.category,
+    returning: schema.suppliers.returning,
     standing: schema.suppliers.standing,
   };
 

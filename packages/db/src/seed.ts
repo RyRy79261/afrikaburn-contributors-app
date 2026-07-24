@@ -725,63 +725,29 @@ async function main(): Promise<void> {
     console.log(`[seed] camp questionnaire activation: ${campActivation.id}`);
 
     // --- Suppliers ---------------------------------------------------------------
-    // Supplier model v2 (docs/supplier-spec.md): imported rows land in `good`
-    // standing with no vetting/source. Three demo suppliers then get explicit
-    // standing + onboarding state (+ notes) so the org console + camp picker
-    // have realistic material:
-    //   - Dimensions … Stretch Tent → good, fully onboarded (7/7)
-    //   - Jenquan Logistics         → watch, 4/7, one infraction + one blessing
-    //   - BedouinTent Masterz       → suspended, 2/7 (excluded from the picker)
-    const DEMO_STANDING: Record<
-      string,
-      (typeof schema.suppliers.$inferInsert)["standing"]
-    > = {
-      "Dimensions Bedouin Stretch Tent Hire (Pty) Ltd": "good",
-      "Jenquan Logistics": "watch",
-      "BedouinTent Masterz": "suspended",
-    };
+    // Supplier model v2 (docs/supplier-spec.md) + the REAL AfrikaBurn Suppliers
+    // List (parser v2). Standing, category, and returning are seeded straight
+    // from the imported sheet data (Status → standing, Category normalised,
+    // Returning Supplier? → returning), and each supplier's onboarding step map
+    // is pre-populated from the sheet's fees/crew-pass progress phrases. No
+    // vetting/source anywhere.
     let supplierCount = 0;
     for (const row of suppliersData.suppliers) {
-      await ensureSupplier(db, row, DEMO_STANDING[row.name] ?? "good");
+      const supplier = await ensureSupplier(db, row);
+      await ensureSupplierOnboarding(db, supplier.id, edition.id, row.onboarding);
       supplierCount++;
     }
-    console.log(`[seed] suppliers: ${supplierCount} (source: ${suppliersData.source})`);
+    console.log(
+      `[seed] suppliers: ${supplierCount} imported (source: ${suppliersData.source})`,
+    );
 
-    // Onboarding state + notes for the demo trio.
-    const fullyOnboarded: SupplierOnboardingSteps = {
-      registration_form: "completed",
-      agreement_signed: "completed",
-      deposit_paid: "completed",
-      inventory_submitted: "completed",
-      crew_details_submitted: "completed",
-      briefing_attended: "completed",
-      registration_fee_paid: "completed",
-    };
-    const fourOfSeven: SupplierOnboardingSteps = {
-      registration_form: "completed",
-      agreement_signed: "completed",
-      deposit_paid: "completed",
-      inventory_submitted: "completed",
-      crew_details_submitted: "awaiting_confirmation",
-      briefing_attended: "pending",
-      registration_fee_paid: "pending",
-    };
-    const twoOfSeven: SupplierOnboardingSteps = {
-      registration_form: "completed",
-      agreement_signed: "completed",
-      deposit_paid: "pending",
-      inventory_submitted: "pending",
-      crew_details_submitted: "pending",
-      briefing_attended: "pending",
-      registration_fee_paid: "pending",
-    };
-
+    // A positive record on a real, well-regarded supplier — demonstrates the
+    // "blessing" note kind. Flattering, never an allegation.
     const dimensions = await findSupplierByName(
       db,
       "Dimensions Bedouin Stretch Tent Hire (Pty) Ltd",
     );
     if (dimensions) {
-      await ensureSupplierOnboarding(db, dimensions.id, edition.id, fullyOnboarded);
       await ensureSupplierNote(db, {
         supplierId: dimensions.id,
         kind: "blessing",
@@ -789,36 +755,29 @@ async function main(): Promise<void> {
       });
     }
 
-    const jenquan = await findSupplierByName(db, "Jenquan Logistics");
-    if (jenquan) {
-      await ensureSupplierOnboarding(db, jenquan.id, edition.id, fourOfSeven);
-      await ensureSupplierNote(db, {
-        supplierId: jenquan.id,
-        kind: "infraction",
-        body: "2026: attempted a delivery after the Sunday cut-off without pre-submitted inventory — turned away at the gate. Flagged to watch.",
-      });
-      await ensureSupplierNote(db, {
-        supplierId: jenquan.id,
-        kind: "blessing",
-        body: "Crew were courteous and accompanied by the project the whole time on the earlier drop-off.",
-      });
-    }
-
-    const bedouinMasterz = await findSupplierByName(db, "BedouinTent Masterz");
-    if (bedouinMasterz) {
-      await ensureSupplierOnboarding(
-        db,
-        bedouinMasterz.id,
-        edition.id,
-        twoOfSeven,
-      );
-      await ensureSupplierNote(db, {
-        supplierId: bedouinMasterz.id,
-        kind: "infraction",
-        body: "Serviced a plug-and-play camp in 2025 — deposit forfeited, suspended pending review (supplier policy: hefty penalties for supporting plug-and-play).",
-      });
-    }
-    console.log("[seed] supplier onboarding + notes seeded for demo trio");
+    // A single SUSPENDED demo supplier so the console + camp picker exercise the
+    // suspended state and the notes drawer. Deliberately a FICTIONAL business
+    // ("Wolfkop") with an obviously-generic note — never a real listed supplier,
+    // so nothing here reads as a real allegation.
+    const wolfkop = await ensureSupplier(db, {
+      name: "Wolfkop",
+      services: "Stretch tents (demo)",
+      contact: "",
+      website: "",
+      category: "Stretch Tents",
+      returning: "returning",
+      standing: "suspended",
+    });
+    await ensureSupplierOnboarding(db, wolfkop.id, edition.id, {
+      registration_form: "completed",
+      agreement_signed: "completed",
+    });
+    await ensureSupplierNote(db, {
+      supplierId: wolfkop.id,
+      kind: "infraction",
+      body: "Demo data — example infraction note.",
+    });
+    console.log("[seed] supplier demo blessing + suspended example seeded");
 
     // --- Payments ---------------------------------------------------------------
     // Intentionally none: AfrikaBurn never receives payments from theme camps —
@@ -1139,11 +1098,15 @@ async function ensureSupplier(
     services: string;
     contact: string;
     website: string;
+    // Ported from the sheet (parser v2); all default to a listed row.
+    category?: string | null;
+    returning?: (typeof schema.suppliers.$inferInsert)["returning"];
+    standing?: (typeof schema.suppliers.$inferInsert)["standing"];
   },
-  // Standing is org-set (supplier model v2). Imported rows default to `good`;
-  // the demo trio below overrides specific ones.
-  standing: (typeof schema.suppliers.$inferInsert)["standing"] = "good",
 ) {
+  const standing = row.standing ?? "good";
+  const category = row.category && row.category.length > 0 ? row.category : null;
+  const returning = row.returning ?? null;
   // Suppliers have no source column anymore — dedupe on name (the seed is the
   // only importer, and sheet names are effectively unique).
   const existing = await db
@@ -1160,6 +1123,8 @@ async function ensureSupplier(
           services: row.services,
           contact: row.contact,
           website: row.website,
+          category,
+          returning,
           standing,
           updatedAt: new Date(),
         })
@@ -1176,6 +1141,8 @@ async function ensureSupplier(
         services: row.services,
         contact: row.contact,
         website: row.website,
+        category,
+        returning,
         standing,
         importedAt: new Date(suppliersData.importedAt),
       })

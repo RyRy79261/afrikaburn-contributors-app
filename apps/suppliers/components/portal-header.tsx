@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PackageOpen } from "lucide-react";
 import { Badge } from "@quagga/ui/components/badge";
-import { standingLabel } from "@quagga/core";
+import { standingLabel, standingTone } from "@quagga/core";
 import type { SupplierSession } from "@/lib/session";
 import { PortalNav, type NavItem } from "@/components/portal-nav";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -17,7 +17,7 @@ const NAV_ITEMS: NavItem[] = [
  * apps. Carries the supplier's business name and current standing.
  */
 export function PortalHeader({ session }: { session: SupplierSession }) {
-  const standing = session.supplier.standing;
+  const { standing, category, returning } = session.supplier;
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
@@ -41,18 +41,17 @@ export function PortalHeader({ session }: { session: SupplierSession }) {
               <p className="max-w-[16rem] truncate text-sm text-foreground">
                 {session.supplier.name}
               </p>
-              <Badge
-                variant={
-                  standing === "good"
-                    ? "success"
-                    : standing === "watch"
-                      ? "warning"
-                      : "destructive"
-                }
-                className="mt-0.5"
-              >
-                {standingLabel(standing)}
-              </Badge>
+              <div className="mt-0.5 flex flex-wrap items-center justify-end gap-1">
+                {category && <Badge variant="secondary">{category}</Badge>}
+                {returning && (
+                  <Badge variant="outline">
+                    {returning === "returning" ? "Returning" : "Newbie"}
+                  </Badge>
+                )}
+                <Badge variant={standingTone(standing)}>
+                  {standingLabel(standing)}
+                </Badge>
+              </div>
             </div>
             <SignOutButton />
           </div>
