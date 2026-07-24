@@ -42,7 +42,13 @@ audience resolution, custom project roles, and the gate/notification loop.*
   **role/officer DEFINITION lives on its own dedicated screen** —
   `/camps/[slug]/settings/roles` ("Camp Settings · Roles & Officers"), a full page,
   set-and-forget: create/edit roles with the complete privilege panel, color/emoji,
-  officer registrations, deletion. NOT a sidebar or popover. The members area keeps
+  officer registrations, deletion. NOT a sidebar or popover. Page structure (Ryan,
+  24 Jul): **three sections, in this order — Officers, Core Roles, Custom Roles** —
+  and every role row is **expandable** (accordion): collapsed = emoji, name, kind
+  tags, one-line privilege summary ("Questionnaires (Burners only) · sees member
+  details"); expanded = the full editor (privileges, sub-controls, emoji, color
+  swatches, rename where allowed, delete where allowed). One row expanded at a time
+  keeps the page scannable. The members area keeps
   only the frequent operations: role chips on member rows + a quick assign
   multi-select per member + a "Manage roles →" link to the settings screen.
 
