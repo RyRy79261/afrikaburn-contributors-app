@@ -127,7 +127,7 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
   |---|---|---|
   | `lnt_officer` | LNT Lead ♻️ | always **required** (upgrades Finlay's contact-only LNT lead into an assignable role — deliberate supersession of the "no app role" rule; non-member contact fields remain as fallback) |
   | `safety_officer` | Safety Officer ⛑️ | always recommended |
-  | `fire_safety_officer` | Safety Baron 🔥 | **required** when registration declares generators, open-flame gifting, or large fuel/gas storage; else recommended |
+  | `fire_safety_officer` | Safety Baron 🔥 | **always required** for registered camps (Ryan, 24 Jul: fire shows up at every registered camp eventually — unconditional, no trigger needed) |
   | `sound_officer` | Sound Officer 🔊 | **required** when sound level ≥ 2 |
   | `safety_monitor` | Safety Monitor 🛡️ | recommended (STAR: "multiple and visible") |
 - **Trigger mechanics**: when a camp's registration matches a trigger, the officer role

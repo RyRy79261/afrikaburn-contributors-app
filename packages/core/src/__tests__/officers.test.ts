@@ -64,10 +64,12 @@ describe("officer trigger matrix", () => {
     );
   });
 
-  it("fire safety officer required on generators, open flame, or fuel storage", () => {
+  it("fire safety officer is always required for registered camps (Ryan, 24 Jul)", () => {
+    // Unconditional — fire shows up at every registered camp eventually,
+    // regardless of what the registration declares.
     expect(
       officerRequirements(triggers({})).get("fire_safety_officer"),
-    ).toBe("recommended");
+    ).toBe("required");
     expect(
       officerRequirements(triggers({ hasGenerators: true })).get("fire_safety_officer"),
     ).toBe("required");
@@ -80,7 +82,9 @@ describe("officer trigger matrix", () => {
   });
 
   it("requiredOfficerKeys collects only the required ones", () => {
-    expect(requiredOfficerKeys(triggers({}))).toEqual(["lnt_officer"]);
+    expect(requiredOfficerKeys(triggers({})).sort()).toEqual(
+      ["fire_safety_officer", "lnt_officer"].sort(),
+    );
     expect(
       requiredOfficerKeys(triggers({ soundLevel: 3, hasGenerators: true })).sort(),
     ).toEqual(["fire_safety_officer", "lnt_officer", "sound_officer"].sort());
@@ -115,15 +119,15 @@ describe("outstandingOfficers", () => {
   });
 
   it("flips to complete when every required officer is assigned", () => {
-    const assigned: OfficerKey[] = ["lnt_officer"];
+    const assigned: OfficerKey[] = ["lnt_officer", "fire_safety_officer"];
     const r = outstandingOfficers({
       isRegisteredOrInFlight: true,
       triggers: triggers({}),
       assignedKeys: assigned,
     });
     expect(r.outstanding).toEqual([]);
-    expect(r.requiredCount).toBe(1);
-    expect(r.assignedCount).toBe(1);
+    expect(r.requiredCount).toBe(2);
+    expect(r.assignedCount).toBe(2);
   });
 });
 

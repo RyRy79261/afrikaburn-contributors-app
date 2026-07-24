@@ -78,20 +78,20 @@ export function soundLevelFromValue(value: string | null | undefined): number {
  * (all 5 keys). Requirement rules (questionnaire-spec table):
  *   - lnt_officer        → always REQUIRED (supersedes the contact-only LNT lead)
  *   - safety_officer     → always recommended
- *   - fire_safety_officer→ REQUIRED when generators / open flame / fuel storage
+ *   - fire_safety_officer→ always REQUIRED for registered camps (Ryan, 24 Jul:
+ *     a registered camp will have fire around sooner or later — generators,
+ *     braais, gifting flames — so the officer is unconditional, not triggered)
  *   - sound_officer      → REQUIRED when sound level ≥ 2, else recommended
  *   - safety_monitor     → always recommended
  */
 export function officerRequirements(
   input: OfficerTriggerInput,
 ): Map<OfficerKey, OfficerRequirement> {
-  const fireRequired =
-    input.hasGenerators || input.hasOpenFlame || input.hasFuelStorage;
   const soundRequired = input.soundLevel >= 2;
   return new Map<OfficerKey, OfficerRequirement>([
     ["lnt_officer", "required"],
     ["safety_officer", "recommended"],
-    ["fire_safety_officer", fireRequired ? "required" : "recommended"],
+    ["fire_safety_officer", "required"],
     ["sound_officer", soundRequired ? "required" : "recommended"],
     ["safety_monitor", "recommended"],
   ]);
