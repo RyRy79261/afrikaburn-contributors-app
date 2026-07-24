@@ -124,6 +124,13 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
   **soft-enforced**: the registration review (org side) and the camp dashboard show
   "Sound Officer — not yet assigned" as a completeness flag; approval gating on it is
   an org decision later, not hard-coded now.
+- **Assignment is deferrable by design (Ryan, 24 Jul):** you often can't say who an
+  officer will be when creating a camp — or even when submitting registration. Officer
+  slots therefore NEVER block camp creation, registration submission, or approval;
+  "not yet assigned" is a normal, long-lived state managed later from Camp Settings.
+  The org's lever for chasing stragglers is the machinery we already built: a
+  questionnaire/notification to registered camp leads with unassigned required
+  officers ("Your camp declared Level 2 sound — who's your Sound Officer?").
 - **Org questionnaire audiences extend** with `officer:<key>` selectors — e.g. **"All
   registered Sound Officers"** resolves to every member assigned `sound_officer` in a
   registered camp, regardless of camp-level aliases. This is the payoff: org can brief
