@@ -12,7 +12,10 @@ import type {
   AudienceSpec,
   GroupKind,
   MembershipRole,
+  OfficerKey,
   OrgOutboundSelector,
+  ProjectRoleKind,
+  RoleAssignmentConsent,
 } from "@quagga/types";
 import { PROJECT_ADMIN_ROLES } from "@quagga/types";
 
@@ -48,6 +51,16 @@ export interface AudienceBio {
 export interface AudienceRoleAssignment {
   membershipId: string;
   projectRoleId: string;
+  /** Officer assignments carry consent; non-officer rows default `accepted`. */
+  consent?: RoleAssignmentConsent;
+}
+
+/** A project_role row, trimmed to what audience resolution needs. */
+export interface AudienceProjectRole {
+  id: string;
+  groupId: string;
+  kind: ProjectRoleKind;
+  officerKey: OfficerKey | null;
 }
 
 /**
@@ -64,6 +77,9 @@ export interface AudienceContext {
   registrations: readonly AudienceRegistration[];
   bios: readonly AudienceBio[];
   roleAssignments: readonly AudienceRoleAssignment[];
+  /** All project_roles (needed for baseline derivation + officer resolution).
+   * Optional so pre-Roles-v2 callers still type-check; absent ⇒ empty. */
+  projectRoles?: readonly AudienceProjectRole[];
 }
 
 const LEAD_ADMIN = new Set<MembershipRole>(PROJECT_ADMIN_ROLES);
@@ -176,14 +192,72 @@ function resolveProjectAudience(
   const wanted = new Set(roleIds);
   if (wanted.size === 0) return [];
 
-  // membership ids that hold at least one wanted role.
+  // Baseline derivation: if any wanted role is the camp's baseline (everyone-
+  // role), the audience is the whole camp — baseline is never stored per member.
+  const projectRoles = ctx.projectRoles ?? [];
+  const baselineWanted = projectRoles.some(
+    (r) => wanted.has(r.id) && r.kind === "baseline",
+  );
+  if (baselineWanted) return inGroup.map((m) => m.userId);
+
+  // membership ids that hold at least one wanted role (accepted assignments —
+  // a pending/declined officer assignment does not yet make someone a target).
   const matchedMemberships = new Set<string>();
   for (const a of ctx.roleAssignments) {
-    if (wanted.has(a.projectRoleId)) matchedMemberships.add(a.membershipId);
+    if (!wanted.has(a.projectRoleId)) continue;
+    if ((a.consent ?? "accepted") !== "accepted") continue;
+    matchedMemberships.add(a.membershipId);
   }
   return inGroup
     .filter((m) => matchedMemberships.has(m.membershipId))
     .map((m) => m.userId);
+}
+
+/**
+ * Resolve an ORG OFFICER audience: every member ACCEPTED into one of the wanted
+ * officer roles, across every REGISTERED camp (approved registration this
+ * edition), regardless of camp aliases. Pending/declined assignments never
+ * resolve (org only reaches consented officers).
+ */
+function resolveOfficerAudience(
+  ctx: AudienceContext,
+  officerKeys: readonly OfficerKey[],
+): string[] {
+  const wantedKeys = new Set<OfficerKey>(officerKeys);
+  if (wantedKeys.size === 0) return [];
+
+  const registeredGroups = registeredGroupIds(ctx);
+  // Officer project_role ids in registered camps matching a wanted key.
+  const wantedRoleIds = new Set<string>();
+  for (const r of ctx.projectRoles ?? []) {
+    if (r.kind !== "officer" || r.officerKey === null) continue;
+    if (!wantedKeys.has(r.officerKey)) continue;
+    if (!registeredGroups.has(r.groupId)) continue;
+    wantedRoleIds.add(r.id);
+  }
+  if (wantedRoleIds.size === 0) return [];
+
+  const acceptedMemberships = new Set<string>();
+  for (const a of ctx.roleAssignments) {
+    if (!wantedRoleIds.has(a.projectRoleId)) continue;
+    if ((a.consent ?? "accepted") !== "accepted") continue;
+    acceptedMemberships.add(a.membershipId);
+  }
+  const out: string[] = [];
+  for (const m of ctx.memberships) {
+    if (acceptedMemberships.has(m.membershipId)) out.push(m.userId);
+  }
+  return out;
+}
+
+/** Group ids (any kind) with an APPROVED registration this edition. */
+function registeredGroupIds(ctx: AudienceContext): Set<string> {
+  const out = new Set<string>();
+  for (const r of ctx.registrations) {
+    if (r.editionId !== ctx.editionId) continue;
+    if (r.status === "approved") out.add(r.groupId);
+  }
+  return out;
 }
 
 /**
@@ -208,6 +282,9 @@ export function resolveAudience(
         ids.push(...resolveOutboundSelector(ctx, selector));
       }
       return finalize(ids);
+    }
+    case "org_officer": {
+      return finalize(resolveOfficerAudience(ctx, spec.officerKeys));
     }
     case "project": {
       return finalize(

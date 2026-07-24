@@ -30,8 +30,13 @@
 //   - questionnaire engine: code-side registry + gating helpers
 //     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
 //   - custom project roles: DEFAULT_PROJECT_ROLES, normalizeRoleName,
-//     roleNameConflicts, dedupeRoleNames, defaultProjectRoleRows
-//     (./project-roles)
+//     roleNameConflicts, dedupeRoleNames, defaultProjectRoleRows,
+//     officerRoleRows, teamLeadScopePatch, kind guards (./project-roles)
+//   - project permissions: hasProjectPermission,
+//     canManageQuestionnaireAudience, allProjectPermissions,
+//     enforceKindPermissions (./project-permissions)
+//   - officer roles: OFFICER_CATALOG, officerRequirements, outstandingOfficers,
+//     officerContactVisibleToOrg, soundLevelFromValue (./officers)
 //   - audience resolution: resolveAudience + AudienceContext row-set types
 //     (./audience)
 //   - activation lifecycle: activationRequiredActionKey,
@@ -58,6 +63,8 @@ export * from "./member-ref-code";
 export * from "./bio";
 export * from "./questionnaire-engine";
 export * from "./project-roles";
+export * from "./project-permissions";
+export * from "./officers";
 export * from "./audience";
 export * from "./questionnaire-activation";
 export * from "./questionnaire-authz";

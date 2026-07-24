@@ -17,6 +17,27 @@
    =========================================================================== */
 
 @theme {
+  /* Accordion open/close (shadcn Accordion — roles settings page). */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
   /* Raw brand ramp — usable directly (e.g. text-ab-teal / bg-ab-sage). */
   --color-ab-teal: #2d7696;
   --color-ab-teal-deep: #235c75;

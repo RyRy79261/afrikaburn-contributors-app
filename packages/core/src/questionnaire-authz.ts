@@ -10,7 +10,16 @@
 // Pure predicates over the actor's memberships — no I/O. Structural roles only
 // (custom project roles are labels, not permissions).
 
-import type { AudienceSpec, MembershipRole } from "@quagga/types";
+import type {
+  AudienceSpec,
+  MembershipRole,
+  ProjectAudience,
+} from "@quagga/types";
+import {
+  canManageQuestionnaireAudience,
+  isPermissionBackstop,
+  type PermissionMembership,
+} from "./project-permissions";
 
 /** The actor's memberships, trimmed to role + group. */
 export interface AuthzMembership {
@@ -93,4 +102,42 @@ export function canManageProjectRoles(
   groupId: string,
 ): boolean {
   return isProjectAdmin(memberships, groupId);
+}
+
+/**
+ * The project_role ids a ProjectAudience targets for scope-checking. "everyone"
+ * (baseline) resolves to the baseline role id — targeting the whole camp IS
+ * targeting the baseline (questionnaire-spec §"Role kinds").
+ */
+export function projectAudienceTargetRoleIds(
+  audience: ProjectAudience,
+  baselineRoleId: string | null,
+): string[] {
+  if (audience.mode === "everyone") {
+    return baselineRoleId ? [baselineRoleId] : [];
+  }
+  return [...audience.roleIds];
+}
+
+/**
+ * May the actor AUTHOR/SEND a PROJECT questionnaire to this audience? Project
+ * questionnaires may be authored by lead/admin OR any member holding
+ * `manage_questionnaires` — but ONLY within their configured scope
+ * (audience_roles + may_block), ENFORCED server-side here (questionnaire-spec
+ * §"Roles v2"; resolves the previously-skipped scope-enforcement finding).
+ *
+ * `baselineRoleId` is the camp's baseline role id (for the "everyone" audience);
+ * pass null only when it genuinely doesn't exist — a non-backstop actor is then
+ * denied the everyone audience since scope can't be verified.
+ */
+export function canAuthorProjectQuestionnaire(
+  m: PermissionMembership,
+  audience: ProjectAudience,
+  blocking: boolean,
+  baselineRoleId: string | null,
+): boolean {
+  if (isPermissionBackstop(m.structuralRole)) return true;
+  if (audience.mode === "everyone" && !baselineRoleId) return false;
+  const targetRoleIds = projectAudienceTargetRoleIds(audience, baselineRoleId);
+  return canManageQuestionnaireAudience(m, { targetRoleIds, blocking });
 }

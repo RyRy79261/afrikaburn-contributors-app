@@ -352,6 +352,78 @@ export async function getRegistrationDetail(
   };
 }
 
+export interface OfficerContactRow {
+  officerKey: string;
+  officerName: string;
+  emoji: string | null;
+  displayName: string | null;
+  email: string | null;
+  phone: string | null;
+  consent: string;
+}
+
+/**
+ * Accepted officers for a camp, with their org-shared contact details
+ * (questionnaire-spec §"Officers are ALSO registrations"). Assigning an officer
+ * is an officer registration; ACCEPTANCE is the SINGLE path that shares an
+ * officer's name/email/phone with AfrikaBurn — so this query filters to
+ * `consent = accepted`. Pending/declined officers never surface contact here,
+ * and the bio phone hard-lock is untouched for everyone else.
+ */
+export async function getRegistrationOfficers(
+  groupId: string,
+  editionId: string,
+): Promise<OfficerContactRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      officerKey: schema.projectRoles.officerKey,
+      officerName: schema.projectRoles.name,
+      emoji: schema.projectRoles.emoji,
+      consent: schema.memberRoleAssignments.consentStatus,
+      displayName: schema.burnerBios.displayName,
+      bioEmail: schema.burnerBios.contactEmail,
+      phone: schema.burnerBios.phone,
+      userEmail: schema.users.email,
+    })
+    .from(schema.memberRoleAssignments)
+    .innerJoin(
+      schema.projectRoles,
+      eq(schema.projectRoles.id, schema.memberRoleAssignments.projectRoleId),
+    )
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .leftJoin(
+      schema.burnerBios,
+      and(
+        eq(schema.burnerBios.userId, schema.memberships.userId),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.memberships.groupId, groupId),
+        eq(schema.projectRoles.kind, "officer"),
+        eq(schema.memberRoleAssignments.consentStatus, "accepted"),
+        eq(schema.memberRoleAssignments.orgVisible, true),
+      ),
+    )
+    .orderBy(asc(schema.projectRoles.sort));
+
+  return rows.map((r) => ({
+    officerKey: r.officerKey ?? "",
+    officerName: r.officerName,
+    emoji: r.emoji,
+    displayName: r.displayName,
+    email: r.bioEmail ?? r.userEmail ?? null,
+    phone: r.phone,
+    consent: r.consent,
+  }));
+}
+
 export interface DecisionLogRow {
   id: string;
   action: string;

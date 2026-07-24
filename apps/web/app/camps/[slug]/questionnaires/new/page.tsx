@@ -51,10 +51,17 @@ export default async function NewCampQuestionnairePage({
     camp.viewerRole !== null && PROJECT_ADMIN_ROLES.includes(camp.viewerRole);
   if (!isAdmin) notFound();
 
-  const roles = await listRoles(camp.id);
+  const allRoles = await listRoles(camp.id);
+  // Audience picker targets custom/default/captain roles ("everyone" covers the
+  // baseline; officers are org-facing, addressed via their own consent flow).
+  const roles = allRoles.filter(
+    (r) => r.kind !== "officer" && r.kind !== "baseline",
+  );
   const assignments = await getRoleAssignments(camp.id);
   const members = camp.members.map((m) => ({
-    roleIds: assignments.get(m.membershipId) ?? [],
+    roleIds: (assignments.get(m.membershipId) ?? [])
+      .filter((a) => a.consent === "accepted")
+      .map((a) => a.projectRoleId),
   }));
 
   return (

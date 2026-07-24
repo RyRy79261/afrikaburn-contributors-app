@@ -14,6 +14,7 @@ import {
   flattenQuestions,
   validateResponses,
   type AudienceSpec,
+  type OfficerKey,
   type ProjectAudience,
   type Questionnaire,
   type QuestionnaireResponses,
@@ -170,6 +171,7 @@ async function resolveProjectTargets(
     .select({
       membershipId: schema.memberRoleAssignments.membershipId,
       projectRoleId: schema.memberRoleAssignments.projectRoleId,
+      consent: schema.memberRoleAssignments.consentStatus,
     })
     .from(schema.memberRoleAssignments)
     .innerJoin(
@@ -177,6 +179,17 @@ async function resolveProjectTargets(
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
     .where(eq(schema.memberships.groupId, groupId));
+
+  // Project_roles are needed for baseline derivation (the "everyone" role).
+  const projectRoles = await db()
+    .select({
+      id: schema.projectRoles.id,
+      groupId: schema.projectRoles.groupId,
+      kind: schema.projectRoles.kind,
+      officerKey: schema.projectRoles.officerKey,
+    })
+    .from(schema.projectRoles)
+    .where(eq(schema.projectRoles.groupId, groupId));
 
   const ctx: AudienceContext = {
     editionId,
@@ -186,6 +199,12 @@ async function resolveProjectTargets(
     registrations: [],
     bios: [],
     roleAssignments,
+    projectRoles: projectRoles.map((r) => ({
+      id: r.id,
+      groupId: r.groupId,
+      kind: r.kind,
+      officerKey: (r.officerKey as OfficerKey | null) ?? null,
+    })),
   };
   return resolveAudience(audience, ctx);
 }

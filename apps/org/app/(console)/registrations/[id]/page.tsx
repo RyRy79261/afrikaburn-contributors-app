@@ -18,6 +18,7 @@ import { guardConsole } from "@/lib/gate";
 import {
   getRegistrationDetail,
   getRegistrationDecisionLog,
+  getRegistrationOfficers,
   type RegistrationDetail,
 } from "@/lib/queries";
 import { classifySoundLevel, SOUND_LEVEL_LABELS } from "@/lib/org-logic";
@@ -58,6 +59,7 @@ export default async function RegistrationDetailPage({
   if (!detail) notFound();
 
   const decisionLog = await getRegistrationDecisionLog(id);
+  const officers = await getRegistrationOfficers(detail.group.id, detail.edition.id);
   const { registration, group, edition } = detail;
   const completed = new Set(registration.completedSections);
 
@@ -111,6 +113,43 @@ export default async function RegistrationDetailPage({
             registrationId={registration.id}
             status={registration.status}
           />
+        </CardContent>
+      </Card>
+
+      {/* Officers — accepted officer registrations share contact with the org */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-base">Camp officers</CardTitle>
+          <CardDescription>
+            Responsible people this camp has registered with AfrikaBurn. Contact
+            details appear only for officers who accepted the role.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {officers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No officers have accepted a role for this camp yet.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {officers.map((o) => (
+                <li
+                  key={`${o.officerKey}-${o.email ?? o.displayName ?? "x"}`}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
+                >
+                  <span className="font-medium">
+                    {o.emoji ? `${o.emoji} ` : ""}
+                    {o.officerName}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
+                    <span>{o.displayName ?? "—"}</span>
+                    {o.email && <span>{o.email}</span>}
+                    {o.phone && <span className="tabular-nums">{o.phone}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

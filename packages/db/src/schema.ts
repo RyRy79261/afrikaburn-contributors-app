@@ -16,6 +16,7 @@ import type {
   Questionnaire,
   QuestionnaireResponses,
   AudienceSpec,
+  ProjectPermissions,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). FROZEN per
@@ -59,6 +60,35 @@ export const membershipRoleEnum = pgEnum("membership_role", [
 export const inviteKindEnum = pgEnum("invite_kind", [
   "member",
   "lead_transfer",
+]);
+
+// Roles v2 (questionnaire-spec §"Role kinds"). `kind` governs permanence +
+// assignment semantics; `color` is a curated palette key (token-mapped, not hex).
+export const projectRoleKindEnum = pgEnum("project_role_kind", [
+  "captain",
+  "baseline",
+  "default",
+  "custom",
+  "officer",
+]);
+
+export const roleColorEnum = pgEnum("role_color", [
+  "teal",
+  "teal_deep",
+  "apricot",
+  "peach",
+  "sage",
+  "olive",
+  "rust",
+  "neutral",
+]);
+
+// Officer assignment consent (questionnaire-spec §"Officers are ALSO
+// registrations"). Non-officer assignments are always `accepted`.
+export const roleAssignmentConsentEnum = pgEnum("role_assignment_consent", [
+  "pending",
+  "accepted",
+  "declined",
 ]);
 
 export const registrationStatusEnum = pgEnum("registration_status", [
@@ -346,6 +376,18 @@ export const projectRoles = pgTable(
     nameNormalized: text("name_normalized").notNull(),
     isDefault: boolean("is_default").notNull().default(false),
     sort: integer("sort").notNull().default(0),
+    // Roles v2 (questionnaire-spec §"Roles v2"). `kind` = permanence/assignment
+    // class; `color`/`emoji` = display; `permissions` = the privilege OBJECT
+    // (keys + config, e.g. manage_questionnaires scope). `officerKey` is the
+    // stable org catalog anchor for `officer`-kind rows (null otherwise).
+    kind: projectRoleKindEnum("kind").notNull().default("custom"),
+    color: roleColorEnum("color").notNull().default("neutral"),
+    emoji: text("emoji"),
+    permissions: jsonb("permissions")
+      .$type<ProjectPermissions>()
+      .notNull()
+      .default({}),
+    officerKey: text("officer_key"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -371,6 +413,17 @@ export const memberRoleAssignments = pgTable(
     projectRoleId: uuid("project_role_id")
       .notNull()
       .references(() => projectRoles.id, { onDelete: "cascade" }),
+    // Officer consent (questionnaire-spec §"Officers are ALSO registrations").
+    // Non-officer assignments are `accepted` immediately; officer assignments
+    // start `pending` and the member must accept. `orgVisible` is set true on an
+    // officer's acceptance — the SINGLE explicit channel that shares an
+    // officer's contact (name/email/phone) with the org (the bio phone
+    // hard-lock stays intact everywhere else).
+    consentStatus: roleAssignmentConsentEnum("consent_status")
+      .notNull()
+      .default("accepted"),
+    acceptedAt: timestamp("accepted_at", { mode: "date" }),
+    orgVisible: boolean("org_visible").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (mra) => ({

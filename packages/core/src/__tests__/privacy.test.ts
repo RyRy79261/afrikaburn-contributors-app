@@ -6,6 +6,7 @@ import {
   enforcePrivacyFlags,
   privacyViolations,
 } from "../privacy";
+import { officerContactVisibleToOrg } from "../officers";
 
 describe("privacy hard-lock", () => {
   it("locks id, passport, phone, both emergency contacts, and medical", () => {
@@ -61,5 +62,22 @@ describe("privacy hard-lock", () => {
         offsiteContactPhone: true,
       }).sort(),
     ).toEqual(["medical", "offsiteContactPhone", "phone"]);
+  });
+});
+
+describe("officer exception is the only path exposing phone", () => {
+  it("bio phone stays hard-locked private regardless of officer state", () => {
+    // Even for someone who is an accepted officer, the BIO privacy flag for
+    // phone can never be set public — officer org-visibility is a SEPARATE,
+    // explicit channel, not a change to the bio hard-lock.
+    const enforced = enforcePrivacyFlags({ phone: true });
+    expect(enforced.phone).toBe(false);
+    expect(isHardLockedPrivate("phone")).toBe(true);
+  });
+
+  it("officerContactVisibleToOrg is the sole gate that exposes contact", () => {
+    expect(officerContactVisibleToOrg({ isOfficer: true, consent: "accepted" })).toBe(true);
+    expect(officerContactVisibleToOrg({ isOfficer: true, consent: "pending" })).toBe(false);
+    expect(officerContactVisibleToOrg({ isOfficer: false, consent: "accepted" })).toBe(false);
   });
 });

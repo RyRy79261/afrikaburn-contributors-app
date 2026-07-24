@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Questionnaire } from "./questionnaire";
+import { OfficerKey } from "./roles";
 
 // Questionnaire audience targeting + activation inputs (questionnaire-spec
 // §"Authoring levels & audiences"). The builder writes a
@@ -82,6 +83,28 @@ export const OrgOutboundAudience = z.object({
 export type OrgOutboundAudience = z.infer<typeof OrgOutboundAudience>;
 
 /**
+ * Org OFFICER audience (questionnaire-spec §"Officer roles"): target the members
+ * assigned a given officer role across every REGISTERED camp, regardless of
+ * camp-level aliases (officers are never aliasable). E.g. "All registered Sound
+ * Officers". Only ACCEPTED officer assignments in registered camps resolve.
+ */
+export const OrgOfficerAudience = z.object({
+  kind: z.literal("org_officer"),
+  officerKeys: z.array(OfficerKey).min(1),
+});
+export type OrgOfficerAudience = z.infer<typeof OrgOfficerAudience>;
+
+/** Human labels for officer audience selectors ("All registered X"). */
+export const OFFICER_AUDIENCE_LABELS: Record<z.infer<typeof OfficerKey>, string> =
+  {
+    lnt_officer: "All registered LNT Leads",
+    safety_officer: "All registered Safety Officers",
+    fire_safety_officer: "All registered Safety Barons",
+    sound_officer: "All registered Sound Officers",
+    safety_monitor: "All registered Safety Monitors",
+  };
+
+/**
  * PROJECT audience — the project's own members, either everyone or a subset by
  * custom project role. `groupId` is the project group; `roleIds` are
  * `project_roles.id` values (ignored when `mode` is `everyone`).
@@ -98,6 +121,7 @@ export type ProjectAudience = z.infer<typeof ProjectAudience>;
 export const AudienceSpec = z.discriminatedUnion("kind", [
   OrgInternalAudience,
   OrgOutboundAudience,
+  OrgOfficerAudience,
   ProjectAudience,
 ]);
 export type AudienceSpec = z.infer<typeof AudienceSpec>;

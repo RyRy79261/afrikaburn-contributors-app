@@ -35,6 +35,8 @@ import {
   nextMemberSequence,
   parseMemberRefCode,
   defaultProjectRoleRows,
+  officerRoleRows,
+  teamLeadScopePatch,
   normalizeRoleName,
   activationRequiredActionKey,
   BURNER_BIO_VERSION,
@@ -510,6 +512,32 @@ async function main(): Promise<void> {
     }
     await ensureRoleAssignment(db, aliceMembership.id, captainRole.id);
     await ensureRoleAssignment(db, jabuMembership.id, teamLeadRole.id);
+
+    // Officer registrations demo: Mad Hatters declared Level 2 sound, so a Sound
+    // Officer is REQUIRED. Alice accepts the LNT Lead officer role (org-visible
+    // contact); the Sound Officer slot is left unassigned to show the
+    // outstanding-officers indicator on the settings page + dashboard.
+    const madHattersOfficers = await getOfficerRolesByKey(db, madHatters.id);
+    const lntOfficer = madHattersOfficers.get("lnt_officer");
+    if (lntOfficer) {
+      await ensureRoleAssignment(
+        db,
+        aliceMembership.id,
+        lntOfficer.id,
+        "accepted",
+      );
+    }
+    // Jabu is offered the Sound Officer role but hasn't accepted yet (pending
+    // consent) — demonstrates the accept/decline flow.
+    const soundOfficer = madHattersOfficers.get("sound_officer");
+    if (soundOfficer) {
+      await ensureRoleAssignment(
+        db,
+        jabuMembership.id,
+        soundOfficer.id,
+        "pending",
+      );
+    }
 
     // --- Questionnaires ----------------------------------------------------------
     // (1) Org OUTBOUND questionnaire → registered_camp_leads. Mad Hatters is the
@@ -1061,10 +1089,16 @@ async function ensureAuditEvent(
 
 type ProjectRoleRow = typeof schema.projectRoles.$inferSelect;
 
-/** Seed the default custom roles for a group (idempotent per unique index). */
+/**
+ * Seed the Roles v2 default + officer roles for a group (idempotent per unique
+ * index), then re-scope Team lead's questionnaire audience to the baseline role
+ * id (only knowable after the rows exist).
+ */
 async function ensureProjectRoles(db: Db, groupId: string): Promise<void> {
-  const rows = defaultProjectRoleRows(groupId);
-  for (const row of rows) {
+  for (const row of [
+    ...defaultProjectRoleRows(groupId),
+    ...officerRoleRows(groupId),
+  ]) {
     await db
       .insert(schema.projectRoles)
       .values(row)
@@ -1074,6 +1108,18 @@ async function ensureProjectRoles(db: Db, groupId: string): Promise<void> {
           schema.projectRoles.nameNormalized,
         ],
       });
+  }
+
+  const rows = await db
+    .select({ id: schema.projectRoles.id, kind: schema.projectRoles.kind })
+    .from(schema.projectRoles)
+    .where(eq(schema.projectRoles.groupId, groupId));
+  const patch = teamLeadScopePatch(rows);
+  if (patch) {
+    await db
+      .update(schema.projectRoles)
+      .set({ permissions: patch.permissions, updatedAt: new Date() })
+      .where(eq(schema.projectRoles.id, patch.roleId));
   }
 }
 
@@ -1089,16 +1135,54 @@ async function getProjectRolesByName(
   return new Map(rows.map((r) => [r.nameNormalized, r]));
 }
 
-/** Assign a custom role to a membership (idempotent via composite PK). */
+/** Map of officer_key → officer role row for a group. */
+async function getOfficerRolesByKey(
+  db: Db,
+  groupId: string,
+): Promise<Map<string, ProjectRoleRow>> {
+  const rows = await db
+    .select()
+    .from(schema.projectRoles)
+    .where(
+      and(
+        eq(schema.projectRoles.groupId, groupId),
+        eq(schema.projectRoles.kind, "officer"),
+      ),
+    );
+  return new Map(
+    rows.filter((r) => r.officerKey !== null).map((r) => [r.officerKey!, r]),
+  );
+}
+
+/** Assign a custom role to a membership (idempotent via composite PK). Officer
+ * assignments carry consent state; `accepted` officers become org-visible. */
 async function ensureRoleAssignment(
   db: Db,
   membershipId: string,
   projectRoleId: string,
+  consent: "pending" | "accepted" | "declined" = "accepted",
 ): Promise<void> {
+  const accepted = consent === "accepted";
   await db
     .insert(schema.memberRoleAssignments)
-    .values({ membershipId, projectRoleId })
-    .onConflictDoNothing();
+    .values({
+      membershipId,
+      projectRoleId,
+      consentStatus: consent,
+      acceptedAt: accepted ? daysBeforeEdition(35) : null,
+      orgVisible: accepted,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.memberRoleAssignments.membershipId,
+        schema.memberRoleAssignments.projectRoleId,
+      ],
+      set: {
+        consentStatus: consent,
+        acceptedAt: accepted ? daysBeforeEdition(35) : null,
+        orgVisible: accepted,
+      },
+    });
 }
 
 type DefinitionRow = typeof schema.questionnaireDefinitions.$inferSelect;

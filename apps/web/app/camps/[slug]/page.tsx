@@ -27,12 +27,20 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getCampBySlug } from "@/lib/groups-store";
 import { listInvites } from "@/lib/invites-store";
-import { listRoles, getRoleAssignments } from "@/lib/roles-store";
+import {
+  listRoles,
+  getRoleAssignments,
+  getOfficerStatus,
+  getMemberPermissions,
+  pendingOfficerConsents,
+} from "@/lib/roles-store";
+import { hasProjectPermission } from "@quagga/core";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
 import { CampMembers } from "@/components/camp-members";
+import { OfficerConsentBanner } from "@/components/roles/officer-consent-banner";
 import { PendingQuestionnaires } from "@/components/questionnaire/pending-questionnaires";
 import { LeaveCampButton } from "@/components/leave-camp-button";
 import { MemberRefCode } from "@/components/member-ref-code";
@@ -40,10 +48,8 @@ import {
   createInviteAction,
   leaveCampAction,
   revokeInviteAction,
-  createRoleAction,
-  renameRoleAction,
-  removeRoleAction,
   setMemberRolesAction,
+  respondToOfficerAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -116,20 +122,54 @@ export default async function CampPage({
   const isMember = camp.viewerRole !== null;
   const invites = isAdmin ? await listInvites(camp.id) : [];
 
-  // Custom project roles + assignments (chips + lead-only management).
+  // Custom project roles + assignments (chips + quick-assign).
   const roles = isMember ? await listRoles(camp.id) : [];
   const assignments = isMember
     ? await getRoleAssignments(camp.id)
-    : new Map<string, string[]>();
-  const memberVMs = camp.members.map((m) => ({
-    membershipId: m.membershipId,
-    userId: m.userId,
-    displayName: m.displayName,
-    role: m.role,
-    refCode: m.refCode,
-    isViewer: m.isViewer,
-    roleIds: assignments.get(m.membershipId) ?? [],
-  }));
+    : new Map<string, Awaited<ReturnType<typeof getRoleAssignments>> extends Map<string, infer V> ? V : never>();
+  const baselineRole = roles.find((r) => r.kind === "baseline");
+  const memberVMs = camp.members.map((m) => {
+    // Chips: baseline (everyone) + accepted non-officer assignments.
+    const accepted = (assignments.get(m.membershipId) ?? [])
+      .filter((a) => a.consent === "accepted")
+      .map((a) => a.projectRoleId);
+    const chipIds = baselineRole ? [baselineRole.id, ...accepted] : accepted;
+    return {
+      membershipId: m.membershipId,
+      userId: m.userId,
+      displayName: m.displayName,
+      role: m.role,
+      refCode: m.refCode,
+      isViewer: m.isViewer,
+      roleIds: [...new Set(chipIds)],
+    };
+  });
+
+  // Assignable roles for quick-assign: not baseline (derived), not officer.
+  const assignableRoles = roles.filter(
+    (r) => r.kind !== "baseline" && r.kind !== "officer",
+  );
+
+  // Permission-gated management (lead/admin OR permission holders).
+  const viewerPerms = campUser
+    ? await getMemberPermissions(camp.id, campUser.id)
+    : null;
+  const canAssignRoles =
+    !!viewerPerms && hasProjectPermission(viewerPerms, "assign_roles");
+  const canManageRoles =
+    !!viewerPerms && hasProjectPermission(viewerPerms, "manage_roles");
+  const canViewDetails =
+    !!viewerPerms && hasProjectPermission(viewerPerms, "view_member_details");
+
+  // Officer status → settings-link badge; pending officer consents → banner.
+  const officerStatus = isMember
+    ? await getOfficerStatus(camp.id, edition.id)
+    : null;
+  const myPendingOfficers = campUser
+    ? (await pendingOfficerConsents(campUser.id)).filter(
+        (p) => p.groupId === camp.id,
+      )
+    : [];
 
   // Pending questionnaires for the viewer (non-blocking card; org + project).
   const pending = campUser
@@ -173,6 +213,18 @@ export default async function CampPage({
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
+        {myPendingOfficers.length > 0 && (
+          <OfficerConsentBanner
+            slug={camp.slug}
+            invitations={myPendingOfficers.map((p) => ({
+              roleId: p.roleId,
+              officerName: p.officerName,
+              emoji: p.emoji,
+            }))}
+            respondAction={respondToOfficerAction}
+          />
+        )}
+
         {pending.length > 0 && <PendingQuestionnaires items={pending} />}
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -192,17 +244,21 @@ export default async function CampPage({
               {isMember ? (
                 <CampMembers
                   slug={camp.slug}
-                  canManage={isAdmin}
-                  showRefCodes={isAdmin}
+                  canAssignRoles={canAssignRoles}
+                  canManageRoles={canManageRoles}
+                  showRefCodes={canViewDetails}
+                  officersOutstanding={
+                    officerStatus?.outstanding.outstanding.length ?? 0
+                  }
                   roles={roles.map((r) => ({
                     id: r.id,
                     name: r.name,
-                    isDefault: r.isDefault,
+                    kind: r.kind,
+                    color: r.color,
+                    emoji: r.emoji,
                   }))}
+                  assignableRoleIds={assignableRoles.map((r) => r.id)}
                   members={memberVMs}
-                  createRoleAction={createRoleAction}
-                  renameRoleAction={renameRoleAction}
-                  removeRoleAction={removeRoleAction}
                   setMemberRolesAction={setMemberRolesAction}
                 />
               ) : (

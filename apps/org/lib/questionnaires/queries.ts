@@ -10,7 +10,9 @@ import {
 } from "@quagga/core";
 import {
   ORG_OUTBOUND_SELECTOR_LABELS,
+  OFFICER_AUDIENCE_LABELS,
   type AudienceSpec,
+  type OfficerKey,
   type Questionnaire,
   type QuestionnaireResponses,
 } from "@quagga/types";
@@ -62,6 +64,10 @@ export function audienceLabel(spec: AudienceSpec | null): string {
     case "org_outbound":
       return spec.selectors
         .map((s) => ORG_OUTBOUND_SELECTOR_LABELS[s] ?? s)
+        .join(", ");
+    case "org_officer":
+      return spec.officerKeys
+        .map((k) => OFFICER_AUDIENCE_LABELS[k] ?? k)
         .join(", ");
     case "project":
       return "Project members";
@@ -357,7 +363,7 @@ export async function buildAudienceContext(
 ): Promise<AudienceContext> {
   const db = getDb();
 
-  const [memberships, groups, registrations, bios, roleAssignments] =
+  const [memberships, groups, registrations, bios, roleAssignments, projectRoles] =
     await Promise.all([
       db
         .select({
@@ -390,8 +396,17 @@ export async function buildAudienceContext(
         .select({
           membershipId: schema.memberRoleAssignments.membershipId,
           projectRoleId: schema.memberRoleAssignments.projectRoleId,
+          consent: schema.memberRoleAssignments.consentStatus,
         })
         .from(schema.memberRoleAssignments),
+      db
+        .select({
+          id: schema.projectRoles.id,
+          groupId: schema.projectRoles.groupId,
+          kind: schema.projectRoles.kind,
+          officerKey: schema.projectRoles.officerKey,
+        })
+        .from(schema.projectRoles),
     ]);
 
   return {
@@ -402,6 +417,12 @@ export async function buildAudienceContext(
     registrations,
     bios,
     roleAssignments,
+    projectRoles: projectRoles.map((r) => ({
+      id: r.id,
+      groupId: r.groupId,
+      kind: r.kind,
+      officerKey: (r.officerKey as OfficerKey | null) ?? null,
+    })),
   };
 }
 

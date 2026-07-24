@@ -4,50 +4,102 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   cleanRoleName,
   defaultProjectRoleRows,
+  officerRoleRows,
+  teamLeadScopePatch,
+  canDeleteRoleKind,
+  canRenameRoleKind,
+  enforceKindPermissions,
   isValidRoleName,
   normalizeRoleName,
+  officerRequirements,
+  officerSlotFilled,
+  outstandingOfficers,
+  soundLevelFromValue,
   PROJECT_ROLE_CAP,
   roleCapReached,
   roleNameConflicts,
+  type OfficerRequirement,
+  type OutstandingOfficers,
 } from "@quagga/core";
+import type {
+  MembershipRole,
+  OfficerKey,
+  ProjectPermissions,
+  ProjectRoleKind,
+  RoleAssignmentConsent,
+  RoleColor,
+} from "@quagga/types";
 import { db, schema } from "./db";
 
-// Custom per-project roles (questionnaire-spec §"Custom project roles"). These
-// are labels for organisation + questionnaire audiences — separate from the
-// structural `memberships.role` ladder. All authz is enforced by the calling
-// server actions (project lead/admin only, via @quagga/core predicates); this
-// store is the persistence layer only.
+// Custom per-project roles (questionnaire-spec §"Roles v2" + §"Officer roles").
+// Labels for organisation + questionnaire audiences + officer registrations —
+// separate from the structural `memberships.role` ladder. All authz is enforced
+// by the calling server actions (via @quagga/core predicates); this store is the
+// persistence layer only.
 
 export interface ProjectRole {
   id: string;
   name: string;
   isDefault: boolean;
   sort: number;
+  kind: ProjectRoleKind;
+  color: RoleColor;
+  emoji: string | null;
+  permissions: ProjectPermissions;
+  officerKey: OfficerKey | null;
 }
 
 /**
- * Seed the default roles (Captain / Team lead / Burn member) for a group that
- * has none yet — camps created before this feature shipped predate the seed, so
- * we top them up lazily the first time their roles are read. Idempotent: the
- * `unique(group_id, name_normalized)` index makes a concurrent double-seed a
- * no-op.
+ * Seed the Roles v2 default + officer roles for a group that has none yet, or
+ * top up a pre-feature group. Idempotent: `unique(group_id, name_normalized)`
+ * makes concurrent double-seeds a no-op. Also re-scopes Team lead's
+ * questionnaire audience to the baseline role id once the rows exist.
  */
 export async function ensureDefaultRoles(groupId: string): Promise<void> {
   const existing = await db()
-    .select({ id: schema.projectRoles.id })
+    .select({
+      id: schema.projectRoles.id,
+      kind: schema.projectRoles.kind,
+      officerKey: schema.projectRoles.officerKey,
+    })
     .from(schema.projectRoles)
-    .where(eq(schema.projectRoles.groupId, groupId))
-    .limit(1);
-  if (existing[0]) return;
-  await db()
-    .insert(schema.projectRoles)
-    .values(defaultProjectRoleRows(groupId))
-    .onConflictDoNothing({
-      target: [schema.projectRoles.groupId, schema.projectRoles.nameNormalized],
-    });
+    .where(eq(schema.projectRoles.groupId, groupId));
+
+  const haveOfficer = existing.some((r) => r.kind === "officer");
+  const haveAny = existing.length > 0;
+
+  const rows = [
+    ...(haveAny ? [] : defaultProjectRoleRows(groupId)),
+    ...(haveOfficer ? [] : officerRoleRows(groupId)),
+  ];
+  for (const row of rows) {
+    await db()
+      .insert(schema.projectRoles)
+      .values(row)
+      .onConflictDoNothing({
+        target: [
+          schema.projectRoles.groupId,
+          schema.projectRoles.nameNormalized,
+        ],
+      });
+  }
+
+  if (!haveAny) {
+    const seeded = await db()
+      .select({ id: schema.projectRoles.id, kind: schema.projectRoles.kind })
+      .from(schema.projectRoles)
+      .where(eq(schema.projectRoles.groupId, groupId));
+    const patch = teamLeadScopePatch(seeded);
+    if (patch) {
+      await db()
+        .update(schema.projectRoles)
+        .set({ permissions: patch.permissions, updatedAt: new Date() })
+        .where(eq(schema.projectRoles.id, patch.roleId));
+    }
+  }
 }
 
-/** All custom roles for a group, ordered by sort then name (default-seeded). */
+/** All roles for a group, ordered by sort then name (default-seeded first). */
 export async function listRoles(groupId: string): Promise<ProjectRole[]> {
   await ensureDefaultRoles(groupId);
   const rows = await db()
@@ -56,25 +108,41 @@ export async function listRoles(groupId: string): Promise<ProjectRole[]> {
       name: schema.projectRoles.name,
       isDefault: schema.projectRoles.isDefault,
       sort: schema.projectRoles.sort,
+      kind: schema.projectRoles.kind,
+      color: schema.projectRoles.color,
+      emoji: schema.projectRoles.emoji,
+      permissions: schema.projectRoles.permissions,
+      officerKey: schema.projectRoles.officerKey,
     })
     .from(schema.projectRoles)
     .where(eq(schema.projectRoles.groupId, groupId))
     .orderBy(asc(schema.projectRoles.sort), asc(schema.projectRoles.name));
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    officerKey: (r.officerKey as OfficerKey | null) ?? null,
+  }));
+}
+
+/** An assignment with its consent state (officer roles carry pending/accepted). */
+export interface RoleAssignmentRow {
+  projectRoleId: string;
+  consent: RoleAssignmentConsent;
+  orgVisible: boolean;
 }
 
 /**
- * membership_id → the custom role ids it holds, for every member of the group.
- * Only assignments whose membership is in THIS group are returned (the join
- * scopes it), so a stray assignment can't leak across projects.
+ * membership_id → its role assignments (with consent), for every member of the
+ * group. The join scopes it so stray assignments can't leak across projects.
  */
 export async function getRoleAssignments(
   groupId: string,
-): Promise<Map<string, string[]>> {
+): Promise<Map<string, RoleAssignmentRow[]>> {
   const rows = await db()
     .select({
       membershipId: schema.memberRoleAssignments.membershipId,
       projectRoleId: schema.memberRoleAssignments.projectRoleId,
+      consent: schema.memberRoleAssignments.consentStatus,
+      orgVisible: schema.memberRoleAssignments.orgVisible,
     })
     .from(schema.memberRoleAssignments)
     .innerJoin(
@@ -82,10 +150,14 @@ export async function getRoleAssignments(
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
     .where(eq(schema.memberships.groupId, groupId));
-  const map = new Map<string, string[]>();
+  const map = new Map<string, RoleAssignmentRow[]>();
   for (const r of rows) {
     const list = map.get(r.membershipId) ?? [];
-    list.push(r.projectRoleId);
+    list.push({
+      projectRoleId: r.projectRoleId,
+      consent: r.consent,
+      orgVisible: r.orgVisible,
+    });
     map.set(r.membershipId, list);
   }
   return map;
@@ -97,6 +169,7 @@ export type RoleMutationResult = { ok: true } | { ok: false; error: string };
 export async function createRole(
   groupId: string,
   rawName: string,
+  opts?: { color?: RoleColor; emoji?: string | null },
 ): Promise<RoleMutationResult> {
   const name = cleanRoleName(rawName);
   if (!isValidRoleName(name)) {
@@ -112,8 +185,7 @@ export async function createRole(
   if (roleNameConflicts(existing.map((r) => r.name), name)) {
     return { ok: false, error: "A role with that name already exists." };
   }
-  const nextSort =
-    existing.reduce((max, r) => Math.max(max, r.sort), -1) + 1;
+  const nextSort = existing.reduce((max, r) => Math.max(max, r.sort), -1) + 1;
   try {
     await db().insert(schema.projectRoles).values({
       groupId,
@@ -121,6 +193,10 @@ export async function createRole(
       nameNormalized: normalizeRoleName(name),
       isDefault: false,
       sort: nextSort,
+      kind: "custom",
+      color: opts?.color ?? "neutral",
+      emoji: opts?.emoji ?? null,
+      permissions: {},
     });
   } catch {
     return { ok: false, error: "A role with that name already exists." };
@@ -128,7 +204,7 @@ export async function createRole(
   return { ok: true };
 }
 
-/** Rename an existing role (unique-safe; a pure case/punct change is allowed). */
+/** Rename a role (kind-guarded — officers are never renameable). */
 export async function renameRole(
   groupId: string,
   roleId: string,
@@ -141,6 +217,9 @@ export async function renameRole(
   const existing = await listRoles(groupId);
   const target = existing.find((r) => r.id === roleId);
   if (!target) return { ok: false, error: "That role no longer exists." };
+  if (!canRenameRoleKind(target.kind)) {
+    return { ok: false, error: "Officer roles can't be renamed." };
+  }
   if (
     roleNameConflicts(
       existing.map((r) => r.name),
@@ -170,12 +249,64 @@ export async function renameRole(
   return { ok: true };
 }
 
+/** Recolour / re-emoji a role (free for any kind). */
+export async function setRoleAppearance(
+  groupId: string,
+  roleId: string,
+  appearance: { color?: RoleColor; emoji?: string | null },
+): Promise<RoleMutationResult> {
+  const existing = await listRoles(groupId);
+  const target = existing.find((r) => r.id === roleId);
+  if (!target) return { ok: false, error: "That role no longer exists." };
+  // Officers are org-uniform: their display is fixed by the catalog.
+  if (target.kind === "officer") {
+    return { ok: false, error: "Officer roles use the AfrikaBurn catalog styling." };
+  }
+  await db()
+    .update(schema.projectRoles)
+    .set({
+      color: appearance.color ?? target.color,
+      emoji: appearance.emoji === undefined ? target.emoji : appearance.emoji,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.projectRoles.id, roleId),
+        eq(schema.projectRoles.groupId, groupId),
+      ),
+    );
+  return { ok: true };
+}
+
 /**
- * Remove a CUSTOM role (its assignments cascade via the FK). Default roles
- * (Captain / Team lead / Burn member) are permanent fixtures and cannot be
- * deleted (questionnaire-spec §"Custom project roles CRUD" + §"Role kinds") —
- * deleting one is unrecoverable because `ensureDefaultRoles` never re-seeds once
- * any role exists.
+ * Set a role's permissions (kind-aware). Captain permissions are LOCKED to all
+ * — enforced here regardless of what the caller passes. Baseline/default/custom/
+ * officer keep the supplied permissions.
+ */
+export async function setRolePermissions(
+  groupId: string,
+  roleId: string,
+  permissions: ProjectPermissions,
+): Promise<RoleMutationResult> {
+  const existing = await listRoles(groupId);
+  const target = existing.find((r) => r.id === roleId);
+  if (!target) return { ok: false, error: "That role no longer exists." };
+  const safe = enforceKindPermissions(target.kind, permissions);
+  await db()
+    .update(schema.projectRoles)
+    .set({ permissions: safe, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.projectRoles.id, roleId),
+        eq(schema.projectRoles.groupId, groupId),
+      ),
+    );
+  return { ok: true };
+}
+
+/**
+ * Remove a role — CUSTOM roles only (its assignments cascade). Captain/baseline/
+ * default/officer are permanent fixtures (questionnaire-spec §"Role kinds").
  */
 export async function removeRole(
   groupId: string,
@@ -184,8 +315,8 @@ export async function removeRole(
   const existing = await listRoles(groupId);
   const target = existing.find((r) => r.id === roleId);
   if (!target) return { ok: false, error: "That role no longer exists." };
-  if (target.isDefault) {
-    return { ok: false, error: "Default roles can't be deleted." };
+  if (!canDeleteRoleKind(target.kind)) {
+    return { ok: false, error: "Only custom roles can be deleted." };
   }
   await db()
     .delete(schema.projectRoles)
@@ -199,9 +330,10 @@ export async function removeRole(
 }
 
 /**
- * Replace a member's custom-role set. Verifies the membership belongs to the
- * group and every role id is one of the group's own roles (cross-project
- * assignment is impossible), then swaps the assignment rows.
+ * Replace a member's NON-OFFICER, non-baseline role set (the quick-assign path).
+ * Baseline is derived (everyone holds it, never stored); officers use the
+ * consent flow (`assignOfficer`). Verifies the membership belongs to the group
+ * and every role id is an assignable role of this group.
  */
 export async function setMemberRoles(
   groupId: string,
@@ -223,16 +355,37 @@ export async function setMemberRoles(
   }
 
   const groupRoles = await listRoles(groupId);
-  const valid = new Set(groupRoles.map((r) => r.id));
-  const wanted = [...new Set(roleIds)].filter((id) => valid.has(id));
+  // Assignable via quick-assign: not baseline (derived), not officer (consent).
+  const assignable = new Map(
+    groupRoles
+      .filter((r) => r.kind !== "baseline" && r.kind !== "officer")
+      .map((r) => [r.id, r]),
+  );
+  const wanted = [...new Set(roleIds)].filter((id) => assignable.has(id));
 
-  await db()
-    .delete(schema.memberRoleAssignments)
-    .where(eq(schema.memberRoleAssignments.membershipId, membershipId));
+  // Remove only assignable (non-officer, non-baseline) assignments, then re-add.
+  const assignableIds = [...assignable.keys()];
+  if (assignableIds.length > 0) {
+    await db()
+      .delete(schema.memberRoleAssignments)
+      .where(
+        and(
+          eq(schema.memberRoleAssignments.membershipId, membershipId),
+          inArray(schema.memberRoleAssignments.projectRoleId, assignableIds),
+        ),
+      );
+  }
   if (wanted.length > 0) {
     await db()
       .insert(schema.memberRoleAssignments)
-      .values(wanted.map((projectRoleId) => ({ membershipId, projectRoleId })))
+      .values(
+        wanted.map((projectRoleId) => ({
+          membershipId,
+          projectRoleId,
+          consentStatus: "accepted" as RoleAssignmentConsent,
+          orgVisible: false,
+        })),
+      )
       .onConflictDoNothing({
         target: [
           schema.memberRoleAssignments.membershipId,
@@ -243,7 +396,348 @@ export async function setMemberRoles(
   return { ok: true };
 }
 
-/** Membership ids in a group that hold ANY of the given role ids (audience). */
+// --- Officer registrations (consent flow) --------------------------------
+
+/**
+ * Assign a member to an OFFICER role — creates a PENDING officer registration
+ * the member must accept (questionnaire-spec §"Officers are ALSO
+ * registrations"). Re-assigning resets to pending (not org-visible).
+ */
+export async function assignOfficer(
+  groupId: string,
+  membershipId: string,
+  roleId: string,
+): Promise<RoleMutationResult> {
+  const roles = await listRoles(groupId);
+  const role = roles.find((r) => r.id === roleId && r.kind === "officer");
+  if (!role) return { ok: false, error: "That officer role doesn't exist." };
+  const membership = await db()
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.id, membershipId),
+        eq(schema.memberships.groupId, groupId),
+      ),
+    )
+    .limit(1);
+  if (!membership[0]) return { ok: false, error: "That member isn't in this camp." };
+
+  await db()
+    .insert(schema.memberRoleAssignments)
+    .values({
+      membershipId,
+      projectRoleId: roleId,
+      consentStatus: "pending",
+      acceptedAt: null,
+      orgVisible: false,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.memberRoleAssignments.membershipId,
+        schema.memberRoleAssignments.projectRoleId,
+      ],
+      set: { consentStatus: "pending", acceptedAt: null, orgVisible: false },
+    });
+  return { ok: true };
+}
+
+/** Remove an officer assignment (frees the slot). */
+export async function unassignOfficer(
+  groupId: string,
+  membershipId: string,
+  roleId: string,
+): Promise<RoleMutationResult> {
+  await db()
+    .delete(schema.memberRoleAssignments)
+    .where(
+      and(
+        eq(schema.memberRoleAssignments.membershipId, membershipId),
+        eq(schema.memberRoleAssignments.projectRoleId, roleId),
+      ),
+    );
+  return { ok: true };
+}
+
+/** A pending officer invitation awaiting the current user's consent. */
+export interface PendingOfficerConsent {
+  membershipId: string;
+  roleId: string;
+  officerKey: OfficerKey;
+  officerName: string;
+  emoji: string | null;
+  groupId: string;
+  groupName: string;
+  groupSlug: string;
+}
+
+/** Pending officer registrations the given user must accept or decline. */
+export async function pendingOfficerConsents(
+  userId: string,
+): Promise<PendingOfficerConsent[]> {
+  const rows = await db()
+    .select({
+      membershipId: schema.memberRoleAssignments.membershipId,
+      roleId: schema.projectRoles.id,
+      officerKey: schema.projectRoles.officerKey,
+      officerName: schema.projectRoles.name,
+      emoji: schema.projectRoles.emoji,
+      groupId: schema.groups.id,
+      groupName: schema.groups.name,
+      groupSlug: schema.groups.slug,
+    })
+    .from(schema.memberRoleAssignments)
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
+    )
+    .innerJoin(
+      schema.projectRoles,
+      eq(schema.projectRoles.id, schema.memberRoleAssignments.projectRoleId),
+    )
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberRoleAssignments.consentStatus, "pending"),
+        eq(schema.projectRoles.kind, "officer"),
+      ),
+    );
+  return rows
+    .filter((r) => r.officerKey !== null)
+    .map((r) => ({
+      membershipId: r.membershipId,
+      roleId: r.roleId,
+      officerKey: r.officerKey as OfficerKey,
+      officerName: r.officerName,
+      emoji: r.emoji,
+      groupId: r.groupId,
+      groupName: r.groupName,
+      groupSlug: r.groupSlug,
+    }));
+}
+
+/**
+ * The current user's response to an officer registration. Accept → org-visible
+ * (the SINGLE channel that shares their contact with the org); decline → removes
+ * the assignment, leaving the slot unassigned.
+ */
+export async function respondToOfficer(
+  userId: string,
+  groupId: string,
+  roleId: string,
+  accept: boolean,
+): Promise<RoleMutationResult> {
+  const membership = await db()
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberships.groupId, groupId),
+      ),
+    )
+    .limit(1);
+  const membershipId = membership[0]?.id;
+  if (!membershipId) return { ok: false, error: "You're not in this camp." };
+
+  if (!accept) {
+    await db()
+      .delete(schema.memberRoleAssignments)
+      .where(
+        and(
+          eq(schema.memberRoleAssignments.membershipId, membershipId),
+          eq(schema.memberRoleAssignments.projectRoleId, roleId),
+        ),
+      );
+    return { ok: true };
+  }
+
+  await db()
+    .update(schema.memberRoleAssignments)
+    .set({ consentStatus: "accepted", acceptedAt: new Date(), orgVisible: true })
+    .where(
+      and(
+        eq(schema.memberRoleAssignments.membershipId, membershipId),
+        eq(schema.memberRoleAssignments.projectRoleId, roleId),
+      ),
+    );
+  return { ok: true };
+}
+
+// --- Permission lookups (authz for role/officer/questionnaire actions) ----
+
+export interface ViewerPermissionMembership {
+  structuralRole: MembershipRole;
+  rolePermissions: ProjectPermissions[];
+}
+
+/**
+ * The viewer's permission inputs for a group: their structural role + the
+ * permissions of every role they hold, INCLUDING the derived baseline role
+ * (everyone holds it). Feeds `hasProjectPermission` / `canManageQuestionnaire-
+ * Audience` at the action layer. Returns null when the user isn't a member.
+ */
+export async function getMemberPermissions(
+  groupId: string,
+  userId: string,
+): Promise<ViewerPermissionMembership | null> {
+  const membership = await db()
+    .select({ id: schema.memberships.id, role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberships.groupId, groupId),
+      ),
+    )
+    .limit(1);
+  const m = membership[0];
+  if (!m) return null;
+
+  const roles = await listRoles(groupId);
+  const baseline = roles.find((r) => r.kind === "baseline");
+
+  const held = await db()
+    .select({ projectRoleId: schema.memberRoleAssignments.projectRoleId })
+    .from(schema.memberRoleAssignments)
+    .where(
+      and(
+        eq(schema.memberRoleAssignments.membershipId, m.id),
+        eq(schema.memberRoleAssignments.consentStatus, "accepted"),
+      ),
+    );
+  const heldIds = new Set(held.map((h) => h.projectRoleId));
+
+  const rolePermissions: ProjectPermissions[] = [];
+  // Baseline is held by everyone (derived — no stored assignment).
+  if (baseline) rolePermissions.push(baseline.permissions);
+  for (const r of roles) {
+    if (r.kind === "baseline") continue;
+    if (heldIds.has(r.id)) rolePermissions.push(r.permissions);
+  }
+
+  return { structuralRole: m.role, rolePermissions };
+}
+
+/** The baseline role id for a group (the "everyone" audience), or null. */
+export async function getBaselineRoleId(groupId: string): Promise<string | null> {
+  const roles = await listRoles(groupId);
+  return roles.find((r) => r.kind === "baseline")?.id ?? null;
+}
+
+// --- Officer status (settings Officers section + dashboard badge) ---------
+
+export interface OfficerAssignmentView {
+  membershipId: string;
+  consent: RoleAssignmentConsent;
+  orgVisible: boolean;
+}
+
+export interface OfficerRoleView {
+  roleId: string;
+  officerKey: OfficerKey;
+  name: string;
+  emoji: string | null;
+  color: RoleColor;
+  requirement: OfficerRequirement;
+  assignments: OfficerAssignmentView[];
+}
+
+export interface OfficerStatus {
+  isRegisteredOrInFlight: boolean;
+  outstanding: OutstandingOfficers;
+  officers: OfficerRoleView[];
+}
+
+// A registration counts as "in flight or registered" for officer requirements
+// unless it's absent (free camp) or has been withdrawn/rejected.
+const IN_FLIGHT_STATUSES = new Set([
+  "draft",
+  "submitted",
+  "under_review",
+  "changes_requested",
+  "approved",
+]);
+
+/**
+ * The officer picture for a camp: which officers are required/recommended (from
+ * its registration triggers), who is assigned to each (with consent), and the
+ * outstanding-required count. Free/unregistered camps get `applies=false`.
+ */
+export async function getOfficerStatus(
+  groupId: string,
+  editionId: string,
+): Promise<OfficerStatus> {
+  const reg = await db()
+    .select({
+      status: schema.registrations.status,
+      sound: schema.registrations.s5AmplifiedMusic,
+    })
+    .from(schema.registrations)
+    .where(
+      and(
+        eq(schema.registrations.groupId, groupId),
+        eq(schema.registrations.editionId, editionId),
+      ),
+    )
+    .limit(1);
+  const registration = reg[0];
+  const isRegisteredOrInFlight = registration
+    ? IN_FLIGHT_STATUSES.has(registration.status)
+    : false;
+
+  const triggers = {
+    soundLevel: soundLevelFromValue(registration?.sound),
+    // No dedicated generator/open-flame/fuel columns exist in the frozen
+    // registration schema, so these default false; the pure trigger logic still
+    // supports them for when those fields land.
+    hasGenerators: false,
+    hasOpenFlame: false,
+    hasFuelStorage: false,
+  };
+  const requirements = officerRequirements(triggers);
+
+  const roles = (await listRoles(groupId)).filter(
+    (r) => r.kind === "officer" && r.officerKey !== null,
+  );
+  const assignments = await getRoleAssignments(groupId);
+  const byRole = new Map<string, OfficerAssignmentView[]>();
+  for (const [membershipId, list] of assignments) {
+    for (const a of list) {
+      const arr = byRole.get(a.projectRoleId) ?? [];
+      arr.push({ membershipId, consent: a.consent, orgVisible: a.orgVisible });
+      byRole.set(a.projectRoleId, arr);
+    }
+  }
+
+  const officers: OfficerRoleView[] = roles.map((r) => {
+    const key = r.officerKey as OfficerKey;
+    return {
+      roleId: r.id,
+      officerKey: key,
+      name: r.name,
+      emoji: r.emoji,
+      color: r.color,
+      requirement: requirements.get(key) ?? "recommended",
+      assignments: byRole.get(r.id) ?? [],
+    };
+  });
+
+  const assignedKeys = officers
+    .filter((o) => o.assignments.some((a) => officerSlotFilled(a.consent)))
+    .map((o) => o.officerKey);
+
+  const outstanding = outstandingOfficers({
+    isRegisteredOrInFlight,
+    triggers,
+    assignedKeys,
+  });
+
+  return { isRegisteredOrInFlight, outstanding, officers };
+}
+
+/** Membership ids in a group that hold ANY of the given role ids (ACCEPTED). */
 export async function membershipIdsWithRoles(
   groupId: string,
   roleIds: readonly string[],
@@ -259,6 +753,7 @@ export async function membershipIdsWithRoles(
     .where(
       and(
         eq(schema.memberships.groupId, groupId),
+        eq(schema.memberRoleAssignments.consentStatus, "accepted"),
         inArray(schema.memberRoleAssignments.projectRoleId, [...roleIds]),
       ),
     );

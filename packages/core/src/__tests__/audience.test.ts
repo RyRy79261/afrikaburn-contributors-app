@@ -244,3 +244,92 @@ describe("resolveAudience — project", () => {
     expect(resolveAudience(spec, ctx)).toEqual([]);
   });
 });
+
+describe("resolveAudience — baseline derivation", () => {
+  it("targeting the baseline role resolves to the whole camp (derived, not stored)", () => {
+    const ctx = baseCtx();
+    ctx.projectRoles = [
+      { id: "r-baseline", groupId: CAMP_REG, kind: "baseline", officerKey: null },
+      { id: "r-captain", groupId: CAMP_REG, kind: "captain", officerKey: null },
+    ];
+    // No roleAssignments for baseline exist — it must still be everyone.
+    const spec: AudienceSpec = {
+      kind: "project",
+      groupId: CAMP_REG,
+      mode: "roles",
+      roleIds: ["r-baseline"],
+    };
+    expect(resolveAudience(spec, ctx)).toEqual([
+      "campRegAdmin",
+      "campRegLead",
+      "campRegMember",
+    ]);
+  });
+});
+
+describe("resolveAudience — org officer", () => {
+  function officerCtx(): AudienceContext {
+    const ctx = baseCtx();
+    ctx.projectRoles = [
+      // Sound Officer role materialised in the REGISTERED camp…
+      { id: "so-reg", groupId: CAMP_REG, kind: "officer", officerKey: "sound_officer" },
+      // …and in the UNREGISTERED (draft) camp — must never resolve.
+      { id: "so-unreg", groupId: CAMP_UNREG, kind: "officer", officerKey: "sound_officer" },
+      { id: "lnt-reg", groupId: CAMP_REG, kind: "officer", officerKey: "lnt_officer" },
+    ];
+    ctx.roleAssignments = [
+      // accepted sound officer in the registered camp → resolves
+      {
+        membershipId: "m:campRegMember:g-camp-registered",
+        projectRoleId: "so-reg",
+        consent: "accepted",
+      },
+      // pending sound officer (registered camp) → excluded until accepted
+      {
+        membershipId: "m:campRegAdmin:g-camp-registered",
+        projectRoleId: "so-reg",
+        consent: "pending",
+      },
+      // accepted sound officer but in an UNREGISTERED camp → excluded
+      {
+        membershipId: "m:campUnregLead:g-camp-unregistered",
+        projectRoleId: "so-unreg",
+        consent: "accepted",
+      },
+      // accepted LNT officer, registered camp
+      {
+        membershipId: "m:campRegLead:g-camp-registered",
+        projectRoleId: "lnt-reg",
+        consent: "accepted",
+      },
+    ];
+    return ctx;
+  }
+
+  it("resolves accepted officers of the wanted key in registered camps only", () => {
+    const spec: AudienceSpec = {
+      kind: "org_officer",
+      officerKeys: ["sound_officer"],
+    };
+    expect(resolveAudience(spec, officerCtx())).toEqual(["campRegMember"]);
+  });
+
+  it("resolves across multiple officer keys, deduped + sorted", () => {
+    const spec: AudienceSpec = {
+      kind: "org_officer",
+      officerKeys: ["sound_officer", "lnt_officer"],
+    };
+    expect(resolveAudience(spec, officerCtx())).toEqual([
+      "campRegLead",
+      "campRegMember",
+    ]);
+  });
+
+  it("empty when no accepted officers of that key exist in a registered camp", () => {
+    const spec: AudienceSpec = {
+      kind: "org_officer",
+      officerKeys: ["fire_safety_officer"],
+    };
+    expect(resolveAudience(spec, officerCtx())).toEqual([]);
+  });
+});

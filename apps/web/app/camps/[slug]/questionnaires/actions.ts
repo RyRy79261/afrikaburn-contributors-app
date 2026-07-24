@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canAuthorAudience } from "@quagga/core";
+import { canAuthorProjectQuestionnaire } from "@quagga/core";
 import { Questionnaire, type ProjectAudience } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
-import { getViewerRole } from "@/lib/groups-store";
 import { getActiveEdition } from "@/lib/edition";
 import { createAndActivateProjectQuestionnaire } from "@/lib/questionnaire-store";
+import { getBaselineRoleId, getMemberPermissions } from "@/lib/roles-store";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 
@@ -64,13 +64,30 @@ export async function createQuestionnaireAction(
     roleIds: mode === "roles" ? roleIds : [],
   };
 
-  const role = await getViewerRole(user.id, groupId);
-  const memberships = role ? [{ groupId, role }] : [];
-  if (!canAuthorAudience(memberships, audience, "")) {
-    return { ok: false, error: "Only a camp lead can send questionnaires." };
-  }
   if (mode === "roles" && roleIds.length === 0) {
     return { ok: false, error: "Pick at least one role, or send to everyone." };
+  }
+
+  // Authz + scope: lead/admin OR a member holding manage_questionnaires WITHIN
+  // their configured audience_roles + may_block scope (questionnaire-spec
+  // §"Roles v2" — server-side enforcement).
+  const permissionMembership = await getMemberPermissions(groupId, user.id);
+  if (!permissionMembership) {
+    return { ok: false, error: "You're not a member of this camp." };
+  }
+  const baselineRoleId = await getBaselineRoleId(groupId);
+  if (
+    !canAuthorProjectQuestionnaire(
+      permissionMembership,
+      audience,
+      blocking,
+      baselineRoleId,
+    )
+  ) {
+    return {
+      ok: false,
+      error: "You can't send to that audience — check your questionnaire permissions.",
+    };
   }
 
   const edition = await getActiveEdition();

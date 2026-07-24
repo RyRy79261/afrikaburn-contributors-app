@@ -6,9 +6,12 @@ import {
   canActivateAudience,
   canViewActivationResults,
   canManageProjectRoles,
+  canAuthorProjectQuestionnaire,
+  projectAudienceTargetRoleIds,
   type AuthzMembership,
 } from "../questionnaire-authz";
-import type { AudienceSpec } from "@quagga/types";
+import type { AudienceSpec, ProjectAudience } from "@quagga/types";
+import type { PermissionMembership } from "../project-permissions";
 
 const ORG = "g-org";
 const CAMP_A = "g-camp-a";
@@ -116,5 +119,39 @@ describe("canManageProjectRoles", () => {
     expect(canManageProjectRoles(campALead, CAMP_A)).toBe(true);
     expect(canManageProjectRoles(campAMember, CAMP_A)).toBe(false);
     expect(canManageProjectRoles(staff, CAMP_A)).toBe(false);
+  });
+});
+
+describe("canAuthorProjectQuestionnaire — permission scope enforced", () => {
+  const BASELINE = "role-baseline";
+  const BURNER_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "roles", roleIds: [BASELINE] };
+  const CREW_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "roles", roleIds: ["role-crew"] };
+  const EVERYONE_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "everyone", roleIds: [] };
+
+  const lead: PermissionMembership = { structuralRole: "lead", rolePermissions: [] };
+  const scopedMember: PermissionMembership = {
+    structuralRole: "member",
+    rolePermissions: [
+      { manage_questionnaires: { audienceRoles: [BASELINE], mayBlock: false } },
+    ],
+  };
+
+  it("lead/admin may author any project audience (backstop)", () => {
+    expect(canAuthorProjectQuestionnaire(lead, CREW_AUD, true, BASELINE)).toBe(true);
+  });
+
+  it("everyone audience maps to the baseline role id", () => {
+    expect(projectAudienceTargetRoleIds(EVERYONE_AUD, BASELINE)).toEqual([BASELINE]);
+    expect(projectAudienceTargetRoleIds(CREW_AUD, BASELINE)).toEqual(["role-crew"]);
+  });
+
+  it("scoped member may target their allowed audience but not others", () => {
+    expect(canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, false, BASELINE)).toBe(true);
+    expect(canAuthorProjectQuestionnaire(scopedMember, EVERYONE_AUD, false, BASELINE)).toBe(true);
+    expect(canAuthorProjectQuestionnaire(scopedMember, CREW_AUD, false, BASELINE)).toBe(false);
+  });
+
+  it("scoped member without mayBlock cannot send a blocking questionnaire", () => {
+    expect(canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, true, BASELINE)).toBe(false);
   });
 });

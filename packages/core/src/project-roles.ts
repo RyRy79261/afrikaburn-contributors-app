@@ -8,23 +8,65 @@
 // `project_roles.name_normalized`; the helpers here decide conflicts and build
 // the default set. Persisting rows and reading assignments is the caller's job.
 
+import type {
+  OfficerKey,
+  ProjectPermissions,
+  ProjectRoleKind,
+  RoleColor,
+} from "@quagga/types";
 import { normalizeName } from "./name-dedupe";
+import { allProjectPermissions } from "./project-permissions";
+import { OFFICER_CATALOG } from "./officers";
 
-/** A default project role's authoring metadata (name + display order). */
+/** A default project role's authoring metadata (Roles v2). */
 export interface DefaultProjectRole {
   name: string;
   sort: number;
+  kind: ProjectRoleKind;
+  color: RoleColor;
+  emoji: string;
+  permissions: ProjectPermissions;
 }
 
 /**
- * Roles seeded on every new project (Camp 404 basis, questionnaire-spec):
- * Captain, Team lead, Burn member. `is_default` marks these in the DB so the UI
- * can treat them differently from user-added roles.
+ * Roles seeded on every new project (Camp 404 basis, questionnaire-spec §"Role
+ * kinds"): Captain (captain kind, all perms), Team lead (default kind,
+ * manage_questionnaires scoped to the baseline audience + view_member_details),
+ * Burner (baseline kind, no perms — every member holds it). `is_default` marks
+ * all three in the DB so the UI can treat them as permanent fixtures.
+ *
+ * Team lead's `manage_questionnaires.audienceRoles` is seeded `"all"` here and
+ * re-scoped to the baseline role id after insert (see `teamLeadScopePatch`) —
+ * the baseline role's id isn't known until the rows exist.
  */
 export const DEFAULT_PROJECT_ROLES: readonly DefaultProjectRole[] = [
-  { name: "Captain", sort: 0 },
-  { name: "Team lead", sort: 1 },
-  { name: "Burn member", sort: 2 },
+  {
+    name: "Captain",
+    sort: 0,
+    kind: "captain",
+    color: "apricot",
+    emoji: "🎩",
+    permissions: allProjectPermissions(),
+  },
+  {
+    name: "Team lead",
+    sort: 1,
+    kind: "default",
+    color: "teal",
+    emoji: "🔧",
+    permissions: {
+      view_member_details: true,
+      manage_questionnaires: { audienceRoles: "all", mayBlock: false },
+    },
+  },
+  {
+    name: "Burner",
+    sort: 2,
+    kind: "baseline",
+    color: "sage",
+    emoji: "🔥",
+    permissions: {},
+  },
 ];
 
 /** Max length of a custom role label (UI + boundary guard). */
@@ -101,19 +143,96 @@ export function dedupeRoleNames(names: readonly string[]): string[] {
   return out;
 }
 
-/** The default role rows to insert for a freshly created project group. */
-export function defaultProjectRoleRows(groupId: string): {
+/** A DB-ready project_roles insert row (Roles v2 shape). */
+export interface ProjectRoleInsert {
   groupId: string;
   name: string;
   nameNormalized: string;
   isDefault: boolean;
   sort: number;
-}[] {
+  kind: ProjectRoleKind;
+  color: RoleColor;
+  emoji: string | null;
+  permissions: ProjectPermissions;
+  officerKey: OfficerKey | null;
+}
+
+/** The default role rows to insert for a freshly created project group. */
+export function defaultProjectRoleRows(groupId: string): ProjectRoleInsert[] {
   return DEFAULT_PROJECT_ROLES.map((r) => ({
     groupId,
     name: r.name,
     nameNormalized: normalizeRoleName(r.name),
     isDefault: true,
     sort: r.sort,
+    kind: r.kind,
+    color: r.color,
+    emoji: r.emoji,
+    permissions: r.permissions,
+    officerKey: null,
   }));
+}
+
+/**
+ * The officer role rows to materialise for a camp (questionnaire-spec §"Officer
+ * roles"). One row per catalog entry; not aliasable, so name/emoji/color come
+ * straight from the catalog. `sort` starts after the defaults. Idempotent via
+ * the caller's `unique(group_id, name_normalized)` upsert.
+ */
+export function officerRoleRows(
+  groupId: string,
+  startSort = 100,
+): ProjectRoleInsert[] {
+  return OFFICER_CATALOG.map((entry, i) => ({
+    groupId,
+    name: entry.name,
+    nameNormalized: normalizeRoleName(entry.name),
+    isDefault: true,
+    sort: startSort + i,
+    kind: "officer" as ProjectRoleKind,
+    color: entry.color,
+    emoji: entry.emoji,
+    permissions: {} as ProjectPermissions,
+    officerKey: entry.key,
+  }));
+}
+
+/**
+ * After the default rows exist, Team lead's `manage_questionnaires` scope is
+ * re-pointed from `"all"` to the baseline role's id (questionnaire-spec: Team
+ * lead is scoped to Burner audiences). Returns the patch to apply, or null when
+ * the roles aren't as expected. Pure — the caller does the DB update.
+ */
+export function teamLeadScopePatch(
+  roles: readonly { id: string; kind: ProjectRoleKind }[],
+): { roleId: string; permissions: ProjectPermissions } | null {
+  const teamLead = roles.find((r) => r.kind === "default");
+  const baseline = roles.find((r) => r.kind === "baseline");
+  if (!teamLead || !baseline) return null;
+  return {
+    roleId: teamLead.id,
+    permissions: {
+      view_member_details: true,
+      manage_questionnaires: { audienceRoles: [baseline.id], mayBlock: false },
+    },
+  };
+}
+
+/** True when a role kind may be deleted by a camp (only `custom`). */
+export function canDeleteRoleKind(kind: ProjectRoleKind): boolean {
+  return kind === "custom";
+}
+
+/** True when a role kind may be renamed by a camp (everything but officers). */
+export function canRenameRoleKind(kind: ProjectRoleKind): boolean {
+  return kind !== "officer";
+}
+
+/**
+ * True when a role kind is the derived baseline — held by EVERY member of the
+ * camp, never stored per-member. The "everyone in this project" questionnaire
+ * audience IS this role (one concept, not two).
+ */
+export function isBaselineKind(kind: ProjectRoleKind): boolean {
+  return kind === "baseline";
 }

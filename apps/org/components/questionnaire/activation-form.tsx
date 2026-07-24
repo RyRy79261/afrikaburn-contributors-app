@@ -2,11 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Check, Loader2, Send, Users } from "lucide-react";
+import { Building2, Check, Loader2, Send, ShieldCheck, Users } from "lucide-react";
 import {
   ORG_OUTBOUND_SELECTORS,
   ORG_OUTBOUND_SELECTOR_LABELS,
+  OFFICER_KEYS,
+  OFFICER_AUDIENCE_LABELS,
   type AudienceSpec,
+  type OfficerKey,
   type OrgOutboundSelector,
 } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
@@ -25,7 +28,7 @@ import {
   previewAudienceCount,
 } from "@/lib/questionnaires/actions";
 
-type AudienceMode = "org_internal" | "org_outbound";
+type AudienceMode = "org_internal" | "org_outbound" | "org_officer";
 
 interface ActivationFormProps {
   questionnaireKey: string;
@@ -39,8 +42,13 @@ interface ActivationFormProps {
 function buildSpec(
   mode: AudienceMode,
   selectors: OrgOutboundSelector[],
+  officerKeys: OfficerKey[],
 ): AudienceSpec | null {
   if (mode === "org_internal") return { kind: "org_internal" };
+  if (mode === "org_officer") {
+    if (officerKeys.length === 0) return null;
+    return { kind: "org_officer", officerKeys };
+  }
   if (selectors.length === 0) return null;
   return { kind: "org_outbound", selectors };
 }
@@ -58,6 +66,7 @@ export function ActivationForm({
 
   const [mode, setMode] = React.useState<AudienceMode>("org_outbound");
   const [selectors, setSelectors] = React.useState<OrgOutboundSelector[]>([]);
+  const [officerKeys, setOfficerKeys] = React.useState<OfficerKey[]>([]);
   const [blocking, setBlocking] = React.useState(false);
   const [dueAt, setDueAt] = React.useState("");
 
@@ -67,7 +76,7 @@ export function ActivationForm({
     error: string | null;
   }>({ loading: false, count: null, error: null });
 
-  const spec = buildSpec(mode, selectors);
+  const spec = buildSpec(mode, selectors, officerKeys);
   const specKey = spec ? JSON.stringify(spec) : "";
 
   // LIVE resolved-count preview — re-resolve whenever the audience changes.
@@ -96,6 +105,12 @@ export function ActivationForm({
   function toggleSelector(s: OrgOutboundSelector) {
     setSelectors((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
+  }
+
+  function toggleOfficer(k: OfficerKey) {
+    setOfficerKeys((prev) =>
+      prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k],
     );
   }
 
@@ -134,7 +149,7 @@ export function ActivationForm({
           <CardTitle>Audience</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <AudienceModeCard
               active={mode === "org_internal"}
               icon={<Building2 className="h-4 w-4" aria-hidden />}
@@ -148,6 +163,13 @@ export function ActivationForm({
               title="Outbound"
               caption="Delivered to burners in the participant app."
               onClick={() => setMode("org_outbound")}
+            />
+            <AudienceModeCard
+              active={mode === "org_officer"}
+              icon={<ShieldCheck className="h-4 w-4" aria-hidden />}
+              title="Officers"
+              caption="Brief the responsible people across all registered camps."
+              onClick={() => setMode("org_officer")}
             />
           </div>
 
@@ -172,6 +194,38 @@ export function ActivationForm({
                     >
                       {on && <Check className="h-3.5 w-3.5 text-accent" />}
                       {ORG_OUTBOUND_SELECTOR_LABELS[s]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {mode === "org_officer" && (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">Officer roles</span>
+              <p className="text-xs text-muted-foreground">
+                Resolves to every accepted officer of these roles across
+                registered camps, whatever each camp calls them.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {OFFICER_KEYS.map((k) => {
+                  const on = officerKeys.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleOfficer(k)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                        on
+                          ? "border-accent bg-accent/10 text-foreground"
+                          : "border-input bg-background text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {on && <Check className="h-3.5 w-3.5 text-accent" />}
+                      {OFFICER_AUDIENCE_LABELS[k]}
                     </button>
                   );
                 })}
