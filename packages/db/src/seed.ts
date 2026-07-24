@@ -150,7 +150,7 @@ async function main(): Promise<void> {
       bio: "First-timer, arriving solo, happiest fixing things that beep. Looking for a camp that needs a spare pair of hands more than a spare tent.",
       skills: ["build", "electrical"],
       firstTime: true,
-      previousAfrikaburns: 0,
+      attendedYears: [],
       contactEmail: "dusty.prototype@example.com",
     });
     await ensureBurnerBio(db, users.alice.id, edition.id, {
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
       bio: "Mad Hatters lead, six burns running. Keeper of the teapot rota and the sound rig's spare fuses.",
       skills: ["sound", "admin", "kitchen"],
       firstTime: false,
-      previousAfrikaburns: 6,
+      attendedYears: [2016, 2017, 2018, 2019, 2023, 2024],
       contactEmail: "alice.hatter@example.com",
     });
     await ensureBurnerBio(db, users.ren.id, edition.id, {
@@ -168,7 +168,7 @@ async function main(): Promise<void> {
       bio: "Camp 404 lead. Debugs generators the same way as code — one wire at a time.",
       skills: ["electrical", "admin"],
       firstTime: false,
-      previousAfrikaburns: 3,
+      attendedYears: [2019, 2023, 2024],
       contactEmail: "ren.notfound@example.com",
     });
 
@@ -573,7 +573,7 @@ async function ensureBurnerBio(
     bio: string;
     skills: string[];
     firstTime: boolean;
-    previousAfrikaburns: number;
+    attendedYears: number[];
     contactEmail: string;
   },
 ) {
@@ -601,7 +601,7 @@ async function ensureBurnerBio(
         bio: fields.bio,
         skills: fields.skills,
         firstTime: fields.firstTime,
-        previousAfrikaburns: fields.previousAfrikaburns,
+        attendedYears: fields.attendedYears,
         contactEmail: fields.contactEmail,
         privacyFlags: defaultPrivacyFlags(),
         version: BURNER_BIO_VERSION,

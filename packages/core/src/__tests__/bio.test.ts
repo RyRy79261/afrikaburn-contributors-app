@@ -8,6 +8,7 @@ import {
   buildBurnerBioQuestionnaire,
   mapResponsesToBio,
   mapBioToResponses,
+  parseAttendedYears,
   isBioComplete,
   type BurnerBioFields,
 } from "../bio";
@@ -121,11 +122,69 @@ describe("bio questionnaire definition", () => {
     const q = buildBurnerBioQuestionnaire();
     const result = validateResponses(q, {
       displayName: "Dusty Prototype",
-      previousAfrikaburns: "3",
+      attendedYears: ["2019", "2024"],
       skills: ["build", "sound"],
       firstTime: false,
     });
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("attended-years validation (2020/21 rejection + range)", () => {
+  const q = buildBurnerBioQuestionnaire();
+
+  it("accepts real burn years and preserves them", () => {
+    const r = validateResponses(q, {
+      displayName: "Veteran",
+      attendedYears: ["2019", "2023", "2024", "2026"],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.responses.attendedYears).toEqual(["2019", "2023", "2024", "2026"]);
+  });
+
+  it("rejects 2020 and 2021 — no burn was held", () => {
+    for (const year of ["2020", "2021"]) {
+      const r = validateResponses(q, {
+        displayName: "X",
+        attendedYears: [year],
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.attendedYears).toBeDefined();
+    }
+  });
+
+  it("rejects years outside 2007–2026", () => {
+    for (const year of ["2006", "2027", "1999", "3000"]) {
+      const r = validateResponses(q, {
+        displayName: "X",
+        attendedYears: [year],
+      });
+      expect(r.ok).toBe(false);
+    }
+  });
+
+  it("de-duplicates repeated years", () => {
+    const r = validateResponses(q, {
+      displayName: "X",
+      attendedYears: ["2019", "2019", "2024"],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.responses.attendedYears).toEqual(["2019", "2024"]);
+  });
+});
+
+describe("parseAttendedYears", () => {
+  it("keeps valid years, drops invalid, dedupes and sorts ascending", () => {
+    expect(
+      parseAttendedYears(["2024", "2019", "2019", "2020", "1990", "2027", "2026"]),
+    ).toEqual([2019, 2024, 2026]);
+  });
+
+  it("accepts numeric input and returns [] for junk", () => {
+    expect(parseAttendedYears([2019, 2023])).toEqual([2019, 2023]);
+    expect(parseAttendedYears([2020, 2021])).toEqual([]); // no-burn years dropped
+    expect(parseAttendedYears(null)).toEqual([]);
+    expect(parseAttendedYears("2019")).toEqual([]);
   });
 });
 
@@ -137,15 +196,14 @@ describe("bio response ⇄ column mapping", () => {
       homeCity: "Cape Town",
       bio: "Second-year builder.",
       skills: ["build", "welding"],
-      previousAfrikaburns: 2,
+      attendedYears: [2019, 2024],
       firstTime: false,
       contactEmail: "ember@example.com",
-      phone: "+27 82 555 1234",
-      emergencyContact: {
-        name: "Sam Vale",
-        phone: "+27 82 555 9999",
-        relationship: "sibling",
-      },
+      phone: "+27825551234",
+      onsiteContactName: "Sam Vale",
+      onsiteContactPhone: "+27825559999",
+      offsiteContactName: "Robin Vale",
+      offsiteContactPhone: "+27215550000",
       medicalNotes: "Bee-sting allergy.",
       idType: "sa_id",
       idNumber: "9001015800089",
@@ -155,10 +213,13 @@ describe("bio response ⇄ column mapping", () => {
     expect(back).toEqual(fields);
   });
 
-  it("collapses an empty emergency contact to null", () => {
+  it("collapses empty emergency contacts to null and empty years to []", () => {
     const back = mapResponsesToBio({ displayName: "Solo" });
-    expect(back.emergencyContact).toBeNull();
-    expect(back.previousAfrikaburns).toBe(0);
+    expect(back.onsiteContactName).toBeNull();
+    expect(back.onsiteContactPhone).toBeNull();
+    expect(back.offsiteContactName).toBeNull();
+    expect(back.offsiteContactPhone).toBeNull();
+    expect(back.attendedYears).toEqual([]);
     expect(isBioComplete(back)).toBe(true);
   });
 

@@ -6,7 +6,11 @@
 // top. The encrypted ID columns are produced here only as plaintext
 // (`idType`/`idNumber`); apps/web encrypts before storage.
 
-import type { Questionnaire, QuestionnaireResponses } from "@quagga/types";
+import {
+  isValidAttendedYear,
+  type Questionnaire,
+  type QuestionnaireResponses,
+} from "@quagga/types";
 import { HARD_LOCKED_PRIVATE_FIELDS, enforcePrivacyFlags } from "./privacy";
 
 /** Bump when the questionnaire SHAPE changes (a question added/removed or a
@@ -22,15 +26,18 @@ export interface BurnerBioFields {
   homeCity: string | null;
   bio: string | null;
   skills: string[];
-  previousAfrikaburns: number;
+  /** Specific AfrikaBurn years attended (valid range 2007–2026, never
+   * 2020/2021). Empty ⇒ first-timer / none recorded. */
+  attendedYears: number[];
   firstTime: boolean;
   contactEmail: string | null;
   phone: string | null;
-  emergencyContact: {
-    name: string;
-    phone: string;
-    relationship: string;
-  } | null;
+  // Two emergency contacts (on-site + off-site), each split into name + phone.
+  // All four are hard-locked always-private (see BIO_PRIVACY_FIELDS).
+  onsiteContactName: string | null;
+  onsiteContactPhone: string | null;
+  offsiteContactName: string | null;
+  offsiteContactPhone: string | null;
   medicalNotes: string | null;
   idType: "passport" | "sa_id" | null;
   idNumber: string | null;
@@ -62,8 +69,8 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
   { key: "bio", label: "About you", locked: false, defaultPublic: true },
   { key: "skills", label: "Skills", locked: false, defaultPublic: true },
   {
-    key: "previousAfrikaburns",
-    label: "Burn history",
+    key: "attendedYears",
+    label: "Years attended",
     locked: false,
     defaultPublic: true,
   },
@@ -77,8 +84,29 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
     lockReason: "Always private — never shown in the directory or to other camps.",
   },
   {
-    key: "emergencyContact",
-    label: "Emergency contact",
+    key: "onsiteContactName",
+    label: "On-site emergency contact — name",
+    locked: true,
+    defaultPublic: false,
+    lockReason: "Always private — held for safety teams only.",
+  },
+  {
+    key: "onsiteContactPhone",
+    label: "On-site emergency contact — phone",
+    locked: true,
+    defaultPublic: false,
+    lockReason: "Always private — held for safety teams only.",
+  },
+  {
+    key: "offsiteContactName",
+    label: "Off-site emergency contact — name",
+    locked: true,
+    defaultPublic: false,
+    lockReason: "Always private — held for safety teams only.",
+  },
+  {
+    key: "offsiteContactPhone",
+    label: "Off-site emergency contact — phone",
     locked: true,
     defaultPublic: false,
     lockReason: "Always private — held for safety teams only.",
@@ -159,18 +187,21 @@ export function publicMemberName(
   return trimmed ? trimmed : "Unnamed burner";
 }
 
-// --- Previous-burn buckets ----------------------------------------------
-// The integer column is captured via a single_select; values are the stored
-// integer as a string so the mapping round-trips losslessly.
-const PREVIOUS_BURN_OPTIONS = [
-  { value: "0", label: "None — this is my first" },
-  { value: "1", label: "1" },
-  { value: "2", label: "2" },
-  { value: "3", label: "3" },
-  { value: "4", label: "4" },
-  { value: "5", label: "5" },
-  { value: "6", label: "6 or more" },
-] as const;
+// --- Attended years -----------------------------------------------------
+
+/** Coerce raw response data into a sorted, de-duplicated list of valid
+ * AfrikaBurn years — silently drops anything out of range or in a no-burn
+ * year (2020/2021). Accepts year strings or numbers. */
+export function parseAttendedYears(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const years = new Set<number>();
+  for (const v of raw) {
+    const n =
+      typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+    if (isValidAttendedYear(n)) years.add(n);
+  }
+  return [...years].sort((a, b) => a - b);
+}
 
 const SKILL_OPTIONS = [
   { value: "build", label: "Build / carpentry" },
@@ -267,11 +298,12 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
             required: false,
           },
           {
-            id: "previousAfrikaburns",
-            kind: "single_select",
-            prompt: "How many AfrikaBurns have you attended?",
-            options: [...PREVIOUS_BURN_OPTIONS],
-            required: true,
+            id: "attendedYears",
+            kind: "years",
+            prompt: "Which AfrikaBurns have you attended?",
+            helper:
+              "Tap every year you were on the playa. 2020 and 2021 had no burn.",
+            required: false,
           },
         ],
       },
@@ -300,28 +332,36 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
       {
         id: "emergency",
         kind: "questions",
-        title: "Emergency contact",
-        subtitle: "Always private — held for safety teams only, never shown to camps.",
+        title: "Emergency contacts",
+        subtitle:
+          "Always private — held for safety teams only, never shown to camps. Give us one person on-site and one off-site.",
         questions: [
           {
-            id: "emergency.name",
+            id: "onsite.name",
             kind: "short_text",
-            prompt: "Emergency contact name",
+            prompt: "On-site contact name",
+            helper: "Someone at the burn we can reach if needed.",
             maxLength: 120,
             required: false,
           },
           {
-            id: "emergency.phone",
+            id: "onsite.phone",
             kind: "phone",
-            prompt: "Emergency contact phone",
+            prompt: "On-site contact phone",
             required: false,
           },
           {
-            id: "emergency.relationship",
+            id: "offsite.name",
             kind: "short_text",
-            prompt: "Relationship to you",
-            helper: "e.g. partner, sibling, friend.",
-            maxLength: 60,
+            prompt: "Off-site contact name",
+            helper: "Someone not at the burn — next of kin or similar.",
+            maxLength: 120,
+            required: false,
+          },
+          {
+            id: "offsite.phone",
+            kind: "phone",
+            prompt: "Off-site contact phone",
             required: false,
           },
           {
@@ -379,24 +419,6 @@ export function mapResponsesToBio(
     ? skillsRaw.filter((s): s is string => typeof s === "string")
     : [];
 
-  const prevRaw = responses["previousAfrikaburns"];
-  const previousAfrikaburns =
-    typeof prevRaw === "string" && /^\d+$/.test(prevRaw)
-      ? Number.parseInt(prevRaw, 10)
-      : 0;
-
-  const emName = asString(responses["emergency.name"]);
-  const emPhone = asString(responses["emergency.phone"]);
-  const emRel = asString(responses["emergency.relationship"]);
-  const emergencyContact =
-    emName || emPhone || emRel
-      ? {
-          name: emName ?? "",
-          phone: emPhone ?? "",
-          relationship: emRel ?? "",
-        }
-      : null;
-
   const idTypeRaw = responses["id.type"];
   const idType =
     idTypeRaw === "passport" || idTypeRaw === "sa_id" ? idTypeRaw : null;
@@ -407,11 +429,14 @@ export function mapResponsesToBio(
     homeCity: asString(responses["homeCity"]),
     bio: asString(responses["bio"]),
     skills,
-    previousAfrikaburns,
+    attendedYears: parseAttendedYears(responses["attendedYears"]),
     firstTime: responses["firstTime"] === true,
     contactEmail: asString(responses["contactEmail"]),
     phone: asString(responses["phone"]),
-    emergencyContact,
+    onsiteContactName: asString(responses["onsite.name"]),
+    onsiteContactPhone: asString(responses["onsite.phone"]),
+    offsiteContactName: asString(responses["offsite.name"]),
+    offsiteContactPhone: asString(responses["offsite.phone"]),
     medicalNotes: asString(responses["medicalNotes"]),
     idType,
     idNumber: asString(responses["id.number"]),
@@ -429,16 +454,16 @@ export function mapBioToResponses(
   if (fields.homeCity) r["homeCity"] = fields.homeCity;
   if (fields.bio) r["bio"] = fields.bio;
   if (fields.skills && fields.skills.length > 0) r["skills"] = fields.skills;
-  if (typeof fields.previousAfrikaburns === "number")
-    r["previousAfrikaburns"] = String(Math.min(fields.previousAfrikaburns, 6));
+  if (fields.attendedYears && fields.attendedYears.length > 0)
+    r["attendedYears"] = fields.attendedYears.map(String);
   if (typeof fields.firstTime === "boolean") r["firstTime"] = fields.firstTime;
   if (fields.contactEmail) r["contactEmail"] = fields.contactEmail;
   if (fields.phone) r["phone"] = fields.phone;
-  if (fields.emergencyContact) {
-    r["emergency.name"] = fields.emergencyContact.name;
-    r["emergency.phone"] = fields.emergencyContact.phone;
-    r["emergency.relationship"] = fields.emergencyContact.relationship;
-  }
+  if (fields.onsiteContactName) r["onsite.name"] = fields.onsiteContactName;
+  if (fields.onsiteContactPhone) r["onsite.phone"] = fields.onsiteContactPhone;
+  if (fields.offsiteContactName) r["offsite.name"] = fields.offsiteContactName;
+  if (fields.offsiteContactPhone)
+    r["offsite.phone"] = fields.offsiteContactPhone;
   if (fields.medicalNotes) r["medicalNotes"] = fields.medicalNotes;
   if (fields.idType) r["id.type"] = fields.idType;
   if (fields.idNumber) r["id.number"] = fields.idNumber;

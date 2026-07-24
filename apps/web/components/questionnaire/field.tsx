@@ -2,9 +2,18 @@
 
 import * as React from "react";
 import { Check } from "lucide-react";
-import type { Question, QuestionnaireResponseValue } from "@quagga/types";
+import {
+  attendedYearOptions,
+  type Question,
+  type QuestionnaireResponseValue,
+} from "@quagga/types";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
+import { PhoneInput } from "@quagga/ui/components/phone-input";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quagga/ui/components/toggle-group";
 import { cn } from "@quagga/ui/lib/utils";
 
 interface FieldProps {
@@ -64,15 +73,25 @@ function Control({
   switch (question.kind) {
     case "short_text":
     case "email":
-    case "phone":
       return (
         <Input
           id={question.id}
-          type={question.kind === "email" ? "email" : question.kind === "phone" ? "tel" : "text"}
+          type={question.kind === "email" ? "email" : "text"}
           value={typeof value === "string" ? value : ""}
           placeholder={"placeholder" in question ? question.placeholder : undefined}
           aria-describedby={describedBy}
           onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
+    case "phone":
+      return (
+        <PhoneInput
+          id={question.id}
+          value={typeof value === "string" ? value : ""}
+          placeholder={question.placeholder}
+          describedBy={describedBy}
+          onChange={(v) => onChange(v)}
         />
       );
 
@@ -178,6 +197,41 @@ function Control({
             );
           })}
         </div>
+      );
+    }
+
+    case "years": {
+      const selected = Array.isArray(value) ? value.map((v) => String(v)) : [];
+      return (
+        <ToggleGroup
+          type="multiple"
+          variant="outline"
+          size="sm"
+          value={selected}
+          onValueChange={(vals) => onChange(vals)}
+          aria-describedby={describedBy}
+          className="justify-start"
+        >
+          {attendedYearOptions().map(({ year, disabled }) => (
+            <ToggleGroupItem
+              key={year}
+              value={String(year)}
+              disabled={disabled}
+              aria-label={
+                disabled ? `${year} — no burn was held` : `${year}`
+              }
+              title={disabled ? "No burn was held this year" : undefined}
+              className="h-auto flex-col gap-0 py-1.5"
+            >
+              <span className="text-sm tabular-nums">{year}</span>
+              {disabled && (
+                <span className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
+                  no burn
+                </span>
+              )}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       );
     }
   }

@@ -40,10 +40,12 @@ function displayValue(fields: BurnerBioFields, key: string): string | null {
       return fields.bio;
     case "skills":
       return fields.skills.length ? fields.skills.join(", ") : null;
-    case "previousAfrikaburns":
-      return fields.firstTime
-        ? "First AfrikaBurn"
-        : `${fields.previousAfrikaburns} previous`;
+    case "attendedYears":
+      return fields.attendedYears.length
+        ? fields.attendedYears.join(", ")
+        : fields.firstTime
+          ? "First AfrikaBurn"
+          : null;
     case "firstTime":
       return fields.firstTime ? "Yes" : "No";
     case "contactEmail":

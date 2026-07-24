@@ -5,13 +5,17 @@
 /**
  * Field keys (as they appear in `burner_bios.privacy_flags`) that are locked
  * private. Maps the build-spec's classes: id_number → `saId`, passport_number →
- * `passport`, plus `phone`, `emergencyContact`, and `medical`.
+ * `passport`, plus `phone`, both emergency contacts (on-site + off-site, each
+ * split into name + phone), and `medical`.
  */
 export const HARD_LOCKED_PRIVATE_FIELDS = [
   "saId",
   "passport",
   "phone",
-  "emergencyContact",
+  "onsiteContactName",
+  "onsiteContactPhone",
+  "offsiteContactName",
+  "offsiteContactPhone",
   "medical",
 ] as const;
 

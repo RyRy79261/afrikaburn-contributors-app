@@ -160,10 +160,11 @@ export const editions = pgTable("editions", {
 // One row per user × edition (carried forward year to year by confirm-and-copy,
 // wave 2+). Field set mirrored from Camp 404's burner profile. `privacy_flags`
 // is a per-field public/private map; the HARD-LOCKED always-private fields
-// (id_number, passport_number, phone, emergency contact, medical) can NEVER be
-// set public — enforced in @quagga/core (privacy hard-lock). SA ID / passport
-// are pgcrypto-encrypted (never stored plaintext); encryption happens in route
-// handlers via @quagga/db/crypto.
+// (id_number, passport_number, phone, both emergency contacts, medical) can
+// NEVER be set public — enforced in @quagga/core (privacy hard-lock). SA ID /
+// passport are pgcrypto-encrypted (never stored plaintext); encryption happens
+// in route handlers via @quagga/db/crypto. `attended_years` is the set of
+// specific AfrikaBurn years attended (2007–2026, never 2020/2021).
 
 export const burnerBios = pgTable(
   "burner_bios",
@@ -182,19 +183,25 @@ export const burnerBios = pgTable(
     homeCity: text("home_city"),
     bio: text("bio"),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
-    previousAfrikaburns: integer("previous_afrikaburns").notNull().default(0),
+    // Specific AfrikaBurn years attended (2007–2026, never 2020/2021 — no burn).
+    attendedYears: jsonb("attended_years")
+      .$type<number[]>()
+      .notNull()
+      .default([]),
     firstTime: boolean("first_time").notNull().default(false),
 
-    // Contact — `email` is display/contact; `phone` is HARD-LOCKED private.
+    // Contact — `email` is display/contact; `phone` is HARD-LOCKED private
+    // (stored E.164).
     contactEmail: text("contact_email"),
     phone: text("phone"),
 
-    // HARD-LOCKED private. Emergency contact stored as a small object.
-    emergencyContact: jsonb("emergency_contact").$type<{
-      name: string;
-      phone: string;
-      relationship: string;
-    } | null>(),
+    // HARD-LOCKED private. Two emergency contacts (on-site + off-site), each
+    // split into name + phone (E.164). Stored plaintext, like the other
+    // contact fields — only id/passport are pgcrypto-encrypted.
+    onsiteContactName: text("onsite_contact_name"),
+    onsiteContactPhone: text("onsite_contact_phone"),
+    offsiteContactName: text("offsite_contact_name"),
+    offsiteContactPhone: text("offsite_contact_phone"),
     medicalNotes: text("medical_notes"),
 
     // HARD-LOCKED private + pgcrypto-encrypted (base64 ciphertext columns).

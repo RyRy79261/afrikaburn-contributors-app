@@ -99,6 +99,48 @@ export const PhoneQuestion = z.object({
 });
 export type PhoneQuestion = z.infer<typeof PhoneQuestion>;
 
+// --- Attended-years (Burner Bio) ----------------------------------------
+// AfrikaBurn has run every year from 2007 to 2026 EXCEPT 2020 and 2021 (no
+// burn — the pandemic years). The bio's years-attended field is a multi-select
+// over this range; 2020/2021 are offered disabled in the UI and REJECTED here
+// at the boundary. These live in @quagga/types because the questionnaire
+// validator (below) is the enforcement point; @quagga/core reuses them.
+export const ATTENDED_YEAR_MIN = 2007;
+export const ATTENDED_YEAR_MAX = 2026;
+export const NO_BURN_YEARS: readonly number[] = [2020, 2021];
+
+/** True when `year` is a real AfrikaBurn edition year (in range, burn held). */
+export function isValidAttendedYear(year: number): boolean {
+  return (
+    Number.isInteger(year) &&
+    year >= ATTENDED_YEAR_MIN &&
+    year <= ATTENDED_YEAR_MAX &&
+    !NO_BURN_YEARS.includes(year)
+  );
+}
+
+/** Newest-first option list for the years-attended toggle grid. Disabled
+ * entries (2020/2021) render with a "no burn" hint. */
+export function attendedYearOptions(): { year: number; disabled: boolean }[] {
+  const out: { year: number; disabled: boolean }[] = [];
+  for (let y = ATTENDED_YEAR_MAX; y >= ATTENDED_YEAR_MIN; y--) {
+    out.push({ year: y, disabled: NO_BURN_YEARS.includes(y) });
+  }
+  return out;
+}
+
+// Multi-select of specific AfrikaBurn years attended. The response value is an
+// array of year strings (fitting QuestionnaireResponseValue's `string[]`);
+// @quagga/core maps it to the integer[] `attended_years` column.
+export const YearsQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("years"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(false),
+});
+export type YearsQuestion = z.infer<typeof YearsQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SingleSelectQuestion,
   MultiSelectQuestion,
@@ -108,6 +150,7 @@ export const Question = z.discriminatedUnion("kind", [
   BooleanQuestion,
   EmailQuestion,
   PhoneQuestion,
+  YearsQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -266,6 +309,23 @@ export function validateOne(
       if (q.required && filtered.length === 0)
         return { ok: false, error: "Pick at least one option" };
       return { ok: true, value: filtered };
+    }
+    case "years": {
+      if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string"))
+        return { ok: false, error: "Expected a list of years" };
+      const seen = new Set<string>();
+      const years: string[] = [];
+      for (const s of raw as string[]) {
+        if (!/^\d{4}$/.test(s) || !isValidAttendedYear(Number(s)))
+          return { ok: false, error: `${s} isn't a valid AfrikaBurn year` };
+        if (!seen.has(s)) {
+          seen.add(s);
+          years.push(s);
+        }
+      }
+      if (q.required && years.length === 0)
+        return { ok: false, error: "Pick at least one year" };
+      return { ok: true, value: years };
     }
     case "short_text":
     case "long_text": {
