@@ -17,6 +17,7 @@ import type {
   QuestionnaireResponses,
   AudienceSpec,
   ProjectPermissions,
+  CampHistoryEntry,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). FROZEN per
@@ -248,6 +249,17 @@ export const burnerBios = pgTable(
     // HARD-LOCKED private + pgcrypto-encrypted (base64 ciphertext columns).
     saIdEncrypted: text("sa_id_encrypted"),
     passportEncrypted: text("passport_encrypted"),
+
+    // v3 additions (build-spec §"Burner Bio v3 additions"). All nullable, all
+    // self-promotional (never hard-locked). `about` is a "for the burns" bio;
+    // `camp_history` is a repeatable list of linked/free-text camps; the ranger
+    // trio is inquiry-framed interest, not a commitment.
+    about: text("about"),
+    campHistory: jsonb("camp_history").$type<CampHistoryEntry[]>(),
+    volunteeringInterests: jsonb("volunteering_interests").$type<string[]>(),
+    rangerTraining: boolean("ranger_training"),
+    rangerCurious: boolean("ranger_curious"),
+    greenDotTraining: boolean("green_dot_training"),
 
     // Per-field public/private map, e.g. { "displayName": true, "bio": true }.
     // Hard-locked fields are force-private regardless of what's stored here.

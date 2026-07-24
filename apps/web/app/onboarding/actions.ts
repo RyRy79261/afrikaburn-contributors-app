@@ -14,6 +14,7 @@ export async function saveOnboardingBioAction(
   responses: unknown,
   privacyFlags: unknown,
   final: boolean,
+  extras?: unknown,
 ): Promise<SaveResult> {
   const user = await requireCampUser();
   const edition = await getActiveEdition();
@@ -26,6 +27,7 @@ export async function saveOnboardingBioAction(
     editionId: edition.id,
     rawResponses: responses,
     rawPrivacyFlags: flags.success && flags.data ? flags.data : undefined,
+    rawExtras: extras,
     final: Boolean(final),
   });
 }

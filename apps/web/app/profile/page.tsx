@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { KeyRound, Pencil } from "lucide-react";
+import { KeyRound, Pencil, ShieldCheck, Tent } from "lucide-react";
 import {
   BIO_PRIVACY_FIELDS,
   buildBurnerBioQuestionnaire,
+  type BioExtras,
   type BurnerBioFields,
 } from "@quagga/core";
+import { volunteerPortfolioLabel } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -20,15 +22,22 @@ import { ensureCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio, getKeyFingerprint } from "@/lib/bio-store";
+import { resolveCampHistoryDisplay } from "@/lib/groups-store";
+import { searchCampsAction } from "@/lib/camp-search-action";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { PrivacyForm } from "@/components/privacy-form";
 import { QuestionnaireRunner } from "@/components/questionnaire/runner";
+import { toBioExtrasState } from "@/components/questionnaire/extras-state";
 import { savePrivacyFlagsAction, updateBioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-function displayValue(fields: BurnerBioFields, key: string): string | null {
+function displayValue(
+  fields: BurnerBioFields,
+  extras: BioExtras,
+  key: string,
+): string | null {
   switch (key) {
     case "displayName":
       return fields.displayName;
@@ -50,6 +59,24 @@ function displayValue(fields: BurnerBioFields, key: string): string | null {
       return fields.firstTime ? "Yes" : "No";
     case "contactEmail":
       return fields.contactEmail;
+    case "about":
+      return extras.about;
+    case "campHistory":
+      return extras.campHistory.length
+        ? `${extras.campHistory.length} camp${extras.campHistory.length === 1 ? "" : "s"}`
+        : null;
+    case "volunteeringInterests": {
+      const labels = extras.volunteeringInterests.map(volunteerPortfolioLabel);
+      if (extras.volunteeringOther) labels.push(extras.volunteeringOther);
+      return labels.length ? labels.join(", ") : null;
+    }
+    case "ranger": {
+      const on: string[] = [];
+      if (extras.rangerTraining) on.push("Trained");
+      if (extras.rangerCurious) on.push("Curious");
+      if (extras.greenDotTraining) on.push("Green Dot");
+      return on.length ? on.join(", ") : null;
+    }
     default:
       return null;
   }
@@ -108,6 +135,10 @@ export default async function ProfilePage({
             questionnaire={buildBurnerBioQuestionnaire()}
             initialResponses={bio.responses}
             action={updateBioAction}
+            burns={{
+              initial: toBioExtrasState(bio.extras),
+              searchCamps: searchCampsAction,
+            }}
             submitLabel="Save changes"
             redirectTo="/profile"
           />
@@ -115,6 +146,17 @@ export default async function ProfilePage({
       </AppShell>
     );
   }
+
+  const extras = bio.extras;
+  const campHistory = await resolveCampHistoryDisplay(
+    extras.campHistory,
+    edition.id,
+  );
+  const volunteeringLabels = extras.volunteeringInterests.map(
+    volunteerPortfolioLabel,
+  );
+  const hasRanger =
+    extras.rangerTraining || extras.rangerCurious || extras.greenDotTraining;
 
   return (
     <AppShell>
@@ -154,6 +196,101 @@ export default async function ProfilePage({
           </Card>
         )}
 
+        {extras.about && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">For the burns</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {extras.about}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {campHistory.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Tent className="h-4 w-4 text-accent" aria-hidden />
+                Camp history
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col divide-y divide-border">
+                {campHistory.map((entry, i) => (
+                  <li
+                    key={`${entry.label}-${i}`}
+                    className="flex items-center justify-between gap-3 py-2.5"
+                  >
+                    <span className="min-w-0 truncate text-sm">
+                      {entry.kind === "linked" && entry.slug ? (
+                        <Link
+                          href={`/camps/${entry.slug}`}
+                          className="rounded-sm font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {entry.label}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{entry.label}</span>
+                      )}
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        {entry.event ?? "AfrikaBurn"}
+                        {entry.years ? ` · ${entry.years}` : ""}
+                      </span>
+                    </span>
+                    {entry.kind === "linked" && (
+                      <Badge variant="secondary">Linked</Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        {(volunteeringLabels.length > 0 || extras.volunteeringOther) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Volunteering interests</CardTitle>
+              <CardDescription>An interest, not a commitment.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-1.5">
+              {volunteeringLabels.map((label) => (
+                <Badge key={label} variant="secondary">
+                  {label}
+                </Badge>
+              ))}
+              {extras.volunteeringOther && (
+                <Badge variant="outline">{extras.volunteeringOther}</Badge>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {hasRanger && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
+                Rangers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-1.5">
+              {extras.rangerTraining && (
+                <Badge variant="success">Dust Ranger trained</Badge>
+              )}
+              {extras.rangerCurious && (
+                <Badge variant="secondary">Curious about shifts</Badge>
+              )}
+              {extras.greenDotTraining && (
+                <Badge variant="success">Green Dot trained</Badge>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Details</CardTitle>
@@ -166,7 +303,7 @@ export default async function ProfilePage({
               {BIO_PRIVACY_FIELDS.map((field) => {
                 const value = field.locked
                   ? null
-                  : displayValue(bio.fields, field.key);
+                  : displayValue(bio.fields, extras, field.key);
                 const isPublic = !field.locked && bio.privacyFlags[field.key];
                 return (
                   <div

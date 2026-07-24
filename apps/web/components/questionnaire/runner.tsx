@@ -13,6 +13,11 @@ import type { BioPrivacyField } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { PrivacyToggles } from "../privacy-toggles";
 import { QuestionField } from "./field";
+import {
+  BurnsAndVolunteeringStep,
+  type BioExtrasState,
+} from "./burns-step";
+import type { CampSearchResult } from "@/lib/groups-store";
 
 const FORM_ERROR_KEY = "_form";
 const SAVE_FAILED =
@@ -22,6 +27,7 @@ export type RunnerAction = (
   responses: QuestionnaireResponses,
   privacyFlags: Record<string, boolean> | null,
   final: boolean,
+  extras?: BioExtrasState | null,
 ) => Promise<SaveResult>;
 
 interface RunnerProps {
@@ -33,6 +39,12 @@ interface RunnerProps {
     fields: readonly BioPrivacyField[];
     initialFlags: Record<string, boolean>;
   };
+  /** When provided, a bespoke "Your burns & volunteering" step is inserted after
+   * the questionnaire pages and before the privacy step (build-spec v3). */
+  burns?: {
+    initial: BioExtrasState;
+    searchCamps: (query: string) => Promise<CampSearchResult[]>;
+  };
   submitLabel?: string;
   /** Persist on every Next (default false — persist only on final submit). */
   persistProgress?: boolean;
@@ -42,6 +54,7 @@ interface RunnerProps {
 
 type Step =
   | { kind: "page"; page: QuestionnairePage }
+  | { kind: "burns" }
   | { kind: "privacy" };
 
 export function QuestionnaireRunner({
@@ -49,6 +62,7 @@ export function QuestionnaireRunner({
   initialResponses,
   action,
   privacy,
+  burns,
   submitLabel = "Finish",
   persistProgress = false,
   redirectTo,
@@ -60,6 +74,9 @@ export function QuestionnaireRunner({
   const [flags, setFlags] = React.useState<Record<string, boolean>>(
     privacy?.initialFlags ?? {},
   );
+  const [extras, setExtras] = React.useState<BioExtrasState | null>(
+    burns?.initial ?? null,
+  );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isPending, startTransition] = React.useTransition();
 
@@ -68,9 +85,10 @@ export function QuestionnaireRunner({
       kind: "page" as const,
       page,
     }));
+    if (burns) s.push({ kind: "burns" });
     if (privacy) s.push({ kind: "privacy" });
     return s;
-  }, [questionnaire, privacy]);
+  }, [questionnaire, privacy, burns]);
 
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
@@ -105,7 +123,12 @@ export function QuestionnaireRunner({
   function persist(final: boolean, onOk: () => void) {
     startTransition(async () => {
       try {
-        const result = await action(responses, privacy ? flags : null, final);
+        const result = await action(
+          responses,
+          privacy ? flags : null,
+          final,
+          burns ? extras : undefined,
+        );
         if (!result.ok) {
           setErrors(result.errors);
           return;
@@ -152,7 +175,13 @@ export function QuestionnaireRunner({
         </div>
       </div>
 
-      {step.kind === "privacy" && privacy ? (
+      {step.kind === "burns" && burns ? (
+        <BurnsAndVolunteeringStep
+          value={extras ?? burns.initial}
+          onChange={setExtras}
+          searchCamps={burns.searchCamps}
+        />
+      ) : step.kind === "privacy" && privacy ? (
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-lg font-semibold">Privacy</h2>

@@ -12,6 +12,10 @@ import {
   mapBioToResponses,
   parseAttendedYears,
   isBioComplete,
+  emptyBioExtras,
+  parseVolunteering,
+  serializeVolunteering,
+  type BioExtras,
   type BurnerBioFields,
 } from "../bio";
 import {
@@ -19,7 +23,13 @@ import {
   enforcePrivacyFlags,
   privacyViolations,
 } from "../privacy";
-import { validateResponses } from "@quagga/types";
+import {
+  VOLUNTEER_PORTFOLIOS,
+  isVolunteerPortfolioKey,
+  volunteerPortfolioLabel,
+  CampHistoryEntry,
+  validateResponses,
+} from "@quagga/types";
 
 describe("bio privacy registry ↔ hard-lock", () => {
   it("marks exactly the hard-locked classes as locked", () => {
@@ -194,6 +204,13 @@ describe("publicBioView (third-party profile projection)", () => {
       attendedYears: [],
       firstTime: null,
       contactEmail: null,
+      about: null,
+      campHistory: [],
+      volunteeringInterests: [],
+      volunteeringOther: null,
+      rangerTraining: false,
+      rangerCurious: false,
+      greenDotTraining: false,
     });
   });
 
@@ -339,5 +356,204 @@ describe("bio response ⇄ column mapping", () => {
   it("treats a missing display name as incomplete", () => {
     expect(isBioComplete({ displayName: null })).toBe(false);
     expect(isBioComplete({ displayName: "  " })).toBe(false);
+  });
+});
+
+// --- Burner Bio v3 additions --------------------------------------------
+
+describe("volunteer portfolios (v3)", () => {
+  it("exposes exactly the 15 corpus portfolios with unique keys", () => {
+    expect(VOLUNTEER_PORTFOLIOS).toHaveLength(15);
+    const keys = VOLUNTEER_PORTFOLIOS.map((p) => p.key);
+    expect(new Set(keys).size).toBe(15);
+  });
+
+  it("validates portfolio keys and resolves labels", () => {
+    expect(isVolunteerPortfolioKey("rangers")).toBe(true);
+    expect(isVolunteerPortfolioKey("kitchen")).toBe(true);
+    expect(isVolunteerPortfolioKey("not_a_portfolio")).toBe(false);
+    expect(volunteerPortfolioLabel("rangers")).toBe("Rangers");
+    expect(volunteerPortfolioLabel("die_hek")).toBe("Die Hek (Gate)");
+    // Unknown keys fall back to the key itself.
+    expect(volunteerPortfolioLabel("mystery")).toBe("mystery");
+  });
+});
+
+describe("volunteering serialize ⇄ parse (keys + free-text other)", () => {
+  it("round-trips known keys and a free-text other", () => {
+    const stored = serializeVolunteering(["rangers", "kitchen"], "Solar crew");
+    expect(stored).toEqual(["rangers", "kitchen", "Solar crew"]);
+    const parsed = parseVolunteering(stored);
+    expect(parsed.interests).toEqual(["rangers", "kitchen"]);
+    expect(parsed.other).toBe("Solar crew");
+  });
+
+  it("drops unknown keys from the interest list and tolerates junk input", () => {
+    expect(serializeVolunteering(["rangers", "bogus"], null)).toEqual([
+      "rangers",
+    ]);
+    expect(parseVolunteering(null)).toEqual({ interests: [], other: null });
+    expect(parseVolunteering(["kitchen"])).toEqual({
+      interests: ["kitchen"],
+      other: null,
+    });
+  });
+});
+
+describe("camp-history entry shapes (v3 Zod)", () => {
+  const uuid = "11111111-1111-4111-8111-111111111111";
+
+  it("accepts a linked entry with a groupId", () => {
+    const r = CampHistoryEntry.safeParse({
+      kind: "linked",
+      groupId: uuid,
+      label: "Mad Hatters",
+      event: "AfrikaBurn",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts a free-text entry with no groupId", () => {
+    const r = CampHistoryEntry.safeParse({
+      kind: "freetext",
+      label: "Camp Sparkle Donkey",
+      event: "Burning Man",
+      years: "2018",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects a linked entry missing its groupId", () => {
+    expect(
+      CampHistoryEntry.safeParse({ kind: "linked", label: "Orphan" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a free-text entry that carries a groupId", () => {
+    expect(
+      CampHistoryEntry.safeParse({
+        kind: "freetext",
+        groupId: uuid,
+        label: "Sneaky",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a non-empty label", () => {
+    expect(
+      CampHistoryEntry.safeParse({ kind: "freetext", label: "" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("v3 privacy registry (self-promotional — never hard-locked)", () => {
+  const v3Keys = ["about", "campHistory", "volunteeringInterests", "ranger"];
+
+  it("registers each v3 field as unlocked and default-public", () => {
+    for (const key of v3Keys) {
+      const field = BIO_PRIVACY_FIELDS.find((f) => f.key === key);
+      expect(field, `missing registry entry for ${key}`).toBeDefined();
+      expect(field?.locked).toBe(false);
+      expect(field?.defaultPublic).toBe(true);
+    }
+  });
+
+  it("keeps the hard-locked set unchanged after v3 was added", () => {
+    const locked = BIO_PRIVACY_FIELDS.filter((f) => f.locked).map((f) => f.key);
+    expect(locked.sort()).toEqual([...HARD_LOCKED_PRIVATE_FIELDS].sort());
+  });
+
+  it("defaults every v3 field to public", () => {
+    const flags = defaultPrivacyFlags();
+    for (const key of v3Keys) expect(flags[key]).toBe(true);
+  });
+});
+
+describe("publicBioView projects v3 fields (extras + flags)", () => {
+  const FIELDS: BurnerBioFields = {
+    displayName: "Alice",
+    legalName: null,
+    homeCity: null,
+    bio: null,
+    skills: [],
+    attendedYears: [],
+    firstTime: false,
+    contactEmail: null,
+    phone: null,
+    onsiteContactName: null,
+    onsiteContactPhone: null,
+    offsiteContactName: null,
+    offsiteContactPhone: null,
+    medicalNotes: null,
+    idType: null,
+    idNumber: null,
+  };
+  const EXTRAS: BioExtras = {
+    about: "Six burns running.",
+    campHistory: [{ kind: "freetext", label: "Camp Sparkle Donkey" }],
+    volunteeringInterests: ["rangers", "kitchen"],
+    volunteeringOther: "Solar crew",
+    rangerTraining: false,
+    rangerCurious: true,
+    greenDotTraining: false,
+  };
+
+  it("passes public v3 fields through when flagged public", () => {
+    const view = publicBioView(
+      FIELDS,
+      {
+        about: true,
+        campHistory: true,
+        volunteeringInterests: true,
+        ranger: true,
+      },
+      EXTRAS,
+    );
+    expect(view.about).toBe("Six burns running.");
+    expect(view.campHistory).toHaveLength(1);
+    expect(view.volunteeringInterests).toEqual(["rangers", "kitchen"]);
+    expect(view.volunteeringOther).toBe("Solar crew");
+    expect(view.rangerCurious).toBe(true);
+  });
+
+  it("withholds each v3 field once its flag is private", () => {
+    const view = publicBioView(
+      FIELDS,
+      {
+        about: false,
+        campHistory: false,
+        volunteeringInterests: false,
+        ranger: false,
+      },
+      EXTRAS,
+    );
+    expect(view.about).toBeNull();
+    expect(view.campHistory).toEqual([]);
+    expect(view.volunteeringInterests).toEqual([]);
+    expect(view.volunteeringOther).toBeNull();
+    expect(view.rangerCurious).toBe(false);
+    expect(view.rangerTraining).toBe(false);
+    expect(view.greenDotTraining).toBe(false);
+  });
+
+  it("the single 'ranger' flag governs all three ranger booleans", () => {
+    const extras: BioExtras = {
+      ...emptyBioExtras(),
+      rangerTraining: true,
+      rangerCurious: true,
+      greenDotTraining: true,
+    };
+    const shown = publicBioView(FIELDS, { ranger: true }, extras);
+    expect(shown.rangerTraining).toBe(true);
+    expect(shown.greenDotTraining).toBe(true);
+    const hidden = publicBioView(FIELDS, { ranger: false }, extras);
+    expect(hidden.rangerTraining).toBe(false);
+    expect(hidden.greenDotTraining).toBe(false);
+  });
+
+  it("defaults to empty extras when none are supplied (back-compat)", () => {
+    const view = publicBioView(FIELDS, { about: true });
+    expect(view.about).toBeNull();
+    expect(view.campHistory).toEqual([]);
   });
 });

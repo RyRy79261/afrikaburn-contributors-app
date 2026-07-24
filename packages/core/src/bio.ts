@@ -8,6 +8,8 @@
 
 import {
   isValidAttendedYear,
+  isVolunteerPortfolioKey,
+  type CampHistoryEntry,
   type Questionnaire,
   type QuestionnaireResponses,
 } from "@quagga/types";
@@ -47,6 +49,74 @@ export interface BurnerBioFields {
   idNumber: string | null;
 }
 
+/** The Burner Bio v3 "extras" (build-spec §"Burner Bio v3 additions"): self-
+ * promotional data that lives in dedicated `burner_bios` columns but does NOT
+ * flow through the questionnaire-response map (camp history is object-shaped and
+ * cannot fit `QuestionnaireResponseValue`). Threaded alongside the responses on
+ * save + load. None of these fields is ever hard-locked. */
+export interface BioExtras {
+  /** Free-text bio "for the burns" (soft ~150-word cap, counted in the UI). */
+  about: string | null;
+  campHistory: CampHistoryEntry[];
+  /** Selected portfolio KEYS only (the free-text "other" lives separately). */
+  volunteeringInterests: string[];
+  volunteeringOther: string | null;
+  rangerTraining: boolean;
+  rangerCurious: boolean;
+  greenDotTraining: boolean;
+}
+
+/** A fresh, empty extras record — the default for a bio with no v3 data yet. */
+export function emptyBioExtras(): BioExtras {
+  return {
+    about: null,
+    campHistory: [],
+    volunteeringInterests: [],
+    volunteeringOther: null,
+    rangerTraining: false,
+    rangerCurious: false,
+    greenDotTraining: false,
+  };
+}
+
+/** Soft word cap on the v3 `about` field — a UI counter hint, not a hard limit. */
+export const ABOUT_SOFT_WORD_CAP = 150;
+
+/**
+ * Serialize the volunteering selection into the single jsonb string[] column:
+ * the known portfolio keys, followed by the free-text "other" (if any). The
+ * inverse is `parseVolunteering`.
+ */
+export function serializeVolunteering(
+  interests: string[],
+  other: string | null | undefined,
+): string[] {
+  const keys = interests.filter(isVolunteerPortfolioKey);
+  const trimmed = other?.trim();
+  return trimmed ? [...keys, trimmed] : keys;
+}
+
+/**
+ * Split a stored volunteering string[] back into known portfolio keys and the
+ * free-text "other" (any non-key strings, joined). Round-trips
+ * `serializeVolunteering` for realistic data (free text never collides with an
+ * internal snake_case key).
+ */
+export function parseVolunteering(raw: string[] | null | undefined): {
+  interests: string[];
+  other: string | null;
+} {
+  const arr = Array.isArray(raw) ? raw : [];
+  const interests: string[] = [];
+  const others: string[] = [];
+  for (const v of arr) {
+    if (typeof v !== "string") continue;
+    if (isVolunteerPortfolioKey(v)) interests.push(v);
+    else if (v.trim()) others.push(v.trim());
+  }
+  return { interests, other: others.length ? others.join(", ") : null };
+}
+
 /** A single privacy-flaggable bio field surfaced in the onboarding + profile
  * toggle UI. `locked` fields render as a locked row and can never be public. */
 export interface BioPrivacyField {
@@ -80,6 +150,16 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
   },
   { key: "firstTime", label: "First-timer status", locked: false, defaultPublic: true },
   { key: "contactEmail", label: "Contact email", locked: false, defaultPublic: false },
+  // v3 additions — all self-promotional, default public, never hard-locked.
+  { key: "about", label: "Bio for the burns", locked: false, defaultPublic: true },
+  { key: "campHistory", label: "Camp history", locked: false, defaultPublic: true },
+  {
+    key: "volunteeringInterests",
+    label: "Volunteering interests",
+    locked: false,
+    defaultPublic: true,
+  },
+  { key: "ranger", label: "Ranger interests", locked: false, defaultPublic: true },
   {
     key: "phone",
     label: "Phone number",
@@ -210,6 +290,16 @@ export interface PublicBioView {
   attendedYears: number[];
   firstTime: boolean | null;
   contactEmail: string | null;
+  // v3 additions (build-spec §"Burner Bio v3 additions"). Camp history is passed
+  // through raw here; whether a LINKED entry renders as a discoverable camp link
+  // is resolved downstream against registration status (free camps stay hidden).
+  about: string | null;
+  campHistory: CampHistoryEntry[];
+  volunteeringInterests: string[];
+  volunteeringOther: string | null;
+  rangerTraining: boolean;
+  rangerCurious: boolean;
+  greenDotTraining: boolean;
 }
 
 /**
@@ -223,9 +313,13 @@ export interface PublicBioView {
 export function publicBioView(
   fields: BurnerBioFields,
   privacyFlags: Record<string, boolean>,
+  extras: BioExtras = emptyBioExtras(),
 ): PublicBioView {
   const show = (key: string): boolean =>
     canBePublic(key) && privacyFlags[key] === true;
+
+  // The three ranger flags share one privacy toggle ("ranger").
+  const showRanger = show("ranger");
 
   return {
     displayName: show("displayName") ? fields.displayName : null,
@@ -236,6 +330,17 @@ export function publicBioView(
     attendedYears: show("attendedYears") ? fields.attendedYears : [],
     firstTime: show("firstTime") ? fields.firstTime : null,
     contactEmail: show("contactEmail") ? fields.contactEmail : null,
+    about: show("about") ? extras.about : null,
+    campHistory: show("campHistory") ? extras.campHistory : [],
+    volunteeringInterests: show("volunteeringInterests")
+      ? extras.volunteeringInterests
+      : [],
+    volunteeringOther: show("volunteeringInterests")
+      ? extras.volunteeringOther
+      : null,
+    rangerTraining: showRanger ? extras.rangerTraining : false,
+    rangerCurious: showRanger ? extras.rangerCurious : false,
+    greenDotTraining: showRanger ? extras.greenDotTraining : false,
   };
 }
 

@@ -5,3 +5,4 @@ export * from "./payments";
 export * from "./suppliers";
 export * from "./questionnaire";
 export * from "./audience";
+export * from "./bio";

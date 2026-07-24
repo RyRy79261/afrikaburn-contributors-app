@@ -1,20 +1,25 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   BURNER_BIO_VERSION,
   buildBurnerBioQuestionnaire,
   defaultPrivacyFlags,
   initialPrivacyFlags,
+  parseVolunteering,
   resolvePrivacyFlagsUpdate,
+  serializeVolunteering,
   isBioComplete,
   mapBioToResponses,
   mapResponsesToBio,
+  type BioExtras,
   type BurnerBioFields,
 } from "@quagga/core";
 import {
+  BioExtrasInput,
   validateResponses,
+  type CampHistoryEntry,
   type QuestionnaireResponses,
 } from "@quagga/types";
 import { db, schema } from "./db";
@@ -24,6 +29,8 @@ import { completeRequiredAction } from "./required-actions";
 
 export interface BioView {
   fields: BurnerBioFields;
+  /** v3 additions — carried alongside the questionnaire-mapped fields. */
+  extras: BioExtras;
   responses: QuestionnaireResponses;
   privacyFlags: Record<string, boolean>;
   completedAt: Date | null;
@@ -76,13 +83,59 @@ export async function getBio(
     idNumber,
   };
 
+  const volunteering = parseVolunteering(row.volunteeringInterests);
+  const extras: BioExtras = {
+    about: row.about,
+    campHistory: row.campHistory ?? [],
+    volunteeringInterests: volunteering.interests,
+    volunteeringOther: volunteering.other,
+    rangerTraining: row.rangerTraining ?? false,
+    rangerCurious: row.rangerCurious ?? false,
+    greenDotTraining: row.greenDotTraining ?? false,
+  };
+
   return {
     fields,
+    extras,
     responses: mapBioToResponses(fields),
     privacyFlags: { ...defaultPrivacyFlags(), ...row.privacyFlags },
     completedAt: row.completedAt,
     cryptoConfigured: isCryptoConfigured(),
   };
+}
+
+/**
+ * Validate the v3 camp-history entries at the write boundary (build-spec: linked
+ * entries must reference an existing group). A linked entry whose group is
+ * missing degrades gracefully to free text (its label survives); a valid linked
+ * entry has its label refreshed to the group's current name.
+ */
+async function resolveCampHistoryForWrite(
+  entries: CampHistoryEntry[],
+): Promise<CampHistoryEntry[]> {
+  const linkedIds = entries
+    .filter((e) => e.kind === "linked" && e.groupId)
+    .map((e) => e.groupId as string);
+  if (linkedIds.length === 0) return entries;
+
+  const rows = await db()
+    .select({ id: schema.groups.id, name: schema.groups.name })
+    .from(schema.groups)
+    .where(inArray(schema.groups.id, linkedIds));
+  const byId = new Map(rows.map((r) => [r.id, r.name]));
+
+  return entries.map((e) => {
+    if (e.kind !== "linked" || !e.groupId) return e;
+    const name = byId.get(e.groupId);
+    if (name) return { ...e, label: name };
+    // Stale link — keep the data as free text so nothing is lost.
+    return {
+      kind: "freetext" as const,
+      label: e.label,
+      ...(e.event ? { event: e.event } : {}),
+      ...(e.years ? { years: e.years } : {}),
+    };
+  });
 }
 
 export type SaveBioResult =
@@ -100,6 +153,8 @@ export async function saveBio(input: {
   editionId: string;
   rawResponses: unknown;
   rawPrivacyFlags?: Record<string, boolean>;
+  /** v3 extras. `undefined` ⇒ leave the stored v3 columns untouched. */
+  rawExtras?: unknown;
   final: boolean;
 }): Promise<SaveBioResult> {
   const questionnaire = buildBurnerBioQuestionnaire();
@@ -110,6 +165,38 @@ export async function saveBio(input: {
 
   if (input.final && !isBioComplete(fields)) {
     return { ok: false, errors: { displayName: "A display name is required." } };
+  }
+
+  // v3 extras — validated (Zod) at this boundary; camp-history linked entries
+  // are resolved against real groups. Omitted ⇒ the columns are left untouched
+  // (mirrors the privacy-flags "don't reset on a partial save" rule).
+  let extrasValues: {
+    about: string | null;
+    campHistory: CampHistoryEntry[];
+    volunteeringInterests: string[];
+    rangerTraining: boolean;
+    rangerCurious: boolean;
+    greenDotTraining: boolean;
+  } | null = null;
+  if (input.rawExtras !== undefined) {
+    const parsedExtras = BioExtrasInput.safeParse(input.rawExtras);
+    if (!parsedExtras.success) {
+      return { ok: false, errors: { _form: "Invalid bio details." } };
+    }
+    const e = parsedExtras.data;
+    const campHistory = await resolveCampHistoryForWrite(e.campHistory ?? []);
+    const about = e.about?.trim() ? e.about.trim() : null;
+    extrasValues = {
+      about,
+      campHistory,
+      volunteeringInterests: serializeVolunteering(
+        e.volunteeringInterests ?? [],
+        e.volunteeringOther ?? null,
+      ),
+      rangerTraining: e.rangerTraining ?? false,
+      rangerCurious: e.rangerCurious ?? false,
+      greenDotTraining: e.greenDotTraining ?? false,
+    };
   }
 
   const saIdEncrypted =
@@ -142,6 +229,8 @@ export async function saveBio(input: {
     medicalNotes: fields.medicalNotes,
     saIdEncrypted,
     passportEncrypted,
+    // v3 columns only when the caller supplied extras (else left untouched).
+    ...(extrasValues ?? {}),
     version: BURNER_BIO_VERSION,
     updatedAt: now,
   };

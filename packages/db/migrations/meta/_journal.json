@@ -43,6 +43,13 @@
       "when": 1784901108288,
       "tag": "0005_careless_old_lace",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784904373351,
+      "tag": "0006_clean_micromacro",
+      "breakpoints": true
     }
   ]
 }

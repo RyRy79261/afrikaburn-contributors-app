@@ -15,6 +15,7 @@ export async function updateBioAction(
   responses: unknown,
   _privacyFlags: unknown,
   final: boolean,
+  extras?: unknown,
 ): Promise<SaveResult> {
   const user = await requireCampUser();
   const edition = await getActiveEdition();
@@ -25,6 +26,7 @@ export async function updateBioAction(
     userId: user.id,
     editionId: edition.id,
     rawResponses: responses,
+    rawExtras: extras,
     final: Boolean(final),
   });
   if (result.ok) revalidatePath("/profile");

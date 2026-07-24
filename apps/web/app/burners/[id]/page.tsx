@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { Pencil, ShieldCheck, Tent } from "lucide-react";
 import { initialsFromName } from "@quagga/core";
+import { volunteerPortfolioLabel } from "@quagga/types";
 import type { GroupKind, MembershipRole } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -82,6 +83,11 @@ export default async function BurnerProfilePage({
 
   const hasYears = pf.attendedYears.length > 0;
   const hasSkills = pf.skills.length > 0;
+  const volunteeringLabels = pf.volunteeringInterests.map(volunteerPortfolioLabel);
+  const hasVolunteering =
+    volunteeringLabels.length > 0 || Boolean(pf.volunteeringOther);
+  const hasRanger =
+    pf.rangerTraining || pf.rangerCurious || pf.greenDotTraining;
 
   return (
     <AppShell>
@@ -131,6 +137,19 @@ export default async function BurnerProfilePage({
           </Card>
         )}
 
+        {pf.about && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">For the burns</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {pf.about}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {(hasSkills || hasYears || pf.firstTime === true) && (
           <Card>
             <CardHeader>
@@ -168,6 +187,91 @@ export default async function BurnerProfilePage({
                     <Badge variant="outline">First AfrikaBurn</Badge>
                   )}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {profile.campHistory.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Tent className="h-4 w-4 text-accent" aria-hidden />
+                Camp history
+              </CardTitle>
+              <CardDescription>
+                Camps this burner has been part of.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col divide-y divide-border">
+                {profile.campHistory.map((entry, i) => (
+                  <li
+                    key={`${entry.label}-${i}`}
+                    className="flex items-center justify-between gap-3 py-2.5"
+                  >
+                    <span className="min-w-0 truncate text-sm">
+                      {/* Linked entries link out ONLY when the camp is
+                          registered — free camps stay undiscoverable. */}
+                      {entry.kind === "linked" &&
+                      entry.registered &&
+                      entry.slug ? (
+                        <Link
+                          href={`/camps/${entry.slug}`}
+                          className="rounded-sm font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {entry.label}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{entry.label}</span>
+                      )}
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        {entry.event ?? "AfrikaBurn"}
+                        {entry.years ? ` · ${entry.years}` : ""}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        {hasVolunteering && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Volunteering interests</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-1.5">
+              {volunteeringLabels.map((label) => (
+                <Badge key={label} variant="secondary">
+                  {label}
+                </Badge>
+              ))}
+              {pf.volunteeringOther && (
+                <Badge variant="outline">{pf.volunteeringOther}</Badge>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {hasRanger && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
+                Rangers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-1.5">
+              {pf.rangerTraining && (
+                <Badge variant="success">Dust Ranger trained</Badge>
+              )}
+              {pf.rangerCurious && (
+                <Badge variant="secondary">Curious about shifts</Badge>
+              )}
+              {pf.greenDotTraining && (
+                <Badge variant="success">Green Dot trained</Badge>
               )}
             </CardContent>
           </Card>

@@ -39,10 +39,15 @@ import {
   teamLeadScopePatch,
   normalizeRoleName,
   activationRequiredActionKey,
+  serializeVolunteering,
   BURNER_BIO_VERSION,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
-import type { AudienceSpec, Questionnaire } from "@quagga/types";
+import type {
+  AudienceSpec,
+  CampHistoryEntry,
+  Questionnaire,
+} from "@quagga/types";
 import { createPooledDb } from "./index";
 import * as schema from "./schema";
 import suppliersDataRaw from "./data/suppliers.json" with { type: "json" };
@@ -172,6 +177,12 @@ async function main(): Promise<void> {
       firstTime: false,
       attendedYears: [2016, 2017, 2018, 2019, 2023, 2024],
       contactEmail: "alice.hatter@example.com",
+      about:
+        "Six burns in and still chasing that first-night hush before the sound comes up. I run The Church at Mad Hatters — if you can pour tea, coil cable, or hold space at 3am, come find me. I love bringing order to beautiful chaos.",
+      // Camp history's linked Mad Hatters entry is filled in below, once the
+      // group exists (see the update after ensureGroup(madHatters)).
+      volunteeringInterests: ["rangers", "kitchen"],
+      rangerCurious: true,
     });
     await ensureBurnerBio(db, users.ren.id, edition.id, {
       displayName: "Ren Notfound",
@@ -181,6 +192,7 @@ async function main(): Promise<void> {
       firstTime: false,
       attendedYears: [2019, 2023, 2024],
       contactEmail: "ren.notfound@example.com",
+      greenDotTraining: true,
     });
 
     // --- Mad Hatters (approved) ------------------------------------------------
@@ -192,6 +204,28 @@ async function main(): Promise<void> {
       joinability: "open",
       createdByUserId: users.alice.id,
     });
+    // Now that Mad Hatters exists, give Alice a realistic camp history: a LINKED
+    // entry to the platform group plus a FREE-TEXT entry for a camp at another
+    // burn worldwide (build-spec §"Burner Bio v3 additions").
+    const aliceCampHistory: CampHistoryEntry[] = [
+      { kind: "linked", groupId: madHatters.id, label: "Mad Hatters", event: "AfrikaBurn" },
+      {
+        kind: "freetext",
+        label: "Camp Sparkle Donkey",
+        event: "Burning Man",
+        years: "2018",
+      },
+    ];
+    await db
+      .update(schema.burnerBios)
+      .set({ campHistory: aliceCampHistory })
+      .where(
+        and(
+          eq(schema.burnerBios.userId, users.alice.id),
+          eq(schema.burnerBios.editionId, edition.id),
+        ),
+      );
+
     const aliceMembership = await ensureMembership(
       db,
       users.alice.id,
@@ -741,6 +775,14 @@ async function ensureBurnerBio(
     firstTime: boolean;
     attendedYears: number[];
     contactEmail: string;
+    // v3 additions (build-spec §"Burner Bio v3 additions") — all optional.
+    about?: string;
+    campHistory?: CampHistoryEntry[];
+    volunteeringInterests?: string[];
+    volunteeringOther?: string;
+    rangerTraining?: boolean;
+    rangerCurious?: boolean;
+    greenDotTraining?: boolean;
   },
 ) {
   const existing = await db
@@ -756,6 +798,14 @@ async function ensureBurnerBio(
   const existingRow = existing[0];
   if (existingRow) return existingRow;
 
+  const volunteering =
+    fields.volunteeringInterests || fields.volunteeringOther
+      ? serializeVolunteering(
+          fields.volunteeringInterests ?? [],
+          fields.volunteeringOther ?? null,
+        )
+      : null;
+
   return firstOrThrow(
     await db
       .insert(schema.burnerBios)
@@ -769,6 +819,12 @@ async function ensureBurnerBio(
         firstTime: fields.firstTime,
         attendedYears: fields.attendedYears,
         contactEmail: fields.contactEmail,
+        about: fields.about ?? null,
+        campHistory: fields.campHistory ?? null,
+        volunteeringInterests: volunteering,
+        rangerTraining: fields.rangerTraining ?? null,
+        rangerCurious: fields.rangerCurious ?? null,
+        greenDotTraining: fields.greenDotTraining ?? null,
         privacyFlags: defaultPrivacyFlags(),
         version: BURNER_BIO_VERSION,
         completedAt: new Date(),

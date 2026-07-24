@@ -17,10 +17,13 @@ import {
   parseMemberRefCode,
   CAMP_DESCRIPTION_WORD_LIMIT,
   isWithinWordLimit,
+  parseVolunteering,
+  type BioExtras,
   type BurnerBioFields,
   type PublicBioView,
 } from "@quagga/core";
 import type {
+  CampHistoryEntry,
   GroupKind,
   Joinability,
   MembershipRole,
@@ -326,6 +329,164 @@ export async function getCampBySlug(
   };
 }
 
+export interface CampSearchResult {
+  id: string;
+  name: string;
+  slug: string;
+  kind: GroupKind;
+  registered: boolean;
+}
+
+/**
+ * Type-ahead over the platform camp directory for the Burner Bio camp-history
+ * editor (build-spec §"Burner Bio v3 additions"). Matches non-org groups by
+ * normalized name substring. Visibility mirrors the directory rule so free camps
+ * stay undiscoverable to strangers: a group surfaces only if it is REGISTERED
+ * for this edition OR the viewer is already a member. Unlisted free camps are
+ * meant to be recorded as free text instead.
+ */
+export async function searchCampDirectory(
+  query: string,
+  editionId: string,
+  viewerId: string | null,
+): Promise<CampSearchResult[]> {
+  const needle = normalizeName(query);
+  if (needle.length < 2) return [];
+
+  const groups = await db()
+    .select({
+      id: schema.groups.id,
+      name: schema.groups.name,
+      slug: schema.groups.slug,
+      kind: schema.groups.kind,
+      nameNormalized: schema.groups.nameNormalized,
+    })
+    .from(schema.groups)
+    .where(ne(schema.groups.kind, "org"));
+
+  const matches = groups.filter((g) => g.nameNormalized.includes(needle));
+  if (matches.length === 0) return [];
+  const matchIds = matches.map((g) => g.id);
+
+  const approved = await db()
+    .select({ groupId: schema.registrations.groupId })
+    .from(schema.registrations)
+    .where(
+      and(
+        eq(schema.registrations.editionId, editionId),
+        eq(schema.registrations.status, "approved"),
+        inArray(schema.registrations.groupId, matchIds),
+      ),
+    );
+  const registeredSet = new Set(approved.map((r) => r.groupId));
+
+  const memberSet = new Set<string>();
+  if (viewerId) {
+    const memberships = await db()
+      .select({ groupId: schema.memberships.groupId })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.userId, viewerId),
+          inArray(schema.memberships.groupId, matchIds),
+        ),
+      );
+    for (const m of memberships) memberSet.add(m.groupId);
+  }
+
+  return matches
+    .filter((g) => registeredSet.has(g.id) || memberSet.has(g.id))
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      slug: g.slug,
+      kind: g.kind,
+      registered: registeredSet.has(g.id),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 10);
+}
+
+export interface CampHistoryDisplay {
+  /** `linked` ⇒ resolved to a real, still-existing group; `text` otherwise. */
+  kind: "linked" | "text";
+  label: string;
+  /** The group slug — present only for `linked` entries. */
+  slug: string | null;
+  /** Whether the linked group is registered this edition (public-link gate). */
+  registered: boolean;
+  event: string | null;
+  years: string | null;
+}
+
+/**
+ * Resolve stored camp-history entries into display rows. Linked entries are
+ * looked up: an existing group yields its current name + slug + registration
+ * status; a stale link falls back to plain text. Free-text entries pass through
+ * as text. Callers decide whether to render a link (own profile: always;
+ * third-party: only when `registered`).
+ */
+export async function resolveCampHistoryDisplay(
+  entries: CampHistoryEntry[],
+  editionId: string,
+): Promise<CampHistoryDisplay[]> {
+  const linkedIds = entries
+    .filter((e) => e.kind === "linked" && e.groupId)
+    .map((e) => e.groupId as string);
+
+  const groupById = new Map<string, { name: string; slug: string }>();
+  const registeredSet = new Set<string>();
+  if (linkedIds.length > 0) {
+    const rows = await db()
+      .select({
+        id: schema.groups.id,
+        name: schema.groups.name,
+        slug: schema.groups.slug,
+      })
+      .from(schema.groups)
+      .where(inArray(schema.groups.id, linkedIds));
+    for (const r of rows) groupById.set(r.id, { name: r.name, slug: r.slug });
+
+    const approved = await db()
+      .select({ groupId: schema.registrations.groupId })
+      .from(schema.registrations)
+      .where(
+        and(
+          eq(schema.registrations.editionId, editionId),
+          eq(schema.registrations.status, "approved"),
+          inArray(schema.registrations.groupId, linkedIds),
+        ),
+      );
+    for (const r of approved) registeredSet.add(r.groupId);
+  }
+
+  return entries.map((e) => {
+    const event = e.event?.trim() ? e.event.trim() : null;
+    const years = e.years?.trim() ? e.years.trim() : null;
+    if (e.kind === "linked" && e.groupId) {
+      const g = groupById.get(e.groupId);
+      if (g) {
+        return {
+          kind: "linked" as const,
+          label: g.name,
+          slug: g.slug,
+          registered: registeredSet.has(e.groupId),
+          event,
+          years,
+        };
+      }
+    }
+    return {
+      kind: "text" as const,
+      label: e.label,
+      slug: null,
+      registered: false,
+      event,
+      years,
+    };
+  });
+}
+
 export interface BurnerCamp {
   name: string;
   slug: string;
@@ -339,6 +500,9 @@ export interface PublicBurnerProfile {
   displayName: string;
   /** Only the fields the burner flagged public; hard-locked fields never leak. */
   publicFields: PublicBioView;
+  /** Public camp history, resolved: linked entries render as camp links ONLY
+   * when registered (free camps stay undiscoverable); the rest are plain text. */
+  campHistory: CampHistoryDisplay[];
   /** Registered camps the burner belongs to (free camps are members-only, so
    * they are never broadcast on a public profile). */
   camps: BurnerCamp[];
@@ -373,6 +537,12 @@ export async function getPublicBurnerProfile(
       attendedYears: schema.burnerBios.attendedYears,
       firstTime: schema.burnerBios.firstTime,
       contactEmail: schema.burnerBios.contactEmail,
+      about: schema.burnerBios.about,
+      campHistory: schema.burnerBios.campHistory,
+      volunteeringInterests: schema.burnerBios.volunteeringInterests,
+      rangerTraining: schema.burnerBios.rangerTraining,
+      rangerCurious: schema.burnerBios.rangerCurious,
+      greenDotTraining: schema.burnerBios.greenDotTraining,
       privacyFlags: schema.burnerBios.privacyFlags,
     })
     .from(schema.burnerBios)
@@ -405,6 +575,23 @@ export async function getPublicBurnerProfile(
     idNumber: null,
   };
   const flags = { ...defaultPrivacyFlags(), ...(bioRow?.privacyFlags ?? {}) };
+
+  const volunteering = parseVolunteering(bioRow?.volunteeringInterests ?? []);
+  const extras: BioExtras = {
+    about: bioRow?.about ?? null,
+    campHistory: bioRow?.campHistory ?? [],
+    volunteeringInterests: volunteering.interests,
+    volunteeringOther: volunteering.other,
+    rangerTraining: bioRow?.rangerTraining ?? false,
+    rangerCurious: bioRow?.rangerCurious ?? false,
+    greenDotTraining: bioRow?.greenDotTraining ?? false,
+  };
+  const publicFields = publicBioView(fields, flags, extras);
+  // Resolve ONLY the public-gated camp history (empty when the flag is private).
+  const campHistory = await resolveCampHistoryDisplay(
+    publicFields.campHistory,
+    editionId,
+  );
 
   // Memberships → registered camps only.
   const membershipRows = await db()
@@ -453,7 +640,8 @@ export async function getPublicBurnerProfile(
   return {
     userId,
     displayName: publicMemberName(bioRow?.displayName ?? null),
-    publicFields: publicBioView(fields, flags),
+    publicFields,
+    campHistory,
     camps,
   };
 }

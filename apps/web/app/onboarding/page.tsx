@@ -9,9 +9,11 @@ import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio } from "@/lib/bio-store";
+import { searchCampsAction } from "@/lib/camp-search-action";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { QuestionnaireRunner } from "@/components/questionnaire/runner";
+import { toBioExtrasState } from "@/components/questionnaire/extras-state";
 import { saveOnboardingBioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +66,10 @@ export default async function OnboardingPage() {
           questionnaire={questionnaire}
           initialResponses={initialResponses}
           action={saveOnboardingBioAction}
+          burns={{
+            initial: toBioExtrasState(bio?.extras),
+            searchCamps: searchCampsAction,
+          }}
           privacy={{ fields: BIO_PRIVACY_FIELDS, initialFlags }}
           submitLabel="Complete my bio"
           redirectTo="/directory"
