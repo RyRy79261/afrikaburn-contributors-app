@@ -65,7 +65,7 @@ Sampled from afrikaburn.org's Elementor kit. Full token file:
 - **Org accent skin**: primary flips to apricot (`#F4B672` dark / `#D98A2B` light with dark text)
 - **Type**: **Montserrat** only (500 body / 600–700 UI / **800 UPPERCASE for h1–h2**, letter-spacing 0.01em). Self-hosted.
 - **Motif**: **QuiltBand** — original repeating diamond band in teal/apricot/sage. Used on header top-edges and as section dividers. You may evolve the quilt language (corner motifs, empty-state art, pattern fills) — original geometry only.
-- **FORBIDDEN**: the AfrikaBurn logo, wordmark lettering, and the San-hand emblem. Brand blessing is pending. Echo the geometry; never copy the marks. No photography of identifiable people (event photo-consent culture); illustrated/geometric art only.
+- **Brand marks — APPROVED (Ryan, 24 Jul 2026)**: the real AfrikaBurn logo and San-hand emblem are in scope — assets live in [`design/brand/`](../design/brand/) (quilt wordmark banner 768×109 + 282×40 nav size, emblem at 270/192/32, footer icons). Header rule: the top QuiltBand spans the **entire page width edge-to-edge**, and the nav carries the real logo at left. Still forbidden: photography of identifiable people (event photo-consent culture) — illustrated/geometric art only.
 - **Status color mapping** (used everywhere a status appears): draft→muted · submitted/under_review→teal · changes_requested→warning apricot · approved→success sage · rejected/withdrawn→destructive/muted · pending payment→muted · reconciled→sage · waived→outline
 - Radius 0.5rem; WCAG AA minimum on every pair (already audited — keep it that way).
 

@@ -20,7 +20,7 @@ file wins. Reference implementation: the Camp 404 clone at
    - **`.org-accent` skin** (org app applies it on `<html>` alongside the theme): primary → `#F4B672` (fg `#17191B`), ring → `#F4B672`; in `.light.org-accent` primary → `#D98A2B` (fg `#332006`, dark for AA) — so the console's interactive colour is apricot, the participant app's teal.
    - **Status mapping:** approved → success (sage), changes_requested → warning (apricot), rejected → destructive, submitted/under_review → primary (teal), draft → muted/outline.
    - **Typography:** Montserrat via `next/font/google` (weights 500/600/700/800, `--font-brand`, display swap). Body 500; `@layer base` treats `h1,h2` as 800 UPPERCASE (`letter-spacing 0.01em`) and `h3` as 700.
-   - **Identity motif:** original `QuiltBand` component — a repeating band of brand-triad diamonds (teal/apricot/sage/transparent) echoing AfrikaBurn's geometric quilt, on each app-shell header top edge and as a landing/auth divider. Per-app favicons are original 3-diamond clusters (web teal-dominant, org apricot-dominant). The AfrikaBurn logo and San-hand emblem are NOT copied — brand blessing pending; original geometry only.
+   - **Identity motif:** `QuiltBand` — a repeating band of brand-triad diamonds on each app-shell header top edge, spanning the **full page width edge-to-edge** (Ryan, 24 Jul 2026), plus landing/auth dividers. **The real AfrikaBurn logo and San-hand emblem are approved for use** (assets in `design/brand/`): nav carries the 282×40 wordmark banner; favicons may adopt the emblem (current original diamond favicons remain until swapped). Photography of identifiable people stays forbidden.
    - Non-corporate, warm, no lorem ipsum anywhere — realistic copy.
 
 ## Monorepo layout
