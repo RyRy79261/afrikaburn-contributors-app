@@ -11,7 +11,11 @@ import {
   type Questionnaire,
   type QuestionnaireResponses,
 } from "@quagga/types";
-import { HARD_LOCKED_PRIVATE_FIELDS, enforcePrivacyFlags } from "./privacy";
+import {
+  HARD_LOCKED_PRIVATE_FIELDS,
+  canBePublic,
+  enforcePrivacyFlags,
+} from "./privacy";
 
 /** Bump when the questionnaire SHAPE changes (a question added/removed or a
  * required flag flipped). Stored on `burner_bios.version`. */
@@ -185,6 +189,67 @@ export function publicMemberName(
 ): string {
   const trimmed = displayName?.trim();
   return trimmed ? trimmed : "Unnamed burner";
+}
+
+// --- Third-party (public) profile view ----------------------------------
+
+/**
+ * A third-party-safe projection of a bio. Only the fields the OWNER flagged
+ * public are populated; every other field is null/empty. The hard-locked
+ * always-private classes (phone, emergency contacts, medical, ID) are never
+ * even eligible — they are not part of this shape AND `publicBioView` gates on
+ * `canBePublic`, so a corrupted flag map claiming one is public can never
+ * surface it.
+ */
+export interface PublicBioView {
+  displayName: string | null;
+  legalName: string | null;
+  homeCity: string | null;
+  bio: string | null;
+  skills: string[];
+  attendedYears: number[];
+  firstTime: boolean | null;
+  contactEmail: string | null;
+}
+
+/**
+ * Build the public, third-party-facing view of a bio. A field appears only when
+ * BOTH its privacy flag is explicitly `true` AND it is allowed to be public at
+ * all (`canBePublic`). The `canBePublic` guard is the last line of defence: even
+ * if `privacyFlags` is corrupted to claim a hard-locked field public, this
+ * function will not leak it. Pass the FULL bio so the caller cannot accidentally
+ * bypass the lock by pre-selecting fields — the gate lives here.
+ */
+export function publicBioView(
+  fields: BurnerBioFields,
+  privacyFlags: Record<string, boolean>,
+): PublicBioView {
+  const show = (key: string): boolean =>
+    canBePublic(key) && privacyFlags[key] === true;
+
+  return {
+    displayName: show("displayName") ? fields.displayName : null,
+    legalName: show("legalName") ? fields.legalName : null,
+    homeCity: show("homeCity") ? fields.homeCity : null,
+    bio: show("bio") ? fields.bio : null,
+    skills: show("skills") ? fields.skills : [],
+    attendedYears: show("attendedYears") ? fields.attendedYears : [],
+    firstTime: show("firstTime") ? fields.firstTime : null,
+    contactEmail: show("contactEmail") ? fields.contactEmail : null,
+  };
+}
+
+/**
+ * Up-to-two-letter initials for an avatar, derived from a display name. Falls
+ * back to a neutral glyph so a nameless burner still renders.
+ */
+export function initialsFromName(name: string | null | undefined): string {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0] ?? "";
+  const last = parts[parts.length - 1] ?? "";
+  if (parts.length === 1) return first.slice(0, 2).toUpperCase();
+  return (first.slice(0, 1) + last.slice(0, 1)).toUpperCase();
 }
 
 // --- Attended years -----------------------------------------------------

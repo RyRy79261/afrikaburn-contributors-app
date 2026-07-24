@@ -12,7 +12,9 @@
  *     registration row at all
  *   - suppliers imported from data/suppliers.json (the AB public sheet
  *     snapshot)
- *   - payment references in mixed states (pending/reconciled/waived)
+ *   - NO payments: AfrikaBurn never receives payment from theme camps —
+ *     registration is free (the `payments` table stays frozen for future
+ *     logistics apps, but nothing is seeded against registrations)
  *
  * No real people — every seed user is obviously fictional (@example.com).
  * Safe to run repeatedly: every write is an upsert keyed on the row's real
@@ -24,8 +26,6 @@
 import { eq, and } from "drizzle-orm";
 import {
   normalizeName,
-  generatePaymentReference,
-  deriveSubjectCode,
   completedSectionsFor,
   getPlacementZones,
   defaultPrivacyFlags,
@@ -326,7 +326,7 @@ async function main(): Promise<void> {
       createdByUserId: users.greta.id,
     });
     await ensureMembership(db, users.greta.id, tinkerers.id, "lead");
-    const tinkerersReg = await ensureRegistration(db, tinkerers, {
+    await ensureRegistration(db, tinkerers, {
       groupId: tinkerers.id,
       editionId: edition.id,
       status: "submitted",
@@ -468,74 +468,11 @@ async function main(): Promise<void> {
     }
     console.log(`[seed] suppliers: ${supplierCount} (source: ${suppliersData.source})`);
 
-    // --- Payments (mixed states) ----------------------------------------------------
-    await ensurePayment(db, {
-      subjectType: "registration",
-      subjectId: madHattersReg.id,
-      reference: generatePaymentReference({
-        year: 2027,
-        code: deriveSubjectCode("Mad Hatters"),
-        sequence: 1,
-      }),
-      amountCents: 850000,
-      currency: "ZAR",
-      status: "reconciled",
-      details: { label: "Placement fee (2027 season)" },
-      recordedByUserId: null,
-    });
-    await ensurePayment(db, {
-      subjectType: "registration",
-      subjectId: camp404Reg.id,
-      reference: generatePaymentReference({
-        year: 2027,
-        code: deriveSubjectCode("Camp 404"),
-        sequence: 1,
-      }),
-      amountCents: null,
-      currency: "ZAR",
-      status: "pending",
-      details: { label: "Placement fee (indicative — awaiting AB confirmation)" },
-      recordedByUserId: null,
-    });
-    await ensurePayment(db, {
-      subjectType: "registration",
-      subjectId: tinkerersReg.id,
-      reference: generatePaymentReference({
-        year: 2027,
-        code: deriveSubjectCode("Tankwa Tinkerers"),
-        sequence: 1,
-      }),
-      amountCents: null,
-      currency: "ZAR",
-      status: "pending",
-      details: { label: "Placement fee (indicative)" },
-      recordedByUserId: null,
-    });
-    const waivedPayment = await ensurePayment(db, {
-      subjectType: "registration",
-      subjectId: velvetMirageReg.id,
-      reference: generatePaymentReference({
-        year: 2027,
-        code: deriveSubjectCode("The Velvet Mirage"),
-        sequence: 1,
-      }),
-      amountCents: 400000,
-      currency: "ZAR",
-      status: "waived",
-      details: { label: "Placement fee — waived pending resubmission" },
-      recordedByUserId: null,
-    });
-
-    await ensureAuditEvent(db, {
-      action: "payment.reconciled",
-      subject: `registration:${madHattersReg.id}`,
-      meta: { camp: "Mad Hatters", edition: edition.year, seeded: true },
-    });
-    await ensureAuditEvent(db, {
-      action: "payment.waived",
-      subject: `payment:${waivedPayment.id}`,
-      meta: { camp: "The Velvet Mirage", edition: edition.year, seeded: true },
-    });
+    // --- Payments ---------------------------------------------------------------
+    // Intentionally none: AfrikaBurn never receives payments from theme camps —
+    // registration is free (Ryan, 24 Jul 2026). The `payments` table stays
+    // frozen in the schema for the future logistics apps, but nothing is seeded
+    // against registrations here.
 
     console.log("[seed] done.");
   } finally {
@@ -837,27 +774,6 @@ async function ensureSupplierDeclarations(
       .values({ registrationId, supplierId: supplier.id })
       .onConflictDoNothing();
   }
-}
-
-async function ensurePayment(
-  db: Db,
-  input: Omit<typeof schema.payments.$inferInsert, "id" | "createdAt" | "updatedAt">,
-) {
-  return firstOrThrow(
-    await db
-      .insert(schema.payments)
-      .values(input)
-      .onConflictDoUpdate({
-        target: schema.payments.reference,
-        set: {
-          amountCents: input.amountCents,
-          status: input.status,
-          details: input.details,
-        },
-      })
-      .returning(),
-    `payment ${input.reference}`,
-  );
 }
 
 async function ensureAuditEvent(

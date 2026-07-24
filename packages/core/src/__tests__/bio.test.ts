@@ -5,6 +5,8 @@ import {
   initialPrivacyFlags,
   resolvePrivacyFlagsUpdate,
   publicMemberName,
+  publicBioView,
+  initialsFromName,
   buildBurnerBioQuestionnaire,
   mapResponsesToBio,
   mapBioToResponses,
@@ -106,6 +108,117 @@ describe("publicMemberName (regression: never leak account email)", () => {
 
   it("trims surrounding whitespace on a real name", () => {
     expect(publicMemberName("  Ember  ")).toBe("Ember");
+  });
+});
+
+describe("publicBioView (third-party profile projection)", () => {
+  // A fully-populated bio, including every hard-locked sensitive field.
+  const FULL: BurnerBioFields = {
+    displayName: "Ember",
+    legalName: "Jordan Vale",
+    homeCity: "Cape Town",
+    bio: "Second-year builder.",
+    skills: ["build", "welding"],
+    attendedYears: [2019, 2024],
+    firstTime: false,
+    contactEmail: "ember@example.com",
+    phone: "+27825551234",
+    onsiteContactName: "Sam Vale",
+    onsiteContactPhone: "+27825559999",
+    offsiteContactName: "Robin Vale",
+    offsiteContactPhone: "+27215550000",
+    medicalNotes: "Bee-sting allergy.",
+    idType: "sa_id",
+    idNumber: "9001015800089",
+  };
+
+  it("returns only the fields explicitly flagged public", () => {
+    const view = publicBioView(FULL, {
+      displayName: true,
+      homeCity: true,
+      attendedYears: true,
+      // legalName + bio + skills + firstTime + contactEmail NOT flagged public
+    });
+    expect(view.displayName).toBe("Ember");
+    expect(view.homeCity).toBe("Cape Town");
+    expect(view.attendedYears).toEqual([2019, 2024]);
+    // Unflagged toggleable fields are withheld.
+    expect(view.legalName).toBeNull();
+    expect(view.bio).toBeNull();
+    expect(view.skills).toEqual([]);
+    expect(view.firstTime).toBeNull();
+    expect(view.contactEmail).toBeNull();
+  });
+
+  it("withholds a default-public field once the owner marks it private", () => {
+    const flags = { ...defaultPrivacyFlags(), homeCity: false };
+    const view = publicBioView(FULL, flags);
+    expect(view.homeCity).toBeNull();
+    // Other defaults still public.
+    expect(view.displayName).toBe("Ember");
+  });
+
+  it("NEVER leaks a hard-locked field, even when flags claim it is public", () => {
+    // A corrupted/hostile flag map claiming every hard-locked class is public.
+    const corrupted: Record<string, boolean> = {
+      phone: true,
+      onsiteContactName: true,
+      onsiteContactPhone: true,
+      offsiteContactName: true,
+      offsiteContactPhone: true,
+      medical: true,
+      saId: true,
+      passport: true,
+    };
+    const view = publicBioView(FULL, corrupted);
+    // No sensitive VALUE appears anywhere in the projection.
+    const serialized = JSON.stringify(view);
+    for (const secret of [
+      FULL.phone,
+      FULL.onsiteContactName,
+      FULL.onsiteContactPhone,
+      FULL.offsiteContactName,
+      FULL.offsiteContactPhone,
+      FULL.medicalNotes,
+      FULL.idNumber,
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+    // And nothing at all was flagged public here, so everything is empty.
+    expect(view).toEqual({
+      displayName: null,
+      legalName: null,
+      homeCity: null,
+      bio: null,
+      skills: [],
+      attendedYears: [],
+      firstTime: null,
+      contactEmail: null,
+    });
+  });
+
+  it("treats a missing flag as private (absent ⇒ not public)", () => {
+    const view = publicBioView(FULL, {});
+    expect(view.displayName).toBeNull();
+    expect(view.homeCity).toBeNull();
+  });
+});
+
+describe("initialsFromName", () => {
+  it("uses first + last initials for a multi-word name", () => {
+    expect(initialsFromName("Dusty Prototype")).toBe("DP");
+    expect(initialsFromName("  alice   the   hatter ")).toBe("AH");
+  });
+
+  it("uses the first two letters of a single-word name", () => {
+    expect(initialsFromName("Ember")).toBe("EM");
+    expect(initialsFromName("x")).toBe("X");
+  });
+
+  it("falls back to a neutral glyph when empty", () => {
+    expect(initialsFromName(null)).toBe("?");
+    expect(initialsFromName(undefined)).toBe("?");
+    expect(initialsFromName("   ")).toBe("?");
   });
 });
 

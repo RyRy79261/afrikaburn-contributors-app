@@ -8,8 +8,12 @@ import {
   isSimilarName,
   trigramSimilarity,
   publicMemberName,
+  publicBioView,
+  defaultPrivacyFlags,
   CAMP_DESCRIPTION_WORD_LIMIT,
   isWithinWordLimit,
+  type BurnerBioFields,
+  type PublicBioView,
 } from "@quagga/core";
 import type {
   GroupKind,
@@ -232,6 +236,138 @@ export async function getCampBySlug(
     createdByUserId: group.createdByUserId,
     members,
     viewerRole,
+  };
+}
+
+export interface BurnerCamp {
+  name: string;
+  slug: string;
+  kind: GroupKind;
+  role: MembershipRole;
+}
+
+export interface PublicBurnerProfile {
+  userId: string;
+  /** Always safe to show — falls back to a neutral placeholder, never email. */
+  displayName: string;
+  /** Only the fields the burner flagged public; hard-locked fields never leak. */
+  publicFields: PublicBioView;
+  /** Registered camps the burner belongs to (free camps are members-only, so
+   * they are never broadcast on a public profile). */
+  camps: BurnerCamp[];
+}
+
+/**
+ * The third-party (public) profile for a burner. Returns null if the user does
+ * not exist. Surfaces ONLY public bio fields (via `publicBioView` — the hard
+ * privacy lock is enforced there) and the burner's REGISTERED camp memberships;
+ * free-camp memberships are omitted so a stranger can't discover them.
+ */
+export async function getPublicBurnerProfile(
+  userId: string,
+  editionId: string,
+): Promise<PublicBurnerProfile | null> {
+  const userRows = await db()
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!userRows[0]) return null;
+
+  // Non-sensitive bio columns only — never select phone / emergency / medical /
+  // encrypted ID here; publicBioView additionally gates on the privacy flags.
+  const bioRows = await db()
+    .select({
+      displayName: schema.burnerBios.displayName,
+      legalName: schema.burnerBios.legalName,
+      homeCity: schema.burnerBios.homeCity,
+      bio: schema.burnerBios.bio,
+      skills: schema.burnerBios.skills,
+      attendedYears: schema.burnerBios.attendedYears,
+      firstTime: schema.burnerBios.firstTime,
+      contactEmail: schema.burnerBios.contactEmail,
+      privacyFlags: schema.burnerBios.privacyFlags,
+    })
+    .from(schema.burnerBios)
+    .where(
+      and(
+        eq(schema.burnerBios.userId, userId),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    )
+    .limit(1);
+  const bioRow = bioRows[0] ?? null;
+
+  const fields: BurnerBioFields = {
+    displayName: bioRow?.displayName ?? null,
+    legalName: bioRow?.legalName ?? null,
+    homeCity: bioRow?.homeCity ?? null,
+    bio: bioRow?.bio ?? null,
+    skills: bioRow?.skills ?? [],
+    attendedYears: bioRow?.attendedYears ?? [],
+    firstTime: bioRow?.firstTime ?? false,
+    contactEmail: bioRow?.contactEmail ?? null,
+    // Hard-locked fields are never fetched — publicBioView never reads them.
+    phone: null,
+    onsiteContactName: null,
+    onsiteContactPhone: null,
+    offsiteContactName: null,
+    offsiteContactPhone: null,
+    medicalNotes: null,
+    idType: null,
+    idNumber: null,
+  };
+  const flags = { ...defaultPrivacyFlags(), ...(bioRow?.privacyFlags ?? {}) };
+
+  // Memberships → registered camps only.
+  const membershipRows = await db()
+    .select({
+      groupId: schema.groups.id,
+      name: schema.groups.name,
+      slug: schema.groups.slug,
+      kind: schema.groups.kind,
+      role: schema.memberships.role,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        ne(schema.groups.kind, "org"),
+      ),
+    );
+
+  const groupIds = membershipRows.map((r) => r.groupId);
+  const approved =
+    groupIds.length === 0
+      ? []
+      : await db()
+          .select({ groupId: schema.registrations.groupId })
+          .from(schema.registrations)
+          .where(
+            and(
+              eq(schema.registrations.editionId, editionId),
+              eq(schema.registrations.status, "approved"),
+              inArray(schema.registrations.groupId, groupIds),
+            ),
+          );
+  const registeredGroupIds = new Set(approved.map((r) => r.groupId));
+
+  const camps: BurnerCamp[] = membershipRows
+    .filter((r) => registeredGroupIds.has(r.groupId))
+    .map((r) => ({
+      name: r.name,
+      slug: r.slug,
+      kind: r.kind,
+      role: r.role,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    userId,
+    displayName: publicMemberName(bioRow?.displayName ?? null),
+    publicFields: publicBioView(fields, flags),
+    camps,
   };
 }
 

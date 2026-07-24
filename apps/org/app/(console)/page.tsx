@@ -63,9 +63,9 @@ export default async function OverviewPage() {
     {
       href: "/payments",
       icon: CreditCard,
-      label: "Pending payments",
+      label: "Payments",
       value: counts.pendingPayments,
-      sub: "References awaiting reconciliation",
+      sub: "Parked — camps never pay to register",
     },
   ] as const;
 

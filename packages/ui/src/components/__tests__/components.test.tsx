@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { Badge } from "../badge";
 import { PaymentDetailsBlock } from "../payment-details-block";
 import { DisabledHintTile } from "../disabled-hint-tile";
+import { EmptyState } from "../empty-state";
 
 describe("Badge", () => {
   it("renders its children", () => {
@@ -44,5 +45,22 @@ describe("DisabledHintTile", () => {
     );
     expect(screen.getByText("Containers")).toBeDefined();
     expect(screen.getByText("Separate app — for large camps")).toBeDefined();
+  });
+});
+
+describe("EmptyState", () => {
+  it("renders the title, description, and an action", () => {
+    render(
+      <EmptyState
+        title="Nothing here yet"
+        description="Parked until the logistics apps land."
+        action={<button type="button">Do a thing</button>}
+      />,
+    );
+    expect(screen.getByText("Nothing here yet")).toBeDefined();
+    expect(
+      screen.getByText("Parked until the logistics apps land."),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Do a thing" })).toBeDefined();
   });
 });

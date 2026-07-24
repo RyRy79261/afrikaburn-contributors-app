@@ -9,10 +9,6 @@ import {
   LayoutGrid,
   FileCheck2,
 } from "lucide-react";
-import {
-  deriveSubjectCode,
-  generatePaymentReference,
-} from "@quagga/core";
 import type { GroupKind, MembershipRole, RegistrationStatus } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -24,7 +20,6 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
-import { PaymentDetailsBlock } from "@quagga/ui/components/payment-details-block";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -110,12 +105,6 @@ export default async function CampPage({
     ? STATUS_LABEL[camp.registrationStatus as RegistrationStatus]
     : "Not started";
 
-  const paymentReference = generatePaymentReference({
-    year: edition.year,
-    code: deriveSubjectCode(camp.name),
-    sequence: 1,
-  });
-
   return (
     <AppShell>
       <div className="flex flex-col gap-6">
@@ -165,8 +154,13 @@ export default async function CampPage({
                     key={m.userId}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
-                    <span className="truncate text-sm">
-                      {m.displayName}
+                    <span className="min-w-0 truncate text-sm">
+                      <Link
+                        href={`/burners/${m.userId}`}
+                        className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {m.displayName}
+                      </Link>
                       {m.isViewer && (
                         <span className="ml-1.5 text-xs text-accent">(you)</span>
                       )}
@@ -292,21 +286,6 @@ export default async function CampPage({
               hint="Topic under exploration."
               tag="Exploring"
               icon={<LayoutGrid className="h-4 w-4" />}
-            />
-          </div>
-        </section>
-
-        {/* Payment pattern demo */}
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Payment pattern
-          </h2>
-          <div className="max-w-md">
-            <PaymentDetailsBlock
-              reference={paymentReference}
-              amountCents={null}
-              status="pending"
-              subjectLabel="Placement fee (indicative)"
             />
           </div>
         </section>
