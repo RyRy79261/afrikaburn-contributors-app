@@ -80,8 +80,24 @@ Roles carry **rights**, an **emoji icon**, and a **color**:
 | Read | every member sees names/colors/emoji on member rows; permission details visible to role managers |
 | Update | rename is id-stable (assignments survive); recolor/re-emoji free; permission changes effective immediately |
 | Assign/unassign | `manage_roles` (or lead/admin); members may hold multiple roles |
-| Delete | confirm-with-count cascade ("11 members hold this role — remove it from them?"); assignments removed, memberships untouched; defaults deletable too |
+| Delete | **custom roles only** — confirm-with-count cascade ("11 members hold this role — remove it from them?"); assignments removed, memberships untouched. Default roles cannot be deleted (see kinds below) |
 | Escalation | a `manage_roles` holder can grant any project permission incl. to themselves — accepted semantics at camp scale (role managers are trusted); leads can always revoke the role itself |
+
+### Role kinds — default roles are permanent, aliasable fixtures (Ryan, 24 Jul)
+
+`project_roles.kind ∈ captain | baseline | default | custom`:
+
+| Kind | Seeded as | Rename | Icon/color | Permissions | Delete | Assignment |
+|---|---|---|---|---|---|---|
+| `captain` | Captain 🎩 | ✅ (alias) | ✅ | ❌ **locked to all** — UI shows disabled toggles + "Captains can do everything — that's what makes them captains" | ❌ | normal |
+| `baseline` | Burn member 🔥 | ✅ (alias — e.g. Mad Hatters rename theirs to "Hatters") | ✅ | ✅ editable (a camp may grant everyone something) | ❌ | **implicit — every member of the camp holds it, always**; cannot be unassigned. Not stored per member: derived (baseline = all members), so it can never drift |
+| `default` | Team lead 🔧 | ✅ | ✅ | ✅ | ❌ | normal |
+| `custom` | — | ✅ | ✅ | ✅ | ✅ (cascade) | normal |
+
+Consequences: the "everyone in this project" questionnaire audience IS the baseline
+role (one concept, not two); audience scoping that includes the baseline role means
+"may target the whole camp". Aliases display everywhere (chips, audiences, completion
+tables) — the kind stays stable underneath.
 
 Authoring rights update: project questionnaires may be authored/sent by lead/admin **or
 any member holding `manage_questionnaires`** (authz predicate + tests updated to match).
