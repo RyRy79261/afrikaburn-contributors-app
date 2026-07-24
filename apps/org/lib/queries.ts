@@ -42,7 +42,6 @@ export interface OverviewCounts {
   registrationsTotal: number;
   camps: number;
   suppliers: number;
-  pendingPayments: number;
 }
 
 const EMPTY_STATUS_COUNTS: Record<RegistrationStatus, number> = {
@@ -55,7 +54,7 @@ const EMPTY_STATUS_COUNTS: Record<RegistrationStatus, number> = {
   withdrawn: 0,
 };
 
-/** Overview tiles: registrations by status, camps, suppliers, pending payments. */
+/** Overview tiles: registrations by status, camps, suppliers. */
 export async function getOverviewCounts(): Promise<OverviewCounts> {
   const db = getDb();
   const edition = await getActiveEdition();
@@ -75,13 +74,12 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
   }
 
   // A "camp" here is any project group (non-org). Persistent, not per-edition.
-  const [camps, suppliers, pendingPayments] = await Promise.all([
+  const [camps, suppliers] = await Promise.all([
     db.$count(
       schema.groups,
       inArray(schema.groups.kind, ["theme_camp", "artwork", "mutant_vehicle"]),
     ),
     db.$count(schema.suppliers),
-    db.$count(schema.payments, eq(schema.payments.status, "pending")),
   ]);
 
   return {
@@ -90,7 +88,6 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
     registrationsTotal,
     camps,
     suppliers,
-    pendingPayments,
   };
 }
 
@@ -391,75 +388,3 @@ export async function getSuppliers(): Promise<SupplierRow[]> {
   return db.select().from(schema.suppliers).orderBy(asc(schema.suppliers.name));
 }
 
-export interface PaymentRow {
-  id: string;
-  reference: string;
-  subjectType: string;
-  subjectLabel: string;
-  amountCents: number | null;
-  currency: string;
-  status: "pending" | "reconciled" | "waived";
-  createdAt: Date;
-}
-
-/** All payment references, newest first, with a best-effort subject label. */
-export async function getPayments(): Promise<PaymentRow[]> {
-  const db = getDb();
-  const rows = await db
-    .select()
-    .from(schema.payments)
-    .orderBy(desc(schema.payments.createdAt));
-
-  const labels = await resolvePaymentSubjectLabels(rows);
-
-  return rows.map((p) => ({
-    id: p.id,
-    reference: p.reference,
-    subjectType: p.subjectType,
-    subjectLabel: labels.get(`${p.subjectType}:${p.subjectId}`) ?? p.subjectType,
-    amountCents: p.amountCents,
-    currency: p.currency,
-    status: p.status,
-    createdAt: p.createdAt,
-  }));
-}
-
-/** Resolve human labels for polymorphic payment subjects (group / registration). */
-async function resolvePaymentSubjectLabels(
-  rows: (typeof schema.payments.$inferSelect)[],
-): Promise<Map<string, string>> {
-  const db = getDb();
-  const labels = new Map<string, string>();
-
-  const groupIds = rows
-    .filter((r) => r.subjectType === "group")
-    .map((r) => r.subjectId);
-  const registrationIds = rows
-    .filter((r) => r.subjectType === "registration")
-    .map((r) => r.subjectId);
-
-  if (groupIds.length > 0) {
-    const groups = await db
-      .select({ id: schema.groups.id, name: schema.groups.name })
-      .from(schema.groups)
-      .where(inArray(schema.groups.id, groupIds));
-    for (const g of groups) labels.set(`group:${g.id}`, g.name);
-  }
-
-  if (registrationIds.length > 0) {
-    const regs = await db
-      .select({
-        id: schema.registrations.id,
-        name: schema.groups.name,
-      })
-      .from(schema.registrations)
-      .innerJoin(
-        schema.groups,
-        eq(schema.groups.id, schema.registrations.groupId),
-      )
-      .where(inArray(schema.registrations.id, registrationIds));
-    for (const r of regs) labels.set(`registration:${r.id}`, r.name);
-  }
-
-  return labels;
-}

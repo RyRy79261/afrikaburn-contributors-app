@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, Package, CreditCard, Tent } from "lucide-react";
+import { ClipboardList, Package, Tent } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -60,13 +60,6 @@ export default async function OverviewPage() {
       value: counts.suppliers,
       sub: "In the vetting repository",
     },
-    {
-      href: "/payments",
-      icon: CreditCard,
-      label: "Payments",
-      value: counts.pendingPayments,
-      sub: "Parked — camps never pay to register",
-    },
   ] as const;
 
   return (
@@ -90,7 +83,7 @@ export default async function OverviewPage() {
         }
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tiles.map(({ href, icon: Icon, label, value, sub }) => (
           <Link key={label} href={href} className="group">
             <Card className="h-full transition-colors group-hover:border-accent/60">

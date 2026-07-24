@@ -1,9 +1,5 @@
 import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
-import type {
-  RegistrationStatus,
-  VettingStatus,
-  PaymentStatus,
-} from "@quagga/types";
+import type { RegistrationStatus, VettingStatus } from "@quagga/types";
 
 type Variant = BadgeProps["variant"];
 
@@ -38,18 +34,6 @@ const VETTING_STYLE: Record<VettingStatus, { label: string; variant: Variant }> 
 
 export function VettingStatusBadge({ status }: { status: VettingStatus }) {
   const s = VETTING_STYLE[status];
-  return <Badge variant={s.variant}>{s.label}</Badge>;
-}
-
-const PAYMENT_STYLE: Record<PaymentStatus, { label: string; variant: Variant }> =
-  {
-    pending: { label: "Pending", variant: "warning" },
-    reconciled: { label: "Reconciled", variant: "success" },
-    waived: { label: "Waived", variant: "secondary" },
-  };
-
-export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
-  const s = PAYMENT_STYLE[status];
   return <Badge variant={s.variant}>{s.label}</Badge>;
 }
 

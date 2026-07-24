@@ -10,7 +10,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/registrations", label: "Registrations" },
   { href: "/questionnaires", label: "Questionnaires" },
   { href: "/suppliers", label: "Suppliers" },
-  { href: "/payments", label: "Payments" },
   { href: "/accounts", label: "Accounts" },
 ];
 
