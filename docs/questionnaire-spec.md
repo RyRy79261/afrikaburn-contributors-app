@@ -135,6 +135,12 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
   **soft-enforced**: the registration review (org side) and the camp dashboard show
   "Sound Officer — not yet assigned" as a completeness flag; approval gating on it is
   an org decision later, not hard-coded now.
+- **Outstanding-officers indicator (Ryan, 24 Jul):** for REGISTERED camps (or camps
+  with a registration in flight), the "Officers" section header on the settings page
+  carries a count badge of unassigned REQUIRED officers — e.g. "2 of 3 assigned" /
+  "1 outstanding" — rendered **red (destructive)** while any remain, flipping to sage
+  when complete. The same badge echoes on the camp dashboard's settings link. Free
+  camps: no badge, no requirement counts (officers optional).
 - **Assignment is deferrable by design (Ryan, 24 Jul):** you often can't say who an
   officer will be when creating a camp — or even when submitting registration. Officer
   slots therefore NEVER block camp creation, registration submission, or approval;
