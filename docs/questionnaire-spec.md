@@ -41,6 +41,41 @@ audience resolution, custom project roles, and the gate/notification loop.*
 - UI: managed inline in the camp dashboard members area (assign via a small
   multi-select per member; role chips shown on member rows).
 
+### Roles v2 — permissions, color, emoji (Ryan, 24 Jul)
+
+Roles carry **rights**, an **emoji icon**, and a **color**:
+
+- `project_roles` gains: `color` (enum of ~8 curated palette keys derived from the brand
+  ramp — teal, teal-deep, apricot, peach, sage, olive, rust, neutral — token-mapped at
+  render so both themes stay legible; **not** freeform hex), `emoji` (single emoji,
+  optional, validated), `permissions` (jsonb array of permission keys).
+- **Permission keys (initial set, deliberately small)**:
+  `manage_questionnaires` (create/edit/send project questionnaires + pick role
+  audiences + view responses) · `manage_members` (create/revoke invites, see all ref
+  codes) · `manage_roles` (full role CRUD + assignment). More keys only when a real
+  feature needs one.
+- **Structural roles are the permission backstop**: `lead`/`admin` implicitly hold every
+  project permission and this cannot be revoked — so no permission edit can ever strand
+  a camp (no self-lockout class of bugs, by construction). Custom-role permissions are
+  *grants on top* for plain members.
+- **Defaults (seeded, fully editable/deletable like any role)**: Captain 🎩 apricot —
+  all three permissions · Team lead 🔧 teal — manage_questionnaires · Burn member 🔥
+  sage — no permissions.
+
+**CRUD semantics:**
+
+| Op | Rule |
+|---|---|
+| Create | lead/admin or `manage_roles` holder; name unique-normalized per project; cap 20 roles/project |
+| Read | every member sees names/colors/emoji on member rows; permission details visible to role managers |
+| Update | rename is id-stable (assignments survive); recolor/re-emoji free; permission changes effective immediately |
+| Assign/unassign | `manage_roles` (or lead/admin); members may hold multiple roles |
+| Delete | confirm-with-count cascade ("11 members hold this role — remove it from them?"); assignments removed, memberships untouched; defaults deletable too |
+| Escalation | a `manage_roles` holder can grant any project permission incl. to themselves — accepted semantics at camp scale (role managers are trusted); leads can always revoke the role itself |
+
+Authoring rights update: project questionnaires may be authored/sent by lead/admin **or
+any member holding `manage_questionnaires`** (authz predicate + tests updated to match).
+
 ## Engine mechanics (Camp 404 pattern, already ported)
 
 - Builder writes a `questionnaire_definitions` row (versioned JSON of fields — reuse the
