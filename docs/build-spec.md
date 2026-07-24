@@ -109,3 +109,12 @@ reference generator · supplier CSV→JSON import parser.
 Containers (hint tile only) · attestation QR flows (only `profile_keys` generation) ·
 payment processing/checkout · water/ice/gas · placement maps · PWA/offline · Inngest ·
 Storybook/pencil · carry-forward between editions (single seeded edition).
+
+## Burner Bio v3 additions (Ryan, 24 Jul 2026 — corpus-grounded)
+
+- **`about`** — free-text bio "for the burns" (soft cap ~150 words, word counter), privacy-flaggable, default public.
+- **`camp_history`** — repeatable entries of camps the burner has been part of, each either **linked** (type-ahead reference to a platform group) or **free text** (unlisted free camps, camps at other burns worldwide); optional event name (default AfrikaBurn) and years. Default public. Expect heavy free-text use.
+- **`volunteering_interests`** — optional multi-select "What kind of volunteering are you into?" from the real Quaggapedia portfolio list: ARTeria, Box Office, Chillaz, DMV, Die Hek (Gate), Die Yskas (Ice), Greeters, Kitchen, Lost & Found, MOOP/Leave No Trace, Recycling, Rangers, Sanctuary, Throne Crew, Volunteer & Info Booth (+ free-text other). Inquiry only — no commitments implied. Default public.
+- **Ranger section** (all optional, inquiry-framed): `ranger_training` (completed Dust Ranger training), `ranger_curious` (interested in doing ranger shifts), `green_dot_training` (Green Dot Ranger training — the emotional-support specialisation). Info links: the Rangers info/training page (facebook.com/afrikaburn.rangers) and rangers@afrikaburn.com exist today; anything else renders as a disabled "info coming" placeholder.
+- **Future org audiences** (cheap resolver additions, note only): `ranger_curious`, `volunteers_interested:<portfolio>` — the whole point of asking is that org can later questionnaire exactly these people.
+- Schema: appended migration; all new fields nullable; privacy flags extended (none hard-locked — this is all self-promotional data); onboarding gains a "Your burns & volunteering" step before the privacy step; profile + third-party public view render whatever is public.
