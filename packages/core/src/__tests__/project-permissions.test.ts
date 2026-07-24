@@ -6,6 +6,7 @@ import {
   enforceKindPermissions,
   isPermissionsLockedKind,
   isPermissionBackstop,
+  roleGrantsElevatedPrivileges,
   type PermissionMembership,
 } from "../project-permissions";
 import type { ProjectPermissions } from "@quagga/types";
@@ -158,5 +159,27 @@ describe("captain lock", () => {
     expect(enforceKindPermissions("custom", perms)).toBe(perms);
     expect(enforceKindPermissions("baseline", perms)).toBe(perms);
     expect(isPermissionsLockedKind("default")).toBe(false);
+  });
+});
+
+describe("roleGrantsElevatedPrivileges — escalation guard for assignment", () => {
+  it("Captain (locked to all) is always elevating, whatever its stored perms", () => {
+    expect(roleGrantsElevatedPrivileges("captain", {})).toBe(true);
+  });
+
+  it("any kind carrying manage_roles or manage_members is elevating", () => {
+    expect(roleGrantsElevatedPrivileges("custom", { manage_roles: true })).toBe(true);
+    expect(roleGrantsElevatedPrivileges("default", { manage_members: true })).toBe(true);
+  });
+
+  it("roles with only weaker grants are NOT elevating", () => {
+    expect(roleGrantsElevatedPrivileges("custom", {})).toBe(false);
+    expect(roleGrantsElevatedPrivileges("custom", { assign_roles: true })).toBe(false);
+    expect(roleGrantsElevatedPrivileges("custom", { view_member_details: true })).toBe(false);
+    expect(
+      roleGrantsElevatedPrivileges("custom", {
+        manage_questionnaires: { audienceRoles: "all", mayBlock: true },
+      }),
+    ).toBe(false);
   });
 });

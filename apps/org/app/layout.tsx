@@ -17,7 +17,7 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "AfrikaBurn Organiser Console",
   description:
-    "The AfrikaBurn organiser console — review registrations, manage accounts, and track payment references. Restricted to org staff.",
+    "The AfrikaBurn organiser console — review registrations and manage accounts. Restricted to org staff.",
   applicationName: "AfrikaBurn Organiser Console",
   icons: { icon: "/icon.svg" },
 };

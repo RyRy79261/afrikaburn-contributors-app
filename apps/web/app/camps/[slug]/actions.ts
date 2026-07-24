@@ -209,10 +209,16 @@ export async function setMemberRolesAction(
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const gate = await requirePermission(parsed.data.slug, "assign_roles");
   if (!gate.ok) return gate;
+  // Escalation guard: assigning an elevating role (manage_roles/manage_members
+  // or Captain) requires manage_roles — assign_roles alone is strictly weaker.
+  const membership = await getMemberPermissions(gate.groupId, gate.userId);
+  const allowElevated =
+    !!membership && hasProjectPermission(membership, "manage_roles");
   const result = await setMemberRoles(
     gate.groupId,
     parsed.data.membershipId,
     parsed.data.roleIds,
+    { allowElevated },
   );
   if (result.ok) revalidateRolePaths(parsed.data.slug);
   return result;

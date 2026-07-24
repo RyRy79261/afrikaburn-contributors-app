@@ -177,6 +177,7 @@ export function RolesSettings(props: Props) {
                 slug={props.slug}
                 role={role}
                 officer={officer}
+                officerApplies={props.officerApplies}
                 members={props.members}
                 canAssign={props.canAssignRoles}
                 canManageRoles={props.canManageRoles}
@@ -630,6 +631,7 @@ function OfficerRow({
   slug,
   role,
   officer,
+  officerApplies,
   members,
   canAssign,
   canManageRoles,
@@ -642,6 +644,7 @@ function OfficerRow({
   slug: string;
   role: RoleVM;
   officer: OfficerVM | undefined;
+  officerApplies: boolean;
   members: MemberVM[];
   canAssign: boolean;
   canManageRoles: boolean;
@@ -685,11 +688,16 @@ function OfficerRow({
       <AccordionTrigger>
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <RoleBadge name={role.name} color={role.color} emoji={role.emoji} />
-          <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${officer?.requirement === "required" ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"}`}
-          >
-            {officer?.requirement ?? "recommended"}
-          </span>
+          {/* Requirement tags apply only to registered / in-flight camps.
+              Free camps show no badge (questionnaire-spec §"Officer roles":
+              "Free camps: no badge, no requirement counts (officers optional)"). */}
+          {officerApplies && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${officer?.requirement === "required" ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"}`}
+            >
+              {officer?.requirement ?? "recommended"}
+            </span>
+          )}
           <span className="hidden text-xs text-muted-foreground sm:inline">
             {assignments.length === 0
               ? "not yet assigned"

@@ -14,6 +14,7 @@ import {
   officerRequirements,
   officerSlotFilled,
   outstandingOfficers,
+  roleGrantsElevatedPrivileges,
   soundLevelFromValue,
   PROJECT_ROLE_CAP,
   roleCapReached,
@@ -334,11 +335,18 @@ export async function removeRole(
  * Baseline is derived (everyone holds it, never stored); officers use the
  * consent flow (`assignOfficer`). Verifies the membership belongs to the group
  * and every role id is an assignable role of this group.
+ *
+ * `allowElevated` guards privilege escalation: an `assign_roles`-only caller may
+ * NOT hand out (or self-assign) a role that carries manage_roles/manage_members
+ * or the Captain role (all permissions). Only a manage_roles holder / structural
+ * lead·admin passes `allowElevated: true` (questionnaire-spec §"Roles v2" — the
+ * escalation clause sanctions only manage_roles holders).
  */
 export async function setMemberRoles(
   groupId: string,
   membershipId: string,
   roleIds: readonly string[],
+  opts?: { allowElevated?: boolean },
 ): Promise<RoleMutationResult> {
   const membership = await db()
     .select({ id: schema.memberships.id })
@@ -362,6 +370,25 @@ export async function setMemberRoles(
       .map((r) => [r.id, r]),
   );
   const wanted = [...new Set(roleIds)].filter((id) => assignable.has(id));
+
+  // Escalation guard: only manage_roles holders may hand out roles that grant
+  // role-/member-management (or Captain). Prevents an assign_roles-only holder
+  // from self-assigning Captain and acquiring every project permission.
+  if (!opts?.allowElevated) {
+    const grantsElevated = wanted.some((id) => {
+      const role = assignable.get(id);
+      return role
+        ? roleGrantsElevatedPrivileges(role.kind, role.permissions)
+        : false;
+    });
+    if (grantsElevated) {
+      return {
+        ok: false,
+        error:
+          "Only a role manager can assign roles that manage roles or members.",
+      };
+    }
+  }
 
   // Remove only assignable (non-officer, non-baseline) assignments, then re-add.
   const assignableIds = [...assignable.keys()];

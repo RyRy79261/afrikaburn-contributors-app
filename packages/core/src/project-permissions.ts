@@ -129,3 +129,19 @@ export function enforceKindPermissions(
   if (isPermissionsLockedKind(kind)) return allProjectPermissions();
   return permissions;
 }
+
+/**
+ * Does assigning this role grant role-/member-management authority — i.e. would
+ * handing it to someone escalate them onto the manage_roles/manage_members axis?
+ * Captain (locked to all) always qualifies. Used to gate assignment: the
+ * escalation clause (questionnaire-spec §"Roles v2" CRUD) only sanctions a
+ * `manage_roles` holder granting such privileges, so an `assign_roles`-only
+ * holder must not be able to hand out (or self-assign) an elevating role.
+ */
+export function roleGrantsElevatedPrivileges(
+  kind: ProjectRoleKind,
+  permissions: ProjectPermissions,
+): boolean {
+  if (isPermissionsLockedKind(kind)) return true;
+  return permissions.manage_roles === true || permissions.manage_members === true;
+}

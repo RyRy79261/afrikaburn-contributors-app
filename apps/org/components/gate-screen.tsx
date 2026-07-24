@@ -49,9 +49,8 @@ export function GateScreen({ state }: { state: Exclude<OrgSessionState, { kind: 
               Restricted to AfrikaBurn staff
             </h1>
             <p className="text-sm text-muted-foreground">
-              This console reviews camp registrations, manages accounts, and
-              tracks payment references. Access is limited to accounts with an
-              organiser role.
+              This console reviews camp registrations and manages accounts.
+              Access is limited to accounts with an organiser role.
             </p>
           </>
         )}
