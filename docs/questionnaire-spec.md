@@ -49,11 +49,21 @@ Roles carry **rights**, an **emoji icon**, and a **color**:
   ramp — teal, teal-deep, apricot, peach, sage, olive, rust, neutral — token-mapped at
   render so both themes stay legible; **not** freeform hex), `emoji` (single emoji,
   optional, validated), `permissions` (jsonb array of permission keys).
-- **Permission keys (initial set, deliberately small)**:
-  `manage_questionnaires` (create/edit/send project questionnaires + pick role
-  audiences + view responses) · `manage_members` (create/revoke invites, see all ref
-  codes) · `manage_roles` (full role CRUD + assignment). More keys only when a real
-  feature needs one.
+- **Privileges (Ryan, 24 Jul — creating a role means setting these).** `permissions`
+  is a jsonb OBJECT (keys + config), not a bare list:
+  | Privilege | Config | Grants |
+  |---|---|---|
+  | `view_member_details` | — | See private camp-held member info: ref codes, member emails, join dates, full member list detail. Without it: names, avatars, role chips only. |
+  | `manage_questionnaires` | `{ audience_roles: "all" \| [role ids], may_block: bool }` | Create/edit/send project questionnaires and view their responses — but only targeting the configured role audiences, and blocking sends only if `may_block`. |
+  | `assign_roles` | — | Assign/unassign *existing* roles to members. |
+  | `manage_roles` | — | Create/edit/delete role definitions (implies `assign_roles`). |
+  | `manage_members` | — | Create/revoke invites. |
+  **Inviolable line:** no camp privilege ever overrides a burner's own privacy flags or
+  the hard-locked bio fields (phone, emergency contacts, ID) — `view_member_details`
+  gates *camp-held* data only, never bio privacy.
+  Defaults: Captain 🎩 apricot = all privileges (questionnaires: all audiences,
+  may_block); Team lead 🔧 teal = manage_questionnaires scoped to Burn-member
+  audiences, no blocking + view_member_details; Burn member 🔥 sage = none.
 - **Structural roles are the permission backstop**: `lead`/`admin` implicitly hold every
   project permission and this cannot be revoked — so no permission edit can ever strand
   a camp (no self-lockout class of bugs, by construction). Custom-role permissions are
