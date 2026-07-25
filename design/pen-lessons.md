@@ -928,3 +928,12 @@ GOTCHAS:
 ROOT CAUSE of the recurring "SELECTED/EMPTY/CLOSED text overlapping labels" everywhere: the library components (Check OirYR/o6q8RQ, Radio kfdhb, Field UIcOu, Textarea t8imVt/w9csgR, Select nn6iK/pMtGo) carried muted spec-annotation Tag/StateTag texts that rendered in EVERY instance and overflowed/overlapped at real widths. All disabled at source 25 Jul (AguQO, TWtJh, b6EsQ, eHwrS, oGd42, qx9UC, W1Z3Og). NEVER add annotation text inside a reusable component — annotate on the library sheet outside the component frame.
 
 Result: 145 measured defects → 0 (plus 4 intentional scroll-chip overflows in D0LTCb). Full reports: scratchpad audit*-report.txt.
+
+## The review harness is now in the repo (25 Jul)
+
+The geometric audit graduated from scratchpad scripts to `design/qa/` — penctl.py +
+audit.py + whitelist.json + REVIEW.md. REVIEW.md is the binding frame-review process
+(decompose → measure → fix-by-property → targeted section screenshots last). The
+scratchpad copies are dead; use the repo versions. audit.py filters disabled-node
+ghost geometry via live props (source + descendants overrides), so no manual ghost
+whitelisting — whitelist.json is only for verified-intentional design (with reasons).

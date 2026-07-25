@@ -1,0 +1,6 @@
+{
+ "mhKYh": "Directory mobile filter-chip row: horizontally scrollable by design (clip:true); chips overflow right edge deliberately.",
+ "dwrhE": "Header Brand: AB emblem mark sits snug against the logo banner image; the 17px box overlap lands in the image's transparent padding \u2014 verified clean in renders.",
+ "C1y2Qr": "Header Brand (teal AppShell): same emblem/logo snug composition as dwrhE.",
+ "QxyA1": "2FA QR code container: #FFFFFF is correct \u2014 QR codes require a true-white quiet zone regardless of theme."
+}

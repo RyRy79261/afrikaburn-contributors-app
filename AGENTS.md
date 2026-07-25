@@ -94,6 +94,13 @@ authoritative; a blank export right after edits is render-lag, not failure — o
 attempt, then move on), the domain-band layout, and the mobile pairing convention
 (every page frame has a "— mobile 360" sibling at desktop.x + 1400).
 
+**Reviewing design work**: never judge a frame by a full-frame screenshot — tall
+frames render as unreadable thumbnails and visual QA has provably missed severe
+defects that way. The binding review process is `design/qa/REVIEW.md`: decompose the
+frame into a component manifest, run the geometric/style/content checks in
+`design/qa/audit.py` (zero `[DEFECT]` tolerance, warnings dispositioned or
+whitelisted-with-reason), and only then do targeted section-level screenshots.
+
 **Saving**: the app writes to disk only when Ryan manually saves. Never assume the
 `.pen` file on disk reflects live canvas state; ask Ryan to save before committing
 design work, and never stage `design/ab-initial-app.pen` from a code-focused commit.
