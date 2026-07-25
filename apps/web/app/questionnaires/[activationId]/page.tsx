@@ -141,6 +141,7 @@ export default async function QuestionnaireFillPage({
                   redirectTo="/directory"
                   submitLabel="Submit answers"
                   gate
+                  respondentSeed={user.id}
                 />
               </CardContent>
             </Card>
@@ -180,6 +181,7 @@ export default async function QuestionnaireFillPage({
           initialResponses={initialResponses}
           redirectTo="/directory"
           submitLabel="Submit"
+          respondentSeed={user.id}
         />
       </div>
     </AppShell>

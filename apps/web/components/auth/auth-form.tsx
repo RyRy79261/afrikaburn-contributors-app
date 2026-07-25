@@ -149,6 +149,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         />
       </Field>
 
+      {isSignUp ? null : (
+        <div className="-mt-1 text-right">
+          <Link
+            href="/auth/forgot-password"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Forgot your password?
+          </Link>
+        </div>
+      )}
+
       {error ? (
         <p role="alert" className="text-sm font-medium text-destructive">
           {error}

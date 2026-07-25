@@ -8,11 +8,11 @@ import {
   parseActivationActionKey,
   resolveAudience,
   tallyActivationCompletion,
+  validateSubmission,
   type AudienceContext,
 } from "@quagga/core";
 import {
   flattenQuestions,
-  validateResponses,
   type AudienceSpec,
   type OfficerKey,
   type ProjectAudience,
@@ -595,7 +595,11 @@ export async function submitResponse(input: {
     return { ok: false, errors: { _form: "This questionnaire wasn't sent to you." } };
   }
 
-  const validated = validateResponses(activation.definition, input.rawResponses);
+  // Branch-aware server-side validation (Runner v2): `validateSubmission`
+  // re-derives the respondent's own path, so a required question inside a
+  // section they branched PAST can neither block their submission nor have a
+  // smuggled answer stored. Same `validateOne` rules per question as before.
+  const validated = validateSubmission(activation.definition, input.rawResponses);
   if (!validated.ok) return { ok: false, errors: validated.errors };
 
   const now = new Date();

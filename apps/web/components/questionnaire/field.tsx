@@ -1,15 +1,26 @@
 "use client";
 
 import * as React from "react";
-import { Check } from "lucide-react";
+import { Check, Heart, Link2, Star } from "lucide-react";
 import {
   attendedYearOptions,
+  isOtherAnswer,
+  otherAnswerText,
+  toOtherAnswer,
   type Question,
+  type QuestionOption,
   type QuestionnaireResponseValue,
 } from "@quagga/types";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
 import { PhoneInput } from "@quagga/ui/components/phone-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@quagga/ui/components/select";
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -21,11 +32,25 @@ interface FieldProps {
   value: QuestionnaireResponseValue | undefined;
   error?: string;
   onChange: (value: QuestionnaireResponseValue) => void;
+  /** Presentation-ordered options (from `presentationOptions` — seeded shuffle).
+   * Falls back to the definition's own order. */
+  options?: readonly QuestionOption[];
 }
 
+/** Sentinel for the "Other…" choice in a dropdown (never a stored value — the
+ * stored value is always `other:<text>`; see @quagga/types OTHER_PREFIX). */
+const OTHER_SENTINEL = "__other__";
+
 /** Render one questionnaire question as a labelled control. Data-driven — the
- * `kind` picks the control; the value shape follows the question kind. */
-export function QuestionField({ question, value, error, onChange }: FieldProps) {
+ * `kind` (and, for choice questions, the `display` variant) picks the control;
+ * the value shape follows the question kind. */
+export function QuestionField({
+  question,
+  value,
+  error,
+  onChange,
+  options,
+}: FieldProps) {
   const describedBy = error
     ? `${question.id}-error`
     : question.helper
@@ -52,6 +77,7 @@ export function QuestionField({ question, value, error, onChange }: FieldProps) 
         question={question}
         value={value}
         onChange={onChange}
+        options={options}
         describedBy={describedBy}
       />
 
@@ -68,6 +94,7 @@ function Control({
   question,
   value,
   onChange,
+  options,
   describedBy,
 }: FieldProps & { describedBy?: string }) {
   switch (question.kind) {
@@ -76,7 +103,7 @@ function Control({
       return (
         <Input
           id={question.id}
-          type={question.kind === "email" ? "email" : "text"}
+          type={inputTypeFor(question)}
           value={typeof value === "string" ? value : ""}
           placeholder={"placeholder" in question ? question.placeholder : undefined}
           aria-describedby={describedBy}
@@ -118,6 +145,55 @@ function Control({
         />
       );
 
+    // Builder v2: time of day, 24h hh:mm.
+    case "time":
+      return (
+        <Input
+          id={question.id}
+          type="time"
+          className="max-w-[10rem]"
+          value={typeof value === "string" ? value : ""}
+          aria-describedby={describedBy}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
+    // Builder v2: "file upload" as a LINK — no blob infrastructure yet, so the
+    // respondent pastes a URL to a file they host.
+    case "file_link": {
+      const url = typeof value === "string" ? value : "";
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className="relative">
+            <Link2
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              id={question.id}
+              type="url"
+              inputMode="url"
+              className="pl-9"
+              value={url}
+              placeholder={question.placeholder ?? "https://…"}
+              aria-describedby={describedBy}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          </div>
+          {/^https?:\/\//i.test(url.trim()) && (
+            <a
+              href={url.trim()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-fit text-xs text-primary underline-offset-2 hover:underline"
+            >
+              Open the link to check it
+            </a>
+          )}
+        </div>
+      );
+    }
+
     case "boolean":
       return (
         <div className="flex gap-2">
@@ -143,59 +219,345 @@ function Control({
         </div>
       );
 
-    case "single_select":
+    // Builder v2: 0/1..max scale with optional end labels.
+    case "linear_scale": {
+      const current = typeof value === "number" ? value : null;
+      const steps: number[] = [];
+      for (let n = question.min; n <= question.max; n++) steps.push(n);
       return (
-        <div className="flex flex-col gap-1.5" role="radiogroup" aria-describedby={describedBy}>
-          {question.options.map((opt) => (
+        <div className="flex flex-col gap-1.5">
+          <div
+            role="radiogroup"
+            aria-describedby={describedBy}
+            aria-label={question.prompt}
+            className="flex flex-wrap items-end gap-2"
+          >
+            {steps.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={current === n}
+                onClick={() => onChange(n)}
+                className="flex w-10 flex-col items-center gap-1"
+              >
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {n}
+                </span>
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
+                    current === n
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input bg-background hover:bg-muted",
+                  )}
+                >
+                  {current === n && <Check className="h-4 w-4" aria-hidden />}
+                </span>
+              </button>
+            ))}
+          </div>
+          {(question.minLabel || question.maxLabel) && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{question.minLabel ?? ""}</span>
+              <span>{question.maxLabel ?? ""}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Builder v2: 3–10 step rating, star/heart/number glyph.
+    case "rating": {
+      const current = typeof value === "number" ? value : 0;
+      const steps = Array.from({ length: question.steps }, (_, i) => i + 1);
+      const Glyph = question.glyph === "heart" ? Heart : Star;
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div
+            role="radiogroup"
+            aria-describedby={describedBy}
+            aria-label={question.prompt}
+            className="flex flex-wrap items-center gap-1"
+          >
+            {steps.map((n) => {
+              const on = current >= n;
+              const label = `${n} out of ${question.steps}`;
+              if (question.glyph === "number") {
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={current === n}
+                    aria-label={label}
+                    onClick={() => onChange(n)}
+                    className={cn(
+                      "h-9 w-9 rounded-md border text-sm tabular-nums transition-colors",
+                      current === n
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input bg-background hover:bg-muted",
+                    )}
+                  >
+                    {n}
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  role="radio"
+                  aria-checked={current === n}
+                  aria-label={label}
+                  onClick={() => onChange(n)}
+                  className="rounded-sm p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Glyph
+                    className={cn(
+                      "h-7 w-7 transition-colors",
+                      on ? "fill-accent text-accent" : "text-muted-foreground",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {current > 0
+              ? `${current} out of ${question.steps}`
+              : `Tap to rate — up to ${question.steps}`}
+          </p>
+        </div>
+      );
+    }
+
+    case "single_select": {
+      const opts = options ?? question.options;
+      const raw = typeof value === "string" ? value : "";
+      const other = isOtherAnswer(raw);
+      const otherText = otherAnswerText(raw);
+
+      // Long option lists render as a dropdown (Builder v2 `display`).
+      if (question.display === "dropdown") {
+        return (
+          <div className="flex flex-col gap-2">
+            <Select
+              value={other ? OTHER_SENTINEL : raw || undefined}
+              onValueChange={(v) =>
+                onChange(v === OTHER_SENTINEL ? toOtherAnswer(otherText) : v)
+              }
+            >
+              <SelectTrigger id={question.id} aria-describedby={describedBy}>
+                <SelectValue placeholder="Choose an option" />
+              </SelectTrigger>
+              <SelectContent>
+                {opts.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+                {question.allowOther && (
+                  <SelectItem value={OTHER_SENTINEL}>
+                    {question.otherLabel ?? "Other…"}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {other && (
+              <OtherInput
+                id={`${question.id}-other`}
+                value={otherText}
+                onChange={(text) => onChange(toOtherAnswer(text))}
+              />
+            )}
+          </div>
+        );
+      }
+
+      // Image grid — multiple-choice-with-images.
+      if (question.display === "image_grid") {
+        return (
+          <div className="flex flex-col gap-2">
+            <div
+              role="radiogroup"
+              aria-describedby={describedBy}
+              aria-label={question.prompt}
+              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+            >
+              {opts.map((opt) => (
+                <ImageOption
+                  key={opt.value}
+                  option={opt}
+                  selected={raw === opt.value}
+                  role="radio"
+                  onToggle={() => onChange(opt.value)}
+                />
+              ))}
+            </div>
+            {question.allowOther && (
+              <OtherChoiceRow
+                label={question.otherLabel ?? "Other…"}
+                selected={other}
+                text={otherText}
+                inputId={`${question.id}-other`}
+                onSelect={() => onChange(toOtherAnswer(otherText))}
+                onText={(text) => onChange(toOtherAnswer(text))}
+              />
+            )}
+          </div>
+        );
+      }
+
+      // Default: radio rows (with option thumbnails when the author set them).
+      return (
+        <div
+          className="flex flex-col gap-1.5"
+          role="radiogroup"
+          aria-describedby={describedBy}
+          aria-label={question.prompt}
+        >
+          {opts.map((opt) => (
             <button
               key={opt.value}
               type="button"
               role="radio"
-              aria-checked={value === opt.value}
+              aria-checked={raw === opt.value}
               onClick={() => onChange(opt.value)}
               className={cn(
-                "flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                value === opt.value
+                "flex items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                raw === opt.value
                   ? "border-primary bg-primary/10"
                   : "border-input bg-background hover:bg-muted",
               )}
             >
-              <span>{opt.label}</span>
-              {value === opt.value && <Check className="h-4 w-4 text-primary" />}
+              {opt.imageUrl && (
+                <OptionThumb url={opt.imageUrl} alt={opt.imageAlt ?? opt.label} />
+              )}
+              <span className="min-w-0 flex-1">{opt.label}</span>
+              <span
+                className={cn(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                  raw === opt.value ? "border-primary" : "border-input",
+                )}
+                aria-hidden
+              >
+                {raw === opt.value && (
+                  <Check className="h-3.5 w-3.5 text-primary" />
+                )}
+              </span>
             </button>
           ))}
+          {question.allowOther && (
+            <OtherChoiceRow
+              label={question.otherLabel ?? "Other…"}
+              selected={other}
+              text={otherText}
+              inputId={`${question.id}-other`}
+              onSelect={() => onChange(toOtherAnswer(otherText))}
+              onText={(text) => onChange(toOtherAnswer(text))}
+            />
+          )}
         </div>
       );
+    }
 
     case "multi_select": {
-      const selected = new Set(Array.isArray(value) ? value : []);
+      const opts = options ?? question.options;
+      const selected = Array.isArray(value) ? value.map(String) : [];
+      const selectedSet = new Set(selected);
+      const otherValue = selected.find((v) => isOtherAnswer(v));
+      const otherText = otherValue ? otherAnswerText(otherValue) : "";
+
+      const toggle = (v: string) => {
+        const next = selected.filter((s) => s !== v);
+        if (next.length === selected.length) next.push(v);
+        onChange(next);
+      };
+      const setOther = (text: string) => {
+        const next = selected.filter((s) => !isOtherAnswer(s));
+        next.push(toOtherAnswer(text));
+        onChange(next);
+      };
+      const clearOther = () =>
+        onChange(selected.filter((s) => !isOtherAnswer(s)));
+
+      const limits = selectionHint(question.minSelections, question.maxSelections);
+
+      if (question.display === "image_grid") {
+        return (
+          <div className="flex flex-col gap-2">
+            <div
+              aria-describedby={describedBy}
+              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+            >
+              {opts.map((opt) => (
+                <ImageOption
+                  key={opt.value}
+                  option={opt}
+                  selected={selectedSet.has(opt.value)}
+                  role="checkbox"
+                  onToggle={() => toggle(opt.value)}
+                />
+              ))}
+            </div>
+            {question.allowOther && (
+              <OtherChoiceRow
+                label={question.otherLabel ?? "Other…"}
+                selected={otherValue !== undefined}
+                text={otherText}
+                inputId={`${question.id}-other`}
+                onSelect={() =>
+                  otherValue === undefined ? setOther("") : clearOther()
+                }
+                onText={setOther}
+              />
+            )}
+            {limits && (
+              <p className="text-xs text-muted-foreground">{limits}</p>
+            )}
+          </div>
+        );
+      }
+
       return (
-        <div className="flex flex-wrap gap-2" aria-describedby={describedBy}>
-          {question.options.map((opt) => {
-            const on = selected.has(opt.value);
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={on}
-                onClick={() => {
-                  const next = new Set(selected);
-                  if (on) next.delete(opt.value);
-                  else next.add(opt.value);
-                  onChange([...next]);
-                }}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
-                  on
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {on && <Check className="h-3.5 w-3.5 text-primary" />}
-                {opt.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2" aria-describedby={describedBy}>
+            {opts.map((opt) => {
+              const on = selectedSet.has(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggle(opt.value)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                    on
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-input bg-background text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {on && <Check className="h-3.5 w-3.5 text-primary" />}
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {question.allowOther && (
+            <OtherChoiceRow
+              label={question.otherLabel ?? "Other…"}
+              selected={otherValue !== undefined}
+              text={otherText}
+              inputId={`${question.id}-other`}
+              onSelect={() =>
+                otherValue === undefined ? setOther("") : clearOther()
+              }
+              onText={setOther}
+            />
+          )}
+          {limits && <p className="text-xs text-muted-foreground">{limits}</p>}
         </div>
       );
     }
@@ -235,4 +597,153 @@ function Control({
       );
     }
   }
+}
+
+/** The `<input type>` for a short-text question, following its format preset. */
+function inputTypeFor(question: Question): string {
+  if (question.kind === "email") return "email";
+  if (question.kind !== "short_text") return "text";
+  switch (question.format) {
+    case "email":
+      return "email";
+    case "url":
+      return "url";
+    case "phone":
+      return "tel";
+    case "number":
+    case "integer":
+      return "number";
+    default:
+      return "text";
+  }
+}
+
+function selectionHint(
+  min: number | undefined,
+  max: number | undefined,
+): string | null {
+  if (min != null && max != null) return `Pick ${min}–${max} options.`;
+  if (min != null) return `Pick at least ${min}.`;
+  if (max != null) return `Pick at most ${max}.`;
+  return null;
+}
+
+function OptionThumb({ url, alt }: { url: string; alt: string }) {
+  return (
+    // Author-supplied remote URL — next/image would need host allowlisting we
+    // deliberately don't configure (no blob infra yet).
+    <img
+      src={url}
+      alt={alt}
+      loading="lazy"
+      className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+    />
+  );
+}
+
+function ImageOption({
+  option,
+  selected,
+  role,
+  onToggle,
+}: {
+  option: QuestionOption;
+  selected: boolean;
+  role: "radio" | "checkbox";
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-checked={selected}
+      onClick={onToggle}
+      className={cn(
+        "flex flex-col gap-2 rounded-md border p-2 text-left text-sm transition-colors",
+        selected
+          ? "border-primary bg-primary/10"
+          : "border-input bg-background hover:bg-muted",
+      )}
+    >
+      {option.imageUrl ? (
+        <img
+          src={option.imageUrl}
+          alt={option.imageAlt ?? option.label}
+          loading="lazy"
+          className="aspect-video w-full rounded-sm border border-border object-cover"
+        />
+      ) : (
+        <span
+          className="flex aspect-video w-full items-center justify-center rounded-sm bg-muted text-xs text-muted-foreground"
+          aria-hidden
+        >
+          No image
+        </span>
+      )}
+      <span className="flex items-center gap-1.5">
+        {selected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+        <span className="min-w-0 truncate">{option.label}</span>
+      </span>
+    </button>
+  );
+}
+
+/** The "Other…" row on a choice question: a selectable row plus its free-text
+ * input. The stored value is `other:<text>` (@quagga/types OTHER_PREFIX). */
+function OtherChoiceRow({
+  label,
+  selected,
+  text,
+  inputId,
+  onSelect,
+  onText,
+}: {
+  label: string;
+  selected: boolean;
+  text: string;
+  inputId: string;
+  onSelect: () => void;
+  onText: (text: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onSelect}
+        className={cn(
+          "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+          selected
+            ? "border-primary bg-primary/10"
+            : "border-input bg-background text-muted-foreground hover:bg-muted",
+        )}
+      >
+        {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
+        {label}
+      </button>
+      {selected && (
+        <OtherInput id={inputId} value={text} onChange={onText} />
+      )}
+    </div>
+  );
+}
+
+function OtherInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (text: string) => void;
+}) {
+  return (
+    <Input
+      id={id}
+      value={value}
+      placeholder="Tell us more…"
+      aria-label="Your other answer"
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
 }

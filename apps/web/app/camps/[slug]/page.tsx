@@ -28,6 +28,7 @@ import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getCampBySlug } from "@/lib/groups-store";
+import { getPinnedBulletinsForCurrentUser } from "@/lib/bulletins";
 import { listInvites } from "@/lib/invites-store";
 import {
   listRoles,
@@ -184,12 +185,19 @@ export default async function CampPage({
 
   const myRefCode = camp.members.find((m) => m.isViewer)?.refCode ?? null;
 
-  // Pinned-bulletin banner SLOT (canvas RGcNS `adNWQ`). The bulletins backend
-  // (#17) is not wired yet, so this resolves to null and the banner stays hidden.
-  // When #17 lands, populate `pinnedBulletin` from the pinned bulletin for this
-  // camp's audience (title + link to /bulletins/[id]) and the slot lights up with
-  // no further layout work.
-  const pinnedBulletin = null as { title: string; href: string } | null;
+  // Pinned-bulletin banner (canvas RGcNS `adNWQ`). Only pinned, PUBLISHED
+  // bulletins this viewer was actually targeted by resolve — the query joins
+  // through their own notification rows, so an untargeted (or org-internal)
+  // broadcast can never light this banner. Newest wins; no pin, no banner.
+  const pinnedBulletins = campUser
+    ? await getPinnedBulletinsForCurrentUser()
+    : [];
+  const pinnedBulletin = pinnedBulletins[0]
+    ? {
+        title: pinnedBulletins[0].title,
+        href: `/bulletins/${pinnedBulletins[0].id}`,
+      }
+    : null;
 
   return (
     <AppShell>

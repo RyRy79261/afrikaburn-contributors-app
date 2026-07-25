@@ -2,27 +2,49 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { Check, Loader2 } from "lucide-react";
 import {
+  isAnswerableBlock,
   pageQuestions,
+  validateOne,
   type Questionnaire,
   type QuestionnairePage,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
   type SaveResult,
 } from "@quagga/types";
-import type { BioPrivacyField } from "@quagga/core";
+import {
+  deriveProgress,
+  nextPageId,
+  pageById,
+  presentationBlocks,
+  presentationOptions,
+  type BioPrivacyField,
+} from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
+import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
 import { QuestionField } from "./field";
+import { ContentBlockView } from "./content-block";
 import {
   BurnsAndVolunteeringStep,
   type BioExtrasState,
 } from "./burns-step";
 import type { CampSearchResult } from "@/lib/groups-store";
 
+// Runner v2 (questionnaire-spec §"Respondent (runner) UX"). Every navigation
+// and completeness decision is delegated to the @quagga/core questionnaire
+// runtime — `nextPageId` (branching), `deriveProgress` (progress + the
+// branch-resolved path), `presentationBlocks`/`presentationOptions` (seeded,
+// reload-stable shuffle) — so the client walks exactly the path the server
+// re-derives at submit time. Content blocks (info/image) render inline but are
+// never answerable and never counted.
+
 const FORM_ERROR_KEY = "_form";
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again in a moment.";
+const DRAFT_PREFIX = "quagga:questionnaire-draft:";
+const AUTOSAVE_DEBOUNCE_MS = 700;
 
 export type RunnerAction = (
   responses: QuestionnaireResponses,
@@ -55,12 +77,20 @@ interface RunnerProps {
   answeredProgress?: boolean;
   /** Gate styling: full-width submit with no Back on a single-page form. */
   fullWidthSubmit?: boolean;
+  /** Seed for the deterministic question/option shuffle. Stable per respondent
+   * (e.g. `${activationId}:${userId}`) so the order never moves on reload. */
+  shuffleSeed?: string;
+  /** Enables local draft autosave under this key (survives reload/offline).
+   * Answers still only reach the server on submit. */
+  draftKey?: string;
 }
 
 type Step =
-  | { kind: "page"; page: QuestionnairePage }
+  | { kind: "page"; pageId: string }
   | { kind: "burns" }
   | { kind: "privacy" };
+
+type SaveState = "idle" | "saving" | "saved" | "unsaved";
 
 export function QuestionnaireRunner({
   questionnaire,
@@ -73,9 +103,23 @@ export function QuestionnaireRunner({
   redirectTo,
   answeredProgress = false,
   fullWidthSubmit = false,
+  shuffleSeed = "",
+  draftKey,
 }: RunnerProps) {
   const router = useRouter();
-  const [stepIndex, setStepIndex] = React.useState(0);
+  const firstPageId = questionnaire.pages[0]?.id ?? null;
+
+  // The trail is the respondent's ACTUAL walk (branching means the page after
+  // this one depends on the answers) — Back pops, Next pushes.
+  const [trail, setTrail] = React.useState<Step[]>(() =>
+    firstPageId
+      ? [{ kind: "page", pageId: firstPageId }]
+      : burns
+        ? [{ kind: "burns" }]
+        : privacy
+          ? [{ kind: "privacy" }]
+          : [],
+  );
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
   const [flags, setFlags] = React.useState<Record<string, boolean>>(
@@ -85,53 +129,108 @@ export function QuestionnaireRunner({
     burns?.initial ?? null,
   );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [saveState, setSaveState] = React.useState<SaveState>("idle");
   const [isPending, startTransition] = React.useTransition();
 
-  const steps: Step[] = React.useMemo(() => {
-    const s: Step[] = questionnaire.pages.map((page) => ({
-      kind: "page" as const,
-      page,
-    }));
-    if (burns) s.push({ kind: "burns" });
-    if (privacy) s.push({ kind: "privacy" });
-    return s;
-  }, [questionnaire, privacy, burns]);
+  const step = trail[trail.length - 1];
+  const currentPageId = step?.kind === "page" ? step.pageId : undefined;
 
-  const step = steps[stepIndex];
-  const isLast = stepIndex === steps.length - 1;
-  const stepProgress = Math.round(((stepIndex + 1) / steps.length) * 100);
+  // --- Local draft autosave --------------------------------------------
+  // Zero-connectivity culture: a half-filled questionnaire must survive a
+  // reload or a dropped signal. The draft is LOCAL only — nothing is sent to
+  // the server until submit, so no half-answers land in the response store.
+  const storageKey = draftKey ? `${DRAFT_PREFIX}${draftKey}` : null;
+  const hydrated = React.useRef(false);
 
-  // Gate progress counts answered questions across all question pages ("2 of 3
-  // answered"), rather than the step position.
-  const answeredStats = React.useMemo(() => {
-    let total = 0;
-    let answered = 0;
-    for (const page of questionnaire.pages) {
-      if (page.kind !== "questions") continue;
-      for (const q of pageQuestions(page)) {
-        total += 1;
-        const v = responses[q.id];
-        const empty =
-          v === undefined ||
-          v === null ||
-          v === "" ||
-          (Array.isArray(v) && v.length === 0);
-        if (!empty) answered += 1;
+  React.useEffect(() => {
+    if (!storageKey || hydrated.current) return;
+    hydrated.current = true;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        setResponses((prev) => ({
+          ...prev,
+          ...(parsed as QuestionnaireResponses),
+        }));
+        setSaveState("saved");
       }
+    } catch {
+      // A corrupt or unavailable draft is never fatal — start clean.
     }
-    return { total, answered };
-  }, [questionnaire, responses]);
+  }, [storageKey]);
 
-  const progress =
-    answeredProgress && answeredStats.total > 0
-      ? Math.round((answeredStats.answered / answeredStats.total) * 100)
-      : stepProgress;
-  const soloSubmit = fullWidthSubmit && isLast && stepIndex === 0;
+  React.useEffect(() => {
+    if (!storageKey || !hydrated.current || saveState !== "unsaved") return;
+    const timer = window.setTimeout(() => {
+      setSaveState("saving");
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(responses));
+        setSaveState("saved");
+      } catch {
+        setSaveState("idle");
+      }
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [responses, storageKey, saveState]);
+
+  function clearDraft() {
+    if (!storageKey) return;
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // Nothing to do — the draft is a convenience, not a source of truth.
+    }
+  }
+
+  // --- Progress ---------------------------------------------------------
+  // deriveProgress walks the BRANCH-RESOLVED path and counts answerable
+  // questions only (content blocks are excluded upstream).
+  const progress = React.useMemo(
+    () => deriveProgress(questionnaire, responses, currentPageId),
+    [questionnaire, responses, currentPageId],
+  );
+
+  const tailSteps = (burns ? 1 : 0) + (privacy ? 1 : 0);
+  const totalSteps = progress.pageCount + tailSteps;
+  const stepNumber =
+    step?.kind === "page"
+      ? Math.max(progress.pageIndex, 0) + 1
+      : step?.kind === "burns"
+        ? progress.pageCount + 1
+        : progress.pageCount + tailSteps;
+
+  const percent =
+    answeredProgress && progress.total > 0
+      ? Math.round((progress.answered / progress.total) * 100)
+      : totalSteps > 0
+        ? Math.round((stepNumber / totalSteps) * 100)
+        : 100;
+
+  const nextStep = React.useMemo(
+    () => resolveNextStep(questionnaire, responses, step, Boolean(burns), Boolean(privacy)),
+    [questionnaire, responses, step, burns, privacy],
+  );
+  const isLast = nextStep === null;
+  const soloSubmit = fullWidthSubmit && isLast && trail.length === 1;
+
+  const rail = React.useMemo(
+    () => buildRail(questionnaire, progress.path, Boolean(burns), Boolean(privacy)),
+    [questionnaire, progress.path, burns, privacy],
+  );
+  const railIndex =
+    step?.kind === "page"
+      ? progress.pageIndex
+      : step?.kind === "burns"
+        ? progress.pageCount
+        : rail.length - 1;
 
   if (!step) return null;
 
   function setResponse(id: string, value: QuestionnaireResponseValue) {
     setResponses((prev) => ({ ...prev, [id]: value }));
+    setSaveState("unsaved");
     setErrors((prev) => {
       if (!prev[id]) return prev;
       const next = { ...prev };
@@ -140,15 +239,14 @@ export function QuestionnaireRunner({
     });
   }
 
+  /** Client-side mirror of the server's per-question validation — same
+   * `validateOne` the server runs inside `validateSubmission`, so what passes
+   * here passes there. */
   function validatePage(page: QuestionnairePage): boolean {
-    if (page.kind === "intro") return true;
     const next: Record<string, string> = {};
     for (const q of pageQuestions(page)) {
-      const v = responses[q.id];
-      const missing = v === undefined || v === null || v === "";
-      if (missing && "required" in q && q.required) {
-        next[q.id] = "This question is required";
-      }
+      const result = validateOne(q, responses[q.id]);
+      if (!result.ok) next[q.id] = result.error;
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -165,8 +263,13 @@ export function QuestionnaireRunner({
         );
         if (!result.ok) {
           setErrors(result.errors);
+          // A server error on a question the respondent can't see is a dead
+          // end — jump to the page that owns the first failing question.
+          const target = pageOwningError(questionnaire, result.errors);
+          if (target && target !== currentPageId) jumpTo(target);
           return;
         }
+        if (final) clearDraft();
         onOk();
       } catch {
         setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
@@ -174,39 +277,103 @@ export function QuestionnaireRunner({
     });
   }
 
+  /** Rewind the trail to a page already walked, or start a fresh trail at it. */
+  function jumpTo(pageId: string) {
+    setTrail((prev) => {
+      const at = prev.findIndex(
+        (s) => s.kind === "page" && s.pageId === pageId,
+      );
+      return at >= 0 ? prev.slice(0, at + 1) : [{ kind: "page", pageId }];
+    });
+  }
+
   function handleNext() {
-    const current = steps[stepIndex];
-    if (current?.kind === "page" && !validatePage(current.page)) return;
-    const advance = () =>
-      setStepIndex((i) => Math.min(i + 1, steps.length - 1));
+    const current = trail[trail.length - 1];
+    if (current?.kind === "page") {
+      const page = pageById(questionnaire, current.pageId);
+      if (page && !validatePage(page)) return;
+    }
+    const target = nextStep;
+    if (!target) return;
+    const advance = () => setTrail((prev) => [...prev, target]);
     if (persistProgress) persist(false, advance);
     else advance();
   }
 
   function handleSubmit() {
-    const current = steps[stepIndex];
-    if (current?.kind === "page" && !validatePage(current.page)) return;
+    const current = trail[trail.length - 1];
+    if (current?.kind === "page") {
+      const page = pageById(questionnaire, current.pageId);
+      if (page && !validatePage(page)) return;
+    }
     persist(true, () => {
       if (redirectTo) router.push(redirectTo);
       else router.refresh();
     });
   }
 
+  const page =
+    step.kind === "page" ? pageById(questionnaire, step.pageId) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
+        {rail.length > 1 && (
+          <div className="flex items-center justify-between gap-3">
+            <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {rail.map((entry, i) => {
+                const state =
+                  i < railIndex ? "done" : i === railIndex ? "current" : "upcoming";
+                return (
+                  <li key={entry.key} className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                        state === "current" &&
+                          "border-primary bg-primary text-primary-foreground",
+                        state === "done" &&
+                          "border-primary bg-primary/15 text-primary",
+                        state === "upcoming" &&
+                          "border-border bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {state === "done" ? (
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "hidden max-w-[12rem] truncate text-xs font-medium sm:inline",
+                        state === "upcoming"
+                          ? "text-muted-foreground"
+                          : "text-foreground",
+                      )}
+                    >
+                      {entry.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Page {stepNumber} of {totalSteps}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
             {answeredProgress
-              ? `${answeredStats.answered} of ${answeredStats.total} answered`
-              : `Step ${stepIndex + 1} of ${steps.length}`}
+              ? `${progress.answered} of ${progress.total} answered`
+              : `Step ${stepNumber} of ${totalSteps}`}
           </span>
-          <span>{progress}%</span>
+          <span>{percent}%</span>
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${percent}%` }}
           />
         </div>
       </div>
@@ -234,33 +401,43 @@ export function QuestionnaireRunner({
             }
           />
         </div>
-      ) : step.kind === "page" && step.page.kind === "intro" ? (
+      ) : page && page.kind === "intro" ? (
         <div className="flex flex-col gap-3 py-4">
           <h2 className="text-2xl font-semibold tracking-tight">
-            {step.page.heading}
+            {page.heading}
           </h2>
-          <p className="text-muted-foreground">{step.page.body}</p>
+          <p className="text-muted-foreground">{page.body}</p>
         </div>
-      ) : step.kind === "page" && step.page.kind === "questions" ? (
+      ) : page && page.kind === "questions" ? (
         <div className="flex flex-col gap-5">
           <div>
-            <h2 className="text-lg font-semibold">{step.page.title}</h2>
-            {step.page.subtitle && (
+            {rail.length > 1 && (
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">
+                Section {stepNumber} of {totalSteps}
+              </p>
+            )}
+            <h2 className="mt-1 text-lg font-semibold">{page.title}</h2>
+            {page.subtitle && (
               <p className="mt-1 text-sm text-muted-foreground">
-                {step.page.subtitle}
+                {page.subtitle}
               </p>
             )}
           </div>
           <div className="flex flex-col gap-5">
-            {pageQuestions(step.page).map((q) => (
-              <QuestionField
-                key={q.id}
-                question={q}
-                value={responses[q.id]}
-                error={errors[q.id]}
-                onChange={(value) => setResponse(q.id, value)}
-              />
-            ))}
+            {presentationBlocks(page, shuffleSeed).map((block) =>
+              isAnswerableBlock(block) ? (
+                <QuestionField
+                  key={block.id}
+                  question={block}
+                  value={responses[block.id]}
+                  error={errors[block.id]}
+                  options={presentationOptions(block, shuffleSeed)}
+                  onChange={(value) => setResponse(block.id, value)}
+                />
+              ) : (
+                <ContentBlockView key={block.id} block={block} />
+              ),
+            )}
           </div>
         </div>
       ) : null}
@@ -280,27 +457,119 @@ export function QuestionnaireRunner({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-            disabled={stepIndex === 0 || isPending}
+            onClick={() => setTrail((prev) => prev.slice(0, -1))}
+            disabled={trail.length <= 1 || isPending}
           >
             Back
           </Button>
         )}
-        {isLast ? (
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isPending}
-            className={soloSubmit ? "w-full" : ""}
-          >
-            {isPending ? "Saving…" : submitLabel}
-          </Button>
-        ) : (
-          <Button type="button" onClick={handleNext} disabled={isPending}>
-            {isPending ? "Saving…" : "Next"}
-          </Button>
-        )}
+        <div
+          className={cn(
+            "flex items-center gap-3",
+            soloSubmit && "w-full flex-col-reverse sm:flex-row",
+          )}
+        >
+          {draftKey && <AutosaveIndicator state={saveState} />}
+          {isLast ? (
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isPending}
+              className={soloSubmit ? "w-full" : ""}
+            >
+              {isPending ? "Saving…" : submitLabel}
+            </Button>
+          ) : (
+            <Button type="button" onClick={handleNext} disabled={isPending}>
+              {isPending ? "Saving…" : "Next"}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function AutosaveIndicator({ state }: { state: SaveState }) {
+  if (state === "idle") return null;
+  if (state === "saving" || state === "unsaved") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        Saving…
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      title="Your answers are kept on this device until you submit."
+    >
+      <Check className="h-3.5 w-3.5 text-success" aria-hidden />
+      Saved on this device
+    </span>
+  );
+}
+
+/** The step after `step`, or null when the questionnaire ends here (submit). */
+function resolveNextStep(
+  questionnaire: Questionnaire,
+  responses: QuestionnaireResponses,
+  step: Step | undefined,
+  hasBurns: boolean,
+  hasPrivacy: boolean,
+): Step | null {
+  if (!step) return null;
+  if (step.kind === "privacy") return null;
+  if (step.kind === "burns") return hasPrivacy ? { kind: "privacy" } : null;
+  const next = nextPageId(questionnaire, step.pageId, responses);
+  if (next) return { kind: "page", pageId: next };
+  if (hasBurns) return { kind: "burns" };
+  if (hasPrivacy) return { kind: "privacy" };
+  return null;
+}
+
+interface RailEntry {
+  key: string;
+  label: string;
+}
+
+/** Labels for the step rail: the branch-resolved pages plus any bespoke tail
+ * steps. Re-derived from `progress.path`, so a branch change reshapes it. */
+function buildRail(
+  questionnaire: Questionnaire,
+  path: readonly string[],
+  hasBurns: boolean,
+  hasPrivacy: boolean,
+): RailEntry[] {
+  const out: RailEntry[] = [];
+  for (const pageId of path) {
+    const page = pageById(questionnaire, pageId);
+    if (!page) continue;
+    out.push({
+      key: pageId,
+      label: page.kind === "questions" ? page.title : page.heading,
+    });
+  }
+  if (hasBurns) out.push({ key: "__burns__", label: "Burns & volunteering" });
+  if (hasPrivacy) out.push({ key: "__privacy__", label: "Privacy" });
+  return out;
+}
+
+/** The page holding the first question the server rejected (so the runner can
+ * surface an off-page validation error instead of silently swallowing it). */
+function pageOwningError(
+  questionnaire: Questionnaire,
+  errors: Record<string, string>,
+): string | null {
+  const ids = new Set(
+    Object.keys(errors).filter((k) => k !== FORM_ERROR_KEY && k !== "_root"),
+  );
+  if (ids.size === 0) return null;
+  for (const page of questionnaire.pages) {
+    for (const q of pageQuestions(page)) {
+      if (ids.has(q.id)) return page.id;
+    }
+  }
+  return null;
 }

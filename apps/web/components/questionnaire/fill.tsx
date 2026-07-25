@@ -21,6 +21,7 @@ export function QuestionnaireFill({
   redirectTo,
   submitLabel,
   gate = false,
+  respondentSeed,
 }: {
   activationId: string;
   questionnaire: Questionnaire;
@@ -29,10 +30,17 @@ export function QuestionnaireFill({
   submitLabel: string;
   /** Gate styling: answered-count progress + full-width submit (§Gate). */
   gate?: boolean;
+  /** Per-respondent shuffle seed (the user id). Combined with the activation id
+   * it keeps a shuffled page/option order stable across reloads. */
+  respondentSeed?: string;
 }) {
   const action = (
     responses: QuestionnaireResponses,
   ): Promise<SaveResult> => submitQuestionnaireAction(activationId, responses);
+
+  const seed = respondentSeed
+    ? `${activationId}:${respondentSeed}`
+    : activationId;
 
   return (
     <QuestionnaireRunner
@@ -43,6 +51,8 @@ export function QuestionnaireFill({
       redirectTo={redirectTo}
       answeredProgress={gate}
       fullWidthSubmit={gate}
+      shuffleSeed={seed}
+      draftKey={seed}
     />
   );
 }

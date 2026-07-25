@@ -37,6 +37,11 @@ interface ActivationFormProps {
   description: string | null;
   editionId: string;
   editionName: string;
+  /** Send options carried over from the builder's rail (optional; the author
+   * still confirms everything here — this only pre-fills the form). */
+  initialAudience?: AudienceSpec | null;
+  initialBlocking?: boolean;
+  initialDueAt?: string;
 }
 
 function buildSpec(
@@ -60,15 +65,26 @@ export function ActivationForm({
   description,
   editionId,
   editionName,
+  initialAudience,
+  initialBlocking,
+  initialDueAt,
 }: ActivationFormProps) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
-  const [mode, setMode] = React.useState<AudienceMode>("org_outbound");
-  const [selectors, setSelectors] = React.useState<OrgOutboundSelector[]>([]);
-  const [officerKeys, setOfficerKeys] = React.useState<OfficerKey[]>([]);
-  const [blocking, setBlocking] = React.useState(false);
-  const [dueAt, setDueAt] = React.useState("");
+  const [mode, setMode] = React.useState<AudienceMode>(
+    initialAudience && initialAudience.kind !== "project"
+      ? initialAudience.kind
+      : "org_outbound",
+  );
+  const [selectors, setSelectors] = React.useState<OrgOutboundSelector[]>(
+    initialAudience?.kind === "org_outbound" ? initialAudience.selectors : [],
+  );
+  const [officerKeys, setOfficerKeys] = React.useState<OfficerKey[]>(
+    initialAudience?.kind === "org_officer" ? initialAudience.officerKeys : [],
+  );
+  const [blocking, setBlocking] = React.useState(initialBlocking ?? false);
+  const [dueAt, setDueAt] = React.useState(initialDueAt ?? "");
 
   const [preview, setPreview] = React.useState<{
     loading: boolean;

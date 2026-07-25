@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flame, Compass, TentTree, UserRound } from "lucide-react";
+import { Flame, Compass, TentTree, UserRound, Settings } from "lucide-react";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getEditionLabel } from "@/lib/edition";
@@ -48,6 +48,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <UserRound className="h-4 w-4" aria-hidden />
                   <span className="hidden sm:inline">Profile</span>
+                </Link>
+                <Link
+                  href="/account"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Settings className="h-4 w-4" aria-hidden />
+                  <span className="hidden sm:inline">Account</span>
                 </Link>
                 <HeaderNotificationBell count={unread} />
                 <SignOutButton />

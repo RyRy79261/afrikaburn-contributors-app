@@ -13,11 +13,16 @@ import { audienceLabel } from "./questionnaires/queries";
 export interface BulletinSummary {
   id: string;
   title: string;
+  /** Raw markdown body — the list derives a plain-text preview, the compose
+   * form seeds the editor with it. */
+  bodyMd: string;
   audience: AudienceSpec;
   audienceLabel: string;
   pinned: boolean;
   publishedAt: Date | null;
   createdAt: Date;
+  /** Last edit — the drafts list shows "last edited …". */
+  updatedAt: Date;
   /** Recipients who have opened it. */
   readCount: number;
   /** Total recipients the bulletin fanned out to. */
@@ -53,11 +58,13 @@ export async function listBulletins(): Promise<BulletinSummary[]> {
     return {
       id: b.id,
       title: b.title,
+      bodyMd: b.bodyMd,
       audience: b.audience,
       audienceLabel: audienceLabel(b.audience),
       pinned: b.pinned,
       publishedAt: b.publishedAt,
       createdAt: b.createdAt,
+      updatedAt: b.updatedAt,
       readCount: tally.read,
       sentCount: tally.sent,
     };

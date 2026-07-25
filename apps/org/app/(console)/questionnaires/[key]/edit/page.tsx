@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
-import { flattenQuestions } from "@quagga/types";
 import { guardConsole } from "@/lib/gate";
 import { PageHeading } from "@/components/page-heading";
 import {
-  QuestionnaireBuilder,
-  questionToField,
-  type BuilderInitial,
-} from "@/components/questionnaire/builder";
+  QuestionnaireBuilderV2,
+  type BuilderV2Initial,
+} from "@/components/questionnaires/builder-v2";
+import { getActiveEdition } from "@/lib/queries";
 import { getOrgDefinition } from "@/lib/questionnaires/queries";
 
 export const dynamic = "force-dynamic";
@@ -20,14 +19,20 @@ export default async function EditQuestionnairePage({
   if (!guard.ok) return guard.node;
 
   const { key } = await params;
-  const definition = await getOrgDefinition(key);
+  const [definition, edition] = await Promise.all([
+    getOrgDefinition(key),
+    getActiveEdition(),
+  ]);
   if (!definition) notFound();
 
-  const initial: BuilderInitial = {
+  // The stored definition IS the editor state — sections, blocks and question
+  // ids are handed over untouched so nothing drifts across a round trip.
+  const initial: BuilderV2Initial = {
     key: definition.key,
     title: definition.title,
     description: definition.description ?? "",
-    fields: flattenQuestions(definition.definition).map(questionToField),
+    definition: definition.definition,
+    status: definition.status,
   };
 
   return (
@@ -37,7 +42,10 @@ export default async function EditQuestionnairePage({
         title="Edit questionnaire"
         description="Editing saves a new version. Questionnaires already sent keep the version they went out with."
       />
-      <QuestionnaireBuilder initial={initial} />
+      <QuestionnaireBuilderV2
+        initial={initial}
+        editionId={edition?.id ?? null}
+      />
     </div>
   );
 }

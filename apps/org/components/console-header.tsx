@@ -9,9 +9,12 @@ import { HeaderNotificationBell } from "@/components/header-notification-bell";
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Overview" },
+  { href: "/status", label: "Status board" },
   { href: "/registrations", label: "Registrations" },
   { href: "/questionnaires", label: "Questionnaires" },
+  { href: "/bulletins", label: "Bulletins" },
   { href: "/suppliers", label: "Suppliers" },
+  { href: "/categories", label: "Categories" },
   { href: "/accounts", label: "Accounts" },
 ];
 

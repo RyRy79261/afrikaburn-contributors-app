@@ -219,6 +219,73 @@ describe("publicBioView (third-party profile projection)", () => {
     expect(view.displayName).toBeNull();
     expect(view.homeCity).toBeNull();
   });
+
+  // Regression guard for the third-party profile page (/burners/[id]): that
+  // page renders `publicBioView` output and nothing else, so proving the
+  // projection is clean under the WORST case — an owner (or a tampered flag
+  // map) marking absolutely everything public — proves the page cannot leak.
+  describe("third-party profile surface", () => {
+    const EXTRAS: BioExtras = {
+      about: "Welder. Tea at 3am.",
+      campHistory: [
+        { kind: "freetext", label: "Camp Sparkle Donkey", years: "2018" },
+      ],
+      volunteeringInterests: ["rangers", "kitchen"],
+      volunteeringOther: "Shade building",
+      rangerTraining: true,
+      rangerCurious: true,
+      greenDotTraining: false,
+    };
+    // Every flag true — including the hard-locked classes.
+    const ALL_PUBLIC: Record<string, boolean> = {};
+    for (const field of BIO_PRIVACY_FIELDS) ALL_PUBLIC[field.key] = true;
+    for (const field of HARD_LOCKED_PRIVATE_FIELDS) ALL_PUBLIC[field] = true;
+
+    it("structurally omits every hard-locked field from the public shape", () => {
+      const view = publicBioView(FULL, ALL_PUBLIC, EXTRAS);
+      const keys = Object.keys(view);
+      for (const locked of HARD_LOCKED_PRIVATE_FIELDS) {
+        expect(keys).not.toContain(locked);
+      }
+      // The bio's own column names for those classes are absent too — the
+      // public view has no slot they could ever be assigned to.
+      for (const column of [
+        "phone",
+        "onsiteContactName",
+        "onsiteContactPhone",
+        "offsiteContactName",
+        "offsiteContactPhone",
+        "medicalNotes",
+        "idType",
+        "idNumber",
+      ]) {
+        expect(keys).not.toContain(column);
+      }
+    });
+
+    it("leaks no hard-locked VALUE even when every flag says public", () => {
+      const view = publicBioView(FULL, ALL_PUBLIC, EXTRAS);
+      const serialized = JSON.stringify(view);
+      for (const secret of [
+        FULL.phone,
+        FULL.onsiteContactName,
+        FULL.onsiteContactPhone,
+        FULL.offsiteContactName,
+        FULL.offsiteContactPhone,
+        FULL.medicalNotes,
+        FULL.idNumber,
+      ]) {
+        expect(secret).toBeTruthy();
+        expect(serialized).not.toContain(secret as string);
+      }
+      // …while the genuinely public, self-promotional v3 fields DO come
+      // through, so the test can't pass by returning an empty object.
+      expect(view.displayName).toBe("Ember");
+      expect(view.about).toBe(EXTRAS.about);
+      expect(view.volunteeringInterests).toEqual(["rangers", "kitchen"]);
+      expect(view.rangerTraining).toBe(true);
+    });
+  });
 });
 
 describe("initialsFromName", () => {

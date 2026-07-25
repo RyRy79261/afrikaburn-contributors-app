@@ -1,138 +1,195 @@
 import Link from "next/link";
-import { ClipboardList, Package, Tent } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@quagga/ui/components/card";
-import { Badge } from "@quagga/ui/components/badge";
-import type { RegistrationStatus } from "@quagga/types";
+  ArrowRight,
+  ClipboardList,
+  FileCheck2,
+  ListChecks,
+  Package,
+  Send,
+  Tags,
+  UserCog,
+  Users,
+} from "lucide-react";
+import { Card, CardContent } from "@quagga/ui/components/card";
+import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
 import { guardConsole } from "@/lib/gate";
-import { getOverviewCounts } from "@/lib/queries";
+import { getActiveEdition, getStatusBoard } from "@/lib/queries";
+import { getRecentActivity } from "@/lib/status-board";
+import { formatDate } from "@/lib/labels";
 import { PageHeading } from "@/components/page-heading";
-import { RegistrationStatusBadge } from "@/components/status-badges";
+import { KpiCards } from "@/components/status-board/kpi-cards";
+import { RegistrationPipelineStrip } from "@/components/status-board/registration-funnel";
+import {
+  OfficerCoverageCard,
+  SupplierOnboardingCard,
+} from "@/components/status-board/coverage";
+import { RecentActivity } from "@/components/status-board/recent-activity";
+
+// The console landing page (build-spec §"Org stats dashboard" — the 25 Jul
+// overhaul, canvas frame obd4x / pKW7z): the four entity KPI cards, the
+// registration pipeline, the coverage row, outbound questionnaires, quick links
+// and the activity feed. Every number is a real query result run through the
+// @quagga/core derivations — the Status Board shares the same components, so
+// the two pages cannot disagree. Registration is free: no payment surface here.
 
 export const dynamic = "force-dynamic";
 
-const STATUS_ORDER: RegistrationStatus[] = [
-  "submitted",
-  "under_review",
-  "changes_requested",
-  "approved",
-  "rejected",
-  "draft",
-  "withdrawn",
-];
-
-const NEEDS_ATTENTION: RegistrationStatus[] = ["submitted", "under_review"];
+/** Console destinations that exist today (canvas quick-links grid). */
+const QUICK_LINKS = [
+  {
+    href: "/registrations",
+    icon: ClipboardList,
+    title: "Registrations",
+    desc: "Review & decide camp registrations",
+  },
+  {
+    href: "/suppliers",
+    icon: Package,
+    title: "Suppliers",
+    desc: "Track supplier onboarding & standing",
+  },
+  {
+    href: "/questionnaires",
+    icon: ListChecks,
+    title: "Questionnaires",
+    desc: "Send & track outbound forms",
+  },
+  {
+    href: "/categories",
+    icon: Tags,
+    title: "Camp categories",
+    desc: "Manage the camp category taxonomy",
+  },
+  {
+    href: "/accounts",
+    icon: Users,
+    title: "Accounts",
+    desc: "People, roles & access",
+  },
+] as const;
 
 export default async function OverviewPage() {
   const guard = await guardConsole();
   if (!guard.ok) return guard.node;
 
-  const counts = await getOverviewCounts();
-  const needsAttention = NEEDS_ATTENTION.reduce(
-    (sum, s) => sum + counts.registrationsByStatus[s],
-    0,
-  );
+  const edition = await getActiveEdition();
+  const board = await getStatusBoard(edition);
+  const activity = await getRecentActivity(6);
 
-  const tiles = [
-    {
-      href: "/registrations",
-      icon: ClipboardList,
-      label: "Registrations",
-      value: counts.registrationsTotal,
-      sub: `${needsAttention} awaiting review`,
-    },
-    {
-      href: "/registrations",
-      icon: Tent,
-      label: "Camps & projects",
-      value: counts.camps,
-      sub: "Free + registered groups",
-    },
-    {
-      href: "/suppliers",
-      icon: Package,
-      label: "Suppliers",
-      value: counts.suppliers,
-      sub: "Onboarding + standing",
-    },
-  ] as const;
+  const updatedAt = new Date().toLocaleTimeString("en-ZA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const sends = board.questionnaires.sends.length;
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       <PageHeading
-        eyebrow="Overview"
-        title={
-          counts.edition
-            ? `${counts.edition.name} at a glance`
-            : "Organiser overview"
+        eyebrow={
+          edition ? `${edition.name} · Console` : "Organiser console"
         }
+        title="Overview"
         description={
-          counts.edition
-            ? `Reviewing contributions for ${counts.edition.startDate} to ${counts.edition.endDate}. Approving a registration is what makes a camp "registered" and lights up its entitlements.`
-            : "No active edition is seeded yet. Counts appear once the database is seeded."
+          edition
+            ? `${formatDate(edition.startDate)} – ${formatDate(edition.endDate)} — the whole console at a glance.`
+            : "No active edition is seeded yet. Numbers appear once the database is seeded."
         }
         actions={
-          counts.edition ? (
-            <Badge variant="secondary">Edition {counts.edition.year}</Badge>
-          ) : undefined
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className="h-2 w-2 rounded-full bg-ab-sage"
+                aria-hidden
+              />
+              Live · updated {updatedAt}
+            </span>
+            <Link
+              href="/status"
+              className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+            >
+              Status board
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
         }
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tiles.map(({ href, icon: Icon, label, value, sub }) => (
-          <Link key={label} href={href} className="group">
+      <KpiCards kpis={board.kpis} />
+
+      <RegistrationPipelineStrip funnel={board.funnel} />
+
+      <section
+        aria-label="Coverage"
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+      >
+        {/* Wrangler assignment has no data model yet (no assignments exist to
+            count), so the tile is honestly parked rather than faked. */}
+        <DisabledHintTile
+          title="Wranglers"
+          hint="Wrangler assignment isn't built yet — there is no assignment data to report on."
+          tag="Coming later"
+          icon={<UserCog className="h-4 w-4" />}
+          className="h-full"
+        />
+        <OfficerCoverageCard coverage={board.officerCoverage} />
+        <SupplierOnboardingCard
+          onboarding={board.supplierOnboarding}
+          standings={board.supplierStandings}
+        />
+      </section>
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div className="flex flex-col gap-1">
+            <span className="flex items-center gap-2 text-base font-semibold">
+              <Send className="h-4 w-4 text-accent" aria-hidden />
+              Outbound questionnaires
+            </span>
+            <p className="text-xs text-muted-foreground">
+              {sends === 0
+                ? "No questionnaires are open right now."
+                : `${sends} active send${sends === 1 ? "" : "s"} · ${board.questionnaires.completionPct}% completion · ${board.questionnaires.totalCompleted} of ${board.questionnaires.totalSent} responses in`}
+            </p>
+          </div>
+          <Link
+            href="/questionnaires"
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+          >
+            Questionnaires
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </CardContent>
+      </Card>
+
+      <section
+        aria-label="Console sections"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {QUICK_LINKS.map(({ href, icon: Icon, title, desc }) => (
+          <Link key={title} href={href} className="group">
             <Card className="h-full transition-colors group-hover:border-accent/60">
-              <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                <CardDescription>{label}</CardDescription>
-                <Icon className="h-4 w-4 text-accent" aria-hidden />
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold tabular-nums">{value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
+              <CardContent className="flex flex-col gap-1.5 p-5">
+                <span className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 text-accent" aria-hidden />
+                  <span className="text-sm font-semibold">{title}</span>
+                </span>
+                <p className="text-xs text-muted-foreground">{desc}</p>
               </CardContent>
             </Card>
           </Link>
         ))}
+        {/* Supplier sign-up management is designed (frame U7929T) but not built
+            — a dead link would be worse than an honest parked tile. */}
+        <DisabledHintTile
+          title="Supplier sign-up management"
+          hint="Approve who joins the suppliers list — page still in design."
+          tag="Not built"
+          icon={<FileCheck2 className="h-4 w-4" />}
+          className="h-full"
+        />
       </section>
 
-      <section className="mt-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Registrations by status</CardTitle>
-            <CardDescription>
-              The review pipeline for the active edition.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            {counts.registrationsTotal === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No registrations yet for this edition.
-              </p>
-            ) : (
-              STATUS_ORDER.map((status) => {
-                const n = counts.registrationsByStatus[status];
-                if (n === 0) return null;
-                return (
-                  <div
-                    key={status}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2"
-                  >
-                    <RegistrationStatusBadge status={status} />
-                    <span className="text-lg font-semibold tabular-nums">
-                      {n}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-      </section>
+      <RecentActivity rows={activity} />
     </div>
   );
 }

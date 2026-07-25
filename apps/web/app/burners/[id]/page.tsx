@@ -1,19 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { Pencil, ShieldCheck, Tent } from "lucide-react";
-import { initialsFromName } from "@quagga/core";
+import { Pencil, ShieldCheck } from "lucide-react";
+import { publicMemberName } from "@quagga/core";
 import { volunteerPortfolioLabel } from "@quagga/types";
-import type { GroupKind, MembershipRole } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@quagga/ui/components/card";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -21,27 +13,25 @@ import { getActiveEdition } from "@/lib/edition";
 import { getPublicBurnerProfile } from "@/lib/groups-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
+import { ProfileHero } from "@/components/profile-public/profile-hero";
+import { ProfileSection } from "@/components/profile-public/profile-section";
+import { ProfileCamps } from "@/components/profile-public/profile-camps";
+import { PrivacyNote } from "@/components/profile-public/privacy-note";
 
 export const dynamic = "force-dynamic";
+
+// Third-party burner profile (canvas `mm31G` desktop / `lYUEe` mobile). The
+// PRIVACY BOUNDARY IS THE SERVER: `getPublicBurnerProfile` never selects the
+// hard-locked columns (phone, emergency contacts, medical, encrypted ID) and
+// projects what it does load through `publicBioView`, which additionally gates
+// every field on `canBePublic` + the owner's flag. Free-camp memberships are
+// filtered out there too (the undiscoverability law). This page therefore has
+// no privacy logic of its own — a field it cannot render is a field it was
+// never given.
 
 // Zod-validate the dynamic segment at the boundary (build-spec §Hard constraints
 // 6). User ids are uuids; anything else is a 404, not a query.
 const ParamsSchema = z.object({ id: z.string().uuid() });
-
-const KIND_LABEL: Record<GroupKind, string> = {
-  org: "AfrikaBurn",
-  theme_camp: "Theme camp",
-  artwork: "Artwork",
-  mutant_vehicle: "Mutant vehicle",
-};
-
-const ROLE_LABEL: Record<MembershipRole, string> = {
-  god: "God",
-  org_staff: "Org staff",
-  lead: "Lead",
-  admin: "Co-lead",
-  member: "Member",
-};
 
 export default async function BurnerProfilePage({
   params,
@@ -78,171 +68,88 @@ export default async function BurnerProfilePage({
   if (!profile) notFound();
 
   const isOwn = profile.userId === viewer.id;
-  const initials = initialsFromName(profile.displayName);
   const pf = profile.publicFields;
 
-  const hasYears = pf.attendedYears.length > 0;
-  const hasSkills = pf.skills.length > 0;
+  // The display name is a FLAGGABLE field like any other: a burner who marked
+  // it private renders as the neutral placeholder to third parties (camp member
+  // lists are a different surface — there, camp-mates always see names).
+  // `publicMemberName` guarantees the fallback is never the account email.
+  const heading = publicMemberName(pf.displayName);
+
+  const about = pf.about ?? pf.bio;
   const volunteeringLabels = pf.volunteeringInterests.map(volunteerPortfolioLabel);
   const hasVolunteering =
     volunteeringLabels.length > 0 || Boolean(pf.volunteeringOther);
   const hasRanger =
     pf.rangerTraining || pf.rangerCurious || pf.greenDotTraining;
+  const hasCamps = profile.camps.length > 0 || profile.campHistory.length > 0;
 
   return (
     <AppShell>
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-foreground"
-              aria-hidden
-            >
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">
-                Burner
-              </p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-                {profile.displayName}
-              </h1>
-              {pf.homeCity && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {pf.homeCity}
-                </p>
-              )}
-            </div>
-          </div>
-          {isOwn && (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/profile">
-                <Pencil className="h-4 w-4" aria-hidden />
-                Edit your bio
-              </Link>
-            </Button>
-          )}
-        </header>
+      <div className="mx-auto flex max-w-3xl flex-col gap-5">
+        <ProfileHero
+          displayName={heading}
+          homeCity={pf.homeCity}
+          burnsCount={pf.attendedYears.length > 0 ? pf.attendedYears.length : null}
+          firstTime={pf.firstTime}
+          action={
+            isOwn ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/profile">
+                  <Pencil className="h-4 w-4" aria-hidden />
+                  Edit your bio
+                </Link>
+              </Button>
+            ) : null
+          }
+        />
 
-        {pf.bio && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">About</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {pf.bio}
-              </p>
-            </CardContent>
-          </Card>
+        {about && (
+          <ProfileSection label="About">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+              {about}
+            </p>
+          </ProfileSection>
         )}
 
-        {pf.about && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">For the burns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {pf.about}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {(hasSkills || hasYears || pf.firstTime === true) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">On the playa</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {hasSkills && (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Skills
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {pf.skills.map((skill) => (
-                      <Badge key={skill} variant="secondary">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {(hasYears || pf.firstTime === true) && (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Years attended
-                  </p>
-                  {hasYears ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {pf.attendedYears.map((year) => (
-                        <Badge key={year} variant="outline">
-                          {year}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <Badge variant="outline">First AfrikaBurn</Badge>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {profile.campHistory.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Tent className="h-4 w-4 text-accent" aria-hidden />
-                Camp history
-              </CardTitle>
-              <CardDescription>
-                Camps this burner has been part of.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="flex flex-col divide-y divide-border">
-                {profile.campHistory.map((entry, i) => (
-                  <li
-                    key={`${entry.label}-${i}`}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <span className="min-w-0 truncate text-sm">
-                      {/* Linked entries link out ONLY when the camp is
-                          registered — free camps stay undiscoverable. */}
-                      {entry.kind === "linked" &&
-                      entry.registered &&
-                      entry.slug ? (
-                        <Link
-                          href={`/camps/${entry.slug}`}
-                          className="rounded-sm font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {entry.label}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{entry.label}</span>
-                      )}
-                      <span className="ml-1.5 text-xs text-muted-foreground">
-                        {entry.event ?? "AfrikaBurn"}
-                        {entry.years ? ` · ${entry.years}` : ""}
-                      </span>
-                    </span>
-                  </li>
+        {pf.attendedYears.length > 0 && (
+          <ProfileSection label="Years attended">
+            <div className="flex flex-wrap gap-1.5">
+              {[...pf.attendedYears]
+                .sort((a, b) => a - b)
+                .map((year) => (
+                  <Badge key={year} variant="outline" className="tabular-nums">
+                    {year}
+                  </Badge>
                 ))}
-              </ul>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfileSection>
+        )}
+
+        {pf.skills.length > 0 && (
+          <ProfileSection label="Skills">
+            <div className="flex flex-wrap gap-1.5">
+              {pf.skills.map((skill) => (
+                <Badge key={skill} variant="secondary">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </ProfileSection>
+        )}
+
+        {hasCamps && (
+          <ProfileSection label="Camps">
+            <ProfileCamps
+              camps={profile.camps}
+              campHistory={profile.campHistory}
+            />
+          </ProfileSection>
         )}
 
         {hasVolunteering && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Volunteering interests</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-1.5">
+          <ProfileSection label="Volunteering">
+            <div className="flex flex-wrap gap-1.5">
               {volunteeringLabels.map((label) => (
                 <Badge key={label} variant="secondary">
                   {label}
@@ -251,87 +158,30 @@ export default async function BurnerProfilePage({
               {pf.volunteeringOther && (
                 <Badge variant="outline">{pf.volunteeringOther}</Badge>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ProfileSection>
         )}
 
         {hasRanger && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
-                Rangers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-1.5">
+          <ProfileSection
+            label="Rangers"
+            icon={<ShieldCheck className="h-3.5 w-3.5 text-accent" aria-hidden />}
+          >
+            <div className="flex flex-wrap gap-1.5">
               {pf.rangerTraining && (
                 <Badge variant="success">Dust Ranger trained</Badge>
-              )}
-              {pf.rangerCurious && (
-                <Badge variant="secondary">Curious about shifts</Badge>
               )}
               {pf.greenDotTraining && (
                 <Badge variant="success">Green Dot trained</Badge>
               )}
-            </CardContent>
-          </Card>
+              {pf.rangerCurious && (
+                <Badge variant="secondary">Curious about rangering</Badge>
+              )}
+            </div>
+          </ProfileSection>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Tent className="h-4 w-4 text-accent" aria-hidden />
-              Camps
-            </CardTitle>
-            <CardDescription>
-              Registered camps this burner belongs to.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {profile.camps.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Not a member of any registered camp yet.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-border">
-                {profile.camps.map((camp) => (
-                  <li
-                    key={camp.slug}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <span className="min-w-0 truncate text-sm">
-                      <Link
-                        href={`/camps/${camp.slug}`}
-                        className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {camp.name}
-                      </Link>
-                      <span className="ml-1.5 text-xs text-muted-foreground">
-                        {KIND_LABEL[camp.kind]}
-                      </span>
-                    </span>
-                    <Badge
-                      variant={
-                        camp.role === "lead"
-                          ? "default"
-                          : camp.role === "admin"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {ROLE_LABEL[camp.role]}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-          Private details are never shown to other burners.
-        </p>
+        <PrivacyNote />
       </div>
     </AppShell>
   );
