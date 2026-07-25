@@ -137,3 +137,10 @@ better-auth process reading `neon_auth` supported, with schema/cookie stability
 commitments or change notice; (iii) the session-token/cookie contract; (iv) will
 managed Better Auth track 1.4.18 or move; (v) any bring-your-own-plugin plans
 (which would collapse Phase 2 into managed).
+
+## STATUS: Part 2 PARKED (Ryan, 25 Jul 2026)
+
+The "Sign in with AfrikaBurn" IdP / profile-sharing platform is deferred until after
+the 28 Jul kickoff — no point building it before adoption is real. Nothing in Part 1
+depends on it; Phase 1 (Option A) remains the active path. When it revives, this
+document is the starting point (research is done and cited).
