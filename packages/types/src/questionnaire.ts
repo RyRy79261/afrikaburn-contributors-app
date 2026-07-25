@@ -9,16 +9,85 @@ import { z } from "zod";
 // dashes, parens and is digit-bounded (7–15, the E.164 range).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s().-]{7,20}$/;
+const URL_RE = /^https?:\/\/[^\s/$.?#][^\s]*$/i;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const ALNUM_RE = /^[a-z0-9 ]+$/i;
+
+// --- Builder v2 (questionnaire-spec §"Builder v2 — Google Forms parity") ---
+// Everything below lives INSIDE the `definition` jsonb — no schema columns.
+// Every field added here is optional (or defaulted on a brand-new kind), so a
+// definition written before Builder v2 still parses and renders unchanged.
+
+/** Reserved branch target meaning "end the questionnaire here, go to submit".
+ * Page ids may never equal it (enforced by validateQuestionnaireDefinition). */
+export const SUBMIT_TARGET = "__submit__";
+
+/** Encoding for an "Other…" free-text answer on a choice question: the stored
+ * value is `other:<the text the respondent typed>`. Keeping it in the same
+ * flat response map (rather than a companion key) means Builder v2 needs no
+ * change to `questionnaire_responses.responses`. Option values may not start
+ * with this prefix (enforced at definition time). */
+export const OTHER_PREFIX = "other:";
+
+/** True when a choice answer is an "Other…" free-text entry. */
+export function isOtherAnswer(value: string): boolean {
+  return value.startsWith(OTHER_PREFIX);
+}
+
+/** The free text out of an `other:` answer (empty string when absent). */
+export function otherAnswerText(value: string): string {
+  return isOtherAnswer(value) ? value.slice(OTHER_PREFIX.length) : "";
+}
+
+/** Build the stored value for an "Other…" answer. */
+export function toOtherAnswer(text: string): string {
+  return `${OTHER_PREFIX}${text}`;
+}
+
+/** Text-answer validation presets ("regex-lite for common cases" — a closed
+ * enum rather than author-supplied regex, which would be a ReDoS surface). */
+export const TextFormat = z.enum([
+  "text",
+  "email",
+  "url",
+  "phone",
+  "number",
+  "integer",
+  "alphanumeric",
+]);
+export type TextFormat = z.infer<typeof TextFormat>;
+
+/** How a choice question renders. `dropdown` is the long-option-list variant
+ * of single choice; `image_grid` is multiple-choice-with-images. */
+export const ChoiceDisplay = z.enum(["radio", "dropdown", "image_grid"]);
+export type ChoiceDisplay = z.infer<typeof ChoiceDisplay>;
+
+export const MultiChoiceDisplay = z.enum(["checkbox", "image_grid"]);
+export type MultiChoiceDisplay = z.infer<typeof MultiChoiceDisplay>;
+
+/** One selectable option. `imageUrl` powers multiple-choice-with-images;
+ * `goTo` is the per-option branch target (single choice only). */
+export const QuestionOption = z.object({
+  value: z.string().min(1),
+  label: z.string().min(1),
+  imageUrl: z.string().min(1).optional(),
+  imageAlt: z.string().optional(),
+  goTo: z.string().min(1).optional(),
+});
+export type QuestionOption = z.infer<typeof QuestionOption>;
 
 export const SingleSelectQuestion = z.object({
   id: z.string().min(1),
   kind: z.literal("single_select"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
-  options: z
-    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
-    .min(2),
+  options: z.array(QuestionOption).min(2),
   required: z.boolean().default(true),
+  // Builder v2 additions.
+  display: ChoiceDisplay.optional(),
+  allowOther: z.boolean().optional(),
+  otherLabel: z.string().optional(),
+  shuffleOptions: z.boolean().optional(),
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestion>;
 
@@ -27,10 +96,15 @@ export const MultiSelectQuestion = z.object({
   kind: z.literal("multi_select"),
   prompt: z.string().min(1),
   helper: z.string().optional(),
-  options: z
-    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
-    .min(2),
+  options: z.array(QuestionOption).min(2),
   required: z.boolean().default(false),
+  // Builder v2 additions.
+  display: MultiChoiceDisplay.optional(),
+  allowOther: z.boolean().optional(),
+  otherLabel: z.string().optional(),
+  shuffleOptions: z.boolean().optional(),
+  minSelections: z.number().int().nonnegative().optional(),
+  maxSelections: z.number().int().positive().optional(),
 });
 export type MultiSelectQuestion = z.infer<typeof MultiSelectQuestion>;
 
@@ -42,6 +116,12 @@ export const ShortTextQuestion = z.object({
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(120),
   required: z.boolean().default(true),
+  // Builder v2 response validation. `format` applies a preset check; `min`/
+  // `max` bound the numeric value when format is number/integer.
+  minLength: z.number().int().nonnegative().optional(),
+  format: TextFormat.optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
 });
 export type ShortTextQuestion = z.infer<typeof ShortTextQuestion>;
 
@@ -53,6 +133,7 @@ export const LongTextQuestion = z.object({
   placeholder: z.string().optional(),
   maxLength: z.number().int().positive().default(1000),
   required: z.boolean().default(false),
+  minLength: z.number().int().nonnegative().optional(),
 });
 export type LongTextQuestion = z.infer<typeof LongTextQuestion>;
 
@@ -141,6 +222,60 @@ export const YearsQuestion = z.object({
 });
 export type YearsQuestion = z.infer<typeof YearsQuestion>;
 
+// --- Builder v2 question kinds ------------------------------------------
+
+// Linear scale — `min` is 0 or 1, `max` is 2–10, with optional end labels
+// ("Not at all" … "Completely"). The response value is the chosen integer.
+export const LinearScaleQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("linear_scale"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  min: z.union([z.literal(0), z.literal(1)]),
+  max: z.number().int().min(2).max(10),
+  minLabel: z.string().optional(),
+  maxLabel: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type LinearScaleQuestion = z.infer<typeof LinearScaleQuestion>;
+
+// Star rating — 3–10 steps, glyph is a render hint only. The response value is
+// the chosen integer, 1..steps.
+export const RatingQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("rating"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  steps: z.number().int().min(3).max(10),
+  glyph: z.enum(["star", "heart", "number"]).optional(),
+  required: z.boolean().default(true),
+});
+export type RatingQuestion = z.infer<typeof RatingQuestion>;
+
+// Time of day, 24h `HH:MM`. Backed by `<input type="time">`.
+export const TimeQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("time"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  required: z.boolean().default(true),
+});
+export type TimeQuestion = z.infer<typeof TimeQuestion>;
+
+// File upload rendered as a LINK. We have no blob infrastructure yet, so the
+// respondent pastes a URL to a file they host (Drive, Dropbox, …) rather than
+// uploading. When blob storage lands this kind keeps its id and gains an
+// upload affordance — the stored value stays a URL either way.
+export const FileLinkQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("file_link"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  placeholder: z.string().optional(),
+  required: z.boolean().default(false),
+});
+export type FileLinkQuestion = z.infer<typeof FileLinkQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SingleSelectQuestion,
   MultiSelectQuestion,
@@ -151,20 +286,86 @@ export const Question = z.discriminatedUnion("kind", [
   EmailQuestion,
   PhoneQuestion,
   YearsQuestion,
+  LinearScaleQuestion,
+  RatingQuestion,
+  TimeQuestion,
+  FileLinkQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
+
+// --- Builder v2 content blocks -------------------------------------------
+// Blocks sit in a page's block list alongside questions but take NO answer —
+// they never appear in the response map and never gate completion.
+
+// Section header / info text: standalone copy, "just there for information".
+export const InfoBlock = z.object({
+  id: z.string().min(1),
+  kind: z.literal("info_block"),
+  heading: z.string().optional(),
+  body: z.string().min(1),
+});
+export type InfoBlock = z.infer<typeof InfoBlock>;
+
+// Standalone image. `url` is a plain URL (no blob infra yet — same reasoning as
+// FileLinkQuestion); `alt` is required so the runner is never inaccessible.
+export const ImageBlock = z.object({
+  id: z.string().min(1),
+  kind: z.literal("image_block"),
+  url: z.string().min(1),
+  alt: z.string().min(1),
+  caption: z.string().optional(),
+});
+export type ImageBlock = z.infer<typeof ImageBlock>;
+
+export const ContentBlock = z.discriminatedUnion("kind", [InfoBlock, ImageBlock]);
+export type ContentBlock = z.infer<typeof ContentBlock>;
+
+/** Anything that can sit in a page's block list — a question or a content
+ * block. Pre-Builder-v2 definitions contain only questions, so widening the
+ * page's `questions` array to this union is backward compatible. */
+export const PageBlock = z.union([Question, ContentBlock]);
+export type PageBlock = z.infer<typeof PageBlock>;
+
+const ANSWERABLE_KINDS: ReadonlySet<string> = new Set([
+  "single_select",
+  "multi_select",
+  "short_text",
+  "long_text",
+  "date",
+  "boolean",
+  "email",
+  "phone",
+  "years",
+  "linear_scale",
+  "rating",
+  "time",
+  "file_link",
+]);
+
+/** True when a block takes an answer (i.e. is a Question, not an info/image
+ * block). The one place the answerable/decorative line is drawn. */
+export function isAnswerableBlock(block: PageBlock): block is Question {
+  return ANSWERABLE_KINDS.has(block.kind);
+}
 
 // The result every questionnaire SAVE action returns.
 export type SaveResult =
   { ok: true } | { ok: false; errors: Record<string, string> };
 
-// Standard page: one or more questions, validated on Next.
+// Standard page — ALSO the Builder v2 "section": one page per section, a page
+// break between them, validated on Next. `questions` holds Builder v2 blocks
+// (questions + info/image blocks); pre-v2 definitions hold questions only.
+// `next` overrides the default fall-through to the following page (a page id
+// or SUBMIT_TARGET); `shuffleQuestions` randomises block order for the
+// respondent.
 export const QuestionsPage = z.object({
   id: z.string().min(1),
   kind: z.literal("questions"),
   title: z.string().min(1),
   subtitle: z.string().optional(),
-  questions: z.array(Question).min(1),
+  questions: z.array(PageBlock).min(1),
+  next: z.string().min(1).optional(),
+  shuffleQuestions: z.boolean().optional(),
 });
 export type QuestionsPage = z.infer<typeof QuestionsPage>;
 
@@ -174,6 +375,7 @@ export const IntroPage = z.object({
   kind: z.literal("intro"),
   heading: z.string().min(1),
   body: z.string().min(1),
+  next: z.string().min(1).optional(),
 });
 export type IntroPage = z.infer<typeof IntroPage>;
 
@@ -217,13 +419,26 @@ export const QuestionnaireFieldChange = z.object({
 });
 export type QuestionnaireFieldChange = z.infer<typeof QuestionnaireFieldChange>;
 
-/** Flatten a questionnaire's pages into a single ordered list of questions. */
+/** Flatten a questionnaire's pages into a single ordered list of ANSWERABLE
+ * questions. Content blocks (info/image) are skipped — they take no answer, so
+ * they never count towards question counts or completion. */
 export function flattenQuestions(questionnaire: Questionnaire): Question[] {
   const out: Question[] = [];
   for (const page of questionnaire.pages) {
-    if (page.kind === "questions") out.push(...page.questions);
+    if (page.kind === "questions") out.push(...pageQuestions(page));
   }
   return out;
+}
+
+/** The answerable questions on one page, in order. */
+export function pageQuestions(page: QuestionnairePage): Question[] {
+  if (page.kind !== "questions") return [];
+  return page.questions.filter(isAnswerableBlock);
+}
+
+/** Every block on one page, in order (questions + info/image blocks). */
+export function pageBlocks(page: QuestionnairePage): PageBlock[] {
+  return page.kind === "questions" ? [...page.questions] : [];
 }
 
 /**
@@ -246,7 +461,7 @@ export function validateResponses(
 
   for (const page of questionnaire.pages) {
     if (page.kind === "intro") continue;
-    for (const q of page.questions) {
+    for (const q of pageQuestions(page)) {
       const value = parsed.data[q.id];
       const result = validateOne(q, value);
       if (!result.ok) {
@@ -259,6 +474,45 @@ export function validateResponses(
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, responses };
+}
+
+/**
+ * Apply a short-text question's `format` preset (and, for the numeric presets,
+ * its `min`/`max` bounds) to an answer. Returns an error message, or null when
+ * the answer passes. Presets are a CLOSED enum, deliberately: author-supplied
+ * regex would be a ReDoS surface on a server-side validator.
+ */
+function checkTextFormat(q: ShortTextQuestion, raw: string): string | null {
+  const trimmed = raw.trim();
+  switch (q.format) {
+    case undefined:
+    case "text":
+      return null;
+    case "email":
+      return EMAIL_RE.test(trimmed) ? null : "Enter a valid email address";
+    case "url":
+      return URL_RE.test(trimmed)
+        ? null
+        : "Enter a link starting with http:// or https://";
+    case "phone": {
+      const digits = trimmed.replace(/\D/g, "");
+      return PHONE_RE.test(trimmed) && digits.length >= 7 && digits.length <= 15
+        ? null
+        : "Enter a valid phone number";
+    }
+    case "alphanumeric":
+      return ALNUM_RE.test(trimmed) ? null : "Letters and numbers only";
+    case "number":
+    case "integer": {
+      const n = Number(trimmed);
+      if (trimmed === "" || Number.isNaN(n)) return "Enter a number";
+      if (q.format === "integer" && !Number.isInteger(n))
+        return "Enter a whole number";
+      if (q.min != null && n < q.min) return `Must be at least ${q.min}`;
+      if (q.max != null && n > q.max) return `Must be at most ${q.max}`;
+      return null;
+    }
+  }
 }
 
 export function validateOne(
@@ -297,6 +551,13 @@ export function validateOne(
     case "single_select": {
       if (typeof raw !== "string")
         return { ok: false, error: "Expected a choice" };
+      if (isOtherAnswer(raw)) {
+        if (!q.allowOther)
+          return { ok: false, error: "Not a valid option" };
+        if (otherAnswerText(raw).trim() === "")
+          return { ok: false, error: "Tell us what your 'other' answer is" };
+        return { ok: true, value: raw };
+      }
       if (!q.options.some((o) => o.value === raw))
         return { ok: false, error: "Not a valid option" };
       return { ok: true, value: raw };
@@ -305,10 +566,59 @@ export function validateOne(
       if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string"))
         return { ok: false, error: "Expected a list of choices" };
       const allowed = new Set(q.options.map((o) => o.value));
-      const filtered = (raw as string[]).filter((v) => allowed.has(v));
+      const filtered: string[] = [];
+      for (const v of raw as string[]) {
+        if (isOtherAnswer(v)) {
+          if (!q.allowOther) continue;
+          if (otherAnswerText(v).trim() === "")
+            return { ok: false, error: "Tell us what your 'other' answer is" };
+          filtered.push(v);
+          continue;
+        }
+        if (allowed.has(v)) filtered.push(v);
+      }
       if (q.required && filtered.length === 0)
         return { ok: false, error: "Pick at least one option" };
+      // min/maxSelections only bind once something is picked — an empty answer
+      // on an OPTIONAL question stays a valid skip.
+      if (
+        filtered.length > 0 &&
+        q.minSelections != null &&
+        filtered.length < q.minSelections
+      )
+        return { ok: false, error: `Pick at least ${q.minSelections} options` };
+      if (q.maxSelections != null && filtered.length > q.maxSelections)
+        return { ok: false, error: `Pick at most ${q.maxSelections} options` };
       return { ok: true, value: filtered };
+    }
+    case "linear_scale": {
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (typeof raw === "boolean" || !Number.isInteger(n))
+        return { ok: false, error: "Pick a value on the scale" };
+      if (n < q.min || n > q.max)
+        return { ok: false, error: `Pick a value between ${q.min} and ${q.max}` };
+      return { ok: true, value: n };
+    }
+    case "rating": {
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (typeof raw === "boolean" || !Number.isInteger(n))
+        return { ok: false, error: "Pick a rating" };
+      if (n < 1 || n > q.steps)
+        return { ok: false, error: `Pick a rating between 1 and ${q.steps}` };
+      return { ok: true, value: n };
+    }
+    case "time": {
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a time" };
+      if (!TIME_RE.test(raw))
+        return { ok: false, error: "Use 24-hour hh:mm" };
+      return { ok: true, value: raw };
+    }
+    case "file_link": {
+      if (typeof raw !== "string") return { ok: false, error: "Expected a link" };
+      if (!URL_RE.test(raw.trim()))
+        return { ok: false, error: "Enter a link starting with http:// or https://" };
+      return { ok: true, value: raw.trim() };
     }
     case "years": {
       if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string"))
@@ -332,6 +642,12 @@ export function validateOne(
       if (typeof raw !== "string") return { ok: false, error: "Expected text" };
       if (raw.length > q.maxLength)
         return { ok: false, error: `Max ${q.maxLength} characters` };
+      if (q.minLength != null && raw.length < q.minLength)
+        return { ok: false, error: `At least ${q.minLength} characters` };
+      if (q.kind === "short_text") {
+        const formatError = checkTextFormat(q, raw);
+        if (formatError) return { ok: false, error: formatError };
+      }
       return { ok: true, value: raw };
     }
     case "date": {

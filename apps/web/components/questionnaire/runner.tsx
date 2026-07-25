@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type {
-  Questionnaire,
-  QuestionnairePage,
-  QuestionnaireResponses,
-  QuestionnaireResponseValue,
-  SaveResult,
+import {
+  pageQuestions,
+  type Questionnaire,
+  type QuestionnairePage,
+  type QuestionnaireResponses,
+  type QuestionnaireResponseValue,
+  type SaveResult,
 } from "@quagga/types";
 import type { BioPrivacyField } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
@@ -107,7 +108,7 @@ export function QuestionnaireRunner({
     let answered = 0;
     for (const page of questionnaire.pages) {
       if (page.kind !== "questions") continue;
-      for (const q of page.questions) {
+      for (const q of pageQuestions(page)) {
         total += 1;
         const v = responses[q.id];
         const empty =
@@ -142,7 +143,7 @@ export function QuestionnaireRunner({
   function validatePage(page: QuestionnairePage): boolean {
     if (page.kind === "intro") return true;
     const next: Record<string, string> = {};
-    for (const q of page.questions) {
+    for (const q of pageQuestions(page)) {
       const v = responses[q.id];
       const missing = v === undefined || v === null || v === "";
       if (missing && "required" in q && q.required) {
@@ -251,7 +252,7 @@ export function QuestionnaireRunner({
             )}
           </div>
           <div className="flex flex-col gap-5">
-            {step.page.questions.map((q) => (
+            {pageQuestions(step.page).map((q) => (
               <QuestionField
                 key={q.id}
                 question={q}

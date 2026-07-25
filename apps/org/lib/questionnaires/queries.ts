@@ -11,6 +11,7 @@ import {
 import {
   ORG_OUTBOUND_SELECTOR_LABELS,
   OFFICER_AUDIENCE_LABELS,
+  flattenQuestions,
   type AudienceSpec,
   type OfficerKey,
   type Questionnaire,
@@ -74,13 +75,11 @@ export function audienceLabel(spec: AudienceSpec | null): string {
   }
 }
 
-/** Count questions across a stored definition's pages. */
+/** Count ANSWERABLE questions across a stored definition's pages — Builder v2
+ * info/image blocks live in the same list but take no answer, so they must not
+ * inflate the "12 questions" count an author sees. */
 function countFields(definition: Questionnaire): number {
-  let n = 0;
-  for (const page of definition.pages) {
-    if (page.kind === "questions") n += page.questions.length;
-  }
-  return n;
+  return flattenQuestions(definition).length;
 }
 
 /**

@@ -29,6 +29,18 @@
 //     helpers, BIO_PRIVACY_FIELDS, defaultPrivacyFlags, isBioComplete (./bio)
 //   - questionnaire engine: code-side registry + gating helpers
 //     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
+//   - questionnaire Builder v2 definition validation: structural integrity
+//     beyond Zod — unique ids, option values, forward-only branch targets
+//     (loops/dead-ends rejected), reachability, min/max consistency
+//     (validateQuestionnaireDefinition) (./questionnaire-definition)
+//   - questionnaire runtime: branch resolution (nextPageId, resolvePath,
+//     visibleQuestions), progress/completeness (deriveProgress), branch-aware
+//     server-side submit validation (validateSubmission), seeded shuffle
+//     (presentationBlocks, presentationOptions) (./questionnaire-runtime)
+//   - questionnaire results: per-question aggregation by chart shape — choice
+//     counts/percentages, scale + star histograms with averages, boolean
+//     splits, date/time timelines, orphan answers (aggregateResponses)
+//     (./questionnaire-results)
 //   - custom project roles: DEFAULT_PROJECT_ROLES, normalizeRoleName,
 //     roleNameConflicts, dedupeRoleNames, defaultProjectRoleRows,
 //     officerRoleRows, teamLeadScopePatch, kind guards (./project-roles)
@@ -97,6 +109,9 @@ export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";
 export * from "./questionnaire-engine";
+export * from "./questionnaire-definition";
+export * from "./questionnaire-runtime";
+export * from "./questionnaire-results";
 export * from "./project-roles";
 export * from "./project-permissions";
 export * from "./officers";
