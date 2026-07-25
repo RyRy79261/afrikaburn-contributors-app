@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@quagga/ui/components/table";
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@quagga/ui/components/responsive-data-table";
 import { Badge } from "@quagga/ui/components/badge";
 import { cn } from "@quagga/ui/lib/utils";
 import { deriveOnboardingProgress, standingLabel } from "@quagga/core";
@@ -23,6 +18,12 @@ import { SupplierOnboardingStepList } from "./supplier-onboarding-steps";
  * onboarding n/7 (incomplete highlighted) · standing (inline select) · notes
  * (count → drawer). Each row expands to the per-step onboarding detail with the
  * org-side confirm/review actions. No source/vetting anywhere.
+ *
+ * Rendered through `ResponsiveDataTable`, so the same column declaration gives
+ * the desktop table and the stacked card the mobile frame draws (`hSNjO`, whose
+ * header row is disabled and whose rows stack Supplier / Onboarding / Standing
+ * / Notes). Expansion, the standing select and the notes drawer all work in
+ * both layouts — the primitive owns the chevron and the open set.
  */
 export function SuppliersTable({
   suppliers,
@@ -31,185 +32,157 @@ export function SuppliersTable({
   suppliers: SupplierOverviewRow[];
   editionId: string | null;
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-8" />
-          <TableHead>Supplier</TableHead>
-          <TableHead>Onboarding</TableHead>
-          <TableHead>Standing</TableHead>
-          <TableHead className="text-right">Notes</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {suppliers.map((s) => {
-          const progress = deriveOnboardingProgress(s.steps);
-          const isOpen = expanded === s.id;
-          return (
-            <SupplierRows
-              key={s.id}
-              supplier={s}
-              editionId={editionId}
-              isOpen={isOpen}
-              onToggle={() => setExpanded(isOpen ? null : s.id)}
-              completed={progress.completed}
-              total={progress.total}
-              awaiting={progress.awaiting}
-              isOnboarded={progress.isOnboarded}
-            />
-          );
-        })}
-      </TableBody>
-    </Table>
-  );
-}
-
-function SupplierRows({
-  supplier: s,
-  editionId,
-  isOpen,
-  onToggle,
-  completed,
-  total,
-  awaiting,
-  isOnboarded,
-}: {
-  supplier: SupplierOverviewRow;
-  editionId: string | null;
-  isOpen: boolean;
-  onToggle: () => void;
-  completed: number;
-  total: number;
-  awaiting: number;
-  isOnboarded: boolean;
-}) {
-  return (
-    <>
-      <TableRow>
-        <TableCell className="align-top">
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={isOpen}
-            aria-label={isOpen ? "Collapse onboarding" : "Expand onboarding"}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-          >
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4" aria-hidden />
-            ) : (
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            )}
-          </button>
-        </TableCell>
-        <TableCell className="font-medium align-top">
-          <div className="flex flex-col gap-1">
-            <span>{s.name}</span>
-            {(s.category || s.returning) && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {s.category && (
-                  <Badge variant="secondary">{s.category}</Badge>
-                )}
-                {s.returning && (
-                  <Badge variant="outline">
-                    {s.returning === "returning" ? "Returning" : "Newbie"}
-                  </Badge>
-                )}
-              </div>
-            )}
-            {s.services && (
-              <span className="max-w-xs truncate text-xs text-muted-foreground">
-                {s.services}
-              </span>
-            )}
-            {s.website && (
-              <a
-                href={s.website}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex w-fit items-center gap-1 text-xs text-accent hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" aria-hidden />
-                Website
-              </a>
-            )}
-          </div>
-        </TableCell>
-        <TableCell className="align-top">
+  const columns: ResponsiveColumn<SupplierOverviewRow>[] = [
+    {
+      id: "supplier",
+      header: "Supplier",
+      role: "title",
+      cellClassName: "font-medium",
+      cell: (s) => (
+        <div className="flex flex-col gap-1">
+          <span>{s.name}</span>
+          {(s.category || s.returning) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {s.category && <Badge variant="secondary">{s.category}</Badge>}
+              {s.returning && (
+                <Badge variant="outline">
+                  {s.returning === "returning" ? "Returning" : "Newbie"}
+                </Badge>
+              )}
+            </div>
+          )}
+          {s.services && (
+            <span className="max-w-xs truncate text-xs font-normal text-muted-foreground">
+              {s.services}
+            </span>
+          )}
+          {s.website && (
+            <a
+              href={s.website}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-fit items-center gap-1 text-xs font-normal text-accent hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" aria-hidden />
+              Website
+            </a>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "onboarding",
+      header: "Onboarding",
+      align: "left",
+      cell: (s) => {
+        const progress = deriveOnboardingProgress(s.steps);
+        return (
           <div className="flex flex-col items-start gap-1.5">
-            <Badge variant={isOnboarded ? "success" : "warning"}>
-              {completed}/{total}
-              {isOnboarded ? " onboarded" : " incomplete"}
+            <Badge variant={progress.isOnboarded ? "success" : "warning"}>
+              {progress.completed}/{progress.total}
+              {progress.isOnboarded ? " onboarded" : " incomplete"}
             </Badge>
             <div
               className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"
               role="progressbar"
-              aria-valuenow={completed}
+              aria-valuenow={progress.completed}
               aria-valuemin={0}
-              aria-valuemax={total}
-              aria-label={`Onboarding ${completed} of ${total} steps`}
+              aria-valuemax={progress.total}
+              aria-label={`Onboarding ${progress.completed} of ${progress.total} steps`}
             >
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
-                  isOnboarded ? "bg-success" : "bg-warning",
+                  progress.isOnboarded ? "bg-success" : "bg-warning",
                 )}
-                style={{ width: `${(completed / total) * 100}%` }}
+                style={{
+                  width: `${(progress.completed / progress.total) * 100}%`,
+                }}
               />
             </div>
-            {awaiting > 0 && (
+            {progress.awaiting > 0 && (
               <span className="text-xs text-muted-foreground">
-                {awaiting} awaiting confirmation
+                {progress.awaiting} awaiting confirmation
               </span>
             )}
           </div>
-        </TableCell>
-        <TableCell className="align-top">
-          <SupplierStandingSelect supplierId={s.id} value={s.standing} />
-        </TableCell>
-        <TableCell className="text-right align-top">
-          <div className="flex justify-end">
-            <SupplierNotesDrawer
-              supplierId={s.id}
-              supplierName={s.name}
-              count={s.notesCount}
-            />
-          </div>
-        </TableCell>
-      </TableRow>
-      {isOpen && (
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={5} className="bg-muted/30 p-4">
-            {editionId ? (
-              <>
-                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Onboarding status · {completed}/{total}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {standingLabel(s.standing)} —{" "}
-                    {isOnboarded
-                      ? "fully onboarded"
-                      : `${total - completed} step${total - completed === 1 ? "" : "s"} outstanding`}
-                  </p>
-                </div>
-                <SupplierOnboardingStepList
-                  supplierId={s.id}
-                  editionId={editionId}
-                  steps={s.steps}
-                />
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No active edition — onboarding steps appear once an edition is
-                active.
-              </p>
-            )}
-          </TableCell>
-        </TableRow>
+        );
+      },
+    },
+    {
+      id: "standing",
+      header: "Standing",
+      align: "left",
+      cell: (s) => (
+        <SupplierStandingSelect supplierId={s.id} value={s.standing} />
+      ),
+    },
+    {
+      id: "notes",
+      header: "Notes",
+      align: "right",
+      cell: (s) => (
+        <div className="flex justify-end">
+          <SupplierNotesDrawer
+            supplierId={s.id}
+            supplierName={s.name}
+            count={s.notesCount}
+          />
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <ResponsiveDataTable
+      columns={columns}
+      data={suppliers}
+      getRowKey={(s) => s.id}
+      caption="Supplier repository"
+      renderExpanded={(s) => (
+        <SupplierExpansion supplier={s} editionId={editionId} />
       )}
+    />
+  );
+}
+
+/** The per-step onboarding detail revealed under an expanded supplier row. */
+function SupplierExpansion({
+  supplier: s,
+  editionId,
+}: {
+  supplier: SupplierOverviewRow;
+  editionId: string | null;
+}) {
+  const progress = deriveOnboardingProgress(s.steps);
+  const outstanding = progress.total - progress.completed;
+
+  if (!editionId) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No active edition — onboarding steps appear once an edition is active.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Onboarding status · {progress.completed}/{progress.total}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {standingLabel(s.standing)} —{" "}
+          {progress.isOnboarded
+            ? "fully onboarded"
+            : `${outstanding} step${outstanding === 1 ? "" : "s"} outstanding`}
+        </p>
+      </div>
+      <SupplierOnboardingStepList
+        supplierId={s.id}
+        editionId={editionId}
+        steps={s.steps}
+      />
     </>
   );
 }

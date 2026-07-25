@@ -2,12 +2,12 @@ import Link from "next/link";
 import {
   ArrowRight,
   ClipboardList,
-  FileCheck2,
   ListChecks,
   Package,
   Send,
   Tags,
   UserCog,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { Card, CardContent } from "@quagga/ui/components/card";
@@ -34,7 +34,13 @@ import { RecentActivity } from "@/components/status-board/recent-activity";
 
 export const dynamic = "force-dynamic";
 
-/** Console destinations that exist today (canvas quick-links grid). */
+/**
+ * Console destinations that exist today (canvas quick-links grid). Supplier
+ * sign-up management is a live tile here (frame node `cYXlB`) — the page ships
+ * at /suppliers/signup-management; it is deliberately NOT in the header nav,
+ * which is already eight items wide, so this tile and the Suppliers page link
+ * are its two entry points.
+ */
 const QUICK_LINKS = [
   {
     href: "/registrations",
@@ -65,6 +71,12 @@ const QUICK_LINKS = [
     icon: Users,
     title: "Accounts",
     desc: "People, roles & access",
+  },
+  {
+    href: "/suppliers/signup-management",
+    icon: UserPlus,
+    title: "Supplier sign-up management",
+    desc: "Approve who joins the suppliers list",
   },
 ] as const;
 
@@ -178,15 +190,6 @@ export default async function OverviewPage() {
             </Card>
           </Link>
         ))}
-        {/* Supplier sign-up management is designed (frame U7929T) but not built
-            — a dead link would be worse than an honest parked tile. */}
-        <DisabledHintTile
-          title="Supplier sign-up management"
-          hint="Approve who joins the suppliers list — page still in design."
-          tag="Not built"
-          icon={<FileCheck2 className="h-4 w-4" />}
-          className="h-full"
-        />
       </section>
 
       <RecentActivity rows={activity} />

@@ -30,13 +30,9 @@ import {
 } from "@quagga/ui/components/select";
 import { Switch } from "@quagga/ui/components/switch";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@quagga/ui/components/table";
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@quagga/ui/components/responsive-data-table";
 import { toast } from "@quagga/ui/components/toast";
 
 import {
@@ -49,6 +45,13 @@ import { BINDABLE_STEPS, UNBOUND_VALUE, asStepKey, stepLabel } from "./steps";
 
 // The per-edition document table (canvas `U7929T`): title + source, source
 // chip, required-ack toggle, bound-step select, reorder, edit, delete.
+//
+// RESPONSIVE. Declared once through `ResponsiveDataTable`, so the desktop table
+// and the stacked card the mobile frame draws (`D6IGel`, row `QD5Dv`) come from
+// the same column set. The mobile card drops the reorder column — the frame
+// disables its drag grip there too, and up/down arrows are meaningless once the
+// rows are cards — while the inline toggle, the step select and edit/delete all
+// stay reachable.
 //
 // REORDERING. The canvas draws a drag grip. @quagga/ui ships no drag-and-drop
 // primitive and this slice may not add dependencies, so the same intent is
@@ -183,166 +186,196 @@ export function DocumentsTable({
     });
   }
 
+  const columns: ResponsiveColumn<OrgSupplierDocumentRow>[] = [
+    {
+      id: "order",
+      header: "Order",
+      // Reorder is a desktop-only affordance: the mobile frame disables its
+      // drag grip, and up/down arrows say nothing once rows are stacked cards.
+      mobileHidden: true,
+      headClassName: "w-[72px]",
+      cell: (doc) => {
+        const index = documents.findIndex((d) => d.id === doc.id);
+        return (
+          <div className="flex items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={pending || index <= 0}
+              onClick={() => move(index, -1)}
+              aria-label={`Move "${doc.title}" up`}
+            >
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={pending || index === documents.length - 1}
+              onClick={() => move(index, 1)}
+              aria-label={`Move "${doc.title}" down`}
+            >
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+            </Button>
+          </div>
+        );
+      },
+    },
+    {
+      id: "document",
+      header: "Document",
+      role: "title",
+      cell: (doc) => {
+        const SourceIcon = sourceIcon(doc.sourceType);
+        return (
+          <>
+            <p className="font-medium text-foreground">{doc.title}</p>
+            <a
+              href={doc.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-normal text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              <SourceIcon className="h-3 w-3" aria-hidden />
+              {displayUrl(doc.url)}
+              <ExternalLink className="h-3 w-3" aria-hidden />
+            </a>
+            {doc.ackCount > 0 ? (
+              <p className="mt-1 text-xs font-normal text-muted-foreground">
+                {doc.ackCount} supplier
+                {doc.ackCount === 1 ? "" : "s"} acknowledged
+              </p>
+            ) : null}
+          </>
+        );
+      },
+    },
+    {
+      id: "source",
+      header: "Source",
+      role: "badge",
+      headClassName: "w-[110px]",
+      cell: (doc) => {
+        const SourceIcon = sourceIcon(doc.sourceType);
+        return (
+          <Badge variant="outline">
+            <SourceIcon className="h-3 w-3" aria-hidden />
+            {doc.sourceType === "file" ? "File" : "Link"}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "requiredAck",
+      header: "Required ack",
+      align: "left",
+      headClassName: "w-[190px]",
+      cell: (doc) => (
+        <div className="flex items-center gap-2.5">
+          <Switch
+            checked={doc.requiredAck}
+            disabled={pending}
+            onCheckedChange={(next) =>
+              save(
+                doc,
+                { requiredAck: next },
+                next
+                  ? "Acknowledgement now required"
+                  : "Acknowledgement no longer required",
+              )
+            }
+            aria-label={`Require acknowledgement of "${doc.title}"`}
+          />
+          <span className="text-sm text-muted-foreground">
+            {doc.requiredAck ? "Required" : "Optional"}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "stepKey",
+      header: "Binds to step",
+      align: "left",
+      headClassName: "w-[240px]",
+      cell: (doc) => (
+        <Select
+          value={doc.stepKey ?? UNBOUND_VALUE}
+          disabled={pending}
+          onValueChange={(next) =>
+            save(
+              doc,
+              {
+                stepKey: next === UNBOUND_VALUE ? null : next,
+                // Binding always implies the acknowledgement.
+                requiredAck: next === UNBOUND_VALUE ? doc.requiredAck : true,
+              },
+              next === UNBOUND_VALUE
+                ? "Binding removed"
+                : `Bound to "${stepLabel(next)}"`,
+            )
+          }
+        >
+          <SelectTrigger aria-label={`Onboarding step bound to "${doc.title}"`}>
+            <SelectValue placeholder="Not bound" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNBOUND_VALUE}>Not bound</SelectItem>
+            {BINDABLE_STEPS.map((step) => (
+              <SelectItem key={step.key} value={step.key}>
+                {step.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      role: "actions",
+      hideHeader: true,
+      align: "right",
+      headClassName: "w-[100px]",
+      cell: (doc) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={pending}
+            onClick={() => setEditing(doc)}
+            aria-label={`Edit "${doc.title}"`}
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            disabled={pending}
+            onClick={() => remove(doc)}
+            aria-label={`Withdraw "${doc.title}"`}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[72px]">Order</TableHead>
-            <TableHead>Document</TableHead>
-            <TableHead className="w-[110px]">Source</TableHead>
-            <TableHead className="w-[190px]">Required ack</TableHead>
-            <TableHead className="w-[240px]">Binds to step</TableHead>
-            <TableHead className="w-[100px] text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {documents.map((doc, index) => {
-            const SourceIcon = sourceIcon(doc.sourceType);
-            return (
-              <TableRow key={doc.id}>
-                <TableCell className="align-top">
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={pending || index === 0}
-                      onClick={() => move(index, -1)}
-                      aria-label={`Move "${doc.title}" up`}
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={pending || index === documents.length - 1}
-                      onClick={() => move(index, 1)}
-                      aria-label={`Move "${doc.title}" down`}
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                  </div>
-                </TableCell>
-
-                <TableCell className="align-top">
-                  <p className="font-medium text-foreground">{doc.title}</p>
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                  >
-                    <SourceIcon className="h-3 w-3" aria-hidden />
-                    {displayUrl(doc.url)}
-                    <ExternalLink className="h-3 w-3" aria-hidden />
-                  </a>
-                  {doc.ackCount > 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {doc.ackCount} supplier
-                      {doc.ackCount === 1 ? "" : "s"} acknowledged
-                    </p>
-                  ) : null}
-                </TableCell>
-
-                <TableCell className="align-top">
-                  <Badge variant="outline">
-                    <SourceIcon className="h-3 w-3" aria-hidden />
-                    {doc.sourceType === "file" ? "File" : "Link"}
-                  </Badge>
-                </TableCell>
-
-                <TableCell className="align-top">
-                  <div className="flex items-center gap-2.5">
-                    <Switch
-                      checked={doc.requiredAck}
-                      disabled={pending}
-                      onCheckedChange={(next) =>
-                        save(
-                          doc,
-                          { requiredAck: next },
-                          next
-                            ? "Acknowledgement now required"
-                            : "Acknowledgement no longer required",
-                        )
-                      }
-                      aria-label={`Require acknowledgement of "${doc.title}"`}
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {doc.requiredAck ? "Required" : "Optional"}
-                    </span>
-                  </div>
-                </TableCell>
-
-                <TableCell className="align-top">
-                  <Select
-                    value={doc.stepKey ?? UNBOUND_VALUE}
-                    disabled={pending}
-                    onValueChange={(next) =>
-                      save(
-                        doc,
-                        {
-                          stepKey: next === UNBOUND_VALUE ? null : next,
-                          // Binding always implies the acknowledgement.
-                          requiredAck:
-                            next === UNBOUND_VALUE ? doc.requiredAck : true,
-                        },
-                        next === UNBOUND_VALUE
-                          ? "Binding removed"
-                          : `Bound to "${stepLabel(next)}"`,
-                      )
-                    }
-                  >
-                    <SelectTrigger
-                      aria-label={`Onboarding step bound to "${doc.title}"`}
-                    >
-                      <SelectValue placeholder="Not bound" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={UNBOUND_VALUE}>Not bound</SelectItem>
-                      {BINDABLE_STEPS.map((step) => (
-                        <SelectItem key={step.key} value={step.key}>
-                          {step.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-
-                <TableCell className="align-top text-right">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={pending}
-                      onClick={() => setEditing(doc)}
-                      aria-label={`Edit "${doc.title}"`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      disabled={pending}
-                      onClick={() => remove(doc)}
-                      aria-label={`Withdraw "${doc.title}"`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      <ResponsiveDataTable
+        columns={columns}
+        data={documents}
+        getRowKey={(doc) => doc.id}
+        caption="Supplier sign-up documents"
+      />
 
       <Dialog
         open={editing !== null}

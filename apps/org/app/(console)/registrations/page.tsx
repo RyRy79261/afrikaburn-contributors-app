@@ -1,14 +1,4 @@
-import Link from "next/link";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@quagga/ui/components/table";
 import { Card, CardContent } from "@quagga/ui/components/card";
-import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getRegistrationRows } from "@/lib/queries";
 import {
@@ -18,8 +8,11 @@ import {
 } from "@/lib/org-logic";
 import { formatDate } from "@/lib/labels";
 import { PageHeading } from "@/components/page-heading";
-import { CohortBadge } from "@/components/status-badges";
 import { RegistrationFilters } from "@/components/registration-filters";
+import {
+  RegistrationsTable,
+  type RegistrationTableRow,
+} from "@/components/registrations-table";
 import { RegistrationsPagination } from "@/components/registrations-pagination";
 
 export const dynamic = "force-dynamic";
@@ -62,10 +55,16 @@ export default async function RegistrationsPage({
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, totalPages);
-  const pageRows = filtered.slice(
-    (current - 1) * PAGE_SIZE,
-    current * PAGE_SIZE,
-  );
+  const pageRows: RegistrationTableRow[] = filtered
+    .slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+    .map((r) => ({
+      id: r.id,
+      groupName: r.groupName,
+      status: r.status,
+      soundShort: SOUND_LEVEL_SHORT[classifySoundLevel(r.soundRaw)],
+      cohort: r.cohort,
+      submittedLabel: r.submittedAt ? formatDate(r.submittedAt) : "Not submitted",
+    }));
 
   return (
     <div>
@@ -98,49 +97,12 @@ export default async function RegistrationsPage({
             {filtered.length}{" "}
             {filtered.length === 1 ? "registration" : "registrations"}
           </p>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Camp</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Sound</TableHead>
-                    <TableHead>New / Ret.</TableHead>
-                    <TableHead>Submitted</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageRows.map((r) => (
-                    <TableRow key={r.id} className="cursor-pointer">
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/registrations/${r.id}`}
-                          className="hover:text-accent"
-                        >
-                          {r.groupName}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={r.status} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {SOUND_LEVEL_SHORT[classifySoundLevel(r.soundRaw)]}
-                      </TableCell>
-                      <TableCell>
-                        <CohortBadge cohort={r.cohort} />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {r.submittedAt
-                          ? formatDate(r.submittedAt)
-                          : "Not submitted"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* Card chrome only at md+: below md the responsive table renders its
+              own stacked cards (frame NkPRL), so an outer bordered box would
+              double-nest. */}
+          <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+            <RegistrationsTable rows={pageRows} />
+          </div>
 
           <RegistrationsPagination
             page={current}

@@ -182,6 +182,40 @@ export async function listLinkedAccounts(): Promise<LinkedAccount[]> {
   }
 }
 
+/** Human labels for the provider ids the app can actually issue. */
+const SIGN_IN_METHOD_LABELS: Record<string, string> = {
+  credential: "Email",
+  google: "Google",
+};
+
+/**
+ * Human-readable sign-in method(s) for a set of linked accounts, in a stable
+ * order (Email, then Google, then anything else), de-duplicated. Returns null
+ * when nothing determinable is linked so callers can render an honest fallback
+ * ("Not available") rather than a wrong literal. Single source of truth for the
+ * /profile Account card and any other surface that names the sign-in method.
+ */
+export function describeSignInMethods(accounts: LinkedAccount[]): string | null {
+  const labels: string[] = [];
+  for (const a of accounts) {
+    const known = SIGN_IN_METHOD_LABELS[a.providerId];
+    if (known) {
+      labels.push(known);
+    } else if (a.providerId && a.providerId !== "unknown") {
+      labels.push(a.providerId.charAt(0).toUpperCase() + a.providerId.slice(1));
+    }
+  }
+  const unique = [...new Set(labels)];
+  if (unique.length === 0) return null;
+  const order = ["Email", "Google"];
+  const rank = (label: string) => {
+    const i = order.indexOf(label);
+    return i === -1 ? order.length : i;
+  };
+  unique.sort((a, b) => rank(a) - rank(b));
+  return unique.join(", ");
+}
+
 // --- Deletion state -------------------------------------------------------
 
 /** The live deletion request for a user, or null. */

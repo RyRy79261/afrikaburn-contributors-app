@@ -42,14 +42,15 @@ export default async function SuppliersPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <SuppliersTable
-              suppliers={suppliers}
-              editionId={edition?.id ?? null}
-            />
-          </CardContent>
-        </Card>
+        /* Card chrome only at md+: below md the responsive table renders its own
+           stacked cards (frame hSNjO), so an outer bordered box would
+           double-nest. */
+        <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+          <SuppliersTable
+            suppliers={suppliers}
+            editionId={edition?.id ?? null}
+          />
+        </div>
       )}
     </div>
   );

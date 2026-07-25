@@ -277,15 +277,17 @@ function ActivationRow({
         )}
       </div>
 
-      <div className="flex items-center gap-3 sm:w-56">
+      <div className="flex items-center gap-3 sm:w-64">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-success transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-          {completed}/{sent}
+        {/* The canvas prints the ratio AND the percentage (frame JY7dF) — the
+            bar alone leaves the reader estimating the number it encodes. */}
+        <span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+          {completed}/{sent} · {pct}%
         </span>
       </div>
     </Link>

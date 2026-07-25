@@ -23,6 +23,7 @@ import { ensureCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio, getKeyFingerprint } from "@/lib/bio-store";
+import { describeSignInMethods, listLinkedAccounts } from "@/lib/account";
 import { resolveCampHistoryDisplay } from "@/lib/groups-store";
 import { searchCampsAction } from "@/lib/camp-search-action";
 import { AppShell } from "@/components/app-shell";
@@ -165,6 +166,7 @@ export default async function ProfilePage({
   const extras: BioExtras = bio.extras;
   const flags = bio.privacyFlags;
   const fingerprint = await getKeyFingerprint(user.id);
+  const signInMethods = describeSignInMethods(await listLinkedAccounts());
   const campHistory = await resolveCampHistoryDisplay(
     extras.campHistory,
     edition.id,
@@ -431,7 +433,9 @@ export default async function ProfilePage({
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   Sign-in
                 </p>
-                <p className="text-sm text-foreground">Email</p>
+                <p className="text-sm text-foreground">
+                  {signInMethods ?? "Not available"}
+                </p>
               </div>
             </div>
           </CardContent>

@@ -372,20 +372,29 @@ function BarRow({
   count: number;
   percent: number;
 }) {
+  // The label/value gutters are fixed at md+ so bars line up down the card. On
+  // a 360px phone those same widths (160 + 112 + gaps) left the track ~24px —
+  // invisible — so below md the label goes full-width above the bar and the
+  // count sits in a narrow gutter beside it (frame nRtO7 keeps a real track).
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-40 shrink-0 truncate text-sm" title={typeof label === "string" ? label : undefined}>
+    <div className="flex flex-col gap-1 md:flex-row md:items-center md:gap-3">
+      <span
+        className="truncate text-sm md:w-40 md:shrink-0"
+        title={typeof label === "string" ? label : undefined}
+      >
         {label}
       </span>
-      <div className="h-6 flex-1 overflow-hidden rounded-sm bg-muted">
-        <div
-          className="h-full rounded-sm bg-accent transition-all"
-          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-        />
+      <div className="flex items-center gap-2 md:contents">
+        <div className="h-6 flex-1 overflow-hidden rounded-sm bg-muted">
+          <div
+            className="h-full rounded-sm bg-accent transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+          />
+        </div>
+        <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground md:w-28">
+          {count} · {percent}%
+        </span>
       </div>
-      <span className="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-        {count} · {percent}%
-      </span>
     </div>
   );
 }

@@ -48,7 +48,11 @@ export interface VehicleRegistrationFormProps {
   blobConfigured: boolean;
 }
 
-/** A numbered registration section (canvas "Num + Title" head row). */
+/**
+ * A numbered registration section, rendered as an elevated $card (canvas
+ * S8ZcWf/Qq5u0 section panels: fill $card, cornerRadius 12, drop-shadow,
+ * padding 24) — matching the @quagga/ui Card treatment every other form uses.
+ */
 function Section({
   index,
   title,
@@ -61,7 +65,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4 border-t border-border pt-6">
+    <section className="flex flex-col gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <span

@@ -1,20 +1,14 @@
 import { Search } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@quagga/ui/components/table";
 import { Card, CardContent } from "@quagga/ui/components/card";
-import { Badge } from "@quagga/ui/components/badge";
 import { Input } from "@quagga/ui/components/input";
 import { Button } from "@quagga/ui/components/button";
 import { guardConsole } from "@/lib/gate";
 import { searchAccounts } from "@/lib/queries";
 import { PageHeading } from "@/components/page-heading";
-import { AccountActions } from "@/components/account-actions";
+import {
+  AccountsTable,
+  type AccountTableRow,
+} from "@/components/accounts-table";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +29,14 @@ export default async function AccountsPage({
   const query = pick(sp.q);
   const isGod = session.role === "god";
   const accounts = await searchAccounts(session.orgGroupId, query);
+  // The table renders its columns as functions, so it is a client component;
+  // the server hands it plain serializable rows (no Date, no query internals).
+  const rows: AccountTableRow[] = accounts.map((a) => ({
+    userId: a.userId,
+    email: a.email,
+    burnerName: a.burnerName,
+    role: a.role,
+  }));
 
   return (
     <div>
@@ -76,60 +78,16 @@ export default async function AccountsPage({
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Burner name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-right">
-                    <span className="sr-only">Access</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accounts.map((a) => (
-                  <TableRow key={a.userId}>
-                    <TableCell className="font-medium">
-                      {a.email ?? (
-                        <span className="italic text-muted-foreground">
-                          no email
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {a.burnerName ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      {a.role === "god" ? (
-                        <Badge>Owner</Badge>
-                      ) : a.role === "org_staff" ? (
-                        <Badge variant="secondary">Org staff</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isGod ? (
-                        <AccountActions
-                          userId={a.userId}
-                          role={a.role}
-                          isSelf={a.userId === session.dbUserId}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          —
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        /* Card chrome only at md+: below md the responsive table renders its own
+           stacked cards (frame y1idvL, whose header row is disabled), so an
+           outer bordered box would double-nest. */
+        <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+          <AccountsTable
+            rows={rows}
+            isGod={isGod}
+            selfUserId={session.dbUserId}
+          />
+        </div>
       )}
     </div>
   );

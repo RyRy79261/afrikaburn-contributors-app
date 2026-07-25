@@ -78,20 +78,25 @@ export default async function SupplierSignupManagementPage() {
         />
       ) : (
         <div className="flex flex-col gap-6">
-          <Card>
-            <CardContent className="p-0">
-              {documents.length === 0 ? (
+          {documents.length === 0 ? (
+            <Card>
+              <CardContent className="p-0">
                 <EmptyState
                   className="border-0 bg-transparent"
                   icon={<FileText className="h-8 w-8" aria-hidden />}
                   title="No documents published yet"
                   description="Add the supplier agreement, the depot basics, and anything else a supplier must read for this edition."
                 />
-              ) : (
-                <DocumentsTable documents={documents} />
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            /* Card chrome only at md+: below md the responsive table renders its
+               own stacked cards (frame D6IGel), so an outer bordered box would
+               double-nest. */
+            <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
+              <DocumentsTable documents={documents} />
+            </div>
+          )}
 
           <Card>
             <CardHeader>
