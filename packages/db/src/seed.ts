@@ -40,6 +40,8 @@ import {
   normalizeRoleName,
   activationRequiredActionKey,
   serializeVolunteering,
+  CANONICAL_CAMP_CATEGORIES,
+  normalizeCategoryLabel,
   BURNER_BIO_VERSION,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
@@ -536,6 +538,50 @@ async function main(): Promise<void> {
       await ensureProjectRoles(db, camp.id);
     }
     console.log(`[seed] project roles seeded for ${camps.length} camps`);
+
+    // --- Camp categories (org-defined per-edition taxonomy) ---------------------
+    // Seed the canonical catalog for 2027 (org may edit freely afterwards), then
+    // assign each seeded camp a realistic set per the /directory canvas chips
+    // (Mad Hatters: Family-friendly + Food & drink; Camp 404: Workshops & talks
+    // + Music & sound; the rest grounded in each camp's description). Idempotent
+    // via the unique (edition, label_normalized) index + the join composite PK.
+    const categoryByLabel = new Map<string, string>();
+    for (const [i, cat] of CANONICAL_CAMP_CATEGORIES.entries()) {
+      const row = await ensureCampCategory(db, edition.id, {
+        label: cat.label,
+        emoji: cat.emoji,
+        sort: i,
+      });
+      categoryByLabel.set(normalizeCategoryLabel(cat.label), row.id);
+    }
+    console.log(
+      `[seed] camp categories seeded: ${CANONICAL_CAMP_CATEGORIES.length}`,
+    );
+
+    const categoryAssignments: { group: GroupRow; labels: string[] }[] = [
+      // Canvas card 1 pair, enriched with Mad Hatters' obvious music + bar.
+      { group: madHatters, labels: ["Family-friendly", "Food & drink", "Music & sound", "Bar"] },
+      // Canvas card 2 pair, plus Camp 404's maker bent.
+      { group: camp404, labels: ["Workshops & talks", "Music & sound", "Art & making"] },
+      { group: saltEmber, labels: ["Food & drink", "Workshops & talks"] },
+      { group: tinkerers, labels: ["Workshops & talks", "Art & making"] },
+      { group: velvetMirage, labels: ["Performance", "Bar", "Music & sound"] },
+      { group: quietStatic, labels: ["Music & sound", "Chill & shade"] },
+      { group: borrowedHorizon, labels: ["Chill & shade", "Workshops & talks"] },
+      { group: windrowCollective, labels: ["Chill & shade", "Family-friendly"] },
+    ];
+    let categoryLinkCount = 0;
+    for (const { group, labels } of categoryAssignments) {
+      for (const label of labels) {
+        const categoryId = categoryByLabel.get(normalizeCategoryLabel(label));
+        if (!categoryId) {
+          throw new Error(`[seed] unknown seed category label: ${label}`);
+        }
+        await ensureGroupCategory(db, group.id, categoryId);
+        categoryLinkCount++;
+      }
+    }
+    console.log(`[seed] group ↔ category links: ${categoryLinkCount}`);
 
     // A couple of role assignments on Mad Hatters: Alice = Captain, Jabu =
     // Team lead (the latter is the target of the seeded camp questionnaire).
@@ -1259,6 +1305,56 @@ async function ensureAuditEvent(
       .returning(),
     `audit event ${input.action}/${input.subject}`,
   );
+}
+
+// --- Camp category upsert helpers ----------------------------------------------
+
+type CampCategoryRow = typeof schema.campCategories.$inferSelect;
+
+/** Upsert a camp category (idempotent on the unique (edition, label_normalized)
+ * index — a re-run refreshes emoji/sort but keeps the row + its id stable). */
+async function ensureCampCategory(
+  db: Db,
+  editionId: string,
+  input: { label: string; emoji: string | null; sort: number },
+): Promise<CampCategoryRow> {
+  return firstOrThrow(
+    await db
+      .insert(schema.campCategories)
+      .values({
+        editionId,
+        label: input.label,
+        labelNormalized: normalizeCategoryLabel(input.label),
+        emoji: input.emoji,
+        sort: input.sort,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.campCategories.editionId,
+          schema.campCategories.labelNormalized,
+        ],
+        set: { label: input.label, emoji: input.emoji, sort: input.sort, updatedAt: new Date() },
+      })
+      .returning(),
+    `camp category ${input.label}`,
+  );
+}
+
+/** Link a group to a category (idempotent via the composite PK). */
+async function ensureGroupCategory(
+  db: Db,
+  groupId: string,
+  categoryId: string,
+): Promise<void> {
+  await db
+    .insert(schema.groupCategories)
+    .values({ groupId, categoryId })
+    .onConflictDoNothing({
+      target: [
+        schema.groupCategories.groupId,
+        schema.groupCategories.categoryId,
+      ],
+    });
 }
 
 // --- Project role + questionnaire upsert helpers -------------------------------

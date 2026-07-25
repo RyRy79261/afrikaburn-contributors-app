@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, ne, sql, inArray } from "drizzle-orm";
+import { and, asc, eq, ne, sql, inArray } from "drizzle-orm";
 import {
   isRegistered,
   normalizeName,
@@ -31,6 +31,13 @@ import type {
 } from "@quagga/types";
 import { db, schema } from "./db";
 
+/** One category chip on a directory card (org-defined per-edition taxonomy). */
+export interface DirectoryCategory {
+  id: string;
+  label: string;
+  emoji: string | null;
+}
+
 export interface DirectoryEntry {
   id: string;
   name: string;
@@ -41,6 +48,26 @@ export interface DirectoryEntry {
   registered: boolean;
   memberCount: number;
   viewerRole: MembershipRole | null;
+  /** Categories this camp has picked, in the org's sort order. */
+  categories: DirectoryCategory[];
+}
+
+/**
+ * The active edition's category catalog (build-spec §"Camp categories") for the
+ * directory filter-chip row. Ordered by the org's sort, then label.
+ */
+export async function listCampCategories(
+  editionId: string,
+): Promise<DirectoryCategory[]> {
+  return db()
+    .select({
+      id: schema.campCategories.id,
+      label: schema.campCategories.label,
+      emoji: schema.campCategories.emoji,
+    })
+    .from(schema.campCategories)
+    .where(eq(schema.campCategories.editionId, editionId))
+    .orderBy(asc(schema.campCategories.sort), asc(schema.campCategories.label));
 }
 
 /** Slugify a camp name: lowercased, alnum runs joined with hyphens. */
@@ -119,6 +146,36 @@ export async function listDirectory(input: {
   }
 
   const counts = await memberCounts(groupIds);
+
+  // Category chips per group (edition-scoped catalog), in the org's sort order.
+  const categoriesByGroup = new Map<string, DirectoryCategory[]>();
+  if (groupIds.length > 0) {
+    const catRows = await db()
+      .select({
+        groupId: schema.groupCategories.groupId,
+        id: schema.campCategories.id,
+        label: schema.campCategories.label,
+        emoji: schema.campCategories.emoji,
+      })
+      .from(schema.groupCategories)
+      .innerJoin(
+        schema.campCategories,
+        eq(schema.campCategories.id, schema.groupCategories.categoryId),
+      )
+      .where(
+        and(
+          inArray(schema.groupCategories.groupId, groupIds),
+          eq(schema.campCategories.editionId, input.editionId),
+        ),
+      )
+      .orderBy(asc(schema.campCategories.sort), asc(schema.campCategories.label));
+    for (const r of catRows) {
+      const list = categoriesByGroup.get(r.groupId) ?? [];
+      list.push({ id: r.id, label: r.label, emoji: r.emoji });
+      categoriesByGroup.set(r.groupId, list);
+    }
+  }
+
   const needle = input.search ? normalizeName(input.search) : "";
 
   const entries: DirectoryEntry[] = [];
@@ -138,6 +195,7 @@ export async function listDirectory(input: {
       registered,
       memberCount: counts.get(g.id) ?? 0,
       viewerRole,
+      categories: categoriesByGroup.get(g.id) ?? [],
     });
   }
   entries.sort((a, b) => {

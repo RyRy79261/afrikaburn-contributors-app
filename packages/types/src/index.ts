@@ -1,5 +1,6 @@
 export * from "./roles";
 export * from "./groups";
+export * from "./categories";
 export * from "./registration";
 export * from "./payments";
 export * from "./suppliers";

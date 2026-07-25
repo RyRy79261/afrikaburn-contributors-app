@@ -1,6 +1,14 @@
 import Link from "next/link";
-import { ArrowRight, Lock, Search, UserRoundCheck, Users } from "lucide-react";
+import {
+  ArrowRight,
+  Lock,
+  Search,
+  SlidersHorizontal,
+  UserRoundCheck,
+  Users,
+} from "lucide-react";
 import type { GroupKind } from "@quagga/types";
+import { matchesCategoryFilter } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Input } from "@quagga/ui/components/input";
 import { Button } from "@quagga/ui/components/button";
@@ -8,7 +16,12 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { listDirectory, type DirectoryEntry } from "@/lib/groups-store";
+import {
+  listDirectory,
+  listCampCategories,
+  type DirectoryEntry,
+  type DirectoryCategory,
+} from "@/lib/groups-store";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -22,6 +35,15 @@ const KIND_LABEL: Partial<Record<GroupKind, string>> = {
   artwork: "Artwork",
   mutant_vehicle: "Mutant vehicle",
 };
+
+/** Build a /directory href that preserves the search term and sets the filter. */
+function directoryHref(q: string | undefined, categoryId: string | null): string {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (categoryId) params.set("cat", categoryId);
+  const qs = params.toString();
+  return qs ? `/directory?${qs}` : "/directory";
+}
 
 function CampCard({ entry }: { entry: DirectoryEntry }) {
   const kindLabel = KIND_LABEL[entry.kind];
@@ -52,6 +74,20 @@ function CampCard({ entry }: { entry: DirectoryEntry }) {
         </p>
       )}
 
+      {entry.categories.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {entry.categories.map((cat) => (
+            <li
+              key={cat.id}
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+            >
+              {cat.emoji && <span aria-hidden>{cat.emoji}</span>}
+              {cat.label}
+            </li>
+          ))}
+        </ul>
+      )}
+
       <div className="mt-auto flex items-center justify-between gap-2 pt-1">
         <div className="flex min-w-0 items-center gap-2">
           {entry.registered &&
@@ -80,12 +116,57 @@ function CampCard({ entry }: { entry: DirectoryEntry }) {
   );
 }
 
+/** Horizontally-scrollable category filter-chip row (canvas "Category Chips").
+ * "All camps" clears the filter; the active category is highlighted. */
+function CategoryFilterRow({
+  categories,
+  activeCategoryId,
+  q,
+}: {
+  categories: DirectoryCategory[];
+  activeCategoryId: string | null;
+  q: string | undefined;
+}) {
+  const baseChip =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors";
+  const inactive = "border-border bg-card text-foreground hover:border-accent/60";
+  const active = "border-accent bg-accent/15 font-semibold text-accent";
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <SlidersHorizontal
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
+      <Link
+        href={directoryHref(q, null)}
+        className={`${baseChip} ${activeCategoryId === null ? active : inactive}`}
+      >
+        All camps
+      </Link>
+      {categories.map((cat) => {
+        const isActive = cat.id === activeCategoryId;
+        return (
+          <Link
+            key={cat.id}
+            href={directoryHref(q, isActive ? null : cat.id)}
+            aria-pressed={isActive}
+            className={`${baseChip} ${isActive ? active : inactive}`}
+          >
+            {cat.emoji && <span aria-hidden>{cat.emoji}</span>}
+            {cat.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function DirectoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; cat?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, cat } = await searchParams;
 
   if (!isDatabaseConfigured()) {
     return (
@@ -105,13 +186,24 @@ export default async function DirectoryPage({
     ? await listPendingQuestionnaires(campUser.id)
     : [];
 
-  const entries = edition
-    ? await listDirectory({
-        editionId: edition.id,
-        viewerId: campUser?.id ?? null,
-        search: q,
-      })
-    : [];
+  const [allEntries, categories] = edition
+    ? await Promise.all([
+        listDirectory({
+          editionId: edition.id,
+          viewerId: campUser?.id ?? null,
+          search: q,
+        }),
+        listCampCategories(edition.id),
+      ])
+    : [[] as DirectoryEntry[], [] as DirectoryCategory[]];
+
+  // The active category filter (URL param). Only honour ids that exist in the
+  // edition's catalog so a stale/garbage `cat` collapses to "All camps".
+  const activeCategoryId =
+    cat && categories.some((c) => c.id === cat) ? cat : null;
+  const entries = allEntries.filter((e) =>
+    matchesCategoryFilter(e, activeCategoryId),
+  );
 
   // Undiscoverability is enforced in listDirectory: free camps only ever appear
   // to their own members. Registered camps are public; the rest are the viewer's
@@ -145,6 +237,10 @@ export default async function DirectoryPage({
               className="pl-9"
               aria-label="Search the directory"
             />
+            {/* Preserve the active category filter across a text search. */}
+            {activeCategoryId && (
+              <input type="hidden" name="cat" value={activeCategoryId} />
+            )}
             <button type="submit" className="sr-only">
               Search
             </button>
@@ -154,10 +250,18 @@ export default async function DirectoryPage({
           </Button>
         </div>
 
+        {categories.length > 0 && (
+          <CategoryFilterRow
+            categories={categories}
+            activeCategoryId={activeCategoryId}
+            q={q}
+          />
+        )}
+
         {entries.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
-            {q
-              ? `No camps match "${q}".`
+            {q || activeCategoryId
+              ? "No camps match your filters."
               : "No registered camps yet. Be the first — create one."}
           </p>
         ) : (

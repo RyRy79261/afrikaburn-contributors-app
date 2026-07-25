@@ -14,12 +14,29 @@ import {
   sql,
 } from "drizzle-orm";
 import type {
+  OfficerKey,
   RegistrationStatus,
   SupplierNoteKind,
   SupplierOnboardingSteps,
   SupplierReturning,
   SupplierStanding,
 } from "@quagga/types";
+import {
+  countCategoryUsage,
+  deriveOfficerCoverage,
+  deriveQuestionnaireCompletion,
+  deriveRegistrationFunnel,
+  deriveStatusBoardKpis,
+  deriveSupplierOnboardingRollup,
+  deriveSupplierStandingRollup,
+  soundLevelFromValue,
+  type OfficerCoverage,
+  type ProjectStatInput,
+  type QuestionnaireCompletionRollup,
+  type RegistrationFunnel,
+  type StatusBoardKpis,
+  type SupplierOnboardingRollup,
+} from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
@@ -613,5 +630,266 @@ export async function getSupplierNotes(
     .leftJoin(schema.users, eq(schema.users.id, schema.supplierNotes.authorId))
     .where(eq(schema.supplierNotes.supplierId, supplierId))
     .orderBy(desc(schema.supplierNotes.createdAt));
+}
+
+// --- Camp categories ------------------------------------------------------
+
+export interface CampCategoryRow {
+  id: string;
+  label: string;
+  emoji: string | null;
+  sort: number;
+  /** Number of groups that have picked this category. */
+  usage: number;
+}
+
+/**
+ * The edition's category catalog with usage counts (build-spec §"Camp
+ * categories"). Feeds the org category-management page. Caller must have
+ * cleared the gate.
+ */
+export async function getCampCategories(
+  editionId: string,
+): Promise<CampCategoryRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.campCategories.id,
+      label: schema.campCategories.label,
+      emoji: schema.campCategories.emoji,
+      sort: schema.campCategories.sort,
+    })
+    .from(schema.campCategories)
+    .where(eq(schema.campCategories.editionId, editionId))
+    .orderBy(asc(schema.campCategories.sort), asc(schema.campCategories.label));
+
+  const assignments = await db
+    .select({ categoryId: schema.groupCategories.categoryId })
+    .from(schema.groupCategories)
+    .innerJoin(
+      schema.campCategories,
+      eq(schema.campCategories.id, schema.groupCategories.categoryId),
+    )
+    .where(eq(schema.campCategories.editionId, editionId));
+  const usage = countCategoryUsage(assignments);
+
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    emoji: r.emoji,
+    sort: r.sort,
+    usage: usage.get(r.id) ?? 0,
+  }));
+}
+
+// --- Status board / overview stats ----------------------------------------
+
+/** Camp registration statuses that count as "registered or in flight" for the
+ * officer-coverage denominator (draft/withdrawn/rejected excluded). */
+const OFFICER_IN_FLIGHT: readonly RegistrationStatus[] = [
+  "submitted",
+  "under_review",
+  "changes_requested",
+  "approved",
+];
+
+export interface StatusBoard {
+  edition: ActiveEdition | null;
+  kpis: StatusBoardKpis;
+  funnel: RegistrationFunnel;
+  officerCoverage: OfficerCoverage;
+  supplierOnboarding: SupplierOnboardingRollup;
+  supplierStandings: Record<SupplierStanding, number>;
+  questionnaires: QuestionnaireCompletionRollup;
+}
+
+/**
+ * The full status-board read model (build-spec §"Org stats dashboard" +
+ * §"Status board KPI row"). Fetches the raw rows and runs the pure @quagga/core
+ * derivations so the org landing + Overview share one consistent source. Caller
+ * must have cleared the gate. Degrades to all-zero derivations when no edition
+ * is active (every derivation handles empty input).
+ */
+export async function getStatusBoard(
+  edition: ActiveEdition | null,
+): Promise<StatusBoard> {
+  const db = getDb();
+
+  if (!edition) {
+    return {
+      edition: null,
+      kpis: deriveStatusBoardKpis({ bios: [], projects: [] }),
+      funnel: deriveRegistrationFunnel([]),
+      officerCoverage: deriveOfficerCoverage([]),
+      supplierOnboarding: deriveSupplierOnboardingRollup([]),
+      supplierStandings: deriveSupplierStandingRollup([]),
+      questionnaires: deriveQuestionnaireCompletion([]),
+    };
+  }
+
+  // Burner bios (completeness) for the edition.
+  const bioRows = await db
+    .select({ completedAt: schema.burnerBios.completedAt })
+    .from(schema.burnerBios)
+    .where(eq(schema.burnerBios.editionId, edition.id));
+
+  // Projects (camps / MV / artworks) with their best registration for the
+  // edition (≤1 per group/edition via the unique index).
+  const projectRows = await db
+    .select({
+      kind: schema.groups.kind,
+      status: schema.registrations.status,
+      grantsInterest: schema.registrations.grantsInterest,
+    })
+    .from(schema.groups)
+    .leftJoin(
+      schema.registrations,
+      and(
+        eq(schema.registrations.groupId, schema.groups.id),
+        eq(schema.registrations.editionId, edition.id),
+      ),
+    )
+    .where(
+      inArray(schema.groups.kind, ["theme_camp", "artwork", "mutant_vehicle"]),
+    );
+  const projects: ProjectStatInput[] = projectRows.map((r) => ({
+    kind: r.kind,
+    status: r.status ?? null,
+    grantsInterest: r.grantsInterest ?? null,
+  }));
+
+  // Registration funnel — every registration status for the edition.
+  const regRows = await db
+    .select({ status: schema.registrations.status })
+    .from(schema.registrations)
+    .where(eq(schema.registrations.editionId, edition.id));
+
+  // Officer coverage — camps registered or in flight, with their sound level
+  // and the officer slots that currently have a member (pending or accepted).
+  const campRegRows = await db
+    .select({
+      groupId: schema.registrations.groupId,
+      status: schema.registrations.status,
+      soundRaw: schema.registrations.s5AmplifiedMusic,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
+    .where(
+      and(
+        eq(schema.registrations.editionId, edition.id),
+        eq(schema.groups.kind, "theme_camp"),
+      ),
+    );
+
+  const officerAssignmentRows = await db
+    .select({
+      groupId: schema.memberships.groupId,
+      officerKey: schema.projectRoles.officerKey,
+      consent: schema.memberRoleAssignments.consentStatus,
+    })
+    .from(schema.memberRoleAssignments)
+    .innerJoin(
+      schema.projectRoles,
+      eq(schema.projectRoles.id, schema.memberRoleAssignments.projectRoleId),
+    )
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
+    )
+    .where(eq(schema.projectRoles.kind, "officer"));
+
+  const assignedByGroup = new Map<string, Set<OfficerKey>>();
+  for (const row of officerAssignmentRows) {
+    // A slot counts as filled once a member holds it (pending or accepted).
+    if (row.consent !== "pending" && row.consent !== "accepted") continue;
+    if (!row.officerKey) continue;
+    const set = assignedByGroup.get(row.groupId) ?? new Set<OfficerKey>();
+    set.add(row.officerKey as OfficerKey);
+    assignedByGroup.set(row.groupId, set);
+  }
+
+  const inFlight = new Set<RegistrationStatus>(OFFICER_IN_FLIGHT);
+  const officerCamps = campRegRows
+    .filter((r) => inFlight.has(r.status))
+    .map((r) => ({
+      isRegisteredOrInFlight: true,
+      triggers: {
+        soundLevel: soundLevelFromValue(r.soundRaw),
+        hasGenerators: false,
+        hasOpenFlame: false,
+        hasFuelStorage: false,
+      },
+      assignedKeys: assignedByGroup.get(r.groupId) ?? new Set<OfficerKey>(),
+    }));
+
+  // Suppliers — standing + onboarding step map for the edition.
+  const supplierRows = await db
+    .select({
+      standing: schema.suppliers.standing,
+      steps: schema.supplierOnboarding.steps,
+    })
+    .from(schema.suppliers)
+    .leftJoin(
+      schema.supplierOnboarding,
+      and(
+        eq(schema.supplierOnboarding.supplierId, schema.suppliers.id),
+        eq(schema.supplierOnboarding.editionId, edition.id),
+      ),
+    );
+
+  // Questionnaire completion — open activations for the edition + their
+  // required-action statuses.
+  const activationRows = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      title: schema.questionnaireActivations.title,
+    })
+    .from(schema.questionnaireActivations)
+    .where(
+      and(
+        eq(schema.questionnaireActivations.editionId, edition.id),
+        eq(schema.questionnaireActivations.status, "open"),
+      ),
+    );
+  const activationIds = activationRows.map((a) => a.id);
+  const actionRows =
+    activationIds.length === 0
+      ? []
+      : await db
+          .select({
+            activationId: schema.requiredActions.activationId,
+            status: schema.requiredActions.status,
+          })
+          .from(schema.requiredActions)
+          .where(inArray(schema.requiredActions.activationId, activationIds));
+  const actionsByActivation = new Map<string, { status: string }[]>();
+  for (const a of actionRows) {
+    if (!a.activationId) continue;
+    const list = actionsByActivation.get(a.activationId) ?? [];
+    list.push({ status: a.status });
+    actionsByActivation.set(a.activationId, list);
+  }
+  const sends = activationRows.map((a) => ({
+    activationId: a.id,
+    title: a.title,
+    actions: actionsByActivation.get(a.id) ?? [],
+  }));
+
+  return {
+    edition,
+    kpis: deriveStatusBoardKpis({ bios: bioRows, projects }),
+    funnel: deriveRegistrationFunnel(regRows.map((r) => r.status)),
+    officerCoverage: deriveOfficerCoverage(officerCamps),
+    supplierOnboarding: deriveSupplierOnboardingRollup(
+      supplierRows.map((s) => ({ steps: s.steps })),
+    ),
+    supplierStandings: deriveSupplierStandingRollup(
+      supplierRows.map((s) => ({ standing: s.standing })),
+    ),
+    questionnaires: deriveQuestionnaireCompletion(sends),
+  };
 }
 

@@ -60,6 +60,13 @@
 //   - notifications + bulletins: payload builders, buildBulletinNotifications
 //     (reuses resolveAudience), shouldSendImmediateEmail, groupNotificationsByDay,
 //     notificationMentionsAny (privacy guard) (./notifications)
+//   - camp categories: CANONICAL_CAMP_CATEGORIES, normalizeCategoryLabel,
+//     categoryLabelConflicts, validateCampCategory, countCategoryUsage,
+//     matchesCategoryFilter (./camp-categories)
+//   - org stats: deriveStatusBoardKpis (burner/camp/MV/artwork cards),
+//     deriveRegistrationFunnel, deriveOfficerCoverage,
+//     deriveSupplierOnboardingRollup/StandingRollup,
+//     deriveQuestionnaireCompletion (./org-stats)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -85,3 +92,5 @@ export * from "./supplier-import";
 export * from "./supplier-onboarding";
 export * from "./supplier-standing";
 export * from "./notifications";
+export * from "./camp-categories";
+export * from "./org-stats";
