@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { hasProjectPermission } from "@quagga/core";
+import { hasProjectPermission, isBaselineKind } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser, enforceGate } from "@/lib/session";
@@ -18,7 +18,6 @@ import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { RolesSettings } from "@/components/roles/roles-settings";
 import {
-  createRoleAction,
   renameRoleAction,
   removeRoleAction,
   setRoleAppearanceAction,
@@ -26,6 +25,7 @@ import {
   assignOfficerAction,
   unassignOfficerAction,
 } from "../../actions";
+import { createRoleWithSetupAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +65,7 @@ export default async function CampRolesSettingsPage({
     !!permissions && hasProjectPermission(permissions, "manage_roles");
   const canAssignRoles =
     !!permissions && hasProjectPermission(permissions, "assign_roles");
-  const canViewDetails =
-    !!permissions && hasProjectPermission(permissions, "view_member_details");
-  // Only role/officer managers reach this page.
+  // Only role/officer managers reach this page (the actions re-check anyway).
   if (!canManageRoles && !canAssignRoles) notFound();
 
   const roles = await listRoles(camp.id);
@@ -80,14 +78,18 @@ export default async function CampRolesSettingsPage({
     displayName: m.displayName,
   }));
 
-  // Assignment map keyed by membershipId → accepted non-officer role ids (chips).
-  const assignmentsByMember: Record<string, string[]> = {};
-  for (const m of members) {
-    assignmentsByMember[m.membershipId] = (
-      assignments.get(m.membershipId) ?? []
-    )
-      .filter((a) => a.consent === "accepted")
-      .map((a) => a.projectRoleId);
+  // How many members hold each role — the collapsed-row counts and the
+  // delete-cascade confirmation. Baseline is DERIVED (everyone holds it, never
+  // stored), so it counts the whole camp.
+  const acceptedCounts = new Map<string, number>();
+  for (const list of assignments.values()) {
+    for (const a of list) {
+      if (a.consent !== "accepted") continue;
+      acceptedCounts.set(
+        a.projectRoleId,
+        (acceptedCounts.get(a.projectRoleId) ?? 0) + 1,
+      );
+    }
   }
 
   return (
@@ -100,12 +102,15 @@ export default async function CampRolesSettingsPage({
               {camp.name}
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Roles &amp; Officers
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {camp.name} / Settings / Roles &amp; officers
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            Roles &amp; officers
           </h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Define what your crew can do, colour-code your roles, and register the
-            responsible people AfrikaBurn needs to reach. Set-and-forget.
+            Set this up once — who your people are, what they can do, and which
+            officers AfrikaBurn can reach.
           </p>
         </div>
 
@@ -113,7 +118,6 @@ export default async function CampRolesSettingsPage({
           slug={slug}
           canManageRoles={canManageRoles}
           canAssignRoles={canAssignRoles}
-          canViewDetails={canViewDetails}
           roles={roles.map((r) => ({
             id: r.id,
             name: r.name,
@@ -122,9 +126,11 @@ export default async function CampRolesSettingsPage({
             emoji: r.emoji,
             permissions: r.permissions,
             officerKey: r.officerKey,
+            memberCount: isBaselineKind(r.kind)
+              ? members.length
+              : (acceptedCounts.get(r.id) ?? 0),
           }))}
           members={members}
-          assignmentsByMember={assignmentsByMember}
           officers={officerStatus.officers.map((o) => ({
             roleId: o.roleId,
             officerKey: o.officerKey,
@@ -136,7 +142,7 @@ export default async function CampRolesSettingsPage({
           }))}
           officerApplies={officerStatus.isRegisteredOrInFlight}
           outstanding={officerStatus.outstanding}
-          createRoleAction={createRoleAction}
+          createRoleWithSetupAction={createRoleWithSetupAction}
           renameRoleAction={renameRoleAction}
           removeRoleAction={removeRoleAction}
           setRoleAppearanceAction={setRoleAppearanceAction}

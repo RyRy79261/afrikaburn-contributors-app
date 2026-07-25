@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export default async function AuthRootPage() {
   const user = await getAuthenticatedUser();
   if (user) redirect("/");
-  redirect("/auth/sign-in");
+  redirect("/signin");
 }

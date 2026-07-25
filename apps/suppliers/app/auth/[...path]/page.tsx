@@ -1,13 +1,27 @@
+import { redirect } from "next/navigation";
 import { AuthView } from "@neondatabase/auth/react/ui";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { PackageOpen } from "lucide-react";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
 
-// Neon Auth sign-in views for the portal. `dynamicParams` stays default (true)
-// so any auth subpath renders via AuthView rather than 404ing. Env-less, the
-// views render but no session is established.
+// Neon Auth fallback views for the portal. `dynamicParams` stays default (true)
+// so any auth subpath renders via AuthView rather than 404ing (callback,
+// verify-email, forgot/reset-password — all provider-supported per the
+// capability matrix in docs/accounts-security-spec.md). Env-less, the views
+// render but no session is established.
+//
+// Sign-in and sign-up are OURS now (canvas `OX6KJ` / `K3zNk`), so those paths
+// redirect to the branded routes rather than rendering the stock views — there
+// must be exactly one supplier sign-in screen, not two.
 export const dynamic = "force-dynamic";
+
+const BRANDED_REDIRECTS: Record<string, string> = {
+  "sign-in": "/signin",
+  signin: "/signin",
+  "sign-up": "/signup",
+  signup: "/signup",
+};
 
 export default async function AuthPage({
   params,
@@ -16,6 +30,9 @@ export default async function AuthPage({
 }) {
   const { path } = await params;
   const view = path?.[0] ?? "sign-in";
+
+  const branded = BRANDED_REDIRECTS[view];
+  if (branded) redirect(branded);
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center gap-4 px-6 py-12">

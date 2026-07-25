@@ -365,7 +365,14 @@ export default async function CampPage({
                   )}
                 </>
               ) : (
-                isAdmin && (
+                isAdmin &&
+                // The six-section wizard at /camps/[slug]/registration is
+                // CAMP-shaped: its section predicates, labels and stored columns
+                // all assume a theme camp. Mutant vehicles and artworks register
+                // through their own forms (/vehicles/new, /artworks/new) and
+                // must never be sent here — following this CTA would let camp
+                // answers overwrite their sound/LNT/dimension fields.
+                (camp.kind === "theme_camp" ? (
                   <Button asChild size="sm" className="w-full">
                     <Link href={`/camps/${camp.slug}/registration`}>
                       {camp.registrationStatus
@@ -373,7 +380,12 @@ export default async function CampPage({
                         : "Begin registration"}
                     </Link>
                   </Button>
-                )
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {KIND_LABEL[camp.kind]} projects register through their own
+                    form — ask AfrikaBurn if you need to change a submission.
+                  </p>
+                ))
               )}
             </CardContent>
           </Card>

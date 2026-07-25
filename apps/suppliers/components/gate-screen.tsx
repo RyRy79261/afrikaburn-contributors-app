@@ -69,9 +69,12 @@ export function GateScreen({
           <SignOutButton variant="outline" size="default" />
         </div>
       ) : (
-        <div className="flex items-center justify-center">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <Button asChild size="lg">
-            <Link href="/auth/sign-in">Sign in</Link>
+            <Link href="/signin">Sign in</Link>
+          </Button>
+          <Button asChild variant="outline" size="lg">
+            <Link href="/signup">Create an account</Link>
           </Button>
         </div>
       )}

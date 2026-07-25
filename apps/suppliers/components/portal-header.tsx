@@ -11,6 +11,7 @@ import { getUnreadNotificationCount } from "@/lib/notifications";
 const NAV_ITEMS: NavItem[] = [
   { href: "/onboarding", label: "Onboarding" },
   { href: "/standing", label: "My standing" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 /**

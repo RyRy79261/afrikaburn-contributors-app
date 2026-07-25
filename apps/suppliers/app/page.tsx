@@ -85,10 +85,15 @@ export default async function LandingPage() {
         ) : (
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <Button asChild size="lg" disabled={!authReady}>
-              <Link href={authReady ? "/auth/sign-in" : "/"}>
+              <Link href={authReady ? "/signin" : "/"}>
                 {authReady ? "Sign in to your portal" : "Sign-in coming soon"}
               </Link>
             </Button>
+            {authReady && !signedIn && (
+              <Button asChild variant="outline" size="lg">
+                <Link href="/signup">Create a supplier account</Link>
+              </Button>
+            )}
             {signedIn && <SignOutButton variant="outline" size="default" />}
           </div>
         )}

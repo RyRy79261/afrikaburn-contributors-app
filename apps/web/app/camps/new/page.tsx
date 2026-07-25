@@ -56,6 +56,26 @@ export default async function NewCampPage() {
           </p>
         </header>
         <CreateCampForm action={createCampAction} />
+        {/* Sibling registration paths. Mutant vehicles and artworks are their
+            own group kinds with their own forms — this is their entry point,
+            since the header only carries "Create camp". */}
+        <p className="mt-6 text-sm text-muted-foreground">
+          Registering something else?{" "}
+          <Link
+            href="/vehicles/new"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Register a mutant vehicle
+          </Link>{" "}
+          or{" "}
+          <Link
+            href="/artworks/new"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            register an art project
+          </Link>
+          .
+        </p>
       </div>
     </AppShell>
   );

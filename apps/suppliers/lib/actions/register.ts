@@ -14,10 +14,19 @@ import { runAction, type ActionResult } from "./result";
 // supplier. This creates the `suppliers` row linked to their account and seeds
 // the onboarding row for the active edition with step 1 (registration_form)
 // already `completed` — filling this form IS the registration step.
+//
+// `category` arrives from the /signup screen (canvas `K3zNk`). Optional, so the
+// landing-page register form — which doesn't ask for it — keeps working
+// unchanged. The vocabulary is the same one the sheet importer normalises to
+// (@quagga/core `normalizeCategory`), so a self-registered supplier and an
+// imported one land in the same bucket. There is no separate contact-person
+// column: `contact` is the free-text "person · email" line the whole codebase
+// already reads (it is what email-overlap linking matches against).
 const RegisterSupplierInput = z.object({
   name: z.string().trim().min(1, "A business name is required.").max(200),
   services: z.string().trim().max(1000).optional(),
   contact: z.string().trim().max(300).optional(),
+  category: z.string().trim().max(120).optional(),
   website: z.string().trim().max(300).optional(),
 });
 
@@ -79,6 +88,7 @@ export async function registerSupplier(
         name: input.name,
         services: input.services || null,
         contact: input.contact || null,
+        category: input.category || null,
         website: input.website || null,
         standing: "good",
         userId: dbUser.id,
@@ -111,7 +121,12 @@ export async function registerSupplier(
       actorId: dbUser.id,
       action: "supplier.register",
       subject: created.id,
-      meta: { name: input.name, code, via: "portal_self_register" },
+      meta: {
+        name: input.name,
+        category: input.category ?? null,
+        code,
+        via: "portal_self_register",
+      },
     });
 
     revalidatePath("/onboarding");

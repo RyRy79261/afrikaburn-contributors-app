@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getSuppliersOverview } from "@/lib/queries";
@@ -20,7 +21,17 @@ export default async function SuppliersPage() {
         eyebrow="Suppliers"
         title="Supplier repository"
         description="The repository camps pick from in Section 6. For each supplier the console shows three things: whether they onboarded properly, their standing, and the internal notes trail. Expand a row to confirm onboarding steps."
-        actions={<AddSupplierForm />}
+        actions={
+          <div className="flex items-center gap-3">
+            <Link
+              href="/suppliers/signup-management"
+              className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            >
+              Sign-up management
+            </Link>
+            <AddSupplierForm />
+          </div>
+        }
       />
 
       {suppliers.length === 0 ? (
