@@ -145,3 +145,37 @@ activity feed (audit events). Time-series where meaningful (registrations over t
 weeks). Charts follow the dataviz standards (load the dataviz skill before authoring
 any chart). This page IS the org landing — glanceable, no scrolling required for the
 headline numbers.
+
+## Notifications & bulletins (Ryan, 25 Jul 2026 — see docs/notifications-spec.md)
+
+- Schema additions (append-only migrations as always): `bulletins` (edition_id,
+  title, body_md, audience [same enum as questionnaire audiences], created_by,
+  published_at, pinned) and `notifications` (account_id, kind, title, body, link,
+  bulletin_id nullable, created_at, read_at). No new PII.
+- Routes: `/notifications` in ALL THREE apps (shared pattern component, app accent);
+  participant `/bulletins/[id]`; org `/bulletins` + `/bulletins/new`.
+- AppShell gains NotificationBell (unread count); mobile headers likewise.
+- Event hooks generate notifications from EXISTING actions only (registration
+  decisions, wrangler assignment, role/officer acceptance, questionnaire release,
+  supplier org-confirmations, security events). Bulletins resolve audiences through
+  the questionnaire audience machinery — one resolver, two consumers.
+- Email: Resend daily digest of unread + immediate ONLY for blocking questionnaires
+  and registration decisions. In-app is source of truth (offline law).
+- Law: bulletins are informational only (no data collection — fewer-forms);
+  notifications never leak hard-locked fields; no payment notifications exist.
+
+## Platform/database separation (Ryan, 25 Jul 2026 — decision pending research)
+
+Direction: the database + migrations move to a single owning "platform" unit so
+apps/web, apps/org, apps/suppliers and (later) Camp 404 share one Neon database and
+one account system; migrations run in exactly one place. Architecture options,
+Neon-Auth/Better-Auth constraints, and the chosen shape live in
+docs/platform-architecture-spec.md. Until that lands, NO new per-app migration
+tooling; packages/db remains the interim single owner of schema + migrations.
+
+## Status board KPI row (Ryan, 25 Jul 2026)
+
+The four headline cards are: BURNERS (total + bios complete %), CAMPS (total +
+registered/free split), MUTANT VEHICLES (total + registered/in-review), ARTWORKS
+(total + grant requests). Same cards on the org Overview page. Numbers must agree
+with seeds (47 camps = 28 registered + 19 free; 12 MV = 9 + 3).
