@@ -77,3 +77,63 @@ matches the vendored-shadcn pattern in `packages/ui`. Fallback if we prefer a pu
 npm package: `@uiw/react-md-editor` (needs a scoped fix for Tailwind v4 Preflight
 collisions). MDXEditor (heavy) and novel (Notion-style, opinionated) rejected.
 Render side: react-markdown + typography plugin, sanitized.
+
+---
+
+# Part 2 — "Sign in with AfrikaBurn": third-party identity platform (Ryan, 25 Jul)
+
+Requirement: ANY website (not just Camp 404) can use Burn accounts + roles, with
+org-issued integrator credentials. That makes us an OAuth2/OIDC **identity
+provider**. Integrator key = OAuth client_id + secret; users authenticate with US
+(redirect + consent); third parties never see credentials and never touch Neon.
+
+## Research verdicts (citations in task notes / agent report)
+
+1. **Managed Neon Auth cannot be the IdP — confirmed.** It's first-party-only and
+   Neon states it "doesn't yet support bringing your own Better Auth plugins or
+   custom server-side handlers"; the entire provider capability is a server-side
+   plugin. No roadmap signal for provider features. (Also confirmed: the old
+   Stack-Auth-era multi-app features did NOT survive the Better Auth rebuild.)
+2. **Hybrid (self-hosted head sharing the managed `neon_auth` pool): spike-only.**
+   Schema-compatible (Neon stores stock Better Auth 1.4.18 table shapes; the Drizzle
+   adapter can target the `neon_auth` schema), but session/cookie interop rests on
+   undocumented internals and Neon migrates that schema at will. Fragile; not a
+   foundation.
+3. **The pinned better-auth 1.4.18 only has the pre-production `oidcProvider`
+   plugin; the production-grade OAuth 2.1 Provider ships in 1.5+** (Feb 2026:
+   client-secret rotation, discovery, custom claims). The IdP is a SEPARATE
+   deployment, so it can run 1.5+ without touching the portals' 1.4.18 pin.
+4. **Alternatives that keep users in Neon all lose**: Keycloak/Zitadel force their
+   own user stores (sync hell); Ory Hydra is the closest headless option but means
+   hand-building login/consent (keep as fallback); SaaS moves users off Neon (out).
+
+## The plan (phased — first-party is NOT blocked)
+
+- **Phase 1 (now, kickoff)**: unchanged Option A — managed Neon Auth for all
+  first-party portals, one pool, apex-domain cookie SSO. Camp 404 first-party too.
+- **Phase 2 (the IdP)**: a dedicated, separately-deployed **auth service on our
+  Neon Postgres** running better-auth 1.5+ `oauthProvider`: /oauth2 authorize,
+  token, userinfo, consent, JWKS + .well-known discovery. Client registration =
+  the org-issued integrator keys. Whether it shares the managed pool live (the
+  hybrid spike) or first-party auth migrates onto it (full Option B) is decided by
+  the spike + Neon's answers below.
+- **Roles/profile exposure (two layers)**: minimal namespaced claims in tokens
+  (coarse roles for UX gating) + an authoritative scoped **`/api/me`** endpoint for
+  fresh role/profile data. Scopes: `profile:basic`, `profile:camps`,
+  `profile:volunteering`, `email` — least-privilege. **Hard-locked fields (phone,
+  emergency contacts, ID/passport, medical) are unconditionally stripped at the
+  response boundary — no scope can ever grant them.** Free-camp undiscoverability
+  applies to integrator endpoints exactly as in the directory.
+- **Org console "Integrations" page (future design frames)**: client registration
+  (secret shown once, stored hashed), confidential vs public+PKCE, exact-match
+  redirect URIs, scope selection, consent preview, secret rotation with grace
+  window, instant revocation, per-client audit into `audit_events`, god/org_staff
+  only. Later: user-facing "connected apps" management with revoke.
+
+## Questions to put to Neon support before committing
+
+(i) any "Neon Auth as OIDC provider / custom clients" roadmap; (ii) is a second
+better-auth process reading `neon_auth` supported, with schema/cookie stability
+commitments or change notice; (iii) the session-token/cookie contract; (iv) will
+managed Better Auth track 1.4.18 or move; (v) any bring-your-own-plugin plans
+(which would collapse Phase 2 into managed).
