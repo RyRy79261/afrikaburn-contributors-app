@@ -39,7 +39,7 @@ shadcn/registry base first, styled to Tankwa Night tokens; hand-roll nothing sol
 | NotificationItem (`H9bn7`/`IDy9A`) | custom row | kind-icon map, unread dot, read state |
 | BulletinCard (`fulVI`) | shadcn `card` base | kicker, pin, audience chip, read-rate bar (org list) |
 | PinnedBulletinBanner (`i3m1n`) | custom, small | dismissable; Camp Dashboard + recipient dashboards |
-| **Markdown editor** (bulletin compose) | **prebuilt — see platform research** | candidates: minimal-tiptap / novel / mdxeditor; decision recorded in docs/platform-architecture-spec.md once research lands. Renderer: react-markdown + tailwind typography, sanitized |
+| **Markdown editor** (bulletin compose) | **prebuilt: minimal-tiptap** + tiptap-markdown | decision in docs/platform-architecture-spec.md; shadcn-registry Tiptap component, tokens-friendly, React 19 OK. Renderer: react-markdown + typography, sanitized |
 | AudienceSelect | Select variant | shared with questionnaire builder; resolves-to count line |
 
 ## Build order
