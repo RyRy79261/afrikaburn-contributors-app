@@ -1,17 +1,95 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
-import { canTransitionSectionReview } from "@quagga/core";
+import {
+  canTransitionSectionReview,
+  registrationDecisionNotification,
+  shouldSendImmediateEmail,
+  type RegistrationDecision,
+} from "@quagga/core";
 import { SectionKey, SectionReviewStatus } from "@quagga/types";
 
 import { getDb, schema } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email";
 import { REVIEW_ACTIONS, resolveReviewAction } from "@/lib/org-logic";
 import { runAction, type ActionResult } from "./result";
+
+// Decision statuses that notify the camp's leads/admins (+ immediate email).
+const DECISION_STATUSES = new Set<RegistrationDecision>([
+  "approved",
+  "changes_requested",
+  "rejected",
+]);
+
+/**
+ * Notify a camp's leads/admins of a registration decision (thin event hook —
+ * no behaviour change to the decision itself). Builds the payload with the
+ * @quagga/core builder (never leaks private fields) and best-effort inserts +
+ * emails; a notification failure never rolls back the committed decision.
+ */
+async function notifyRegistrationDecision(
+  db: ReturnType<typeof getDb>,
+  registrationId: string,
+  groupId: string,
+  decision: RegistrationDecision,
+): Promise<void> {
+  try {
+    const [group] = await db
+      .select({ name: schema.groups.name, slug: schema.groups.slug })
+      .from(schema.groups)
+      .where(eq(schema.groups.id, groupId))
+      .limit(1);
+    if (!group) return;
+
+    const leads = await db
+      .select({ userId: schema.memberships.userId })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.groupId, groupId),
+          inArray(schema.memberships.role, ["lead", "admin"]),
+        ),
+      );
+    const userIds = [...new Set(leads.map((l) => l.userId))];
+    if (userIds.length === 0) return;
+
+    const payload = registrationDecisionNotification({
+      campName: group.name,
+      decision,
+      campSlug: group.slug,
+    });
+    await insertNotifications(
+      db,
+      userIds.map((userId) => ({ ...payload, userId })),
+    );
+
+    // Immediate email for registration decisions (env-less no-op otherwise).
+    if (shouldSendImmediateEmail("registration")) {
+      const recipients = await db
+        .select({ email: schema.users.email })
+        .from(schema.users)
+        .where(inArray(schema.users.id, userIds));
+      const to = recipients
+        .map((r) => r.email)
+        .filter((e): e is string => Boolean(e));
+      if (to.length > 0) {
+        await sendEmail({
+          to,
+          subject: payload.title,
+          text: `${payload.title}${payload.body ? `\n\n${payload.body}` : ""}\n\nOpen the Contributors app to see details.`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[notifications] registration decision hook failed", err);
+  }
+}
 
 const DecideInput = z.object({
   registrationId: z.string().uuid(),
@@ -46,7 +124,10 @@ export async function decideRegistration(
 
     const db = getDb();
     const [registration] = await db
-      .select({ status: schema.registrations.status })
+      .select({
+        status: schema.registrations.status,
+        groupId: schema.registrations.groupId,
+      })
       .from(schema.registrations)
       .where(eq(schema.registrations.id, input.registrationId))
       .limit(1);
@@ -92,6 +173,17 @@ export async function decideRegistration(
         ...(reason ? { reason } : {}),
       },
     });
+
+    // Event hook: notify the camp's leads/admins of the decision (thin — best-
+    // effort, never alters the decision outcome).
+    if (DECISION_STATUSES.has(nextStatus as RegistrationDecision)) {
+      await notifyRegistrationDecision(
+        db,
+        input.registrationId,
+        registration.groupId,
+        nextStatus as RegistrationDecision,
+      );
+    }
 
     revalidatePath(`/registrations/${input.registrationId}`);
     revalidatePath("/registrations");

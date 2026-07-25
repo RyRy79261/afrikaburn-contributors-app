@@ -11,41 +11,30 @@ import type { NotificationFilter, NotificationKind } from "@quagga/types";
 
 import { getDb, schema } from "./db";
 import { isDatabaseConfigured } from "./config";
-import { resolveOrgSession } from "./session";
 
-// Notifications backend for the Organiser Console (docs/notifications-spec.md).
-// Console staff have inboxes too (org-internal bulletins, org-targeted events).
-// Reads are scoped to a `users.id` the caller resolved through the console gate;
-// the header count falls back to resolving the session itself.
+// Notifications backend for the Supplier Portal (docs/notifications-spec.md).
+// Suppliers only ever get THEIR OWN supplier events (standing value changes +
+// org-confirmed onboarding steps — never org-internal notes). Reads are scoped
+// to the `users.id` the caller resolved through the portal gate (session.dbUserId).
 
-/**
- * Unread count for the console header bell. Pass the gated `dbUserId` (the
- * header already holds the session); falls back to resolving the session.
- * Env-less / not-ok → 0.
- */
+/** Unread count for the portal header bell. Pass the gated `dbUserId`. */
 export async function getUnreadNotificationCount(
-  userId?: string,
+  userId: string,
 ): Promise<number> {
   if (!isDatabaseConfigured()) return 0;
-  let uid = userId;
-  if (!uid) {
-    const session = await resolveOrgSession();
-    if (session.kind !== "ok") return 0;
-    uid = session.dbUserId;
-  }
   const [row] = await getDb()
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.notifications)
     .where(
       and(
-        eq(schema.notifications.userId, uid),
+        eq(schema.notifications.userId, userId),
         isNull(schema.notifications.readAt),
       ),
     );
   return row?.count ?? 0;
 }
 
-/** One inbox row as the console /notifications surface consumes it. */
+/** One inbox row as the portal /notifications surface consumes it. */
 export interface NotificationView {
   id: string;
   kind: NotificationKind;
@@ -70,7 +59,7 @@ function toView(r: typeof schema.notifications.$inferSelect): NotificationView {
   };
 }
 
-/** The staff member's notifications, newest first, filtered + grouped by day. */
+/** The supplier's notifications, newest first, filtered + grouped by day. */
 export async function listNotificationGroups(
   userId: string,
   filter: NotificationFilter = "all",
@@ -88,25 +77,9 @@ export async function listNotificationGroups(
   return groupNotificationsByDay(rows.map(toView));
 }
 
-/** Latest ~n notifications flat (header dropdown panel). */
-export async function recentNotifications(
-  userId: string,
-  limit = 6,
-): Promise<NotificationView[]> {
-  if (!isDatabaseConfigured()) return [];
-  const rows = await getDb()
-    .select()
-    .from(schema.notifications)
-    .where(eq(schema.notifications.userId, userId))
-    .orderBy(desc(schema.notifications.createdAt))
-    .limit(limit);
-  return rows.map(toView);
-}
-
 /**
- * Insert notification rows (event-hook + bulletin-fan-out writer). Reuses a
- * db handle the caller already holds. No-op on an empty batch. Rows come from
- * the @quagga/core payload builders (never carry hard-locked private fields).
+ * Insert notification rows (the org-side supplier hooks write here). Reuses a
+ * db handle the caller already holds. No-op on an empty batch.
  */
 export async function insertNotifications(
   handle: Database,

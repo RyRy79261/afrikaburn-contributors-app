@@ -20,9 +20,9 @@ const NAV_ITEMS: NavItem[] = [
  * Console" wordmark keep it unmistakably separate from the participant app.
  */
 export async function ConsoleHeader({ session }: { session: OrgSession }) {
-  // Signed-in only: the bell lives in the header; the count is a placeholder
-  // seam until the notifications backend lands (see lib/notifications.ts).
-  const unread = await getUnreadNotificationCount();
+  // Signed-in only: the bell lives in the header. Real per-user unread count,
+  // scoped to the gated staff member (see lib/notifications.ts).
+  const unread = await getUnreadNotificationCount(session.dbUserId);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">

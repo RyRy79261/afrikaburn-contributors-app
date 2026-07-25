@@ -6,6 +6,7 @@ import type { SupplierSession } from "@/lib/session";
 import { PortalNav, type NavItem } from "@/components/portal-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import { HeaderNotificationBell } from "@/components/header-notification-bell";
+import { getUnreadNotificationCount } from "@/lib/notifications";
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/onboarding", label: "Onboarding" },
@@ -17,8 +18,10 @@ const NAV_ITEMS: NavItem[] = [
  * wordmark keep it unmistakably separate from the participant and organiser
  * apps. Carries the supplier's business name and current standing.
  */
-export function PortalHeader({ session }: { session: SupplierSession }) {
+export async function PortalHeader({ session }: { session: SupplierSession }) {
   const { standing, category, returning } = session.supplier;
+  // Real per-user unread count, scoped to the gated supplier account.
+  const unread = await getUnreadNotificationCount(session.dbUserId);
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
@@ -54,9 +57,7 @@ export function PortalHeader({ session }: { session: SupplierSession }) {
                 </Badge>
               </div>
             </div>
-            {/* NotificationBell seam — placeholder count until a supplier
-                notifications surface exists (see header-notification-bell). */}
-            <HeaderNotificationBell count={0} />
+            <HeaderNotificationBell count={unread} />
             <SignOutButton />
           </div>
         </div>

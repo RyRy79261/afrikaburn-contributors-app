@@ -10,11 +10,19 @@ import {
   SupplierOnboardingStepStatus,
   SupplierStanding,
 } from "@quagga/types";
-import { applyStepTransition, standingLabel } from "@quagga/core";
+import {
+  applyStepTransition,
+  isSelfServiceStep,
+  standingLabel,
+  supplierOnboardingStep,
+  supplierStandingNotification,
+  supplierStepConfirmedNotification,
+} from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
 import { getSupplierNotes, type SupplierNoteRow } from "@/lib/queries";
 import { runAction, type ActionResult } from "./result";
 
@@ -33,7 +41,7 @@ export async function setSupplierStanding(
 
     const db = getDb();
     const [supplier] = await db
-      .select({ name: schema.suppliers.name })
+      .select({ name: schema.suppliers.name, userId: schema.suppliers.userId })
       .from(schema.suppliers)
       .where(eq(schema.suppliers.id, input.supplierId))
       .limit(1);
@@ -43,6 +51,23 @@ export async function setSupplierStanding(
       .update(schema.suppliers)
       .set({ standing: input.standing, updatedAt: new Date() })
       .where(eq(schema.suppliers.id, input.supplierId));
+
+    // Event hook: a supplier only ever sees their OWN standing value change
+    // (never notes). Thin + best-effort; only when an account is linked.
+    if (supplier.userId) {
+      try {
+        await insertNotifications(db, [
+          {
+            ...supplierStandingNotification({
+              standingLabel: standingLabel(input.standing),
+            }),
+            userId: supplier.userId,
+          },
+        ]);
+      } catch (err) {
+        console.error("[notifications] supplier standing hook failed", err);
+      }
+    }
 
     await writeAuditEvent(db, {
       actorId: session.dbUserId,
@@ -81,7 +106,7 @@ export async function setSupplierOnboardingStep(
 
     const db = getDb();
     const [supplier] = await db
-      .select({ name: schema.suppliers.name })
+      .select({ name: schema.suppliers.name, userId: schema.suppliers.userId })
       .from(schema.suppliers)
       .where(eq(schema.suppliers.id, input.supplierId))
       .limit(1);
@@ -120,6 +145,25 @@ export async function setSupplierOnboardingStep(
         ],
         set: { steps: applied.steps, updatedAt: new Date() },
       });
+
+    // Event hook: notify the supplier when the ORG confirms a step to completed
+    // (deposit / briefing / fee, and org-reviewed inventory / crew — never a
+    // self-service step the supplier drove themselves). Thin + best-effort.
+    if (supplier.userId && input.status === "completed") {
+      const step = supplierOnboardingStep(input.stepKey);
+      if (step && !isSelfServiceStep(step)) {
+        try {
+          await insertNotifications(db, [
+            {
+              ...supplierStepConfirmedNotification({ stepLabel: step.title }),
+              userId: supplier.userId,
+            },
+          ]);
+        } catch (err) {
+          console.error("[notifications] supplier step hook failed", err);
+        }
+      }
+    }
 
     await writeAuditEvent(db, {
       actorId: session.dbUserId,

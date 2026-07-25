@@ -11,6 +11,8 @@ import {
   enforceKindPermissions,
   isValidRoleName,
   normalizeRoleName,
+  officerAcceptedNotification,
+  officerAssignmentRequestNotification,
   officerRequirements,
   officerSlotFilled,
   outstandingOfficers,
@@ -31,6 +33,19 @@ import type {
   RoleColor,
 } from "@quagga/types";
 import { db, schema } from "./db";
+import { insertNotifications } from "./notifications";
+
+/** Camp name + slug for an officer notification (best-effort lookup). */
+async function campNameAndSlug(
+  groupId: string,
+): Promise<{ name: string; slug: string } | null> {
+  const [g] = await db()
+    .select({ name: schema.groups.name, slug: schema.groups.slug })
+    .from(schema.groups)
+    .where(eq(schema.groups.id, groupId))
+    .limit(1);
+  return g ?? null;
+}
 
 // Custom per-project roles (questionnaire-spec §"Roles v2" + §"Officer roles").
 // Labels for organisation + questionnaire audiences + officer registrations —
@@ -466,6 +481,31 @@ export async function assignOfficer(
       ],
       set: { consentStatus: "pending", acceptedAt: null, orgVisible: false },
     });
+
+  // Event hook: tell the assigned member they have an officer registration to
+  // accept (consent flow). Thin + best-effort — never fails the assignment.
+  try {
+    const [m] = await db()
+      .select({ userId: schema.memberships.userId })
+      .from(schema.memberships)
+      .where(eq(schema.memberships.id, membershipId))
+      .limit(1);
+    const camp = await campNameAndSlug(groupId);
+    if (m && camp) {
+      await insertNotifications(db(), [
+        {
+          ...officerAssignmentRequestNotification({
+            officerLabel: role.name,
+            campName: camp.name,
+            campSlug: camp.slug,
+          }),
+          userId: m.userId,
+        },
+      ]);
+    }
+  } catch (err) {
+    console.error("[notifications] officer assignment hook failed", err);
+  }
   return { ok: true };
 }
 
@@ -589,6 +629,31 @@ export async function respondToOfficer(
         eq(schema.memberRoleAssignments.projectRoleId, roleId),
       ),
     );
+
+  // Event hook: confirm the acceptance back to the officer (org can now reach
+  // them). Thin + best-effort.
+  try {
+    const [role] = await db()
+      .select({ name: schema.projectRoles.name })
+      .from(schema.projectRoles)
+      .where(eq(schema.projectRoles.id, roleId))
+      .limit(1);
+    const camp = await campNameAndSlug(groupId);
+    if (role && camp) {
+      await insertNotifications(db(), [
+        {
+          ...officerAcceptedNotification({
+            officerLabel: role.name,
+            campName: camp.name,
+            campSlug: camp.slug,
+          }),
+          userId,
+        },
+      ]);
+    }
+  } catch (err) {
+    console.error("[notifications] officer acceptance hook failed", err);
+  }
   return { ok: true };
 }
 

@@ -57,6 +57,9 @@
 //     filterPickerEligible (./supplier-standing)
 //   - supplier import mappers: mapStatusToStanding, mapReturning,
 //     normalizeCategory, feePhraseToStepKey (./supplier-import)
+//   - notifications + bulletins: payload builders, buildBulletinNotifications
+//     (reuses resolveAudience), shouldSendImmediateEmail, groupNotificationsByDay,
+//     notificationMentionsAny (privacy guard) (./notifications)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -81,3 +84,4 @@ export * from "./god-emails";
 export * from "./supplier-import";
 export * from "./supplier-onboarding";
 export * from "./supplier-standing";
+export * from "./notifications";

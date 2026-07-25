@@ -1,0 +1,232 @@
+"use server";
+
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+
+import {
+  buildBulletinNotifications,
+  canActivateAudience,
+  resolveBulletinAudience,
+  type AuthzMembership,
+} from "@quagga/core";
+import { BulletinComposeInput } from "@quagga/types";
+
+import { getDb, schema } from "@/lib/db";
+import { requireOrgSession, type OrgSession } from "@/lib/session";
+import { getActiveEdition } from "@/lib/queries";
+import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
+import { buildAudienceContext } from "@/lib/questionnaires/queries";
+import { runAction, type ActionResult } from "./result";
+
+// Bulletin CRUD — org staff only (requireOrgSession gates to god/org_staff; the
+// audience authz predicate double-checks server-side). Bulletins are broadcasts
+// to an org audience; project audiences are rejected (those are camp-scoped
+// questionnaires, not org bulletins). Informational only — no data collection.
+
+function authzMemberships(session: OrgSession): AuthzMembership[] {
+  return [{ groupId: session.orgGroupId, role: session.role }];
+}
+
+/** Assert the actor may target this (org-only) audience. Throws otherwise. */
+function assertOrgAudience(session: OrgSession, input: BulletinComposeInput) {
+  if (input.audience.kind === "project") {
+    throw new Error("Bulletins broadcast to org audiences, not a single camp.");
+  }
+  if (
+    !canActivateAudience(authzMemberships(session), input.audience, session.orgGroupId)
+  ) {
+    throw new Error("You are not allowed to broadcast to that audience.");
+  }
+}
+
+const SaveInput = BulletinComposeInput.extend({
+  id: z.string().uuid().optional(),
+});
+
+export type SaveBulletinResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/**
+ * Create or update a bulletin. `publish: true` stamps `published_at` and fans
+ * out one notification per resolved recipient (idempotent-ish: publishing an
+ * already-published bulletin re-resolves and would re-notify, so the action
+ * refuses to re-publish an already-published row). Draft edits never notify.
+ */
+export async function saveBulletin(
+  raw: z.input<typeof SaveInput>,
+): Promise<SaveBulletinResult> {
+  try {
+    const session = await requireOrgSession();
+    const input = SaveInput.parse(raw);
+    assertOrgAudience(session, input);
+
+    const edition = await getActiveEdition();
+    if (!edition) throw new Error("No active edition to attach the bulletin to.");
+
+    const db = getDb();
+    const now = new Date();
+
+    // --- Update path -----------------------------------------------------
+    if (input.id) {
+      const [existing] = await db
+        .select({
+          id: schema.bulletins.id,
+          publishedAt: schema.bulletins.publishedAt,
+        })
+        .from(schema.bulletins)
+        .where(eq(schema.bulletins.id, input.id))
+        .limit(1);
+      if (!existing) throw new Error("That bulletin no longer exists.");
+      const alreadyPublished = existing.publishedAt !== null;
+
+      await db
+        .update(schema.bulletins)
+        .set({
+          title: input.title,
+          bodyMd: input.bodyMd,
+          audience: input.audience,
+          pinned: input.pinned,
+          // Publishing a draft stamps published_at; never un-publish or restamp.
+          ...(input.publish && !alreadyPublished ? { publishedAt: now } : {}),
+          updatedAt: now,
+        })
+        .where(eq(schema.bulletins.id, input.id));
+
+      if (input.publish && !alreadyPublished) {
+        await fanOut(db, input.id, input.title, input.audience, edition.id, session);
+      }
+
+      await writeAuditEvent(db, {
+        actorId: session.dbUserId,
+        action: input.publish && !alreadyPublished ? "bulletin.publish" : "bulletin.update",
+        subject: input.id,
+      });
+
+      revalidatePath("/bulletins");
+      revalidatePath(`/bulletins/${input.id}`);
+      return { ok: true, id: input.id };
+    }
+
+    // --- Create path -----------------------------------------------------
+    const [created] = await db
+      .insert(schema.bulletins)
+      .values({
+        editionId: edition.id,
+        title: input.title,
+        bodyMd: input.bodyMd,
+        audience: input.audience,
+        createdByUserId: session.dbUserId,
+        pinned: input.pinned,
+        publishedAt: input.publish ? now : null,
+      })
+      .returning({ id: schema.bulletins.id });
+    if (!created) throw new Error("Could not create the bulletin.");
+
+    if (input.publish) {
+      await fanOut(db, created.id, input.title, input.audience, edition.id, session);
+    }
+
+    await writeAuditEvent(db, {
+      actorId: session.dbUserId,
+      action: input.publish ? "bulletin.publish" : "bulletin.create",
+      subject: created.id,
+    });
+
+    revalidatePath("/bulletins");
+    return { ok: true, id: created.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not save the bulletin.",
+    };
+  }
+}
+
+/** Resolve the audience and fan out bulletin notifications (shared resolver). */
+async function fanOut(
+  db: ReturnType<typeof getDb>,
+  bulletinId: string,
+  title: string,
+  audience: BulletinComposeInput["audience"],
+  editionId: string,
+  session: OrgSession,
+): Promise<void> {
+  const ctx = await buildAudienceContext(editionId, session.orgGroupId);
+  const userIds = resolveBulletinAudience(audience, ctx);
+  const rows = buildBulletinNotifications({ bulletinId, title }, userIds);
+  await insertNotifications(db, rows);
+}
+
+const PublishInput = z.object({ id: z.string().uuid() });
+
+/** Publish an existing draft bulletin (fan-out). Org staff only. */
+export async function publishBulletin(
+  raw: z.input<typeof PublishInput>,
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const session = await requireOrgSession();
+    const input = PublishInput.parse(raw);
+
+    const db = getDb();
+    const [bulletin] = await db
+      .select()
+      .from(schema.bulletins)
+      .where(eq(schema.bulletins.id, input.id))
+      .limit(1);
+    if (!bulletin) throw new Error("That bulletin no longer exists.");
+    if (bulletin.publishedAt !== null) {
+      throw new Error("That bulletin is already published.");
+    }
+    // Re-check the stored audience is one this actor may broadcast to.
+    if (
+      bulletin.audience.kind === "project" ||
+      !canActivateAudience(authzMemberships(session), bulletin.audience, session.orgGroupId)
+    ) {
+      throw new Error("You are not allowed to broadcast to that audience.");
+    }
+
+    const now = new Date();
+    await db
+      .update(schema.bulletins)
+      .set({ publishedAt: now, updatedAt: now })
+      .where(eq(schema.bulletins.id, input.id));
+
+    await fanOut(db, bulletin.id, bulletin.title, bulletin.audience, bulletin.editionId, session);
+
+    await writeAuditEvent(db, {
+      actorId: session.dbUserId,
+      action: "bulletin.publish",
+      subject: bulletin.id,
+    });
+
+    revalidatePath("/bulletins");
+    revalidatePath(`/bulletins/${bulletin.id}`);
+  });
+}
+
+const SetPinnedInput = z.object({ id: z.string().uuid(), pinned: z.boolean() });
+
+/** Toggle a bulletin's pinned state. Org staff only. */
+export async function setBulletinPinned(
+  raw: z.input<typeof SetPinnedInput>,
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const session = await requireOrgSession();
+    const input = SetPinnedInput.parse(raw);
+    const db = getDb();
+    await db
+      .update(schema.bulletins)
+      .set({ pinned: input.pinned, updatedAt: new Date() })
+      .where(eq(schema.bulletins.id, input.id));
+    await writeAuditEvent(db, {
+      actorId: session.dbUserId,
+      action: "bulletin.pin",
+      subject: input.id,
+      meta: { pinned: input.pinned },
+    });
+    revalidatePath("/bulletins");
+  });
+}

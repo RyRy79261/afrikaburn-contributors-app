@@ -8,7 +8,9 @@ import {
   canActivateAudience,
   canAuthorAudience,
   completeRequiredAction as completeRequiredActionPatch,
+  questionnaireReleasedNotification,
   resolveAudience,
+  shouldSendImmediateEmail,
   type AuthzMembership,
 } from "@quagga/core";
 import {
@@ -26,8 +28,11 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireOrgSession, type OrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email";
 import { buildAudienceContext } from "@/lib/questionnaires/queries";
 import { runAction, type ActionResult } from "@/lib/actions/result";
+import { inArray } from "drizzle-orm";
 
 /** The console actor's memberships for the core authz predicates: a single org
  * membership carrying their org role. Custom roles are never permissions. */
@@ -332,6 +337,41 @@ export async function activateQuestionnaire(
             schema.requiredActions.actionKey,
           ],
         });
+    }
+
+    // Event hook: notify the resolved audience that a questionnaire was
+    // released (blocking flag surfaced), + immediate email for blocking ones.
+    // Thin + best-effort — never blocks the activation itself.
+    if (userIds.length > 0) {
+      try {
+        const payload = questionnaireReleasedNotification({
+          title: input.title,
+          blocking: input.blocking,
+          activationId: activation.id,
+        });
+        await insertNotifications(
+          db,
+          userIds.map((userId) => ({ ...payload, userId })),
+        );
+        if (shouldSendImmediateEmail("questionnaire", { blocking: input.blocking })) {
+          const recipients = await db
+            .select({ email: schema.users.email })
+            .from(schema.users)
+            .where(inArray(schema.users.id, userIds));
+          const to = recipients
+            .map((r) => r.email)
+            .filter((e): e is string => Boolean(e));
+          if (to.length > 0) {
+            await sendEmail({
+              to,
+              subject: payload.title,
+              text: `${payload.title}\n\nOpen the Contributors app to complete it.`,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[notifications] questionnaire release hook failed", err);
+      }
     }
 
     await writeAuditEvent(db, {
