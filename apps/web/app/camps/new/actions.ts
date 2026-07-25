@@ -8,7 +8,10 @@ import { checkCampName, createCamp } from "@/lib/groups-store";
 
 const CreateCampInput = z.object({
   name: z.string().trim().min(2, "Give your camp a name.").max(120),
-  kind: GroupKind.exclude(["org"]),
+  // The form (canvas §Create a camp) is deliberately three fields — name,
+  // description, joinability — so kind is not asked; participant-created groups
+  // are theme camps. Artwork / mutant-vehicle creation is a separate flow.
+  kind: GroupKind.exclude(["org"]).default("theme_camp"),
   description: z
     .string()
     .trim()

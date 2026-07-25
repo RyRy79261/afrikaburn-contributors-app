@@ -4,11 +4,11 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Check,
-  CircleAlert,
   Cloud,
   CloudOff,
   Loader2,
+  Lock,
+  MessageSquareWarning,
   Send,
 } from "lucide-react";
 import {
@@ -25,6 +25,8 @@ import {
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { Badge } from "@quagga/ui/components/badge";
+import { AckRow } from "@quagga/ui/components/checkbox";
+import { Wizard } from "@quagga/ui/components/wizard";
 import { toast } from "@quagga/ui/components/toast";
 import type {
   CampSectionReview,
@@ -37,6 +39,8 @@ import {
   CheckGroup,
   ChoiceGroup,
   NumberField,
+  PlacementSelect,
+  RadioChoiceGroup,
   TextAreaField,
   TextField,
   WordLimitedTextArea,
@@ -232,6 +236,23 @@ export function RegistrationWizard(props: WizardProps) {
   const activeReviews = props.reviews.filter((r) => r.sectionKey === active);
   const family = parseFamily(values.s5FamilyFriendly);
 
+  // Wizard-navigator model (canvas RBIDd `YYwgl`) — the @quagga/ui Wizard is the
+  // single numbered-sections component; sections are enterable in any order so
+  // nothing is `blocked`.
+  const wizardSections = SECTION_KEYS.map((key) => ({
+    id: key,
+    label: SECTION_LABELS[key],
+    done: completed.has(key),
+  }));
+  const activeIndex = SECTION_KEYS.indexOf(active) + 1;
+  const activeDone = completed.has(active);
+  const activeFlagged = activeReviews.some((r) => r.status === "open");
+  const activeState = activeFlagged
+    ? "NEEDS CHANGES"
+    : activeDone
+      ? "COMPLETE"
+      : "CURRENT";
+
   return (
     <div className="flex flex-col gap-6">
       {props.status === "changes_requested" && (
@@ -249,84 +270,121 @@ export function RegistrationWizard(props: WizardProps) {
         </div>
       )}
 
-      <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+        {/* Section navigator — desktop rail / mobile strip (canvas `YYwgl`) */}
+        <aside className="lg:sticky lg:top-6 lg:w-64 lg:shrink-0">
+          <div className="flex flex-col gap-4 rounded-xl border border-border p-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Your progress
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                {completed.size} of {SECTION_KEYS.length} sections complete
+              </p>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-secondary"
+                role="progressbar"
+                aria-valuenow={completed.size}
+                aria-valuemin={0}
+                aria-valuemax={SECTION_KEYS.length}
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{
+                    width: `${(completed.size / SECTION_KEYS.length) * 100}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Any order. Nothing is lost.
+              </p>
+            </div>
 
-      {/* Section navigation — any order */}
-      <nav aria-label="Registration sections">
-        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {SECTION_KEYS.map((key, i) => {
-            const done = completed.has(key);
-            const isActive = key === active;
-            const flagged = props.reviews.some(
-              (r) => r.sectionKey === key && r.status === "open",
-            );
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  onClick={() => setActive(key)}
-                  aria-current={isActive ? "step" : undefined}
-                  className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                    isActive
-                      ? "border-accent bg-accent/10"
-                      : "border-border hover:bg-secondary/50"
-                  }`}
-                >
-                  <span
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-                      done
-                        ? "bg-success/20 text-success"
-                        : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {done ? <Check className="h-3 w-3" aria-hidden /> : i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-foreground">
-                    {SECTION_LABELS[key]}
-                  </span>
-                  {flagged && (
-                    <CircleAlert className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+            {/* Desktop vertical rail */}
+            <div className="hidden lg:block">
+              <Wizard
+                variant="rail"
+                sections={wizardSections}
+                currentId={active}
+                onSelect={(id) => setActive(id as SectionKey)}
+              />
+            </div>
+            {/* Mobile compact strip */}
+            <div className="lg:hidden">
+              <Wizard
+                variant="strip"
+                sections={wizardSections}
+                currentId={active}
+                onSelect={(id) => setActive(id as SectionKey)}
+              />
+            </div>
 
-      {/* Active section feedback (camp side) */}
-      {activeReviews.length > 0 && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/30 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            AfrikaBurn feedback on this section
-          </p>
-          <ul className="flex flex-col gap-2">
-            {activeReviews.map((r) => (
-              <li key={r.id} className="text-sm">
-                <div className="mb-0.5 flex items-center gap-2">
-                  <Badge variant={r.status === "open" ? "warning" : "success"}>
-                    {r.status === "open" ? "Open" : "Resolved"}
-                  </Badge>
-                </div>
-                <p className="whitespace-pre-wrap text-foreground">{r.comment}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+          </div>
+        </aside>
 
-      {/* Active section fields */}
-      <section className="flex flex-col gap-5 rounded-xl border border-border p-5">
-        <div>
-          <h2 className="text-lg font-semibold">{SECTION_LABELS[active]}</h2>
-          <p className="text-xs text-muted-foreground">
-            {isSectionComplete(active, toSectionData(props.campName, values))
-              ? "All required fields complete."
-              : "Required fields are marked with *."}
-          </p>
-        </div>
+        {/* Active section card */}
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Section {activeIndex} of {SECTION_KEYS.length} · {activeState}
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-2xl font-semibold uppercase tracking-tight">
+                {SECTION_LABELS[active]}
+              </h2>
+              <Badge
+                variant={
+                  activeFlagged ? "warning" : activeDone ? "success" : "outline"
+                }
+              >
+                {activeFlagged
+                  ? "Changes requested"
+                  : activeDone
+                    ? "Complete"
+                    : "In progress"}
+              </Badge>
+            </div>
+          </div>
 
-        {active === "identity" && (
+          {/* Org feedback on this section (canvas `fwnHH`) */}
+          {activeReviews.length > 0 && (
+            <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+              <MessageSquareWarning
+                className="mt-0.5 h-5 w-5 shrink-0 text-warning"
+                aria-hidden
+              />
+              <div className="flex min-w-0 flex-col gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Org feedback
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {activeReviews.map((r) => (
+                    <li key={r.id} className="text-sm">
+                      <Badge
+                        variant={r.status === "open" ? "warning" : "success"}
+                      >
+                        {r.status === "open" ? "Open" : "Resolved"}
+                      </Badge>
+                      <p className="mt-1 whitespace-pre-wrap text-foreground">
+                        {r.comment}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Active section fields */}
+          <section className="flex flex-col gap-5 rounded-xl border border-border p-5">
+            <p className="text-xs text-muted-foreground">
+              {isSectionComplete(active, toSectionData(props.campName, values))
+                ? "All required fields complete."
+                : "Required fields are marked with *."}
+            </p>
+
+            {active === "identity" && (
           <>
             <div className="rounded-lg border border-dashed border-border p-3 text-sm">
               <span className="text-muted-foreground">Camp name: </span>
@@ -519,10 +577,11 @@ export function RegistrationWizard(props: WizardProps) {
 
         {active === "sound_placement" && (
           <>
-            <ChoiceGroup
-              label="Amplified music"
+            <RadioChoiceGroup
+              label="Sound level (SOOP)"
               required
               hint="Pick the loudest you'll get. This decides which zone you're placed in."
+              footnote="SOOP = Sound Out Of Place — how loud you are, relative to your camp neighbours."
               options={SOUND_SCALE.map((s) => ({
                 value: s.value,
                 label: s.label,
@@ -544,8 +603,8 @@ export function RegistrationWizard(props: WizardProps) {
               onCommit={commit}
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <ChoiceGroup
-                label="Placement — 1st choice"
+              <PlacementSelect
+                label="Placement — first choice"
                 required
                 options={zones.map((z) => ({
                   value: z.value,
@@ -557,9 +616,14 @@ export function RegistrationWizard(props: WizardProps) {
                   update({ s5PlacementFirstChoice: v });
                   setTimeout(commit, 0);
                 }}
+                flagNote={
+                  activeReviews.some((r) => r.status === "open")
+                    ? "The placement team asked you to reconsider this."
+                    : undefined
+                }
               />
-              <ChoiceGroup
-                label="Placement — 2nd choice"
+              <PlacementSelect
+                label="Placement — second choice"
                 options={zones.map((z) => ({
                   value: z.value,
                   label: z.label,
@@ -646,47 +710,59 @@ export function RegistrationWizard(props: WizardProps) {
               onChange={(v) => update({ s6ExpectedBudgetZar: v })}
               onCommit={commit}
             />
-            <label className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 accent-[var(--accent)]"
-                checked={values.s6PlugAndPlayAck === true}
-                onChange={(e) => {
-                  update({ s6PlugAndPlayAck: e.target.checked });
-                  setTimeout(commit, 0);
-                }}
-              />
-              <span className="text-sm">
-                <span className="font-medium text-foreground">
-                  Plug &amp; Play acknowledgement{" "}
-                  <span className="text-accent" aria-hidden>*</span>
-                </span>
-                <span className="mt-0.5 block text-muted-foreground">
-                  We understand AfrikaBurn is a decommodified event: our camp is
-                  participant-run, not a paid turnkey (&ldquo;plug &amp; play&rdquo;)
-                  operation, and we commit to gifting and communal effort over
-                  commerce.
+            <AckRow
+              checked={values.s6PlugAndPlayAck === true}
+              onChange={(e) => {
+                update({ s6PlugAndPlayAck: e.currentTarget.checked });
+                setTimeout(commit, 0);
+              }}
+            >
+              <span className="font-medium text-foreground">
+                Plug &amp; Play acknowledgement{" "}
+                <span className="text-accent" aria-hidden>
+                  *
                 </span>
               </span>
-            </label>
+              <span className="mt-0.5 block text-muted-foreground">
+                We understand AfrikaBurn is a decommodified event: our camp is
+                participant-run, not a paid turnkey (&ldquo;plug &amp; play&rdquo;)
+                operation, and we commit to gifting and communal effort over
+                commerce.
+              </span>
+            </AckRow>
           </>
         )}
-      </section>
+          </section>
+        </div>
+      </div>
 
-      {/* Submit / withdraw */}
-      <div className="flex flex-col gap-3 border-t border-border pt-5">
+      {/* Submit area (canvas `kDSa7`) — the gate stays locked until all six
+          sections are complete. */}
+      <div className="flex flex-col gap-4 border-t border-border pt-6">
         {!allComplete && (
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-            <span>
-              {missing.length} section{missing.length === 1 ? "" : "s"} still to
-              complete before you can submit:{" "}
-              <span className="text-foreground">
-                {missing.map((k) => SECTION_LABELS[k]).join(", ")}
+          <>
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Lock className="h-4 w-4 shrink-0" aria-hidden />
+              Submit opens once all six sections are complete
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Still needed:
               </span>
-              .
-            </span>
-          </div>
+              {missing.map((k) => (
+                <span
+                  key={k}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 text-xs text-foreground"
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-warning"
+                    aria-hidden
+                  />
+                  {SECTION_LABELS[k]}
+                </span>
+              ))}
+            </div>
+          </>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button
@@ -704,11 +780,13 @@ export function RegistrationWizard(props: WizardProps) {
           >
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : (
+            ) : allComplete ? (
               <Send className="h-4 w-4" aria-hidden />
+            ) : (
+              <Lock className="h-4 w-4" aria-hidden />
             )}
             {props.status === "changes_requested"
-              ? "Resubmit for review"
+              ? "Resubmit registration"
               : "Submit registration"}
           </Button>
         </div>
@@ -734,7 +812,7 @@ function SaveStatus({
     text = "Save failed — we'll retry";
   } else if (state === "saved" || lastSavedAt) {
     icon = <Cloud className="h-3.5 w-3.5 text-success" aria-hidden />;
-    text = "All changes saved";
+    text = "Saved just now";
   } else {
     icon = <Cloud className="h-3.5 w-3.5" aria-hidden />;
     text = "Autosaves as you go";

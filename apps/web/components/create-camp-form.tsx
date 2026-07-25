@@ -1,33 +1,36 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
-import {
-  CAMP_DESCRIPTION_WORD_LIMIT,
-  wordsRemaining,
-} from "@quagga/core";
-import type { GroupKind, Joinability } from "@quagga/types";
+import { CAMP_DESCRIPTION_WORD_LIMIT, wordsRemaining } from "@quagga/core";
+import type { Joinability } from "@quagga/types";
 import { Input } from "@quagga/ui/components/input";
-import { Textarea } from "@quagga/ui/components/textarea";
+import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { Button } from "@quagga/ui/components/button";
-import { cn } from "@quagga/ui/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@quagga/ui/components/select";
 import type { CreateCampActionResult } from "@/app/camps/new/actions";
-
-const KINDS: { value: Exclude<GroupKind, "org">; label: string }[] = [
-  { value: "theme_camp", label: "Theme camp" },
-  { value: "artwork", label: "Artwork" },
-  { value: "mutant_vehicle", label: "Mutant vehicle" },
-];
 
 interface CreateCampFormProps {
   action: (raw: unknown) => Promise<CreateCampActionResult>;
 }
 
+const JOINABILITY_HELP: Record<Joinability, string> = {
+  open: "Anyone can request to join. Switch to invite-only whenever you like — it's a directory badge, not a lock.",
+  invite_only:
+    "Only people with an invite link can join. Open it up whenever you like — it's a directory badge, not a lock.",
+};
+
 export function CreateCampForm({ action }: CreateCampFormProps) {
   const router = useRouter();
   const [name, setName] = React.useState("");
-  const [kind, setKind] = React.useState<Exclude<GroupKind, "org">>("theme_camp");
   const [description, setDescription] = React.useState("");
   const [joinability, setJoinability] = React.useState<Joinability>("open");
   const [warnings, setWarnings] = React.useState<string[]>([]);
@@ -43,7 +46,6 @@ export function CreateCampForm({ action }: CreateCampFormProps) {
     startTransition(async () => {
       const result = await action({
         name,
-        kind,
         description: description.trim() || undefined,
         joinability,
         confirmWarnings,
@@ -67,6 +69,7 @@ export function CreateCampForm({ action }: CreateCampFormProps) {
       }}
       className="flex flex-col gap-5"
     >
+      {/* 1 — Camp name (with soft dedupe feedback) */}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="name" className="text-sm font-medium">
           Camp name <span className="text-primary">*</span>
@@ -78,99 +81,56 @@ export function CreateCampForm({ action }: CreateCampFormProps) {
             setName(e.target.value);
             setWarnings([]);
           }}
-          placeholder="e.g. Neon Cathedral"
+          placeholder="e.g. Mad Hatters Tea Co."
           required
         />
+        {awaitingConfirm && (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>
+              Similar to existing camp &ldquo;{warnings[0]}&rdquo; — is yours
+              different? You can still use this name.
+            </span>
+          </p>
+        )}
       </div>
 
+      {/* 2 — Short description (word-counted) */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Kind</span>
-        <div className="flex flex-wrap gap-2">
-          {KINDS.map((k) => (
-            <button
-              key={k.value}
-              type="button"
-              aria-pressed={kind === k.value}
-              onClick={() => setKind(k.value)}
-              className={cn(
-                "rounded-md border px-3 py-2 text-sm transition-colors",
-                kind === k.value
-                  ? "border-primary bg-primary/10"
-                  : "border-input bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label htmlFor="description" className="text-sm font-medium">
-            Description
-          </label>
-          <span
-            className={cn(
-              "text-xs",
-              overLimit ? "text-destructive" : "text-muted-foreground",
-            )}
-          >
-            {overLimit
-              ? `${Math.abs(remaining)} over`
-              : `${remaining} words left`}
-          </span>
-        </div>
-        <Textarea
+        <label htmlFor="description" className="text-sm font-medium">
+          Short description
+        </label>
+        <TextareaWithCount
           id="description"
           rows={4}
+          maxWords={CAMP_DESCRIPTION_WORD_LIMIT}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What your camp brings to the Tankwa. Up to 60 words."
         />
       </div>
 
+      {/* 3 — Joinability */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Who can join</span>
-        <div className="flex gap-2">
-          {(
-            [
-              { value: "open", label: "Anyone can join" },
-              { value: "invite_only", label: "Invite-only" },
-            ] as const
-          ).map((j) => (
-            <button
-              key={j.value}
-              type="button"
-              aria-pressed={joinability === j.value}
-              onClick={() => setJoinability(j.value)}
-              className={cn(
-                "flex-1 rounded-md border px-3 py-2 text-sm transition-colors",
-                joinability === j.value
-                  ? "border-primary bg-primary/10"
-                  : "border-input bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {j.label}
-            </button>
-          ))}
-        </div>
+        <label htmlFor="joinability" className="text-sm font-medium">
+          Joinability
+        </label>
+        <Select
+          value={joinability}
+          onValueChange={(v) => setJoinability(v as Joinability)}
+        >
+          <SelectTrigger id="joinability">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="open">Accepting new members</SelectItem>
+            <SelectItem value="invite_only">Invite-only</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {JOINABILITY_HELP[joinability]}
+        </p>
       </div>
-
-      {awaitingConfirm && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-          <TriangleAlert
-            className="mt-0.5 h-4 w-4 shrink-0 text-warning"
-            aria-hidden
-          />
-          <div>
-            <p className="font-medium text-foreground">Similar names exist</p>
-            <p className="mt-0.5 text-muted-foreground">
-              {warnings.join(", ")}. If yours is different, create it anyway.
-            </p>
-          </div>
-        </div>
-      )}
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -178,18 +138,26 @@ export function CreateCampForm({ action }: CreateCampFormProps) {
         </p>
       )}
 
-      <div className="flex justify-end gap-2">
-        <Button
-          type="submit"
-          disabled={isPending || overLimit || name.trim().length < 2}
-        >
-          {isPending
-            ? "Creating…"
-            : awaitingConfirm
-              ? "Create anyway"
-              : "Create camp"}
-        </Button>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <span className="text-xs text-muted-foreground">
+          Free to create · no approval needed
+        </span>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost">
+            <Link href="/directory">Cancel</Link>
+          </Button>
+          <Button
+            type="submit"
+            disabled={isPending || overLimit || name.trim().length < 2}
+          >
+            {isPending ? "Creating…" : "Create camp"}
+          </Button>
+        </div>
       </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        That&rsquo;s the whole form. Really.
+      </p>
     </form>
   );
 }

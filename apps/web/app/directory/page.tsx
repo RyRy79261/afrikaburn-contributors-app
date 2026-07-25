@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, Users } from "lucide-react";
+import { ArrowRight, Lock, Search, UserRoundCheck, Users } from "lucide-react";
 import type { GroupKind } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Input } from "@quagga/ui/components/input";
@@ -8,7 +8,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { listDirectory } from "@/lib/groups-store";
+import { listDirectory, type DirectoryEntry } from "@/lib/groups-store";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -16,12 +16,69 @@ import { PendingQuestionnaires } from "@/components/questionnaire/pending-questi
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABEL: Record<GroupKind, string> = {
-  org: "AfrikaBurn",
-  theme_camp: "Theme camp",
+// Kind is surfaced only for the non-camp entries; theme camps are the directory
+// default (canvas subhead) so their kind line would just be noise.
+const KIND_LABEL: Partial<Record<GroupKind, string>> = {
   artwork: "Artwork",
   mutant_vehicle: "Mutant vehicle",
 };
+
+function CampCard({ entry }: { entry: DirectoryEntry }) {
+  const kindLabel = KIND_LABEL[entry.kind];
+  return (
+    <Link
+      href={`/camps/${entry.slug}`}
+      className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent/60"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{entry.name}</p>
+          {kindLabel && (
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {kindLabel}
+            </p>
+          )}
+        </div>
+        {entry.registered ? (
+          <Badge variant="success">Registered</Badge>
+        ) : (
+          <Badge variant="outline">Free camp</Badge>
+        )}
+      </div>
+
+      {entry.description && (
+        <p className="line-clamp-3 text-sm text-muted-foreground">
+          {entry.description}
+        </p>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+        <div className="flex min-w-0 items-center gap-2">
+          {entry.registered &&
+            (entry.joinability === "open" ? (
+              <Badge variant="default">
+                <UserRoundCheck className="h-3 w-3" aria-hidden />
+                Accepting members
+              </Badge>
+            ) : (
+              <Badge variant="outline">
+                <Lock className="h-3 w-3" aria-hidden />
+                Invite only
+              </Badge>
+            ))}
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+            <Users className="h-3.5 w-3.5" aria-hidden />
+            {entry.memberCount} member{entry.memberCount === 1 ? "" : "s"}
+          </span>
+        </div>
+        <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-accent">
+          {entry.registered ? "View camp" : "Open camp"}
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </span>
+      </div>
+    </Link>
+  );
+}
 
 export default async function DirectoryPage({
   searchParams,
@@ -56,21 +113,27 @@ export default async function DirectoryPage({
       })
     : [];
 
+  // Undiscoverability is enforced in listDirectory: free camps only ever appear
+  // to their own members. Registered camps are public; the rest are the viewer's
+  // own free camps — split into the two canvas sections.
+  const registered = entries.filter((e) => e.registered);
+  const yourFreeCamps = entries.filter((e) => !e.registered);
+
   return (
     <AppShell>
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">Directory</h1>
           <p className="max-w-prose text-sm text-muted-foreground">
-            Registered camps, artworks, and mutant vehicles heading to the
-            Tankwa. Free camps you belong to show here too.
+            Every registered theme camp for {edition?.name ?? "AfrikaBurn"}, in
+            one place. Find your people, or start your own.
           </p>
         </header>
 
         {pending.length > 0 && <PendingQuestionnaires items={pending} />}
 
-        <form method="get" className="flex gap-2">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <form method="get" className="relative flex-1">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden
@@ -78,15 +141,18 @@ export default async function DirectoryPage({
             <Input
               name="q"
               defaultValue={q ?? ""}
-              placeholder="Search by name…"
+              placeholder="Search camps by name, gift or vibe…"
               className="pl-9"
               aria-label="Search the directory"
             />
-          </div>
-          <Button type="submit" variant="secondary">
-            Search
+            <button type="submit" className="sr-only">
+              Search
+            </button>
+          </form>
+          <Button asChild className="shrink-0">
+            <Link href="/camps/new">Create a camp</Link>
           </Button>
-        </form>
+        </div>
 
         {entries.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border bg-card/40 p-8 text-center text-sm text-muted-foreground">
@@ -95,55 +161,53 @@ export default async function DirectoryPage({
               : "No registered camps yet. Be the first — create one."}
           </p>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {entries.map((entry) => (
-              <li key={entry.id}>
-                <Link
-                  href={`/camps/${entry.slug}`}
-                  className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent/60"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{entry.name}</p>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {KIND_LABEL[entry.kind]}
-                      </p>
-                    </div>
-                    {entry.registered ? (
-                      <Badge variant="success">Registered</Badge>
-                    ) : (
-                      <Badge variant="outline">Free camp</Badge>
-                    )}
-                  </div>
-
-                  {entry.description && (
-                    <p className="line-clamp-3 text-sm text-muted-foreground">
-                      {entry.description}
+          <div className="flex flex-col gap-8">
+            {registered.length > 0 && (
+              <section className="flex flex-col gap-4">
+                <div className="flex items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Registered camps
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Public this edition — anyone can find and request to join.
                     </p>
-                  )}
-
-                  <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                    <Badge
-                      variant={
-                        entry.joinability === "open" ? "default" : "secondary"
-                      }
-                    >
-                      {entry.joinability === "open"
-                        ? "Accepting members"
-                        : "Invite-only"}
-                    </Badge>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Users className="h-3.5 w-3.5" aria-hidden />
-                      {entry.memberCount}
-                      {entry.viewerRole && (
-                        <span className="ml-1 text-accent">· you</span>
-                      )}
-                    </span>
                   </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                    {registered.length} camp{registered.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ul className="grid gap-4 sm:grid-cols-2">
+                  {registered.map((entry) => (
+                    <li key={entry.id}>
+                      <CampCard entry={entry} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {yourFreeCamps.length > 0 && (
+              <section className="flex flex-col gap-4">
+                <div>
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Your camps · members only
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Free camps you&rsquo;re part of. Not yet registered, so they
+                    stay hidden from the public directory.
+                  </p>
+                </div>
+                <ul className="grid gap-4 sm:grid-cols-2">
+                  {yourFreeCamps.map((entry) => (
+                    <li key={entry.id}>
+                      <CampCard entry={entry} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
       </div>
     </AppShell>

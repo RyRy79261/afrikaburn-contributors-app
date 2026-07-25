@@ -6,6 +6,7 @@ import {
   FileClock,
   Hourglass,
   MessageSquare,
+  MessageSquareWarning,
   XCircle,
 } from "lucide-react";
 import {
@@ -14,13 +15,8 @@ import {
   type RegistrationStatus,
   type SectionKey,
 } from "@quagga/types";
-import { Badge } from "@quagga/ui/components/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@quagga/ui/components/card";
+import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
+import { StatusBadge } from "@quagga/ui/components/status-badge";
 import type {
   CampSectionReview,
   RegistrationRow,
@@ -93,6 +89,51 @@ function yesNo(v: boolean | null): string {
 
 function text(v: string | null | undefined): string {
   return v && v.trim().length > 0 ? v : "—";
+}
+
+/** Relative "N days ago" for the feedback thread timestamps. */
+function formatRelative(date: Date): string {
+  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
+  return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+}
+
+/** Per-section review state → row status pill + icon (canvas P0Tcl section rows). */
+function sectionStatus(reviews: CampSectionReview[]): {
+  label: string;
+  variant: NonNullable<BadgeProps["variant"]>;
+  icon: React.ReactNode;
+} {
+  if (reviews.some((r) => r.status === "open")) {
+    return {
+      label: "Changes requested",
+      variant: "warning",
+      icon: (
+        <MessageSquareWarning
+          className="h-5 w-5 shrink-0 text-warning"
+          aria-hidden
+        />
+      ),
+    };
+  }
+  if (reviews.length > 0) {
+    return {
+      label: "Reviewed",
+      variant: "success",
+      icon: (
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden />
+      ),
+    };
+  }
+  return {
+    label: "Complete",
+    variant: "success",
+    icon: <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden />,
+  };
 }
 
 interface Field {
@@ -210,66 +251,94 @@ export function RegistrationSummary({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className={`flex items-start gap-3 rounded-xl border p-4 ${banner.tone}`}>
-        <span className="mt-0.5 shrink-0">{banner.icon}</span>
-        <div>
-          <p className="text-sm font-medium">{banner.title}</p>
-          <p className="mt-0.5 text-sm opacity-80">{banner.body}</p>
+      {/* Status banner (canvas P0Tcl `Ovnjk`) */}
+      <div
+        className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border p-4 ${banner.tone}`}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 shrink-0">{banner.icon}</span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{banner.title}</p>
+            <p className="mt-0.5 text-sm opacity-80">{banner.body}</p>
+          </div>
         </div>
+        <StatusBadge status={r.status} />
       </div>
 
-      {SECTION_KEYS.map((key) => {
-        const secReviews = reviewsBySection.get(key) ?? [];
-        return (
-          <Card key={key}>
-            <CardHeader>
-              <CardTitle className="text-base">{SECTION_LABELS[key]}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                {fieldsBySection[key].map((f) => (
-                  <div
-                    key={f.label}
-                    className={f.wide ? "sm:col-span-2" : undefined}
-                  >
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {f.label}
-                    </dt>
-                    <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
-                      {f.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+      {/* Per-section review states + feedback threads (canvas `HmdmU`). Each
+          section collapses to a status row; open feedback shows an AfrikaBurn
+          comment thread, and the submitted answers stay one click away. */}
+      <div className="flex flex-col gap-3">
+        {SECTION_KEYS.map((key) => {
+          const secReviews = reviewsBySection.get(key) ?? [];
+          const st = sectionStatus(secReviews);
+          return (
+            <div key={key} className="rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  {st.icon}
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {SECTION_LABELS[key]}
+                  </span>
+                </div>
+                <Badge variant={st.variant}>{st.label}</Badge>
+              </div>
 
               {secReviews.length > 0 && (
-                <div className="mt-4 border-t border-border pt-4">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    AfrikaBurn feedback
-                  </p>
-                  <ul className="flex flex-col gap-2">
-                    {secReviews.map((rev) => (
-                      <li
-                        key={rev.id}
-                        className="rounded-lg border border-border bg-secondary/40 p-3 text-sm"
+                <div className="flex flex-col gap-3 border-t border-border px-4 py-4">
+                  {secReviews.map((rev) => (
+                    <div key={rev.id} className="flex gap-3">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground"
+                        aria-hidden
                       >
-                        <Badge
-                          variant={rev.status === "open" ? "warning" : "success"}
-                        >
-                          {rev.status === "open" ? "Open" : "Resolved"}
-                        </Badge>
-                        <p className="mt-1.5 whitespace-pre-wrap text-foreground">
+                        AB
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-sm font-medium text-foreground">
+                            AfrikaBurn
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelative(rev.createdAt)} ·{" "}
+                            {rev.status === "open" ? "Open" : "Resolved"}
+                          </span>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
                           {rev.comment}
                         </p>
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        );
-      })}
+
+              <details className="border-t border-border">
+                <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+                  View what you submitted
+                </summary>
+                <div className="px-4 pb-4">
+                  <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                    {fieldsBySection[key].map((f) => (
+                      <div
+                        key={f.label}
+                        className={f.wide ? "sm:col-span-2" : undefined}
+                      >
+                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {f.label}
+                        </dt>
+                        <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
+                          {f.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </details>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

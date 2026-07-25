@@ -1,9 +1,17 @@
 "use client";
 
 import * as React from "react";
+import { Info } from "lucide-react";
 import { countWords, CAMP_DESCRIPTION_WORD_LIMIT } from "@quagga/core";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@quagga/ui/components/select";
 
 // Small controlled form primitives shared across the six registration section
 // panels. Each fires `onCommit` on blur so the wizard can autosave; `onChange`
@@ -282,6 +290,130 @@ export function CheckGroup({
           );
         })}
       </div>
+    </Labeled>
+  );
+}
+
+/**
+ * Single-choice RADIO list — a stacked radio card per option (canvas RBIDd
+ * `kUckT` SOOP list): a radio dot + a title, with an optional one-line blurb.
+ * Used for the sound-level (SOOP) scale where each level needs explaining.
+ */
+export function RadioChoiceGroup({
+  label,
+  options,
+  value,
+  onChange,
+  hint,
+  required,
+  footnote,
+}: {
+  label: string;
+  options: readonly { value: string; label: string; blurb?: string }[];
+  value: string | null;
+  onChange: (v: string) => void;
+  hint?: string;
+  required?: boolean;
+  /** Small info line under the group (e.g. the SOOP explainer). */
+  footnote?: string;
+}) {
+  return (
+    <Labeled label={label} hint={hint} required={required}>
+      <div role="radiogroup" className="flex flex-col gap-2">
+        {options.map((opt) => {
+          const on = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(opt.value)}
+              className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                on
+                  ? "border-accent bg-accent/10"
+                  : "border-input hover:bg-secondary/40"
+              }`}
+            >
+              <span
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                  on ? "border-accent" : "border-input"
+                }`}
+                aria-hidden
+              >
+                {on && <span className="h-2.5 w-2.5 rounded-full bg-accent" />}
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-medium text-foreground">
+                  {opt.label}
+                </span>
+                {opt.blurb && (
+                  <span className="text-xs text-muted-foreground">{opt.blurb}</span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {footnote && (
+        <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{footnote}</span>
+        </p>
+      )}
+    </Labeled>
+  );
+}
+
+/**
+ * A dropdown select for a single choice (canvas RBIDd `qTyPN` placement selects).
+ * Shows the selected option's blurb underneath as a "flag note"; a `flagNote`
+ * override surfaces reviewer guidance (e.g. "reconsider this") in the warning tone.
+ */
+export function PlacementSelect({
+  label,
+  options,
+  value,
+  onChange,
+  hint,
+  required,
+  placeholder = "Choose a zone",
+  flagNote,
+}: {
+  label: string;
+  options: readonly { value: string; label: string; blurb?: string }[];
+  value: string | null;
+  onChange: (v: string) => void;
+  hint?: string;
+  required?: boolean;
+  placeholder?: string;
+  flagNote?: string;
+}) {
+  const active = options.find((o) => o.value === value);
+  return (
+    <Labeled label={label} hint={hint} required={required}>
+      <Select value={value ?? undefined} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {flagNote ? (
+        <p className="mt-1 flex items-start gap-1.5 text-xs text-warning">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{flagNote}</span>
+        </p>
+      ) : (
+        active?.blurb && (
+          <p className="mt-1 text-xs text-muted-foreground">{active.blurb}</p>
+        )
+      )}
     </Labeled>
   );
 }

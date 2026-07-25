@@ -1,9 +1,5 @@
 import { redirect } from "next/navigation";
-import {
-  BIO_PRIVACY_FIELDS,
-  buildBurnerBioQuestionnaire,
-  defaultPrivacyFlags,
-} from "@quagga/core";
+import { defaultPrivacyFlags, mapBioToResponses } from "@quagga/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -12,7 +8,7 @@ import { getBio } from "@/lib/bio-store";
 import { searchCampsAction } from "@/lib/camp-search-action";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
-import { QuestionnaireRunner } from "@/components/questionnaire/runner";
+import { BioFlow } from "@/components/onboarding/bio-flow";
 import { toBioExtrasState } from "@/components/questionnaire/extras-state";
 import { saveOnboardingBioAction } from "./actions";
 
@@ -43,18 +39,17 @@ export default async function OnboardingPage() {
   const bio = await getBio(user.id, edition.id);
   if (bio?.completedAt) redirect("/profile");
 
-  const questionnaire = buildBurnerBioQuestionnaire();
-  const initialResponses = bio?.responses ?? {};
+  // Pre-fill from any in-progress bio so "save & finish later" resumes cleanly.
+  const initialResponses = bio
+    ? mapBioToResponses(bio.fields)
+    : {};
   const initialFlags = bio?.privacyFlags ?? defaultPrivacyFlags();
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-2xl">
         <div className="mb-6">
-          <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">
-            Welcome
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-semibold tracking-tight">
             Set up your Burner Bio
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -62,16 +57,13 @@ export default async function OnboardingPage() {
             this later from your profile.
           </p>
         </div>
-        <QuestionnaireRunner
-          questionnaire={questionnaire}
+        <BioFlow
+          mode="onboarding"
           initialResponses={initialResponses}
+          initialFlags={initialFlags}
+          initialExtras={toBioExtrasState(bio?.extras)}
           action={saveOnboardingBioAction}
-          burns={{
-            initial: toBioExtrasState(bio?.extras),
-            searchCamps: searchCampsAction,
-          }}
-          privacy={{ fields: BIO_PRIVACY_FIELDS, initialFlags }}
-          submitLabel="Complete my bio"
+          searchCamps={searchCampsAction}
           redirectTo="/directory"
         />
       </div>

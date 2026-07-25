@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -36,14 +38,21 @@ export default async function NewCampPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-xl">
+        <Link
+          href="/directory"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to directory
+        </Link>
         <header className="mb-6 flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">
             Create a camp
           </h1>
           <p className="text-sm text-muted-foreground">
-            It exists the moment you create it — a free camp you can invite
-            people to and organise right away. Registration comes later and earns
-            entitlements.
+            Fewer forms, not more. Your camp exists the moment you create it —
+            invite your people right away. Registration for entitlements comes
+            later, when you&rsquo;re ready.
           </p>
         </header>
         <CreateCampForm action={createCampAction} />

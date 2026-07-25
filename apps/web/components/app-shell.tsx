@@ -2,49 +2,19 @@ import Link from "next/link";
 import { Flame, Compass, TentTree, UserRound } from "lucide-react";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getActiveEdition } from "@/lib/edition";
-import { isDatabaseConfigured } from "@/lib/config";
+import { getEditionLabel } from "@/lib/edition";
+import { getUnreadNotificationCount } from "@/lib/notifications";
 import { SignOutButton } from "./sign-out-button";
-
-/** Static fallback so the banner reads correctly before the edition is seeded. */
-const FALLBACK_EDITION = "AfrikaBurn 2027 · 26 April – 2 May";
-
-function formatEditionRange(
-  name: string,
-  startISO: string,
-  endISO: string,
-): string {
-  try {
-    const start = new Date(`${startISO}T00:00:00Z`);
-    const end = new Date(`${endISO}T00:00:00Z`);
-    const day = (d: Date) =>
-      d.toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
-    return `${name} · ${day(start)} – ${day(end)}`;
-  } catch {
-    return `${name}`;
-  }
-}
+import { HeaderNotificationBell } from "./header-notification-bell";
 
 /** App chrome: brand nav, the edition banner, and the page body. Server
  * component — reads the session cheaply and degrades gracefully env-less. */
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getAuthenticatedUser();
-
-  let editionLabel = FALLBACK_EDITION;
-  if (isDatabaseConfigured()) {
-    try {
-      const edition = await getActiveEdition();
-      if (edition) {
-        editionLabel = formatEditionRange(
-          edition.name,
-          edition.startDate,
-          edition.endDate,
-        );
-      }
-    } catch {
-      // keep the fallback
-    }
-  }
+  const editionLabel = await getEditionLabel();
+  // Signed-in only: the bell renders in the header; count is a placeholder
+  // seam until the notifications backend lands (see lib/notifications.ts).
+  const unread = user ? await getUnreadNotificationCount() : 0;
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -79,6 +49,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
                   <UserRound className="h-4 w-4" aria-hidden />
                   <span className="hidden sm:inline">Profile</span>
                 </Link>
+                <HeaderNotificationBell count={unread} />
                 <SignOutButton />
               </>
             ) : (

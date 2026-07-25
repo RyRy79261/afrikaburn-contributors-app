@@ -8,6 +8,7 @@ import {
   Wallet,
   LayoutGrid,
   FileCheck2,
+  CheckCircle2,
   ClipboardList,
 } from "lucide-react";
 import type { GroupKind, MembershipRole, RegistrationStatus } from "@quagga/types";
@@ -21,6 +22,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
+import { PinnedBulletinBanner } from "@quagga/ui/components/pinned-bulletin-banner";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -182,6 +184,13 @@ export default async function CampPage({
 
   const myRefCode = camp.members.find((m) => m.isViewer)?.refCode ?? null;
 
+  // Pinned-bulletin banner SLOT (canvas RGcNS `adNWQ`). The bulletins backend
+  // (#17) is not wired yet, so this resolves to null and the banner stays hidden.
+  // When #17 lands, populate `pinnedBulletin` from the pinned bulletin for this
+  // camp's audience (title + link to /bulletins/[id]) and the slot lights up with
+  // no further layout work.
+  const pinnedBulletin = null as { title: string; href: string } | null;
+
   return (
     <AppShell>
       <div className="flex flex-col gap-6">
@@ -210,6 +219,13 @@ export default async function CampPage({
             <LeaveCampButton slug={camp.slug} action={leaveCampAction} />
           )}
         </header>
+
+        {pinnedBulletin && (
+          <PinnedBulletinBanner
+            title={pinnedBulletin.title}
+            href={pinnedBulletin.href}
+          />
+        )}
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
@@ -317,14 +333,39 @@ export default async function CampPage({
                   {statusLabel}
                 </Badge>
               </div>
-              {isAdmin && (
-                <Button asChild size="sm" className="w-full">
-                  <Link href={`/camps/${camp.slug}/registration`}>
-                    {camp.registrationStatus
-                      ? "Continue registration"
-                      : "Begin registration"}
-                  </Link>
-                </Button>
+              {camp.registered ? (
+                <>
+                  {/* Approved-note (canvas RGcNS `xPpft`): registered camps read
+                      the confirmation + a link to the locked submission, not a
+                      "begin/continue" CTA. */}
+                  <div className="flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 p-3 text-sm">
+                    <CheckCircle2
+                      className="mt-0.5 h-4 w-4 shrink-0 text-success"
+                      aria-hidden
+                    />
+                    <span className="text-foreground">
+                      Registered for {edition.name} — your entitlements are live.
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <Link
+                      href={`/camps/${camp.slug}/registration`}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      View submission
+                    </Link>
+                  )}
+                </>
+              ) : (
+                isAdmin && (
+                  <Button asChild size="sm" className="w-full">
+                    <Link href={`/camps/${camp.slug}/registration`}>
+                      {camp.registrationStatus
+                        ? "Continue registration"
+                        : "Begin registration"}
+                    </Link>
+                  </Button>
+                )
               )}
             </CardContent>
           </Card>
@@ -385,7 +426,7 @@ export default async function CampPage({
               title="Placement & art grants"
               hint={
                 camp.registered
-                  ? "Entitlement — application process TBC with AfrikaBurn."
+                  ? "Entitlement unlocked — placement application opens once AfrikaBurn confirms the process."
                   : "Unlocks once your registration is approved."
               }
               tag="Entitlement"
@@ -405,19 +446,28 @@ export default async function CampPage({
             />
             <DisabledHintTile
               title="Shifts"
-              hint="Topic under exploration."
+              hint="Topic under exploration with camp leads."
               tag="Exploring"
               icon={<CalendarClock className="h-4 w-4" />}
             />
+            {/*
+              PENDING RYAN'S RULING: the "Budget" capability sits in tension with
+              the product law that AfrikaBurn never runs camp treasuries/dues
+              (AGENTS.md §Product laws — "camp treasuries/dues" are out of scope
+              "permanently unless Ryan says otherwise"). It is rendered here only
+              as a disabled "topic under exploration" hint tile — no budgeting UI,
+              no money handling. Do NOT build any budget/treasury feature behind
+              this tile until Ryan explicitly reverses the no-treasuries stance.
+            */}
             <DisabledHintTile
               title="Budget"
-              hint="Topic under exploration."
+              hint="Topic under exploration with camp leads."
               tag="Exploring"
               icon={<Wallet className="h-4 w-4" />}
             />
             <DisabledHintTile
               title="Layout"
-              hint="Topic under exploration."
+              hint="Topic under exploration with camp leads."
               tag="Exploring"
               icon={<LayoutGrid className="h-4 w-4" />}
             />

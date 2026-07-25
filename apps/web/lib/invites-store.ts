@@ -93,24 +93,86 @@ export interface InvitePreview {
   kind: InviteKind;
   groupName: string;
   groupSlug: string;
+  groupDescription: string | null;
+  /** Display name of whoever minted the link (edition-scoped); null if unknown. */
+  inviterName: string | null;
+  expiresAt: Date | null;
+  usedAt: Date | null;
+  /** Whether the camp is registered (approved) for the passed edition. */
+  registered: boolean;
 }
 
-/** Look up an invite + its group for the redemption landing page. */
+/**
+ * Look up an invite + its group for the redemption landing page. Pass the active
+ * `editionId` to also resolve the inviter's display name and the camp's
+ * registration badge (both edition-scoped); the used/expired state is derived by
+ * the caller from `usedAt` / `expiresAt`.
+ */
 export async function getInvitePreview(
   token: string,
+  editionId?: string,
 ): Promise<InvitePreview | null> {
   const rows = await db()
     .select({
       token: schema.invites.token,
       kind: schema.invites.kind,
+      groupId: schema.groups.id,
       groupName: schema.groups.name,
       groupSlug: schema.groups.slug,
+      groupDescription: schema.groups.description,
+      expiresAt: schema.invites.expiresAt,
+      usedAt: schema.invites.usedAt,
+      createdByUserId: schema.invites.createdByUserId,
     })
     .from(schema.invites)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.invites.groupId))
     .where(eq(schema.invites.token, token))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+
+  let inviterName: string | null = null;
+  let registered = false;
+  if (editionId) {
+    const approved = await db()
+      .select({ id: schema.registrations.id })
+      .from(schema.registrations)
+      .where(
+        and(
+          eq(schema.registrations.groupId, row.groupId),
+          eq(schema.registrations.editionId, editionId),
+          eq(schema.registrations.status, "approved"),
+        ),
+      )
+      .limit(1);
+    registered = approved.length > 0;
+
+    if (row.createdByUserId) {
+      const bio = await db()
+        .select({ displayName: schema.burnerBios.displayName })
+        .from(schema.burnerBios)
+        .where(
+          and(
+            eq(schema.burnerBios.userId, row.createdByUserId),
+            eq(schema.burnerBios.editionId, editionId),
+          ),
+        )
+        .limit(1);
+      inviterName = bio[0]?.displayName?.trim() || null;
+    }
+  }
+
+  return {
+    token: row.token,
+    kind: row.kind,
+    groupName: row.groupName,
+    groupSlug: row.groupSlug,
+    groupDescription: row.groupDescription,
+    inviterName,
+    expiresAt: row.expiresAt,
+    usedAt: row.usedAt,
+    registered,
+  };
 }
 
 export type RedeemResult =
