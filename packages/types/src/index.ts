@@ -8,3 +8,4 @@ export * from "./questionnaire";
 export * from "./audience";
 export * from "./bio";
 export * from "./notifications";
+export * from "./accounts";

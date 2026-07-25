@@ -1,0 +1,223 @@
+import "server-only";
+
+import { and, eq, lte, sql } from "drizzle-orm";
+import {
+  buildSanitizationPlan,
+  deletionCompletedEmail,
+  isSanitizationDue,
+} from "@quagga/core";
+
+import { db, schema } from "@/lib/db";
+import { isDatabaseConfigured } from "@/lib/config";
+import { sendEmail } from "@/lib/email";
+
+// The sanitization runner — the business end of account deletion
+// (docs/accounts-security-spec.md §Deletion, the Camp 404 "Lost Cat" precedent).
+//
+// This is the ONLY place application rows are erased, and it never deletes the
+// `users` row. @quagga/core `buildSanitizationPlan` decides WHAT to erase; this
+// module applies it, in a deliberate order, and records that it happened.
+//
+// ORDERING MATTERS, because the HTTP Drizzle driver has no transactions:
+//   1. capture the address to notify (after step 4 there is none left);
+//   2. purge the secrets tables (profile keys, in-flight email-change tokens);
+//   3. patch every `burner_bios` row for the account;
+//   4. patch the `users` row LAST — `sanitized_at` is the tombstone, so it is
+//      only set once the erasure it claims has actually happened. A crash before
+//      step 4 leaves the request `pending` and the sweep simply runs again;
+//      every step is idempotent, so a re-run is harmless.
+//
+// Note what is NOT here: no delete of memberships, questionnaire responses,
+// required actions, supplier acks, or audit events. Preserving those is the
+// entire point — the cascade would be the damage.
+
+export interface SanitizationOutcome {
+  ok: boolean;
+  userId: string;
+  bioRows: number;
+  membershipsPreserved: number;
+  /** Whether the farewell email was dispatched (false when Resend is unset). */
+  notified: boolean;
+  error?: string;
+}
+
+/**
+ * Sanitize one account against its due deletion request. Re-checks that the
+ * request is genuinely `due` before touching anything: a cancelled request or
+ * one still inside its grace period must never be processed, whatever the caller
+ * believed when it queued the work.
+ */
+export async function sanitizeAccount(
+  userId: string,
+  requestId: string,
+  now: Date = new Date(),
+): Promise<SanitizationOutcome> {
+  const base: SanitizationOutcome = {
+    ok: false,
+    userId,
+    bioRows: 0,
+    membershipsPreserved: 0,
+    notified: false,
+  };
+  if (!isDatabaseConfigured()) {
+    return { ...base, error: "Database is not configured." };
+  }
+
+  const handle = db();
+
+  const [request] = await handle
+    .select({
+      status: schema.accountDeletionRequests.status,
+      requestedAt: schema.accountDeletionRequests.requestedAt,
+      graceEndsAt: schema.accountDeletionRequests.graceEndsAt,
+      cancelledAt: schema.accountDeletionRequests.cancelledAt,
+      completedAt: schema.accountDeletionRequests.completedAt,
+    })
+    .from(schema.accountDeletionRequests)
+    .where(
+      and(
+        eq(schema.accountDeletionRequests.id, requestId),
+        eq(schema.accountDeletionRequests.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  if (!request) return { ...base, error: "Deletion request not found." };
+  if (!isSanitizationDue(request, now)) {
+    return {
+      ...base,
+      error:
+        "That deletion request isn't due — it's cancelled, already done, or still inside its grace period.",
+    };
+  }
+
+  // 1. Capture what we need BEFORE erasing it.
+  const [user] = await handle
+    .select({ email: schema.users.email, sanitizedAt: schema.users.sanitizedAt })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!user) return { ...base, error: "Account not found." };
+
+  const farewellAddress = user.email;
+
+  const [{ memberships } = { memberships: 0 }] = await handle
+    .select({ memberships: sql<number>`count(*)::int` })
+    .from(schema.memberships)
+    .where(eq(schema.memberships.userId, userId));
+
+  const [{ bios } = { bios: 0 }] = await handle
+    .select({ bios: sql<number>`count(*)::int` })
+    .from(schema.burnerBios)
+    .where(eq(schema.burnerBios.userId, userId));
+
+  const plan = buildSanitizationPlan({
+    userId,
+    at: now,
+    bioCount: Number(bios),
+    membershipCount: Number(memberships),
+  });
+
+  // 2. Purge the secrets-only tables. Nothing references these rows.
+  await handle
+    .delete(schema.profileKeys)
+    .where(eq(schema.profileKeys.userId, userId));
+  await handle
+    .delete(schema.emailChangeRequests)
+    .where(eq(schema.emailChangeRequests.userId, userId));
+
+  // 3. Erase every bio row (one per edition). The plan's patch nulls all
+  //    personal columns including the hard-locked classes, and replaces the
+  //    display name with the "Departed Burner" stub.
+  await handle
+    .update(schema.burnerBios)
+    .set(plan.bio)
+    .where(eq(schema.burnerBios.userId, userId));
+
+  // 4. The users row LAST — the tombstone only lands once erasure is real.
+  await handle
+    .update(schema.users)
+    .set(plan.user)
+    .where(eq(schema.users.id, userId));
+
+  await handle
+    .update(schema.accountDeletionRequests)
+    .set({ status: "completed", completedAt: now, updatedAt: now })
+    .where(eq(schema.accountDeletionRequests.id, requestId));
+
+  // The proof that erasure happened. Names no personal data — only our internal
+  // id and counts — so recording it does not undo what it records.
+  await handle.insert(schema.auditEvents).values({
+    actorId: userId,
+    action: plan.audit.action,
+    subject: plan.audit.subject,
+    meta: plan.audit.meta,
+  });
+
+  // The last message this address will ever get from us.
+  let notified = false;
+  if (farewellAddress) {
+    const mail = deletionCompletedEmail();
+    const sent = await sendEmail({
+      to: farewellAddress,
+      subject: mail.subject,
+      text: mail.text,
+    });
+    notified = sent.ok && sent.delivered;
+  }
+
+  return {
+    ok: true,
+    userId,
+    bioRows: Number(bios),
+    membershipsPreserved: Number(memberships),
+    notified,
+  };
+}
+
+/**
+ * Find every deletion request whose grace period has elapsed and sanitize it.
+ * Called by an operator or a scheduled route — deliberately NOT wired into a
+ * build step or app boot (the no-migrate-in-build discipline applies to
+ * destructive maintenance too).
+ *
+ * `limit` caps a single sweep so a large backlog can't blow a serverless
+ * timeout; the next run picks up the rest.
+ */
+export async function sweepDueDeletions(
+  now: Date = new Date(),
+  limit = 50,
+): Promise<SanitizationOutcome[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const due = await db()
+    .select({
+      id: schema.accountDeletionRequests.id,
+      userId: schema.accountDeletionRequests.userId,
+    })
+    .from(schema.accountDeletionRequests)
+    .where(
+      and(
+        eq(schema.accountDeletionRequests.status, "pending"),
+        lte(schema.accountDeletionRequests.graceEndsAt, now),
+      ),
+    )
+    .limit(limit);
+
+  const results: SanitizationOutcome[] = [];
+  for (const row of due) {
+    try {
+      results.push(await sanitizeAccount(row.userId, row.id, now));
+    } catch (err) {
+      results.push({
+        ok: false,
+        userId: row.userId,
+        bioRows: 0,
+        membershipsPreserved: 0,
+        notified: false,
+        error: err instanceof Error ? err.message : "Sanitization failed.",
+      });
+    }
+  }
+  return results;
+}

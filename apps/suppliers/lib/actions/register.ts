@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit";
+import { assignSupplierCode } from "@/lib/supplier-code";
 import { runAction, type ActionResult } from "./result";
 
 // A signed-in user with no matching supplier row registers themselves as a
@@ -56,7 +57,7 @@ export async function registerSupplier(
     // The active (or most recent) edition to scope onboarding to.
     const [edition] =
       (await db
-        .select({ id: schema.editions.id })
+        .select({ id: schema.editions.id, year: schema.editions.year })
         .from(schema.editions)
         .where(eq(schema.editions.isActive, true))
         .limit(1)) ??
@@ -65,7 +66,7 @@ export async function registerSupplier(
       edition ??
       (
         await db
-          .select({ id: schema.editions.id })
+          .select({ id: schema.editions.id, year: schema.editions.year })
           .from(schema.editions)
           .orderBy(desc(schema.editions.year))
           .limit(1)
@@ -84,6 +85,11 @@ export async function registerSupplier(
       })
       .returning({ id: schema.suppliers.id });
     if (!created) throw new Error("Could not create your supplier profile.");
+
+    // Issue the supplier's reference code (`SUP-2027-0416`) — the number the
+    // depot and camps quote. Non-fatal if it can't be allocated: a missing code
+    // never blocks onboarding and can be backfilled.
+    const code = await assignSupplierCode(db, created.id, editionRow.year);
 
     // Seed onboarding with the registration form already done.
     await db
@@ -105,7 +111,7 @@ export async function registerSupplier(
       actorId: dbUser.id,
       action: "supplier.register",
       subject: created.id,
-      meta: { name: input.name, via: "portal_self_register" },
+      meta: { name: input.name, code, via: "portal_self_register" },
     });
 
     revalidatePath("/onboarding");

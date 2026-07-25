@@ -67,6 +67,23 @@
 //     deriveRegistrationFunnel, deriveOfficerCoverage,
 //     deriveSupplierOnboardingRollup/StandingRollup,
 //     deriveQuestionnaireCompletion (./org-stats)
+//   - auth capability matrix: AUTH_CAPABILITIES, assertCapability,
+//     isCapabilityUnavailable, unavailableCapabilities — what MANAGED Neon Auth
+//     actually supports, and the fail-closed gate for what it doesn't
+//     (./auth-capabilities)
+//   - account security: password policy (assessPassword), enumeration-safe
+//     messaging, the 14-day deletion grace state machine, the 48h-revocable
+//     email-change state machine, and the sole-lead / sole-god / last-method
+//     deletion guards (./account-security)
+//   - account sanitization ("Lost Cat"): buildSanitizationPlan,
+//     DEPARTED_BURNER_NAME, isSanitized/assertNotSanitized,
+//     uncoveredHardLockedFields (./account-sanitization)
+//   - security notifications + Resend email bodies: password/email-change/
+//     new-device/deletion builders, maskEmail (./security-notifications)
+//   - supplier codes: formatSupplierCode (`SUP-2027-0416`), parse/validate,
+//     nextSupplierSequence, issueSupplierCode (./supplier-code)
+//   - supplier documents: buildDocumentViews, deriveDocumentAckProgress,
+//     validateDocumentBinding, applyDocumentAcksToSteps (./supplier-documents)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -94,3 +111,9 @@ export * from "./supplier-standing";
 export * from "./notifications";
 export * from "./camp-categories";
 export * from "./org-stats";
+export * from "./auth-capabilities";
+export * from "./account-security";
+export * from "./account-sanitization";
+export * from "./security-notifications";
+export * from "./supplier-code";
+export * from "./supplier-documents";

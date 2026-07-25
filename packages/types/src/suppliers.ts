@@ -131,3 +131,40 @@ export const SupplierImportRow = z.object({
   onboarding: SupplierOnboardingSteps.default({}),
 });
 export type SupplierImportRow = z.infer<typeof SupplierImportRow>;
+
+// --- Supplier documents (org-controlled) ---------------------------------
+// docs/accounts-security-spec.md §"Supplier documents — org-controlled".
+// The org CRUDs a per-edition list of documents/links suppliers must read; a
+// `required_ack` document carries an acknowledgement checkbox on the supplier
+// portal, and may BIND to an onboarding step (e.g. the Supplier Agreement binds
+// to `agreement_signed`) so acknowledging it completes that step.
+
+/**
+ * Where a supplier document lives (`supplier_documents.source_type`).
+ * - `link` — an external URL (a Google Doc, the afrikaburn.org policy page).
+ * - `file` — an uploaded asset (Blob); `url` holds the blob URL either way, so
+ *   the two differ only in how the UI labels the action (Open vs Download) and
+ *   in who is responsible for the artifact's lifetime.
+ */
+export const SupplierDocumentSourceType = z.enum(["file", "link"]);
+export type SupplierDocumentSourceType = z.infer<
+  typeof SupplierDocumentSourceType
+>;
+
+/**
+ * Org-side create/update payload for a supplier document. `stepKey` is the
+ * optional binding to an onboarding step — when set AND `requiredAck` is true,
+ * acknowledging every document bound to that step completes it for the supplier
+ * (@quagga/core `applyDocumentAcksToSteps`). Binding a document to an
+ * ORG-CONFIRMED step (deposit / briefing / fee) is rejected in core: a supplier
+ * ticking a checkbox must never be able to confirm money or attendance.
+ */
+export const SupplierDocumentInput = z.object({
+  title: z.string().trim().min(1, "Give the document a title.").max(160),
+  sourceType: SupplierDocumentSourceType,
+  url: z.string().trim().url("That doesn't look like a valid link.").max(2048),
+  requiredAck: z.boolean().default(false),
+  stepKey: SupplierOnboardingStepKey.nullable().default(null),
+  sort: z.number().int().min(0).max(9999).nullable().default(null),
+});
+export type SupplierDocumentInput = z.infer<typeof SupplierDocumentInput>;

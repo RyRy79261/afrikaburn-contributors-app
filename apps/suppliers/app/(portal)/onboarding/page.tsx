@@ -7,13 +7,19 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { Badge } from "@quagga/ui/components/badge";
+import { supplierOnboardingStep } from "@quagga/core";
 import { guardPortal } from "@/lib/gate";
 import { PageHeading } from "@/components/page-heading";
 import {
   OnboardingChecklist,
   type StepData,
 } from "@/components/onboarding-checklist";
+import {
+  DocumentsPanel,
+  type DocumentRow,
+} from "@/components/documents-panel";
 import { buildStepCardModel, stepEyebrow } from "@/lib/onboarding-view";
+import { loadSupplierDocumentsPanel } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +40,23 @@ export default async function OnboardingPage() {
   }));
 
   const pct = Math.round((progress.completed / progress.total) * 100);
+
+  // Documents & links for this edition, joined to this supplier's acks. The step
+  // TITLE is resolved here (server side) from the core catalog so the client
+  // panel never has to carry it.
+  const documents = await loadSupplierDocumentsPanel(supplier.id, edition.id);
+  const documentRows: DocumentRow[] = documents.views.map((view) => ({
+    id: view.document.id,
+    title: view.document.title,
+    sourceType: view.document.sourceType,
+    url: view.document.url,
+    requiredAck: view.document.requiredAck,
+    acked: view.acked,
+    outstanding: view.outstanding,
+    stepTitle: view.document.stepKey
+      ? (supplierOnboardingStep(view.document.stepKey)?.title ?? null)
+      : null,
+  }));
 
   return (
     <div>
@@ -88,15 +111,18 @@ export default async function OnboardingPage() {
       </Card>
 
       {/*
-        Documents & links panel seam — canvas Q4fye "Documents Panel".
-        BLOCKED on #8 (supplier_documents schema): there is no table yet to hold
-        the required/optional documents, acknowledgements, or download links, so
-        the panel is not rendered to suppliers. This is a flagged, hidden slot
-        (same pattern as the wave-1 pinned-banner seam): once #8 lands, replace
-        this stub with the real <DocumentsPanel documents={...} /> in-place. No
-        supplier-facing UI ships from this seam.
+        Documents & links panel — canvas Q4fye "Documents Panel". Unblocked by
+        migration 0011 (`supplier_documents` + `supplier_document_acks`). The
+        panel renders ONLY when the org has published documents for this edition:
+        an empty catalog shows nothing at all rather than an empty card.
       */}
-      <div hidden aria-hidden data-seam="supplier-documents-panel" />
+      {documentRows.length > 0 && (
+        <DocumentsPanel
+          documents={documentRows}
+          acked={documents.progress.acked}
+          required={documents.progress.required}
+        />
+      )}
 
       <OnboardingChecklist
         steps={steps}

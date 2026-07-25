@@ -38,6 +38,13 @@ sender for the MVP.
 - Install command: `pnpm install` at repo root (Vercel detects the monorepo; if needed set it explicitly).
 - Env vars on **both** projects: `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`, `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
 - `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
+- **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
+  `POST /api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
+  grace period has elapsed (docs/accounts-security-spec.md §Deletion). **Leave it
+  unset until you want the sweeper live** — without it the route refuses to run and
+  nothing is ever erased. Point a scheduler at the route once it is set; never a
+  build step. `NEXT_PUBLIC_APP_URL` (also optional) is the origin used to build
+  email-change confirm/revoke links.
 
 ## 5. Smoke test
 
