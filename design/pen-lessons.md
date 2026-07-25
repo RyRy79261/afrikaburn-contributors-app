@@ -641,3 +641,290 @@ any NEW page frame from now on, create its mobile pair in the same session.
 - Rules-ack with inline link: custom row (18px sage check box + label row ["I've read the" $foreground + "supplier basics ↗" $ab-sage underline]) — cleaner than OirYR/o6q8RQ when the label needs an embedded link.
 - Enumeration-safe messaging: sign-in generic-error = muted $muted banner + info icon "If something doesn't match, we'll just say so — we never reveal which part" under an "EXAMPLE ERROR STATE" caption. Forgot-request confirmation = soft-teal (#2D769626) banner + circle-check "If that account exists, we've emailed it a reset link." under "AFTER YOU SUBMIT" caption.
 - Forgot-password TWO stacked states in one frame via State Wraps: "① REQUEST A RESET LINK" label + card, "② SET A NEW PASSWORD" label + card. Reset card note "This signs you out everywhere…" = muted strip + lucide "log-out".
+
+## 📱 MOBILE-360 batch — 17 remaining PARTICIPANT-APP page pairs (2026-07-24)
+
+Built a mobile 360 sibling for every remaining page frame in the PARTICIPANT APP band (y=5260),
+each at x = desktop.x + 1400. Skipped the 4 pre-existing pairs (EQW5G/Z2300W/TOUE1/D0LTCb) and the
+H7aIdg card study (exempt). Three unlisted new Account pages (SjInE/G35eq/Q3pQj6, added by the
+concurrent workflow into THIS band) were included per "every remaining page frame".
+
+### New frames (name = id @ x, paired-to desktop)
+- Sign up / Sign in — HCt1i @ 1400  ← u87N7
+- Landing — R8zPnr @ 2940  ← L82AQr
+- Profile — SdcDN @ 6020  ← C313E
+- Burner Profile — lYUEe @ 7560  ← mm31G
+- Create a camp — Evh1t @ 10640  ← g5Uqfw
+- Join a camp — MttcT @ 12180  ← qhcHh
+- Camp Settings · Roles & Officers — TIrbC @ 15260  ← ZyKzw
+- Camp Questionnaires — YOdgW @ 16800  ← Hameq
+- Runner v2 — M6JCN @ 19880  ← uj2yF
+- Registration Wizard — XAJSe @ 21420  ← RBIDd
+- Registration Feedback — QzpU6 @ 22960  ← P0Tcl
+- Mutant Vehicle Registration — Qq5u0 @ 24500  ← S8ZcWf
+- Art Project Registration — H2DP4 @ 26040  ← d3pOJI
+- Forgot Password — s2PAS @ 28860  ← Gf1iJ
+- Account · Manage — U6ixd @ 30400  ← SjInE
+- Account · Security — JbB35 @ 31940  ← G35eq
+- Account · Delete — Ur0rS @ 33480  ← Q3pQj6
+
+### Patterns reused (this batch's recipe — very fast, mostly Copy)
+- **Slim signed-in header** = `Copy("rZXLb", root, {name:"Header"})`. rZXLb (from the EQW5G pilot) =
+  vertical [QuiltBand `a30rO` (layout:none, clip, height10, 3 full-1280 diamond paths teal/apricot/sage,
+  opacity 0.9) + Bar (space_between, padding[12,16]) → 140px logo image frame + 32px `$secondary` avatar
+  "AH"]. Override the avatar initials via `descendants:{I0Flc:{content:"DU"}}` when the page's person differs.
+- **Signed-out logo-only header** (Auth/Landing/Join/Forgot) = build a vertical header, `Copy("a30rO")`
+  for the band, then a Bar (justifyContent center or space_between) with a ~150px logo image frame
+  (`fill:{type:"image",mode:"fit",url:"brand/afrikaburn-logo-banner-282.png"}`) + optional "Sign in" text.
+- **Compress by Copy, not rebuild**: the desktop cards/content are almost all `width:"fill_container"`,
+  so `Copy("<cardOrContentId>", body, {width:"fill_container", padding:18, descendants:{…}})` drops them
+  straight into a 360 body (body padding [~22,16], gap ~18-20). Worked wholesale for Auth card (EEPpt),
+  Profile cards (zxDzQ/g457WM/wSmyJ/S6a5z), Burner Profile Content (n7pJLW), Create-camp Form Card (g46AK),
+  Join invite/expired cards, Runner question cards (attI9/fFVeT/XYrbp), Registration Wizard nav+section+
+  submit (YYwgl/WTKig/kDSa7), Reg-Feedback sections (HmdmU), Vehicle/Art whole Content (TyfPc/vsYUk),
+  Forgot cards (wBvAD/g6r17g), all 3 Account Inners (H7n8C/J34odI/r69ikm).
+- **Copy descendants keys work on PLAIN (non-component) frames too**, keyed by the ORIGINAL child id —
+  Copy remaps them. Verified retitling H1s (Kqekn/fH9hy/vowM6→fontSize24), shrinking display titles
+  (jelg7/S5BcfR/AQsdB/WiFpJ), stacking submit rows (`{hxRUx:{layout:"vertical"}, <btn>:{width:"fill_container"}}`),
+  and re-stacking the Delete two-col comparison (`{mYdQN:{layout:"vertical"}}`).
+- Only ZyKzw (roles) + Hameq (questionnaire card) + Runner progress/footer were hand-rebuilt: the desktop
+  role rows / member rows / steppers are wide horizontal `space_between` rows that can't compress. Rebuilt
+  with a compact `roleRow` helper (vertical card: top row [emoji tile + name + lock + fill_container spacer +
+  chevron], tags row, wrapping summary) and custom toggles (track 34×20 + 16 knob) per the roles recipe.
+  Curated 8-key swatch palette + 🎩🔧🔥♻️🔊🧙 emoji (own $foreground text node) all reused from Roles v2.
+
+### 🐛 Copied `space_between` rows OVERLAP at 360 (found via export, fixed)
+Desktop key/value rows (Profile Bio Card `faHfK`) are horizontal `space_between` with a `fit_content` left
+column whose VALUE text is `textGrowth:"auto"` (single-line, never wraps) + a right badge. At 1280 fine; at
+360 the long values ("Hidden — someone at the burn", phone, "ALWAYS PRIVATE") overrun and sit UNDER the
+badge. **snapshot_layout does NOT flag this** (auto-text overflow isn't a "problem") — only the export showed
+it. FIX per offending row: set the L column `width:"fill_container"` + the value text
+`{textGrowth:"fixed-width", width:"fill_container"}` (so it wraps in the freed space) and tighten row padding
+[16,24]→[16,16]. Short-value rows were fine. Rule: when Copying a desktop `space_between` label/value/badge
+row into 360, always wrap the value + fill_container the left column, and spot-check with an export (structure
+verification alone misses text-overrun overlaps).
+
+### Tooling notes
+- Phantom "+50px partially clipped" on the fit-content body persists on MOST new pages even with explicit
+  `height:"fit_content"` (Auth HCt1i + both Vehicle/Art came back fully clean; the rest flag it — ignorable,
+  content is intact). Same +50 offset bug as every prior batch.
+- Copied disabled tooltip node (gnTtE → `HmAKq`, enabled:false) emits the harmless "fill_container not inside
+  flexbox" warning — ignore (it's disabled, won't render).
+- **NO render lag this batch** — one export of Copy-based frames (HCt1i/SdcDN/Qq5u0, scale 1) rendered
+  perfectly & immediately (Copy'd content always paints; doc was quiet). Used the single allowed export to
+  catch the Bio-Card overlap above.
+
+### Overlaps recorded for the task-#10 re-spacing pass
+Desktops sit 1540 apart; a 360 mobile at desktop.x+1400 spans to desktop.x+1760, so EVERY pair overlaps its
+right-neighbour desktop by ~220px (same as the 4 pilot pairs already did). Built in place as instructed; did
+NOT reposition any neighbour. Only Account · Delete (Ur0rS @ 33480) has clear space to its right.
+
+## ✅ TASK #10 — PARTICIPANT APP band re-spacing pass (2026-07-24)
+
+Fixed the ~220px overlap: old desktop pitch was ~1540 while mobiles were added at desktop.x+1400
+(mobile spans to +1760, overrunning the next desktop by 220). Re-spaced every top-level frame in
+the y=5260 band into clean columns. New pitch = **2020** between consecutive desktops (desktop @ x,
+its mobile @ x+1400 ending x+1760, next desktop @ x+2020 → **260 gutter**; desktop-end→mobile-start
+gap = 120). Anchor u87N7 kept at x=0. Walked left→right in prior visual order; all y unchanged.
+Reposition-only via `Update(id,{x})` — NO Move. 41 frames actually moved (u87N7 + HCt1i were already
+correct at 0 / 1400).
+
+### New column map (desktop id @ x  ·  mobile id @ x)
+- u87N7 @ 0 · HCt1i @ 1400
+- L82AQr @ 2020 · R8zPnr @ 3420
+- h3ak0 @ 4040 · Z2300W @ 5440
+- C313E @ 6060 · SdcDN @ 7460
+- mm31G @ 8080 · lYUEe @ 9480
+- u7RSIJ @ 10100 · D0LTCb @ 11500
+- g5Uqfw @ 12120 · Evh1t @ 13520
+- qhcHh @ 14140 · MttcT @ 15540
+- RGcNS @ 16160 · EQW5G @ 17560
+- ZyKzw @ 18180 · TIrbC @ 19580
+- Hameq @ 20200 · YOdgW @ 21600
+- qKG3g @ 22220 · TOUE1 @ 23620
+- uj2yF @ 24240 · M6JCN @ 25640
+- RBIDd @ 26260 · XAJSe @ 27660
+- P0Tcl @ 28280 · QzpU6 @ 29680
+- S8ZcWf @ 30300 · Qq5u0 @ 31700
+- d3pOJI @ 32320 · H2DP4 @ 33720
+- **H7aIdg @ 34340** (card study, w=1024, no mobile — own tighter slot: 1024+260 gutter, advance 1284)
+- Gf1iJ @ 35624 · s2PAS @ 37024
+- SjInE @ 37644 · U6ixd @ 39044
+- G35eq @ 39664 · JbB35 @ 41064
+- Q3pQj6 @ 41684 · Ur0rS @ 43084
+
+### Verification
+- snapshot_layout maxDepth=0 confirms **ZERO horizontal overlaps** across all 43 band frames: every
+  consecutive gap is exactly 120 (desktop→own mobile) or 260 (mobile→next desktop, and both
+  card-study gutters). Band now spans x=0..43444.
+- Pairings verified two ways: recorded pen-lessons pairedTo ids AND x-math (every mobile was at its
+  desktop's old x+1400). No structural check flagged anything; no export needed (positions authoritative).
+- Other bands (COMPONENT LIBRARIES y=200, ORGANISER CONSOLE y=8660, SUPPLIER PORTAL y=11160,
+  CONCEPTS/ARCHIVE y=13660) and band title I6Udi3 (x=0,y=5140) left untouched — confirmed unchanged x.
+
+## 📱 ORGANISER CONSOLE band — re-spacing + mobile-360 batch (2026-07-24)
+
+Re-spaced the y=8660 ORGANISER CONSOLE band onto the 2020 pitch and built a mobile 360
+sibling for EVERY org page frame (13 pages, incl. the new Supplier Sign-up Management U7929T).
+Anchor = T7siQ9 kept at x=0. Reposition-only via Update(id,{x}); no Move; y untouched; band
+title S7sfj (x=0,y=8540) left alone. Only the SUPPLIER band (y=11160) was worked concurrently
+by another agent — not touched here.
+
+### Column map (desktop id @ new x  ·  mobile id @ x = desktop.x+1400)
+- T7siQ9 @ 0        · E5Oip  @ 1400   (Gate — org wall)
+- RTfFF  @ 2020     · w6X0wA @ 3420   (Org Status Board)
+- StJXH  @ 4040     · NkPRL  @ 5440   (Registrations)
+- PRDdG  @ 6060     · t4Ji4  @ 7460   (Review)
+- CJs0P  @ 8080     · y1idvL @ 9480   (Accounts)
+- iQEpd  @ 10100    · hSNjO  @ 11500  (Suppliers)
+- g4CzsM @ 12120    · X8RHa  @ 13520  (Org Camp Categories)
+- JY7dF  @ 14140    · XY8yO  @ 15540  (Org Questionnaires)
+- sCEHP  @ 16160    · ELUfI  @ 17560  (Questionnaire Builder)
+- AssNH  @ 18180    · ZBw8O  @ 19580  (Builder v2)
+- Mjiqz  @ 20200    · nRtO7  @ 21600  (Results v2)
+- obd4x  @ 22220    · pKW7z  @ 23620  (Overview)
+- U7929T @ 24240    · D6IGel @ 25640  (Org Supplier Sign-up Management)
+
+### Verification — ZERO horizontal overlaps
+snapshot_layout maxDepth=0 confirms every consecutive gap in the band is exactly 120
+(desktop→own mobile) or 260 (mobile→next desktop). Band spans x=0..26000. All 13 mobiles
+present at desktop.x+1400, same y=8660. Each mobile passes snapshot_layout problemsOnly
+= "No layout problems". One screenshot (y1idvL Accounts) rendered perfectly — validated the
+slim header + stacked-table pattern; doc was quiet enough that the render-lag bug didn't bite.
+
+### Reusable slim ORG mobile header = **t5SRc** (built in X8RHa, Copy'd into the other 12)
+Header (vertical, fill_container) = Copy("pUEFw") mobile quilt band (full-1280 3-path band,
+clip, height10) + Bar (space_between, padding[12,16], fill $card, strokeWidth{bottom:1}) →
+[140×20 logo image frame (brand/afrikaburn-logo-banner-282.png)] + Right(gap9) → [apricot
+"CONSOLE" pill (fill #F4B67226, radius999, pad[4,10], text $accent 10/700) + Copy("X1PTIY",
+{width:32,height:32,fill:"$accent",descendants:{b5sb0Z:{content:"AB",fill:"$accent-foreground"}}})].
+Reuse: `Copy("t5SRc", page)` drops the whole header (band+logo+tag+avatar) into each page — plain
+frame Copy remaps all descendant ids, renders instantly. Slim header keeps NO nav (per pairing
+convention); apricot accent preserved. Gate (E5Oip) uses a logo-only centered variant (no tag/avatar).
+
+### Recipe: Copy the desktop Content, stack columns, override fixed widths
+Most org pages Copy wholesale: `Copy("<ContentId>", page, {width:"fill_container", padding:[20,16],
+descendants:{...}})`. Overrides applied:
+- Horizontal multi-col groups → `{layout:"vertical", gap:16}` (RTfFF g0Hs3v, obd4x X1QOzU,
+  PRDdG lSbeB, sCEHP cfIhy, AssNH wRL7a). Their fixed-width side columns → `{width:"fill_container"}`
+  (iZn50 380, OWCvS 360, F0ItxR 380, J6oLEB 322, SYZQL 214, ks27x 540).
+- Headline-tile rows → `{layout:"vertical"}` (RTfFF s5CXcH — 4 KPI tiles stack).
+- space_between Page-Head rows with a CTA → `{layout:"vertical", alignItems:"start"}` + the button
+  `{width:"fill_container"}` (JY7dF BAnr0/e5tbS full-width CTA).
+- PRDdG Camp Header wide meta row (ze3BU, 4 metas + 3 interpunct dots, non-wrapping) → set ze3BU
+  `layout:"vertical"` and disable the 3 dot texts (XvQLA/Yu5Lw/Ykn8O); H1 s3oA5 fontSize 28→22.
+
+### Wide data tables → stacked card-per-row (reuses REAL data, no invention)
+For the 3 real tables (Accounts agNHi, Suppliers e773Yw, Documents g1hWC0) I Copy the table frame
+and pass a PROGRAMMATICALLY-BUILT descendants map (built with JS for-loops in batch_design before
+the Copy — Copy remaps original ids): disable the Header Row; set each data Row (or its Summary
+frame) `{layout:"vertical", alignItems:"start", gap:6-10}`; set the meaningful cells
+`{width:"fill_container"}`; disable grip/expand/action-icon cells that don't matter on mobile
+(e773Yw: also disabled the Desert Ablutions Expansion WJdpD). Each row becomes a clean stacked card.
+Verified visually on y1idvL Accounts — reads great. Registrations (StJXH) uses the XqVPe **component**
+(shadow ids unreachable for overrides) so I HAND-BUILT 5 compact reg cards (name + status Badge +
+"SOOP Lx · New/Returning · Submitted date") from the known XqVPe seed data (Mad Hatters APPROVED,
+Camp 404 UNDER REVIEW, Karoo Kombuis CHANGES REQUESTED, Dust Bunnies DRAFT, Long Drop Inn SUBMITTED).
+
+### Fixed-width charts don't compress — dropped on mobile
+RTfFF Status Board Left Column (hDasu = registration funnel 540-track + line chart 700-plot,
+both precomputed-geometry fixed-width, mobile-hostile) → disabled on mobile. Kept the 4 KPI
+tiles (stacked) + Right Column coverage cards (officer/questionnaire/supplier, fill_container —
+their tracks fit 328, snapshot confirms no clipping) + Recent activity. Honest KPI-focused
+mobile dashboard; noted the funnel/line-chart omission.
+
+### Quirks
+- Harmless "fill_container not inside flexbox" warnings on copied descendants (Tk86T, VsQNk,
+  m6TDcu, EkMfM, P6Eg3, G8jqv0) — same ignorable class as prior batches; every affected frame
+  passes snapshot_layout problemsOnly = "No layout problems".
+- One "Collapsed size … zero" warning (tyFqD, e773Yw) = an emptied cell after stacking; invisible,
+  no visual impact, snapshot clean.
+- Every mobile page: width 360, height fit_content, clip:true, theme dark, fill $background.
+
+## ✅ SUPPLIER PORTAL band — re-space (2020 pitch) + mobile-360 build (2026-07-24)
+
+Ran the mobile-360 + re-spacing campaign on the SUPPLIER PORTAL band (y=11160). Re-spaced first
+(Update x only, no Move, no y change, band title j6pIPH left alone), then built a mobile 360 sibling
+for every supplier PAGE frame. Di3Zv (Supplier Documents 1024 card study) is EXEMPT — no mobile.
+
+### Supplier band column map (desktop id @ x · mobile id @ x) — 2020 pitch, anchor Q4fye@0
+- Q4fye (Supplier Onboarding) @ 0 · **lm3jO** @ 1400
+- R4wvO (Supplier Standing) @ 2020 · **TXyLN** @ 3420
+- K3zNk (Supplier Sign-up) @ 4040 · **h83pUG** @ 5440
+- OX6KJ (Supplier Sign-in) @ 6060 · **xgCd7** @ 7460
+- **Di3Zv** (Supplier Documents card study, w1024, no mobile) @ 8080 (tighter slot: width+260)
+- Only R4wvO/K3zNk/OX6KJ/Di3Zv actually moved x (Q4fye was already the anchor @0). Band spans x=0..9104.
+- ZERO horizontal overlaps confirmed (snapshot maxDepth=0): every gap is 120 (desktop→own mobile) or
+  260 (mobile→next desktop, and the card-study gutter). All new mobiles snapshot problemsOnly = clean.
+
+### Mobile build recipe (sage supplier accent preserved)
+- **Slim supplier header** (built fresh per frame, not the desktop AppShell — nav too wide at 360):
+  vertical [Copy of the desktop's quilt band z4IE9/ufAGC/ki2sw/M5gXGD (fill_container, 3 full-1280
+  diamond paths) + Bar (space_between, padding[12,16]) → 140x20 logo image frame
+  (brand/afrikaburn-logo-banner-282.png) + sage "SUPPLIERS" pill (fill $ab-sage, #17191B 10/700 label)].
+- **Copy-the-Content recipe worked wholesale** — every supplier desktop card/field is width:fill_container,
+  so `Copy("<Content>", root, {width:"fill_container", padding:[..,16,..,16], descendants:{…}})` dropped
+  them straight into a 360 body. Q4fye: Copy OhlGV. R4wvO: Copy CMDFq. Auth pages: Copy the Auth Region
+  (FQDNR/m903f) with the 440 card overridden to `{width:"fill_container", padding:20}` (the alignItems:
+  center region + fill_container card = card spans 360). H1s dropped 28→24 via descendant fontSize.
+- **space_between / multi-element rows stacked via descendant `layout:"vertical"` override** (the proven
+  fix for the 360 overrun bug — pure property override, no rebuild, no overflow, snapshot-clean):
+  - Q4fye: Progress top rRVfg→vertical (+D6Xsb alignItems start); Documents Panel head jMXyJ→vertical
+    (+f3UIj auto→fixed-width fill_container so the sub wraps); all 4 doc rows CmqE4/fNWTt/I9VDCc/HO6oS
+    →vertical (icon+info+ack+action would crush the fill_container info to ~14px otherwise); all 7
+    step-card heads m7Uomb/PgLRd/e68hjH/OOyFb/gr1Sv/CrpcZ/vktWD →vertical (status32 + titles + wide
+    badge like "AWAITING AFRIKABURN"/"AVAILABLE" overran; stacked reads fine: status chip / kicker+title / badge).
+  - R4wvO: Standing Hero M2UQh→vertical (icon52 on top); 3 standing rows P1lsWu/Piozn/Nt57p→vertical
+    (160px Label + Body); Contact yw0wl auto→fixed-width fill_container (email line would overflow).
+- **Fixed-px progress fill must be rescaled**: Q4fye progress Fill eFfEa was width:562 (desktop 4/7 of a
+  wide track); at a ~296 mobile track a 562 fill clips to 100%. Overrode eFfEa→width:165 (4/7 of mobile).
+  (Auth strength-track inner fills 300–312px stay clipped-to-full = reads "Strong", matches the label; left as-is.)
+- All 4 mobiles: root width 360, height fit_content, clip:false, theme dark, fill $background. Copy-based
+  content painted immediately; no render lag this session (doc quiet). No export needed — structure authoritative.
+
+### ⚠️ ISSUE — lm3jO (onboarding mobile) overflows DOWN into the CONCEPTS/ARCHIVE band
+The onboarding mobile is 3938px tall (7 full step cards + docs panel stacked full-width at 360). At y=11160
+its bottom = y15098, but the CONCEPTS/ARCHIVE band sits at y=13660 — so lm3jO (x1400-1760) vertically
+overlaps the Camp-Plot archive frame CwVWw (x1540-1900) by ~220px wide × ~1438px tall. This is a BAND-SPACING
+limitation, not a build error: the canvas-reorg y-gap (supplier→concepts = 2500px) was sized against Q4fye@2189,
+before any 3900px mobile existed. Could not fix within scope — the campaign forbids changing y and forbids
+touching other bands (CwVWw is an archive frame I don't own). RECOMMEND: push the CONCEPTS/ARCHIVE band (+ its
+title Xe1pm) down ~1600px, or right-shift the archive band clear of the supplier mobiles. Flagged for Ryan/QA.
+No other supplier mobile overflows (TXyLN/h83pUG/xgCd7 bottoms all < y13660; all desktops < y13349).
+
+## Vertical band re-space (24 Jul, orchestrator)
+
+Tall mobiles overflowed the old band y-positions (org t4Ji4 bottom 11694 > supplier 11160; supplier lm3jO bottom 15098 > archive 13660). Whole bands shifted down via Update y only:
+
+- SUPPLIER PORTAL band: y 11160 → **12300** (title j6pIPH → 12180)
+- CONCEPTS/ARCHIVE band: y 13660 → **16800** (title Xe1pm → 16680)
+
+Verified via snapshot maxDepth=0: every band now starts ≥~440px below the previous band's max bottom. Current band map: components y=200 (bottom 4608) · participant y=5260 (bottom 8130) · org y=8660 (bottom 11694) · supplier y=12300 (bottom 16238) · archive y=16800. Rule going forward: when adding a tall frame, check band max bottom vs next band's title y and shift LOWER bands down (never squeeze the frame).
+
+## QA lesson: thumbnails lie (24 Jul, after user caught residual jank)
+
+Full-frame get_screenshot of anything taller than ~1100px is a THUMBNAIL — text-level defects (one-letter-per-line columns, badge/text collisions, mid-word email wraps) are INVISIBLE at that scale. The first QA sweep "verified" frames that were badly broken.
+
+**Binding QA protocol:** for any frame taller than ~1100px, enumerate its Body's card/section children via batch_get and screenshot EACH section node individually. Frame-level screenshots are not acceptable evidence of correctness. Also: translucent-fill nodes (e.g. #C2443812 blocker cards) screenshotted in isolation composite on white and look ghostly/unreadable — that is an artifact, not a defect; verify those in situ on the parent.
+
+Recurring mobile defect patterns found in the account area (all now fixed there):
+- Auto-growth (non-wrapping) text in a fill_container column beside a fixed right element (date, badge, button) → overflows underneath it. Fix: textGrowth fixed-width + width fill_container on the text.
+- A fixed-width element (150px QR) beside a fill column inside nested paddings starves the column to ~30px → one-letter-per-line. Fix: stack the row vertical on mobile.
+- space_between heads with buttons ("Sign out everywhere") starve the title column. Fix: stack CardHead vertical on mobile.
+- Long unbreakable tokens (emails) in narrow columns wrap mid-word. Fix: deliberate line break + smaller size, or restructure.
+
+## Geometric audit protocol (25 Jul — after visual QA failed twice)
+
+Eyes (mine and agents') missed text-level jank twice. The authoritative QA method is now GEOMETRIC:
+
+1. `python3 scratchpad/penctl.py snapshot_layout '{"nodeId":"root","maxDepth":200}' full-layout.json` — full computed geometry of every node (penctl.py = raw JSONRPC client to the Windows bridge; recreate from design lessons if scratchpad is wiped).
+2. BFS-crawl props via batch_get (15 ids per call, depth 3 — larger batches get elided to depth 1) → props-by-id.json.
+3. `audit2.py` joins them: flags H/V-overflow of child vs parent box and sibling overlaps (any overlap in auto-layout parents; text-text overlaps in free layouts). Skips ≤12px quilt diamonds, disabled nodes, archive frames.
+
+GOTCHAS:
+- **snapshot_layout reports disabled nodes' stale as-if-enabled geometry** — both source-disabled and instance-override-disabled (descendants {X:{enabled:false}}). These are GHOSTS: verify visually once, then whitelist the shadow id in audit2.py DISABLED. Current whitelist covers the component annotation tags (below), AppShell wordmark PO6BC, switch label cols iaJYv/OJ2yq, supplier-nav VuubM/VU2a3, surplus tabs/pagination shadows, field help Tk86T.
+- snapshot_layout ignores nodeId scoping in this bridge version — always dump root to a FILE via penctl, never inline (851KB).
+
+ROOT CAUSE of the recurring "SELECTED/EMPTY/CLOSED text overlapping labels" everywhere: the library components (Check OirYR/o6q8RQ, Radio kfdhb, Field UIcOu, Textarea t8imVt/w9csgR, Select nn6iK/pMtGo) carried muted spec-annotation Tag/StateTag texts that rendered in EVERY instance and overflowed/overlapped at real widths. All disabled at source 25 Jul (AguQO, TWtJh, b6EsQ, eHwrS, oGd42, qx9UC, W1Z3Og). NEVER add annotation text inside a reusable component — annotate on the library sheet outside the component frame.
+
+Result: 145 measured defects → 0 (plus 4 intentional scroll-chip overflows in D0LTCb). Full reports: scratchpad audit*-report.txt.
