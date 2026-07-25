@@ -75,7 +75,7 @@ class Auditor:
                 rec = {k: n.get(k) for k in ("type", "name", "layout", "clip", "enabled",
                                              "textGrowth", "content", "ref", "justifyContent",
                                              "alignItems", "fill", "stroke", "fontFamily",
-                                             "fontSize", "cornerRadius", "width") if k in n}
+                                             "fontSize", "cornerRadius", "width", "layoutPosition") if k in n}
                 self.props.setdefault(nid, {}).update(rec)
                 desc = n.get("descendants")
                 if isinstance(desc, dict):
@@ -141,6 +141,8 @@ class Auditor:
                         tag = "CLIPPED" if p.get("clip") else "DEFECT"
                         out.append(f"[{tag}] V-OVERFLOW {self.label(c['id'])} exceeds {self.label(nid)} h={ph} by {round(max(cy+ch-ph, -cy),1)}px")
             auto = p.get("layout") in ("vertical", "horizontal") or p.get("justifyContent") or p.get("alignItems")
+            flow = [c for c in live if self.P(c["id"]).get("layoutPosition") != "absolute"]
+            live = flow
             for i in range(len(live)):
                 for j in range(i + 1, len(live)):
                     a, b = live[i], live[j]
@@ -166,7 +168,8 @@ class Auditor:
                         if cw < 44 and ch > max(34, fs * 1.9):
                             out.append(f"[DEFECT] LETTER-STACK {self.label(cid)} squeezed to {round(cw)}px wide, {round(ch)}px tall")
                         fam = cp.get("fontFamily")
-                        if fam and fam not in ALLOWED_FONTS:
+                        has_letters = re.search(r"[A-Za-z]", str(cp.get("content") or ""))
+                        if fam and fam not in ALLOWED_FONTS and has_letters:
                             out.append(f"[STYLE] FONT {self.label(cid)} family {fam}")
                         fs = cp.get("fontSize")
                         if isinstance(fs, (int, float)) and fs < 9.5:

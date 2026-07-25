@@ -937,3 +937,68 @@ audit.py + whitelist.json + REVIEW.md. REVIEW.md is the binding frame-review pro
 scratchpad copies are dead; use the repo versions. audit.py filters disabled-node
 ghost geometry via live props (source + descendants overrides), so no manual ghost
 whitelisting — whitelist.json is only for verified-intentional design (with reasons).
+
+## ORG BULLETINS + NOTIFICATIONS batch (26 Jul) — 6 frames + a big Copy gotcha
+
+### 🐛 Copy/Update `descendants` keys MUST be node IDs, not NAMES — name keys SILENTLY fail
+Copying a component instance with `descendants:{"Title":{content:...},"Kind Icon":{icon:...}}`
+(keyed by the node's display NAME) applied NOTHING and threw NO error — every instance rendered
+its component DEFAULT. Only ID-keyed overrides worked (button labels via `MK2Fb`, Field via
+`eO4OD`/`piinX`, Check via `OsGrm`/`hvwng` all took; every name-keyed bulletin-card / notif-item /
+switch override was a no-op). The schema claims unique names are allowed as keys — in THIS bridge
+they are not for Copy/Update. ALWAYS resolve real internal IDs first. Get them from
+`penctl snapshot_layout root maxDepth:200`: a placed instance shows its internals as
+`instanceId/childId` paths — cross-reference those child IDs against the component's `export_html`
+name-tree (export_html shows names, snapshot shows the id paths; join them). Then
+`Update(instanceId,{descendants:{"<childId>":{content:...}}})` retrofits a placed instance.
+- export_html reads the MODEL (resolves ID overrides, ignores render-cache lag) — it is the
+  authoritative way to verify content when get_screenshot/export_nodes are blank. grep it for your
+  override strings AND for the component DEFAULT strings (defaults still present = your override failed).
+
+### Notifications library component internal IDs (join of snapshot + export_html)
+- **Notification Item · Unread H9bn7**: Kind Icon=`K2sZC3`, Title=`s2v7X`, Meta=`VfAvU`, Unread Dot under `RasEP`.
+- **Notification Item · Read IDy9A**: Kind Icon=`iMIcT`, Title=`s5MAr4`, Meta=`HekHd`.
+- **Bulletin Card fulVI**: Emoji=`o1D9hA`, BULLETIN kicker=`qddZ0`, Pin icon=`imQG5`, Title=`k6BiD2`,
+  Body Preview=`XS1vF`, Footer=`qp8HU`, Meta=`DY3BT`, Audience text=`xuXJp`. Default content = the
+  ticket-resale bulletin (kept as-is for card 1). Pinned look = `{imQG5:{fill:"$accent"}}` + root
+  `stroke:"$accent"`. At 360, stack the footer: `{qp8HU:{layout:"vertical",alignItems:"start",gap:8}}`
+  (Meta+Audience chip overrun otherwise).
+- **Switch K86ztM**: Cap=`KU1by`, Label=`R5v5G1`, Desc=`v7feRE` (Row=`A40wYB`, Text group=`iaJYv`).
+  Used full-width in a form card (space_between Row) — no compact-overflow hack needed.
+- Valid lucide this batch: inbox, package, clipboard-list, shield-check, megaphone (all accepted).
+- read-rate bar: fixed-width track (`fill $border`, clip) + inner Fill `width:round(track*done/total)`
+  `fill $accent`; label beside it needs enough room or it 2-line-wraps (600 track left only 118px →
+  wrapped; dropped track to 440 desktop / stack vertical on mobile). No ratio-fill possible on a
+  fill_container track. NO raw hex — tint panels = `$muted` fill + colored `strokeWidth:{left:3}`.
+
+### Org header for these pages
+`Copy("zGh0i", page, {width:"fill_container"})` — zGh0i = U7929T's Header (quilt band + AppShell
+Apricot jgbtP, now WITH the notifications Bell + unread badge "3" baked in; Payments nav GONE, so
+nav = Overview/Registrations/Suppliers/Accounts). ⚠️ zGh0i is a SUPPLIERS page header, so its ACTIVE
+apricot nav item is Suppliers (`VuubM`), NOT Overview. To make "Bulletins" active you must BOTH
+rename+activate the Overview slot AND deactivate Suppliers. Copy remaps the AppShell instance id, so
+after copying, find the new instance id (snapshot: `<newInst>/p9ddJ`) and
+`Update("<newInst>/p9ddJ",{fill:"$accent",fontWeight:"700"})` + `Update("<newInst>/VuubM",{fill:"$muted-foreground",fontWeight:"600"})`.
+(Copy-time `descendants:{"clnIi/p9ddJ":{content:"Bulletins"}}` DID work for content since it's the
+original path, but only set the muted slot's text — hence the two-step activation.)
+
+### My frames (org apricot; y=8660; 2020 pitch, all render-lag blank in body but export_html-verified)
+- Org Bulletins — /bulletins = **QqnNq** (x=26260) · mobile **laWqH** (x=27660)
+- Org Bulletin Compose — /bulletins/new = **U8CqE** (x=28280) · mobile **zW1uE** (x=29680)
+- Org Notifications — /notifications = **xRjgy** (x=30300) · mobile **Cb5MV** (x=31700)
+- Render-lag reconfirmed: Copy'd headers painted; ALL freshly-Inserted/Copy'd body stayed blank in
+  get_screenshot the whole session (concurrent doc). snapshot shows the +50 y phantom AND, worse this
+  session, SCRAMBLED x on fresh nodes (Body Field reported x=404 inside a 328px frame) → audit throws
+  spurious H/V-OVERFLOW + OVERLAP. Widths were all correctly fill_container-resolved and frame heights
+  matched the true vertical stack, so structure is sound — verified content via export_html instead.
+
+## Post-build audit timing (25 Jul, notifications campaign)
+
+Freshly built subtrees report STALE geometry to snapshot_layout for a long time
+(minutes+), including after a settle wait: the classic signature is a +50px y-offset
+on the new node while its SIBLINGS sit exactly where correct flow would put them and
+the frame's total height sums correctly. Arbiter when a fresh-node finding looks
+real: check whether siblings + frame height are consistent with the node in its
+correct slot — if yes, it's cache, not layout. Property nudges (gap +1/-1) do NOT
+clear it. Re-audit later; renders of fresh instances also lag (blank), so neither
+screenshots nor immediate snapshots can convict a freshly built node.
