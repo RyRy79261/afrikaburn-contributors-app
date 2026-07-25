@@ -8,6 +8,24 @@
 // row-shaping here makes the gate/notification loop unit-testable and keeps the
 // key convention in one place.
 
+/**
+ * Resolve the definition an activation must be rendered / validated / aggregated
+ * against. The SNAPSHOT taken at activation time is authoritative: it is what the
+ * respondents were actually shown, so editing (or re-versioning) the live
+ * definition afterwards must never change it. The `liveFallback` is used ONLY for
+ * pre-snapshot activation rows (activated before the snapshot column existed,
+ * where `snapshot` is null) so no backfill is required.
+ *
+ * Generic over the definition shape so both apps and tests can call it without a
+ * @quagga/types dependency here; callers pass `Questionnaire` values.
+ */
+export function resolveActivationDefinition<T>(
+  snapshot: T | null | undefined,
+  liveFallback: T,
+): T {
+  return snapshot ?? liveFallback;
+}
+
 /** The `required_actions.action_key` for an activation. One key per activation
  * per user — the unique constraint on (user_id, action_key) dedupes re-sends. */
 export function activationRequiredActionKey(activationId: string): string {

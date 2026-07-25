@@ -18,9 +18,12 @@ import type { NotificationRowItem } from "./format";
 export function NotificationRow({
   item,
   className,
+  onOpen,
 }: {
   item: NotificationRowItem;
   className?: string;
+  /** Fired when the row is opened — e.g. so the header panel can close. */
+  onOpen?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -57,6 +60,7 @@ export function NotificationRow({
       disabled={pending}
       onClick={() => {
         setOpened(true);
+        onOpen?.();
         startTransition(async () => {
           if (!item.read) {
             await markNotificationRead({ notificationId: item.id });

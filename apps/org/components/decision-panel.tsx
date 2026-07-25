@@ -34,9 +34,13 @@ const NEEDS_REASON: ReviewAction[] = ["request_changes", "reject"];
 export function DecisionPanel({
   registrationId,
   status,
+  subjectNoun = "camp",
 }: {
   registrationId: string;
   status: RegistrationStatus;
+  /** How the reviewed thing is named in dialog copy ("camp" / "mutant vehicle"
+   * / "artwork"). Keeps request-changes + reject copy honest per kind. */
+  subjectNoun?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -113,8 +117,8 @@ export function DecisionPanel({
             </DialogTitle>
             <DialogDescription>
               {reasonFor === "reject"
-                ? "Give the camp a clear reason for the rejection. They will see this."
-                : "Tell the camp what needs to change before they resubmit."}
+                ? `Give the ${subjectNoun} a clear reason for the rejection. They will see this.`
+                : `Tell the ${subjectNoun} what needs to change before they resubmit.`}
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -123,8 +127,8 @@ export function DecisionPanel({
             rows={5}
             placeholder={
               reasonFor === "reject"
-                ? "e.g. This registration duplicates an existing camp for 2027."
-                : "e.g. Section 4 needs a layout upload, and the LNT lead contact is missing a phone number."
+                ? "e.g. This registration duplicates an existing entry for 2027."
+                : "e.g. The strike & Leave No Trace plan needs more detail before this can be approved."
             }
           />
           <DialogFooter>

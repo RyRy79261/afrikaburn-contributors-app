@@ -5,8 +5,28 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import { getDb, schema } from "@/lib/db";
-import { requireSupplierSession } from "@/lib/session";
+import { requireSupplierSession, resolveSupplierSession } from "@/lib/session";
+import { recentNotifications } from "@/lib/notifications";
+import {
+  toRowItem,
+  type NotificationRowItem,
+} from "@/components/notifications/format";
 import { runAction, type ActionResult } from "./result";
+
+// Feeds the header notification panel (canvas `UAc97`) with the latest few rows,
+// projected server-side into display strings. Takes NO input — the inbox is
+// always the gated supplier's own (resolved here); a signed-out / env-less
+// caller gets an empty list so the panel degrades to an empty state rather than
+// erroring the chrome.
+export async function fetchRecentNotifications(): Promise<
+  NotificationRowItem[]
+> {
+  const session = await resolveSupplierSession();
+  if (session.kind !== "ok") return [];
+  const rows = await recentNotifications(session.dbUserId, 6);
+  const now = new Date();
+  return rows.map((row) => toRowItem(row, now));
+}
 
 // Portal notification mutations (docs/notifications-spec.md). Server-side
 // authz: a supplier marks only their OWN rows read — every WHERE pins

@@ -1,0 +1,1 @@
+ALTER TABLE "questionnaire_activations" ADD COLUMN "definition" jsonb;

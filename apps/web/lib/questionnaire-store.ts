@@ -6,6 +6,7 @@ import {
   buildActivationRequiredActions,
   isParticipantFacingActivation,
   parseActivationActionKey,
+  resolveActivationDefinition,
   resolveAudience,
   tallyActivationCompletion,
   validateSubmission,
@@ -99,6 +100,9 @@ export async function createAndActivateProjectQuestionnaire(
       groupId: input.groupId,
       editionId: input.editionId,
       audience: input.audience,
+      // Snapshot the definition AS SENT so later edits to the live definition
+      // never mutate what these respondents were shown.
+      definition: input.definition,
       activatedByUserId: input.createdByUserId,
       openedAt: new Date(),
     })
@@ -270,7 +274,8 @@ export async function listProjectQuestionnaires(
       dueAt: schema.questionnaireActivations.dueAt,
       status: schema.questionnaireActivations.status,
       createdAt: schema.questionnaireActivations.createdAt,
-      definition: schema.questionnaireDefinitions.definition,
+      snapshotDefinition: schema.questionnaireActivations.definition,
+      liveDefinition: schema.questionnaireDefinitions.definition,
     })
     .from(schema.questionnaireActivations)
     .innerJoin(
@@ -295,6 +300,12 @@ export async function listProjectQuestionnaires(
       .from(schema.requiredActions)
       .where(eq(schema.requiredActions.activationId, r.activationId));
     const tally = tallyActivationCompletion(actions);
+    // Count questions from the SNAPSHOT (what was sent); fall back to the live
+    // definition only for pre-snapshot rows.
+    const definition = resolveActivationDefinition(
+      r.snapshotDefinition,
+      r.liveDefinition,
+    );
     out.push({
       activationId: r.activationId,
       key: r.key,
@@ -303,7 +314,7 @@ export async function listProjectQuestionnaires(
       blocking: r.blocking,
       dueAt: r.dueAt,
       status: r.status,
-      questionCount: flattenQuestions(r.definition).length,
+      questionCount: flattenQuestions(definition).length,
       createdAt: r.createdAt,
       sent: tally.sent,
       completed: tally.completed,
@@ -345,7 +356,8 @@ export async function getActivation(
       groupId: schema.questionnaireActivations.groupId,
       editionId: schema.questionnaireActivations.editionId,
       audience: schema.questionnaireActivations.audience,
-      definition: schema.questionnaireDefinitions.definition,
+      snapshotDefinition: schema.questionnaireActivations.definition,
+      liveDefinition: schema.questionnaireDefinitions.definition,
     })
     .from(schema.questionnaireActivations)
     .innerJoin(
@@ -357,7 +369,17 @@ export async function getActivation(
     )
     .where(eq(schema.questionnaireActivations.id, activationId))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const { snapshotDefinition, liveDefinition, ...rest } = row;
+  // Every fill / submit / results path resolves the activation through here, so
+  // snapshotting the definition once here fixes them all: render/validate/
+  // aggregate against what respondents were sent, live def only as the
+  // pre-snapshot fallback.
+  return {
+    ...rest,
+    definition: resolveActivationDefinition(snapshotDefinition, liveDefinition),
+  };
 }
 
 export interface ActivationRespondent {

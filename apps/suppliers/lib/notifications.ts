@@ -77,6 +77,21 @@ export async function listNotificationGroups(
   return groupNotificationsByDay(rows.map(toView));
 }
 
+/** Latest ~n notifications flat (the header dropdown panel). */
+export async function recentNotifications(
+  userId: string,
+  limit = 6,
+): Promise<NotificationView[]> {
+  if (!isDatabaseConfigured()) return [];
+  const rows = await getDb()
+    .select()
+    .from(schema.notifications)
+    .where(eq(schema.notifications.userId, userId))
+    .orderBy(desc(schema.notifications.createdAt))
+    .limit(limit);
+  return rows.map(toView);
+}
+
 /**
  * Insert notification rows (the org-side supplier hooks write here). Reuses a
  * db handle the caller already holds. No-op on an empty batch.

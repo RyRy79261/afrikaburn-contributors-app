@@ -20,6 +20,8 @@ export interface NotificationRowProps {
   timeAgo: string;
   source: string;
   read: boolean;
+  /** Fired when the row is opened — e.g. so the header panel can close. */
+  onOpen?: () => void;
 }
 
 export function NotificationRow({
@@ -31,11 +33,13 @@ export function NotificationRow({
   timeAgo,
   source,
   read,
+  onOpen,
 }: NotificationRowProps) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
   function open() {
+    onOpen?.();
     startTransition(async () => {
       if (!read) await markNotificationRead({ notificationId: id });
       if (link) router.push(link);

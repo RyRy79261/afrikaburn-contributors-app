@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   activationRequiredActionKey,
+  resolveActivationDefinition,
   tallyActivationCompletion,
   type ActivationCompletion,
   type AudienceContext,
@@ -281,7 +282,9 @@ export async function getOrgActivation(
     groupId: a.groupId,
     audience: spec,
     audienceLabel: audienceLabel(spec),
-    definition: def.definition,
+    // Results/rendering aggregate against the SNAPSHOT (what respondents were
+    // sent); fall back to the live definition only for pre-snapshot rows.
+    definition: resolveActivationDefinition(a.definition, def.definition),
     createdAt: a.createdAt,
   };
 }
@@ -458,6 +461,7 @@ export async function getConsoleBlockingQuestionnaire(
       description: schema.questionnaireActivations.description,
       authoredScope: schema.questionnaireActivations.authoredScope,
       audience: schema.questionnaireActivations.audience,
+      snapshotDefinition: schema.questionnaireActivations.definition,
     })
     .from(schema.requiredActions)
     .innerJoin(
@@ -514,7 +518,11 @@ export async function getConsoleBlockingQuestionnaire(
     title: gate.title,
     description: gate.description,
     dueAt: gate.dueAt,
-    questionnaire: def.definition,
+    // Gate the console against the SNAPSHOT; live def is the pre-snapshot fallback.
+    questionnaire: resolveActivationDefinition(
+      gate.snapshotDefinition,
+      def.definition,
+    ),
     existingResponses: existing?.responses ?? {},
   };
 }

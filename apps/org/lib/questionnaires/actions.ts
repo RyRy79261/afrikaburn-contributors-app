@@ -9,6 +9,7 @@ import {
   canAuthorAudience,
   completeRequiredAction as completeRequiredActionPatch,
   questionnaireReleasedNotification,
+  resolveActivationDefinition,
   resolveAudience,
   shouldSendImmediateEmail,
   type AuthzMembership,
@@ -266,6 +267,7 @@ export async function activateQuestionnaire(
       .select({
         key: schema.questionnaireDefinitions.key,
         version: schema.questionnaireDefinitions.version,
+        definition: schema.questionnaireDefinitions.definition,
       })
       .from(schema.questionnaireDefinitions)
       .where(eq(schema.questionnaireDefinitions.key, input.questionnaireKey))
@@ -299,6 +301,9 @@ export async function activateQuestionnaire(
         groupId: groupIdForAudience(input.audience),
         editionId: input.editionId,
         audience: input.audience,
+        // Snapshot the definition AS SENT — the activation must render/validate/
+        // aggregate against exactly this, immune to later edits/re-versions.
+        definition: def.definition,
         activatedByUserId: session.dbUserId,
         openedAt: now,
       })
@@ -451,6 +456,7 @@ export async function submitConsoleQuestionnaire(
         key: schema.questionnaireActivations.questionnaireKey,
         version: schema.questionnaireActivations.version,
         audience: schema.questionnaireActivations.audience,
+        definition: schema.questionnaireActivations.definition,
       })
       .from(schema.questionnaireActivations)
       .where(eq(schema.questionnaireActivations.id, parsedId.data))
@@ -475,7 +481,13 @@ export async function submitConsoleQuestionnaire(
       return { ok: false, errors: { _form: "This questionnaire has ended." } };
     }
 
-    const validated = validateResponses(def.definition, rawResponses);
+    // Validate against the SNAPSHOT (what this respondent was sent); fall back to
+    // the live definition only for pre-snapshot activation rows.
+    const definition = resolveActivationDefinition(
+      activation.definition,
+      def.definition,
+    );
+    const validated = validateResponses(definition, rawResponses);
     if (!validated.ok) return { ok: false, errors: validated.errors };
 
     const now = new Date();

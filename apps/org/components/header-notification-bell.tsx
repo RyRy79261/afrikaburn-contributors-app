@@ -1,20 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { NotificationBell } from "@quagga/ui/components/notification-bell";
+import { NotificationPanel } from "./notifications/notification-panel";
 
 /**
- * Header bell for the signed-in console chrome. Wraps the stateless @quagga/ui
- * NotificationBell (which renders the badge from `count`) with client-side
- * navigation to the notifications surface. Rendered only inside the console
- * header — the gate has no chrome. Same seam idiom as apps/web.
+ * Header bell for the signed-in console chrome. Opening it shows the notification
+ * panel — the last few items, "Mark all read", and a link through to
+ * /notifications — anchored under the bell as a non-modal Popover (no page
+ * overlay). Rendered only inside the console header; the gate has no chrome.
  */
 export function HeaderNotificationBell({ count }: { count?: number }) {
-  const router = useRouter();
-  return (
-    <NotificationBell
-      count={count}
-      onClick={() => router.push("/notifications")}
-    />
-  );
+  return <NotificationPanel count={count} />;
 }

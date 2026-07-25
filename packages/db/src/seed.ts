@@ -677,6 +677,7 @@ async function main(): Promise<void> {
       groupId: null,
       editionId: edition.id,
       audience: orgAudience,
+      definition: orgQuestionnaire,
       blocking: false,
       status: "open",
       dueAt: daysBeforeEdition(21),
@@ -759,6 +760,7 @@ async function main(): Promise<void> {
       groupId: madHatters.id,
       editionId: edition.id,
       audience: campAudience,
+      definition: campQuestionnaire,
       blocking: false,
       status: "open",
       dueAt: daysBeforeEdition(14),
@@ -1510,6 +1512,7 @@ async function ensureActivation(
     groupId: string | null;
     editionId: string;
     audience: AudienceSpec;
+    definition: Questionnaire;
     blocking: boolean;
     status: (typeof schema.questionnaireActivations.$inferInsert)["status"];
     dueAt: Date | null;
@@ -1538,6 +1541,9 @@ async function ensureActivation(
     groupId: input.groupId,
     editionId: input.editionId,
     audience: input.audience,
+    // Snapshot the definition as sent (task #59) — seeded activations stay
+    // self-consistent even if their live definition later changes.
+    definition: input.definition,
     blocking: input.blocking,
     status: input.status,
     dueAt: input.dueAt,

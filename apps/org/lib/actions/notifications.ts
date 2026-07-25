@@ -5,8 +5,38 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import { getDb, schema } from "@/lib/db";
-import { requireOrgSession } from "@/lib/session";
+import { requireOrgSession, resolveOrgSession } from "@/lib/session";
+import { recentNotifications } from "@/lib/notifications";
+import {
+  NOTIFICATION_SOURCE_LABELS,
+  timeAgo,
+} from "@/components/notifications/relative-time";
+import type { NotificationRowProps } from "@/components/notifications/notification-row";
 import { runAction, type ActionResult } from "./result";
+
+// Feeds the header notification panel (canvas `UAc97`) with the latest few rows,
+// projected server-side into the display strings the client row renders. Takes
+// NO input — the inbox is always the gated staff member's own (resolved here);
+// a signed-out / env-less caller gets an empty list so the panel degrades to an
+// empty state rather than erroring the chrome.
+export async function fetchRecentNotifications(): Promise<
+  Omit<NotificationRowProps, "onOpen">[]
+> {
+  const session = await resolveOrgSession();
+  if (session.kind !== "ok") return [];
+  const rows = await recentNotifications(session.dbUserId, 6);
+  const now = new Date();
+  return rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    body: row.body,
+    link: row.link,
+    timeAgo: timeAgo(row.createdAt, now),
+    source: NOTIFICATION_SOURCE_LABELS[row.kind],
+    read: row.readAt !== null,
+  }));
+}
 
 // Console notification mutations. Server-side authz: staff mark only their OWN
 // rows read — the WHERE always pins user_id to the gated session's dbUserId.

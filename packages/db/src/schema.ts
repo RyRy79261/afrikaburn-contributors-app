@@ -708,6 +708,14 @@ export const questionnaireActivations = pgTable(
       onDelete: "cascade",
     }),
     audience: jsonb("audience").$type<AudienceSpec>(),
+    // The definition AS SENT, snapshotted at activation time. An activation must
+    // render/validate/aggregate against exactly what its respondents were shown —
+    // editing (or re-versioning) the live `questionnaire_definitions` row must
+    // never mutate an in-flight or already-answered activation. Nullable so
+    // pre-snapshot rows (activated before this column existed) fall back to the
+    // live join at read time; no backfill required. Re-activation snapshots the
+    // new version, which is correct.
+    definition: jsonb("definition").$type<Questionnaire>(),
     activatedByUserId: uuid("activated_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),

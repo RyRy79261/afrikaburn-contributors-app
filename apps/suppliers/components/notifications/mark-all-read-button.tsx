@@ -12,7 +12,16 @@ import { markAllNotificationsRead } from "@/lib/actions/notifications";
  * "Mark all read" — the toolbar action on the portal inbox (canvas `swSq4`).
  * The server action clears only the gated supplier's own unread rows.
  */
-export function MarkAllReadButton({ unreadCount }: { unreadCount: number }) {
+export function MarkAllReadButton({
+  unreadCount,
+  className,
+  onDone,
+}: {
+  unreadCount: number;
+  className?: string;
+  /** Fired after a successful mark-all (e.g. so the header panel can refetch). */
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
@@ -21,6 +30,7 @@ export function MarkAllReadButton({ unreadCount }: { unreadCount: number }) {
       type="button"
       variant="ghost"
       size="sm"
+      className={className}
       disabled={pending || unreadCount === 0}
       onClick={() =>
         startTransition(async () => {
@@ -30,6 +40,7 @@ export function MarkAllReadButton({ unreadCount }: { unreadCount: number }) {
               description: "Every notification is marked read.",
             });
             router.refresh();
+            onDone?.();
             return;
           }
           toast.error("Could not mark them read", {
