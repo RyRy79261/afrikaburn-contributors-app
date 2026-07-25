@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CheckCircle2, Lock } from "lucide-react";
+import { eq } from "drizzle-orm";
+import { CheckCircle2, Lock, Flame } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import {
   Card,
@@ -9,16 +10,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
+import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { requireCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
-import { getFillView } from "@/lib/questionnaire-store";
+import { getFillView, type ActivationRow } from "@/lib/questionnaire-store";
+import { db, schema } from "@/lib/db";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { QuestionnaireFill } from "@/components/questionnaire/fill";
+import { SignOutButton } from "@/components/sign-out-button";
 
 export const dynamic = "force-dynamic";
+
+/** Who's asking — the authoring camp's name, or "AfrikaBurn" for org sends. */
+async function authorName(activation: ActivationRow): Promise<string> {
+  if (activation.authoredScope === "org" || !activation.groupId) {
+    return "AfrikaBurn";
+  }
+  const rows = await db()
+    .select({ name: schema.groups.name })
+    .from(schema.groups)
+    .where(eq(schema.groups.id, activation.groupId))
+    .limit(1);
+  return rows[0]?.name ?? "Your camp";
+}
 
 export default async function QuestionnaireFillPage({
   params,
@@ -76,6 +93,71 @@ export default async function QuestionnaireFillPage({
     );
   }
 
+  // Blocking gate (questionnaire-spec §"Engine mechanics"): a HARD gate whose
+  // ONLY reachable actions are filling it in and signing out. The chrome is
+  // stripped to a band + brand mark + sign-out — no nav can leak an escape.
+  if (activation.blocking) {
+    const asker = await authorName(activation);
+    return (
+      <div className="flex min-h-svh flex-col bg-background">
+        <header className="border-b border-border">
+          <QuiltBand />
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
+            <span className="flex items-center gap-2 font-semibold">
+              <Flame className="h-5 w-5 text-primary" aria-hidden />
+              <span className="tracking-tight">Contributors</span>
+            </span>
+            <SignOutButton />
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-xl flex-1 px-6 py-10">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <BlockingBadge blocking />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {activation.title}
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {asker} asks:
+                </p>
+              </div>
+              {activation.description && (
+                <p className="text-sm text-muted-foreground">
+                  {activation.description}
+                </p>
+              )}
+            </div>
+
+            <Card>
+              <CardContent className="pt-6">
+                <QuestionnaireFill
+                  activationId={activationId}
+                  questionnaire={activation.definition}
+                  initialResponses={initialResponses}
+                  redirectTo="/directory"
+                  submitLabel="Submit answers"
+                  gate
+                />
+              </CardContent>
+            </Card>
+
+            <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              You can&apos;t use the portal until this is done — it only takes a
+              couple of minutes.
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Non-blocking questionnaire: a normal, navigable fill page (reached from the
+  // dashboard "Pending questionnaires" card) — keep the full app chrome.
   return (
     <AppShell>
       <div className="mx-auto max-w-xl">
@@ -89,15 +171,6 @@ export default async function QuestionnaireFillPage({
           {activation.description && (
             <p className="text-sm text-muted-foreground">
               {activation.description}
-            </p>
-          )}
-          {activation.blocking && (
-            <p className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
-              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
-              <span>
-                This one&apos;s required. Submitting it unlocks the rest of the
-                app — until then it&apos;s the only thing you can do here.
-              </span>
             </p>
           )}
         </div>

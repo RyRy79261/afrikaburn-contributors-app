@@ -50,6 +50,10 @@ interface RunnerProps {
   persistProgress?: boolean;
   /** Where to go after a successful final submit (default: refresh in place). */
   redirectTo?: string;
+  /** Gate styling: show "N of M answered" instead of step progress. */
+  answeredProgress?: boolean;
+  /** Gate styling: full-width submit with no Back on a single-page form. */
+  fullWidthSubmit?: boolean;
 }
 
 type Step =
@@ -66,6 +70,8 @@ export function QuestionnaireRunner({
   submitLabel = "Finish",
   persistProgress = false,
   redirectTo,
+  answeredProgress = false,
+  fullWidthSubmit = false,
 }: RunnerProps) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = React.useState(0);
@@ -92,7 +98,34 @@ export function QuestionnaireRunner({
 
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
-  const progress = Math.round(((stepIndex + 1) / steps.length) * 100);
+  const stepProgress = Math.round(((stepIndex + 1) / steps.length) * 100);
+
+  // Gate progress counts answered questions across all question pages ("2 of 3
+  // answered"), rather than the step position.
+  const answeredStats = React.useMemo(() => {
+    let total = 0;
+    let answered = 0;
+    for (const page of questionnaire.pages) {
+      if (page.kind !== "questions") continue;
+      for (const q of page.questions) {
+        total += 1;
+        const v = responses[q.id];
+        const empty =
+          v === undefined ||
+          v === null ||
+          v === "" ||
+          (Array.isArray(v) && v.length === 0);
+        if (!empty) answered += 1;
+      }
+    }
+    return { total, answered };
+  }, [questionnaire, responses]);
+
+  const progress =
+    answeredProgress && answeredStats.total > 0
+      ? Math.round((answeredStats.answered / answeredStats.total) * 100)
+      : stepProgress;
+  const soloSubmit = fullWidthSubmit && isLast && stepIndex === 0;
 
   if (!step) return null;
 
@@ -163,7 +196,9 @@ export function QuestionnaireRunner({
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            Step {stepIndex + 1} of {steps.length}
+            {answeredProgress
+              ? `${answeredStats.answered} of ${answeredStats.total} answered`
+              : `Step ${stepIndex + 1} of ${steps.length}`}
           </span>
           <span>{progress}%</span>
         </div>
@@ -235,17 +270,28 @@ export function QuestionnaireRunner({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-          disabled={stepIndex === 0 || isPending}
-        >
-          Back
-        </Button>
+      <div
+        className={`flex items-center gap-3 border-t border-border pt-4 ${
+          soloSubmit ? "" : "justify-between"
+        }`}
+      >
+        {!soloSubmit && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            disabled={stepIndex === 0 || isPending}
+          >
+            Back
+          </Button>
+        )}
         {isLast ? (
-          <Button type="button" onClick={handleSubmit} disabled={isPending}>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isPending}
+            className={soloSubmit ? "w-full" : ""}
+          >
             {isPending ? "Saving…" : submitLabel}
           </Button>
         ) : (

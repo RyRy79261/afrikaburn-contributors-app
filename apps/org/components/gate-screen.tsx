@@ -3,13 +3,19 @@ import { Lock, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import type { OrgSessionState } from "@/lib/session";
-import { missingConfig } from "@/lib/config";
+import { missingConfig, participantAppUrl } from "@/lib/config";
 import { SignOutButton } from "@/components/sign-out-button";
 
 /**
  * The full-screen gate — shown to anyone who has not cleared into the console.
  * Renders three honest states: not signed in, signed in but not connected
- * (preview), and signed in without an org role (polite wall).
+ * (preview), and signed in without an org role (the polite wall, per canvas
+ * T7siQ9 — eyebrow, copy, and a two-button row: participant app + sign out).
+ *
+ * The full-width QuiltBand + apricot `.org-accent` skin come from the root
+ * layout, so this stays a plain centred column (adopting the @quagga/ui
+ * GateScreen primitive here would double that shared band — the blocking
+ * console-gate depends on it too — so the per-app gate keeps its own shell).
  */
 export function GateScreen({ state }: { state: Exclude<OrgSessionState, { kind: "ok" }> }) {
   const missing = missingConfig();
@@ -31,16 +37,11 @@ export function GateScreen({ state }: { state: Exclude<OrgSessionState, { kind: 
         {state.kind === "forbidden" ? (
           <>
             <h1 className="text-2xl font-semibold tracking-tight">
-              This console is for AfrikaBurn staff
+              This side is for AfrikaBurn staff
             </h1>
             <p className="text-sm text-muted-foreground">
-              You&apos;re signed in as{" "}
-              <span className="text-foreground">
-                {state.user.primaryEmail ?? "your account"}
-              </span>
-              , but it doesn&apos;t have an organiser role. If you should have
-              access, ask a god administrator to elevate you — then reload.
-              Otherwise, head back to the participant app.
+              If that&apos;s you, ask a god admin to elevate your account.
+              Otherwise, the participant app is where your camp lives.
             </p>
           </>
         ) : (
@@ -57,12 +58,20 @@ export function GateScreen({ state }: { state: Exclude<OrgSessionState, { kind: 
       </div>
 
       {state.kind === "forbidden" ? (
-        <div className="flex items-center justify-center gap-3">
-          <SignOutButton variant="outline" size="default" />
-          <Button asChild variant="ghost">
-            <Link href="/">Reload</Link>
-          </Button>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button asChild>
+              <a href={participantAppUrl()}>Go to the participant app</a>
+            </Button>
+            <SignOutButton variant="outline" size="default" />
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            Signed in as{" "}
+            <span className="text-foreground">
+              {state.user.primaryEmail ?? "your account"}
+            </span>
+          </p>
+        </>
       ) : (
         <div className="flex items-center justify-center">
           <Button asChild size="lg">

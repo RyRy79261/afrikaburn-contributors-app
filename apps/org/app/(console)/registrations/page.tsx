@@ -7,26 +7,24 @@ import {
   TableHeader,
   TableRow,
 } from "@quagga/ui/components/table";
-import {
-  Card,
-  CardContent,
-} from "@quagga/ui/components/card";
-import { GROUP_KIND_LABELS } from "@/lib/labels";
+import { Card, CardContent } from "@quagga/ui/components/card";
+import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getRegistrationRows } from "@/lib/queries";
 import {
   classifySoundLevel,
-  SOUND_LEVEL_LABELS,
+  SOUND_LEVEL_SHORT,
   type SoundLevel,
 } from "@/lib/org-logic";
+import { formatDate } from "@/lib/labels";
 import { PageHeading } from "@/components/page-heading";
-import {
-  CohortBadge,
-  RegistrationStatusBadge,
-} from "@/components/status-badges";
+import { CohortBadge } from "@/components/status-badges";
 import { RegistrationFilters } from "@/components/registration-filters";
+import { RegistrationsPagination } from "@/components/registrations-pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 15;
 
 function pick(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "all";
@@ -44,6 +42,8 @@ export default async function RegistrationsPage({
   const statusFilter = pick(sp.status);
   const soundFilter = pick(sp.sound);
   const cohortFilter = pick(sp.cohort);
+  const pageParam = Number(pick(sp.page));
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
   const edition = await getActiveEdition();
   const rows = edition ? await getRegistrationRows(edition) : [];
@@ -59,6 +59,13 @@ export default async function RegistrationsPage({
     if (cohortFilter !== "all" && r.cohort !== cohortFilter) return false;
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const pageRows = filtered.slice(
+    (current - 1) * PAGE_SIZE,
+    current * PAGE_SIZE,
+  );
 
   return (
     <div>
@@ -86,51 +93,66 @@ export default async function RegistrationsPage({
             : "No registrations match these filters."}
         </EmptyNote>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Camp / project</TableHead>
-                  <TableHead>Kind</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Sound</TableHead>
-                  <TableHead>Cohort</TableHead>
-                  <TableHead className="text-right">Population</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((r) => (
-                  <TableRow key={r.id} className="cursor-pointer">
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/registrations/${r.id}`}
-                        className="hover:text-accent"
-                      >
-                        {r.groupName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {GROUP_KIND_LABELS[r.groupKind] ?? r.groupKind}
-                    </TableCell>
-                    <TableCell>
-                      <RegistrationStatusBadge status={r.status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {SOUND_LEVEL_LABELS[classifySoundLevel(r.soundRaw)]}
-                    </TableCell>
-                    <TableCell>
-                      <CohortBadge cohort={r.cohort} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {r.expectedPopulation ?? "—"}
-                    </TableCell>
+        <>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {filtered.length}{" "}
+            {filtered.length === 1 ? "registration" : "registrations"}
+          </p>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Camp</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Sound</TableHead>
+                    <TableHead>New / Ret.</TableHead>
+                    <TableHead>Submitted</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {pageRows.map((r) => (
+                    <TableRow key={r.id} className="cursor-pointer">
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/registrations/${r.id}`}
+                          className="hover:text-accent"
+                        >
+                          {r.groupName}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {SOUND_LEVEL_SHORT[classifySoundLevel(r.soundRaw)]}
+                      </TableCell>
+                      <TableCell>
+                        <CohortBadge cohort={r.cohort} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {r.submittedAt
+                          ? formatDate(r.submittedAt)
+                          : "Not submitted"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <RegistrationsPagination
+            page={current}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            params={{
+              status: statusFilter,
+              sound: soundFilter,
+              cohort: cohortFilter,
+            }}
+          />
+        </>
       )}
     </div>
   );

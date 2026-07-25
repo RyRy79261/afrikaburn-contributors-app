@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
@@ -56,7 +56,11 @@ export async function decideRegistration(
     const nextStatus = resolveReviewAction(registration.status, input.action);
     const isDecision = nextStatus === "approved" || nextStatus === "rejected";
 
-    await db
+    // TOCTOU guard: the status we validated the transition against must still be
+    // the row's status when we write. Guarding the UPDATE's WHERE on that exact
+    // status means a concurrent decision (another reviewer, a resubmit) makes
+    // this update a no-op, and we abort before stamping a stale audit event.
+    const updated = await db
       .update(schema.registrations)
       .set({
         status: nextStatus,
@@ -65,7 +69,18 @@ export async function decideRegistration(
           ? { decidedAt: new Date(), decidedByUserId: session.dbUserId }
           : {}),
       })
-      .where(eq(schema.registrations.id, input.registrationId));
+      .where(
+        and(
+          eq(schema.registrations.id, input.registrationId),
+          eq(schema.registrations.status, registration.status),
+        ),
+      )
+      .returning({ id: schema.registrations.id });
+    if (updated.length === 0) {
+      throw new Error(
+        "This registration changed since you opened it — reload and try again.",
+      );
+    }
 
     await writeAuditEvent(db, {
       actorId: session.dbUserId,

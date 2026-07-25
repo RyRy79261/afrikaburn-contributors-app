@@ -31,6 +31,8 @@ export interface StepData {
   key: SupplierOnboardingStepKey;
   order: number;
   title: string;
+  /** "Step N · Org confirms" — the who-completes/who-confirms eyebrow. */
+  eyebrow: string;
   description: string;
   model: StepCardModel;
 }
@@ -108,11 +110,22 @@ function StepCard({
     <Card className={cn("border", t.ring)}>
       <CardHeader className="gap-2">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
-              {step.order}
+          <div className="flex items-start gap-2.5">
+            <span
+              className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                t.badge,
+              )}
+              aria-hidden
+            >
+              {t.icon}
             </span>
-            <CardTitle className="text-base">{step.title}</CardTitle>
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">
+                {step.eyebrow}
+              </span>
+              <CardTitle className="text-base">{step.title}</CardTitle>
+            </div>
           </div>
           <StatusPill model={step.model} />
         </div>
@@ -137,11 +150,20 @@ function StepAction({
   const { flow } = step.model;
 
   if (flow === "org_confirmed") {
+    // Payment steps (deposit / fee) may only ever use receipt-confirmation
+    // wording — the platform never holds or processes funds, so no copy may
+    // imply anything is paid *through* the portal. The briefing step is an
+    // attendance confirmation, not a payment.
+    const isPaymentStep =
+      step.key === "deposit_paid" || step.key === "registration_fee_paid";
+    const pending = isPaymentStep
+      ? "Awaiting AfrikaBurn. AfrikaBurn confirms receipt here — nothing is ever paid through this portal."
+      : "Awaiting AfrikaBurn — the Supplier Team confirms this here once it's done.";
     return (
       <p className="text-sm text-muted-foreground">
         {step.model.tone === "done"
           ? "AfrikaBurn has confirmed this step."
-          : "Awaiting AfrikaBurn confirmation — the Supplier Team records this once it's done. Tracked here only; the platform never processes payments."}
+          : pending}
       </p>
     );
   }

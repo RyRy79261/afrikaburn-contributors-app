@@ -15,7 +15,6 @@ import { guardConsole } from "@/lib/gate";
 import { searchAccounts } from "@/lib/queries";
 import { PageHeading } from "@/components/page-heading";
 import { AccountActions } from "@/components/account-actions";
-import { formatDate } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +39,11 @@ export default async function AccountsPage({
   return (
     <div>
       <PageHeading
-        eyebrow="Accounts"
-        title="People & access"
+        title="Accounts"
         description={
           isGod
-            ? "Search accounts and grant or remove organiser access. God administrators are set via the GOD_EMAILS environment list and cannot be created here."
-            : "Search accounts and their organiser roles. Only god administrators can change access."
+            ? "Find a burner, see their role, and elevate trusted people to org staff."
+            : "Find a burner and see their org role. Only the system owner can change access."
         }
       />
 
@@ -59,9 +57,9 @@ export default async function AccountsPage({
             type="search"
             name="q"
             defaultValue={query}
-            placeholder="Search by email…"
+            placeholder="Search by email or burner name…"
             className="pl-9"
-            aria-label="Search accounts by email"
+            aria-label="Search accounts by email or burner name"
           />
         </div>
         <Button type="submit" variant="secondary">
@@ -84,9 +82,11 @@ export default async function AccountsPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Email</TableHead>
-                  <TableHead>Org role</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Access</TableHead>
+                  <TableHead>Burner name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="text-right">
+                    <span className="sr-only">Access</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -99,17 +99,17 @@ export default async function AccountsPage({
                         </span>
                       )}
                     </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {a.burnerName ?? "—"}
+                    </TableCell>
                     <TableCell>
                       {a.role === "god" ? (
-                        <Badge variant="warning">God admin</Badge>
+                        <Badge>Owner</Badge>
                       ) : a.role === "org_staff" ? (
                         <Badge variant="secondary">Org staff</Badge>
                       ) : (
-                        <Badge variant="outline">Participant</Badge>
+                        <span className="text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(a.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       {isGod ? (

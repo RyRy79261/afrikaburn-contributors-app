@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, UserMinus } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { toast } from "@quagga/ui/components/toast";
 import { setOrgStaffRole } from "@/lib/actions/accounts";
@@ -23,7 +23,7 @@ export function AccountActions({
   if (role === "god") {
     return (
       <span className="text-xs text-muted-foreground">
-        Managed via GOD_EMAILS
+        System owner — cannot change
       </span>
     );
   }
@@ -49,18 +49,18 @@ export function AccountActions({
 
   return role === "org_staff" ? (
     <Button
-      variant="outline"
+      variant="ghost"
       size="sm"
       disabled={pending}
       onClick={() => act("demote")}
     >
-      <ArrowDown aria-hidden />
-      Demote
+      <UserMinus aria-hidden />
+      Remove staff access
     </Button>
   ) : (
     <Button size="sm" disabled={pending} onClick={() => act("elevate")}>
       <ArrowUp aria-hidden />
-      Make org staff
+      Elevate to org staff
     </Button>
   );
 }

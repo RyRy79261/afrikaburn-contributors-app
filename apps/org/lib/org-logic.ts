@@ -152,6 +152,18 @@ export const SOUND_LEVEL_LABELS: Record<SoundLevel, string> = {
   unspecified: "Unspecified",
 };
 
+// Compact sound labels for the dense registrations table + review header meta
+// (canvas StJXH shows "Level 2"; PRDdG meta shows "SOOP Level 2"). None and
+// unspecified collapse to an em-dash so the table stays glanceable.
+export const SOUND_LEVEL_SHORT: Record<SoundLevel, string> = {
+  none: "—",
+  level_1: "Level 1",
+  level_2: "Level 2",
+  level_3: "Level 3",
+  level_4: "Level 4",
+  unspecified: "—",
+};
+
 /**
  * Classify a stored amplified-music string into a sound-level bucket. Matches a
  * digit 1–4 anywhere in the string first; falls back to "none" for explicit

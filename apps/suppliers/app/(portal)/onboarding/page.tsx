@@ -13,7 +13,7 @@ import {
   OnboardingChecklist,
   type StepData,
 } from "@/components/onboarding-checklist";
-import { buildStepCardModel } from "@/lib/onboarding-view";
+import { buildStepCardModel, stepEyebrow } from "@/lib/onboarding-view";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ export default async function OnboardingPage() {
     key: view.step.key,
     order: view.step.order,
     title: view.step.title,
+    eyebrow: stepEyebrow(view.step),
     description: view.step.description,
     model: buildStepCardModel(view),
   }));
@@ -85,6 +86,17 @@ export default async function OnboardingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/*
+        Documents & links panel seam — canvas Q4fye "Documents Panel".
+        BLOCKED on #8 (supplier_documents schema): there is no table yet to hold
+        the required/optional documents, acknowledgements, or download links, so
+        the panel is not rendered to suppliers. This is a flagged, hidden slot
+        (same pattern as the wave-1 pinned-banner seam): once #8 lands, replace
+        this stub with the real <DocumentsPanel documents={...} /> in-place. No
+        supplier-facing UI ships from this seam.
+      */}
+      <div hidden aria-hidden data-seam="supplier-documents-panel" />
 
       <OnboardingChecklist
         steps={steps}

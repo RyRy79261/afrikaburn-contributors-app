@@ -11,7 +11,8 @@ import {
   TableRow,
 } from "@quagga/ui/components/table";
 import { Badge } from "@quagga/ui/components/badge";
-import { deriveOnboardingProgress } from "@quagga/core";
+import { cn } from "@quagga/ui/lib/utils";
+import { deriveOnboardingProgress, standingLabel } from "@quagga/core";
 import type { SupplierOverviewRow } from "@/lib/queries";
 import { SupplierStandingSelect } from "./supplier-standing-select";
 import { SupplierNotesDrawer } from "./supplier-notes-drawer";
@@ -137,11 +138,27 @@ function SupplierRows({
           </div>
         </TableCell>
         <TableCell className="align-top">
-          <div className="flex flex-col items-start gap-1">
+          <div className="flex flex-col items-start gap-1.5">
             <Badge variant={isOnboarded ? "success" : "warning"}>
               {completed}/{total}
               {isOnboarded ? " onboarded" : " incomplete"}
             </Badge>
+            <div
+              className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={completed}
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-label={`Onboarding ${completed} of ${total} steps`}
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  isOnboarded ? "bg-success" : "bg-warning",
+                )}
+                style={{ width: `${(completed / total) * 100}%` }}
+              />
+            </div>
             {awaiting > 0 && (
               <span className="text-xs text-muted-foreground">
                 {awaiting} awaiting confirmation
@@ -166,11 +183,24 @@ function SupplierRows({
         <TableRow className="hover:bg-transparent">
           <TableCell colSpan={5} className="bg-muted/30 p-4">
             {editionId ? (
-              <SupplierOnboardingStepList
-                supplierId={s.id}
-                editionId={editionId}
-                steps={s.steps}
-              />
+              <>
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    Onboarding status · {completed}/{total}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {standingLabel(s.standing)} —{" "}
+                    {isOnboarded
+                      ? "fully onboarded"
+                      : `${total - completed} step${total - completed === 1 ? "" : "s"} outstanding`}
+                  </p>
+                </div>
+                <SupplierOnboardingStepList
+                  supplierId={s.id}
+                  editionId={editionId}
+                  steps={s.steps}
+                />
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">
                 No active edition — onboarding steps appear once an edition is

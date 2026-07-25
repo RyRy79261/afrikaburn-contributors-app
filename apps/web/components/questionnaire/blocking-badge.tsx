@@ -17,7 +17,7 @@ export function BlockingBadge({
     return (
       <Badge variant="destructive" className={className}>
         <AlertTriangle className="h-3 w-3" aria-hidden />
-        Required — blocks the app until done
+        Required · blocks until done
       </Badge>
     );
   }

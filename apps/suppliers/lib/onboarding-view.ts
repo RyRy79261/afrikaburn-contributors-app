@@ -8,12 +8,38 @@ import {
   isOrgReviewedStep,
   isSelfServiceStep,
   stepFlow,
+  type SupplierOnboardingStep,
   type SupplierOnboardingStepView,
   type SupplierStepFlow,
 } from "@quagga/core";
 import type { SupplierOnboardingStepStatus } from "@quagga/types";
 
 export type StepStatusTone = "done" | "awaiting" | "pending";
+
+/**
+ * The card eyebrow line, e.g. "Step 3 · Org confirms" (canvas Q4fye). Encodes
+ * the who-completes / who-confirms model from the step's confirmation type so
+ * suppliers see, at a glance, who drives each step:
+ *   - auto           → "You complete · Auto-confirmed"
+ *   - org_may_revoke → "You confirm · Org may revoke"
+ *   - org_reviews    → "You submit · Org reviews"
+ *   - org_confirms   → "Org confirms"
+ */
+export function stepEyebrow(step: SupplierOnboardingStep): string {
+  const who = ((): string => {
+    switch (step.confirmation) {
+      case "auto":
+        return "You complete · Auto-confirmed";
+      case "org_may_revoke":
+        return "You confirm · Org may revoke";
+      case "org_reviews":
+        return "You submit · Org reviews";
+      case "org_confirms":
+        return "Org confirms";
+    }
+  })();
+  return `Step ${step.order} · ${who}`;
+}
 
 export interface StepCardModel {
   flow: SupplierStepFlow;

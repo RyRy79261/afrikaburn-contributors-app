@@ -20,12 +20,15 @@ export function QuestionnaireFill({
   initialResponses,
   redirectTo,
   submitLabel,
+  gate = false,
 }: {
   activationId: string;
   questionnaire: Questionnaire;
   initialResponses: QuestionnaireResponses;
   redirectTo: string;
   submitLabel: string;
+  /** Gate styling: answered-count progress + full-width submit (§Gate). */
+  gate?: boolean;
 }) {
   const action = (
     responses: QuestionnaireResponses,
@@ -38,6 +41,8 @@ export function QuestionnaireFill({
       action={action}
       submitLabel={submitLabel}
       redirectTo={redirectTo}
+      answeredProgress={gate}
+      fullWidthSubmit={gate}
     />
   );
 }

@@ -76,13 +76,11 @@ export function SectionReviewThread({
   return (
     <div className="mt-4 border-t border-border pt-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Review thread
-          {comments.length > 0 && (
-            <span className="ml-2 text-muted-foreground/70">
-              ({comments.filter((c) => c.status === "open").length} open)
-            </span>
+        <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {comments.filter((c) => c.status === "open").length > 0 && (
+            <Badge variant="warning">Open</Badge>
           )}
+          Section review
         </p>
         {!open && (
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>

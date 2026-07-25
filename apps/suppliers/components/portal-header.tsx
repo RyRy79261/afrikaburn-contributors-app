@@ -5,6 +5,7 @@ import { standingLabel, standingTone } from "@quagga/core";
 import type { SupplierSession } from "@/lib/session";
 import { PortalNav, type NavItem } from "@/components/portal-nav";
 import { SignOutButton } from "@/components/sign-out-button";
+import { HeaderNotificationBell } from "@/components/header-notification-bell";
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/onboarding", label: "Onboarding" },
@@ -53,6 +54,9 @@ export function PortalHeader({ session }: { session: SupplierSession }) {
                 </Badge>
               </div>
             </div>
+            {/* NotificationBell seam — placeholder count until a supplier
+                notifications surface exists (see header-notification-bell). */}
+            <HeaderNotificationBell count={0} />
             <SignOutButton />
           </div>
         </div>

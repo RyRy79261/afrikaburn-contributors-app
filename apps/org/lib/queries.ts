@@ -1,6 +1,18 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, ilike, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import type {
   RegistrationStatus,
   SupplierNoteKind,
@@ -100,13 +112,16 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
 export interface AccountRow {
   userId: string;
   email: string | null;
+  /** Latest Burner Bio display name, when the account has one. */
+  burnerName: string | null;
   role: "god" | "org_staff" | null;
   createdAt: Date;
 }
 
 /**
- * Search users by email (case-insensitive substring), annotated with their org
- * role. Empty query returns the most recent accounts.
+ * Search users by email OR Burner Bio display name (case-insensitive
+ * substring), annotated with their org role and most-recent display name.
+ * Empty query returns the most recent accounts. One row per user.
  */
 export async function searchAccounts(
   orgGroupId: string,
@@ -114,6 +129,7 @@ export async function searchAccounts(
 ): Promise<AccountRow[]> {
   const db = getDb();
   const q = query.trim();
+  const like = `%${q}%`;
 
   const rows = await db
     .select({
@@ -130,13 +146,51 @@ export async function searchAccounts(
         eq(schema.memberships.groupId, orgGroupId),
       ),
     )
-    .where(q ? ilike(schema.users.email, `%${q}%`) : undefined)
+    .where(
+      q
+        ? or(
+            ilike(schema.users.email, like),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(schema.burnerBios)
+                .where(
+                  and(
+                    eq(schema.burnerBios.userId, schema.users.id),
+                    ilike(schema.burnerBios.displayName, like),
+                  ),
+                ),
+            ),
+          )
+        : undefined,
+    )
     .orderBy(desc(schema.users.createdAt))
     .limit(50);
+
+  // Latest display name per returned user (bios are per-edition; newest wins).
+  const userIds = rows.map((r) => r.userId);
+  const nameByUser = new Map<string, string>();
+  if (userIds.length > 0) {
+    const bios = await db
+      .select({
+        userId: schema.burnerBios.userId,
+        displayName: schema.burnerBios.displayName,
+        updatedAt: schema.burnerBios.updatedAt,
+      })
+      .from(schema.burnerBios)
+      .where(inArray(schema.burnerBios.userId, userIds))
+      .orderBy(desc(schema.burnerBios.updatedAt));
+    for (const b of bios) {
+      if (b.displayName && !nameByUser.has(b.userId)) {
+        nameByUser.set(b.userId, b.displayName);
+      }
+    }
+  }
 
   return rows.map((r) => ({
     userId: r.userId,
     email: r.email,
+    burnerName: nameByUser.get(r.userId) ?? null,
     role: r.role === "god" || r.role === "org_staff" ? r.role : null,
     createdAt: r.createdAt,
   }));
