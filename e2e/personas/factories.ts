@@ -108,6 +108,18 @@ export async function signUpBurner(
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
+  // Wait for the REQUEST, not just the click. `.click()` resolves as soon as the
+  // event is dispatched, so navigating straight to /onboarding raced the sign-up
+  // POST: the session cookie had not been set yet, the gate quite correctly
+  // bounced to sign-in, and the spec then blamed the product for it. Every
+  // persona builds on this factory, so the race showed up as ~100 failures that
+  // all looked like broken auth. A real person cannot click and navigate inside
+  // the same 5ms; the harness could.
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    { timeout: 15_000 },
+  );
+
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);
     await page.goto(link); // autoSignInAfterVerification signs the session in
@@ -345,6 +357,13 @@ export async function acceptInviteAsNewBurner(
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
 
+  // Same click-vs-request race as signUpBurner — wait for the POST to land
+  // before anything reads the session.
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    { timeout: 15_000 },
+  );
+
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);
     await page.goto(link); // autoSignInAfterVerification + the invite callback
@@ -541,6 +560,13 @@ export async function registerSupplier(
     .getByRole("checkbox", { name: /read the supplier basics/i })
     .check();
   await page.getByRole("button", { name: /create account/i }).click();
+
+  // Same click-vs-request race as signUpBurner — wait for the POST to land
+  // before anything reads the session.
+  await page.waitForResponse(
+    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    { timeout: 15_000 },
+  );
 
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);

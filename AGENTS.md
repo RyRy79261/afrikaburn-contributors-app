@@ -24,9 +24,34 @@ docs/           specs (law) + sources/ (mirrored corpora: quaggapedia, afrikabur
 
 ```bash
 pnpm turbo run lint typecheck test build   # THE gate — must be green before any commit
+pnpm e2e:local                             # the OTHER gate — real DB, real browser
+pnpm e2e:local specs/new-burner            # ...or one persona
 pnpm --filter @quagga/web dev              # or org / suppliers
 pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (offline)
 ```
+
+**The unit gate does not run a single browser.** `turbo run … test` lints and
+typechecks `@quagga/e2e` but never executes Playwright, so the 141 persona specs
+prove nothing until `pnpm e2e:local` runs them. It brings up Postgres + the two
+Neon proxies (`docker-compose.local.yml`), migrates, seeds, boots all three apps
+and runs the suite. **Run it for anything touching auth, sessions, privacy
+projection, or the invite round trip** — a whole class of defect is invisible to
+static analysis. The sign-up dead-end (a live session behind a "check your
+inbox" message that no deployment without a mail provider could ever satisfy)
+passed lint, typecheck, unit tests and build, and died on first contact with a
+browser.
+
+Two traps that already cost real time:
+
+- **A long-lived `next dev` keeps a stale module graph.** Delete a file that
+  something imports and the running server serves 500s *while `turbo build`
+  stays green* — once producing 104 phantom E2E failures that read exactly like
+  product bugs. `e2e:local` always restarts dev and aborts on
+  `Module not found`. If you are running dev by hand, restart it after deleting
+  or moving a module.
+- **Local Postgres is not Neon.** The proxies are faithful enough to catch
+  logic, not pooling behaviour or cold starts. Green locally is strong evidence,
+  never proof for production.
 
 ## Hard engineering rules
 

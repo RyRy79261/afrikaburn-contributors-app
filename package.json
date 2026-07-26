@@ -2,14 +2,15 @@
   "name": "quagga-portal-workspace",
   "private": true,
   "version": "0.0.0",
-  "description": "AfrikaBurn Contributors App — participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
+  "description": "AfrikaBurn Contributors App \u2014 participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "e2e:local": "./scripts/e2e-local.sh"
   },
   "devDependencies": {
     "prettier": "^3.8.3",
