@@ -52,7 +52,7 @@ test.describe("new burner · Burner Bio", () => {
     await signUpBurner(webPage);
     await webPage.goto("/onboarding");
     await webPage.getByRole("button", { name: "Get started" }).click();
-    await webPage.getByLabel(/burner name/i).fill(uniqueName("Toggler"));
+    await webPage.getByRole("textbox", { name: /burner name/i }).fill(uniqueName("Toggler"));
 
     // Home city defaults PUBLIC; a click makes it private.
     const city = webPage.getByRole("switch", {
@@ -102,7 +102,7 @@ test.describe("new burner · Burner Bio", () => {
     await signUpBurner(webPage);
     await webPage.goto("/onboarding");
     await webPage.getByRole("button", { name: "Get started" }).click();
-    await webPage.getByLabel(/burner name/i).fill(uniqueName("Locked"));
+    await webPage.getByRole("textbox", { name: /burner name/i }).fill(uniqueName("Locked"));
 
     // On the details step every hard-locked class renders an "always private"
     // switch that is DISABLED — it cannot be flipped on.

@@ -81,6 +81,26 @@ export function resolveBaseURL(env: AuthEnv): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether cookies get the `Secure` flag (and the `__Secure-` name prefix).
+ *
+ * Derived from the ORIGIN we are actually served on, not from `NODE_ENV`.
+ * Better Auth's default keys off NODE_ENV, which is wrong for one real case: a
+ * production BUILD served over plain http, which is exactly how the E2E suite
+ * runs the app locally. There the browser silently drops every `__Secure-`
+ * cookie, so sign-up "succeeds" with no session and every authenticated journey
+ * fails in a way that looks like broken auth.
+ *
+ * Returns `undefined` (keep Better Auth's default → secure) when no base URL is
+ * configured, so a real deployment can never accidentally opt out: it takes an
+ * explicit http:// base URL to turn the flag off.
+ */
+export function resolveUseSecureCookies(env: AuthEnv): boolean | undefined {
+  const baseURL = resolveBaseURL(env);
+  if (!baseURL) return undefined;
+  return baseURL.startsWith("https://") ? undefined : false;
+}
+
 function hostOf(url: string | undefined): string | null {
   if (!url) return null;
   try {

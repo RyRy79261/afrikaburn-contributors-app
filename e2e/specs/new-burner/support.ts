@@ -58,8 +58,8 @@ export async function fillDetailedBio(
   await page.getByRole("button", { name: "Get started" }).click();
 
   // Step 2 — Your details.
-  await page.getByLabel(/burner name/i).fill(input.displayName);
-  await page.getByLabel(/home city/i).fill(input.homeCity);
+  await page.getByRole("textbox", { name: /burner name/i }).fill(input.displayName);
+  await page.getByRole("textbox", { name: /home city/i }).fill(input.homeCity);
 
   for (const year of input.attendedYears) {
     await page.getByRole("button", { name: String(year), exact: true }).click();

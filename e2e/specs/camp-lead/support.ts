@@ -121,7 +121,7 @@ export async function completeBioWithPhone(
   const displayName = opts.displayName ?? uniqueName("Officer Ren");
   await page.goto("/onboarding");
   await page.getByRole("button", { name: "Get started" }).click();
-  await page.getByLabel(/burner name/i).fill(displayName);
+  await page.getByRole("textbox", { name: /burner name/i }).fill(displayName);
   // The Field wires htmlFor="phone" to the react-phone-number-input's input id,
   // so the accessible label is exactly "Phone" (distinct from the emergency-
   // contact phones, which are labelled "On-site … contact" etc).

@@ -40,6 +40,16 @@ echo "==> database stack"
 $COMPOSE up -d
 until docker exec quagga-pg pg_isready -U postgres -d quagga >/dev/null 2>&1; do sleep 1; done
 
+if [ "${E2E_RESET_DB:-0}" = "1" ]; then
+  # Drops BOTH schemas. `drizzle` holds the migration-tracking table, so
+  # dropping only `public` leaves the tracker behind and the migrator then
+  # reports "up to date" against an empty database — a silent no-op that looks
+  # like success and fails much later.
+  echo "==> resetting database (public + drizzle)"
+  docker exec quagga-pg psql -U postgres -d quagga \
+    -c "DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;"
+fi
+
 echo "==> migrations + seed"
 pnpm --filter @quagga/db db:migrate:deploy
 pnpm --filter @quagga/db db:seed

@@ -192,8 +192,8 @@ export async function completeBio(
   await page.getByRole("button", { name: "Get started" }).click();
 
   // Step 2 — Your details (Burner name is the only required field).
-  await page.getByLabel(/burner name/i).fill(displayName);
-  if (opts.homeCity) await page.getByLabel(/home city/i).fill(opts.homeCity);
+  await page.getByRole("textbox", { name: /burner name/i }).fill(displayName);
+  if (opts.homeCity) await page.getByRole("textbox", { name: /home city/i }).fill(opts.homeCity);
   await page.getByRole("button", { name: "Save & continue" }).click();
 
   // Step 3 — Burns & volunteering (no required fields).
@@ -241,7 +241,25 @@ export async function createCamp(
     await page.getByRole("option", { name: /invite-only/i }).click();
   }
 
-  await page.getByRole("button", { name: /create camp/i }).click();
+  const createButton = page.getByRole("button", { name: /create camp/i });
+  await createButton.click();
+
+  // The form SOFT-WARNS on a near-duplicate name and requires a second,
+  // confirming submit (`confirmWarnings`) — deliberate product behaviour, with
+  // its own spec in camp-lifecycle. A factory that clicked once then waited for
+  // a redirect simply hung whenever the fuzzy matcher fired, and it fires often
+  // here: `uniqueCampName` varies a suffix, not the stem, so after a few runs a
+  // database full of past camps makes a near-match almost certain. This is a
+  // factory — its job is "get me a camp" — so it confirms and moves on. The spec
+  // that actually asserts the warning drives the form directly.
+  const warning = page.getByText(/similar to existing camp/i);
+  await Promise.race([
+    page.waitForURL(isCampDetailUrl).catch(() => undefined),
+    warning.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
+  ]);
+  if (await warning.count()) {
+    await createButton.click();
+  }
 
   // waitForURL resolves IMMEDIATELY when the CURRENT url already matches, and we
   // start on /camps/new — which a naive /\/camps\/[^/]+$/ matches ("new" is a

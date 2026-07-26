@@ -69,8 +69,8 @@ async function completePiiBioAllPublic(
   await page.getByRole("button", { name: "Get started" }).click();
 
   // Step 2 — Your details (public-eligible + hard-locked fields).
-  await page.getByLabel(/burner name/i).fill(s.displayName);
-  await page.getByLabel(/home city/i).fill(s.homeCity);
+  await page.getByRole("textbox", { name: /burner name/i }).fill(s.displayName);
+  await page.getByRole("textbox", { name: /home city/i }).fill(s.homeCity);
   await page.locator("#phone").fill(s.phoneDigits);
   await page.getByLabel("On-site contact name").fill(s.onsiteName);
   await page.getByLabel("Off-site contact name").fill(s.offsiteName);

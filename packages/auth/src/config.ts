@@ -26,6 +26,7 @@ import {
   resolvePasskeyRpID,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
+  resolveUseSecureCookies,
   isEmailProviderConfigured,
   type AuthEnv,
 } from "./env";
@@ -50,6 +51,7 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
   const emailProvider = isEmailProviderConfigured(env);
   const passkeyRpID = resolvePasskeyRpID(env);
   const passkeyOrigins = resolvePasskeyOrigins(env);
+  const useSecureCookies = resolveUseSecureCookies(env);
 
   return {
     appName: "AfrikaBurn Contributors",
@@ -194,6 +196,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
 
     advanced: {
       cookiePrefix: "quagga",
+      // Keyed off the ORIGIN, not NODE_ENV — a production build served over
+      // http (how E2E runs locally) must not emit __Secure- cookies the browser
+      // will drop. Only an explicit http:// base URL turns this off.
+      ...(useSecureCookies === undefined ? {} : { useSecureCookies }),
       // Cross-subdomain SSO — enabled only when actually served under the apex,
       // so localhost / *.vercel.app previews (which cannot share the cookie) still
       // boot and work host-only.
