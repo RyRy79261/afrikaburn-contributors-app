@@ -201,11 +201,41 @@ export async function signInAs(
 
 /** End the current session (web/org header sign-out; supplier equivalent). */
 export async function signOut(page: Page): Promise<void> {
+  // Loud, not silent. This used to `return` when the control was missing, so a
+  // spec that meant "sign out, now prove the session is gone" quietly asserted
+  // against a STILL-SIGNED-IN browser and blamed the app for the result.
+  // WAIT for the control, do not `count()` it. `count()` resolves immediately,
+  // so arriving here straight after a redirect it reads 0 while the page is
+  // still rendering — which the old code treated as "no button, nothing to do"
+  // and returned silently, leaving later assertions to run against a live
+  // session and blame the app. Wait, then fail loudly if it truly is not there.
   const btn = page.getByRole("button", { name: /sign out/i }).first();
-  if (await btn.count()) {
-    await btn.click();
-    await expect(page).toHaveURL(/\/(auth\/sign-in|signin)?$|\/$/);
+  try {
+    await btn.waitFor({ state: "visible", timeout: 10_000 });
+  } catch {
+    throw new Error(
+      `[e2e] signOut(): no "Sign out" control on ${page.url()} after 10s. The ` +
+        `factory did nothing, so anything asserted after this would be testing ` +
+        `a live session.`,
+    );
   }
+  await btn.click();
+  await expect(page).toHaveURL(/\/(auth\/sign-in|signin)?$|\/$/);
+
+  // The click-vs-request race again, in its most misleading form: without this,
+  // the very next navigation can still carry a live session cookie, so a spec
+  // asserting "signed out means this route needs sign-in" lands on the ONBOARDING
+  // GATE instead and reads as a broken sign-out. Wait for the cookie to actually
+  // go away.
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const cookies = await page.context().cookies();
+    if (!cookies.some((c) => /quagga\.session_token$/.test(c.name) && c.value)) {
+      return;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error("[e2e] sign-out did not clear the session cookie within 10s.");
 }
 
 // --- Burner Bio (onboarding) ----------------------------------------------

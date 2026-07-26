@@ -82,7 +82,7 @@ export async function fillDetailedBio(
   await page.getByLabel(/on-site contact name/i).fill(input.onsiteName);
   await page.getByLabel(/off-site contact name/i).fill(input.offsiteName);
   await page.getByRole("textbox", { name: /medical notes/i }).fill(input.medical);
-  await page.getByRole("button", { name: "Passport", exact: true }).click();
+  await page.getByRole("radio", { name: "Passport", exact: true }).click();
   await page.locator('[id="id.number"]').fill(input.idNumber);
 
   await page.getByRole("button", { name: "Save & continue" }).click();

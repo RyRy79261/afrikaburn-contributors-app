@@ -10,6 +10,7 @@
 
 import { test, expect } from "../../fixtures";
 import { signUpBurner } from "../../personas/factories";
+import { requiresEmailVerification } from "../../lib/env";
 import { TEST_PASSWORD, TOO_SHORT_PASSWORD, uniqueEmail } from "../../lib/identity";
 import { appAlerts } from "../../lib/dom";
 
@@ -48,10 +49,24 @@ test.describe("new burner · sign-up", () => {
     await expect(webPage).toHaveURL(/\/auth\/sign-in/);
   });
 
+  // ENUMERATION-SAFETY ON SIGN-UP HOLDS ONLY WHEN VERIFICATION IS ON, and that is
+  // a deliberate, documented trade rather than an oversight. With no mail
+  // provider Better Auth signs a NEW account straight in, so the only two
+  // possible outcomes are "you are now signed in" and "check your inbox" —
+  // there is no third one to hide behind. Showing the notice to a freshly
+  // created account instead left every new burner stranded on the auth page
+  // waiting for mail the deployment structurally cannot send, which is worse.
+  // With verification ON (production) no session comes back either way and both
+  // paths are byte-identical — which is what this spec proves, so it runs there
+  // and skips here.
   test("handles a duplicate email enumeration-safely (identical to a new one)", async ({
     webPage,
     makeAppPage,
   }) => {
+    test.skip(
+      !requiresEmailVerification(),
+      "no mail provider: sign-up auto-signs-in, so the two outcomes differ by design",
+    );
     // Create a real account, then attempt to sign up its address AGAIN in a fresh
     // context, and sign up a never-seen address in a THIRD context. The two
     // responses must be identical — that identity is the enumeration defence.

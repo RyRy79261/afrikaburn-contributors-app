@@ -53,7 +53,16 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
       invitee.getByRole("heading", { name: camp.name }),
     ).toBeVisible();
     await expect(invitee.getByText(/you've been invited to join/i)).toBeVisible();
-    await expect(invitee.getByText(`${leadName} invited you to join.`)).toBeVisible();
+    // The inviter's name is NOT shown here, and that is correct. It is a
+    // flaggable field, and an invite link is the most-forwarded surface in the
+    // app — anyone the recipient pastes it to reads this card. A lead who has
+    // not marked their burner name public does not get named to strangers, so
+    // the card simply drops that line (apps/web/lib/invites-store.ts gates it on
+    // the same canBePublic + flag pair as the public profile). The camp itself
+    // still identifies the invite, which is what the recipient actually needs.
+    await expect(
+      invitee.getByText(`${leadName} invited you to join.`),
+    ).toHaveCount(0);
     await expect(invitee.getByText(/one-time invite/i)).toBeVisible();
     await expect(
       invitee.getByRole("button", { name: new RegExp(`join ${camp.name}`, "i") }),
