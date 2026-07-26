@@ -25,7 +25,6 @@ import {
 } from "@quagga/ui/components/card";
 import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
-import { PasswordInput } from "@quagga/ui/components/password-input";
 import { PhoneInput } from "@quagga/ui/components/phone-input";
 import { Switch } from "@quagga/ui/components/switch";
 import { Textarea } from "@quagga/ui/components/textarea";
@@ -648,12 +647,21 @@ function DetailsStep({
                   South African ID
                 </ToggleGroupItem>
               </ToggleGroup>
-              <PasswordInput
+              {/* A PLAIN, VISIBLE input — deliberately not the masked one.
+                  An ID or passport number is transcribed from a document in
+                  your hand, and a single wrong character means the name on the
+                  ticket will not match the document at the gate. You cannot
+                  proof-read what you cannot see, and masking buys nothing here:
+                  the value is already yours, on your screen, and the protection
+                  that matters is encryption at rest plus never showing it to
+                  anyone else. */}
+              <Input
                 id="id.number"
-                hideStrength
                 value={str("id.number")}
                 placeholder="Document number"
                 autoComplete="off"
+                spellCheck={false}
+                inputMode="text"
                 onChange={(e) => setResp("id.number", e.target.value)}
               />
             </div>
