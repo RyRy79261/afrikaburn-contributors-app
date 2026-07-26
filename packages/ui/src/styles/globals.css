@@ -158,6 +158,32 @@
   * {
     border-color: var(--color-border);
   }
+  /* Tailwind v4 dropped the Preflight rule that gave buttons `cursor: pointer`,
+     matching the browser default of `cursor: default` instead. Every button in
+     all three apps silently lost its pointer — restored here once rather than
+     by adding `cursor-pointer` to each component, so anything interactive that
+     lands later is covered too.
+
+     `:not(:disabled)` keeps a disabled control showing the default arrow, and
+     the `[role]` selectors catch Radix primitives (Select, ToggleGroup, Tabs…)
+     that render a div rather than a real <button>. Base layer, so any utility
+     at a call site still wins. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="radio"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  label[for]:not(:has(input:disabled)),
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
