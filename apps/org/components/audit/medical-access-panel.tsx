@@ -25,10 +25,16 @@ import { relativeTime } from "@/lib/status-board-format";
 //
 // Every `bio.medical.view` row is a disclosure of someone's health information
 // that already happened — the read path is fail-open by design, so nothing on
-// this page could have stopped it. What this page does is make the abuse shape
-// visible: one actor, many different burners, one short window. That is the
-// whole compensating control for the missing rate limit, and it only works if a
-// human can actually see it.
+// this page could have stopped it, and nothing here tries to judge it.
+//
+// It is a RECORD: it answers "who saw my medical information?" when a burner
+// asks, and lets a real incident be reconstructed. It deliberately does NOT
+// aggregate by actor or flag volume. Working through every member of a camp
+// before the burn is what the job looks like, so surfacing that as a pattern
+// would report ordinary care as an incident and tell the people we most need
+// reading this information that the tool is watching them. (Ryan, 26 Jul 2026 —
+// an enumeration detector was built here and removed for exactly that reason;
+// `lib/__tests__/medical-audit-surface.test.ts` pins its absence.)
 
 const BASIS_LABEL: Record<MedicalAccessBasis, string> = {
   self: "Own notes",

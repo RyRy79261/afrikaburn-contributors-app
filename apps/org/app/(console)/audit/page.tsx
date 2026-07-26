@@ -38,7 +38,7 @@ export default async function AuditLogPage() {
       <PageHeading
         eyebrow="Console / Audit"
         title="Audit log"
-        description="Who did what, and when. Medical-notes reads are called out first — they are the one action nothing prevents, so seeing them is the control."
+        description="Who did what, and when. Medical-notes reads are listed first because that is the record people ask about — not because anyone is being watched."
       />
 
       <div className="flex flex-col gap-6">
