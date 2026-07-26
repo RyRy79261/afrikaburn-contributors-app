@@ -299,3 +299,82 @@ export async function addSupplier(
     revalidatePath("/suppliers");
   });
 }
+
+const DeleteSupplierInput = z.object({ supplierId: z.string().uuid() });
+
+/**
+ * Remove a supplier from the catalogue — for duplicates and bad imports.
+ *
+ * WHAT IT REFUSES, AND WHY. Four tables cascade off `suppliers`
+ * (packages/db/src/schema.ts): onboarding, documents, document acks and
+ * `supplier_declarations`. That last one is a CAMP'S RECORD that it declared
+ * this supplier on its registration, and a cascade would erase it silently from
+ * a page nobody was looking at. So:
+ *
+ *   - declared by any registration → REFUSED, with the count, because the row
+ *     is somebody else's history and deleting it is not this screen's call.
+ *     Fix the duplicate by renaming it or leaving it; a declared supplier is by
+ *     definition not a stray import.
+ *   - claimed by a real supplier account → REFUSED. Deleting it would strand a
+ *     person mid-onboarding and orphan their uploaded documents. Suspend the
+ *     account instead (standing → suspended), which is what that control is for.
+ *
+ * Anything else is an unclaimed, undeclared catalogue entry: safe to delete, and
+ * its onboarding row goes with it. Audited either way.
+ */
+export async function deleteSupplier(
+  raw: z.input<typeof DeleteSupplierInput>,
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const session = await requireOrgSession();
+    const { supplierId } = DeleteSupplierInput.parse(raw);
+    const db = getDb();
+
+    const [supplier] = await db
+      .select({
+        id: schema.suppliers.id,
+        name: schema.suppliers.name,
+        userId: schema.suppliers.userId,
+      })
+      .from(schema.suppliers)
+      .where(eq(schema.suppliers.id, supplierId))
+      .limit(1);
+    if (!supplier) throw new Error("That supplier no longer exists.");
+
+    if (supplier.userId) {
+      throw new Error(
+        "A supplier has claimed this listing, so deleting it would strand them " +
+          "mid-onboarding and orphan their documents. Set their standing to " +
+          "suspended instead.",
+      );
+    }
+
+    const declarations = await db
+      .select({ registrationId: schema.supplierDeclarations.registrationId })
+      .from(schema.supplierDeclarations)
+      .where(eq(schema.supplierDeclarations.supplierId, supplierId));
+    if (declarations.length > 0) {
+      const n = declarations.length;
+      throw new Error(
+        `${n} camp registration${n === 1 ? "" : "s"} declared this supplier. ` +
+          "Deleting it would erase that from their registration, so it stays. " +
+          "If this is a duplicate, rename it rather than removing it.",
+      );
+    }
+
+    // Delete and audit atomically. The audit row records the NAME, because after
+    // this commit the id resolves to nothing and a bare id is unreadable later.
+    await withTransaction(async (tx) => {
+      await tx.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.delete",
+        subject: supplierId,
+        meta: { name: supplier.name },
+      });
+    });
+
+    revalidatePath("/suppliers");
+    revalidatePath("/suppliers/signup-management");
+  });
+}

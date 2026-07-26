@@ -11,6 +11,7 @@ import { deriveOnboardingProgress, standingLabel } from "@quagga/core";
 import type { SupplierOverviewRow } from "@/lib/queries";
 import { SupplierStandingSelect } from "./supplier-standing-select";
 import { SupplierNotesDrawer } from "./supplier-notes-drawer";
+import { SupplierDeleteButton } from "./supplier-delete-button";
 import { SupplierOnboardingStepList } from "./supplier-onboarding-steps";
 
 /**
@@ -122,12 +123,13 @@ export function SuppliersTable({
       header: "Notes",
       align: "right",
       cell: (s) => (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-1">
           <SupplierNotesDrawer
             supplierId={s.id}
             supplierName={s.name}
             count={s.notesCount}
           />
+          <SupplierDeleteButton supplierId={s.id} supplierName={s.name} />
         </div>
       ),
     },

@@ -139,6 +139,8 @@ export function planMigration(
   const pooled = env.DATABASE_URL;
   const connectionString = unpooled ?? pooled;
   const isProductionDeploy = env.VERCEL_ENV === "production";
+  // Preview and production alike: a pooled fallback breaks the lock in both.
+  const isVercelDeploy = Boolean(env.VERCEL || env.VERCEL_ENV);
   const neonLocal = env.NEON_LOCAL_PROXY === "1";
 
   if (!connectionString) {
@@ -167,11 +169,23 @@ export function planMigration(
           "Set DATABASE_URL_UNPOOLED to Neon's direct/unpooled endpoint.",
       );
     }
-    if (!unpooled && isProductionDeploy) {
+    // ANY Vercel deploy, not just production. This guard used to read
+    // `isProductionDeploy`, and that gap is not hypothetical — it double-seeded
+    // the real database. A preview build with DATABASE_URL_UNPOOLED unset fell
+    // through to DATABASE_URL, which Neon's integration points at the POOLED
+    // endpoint; `isPoolerConnection` cannot always tell (the host string does
+    // not reliably say "pooler"), so the advisory lock was taken on a
+    // transaction-pooling connection where it does not hold. Two builders then
+    // each held a lock that protected nothing, both saw an empty `editions`,
+    // and both seeded — 40 suppliers where there should have been 20.
+    //
+    // The hazard was never specific to production; only the guard was.
+    if (!unpooled && isVercelDeploy) {
       throw new Error(
-        "[migrate] PRODUCTION DEPLOY without DATABASE_URL_UNPOOLED. Refusing to fall back to DATABASE_URL: " +
+        "[migrate] DEPLOY without DATABASE_URL_UNPOOLED. Refusing to fall back to DATABASE_URL: " +
           "Neon's Vercel integration sets DATABASE_URL to the POOLED endpoint by default, where session " +
-          "advisory locks do not hold. Add DATABASE_URL_UNPOOLED (Neon's direct/unpooled endpoint).",
+          "advisory locks do not hold — concurrent builders would not serialise and could both migrate " +
+          "and seed. Add DATABASE_URL_UNPOOLED (Neon's direct/unpooled endpoint) to THIS environment.",
       );
     }
   }

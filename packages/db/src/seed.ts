@@ -44,7 +44,7 @@
  * Run via `pnpm --filter @quagga/db db:seed` once `DATABASE_URL` is set. This
  * script is NEVER part of any build step and must not run at import time.
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   normalizeName,
   CANONICAL_CAMP_CATEGORIES,
@@ -311,13 +311,16 @@ async function ensureSupplier(
   const standing = row.standing ?? "good";
   const category = row.category && row.category.length > 0 ? row.category : null;
   const returning = row.returning ?? null;
-  // Suppliers have no source column anymore — dedupe on name (the seed is the
-  // only importer, and sheet names are effectively unique). `userId` is never
-  // written: the catalog row stays accountless until a real supplier claims it.
+  // Dedupe on the NORMALISED name, not the exact one. The sheet is a human
+  // export: a trailing space or a capitalisation change makes two rows that
+  // look identical in the console but are distinct strings, so an exact-match
+  // lookup inserts a second row and the org sees a perfect duplicate it cannot
+  // tell apart. `userId` is never written — the catalogue row stays accountless
+  // until a real supplier claims it.
   const existing = await db
     .select()
     .from(schema.suppliers)
-    .where(eq(schema.suppliers.name, row.name))
+    .where(sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${row.name}))`)
     .limit(1);
   const existingRow = existing[0];
   if (existingRow) {

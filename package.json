@@ -1,6 +1,7 @@
 {
   "name": "quagga-portal-workspace",
   "private": true,
+  "license": "FSL-1.1-ALv2",
   "version": "0.0.0",
   "description": "AfrikaBurn Contributors App \u2014 participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
   "scripts": {
