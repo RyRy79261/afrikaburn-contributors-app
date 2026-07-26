@@ -26,6 +26,7 @@ import {
   resolvePasskeyRpID,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
+  resolveRateLimit,
   resolveUseSecureCookies,
   isEmailProviderConfigured,
   type AuthEnv,
@@ -155,6 +156,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     rateLimit: {
       storage: "database",
       modelName: "rateLimit",
+      // Window/max only when explicitly configured; otherwise Better Auth's
+      // secure defaults stand. See resolveRateLimit — this exists so a test
+      // deployment can raise the ceiling instead of disabling the limiter.
+      ...resolveRateLimit(env),
     },
 
     // Optional second factors / passwordless accelerators (auth-platform-spec §3).

@@ -24,6 +24,7 @@ import { signInAs } from "../../personas/factories";
 import { requireMailbox } from "../../lib/mail";
 import { requiresEmailVerification } from "../../lib/env";
 import { TEST_PASSWORD } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 const NEW_PASSWORD = "reset-flow-fresh-passphrase-e2e";
 
@@ -74,7 +75,7 @@ test.describe("new burner · password reset (real email round trip)", () => {
     await webPage.getByLabel("Email", { exact: true }).fill(email);
     await webPage.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await webPage.getByRole("button", { name: /^sign in$/i }).click();
-    await expect(webPage.getByRole("alert")).toBeVisible();
+    await expect(appAlerts(webPage)).toBeVisible();
     await expect(webPage).toHaveURL(/\/auth\/sign-in/);
 
     // … NEW password accepted, in a clean context.

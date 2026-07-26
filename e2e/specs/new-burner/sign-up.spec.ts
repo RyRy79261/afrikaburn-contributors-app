@@ -11,6 +11,7 @@
 import { test, expect } from "../../fixtures";
 import { signUpBurner } from "../../personas/factories";
 import { TEST_PASSWORD, TOO_SHORT_PASSWORD, uniqueEmail } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 test.describe("new burner · sign-up", () => {
   test("signs up with email + password and lands in the Burner Bio", async ({
@@ -41,7 +42,7 @@ test.describe("new burner · sign-up", () => {
 
     // The policy floor is surfaced, and no account is minted: we stay on sign-up
     // and a protected route still bounces us to sign-in (no session was created).
-    await expect(webPage.getByRole("alert")).toContainText(/15 characters/i);
+    await expect(appAlerts(webPage)).toContainText(/15 characters/i);
     await expect(webPage).toHaveURL(/\/auth\/sign-up/);
     await webPage.goto("/profile");
     await expect(webPage).toHaveURL(/\/auth\/sign-in/);
@@ -75,7 +76,7 @@ test.describe("new burner · sign-up", () => {
     await expect(dupNotice).toBeVisible();
     // Crucially: the "already registered" case must NOT raise a distinct error
     // that reveals existence. The generic inbox notice is a status, not an alert.
-    await expect(dupPage.getByRole("alert")).toHaveCount(0);
+    await expect(appAlerts(dupPage)).toHaveCount(0);
     const dupText = (await dupNotice.textContent())?.trim();
 
     const freshPage = await makeAppPage("web");

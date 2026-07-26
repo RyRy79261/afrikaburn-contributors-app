@@ -16,6 +16,7 @@
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import { godCredentials } from "../../lib/env";
 import { elevateToGod, signInAs } from "../../personas/factories";
+import { appAlerts } from "../../lib/dom";
 
 test.describe("sole god cannot self-delete", () => {
   test.beforeEach(() => {
@@ -58,7 +59,7 @@ test.describe("sole god cannot self-delete", () => {
       (el as unknown as { disabled: boolean }).disabled = false;
     });
     await submit.click();
-    await expect(webGod.getByRole("alert")).toContainText(
+    await expect(appAlerts(webGod)).toContainText(
       /god administrator|grant god/i,
     );
 

@@ -21,6 +21,7 @@
 
 import { expect, type Locator, type Page } from "@playwright/test";
 import { uniqueName } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 // --- Camp creation (raw form, for the dedupe paths) ------------------------
 //
@@ -76,8 +77,7 @@ export async function attemptCreateCamp(
     .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => "warn" as const)
     .catch(() => null);
-  const error = page
-    .getByRole("alert")
+  const error = appAlerts(page)
     .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => "error" as const)
     .catch(() => null);
@@ -91,7 +91,7 @@ export async function attemptCreateCamp(
     return { outcome: "warn", message: message ?? undefined };
   }
   if (outcome === "error") {
-    const message = (await page.getByRole("alert").textContent()) ?? undefined;
+    const message = (await appAlerts(page).textContent()) ?? undefined;
     return { outcome: "error", message: message ?? undefined };
   }
   throw new Error("attemptCreateCamp: no outcome (created/warn/error) observed");

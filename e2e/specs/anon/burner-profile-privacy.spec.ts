@@ -74,7 +74,7 @@ async function completePiiBioAllPublic(
   await page.locator("#phone").fill(s.phoneDigits);
   await page.getByLabel("On-site contact name").fill(s.onsiteName);
   await page.getByLabel("Off-site contact name").fill(s.offsiteName);
-  await page.getByLabel(/medical notes/i).fill(s.medical);
+  await page.getByRole("textbox", { name: /medical notes/i }).fill(s.medical);
   // The id number input carries a dotted id ("id.number"); escape it for CSS.
   await page.locator("#id\\.number").fill(s.idNumber);
   await page.getByRole("button", { name: "Save & continue" }).click();

@@ -33,6 +33,14 @@ export NEXT_PUBLIC_PARTICIPANT_APP_URL="http://localhost:3000"
 
 # No mail provider locally, so email verification is derived OFF and the specs
 # that need a real inbox skip themselves rather than failing.
+# Raise the auth rate-limit ceiling FOR THIS LOCAL RUN ONLY. Every Playwright
+# worker drives real sign-ups from 127.0.0.1, so the limiter correctly sees one
+# client hammering /sign-up/email and starts returning 429 — which then looks
+# exactly like broken auth. The limiter is doing its job; the test environment
+# needs the higher ceiling. NEVER set these on a real deployment.
+export AUTH_RATE_LIMIT_WINDOW_SECONDS="${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}"
+export AUTH_RATE_LIMIT_MAX="${AUTH_RATE_LIMIT_MAX:-10000}"
+
 export E2E_MAIL_MODE="${E2E_MAIL_MODE:-off}"
 export E2E_REQUIRE_EMAIL_VERIFICATION="${E2E_REQUIRE_EMAIL_VERIFICATION:-false}"
 

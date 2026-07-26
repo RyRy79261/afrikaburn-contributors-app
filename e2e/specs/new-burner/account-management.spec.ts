@@ -24,6 +24,7 @@
 import { test, expect } from "../../fixtures";
 import { signUpBurner, signInAs } from "../../personas/factories";
 import { TEST_PASSWORD } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 const NEW_PASSWORD = "brand-new-passphrase-for-e2e-rotation";
 
@@ -78,7 +79,7 @@ test.describe("new burner · account management", () => {
     await fresh.getByLabel("Email", { exact: true }).fill(account.email);
     await fresh.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await fresh.getByRole("button", { name: /^sign in$/i }).click();
-    await expect(fresh.getByRole("alert")).toBeVisible();
+    await expect(appAlerts(fresh)).toBeVisible();
     await expect(fresh).toHaveURL(/\/auth\/sign-in/);
     // The new password works.
     await signInAs(fresh, { email: account.email, password: NEW_PASSWORD });

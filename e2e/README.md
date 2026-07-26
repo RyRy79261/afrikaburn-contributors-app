@@ -149,3 +149,30 @@ only writer is the app, exactly as a real user.
 - **Nightly:** full suite, both projects, on the `deployment_status` event (carries
   the preview URL); send `x-vercel-protection-bypass`; throwaway Neon branch,
   deleted on completion; upload traces/videos on failure.
+
+## Selector traps (each of these cost a debugging session)
+
+Every one of these produced a failure that *looked* like a product bug. The specs
+were authored against source, never against a live DOM, so the whole class went
+unnoticed until the suite was first executed.
+
+- **`getByRole("alert")` can never resolve to one element.** Next injects
+  `<div role="alert" id="__next-route-announcer__">` into every page, so a bare
+  alert query always matches it too — and `toHaveCount(0)` can never pass. Use
+  `appAlerts(page)` from `lib/dom.ts`.
+- **A `required` field's label contains the asterisk.** `Labeled` renders
+  `{label}<span aria-hidden>*</span>`, so the accessible name is
+  `"Contact email *"` and `getByLabel("Contact email", { exact: true })` matches
+  nothing. Use a prefix regex: `getByLabel(/^contact email/i)`.
+- **Burner Bio text fields collide with their own privacy switch.** The switch's
+  aria-label is `"Home city — public or private"`, so `getByLabel(/home city/i)`
+  is a strict-mode violation. Scope to the control:
+  `getByRole("textbox", { name: /home city/i })`.
+- **`.click()` is not "the request finished".** It resolves when the event is
+  dispatched. Navigating straight afterwards raced the sign-up POST and the
+  session cookie did not exist yet, so the gate bounced to sign-in and ~100
+  specs blamed the product. The sign-up factories now wait for the response AND
+  for the cookie to actually land (`waitForSessionCookie`).
+- **Create-camp soft-warns on a near-duplicate name** and needs a second,
+  confirming submit. `uniqueCampName` varies a suffix rather than the stem, so
+  once the database holds a few camps a near-match is close to certain.

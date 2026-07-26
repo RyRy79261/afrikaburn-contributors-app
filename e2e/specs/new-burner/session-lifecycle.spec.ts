@@ -8,6 +8,7 @@
 import { test, expect } from "../../fixtures";
 import { signUpBurner, signInAs, signOut } from "../../personas/factories";
 import { TEST_PASSWORD, uniqueEmail } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 test.describe("new burner · session lifecycle", () => {
   test("signs back in after signing out", async ({ webPage }) => {
@@ -62,7 +63,7 @@ test.describe("new burner · session lifecycle", () => {
       .getByLabel("Password", { exact: true })
       .fill("wrong-but-long-enough-password");
     await webPage.getByRole("button", { name: /^sign in$/i }).click();
-    const knownError = webPage.getByRole("alert");
+    const knownError = appAlerts(webPage);
     await expect(knownError).toBeVisible();
     const knownText = (await knownError.textContent())?.trim();
     // Sign-in FAILED, so we are still on the sign-in route.
@@ -74,7 +75,7 @@ test.describe("new burner · session lifecycle", () => {
     await other.getByLabel("Email", { exact: true }).fill(uniqueEmail("ghost"));
     await other.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await other.getByRole("button", { name: /^sign in$/i }).click();
-    const unknownError = other.getByRole("alert");
+    const unknownError = appAlerts(other);
     await expect(unknownError).toBeVisible();
     const unknownText = (await unknownError.textContent())?.trim();
 

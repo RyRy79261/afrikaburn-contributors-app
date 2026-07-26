@@ -68,7 +68,7 @@ test.describe("camp lead — registration wizard", () => {
     await webPage.goto(`/camps/${camp.slug}/registration`);
     // Section 1 (active by default).
     await webPage.getByLabel(/camp description/i).fill("Draft in progress.");
-    await webPage.getByLabel("Contact email", { exact: true }).fill(email);
+    await webPage.getByLabel(/^contact email/i).fill(email);
     // Section 2 — navigating commits section 1; fill one field to leave a partial.
     await goToSection(webPage, /leave no trace/i);
     await webPage.getByLabel(/leave no trace plan/i).fill(lntPlan);
@@ -83,7 +83,7 @@ test.describe("camp lead — registration wizard", () => {
 
     // Section 1's value is restored (identity is the default-active section).
     await expect(
-      freshPage.getByLabel("Contact email", { exact: true }),
+      freshPage.getByLabel(/^contact email/i),
     ).toHaveValue(email);
     // …and a value typed in a DIFFERENT section is restored too.
     await goToSection(freshPage, /leave no trace/i);
@@ -118,7 +118,7 @@ test.describe("camp lead — registration wizard", () => {
     // sections remain. Partial completeness never opens the action.
     await webPage.getByLabel(/camp description/i).fill("A tea house on the playa.");
     await webPage
-      .getByLabel("Contact email", { exact: true })
+      .getByLabel(/^contact email/i)
       .fill("lead@example.com");
     await goToSection(webPage, /leave no trace/i); // navigate → commits section 1
     await expect(

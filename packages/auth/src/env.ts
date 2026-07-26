@@ -26,6 +26,9 @@ export interface AuthEnv {
    * never turn verification ON without a provider — that is impossible.
    */
   BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION?: string | undefined;
+  /** Optional rate-limit tuning. UNSET IN PRODUCTION — see resolveRateLimit. */
+  AUTH_RATE_LIMIT_WINDOW_SECONDS?: string | undefined;
+  AUTH_RATE_LIMIT_MAX?: string | undefined;
   GOOGLE_CLIENT_ID?: string | undefined;
   GOOGLE_CLIENT_SECRET?: string | undefined;
   NODE_ENV?: string | undefined;
@@ -99,6 +102,52 @@ export function resolveUseSecureCookies(env: AuthEnv): boolean | undefined {
   const baseURL = resolveBaseURL(env);
   if (!baseURL) return undefined;
   return baseURL.startsWith("https://") ? undefined : false;
+}
+
+/**
+ * Optional rate-limit tuning, so a deployment can raise the ceiling WITHOUT a
+ * code change and without anyone reaching for `enabled: false`.
+ *
+ * Returns `{}` when unset, which keeps Better Auth's own (secure) defaults —
+ * this can only ever LOOSEN things deliberately, never silently.
+ *
+ * The case that forced it: the E2E suite drives real sign-ups from several
+ * parallel workers that all share 127.0.0.1, so the limiter correctly sees one
+ * client hammering /sign-up/email and returns 429. The limiter is right; the
+ * test environment needs a higher ceiling. Production must leave these unset.
+ */
+export function resolveRateLimit(env: AuthEnv): {
+  window?: number;
+  max?: number;
+  customRules?: Record<string, { window: number; max: number }>;
+} {
+  const window = Number(env.AUTH_RATE_LIMIT_WINDOW_SECONDS);
+  const max = Number(env.AUTH_RATE_LIMIT_MAX);
+  const hasWindow = Number.isFinite(window) && window > 0;
+  const hasMax = Number.isFinite(max) && max > 0;
+  if (!hasWindow && !hasMax) return {};
+
+  const out: {
+    window?: number;
+    max?: number;
+    customRules?: Record<string, { window: number; max: number }>;
+  } = {};
+  if (hasWindow) out.window = window;
+  if (hasMax) out.max = max;
+
+  // The GLOBAL max is not enough. Better Auth ships STRICTER built-in rules for
+  // the sensitive auth paths, and those win over `max` — so raising only the
+  // global ceiling still yields 429 on sign-up, which is exactly what happened.
+  if (hasMax) {
+    const rule = { window: hasWindow ? window : 60, max };
+    out.customRules = {
+      "/sign-up/email": rule,
+      "/sign-in/email": rule,
+      "/forget-password": rule,
+      "/reset-password": rule,
+    };
+  }
+  return out;
 }
 
 function hostOf(url: string | undefined): string | null {

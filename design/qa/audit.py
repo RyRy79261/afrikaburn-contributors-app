@@ -63,8 +63,21 @@ class Auditor:
 
     # ---------- data collection ----------
     def snapshot(self):
-        raw = self.pen.tool("snapshot_layout", {"nodeId": "root", "maxDepth": 200}, timeout=300)
+        """Top-level frames only (ids + boxes).
+
+        A full-depth dump of the whole document now exceeds the Pen bridge's
+        own 60s budget and comes back as the misleading error "you are probably
+        referencing the wrong .pen file". Deep geometry is therefore fetched one
+        frame at a time via `snapshot_frame` (fast, ~0.4s each).
+        """
+        raw = self.pen.tool("snapshot_layout", {"maxDepth": 0}, timeout=300)
         return json.loads(raw)
+
+    def snapshot_frame(self, fid):
+        """Full-depth geometry for one top-level frame."""
+        raw = self.pen.tool("snapshot_layout", {"parentId": fid, "maxDepth": 200}, timeout=300)
+        node = json.loads(raw)
+        return node[0] if isinstance(node, list) else node
 
     def crawl_props(self, root_ids):
         """BFS batch_get; records props by id, disabled overrides from ref descendants."""
@@ -251,8 +264,8 @@ def main():
 
     report = {}
     for fid in targets:
-        node = find(fid, doc)
-        if node is None:
+        node = a.snapshot_frame(fid) if any(t["id"] == fid for t in tops) else find(fid, doc)
+        if node is None or "id" not in node:
             print(f"== {fid}: NOT FOUND")
             continue
         print(f"crawling {fid}...", file=sys.stderr)

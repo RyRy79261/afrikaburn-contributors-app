@@ -61,6 +61,36 @@ function isCampDetailUrl(url: URL): boolean {
   );
 }
 
+/**
+ * Block until the browser actually HOLDS a session cookie.
+ *
+ * Waiting for the sign-up response is not enough and the difference is not
+ * theoretical — it produced an intermittent failure in every persona that signs
+ * up. `waitForResponse` resolves on response headers; the cookie jar is updated
+ * a beat later, and a `page.goto` issued in that gap carries no session, so the
+ * gate correctly bounces to sign-in and the spec blames the product.
+ *
+ * It also turns a FAILED sign-up into an honest error here, instead of a
+ * confusing "expected not to be on /auth/sign-in" fifteen seconds later.
+ */
+async function waitForSessionCookie(page: Page, what: string): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const cookies = await page.context().cookies();
+    // Better Auth prefixes with "quagga" (advanced.cookiePrefix), and adds
+    // "__Secure-" on https origins — match either.
+    if (cookies.some((c) => /quagga\.session_token$/.test(c.name) && c.value)) {
+      return;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error(
+    `[e2e] ${what} did not produce a session cookie within 15s. The request may ` +
+      `have been refused (duplicate address, password policy, rate limit) — check ` +
+      `the app log rather than treating this as a navigation problem.`,
+  );
+}
+
 /** Fail loudly if a factory landed on a "not configured" preview surface. */
 async function assertConfigured(page: Page): Promise<void> {
   const banner = page.getByText(/not configured|preview mode|isn't set up/i);
@@ -115,10 +145,20 @@ export async function signUpBurner(
   // persona builds on this factory, so the race showed up as ~100 failures that
   // all looked like broken auth. A real person cannot click and navigate inside
   // the same 5ms; the harness could.
-  await page.waitForResponse(
+  const signUpResponse = await page.waitForResponse(
     (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
+  if (!signUpResponse.ok()) {
+    throw new Error(
+      `[e2e] sign-up POST returned ${signUpResponse.status()}: ` +
+        `${(await signUpResponse.text().catch(() => "")).slice(0, 300)}`,
+    );
+  }
+  // Only when verification is OFF. With it ON, Better Auth deliberately returns
+  // no session until the emailed link is followed, so waiting here would be
+  // waiting for something that must not exist yet.
+  if (!needsVerification) await waitForSessionCookie(page, "sign-up");
 
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);
@@ -377,10 +417,20 @@ export async function acceptInviteAsNewBurner(
 
   // Same click-vs-request race as signUpBurner — wait for the POST to land
   // before anything reads the session.
-  await page.waitForResponse(
+  const signUpResponse = await page.waitForResponse(
     (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
+  if (!signUpResponse.ok()) {
+    throw new Error(
+      `[e2e] sign-up POST returned ${signUpResponse.status()}: ` +
+        `${(await signUpResponse.text().catch(() => "")).slice(0, 300)}`,
+    );
+  }
+  // Only when verification is OFF. With it ON, Better Auth deliberately returns
+  // no session until the emailed link is followed, so waiting here would be
+  // waiting for something that must not exist yet.
+  if (!needsVerification) await waitForSessionCookie(page, "sign-up");
 
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);
@@ -457,7 +507,7 @@ export async function submitRegistration(
         "A dusty tea house on the Tankwa, gifting chai at dawn.",
     );
   await page
-    .getByLabel("Contact email", { exact: true })
+    .getByLabel(/^contact email/i)
     .fill(input.contactEmail ?? "lead@example.com");
 
   // Section 2 — Leave No Trace.
@@ -581,10 +631,20 @@ export async function registerSupplier(
 
   // Same click-vs-request race as signUpBurner — wait for the POST to land
   // before anything reads the session.
-  await page.waitForResponse(
+  const signUpResponse = await page.waitForResponse(
     (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
+  if (!signUpResponse.ok()) {
+    throw new Error(
+      `[e2e] sign-up POST returned ${signUpResponse.status()}: ` +
+        `${(await signUpResponse.text().catch(() => "")).slice(0, 300)}`,
+    );
+  }
+  // Only when verification is OFF. With it ON, Better Auth deliberately returns
+  // no session until the emailed link is followed, so waiting here would be
+  // waiting for something that must not exist yet.
+  if (!needsVerification) await waitForSessionCookie(page, "sign-up");
 
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);
