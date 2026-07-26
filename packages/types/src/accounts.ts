@@ -71,16 +71,16 @@ export const AuthCapabilityKey = z.enum([
 export type AuthCapabilityKey = z.infer<typeof AuthCapabilityKey>;
 
 /**
- * How well the identity provider supports a capability.
- * - `supported`   — the Neon Auth SDK exposes a SERVER method we can call and
- *                   trust; safe to build the full flow on.
- * - `client_only` — only the browser client exposes it (the `/api/auth/*` proxy
- *                   forwards arbitrary paths to the managed Better Auth
- *                   instance), so it MAY work, but the server SDK's typed
- *                   endpoint allowlist omits it and we cannot verify upstream
- *                   enablement without a live instance. Treat as unverified.
- * - `unavailable` — structurally absent (the plugin cannot be installed on a
- *                   managed instance). Never fake it; seam + document instead.
+ * How well our (now self-hosted) Better Auth stack supports a capability.
+ * - `supported`   — @quagga/auth exposes a SERVER method (`auth.api.*`) we can
+ *                   call and trust; safe to build the full flow on.
+ * - `client_only` — retained for the type's history; no capability is in this
+ *                   interim state under self-hosting (it described the managed
+ *                   Neon era, where the browser client exposed a method the
+ *                   server allowlist omitted and we could not verify upstream).
+ * - `unavailable` — the backing Better Auth PLUGIN is not installed yet (e.g.
+ *                   twoFactor, passkey). Never fake it; seam + document instead,
+ *                   and flip it here the day the plugin lands.
  */
 export const AuthCapabilitySupport = z.enum([
   "supported",

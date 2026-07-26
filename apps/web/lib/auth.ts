@@ -1,7 +1,8 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/neon-auth";
+import { auth } from "@quagga/auth";
 import { isAuthConfigured } from "@/lib/config";
 
 /** Minimal authenticated-user shape used across the app. */
@@ -33,14 +34,15 @@ function toAuthenticatedUser(
 }
 
 /**
- * Read the current authenticated user. Returns null (never throws) when auth
- * isn't configured or the session read fails, so the landing page and any
- * public surface render env-lessly.
+ * Read the current authenticated user from the self-hosted Better Auth session
+ * (@quagga/auth, mounted in-process — a zero-network-hop DB read). Returns null
+ * (never throws) when auth isn't configured or the session read fails, so the
+ * landing page and any public surface render env-lessly.
  */
 export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
   if (!isAuthConfigured()) return null;
   try {
-    const { data: session } = await auth.getSession();
+    const session = await auth.api.getSession({ headers: await headers() });
     return toAuthenticatedUser(session?.user);
   } catch {
     return null;

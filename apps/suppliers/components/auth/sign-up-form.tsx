@@ -39,11 +39,10 @@ import { registerSupplier } from "@/lib/actions/register";
 // SAME outcome copy, pulled from @quagga/core's `enumerationSafeMessage` — this
 // form never branches on whether the account existed.
 //
-// Account creation MUST happen on the client: our managed Neon Auth instance
-// exposes no server-side sign-up endpoint (see the capability probe in the
-// accounts-security spec). The supplier PROFILE is created by the existing
-// `registerSupplier` server action, which is also what issues the supplier's
-// `SUP-2027-0416` reference code.
+// Account creation happens on the client via the self-hosted Better Auth client
+// (authClient.signUp.email → our own /api/auth/*). The supplier PROFILE is then
+// created by the existing `registerSupplier` server action, which is also what
+// issues the supplier's `SUP-2027-0416` reference code.
 
 /**
  * Service categories offered at sign-up. Values match the vocabulary the sheet

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   AUTH_CAPABILITIES,
@@ -17,24 +18,27 @@ import {
   type LedProject,
 } from "@quagga/core";
 
-import { auth } from "@/lib/neon-auth";
+import { auth } from "@quagga/auth";
 import { db, schema } from "@/lib/db";
 import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
 
 // Read side of the account surfaces (/account, /account/security,
 // /account/delete) — docs/accounts-security-spec.md.
 //
-// PROVIDER REALITY (probed 25 Jul 2026, @neondatabase/auth 0.4.1-beta): we run
-// MANAGED Neon Auth, which does not permit Better Auth server plugins. Session
-// listing/revocation, password change/reset, email verification, linked-account
-// listing and delete-user ARE in the server SDK's endpoint allowlist. 2FA/TOTP,
-// backup codes and passkeys are NOT — no plugin, no endpoints, nothing to call.
-// `AUTH_CAPABILITIES` in @quagga/core is the authority; the /account/security
-// surface reads it and renders an honest unavailable state rather than a control
-// that does nothing.
+// PROVIDER REALITY (self-hosted Better Auth via @quagga/auth): we now run our
+// OWN Better Auth in-process, so the server API `auth.api.*` exposes the full
+// surface — session listing/revocation, password change/reset, email
+// verification, linked-account listing, change-email, unlink and delete-user are
+// all real server calls. 2FA/TOTP, backup codes and passkeys remain unavailable
+// only because their PLUGINS are not yet installed (a scheduled task), not
+// because a provider forbids them. `AUTH_CAPABILITIES` in @quagga/core is the
+// authority; the /account/security surface reads it and renders an honest
+// unavailable state rather than a control that does nothing.
 //
-// Every read here degrades gracefully: env-less or provider-down returns an
-// empty/unknown state, never a throw, so the account pages still render.
+// The self-hosted server API takes `{ headers }` and RETURNS data directly
+// (throwing on failure), unlike the old client-shaped `{ data, error }`. Every
+// read here degrades gracefully: env-less or an error returns an empty/unknown
+// state, never a throw, so the account pages still render.
 
 // --- Capabilities ---------------------------------------------------------
 
@@ -85,14 +89,13 @@ function toDate(v: string | Date | null | undefined): Date | null {
 export async function listAccountSessions(): Promise<AccountSession[]> {
   if (!isAuthConfigured()) return [];
   try {
-    const [{ data: sessions }, { data: current }] = await Promise.all([
-      auth.listSessions(),
-      auth.getSession(),
+    const hdrs = await headers();
+    const [sessions, current] = await Promise.all([
+      auth.api.listSessions({ headers: hdrs }),
+      auth.api.getSession({ headers: hdrs }),
     ]);
     const rows = (sessions ?? []) as ProviderSession[];
-    const currentToken =
-      (current as { session?: { token?: string | null } } | null)?.session
-        ?.token ?? null;
+    const currentToken = current?.session?.token ?? null;
 
     return rows
       .map((s) => ({
@@ -163,7 +166,7 @@ export interface LinkedAccount {
 export async function listLinkedAccounts(): Promise<LinkedAccount[]> {
   if (!isAuthConfigured()) return [];
   try {
-    const { data } = await auth.listAccounts();
+    const data = await auth.api.listUserAccounts({ headers: await headers() });
     const rows = (data ?? []) as {
       id?: string | null;
       providerId?: string | null;

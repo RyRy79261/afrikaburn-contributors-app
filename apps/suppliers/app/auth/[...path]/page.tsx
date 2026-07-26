@@ -1,19 +1,12 @@
 import { redirect } from "next/navigation";
-import { AuthView } from "@neondatabase/auth/react/ui";
-import { Card, CardContent } from "@quagga/ui/components/card";
-import { QuiltBand } from "@quagga/ui/components/quilt-band";
-import { PackageOpen } from "lucide-react";
-import { NotConfiguredBanner } from "@/components/not-configured-banner";
 
-// Neon Auth fallback views for the portal. `dynamicParams` stays default (true)
-// so any auth subpath renders via AuthView rather than 404ing (callback,
-// verify-email, forgot/reset-password — all provider-supported per the
-// capability matrix in docs/accounts-security-spec.md). Env-less, the views
-// render but no session is established.
-//
-// Sign-in and sign-up are OURS now (canvas `OX6KJ` / `K3zNk`), so those paths
-// redirect to the branded routes rather than rendering the stock views — there
-// must be exactly one supplier sign-in screen, not two.
+// Auth subpath router for the portal. Sign-in and sign-up are OURS (canvas
+// `OX6KJ` / `K3zNk`) at /signin and /signup; forgot- and reset-password are
+// their own STATIC routes (app/auth/forgot-password + reset-password) that win
+// over this catch-all. Verification and OAuth callbacks are handled by the route
+// handler (self-hosted @quagga/auth at /api/auth/*), not a page — so any
+// remaining auth subpath simply redirects to sign-in rather than rendering a
+// stock view.
 export const dynamic = "force-dynamic";
 
 const BRANDED_REDIRECTS: Record<string, string> = {
@@ -30,27 +23,5 @@ export default async function AuthPage({
 }) {
   const { path } = await params;
   const view = path?.[0] ?? "sign-in";
-
-  const branded = BRANDED_REDIRECTS[view];
-  if (branded) redirect(branded);
-
-  return (
-    <main className="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center gap-4 px-6 py-12">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
-          <PackageOpen className="h-5 w-5" aria-hidden />
-        </span>
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-primary">
-          Supplier Portal
-        </p>
-      </div>
-      <NotConfiguredBanner />
-      <QuiltBand opacity={0.55} className="rounded-full" />
-      <Card className="overflow-hidden">
-        <CardContent className="p-6">
-          <AuthView path={view} />
-        </CardContent>
-      </Card>
-    </main>
-  );
+  redirect(BRANDED_REDIRECTS[view] ?? "/signin");
 }

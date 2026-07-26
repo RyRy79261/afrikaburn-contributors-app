@@ -8,7 +8,9 @@ import { Input } from "@quagga/ui/components/input";
 import { requestPasswordReset } from "@/lib/account-actions";
 
 // Forgot-password request (canvas Gf1iJ / s2PAS ① "Request a reset link"). REAL:
-// `request-password-reset` is in the managed Neon Auth server allowlist.
+// `auth.api.requestPasswordReset` is native to self-hosted email/password
+// (@quagga/auth); the action presents it as honestly unavailable when no email
+// sender is configured (a reset link can only reach the user by email).
 //
 // ENUMERATION-SAFETY IS THE DESIGN. The confirmation copy comes from @quagga/core
 // `enumerationSafeMessage("forgot_password")` via the server action, and the SAME

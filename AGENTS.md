@@ -57,8 +57,17 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
    Amended same day: fallback-to-pooled is a hard failure, not a warning.)*
 2. **Migrations are append-only.** Never edit or regenerate an existing migration;
    `packages/db/src/schema.ts` is the single source of truth.
-3. **Pins that must not move**: `better-auth` = 1.4.18 exactly; `@radix-ui/react-slot`
-   ~1.2.4. Newer versions break typecheck/build (documented breakages).
+3. **Pins that must not move**: `better-auth` = **1.6.25 exactly** (a DIRECT dependency of
+   `@quagga/auth`; verified React 19 / Next 16 / zod 4 / drizzle-orm 0.45.x compatible);
+   `@radix-ui/react-slot` ~1.2.4 (newer breaks typecheck/build). *(Ryan, 26 Jul 2026: the
+   old `better-auth = 1.4.18` pin lived in `pnpm.overrides` ONLY because better-auth was a
+   transitive dep of managed Neon Auth and had to match Neon's internal version. Self-hosting
+   (docs/auth-platform-spec.md) makes better-auth a first-class direct dependency, so the pin now
+   lives as the exact version in `packages/auth/package.json` and the override was removed. 1.5+
+   also unlocks versioned-secret rotation and the OAuth-provider path.)* **Never auto-bump
+   better-auth**: it has a track record of high-severity auth advisories (GHSA-vp58-j275-797x,
+   GHSA-8jhw-6pjj-8723) and we now own the CVE-patch watch — a critical CVE is the one reason to
+   move the pin, done deliberately with the gate re-greened, not via Renovate/Dependabot.
 4. **All three apps must boot env-less** to a graceful "not configured" state. Never
    add code that crashes the build or boot without env.
 5. `turbo` runs `typecheck` after `build` on purpose (Next generates `routes.d.ts`).

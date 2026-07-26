@@ -2,6 +2,7 @@
 
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 import {
@@ -35,11 +36,11 @@ import {
   type NotificationPayload,
 } from "@quagga/core";
 
-import { auth } from "@/lib/neon-auth";
+import { auth } from "@quagga/auth";
 import { db, schema } from "@/lib/db";
 import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
-import { sendEmail } from "@/lib/email";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { insertNotifications } from "@/lib/notifications";
 import { buildDeletionGuardContext, getDeletionRequest } from "@/lib/account";
 import { hashToken, newToken } from "@/lib/account-tokens";
@@ -47,12 +48,13 @@ import { hashToken, newToken } from "@/lib/account-tokens";
 // Write side of the account surfaces (docs/accounts-security-spec.md).
 //
 // THE HONESTY RULE, enforced everywhere below: never report success for
-// something that did not happen. Where the managed Neon Auth instance does not
-// expose a capability (see @quagga/core AUTH_CAPABILITIES), the action refuses
-// via `assertCapability` and says so plainly — it never silently no-ops, and it
-// never emits a "your X was changed" notification for a change that did not
-// occur. A false security notification is worse than none: it trains people to
-// ignore the real one.
+// something that did not happen. The self-hosted Better Auth server API
+// (`auth.api.*` via @quagga/auth) THROWS on failure and returns data on success,
+// so each call is wrapped and a refusal surfaces plainly — it never silently
+// no-ops, and it never emits a "your X was changed" notification for a change
+// that did not occur. A false security notification is worse than none: it
+// trains people to ignore the real one. Capabilities that are not yet deliverable
+// (2FA/passkeys — plugins not installed) still refuse via `assertCapability`.
 //
 // Every action re-resolves the session server-side; nothing trusts a client id.
 
@@ -127,15 +129,20 @@ export async function changePassword(
     const assessment = assessPassword(input.newPassword);
     if (!assessment.ok) throw new Error(assessment.error ?? "That password won't do.");
 
-    const { error } = await auth.changePassword({
-      currentPassword: input.currentPassword,
-      newPassword: input.newPassword,
-      revokeOtherSessions: input.revokeOtherSessions,
-    });
-    // Fail CLOSED: if the provider refused, nothing changed, so nothing is
+    // Fail CLOSED: if the server API throws, nothing changed, so nothing is
     // announced. The message stays generic — a precise upstream error is a
-    // credential oracle.
-    if (error) {
+    // credential oracle. `changePassword` re-authenticates with the current
+    // password server-side; we never verify a password ourselves.
+    try {
+      await auth.api.changePassword({
+        body: {
+          currentPassword: input.currentPassword,
+          newPassword: input.newPassword,
+          revokeOtherSessions: input.revokeOtherSessions,
+        },
+        headers: await headers(),
+      });
+    } catch {
       throw new Error(
         "That didn't work. Check your current password and try again.",
       );
@@ -159,23 +166,40 @@ const RequestPasswordResetInput = z.object({
 });
 
 /**
- * Start a password reset. Backed by `request-password-reset` (SUPPORTED).
+ * Start a password reset. Backed by `auth.api.requestPasswordReset` (native to
+ * self-hosted email/password).
  *
- * ENUMERATION-SAFE: the same message ships whether or not the account exists,
- * and the provider's outcome is deliberately discarded rather than surfaced.
- * The `void error` below is the point, not an oversight.
+ * HONESTLY UNAVAILABLE WITHOUT A SENDER: the reset LINK can only reach the user
+ * by email, so with no email provider (RESEND_API_KEY) this presents as
+ * unavailable rather than claiming a link was sent. That refusal is NOT
+ * account-specific, so it leaks nothing about whether the account exists.
+ *
+ * ENUMERATION-SAFE when it does run: the same message ships whether or not the
+ * account exists, and the server API's outcome is deliberately discarded (the
+ * swallowed throw is the point, not an oversight).
  */
 export async function requestPasswordReset(
   raw: z.input<typeof RequestPasswordResetInput>,
 ): Promise<AccountActionResult> {
+  const input = RequestPasswordResetInput.parse(raw);
+  if (!isAuthConfigured() || !isEmailConfigured()) {
+    // Honest, non-enumerating refusal — nothing was sent because nothing could be.
+    return {
+      ok: false,
+      error:
+        "Password reset by email isn't available yet — no reset link can be sent. Ask an organiser for help.",
+    };
+  }
   return run(async () => {
-    const input = RequestPasswordResetInput.parse(raw);
-    if (isAuthConfigured()) {
-      const { error } = await auth.requestPasswordReset({
-        email: input.email,
-        redirectTo: input.redirectTo ?? "/auth/reset-password",
+    try {
+      await auth.api.requestPasswordReset({
+        body: {
+          email: input.email,
+          redirectTo: input.redirectTo ?? "/auth/reset-password",
+        },
       });
-      void error;
+    } catch {
+      // Swallow — surfacing the outcome would be an account-existence oracle.
     }
     return { message: enumerationSafeMessage("forgot_password") };
   });
@@ -187,8 +211,10 @@ const ResetPasswordInput = z.object({
 });
 
 /**
- * Complete a password reset from an emailed link. Backed by `reset-password`
- * (SUPPORTED); the provider invalidates all sessions on success.
+ * Complete a password reset from an emailed link. Backed by
+ * `auth.api.resetPassword`; `revokeSessionsOnPasswordReset` is set in
+ * @quagga/auth so every session is invalidated on success. The token is in hand,
+ * so this needs no email provider.
  */
 export async function resetPassword(
   raw: z.input<typeof ResetPasswordInput>,
@@ -202,11 +228,11 @@ export async function resetPassword(
     const assessment = assessPassword(input.newPassword);
     if (!assessment.ok) throw new Error(assessment.error ?? "That password won't do.");
 
-    const { error } = await auth.resetPassword({
-      token: input.token,
-      newPassword: input.newPassword,
-    });
-    if (error) {
+    try {
+      await auth.api.resetPassword({
+        body: { token: input.token, newPassword: input.newPassword },
+      });
+    } catch {
       throw new Error(
         "That reset link has expired or has already been used. Request a new one.",
       );
@@ -239,7 +265,7 @@ export async function notifyPasswordResetCompleted(): Promise<AccountActionResul
 
 const RevokeSessionInput = z.object({ token: z.string().min(1) });
 
-/** Revoke one session. Backed by `revoke-session` (SUPPORTED). */
+/** Revoke one session. Backed by `auth.api.revokeSession`. */
 export async function revokeSession(
   raw: z.input<typeof RevokeSessionInput>,
 ): Promise<AccountActionResult> {
@@ -248,10 +274,16 @@ export async function revokeSession(
     const input = RevokeSessionInput.parse(raw);
     if (!isAuthConfigured()) throw new Error("Sign-in isn't configured yet.");
 
-    // The provider scopes revocation to the CALLING session's user, so a forged
+    // Better Auth scopes revocation to the CALLING session's user, so a forged
     // token from another account cannot be revoked through our session.
-    const { error } = await auth.revokeSession({ token: input.token });
-    if (error) throw new Error("That session couldn't be ended. Try again.");
+    try {
+      await auth.api.revokeSession({
+        body: { token: input.token },
+        headers: await headers(),
+      });
+    } catch {
+      throw new Error("That session couldn't be ended. Try again.");
+    }
 
     revalidatePath("/account/security");
     return { message: "Session ended." };
@@ -267,8 +299,11 @@ export async function revokeOtherSessions(): Promise<AccountActionResult> {
   return run(async () => {
     await requireCampUser();
     if (!isAuthConfigured()) throw new Error("Sign-in isn't configured yet.");
-    const { error } = await auth.revokeOtherSessions();
-    if (error) throw new Error("Those sessions couldn't be ended. Try again.");
+    try {
+      await auth.api.revokeOtherSessions({ headers: await headers() });
+    } catch {
+      throw new Error("Those sessions couldn't be ended. Try again.");
+    }
     revalidatePath("/account/security");
     return { message: "Every other device has been signed out." };
   });
@@ -377,13 +412,21 @@ const TokenInput = z.object({ token: z.string().min(1) });
 /**
  * Confirm a change from the NEW address's link.
  *
- * FAILS CLOSED, by design. The token is verified and the window logic is sound,
- * but applying the address at the identity provider is a `client_only`
- * capability we cannot perform or verify server-side — so the row is NOT marked
- * confirmed and no "your email changed" notification is emitted. The burner gets
- * the honest capability message. The moment Neon exposes `change-email`
- * server-side, the guard below flips to `supported` in one place
- * (@quagga/core AUTH_CAPABILITIES) and the commit lands here.
+ * WIRED FOR REAL (self-hosted). The confirm token proves control of the NEW
+ * address, so on success we apply the address at the identity layer — a direct,
+ * transactional update of the Better Auth `user` row we now own in our own DB.
+ *
+ * Why a direct write rather than `auth.api.changeEmail`: Better Auth's own
+ * change-email runs its OWN confirmation flow (it sends a link to the CURRENT
+ * address when that address is verified, and only applies on that second click),
+ * which would collide with — and double up on — this app's token flow and its
+ * 48-hour revocation window. Owning the DB lets us apply the confirmed address in
+ * one place and honestly stamp `providerCommittedAt`. `emailVerified` is set true
+ * because clicking the link sent to the NEW address is proof of control (the same
+ * standard the god-bootstrap guard relies on).
+ *
+ * Still gated by `assertCapability('emailChange')` (now `supported`) — the single
+ * kill-switch that keeps every not-yet-deliverable flow honest.
  */
 export async function confirmEmailChange(
   raw: z.input<typeof TokenInput>,
@@ -397,6 +440,7 @@ export async function confirmEmailChange(
     const [request] = await db()
       .select({
         id: schema.emailChangeRequests.id,
+        newEmail: schema.emailChangeRequests.newEmail,
         status: schema.emailChangeRequests.status,
         expiresAt: schema.emailChangeRequests.expiresAt,
         confirmedAt: schema.emailChangeRequests.confirmedAt,
@@ -425,10 +469,22 @@ export async function confirmEmailChange(
       throw new Error(capability.message);
     }
 
-    // Reached only once the provider supports a server-side commit. The address
-    // is applied FIRST; only a real success writes `providerCommittedAt`, which
-    // is what `isEmailChangeEffective` reads.
+    // Apply the address at the identity layer FIRST — if it fails (e.g. the new
+    // address is already taken by another identity), the request is NOT marked
+    // confirmed and nothing is announced. Only a real identity update proceeds to
+    // stamp `providerCommittedAt`, which is what `isEmailChangeEffective` reads.
     const confirmedAt = now;
+    try {
+      await db()
+        .update(schema.user)
+        .set({ email: request.newEmail, emailVerified: true, updatedAt: now })
+        .where(eq(schema.user.id, user.authUserId));
+    } catch {
+      throw new Error(
+        "That address can't be used — it may already be linked to another account.",
+      );
+    }
+
     await db()
       .update(schema.emailChangeRequests)
       .set({
@@ -439,6 +495,13 @@ export async function confirmEmailChange(
         updatedAt: now,
       })
       .where(eq(schema.emailChangeRequests.id, request.id));
+
+    // Keep our own users.email row in step immediately (the session resolver also
+    // syncs it on next sign-in, but /account should reflect the change now).
+    await db()
+      .update(schema.users)
+      .set({ email: request.newEmail })
+      .where(eq(schema.users.id, user.id));
 
     revalidatePath("/account");
     return { message: "Your sign-in email has been updated." };
@@ -537,16 +600,32 @@ export async function requestAccountDeletion(
     // Re-auth. Deleting an account is the most destructive thing a session can
     // do, so a stolen session alone must not be enough.
     //
-    // We re-authenticate by signing in as the same account rather than by a
-    // dedicated verify-password endpoint, because the managed instance exposes
-    // no such endpoint. Side effect: this establishes a fresh session for the
-    // SAME user. Harmless (no privilege change, no other account involved), but
-    // worth knowing when reading the session list right after.
-    const { error: reauthError } = await auth.signIn.email({
-      email: user.email,
-      password: input.password,
-    });
-    if (reauthError) throw new Error("That password didn't match. Try again.");
+    // We re-authenticate by verifying the password through `signInEmail`, which
+    // throws on a mismatch. Not returning it as a Response (no asResponse /
+    // nextCookies) means NO session cookie reaches the caller — but Better Auth
+    // still PERSISTS a `session` row on success. Left alone those rows accumulate
+    // as live, valid tokens (a token nobody transmitted is still a usable token),
+    // and account deletion is precisely when stray sessions must not survive. So
+    // we capture the freshly-minted token and delete that row immediately: the
+    // credential is verified with zero lasting session side effect.
+    try {
+      const reauth = await auth.api.signInEmail({
+        body: { email: user.email, password: input.password },
+      });
+      const reauthToken = reauth?.token;
+      if (reauthToken) {
+        try {
+          await db()
+            .delete(schema.session)
+            .where(eq(schema.session.token, reauthToken));
+        } catch {
+          // Best-effort: a lingering re-auth session is cleaned up by the
+          // sweeper's identity deletion anyway; never fail deletion over it.
+        }
+      }
+    } catch {
+      throw new Error("That password didn't match. Try again.");
+    }
 
     const eligibility = assessDeletionEligibility(
       await buildDeletionGuardContext(user.id),

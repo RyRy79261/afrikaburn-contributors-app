@@ -40,9 +40,12 @@ packages/
 
 ## Environment variables (`.env.example` at root; all optional for boot)
 
-`DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `RESEND_API_KEY`,
-`GOD_EMAILS` (comma list — grants god on first login), `BLOB_READ_WRITE_TOKEN`,
-`PGCRYPTO_KEY`. Update turbo.json `globalEnv` in the same change (Camp 404 rule).
+`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET` (self-hosted Better
+Auth — identical on all three apps), `BETTER_AUTH_URL` (per app),
+`BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override), `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `GOD_EMAILS` (comma list — grants god on
+first login to a VERIFIED address), `BLOB_READ_WRITE_TOKEN`, `PGCRYPTO_KEY`. Update
+turbo.json `globalEnv` in the same change (Camp 404 rule).
 
 ## Schema (frozen)
 

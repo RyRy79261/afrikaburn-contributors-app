@@ -4,6 +4,7 @@ import {
   SANITIZED_BIO_NULL_FIELDS,
   SANITIZATION_PRESERVED_TABLES,
   SANITIZATION_PURGED_TABLES,
+  SANITIZATION_IDENTITY_TABLES,
   buildBioSanitizationPatch,
   buildUserSanitizationPatch,
   buildSanitizationPlan,
@@ -121,10 +122,14 @@ describe("buildUserSanitizationPatch", () => {
     expect(patch.sanitizedAt).toEqual(AT);
   });
 
-  it("rewrites authUserId so a recycled provider id can't re-adopt the account", () => {
-    // Derived from OUR primary key: stable, unique, and carrying no personal data.
-    expect(patch.authUserId).toBe(`deleted:${USER_ID}`);
-    expect(patch.authUserId).not.toContain("@");
+  it("leaves authUserId UNTOUCHED so the tombstone stays findable", () => {
+    // Regression for the re-animation hole: an earlier design rewrote authUserId
+    // to `deleted:<uuid>`, which meant the session resolvers (which look the row
+    // up by the Better Auth user id) could no longer find the tombstone and
+    // silently minted a fresh, clean account instead of refusing. The patch must
+    // NOT carry an authUserId key at all — the column is deliberately preserved.
+    expect(Object.keys(patch)).not.toContain("authUserId");
+    expect(Object.keys(patch).sort()).toEqual(["email", "sanitizedAt"]);
   });
 });
 
@@ -164,6 +169,28 @@ describe("buildSanitizationPlan — referential integrity", () => {
     expect(plan.preservedTables).not.toContain("users");
     // users is PATCHED, not deleted — that's what `plan.user` is.
     expect(plan.user.sanitizedAt).toEqual(AT);
+  });
+
+  it("HARD-DELETES the Better Auth identity tables (session, account, user)", () => {
+    // The blocker regression: deletion must actually remove the identity layer —
+    // live session tokens, the credential/OAuth `account` (password hash), and
+    // the `user` row (email PII) — not just patch our app rows. Without this a
+    // 'deleted' account keeps a working password and valid sessions, and its
+    // email is never erased (a POPIA failure).
+    expect([...plan.identityTables]).toEqual(["session", "account", "user"]);
+    expect([...SANITIZATION_IDENTITY_TABLES]).toEqual([
+      "session",
+      "account",
+      "user",
+    ]);
+  });
+
+  it("never lists an identity table as preserved (identity is erased, app rows survive)", () => {
+    for (const table of SANITIZATION_IDENTITY_TABLES) {
+      expect(SANITIZATION_PRESERVED_TABLES).not.toContain(table);
+    }
+    // And our surviving `users` row is neither an identity table nor purged.
+    expect([...SANITIZATION_IDENTITY_TABLES]).not.toContain("users");
   });
 
   it("records provable erasure in the audit trail without naming personal data", () => {

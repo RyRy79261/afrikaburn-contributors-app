@@ -6,6 +6,7 @@ import {
   BURNER_BIO_ACTION_KEY,
   firstBlockingAction,
   canBootstrapGod,
+  isSanitized,
   parseGodEmails,
 } from "@quagga/core";
 import { db, schema } from "./db";
@@ -114,12 +115,23 @@ export async function ensureCampUser(
       id: schema.users.id,
       authUserId: schema.users.authUserId,
       email: schema.users.email,
+      sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.users)
     .where(eq(schema.users.authUserId, authUser.id))
     .limit(1);
   const campUser = rows[0];
   if (!campUser) return null;
+
+  // THE re-animation guard. A deleted-and-sanitized account keeps its `users`
+  // row (memberships, roles and audit history survive for integrity), so handing
+  // it back a session would silently re-adopt a stranger's — possibly a camp
+  // lead's — permissions and un-erase the account. The tombstone is still
+  // findable here because sanitization leaves `auth_user_id` unchanged; refuse
+  // rather than mint or bootstrap anything. The Better Auth identity is already
+  // deleted, so a real session cannot reach this — but the cookie cache can serve
+  // a stale one for up to its 5-minute maxAge, which is exactly what this stops.
+  if (isSanitized(campUser)) return null;
 
   // Keep the email fresh (it may have been null at insert or changed upstream).
   if (authUser.primaryEmail && campUser.email !== authUser.primaryEmail) {

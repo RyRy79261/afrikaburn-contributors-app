@@ -25,27 +25,40 @@ export const DEPARTED_BURNER_NAME = "Departed Burner";
 
 /**
  * Patch applied to the `users` row. The row itself SURVIVES — only its personal
- * content goes. `authUserId` is rewritten to a tombstone value so the deleted
- * identity can never be re-matched to a returning Neon Auth user (a recycled
- * provider id must not silently re-adopt a stranger's memberships), and
- * `sanitizedAt` is the tombstone flag the guards read.
+ * content goes: `email` is nulled and `sanitizedAt` is stamped (the tombstone the
+ * guards read).
+ *
+ * `authUserId` is DELIBERATELY LEFT UNCHANGED. It is the key the session
+ * resolvers look the row up by (`ensureCampUser` / `resolveOrgSession` /
+ * `resolveSupplierSession` all query `where authUserId = <Better Auth user id>`),
+ * so the tombstone MUST stay findable by that id or the guard can never fire:
+ * an earlier design rewrote it to `deleted:<uuid>`, which meant a returning
+ * session (or a session still served from the 5-minute cookie cache after the
+ * Better Auth identity was deleted) looked up by the real id found NOTHING and
+ * was silently minted a fresh, clean account — the "Lost Cat" re-animation hole.
+ *
+ * The recycled-provider-id worry that motivated the rewrite does not apply to the
+ * self-hosted stack: Better Auth mints random `user.id`s and account deletion
+ * hard-deletes the identity row (so the id is never reissued). Even in an
+ * impossible collision, `assertNotSanitized` REFUSES the sanitized row rather
+ * than adopting it — the safe failure. Keeping the original id is therefore
+ * strictly safer than rewriting it, and it is what makes the guard reachable.
  */
 export interface UserSanitizationPatch {
   email: null;
-  authUserId: string;
   sanitizedAt: Date;
 }
 
 /**
- * Build the `users` patch. `authUserId` becomes `deleted:<our uuid>` — derived
- * from OUR primary key, not from anything the provider controls, so it is stable,
- * unique, and carries no personal information.
+ * Build the `users` patch. Nulls the email and stamps the tombstone; leaves
+ * `authUserId` untouched so the row stays findable by the session resolvers (see
+ * the interface note above).
  */
 export function buildUserSanitizationPatch(
-  userId: string,
+  _userId: string,
   at: Date,
 ): UserSanitizationPatch {
-  return { email: null, authUserId: `deleted:${userId}`, sanitizedAt: at };
+  return { email: null, sanitizedAt: at };
 }
 
 /**
@@ -158,6 +171,29 @@ export const SANITIZATION_PURGED_TABLES = [
   "email_change_requests",
 ] as const;
 
+/**
+ * The Better Auth IDENTITY tables whose rows are HARD-DELETED for the account —
+ * the POPIA-critical step the "Lost Cat" plan hangs on. Our `users` row survives
+ * as a stub, but the identity layer holds real personal data and live
+ * credentials that must not outlive the account:
+ *   - `session` — live session tokens, IP addresses and user-agents. Deleting
+ *     these is what actually SIGNS THE ACCOUNT OUT everywhere; without it a stolen
+ *     or lingering cookie stays valid indefinitely.
+ *   - `account` — the bcrypt password hash (and any OAuth tokens). Without it the
+ *     old password still authenticates.
+ *   - `user`    — the identity's email (PII) plus name/verification state.
+ * Deleting the `user` row cascades to `session` and `account` (FK
+ * `onDelete: "cascade"`), but the app deletes all three explicitly and in order
+ * so the erasure is unambiguous and idempotent under the no-transaction HTTP
+ * driver. This must run BEFORE the `users` tombstone lands, so the tombstone only
+ * ever marks an erasure that has actually happened.
+ */
+export const SANITIZATION_IDENTITY_TABLES = [
+  "session",
+  "account",
+  "user",
+] as const;
+
 /** The complete plan, for the app to execute and the tests to assert over. */
 export interface SanitizationPlan {
   userId: string;
@@ -166,6 +202,9 @@ export interface SanitizationPlan {
   bio: BurnerBioSanitizationPatch;
   preservedTables: readonly string[];
   purgedTables: readonly string[];
+  /** Better Auth identity tables the app hard-deletes (email PII, password hash,
+   * live sessions) — the POPIA-critical erasure, run before the tombstone lands. */
+  identityTables: readonly string[];
   /** The audit event to write LAST, recording that erasure happened. */
   audit: {
     action: "account.sanitized";
@@ -198,6 +237,7 @@ export function buildSanitizationPlan(input: {
     bio: buildBioSanitizationPatch(at),
     preservedTables: SANITIZATION_PRESERVED_TABLES,
     purgedTables: SANITIZATION_PURGED_TABLES,
+    identityTables: SANITIZATION_IDENTITY_TABLES,
     audit: {
       action: "account.sanitized",
       subject: userId,

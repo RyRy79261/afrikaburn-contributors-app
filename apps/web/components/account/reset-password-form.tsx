@@ -11,9 +11,9 @@ import { toast } from "@quagga/ui/components/toast";
 import { resetPassword } from "@/lib/account-actions";
 
 // Set a new password from an emailed link (canvas Gf1iJ / s2PAS ② "Set a new
-// password"). REAL: `reset-password` is in the managed Neon Auth server
-// allowlist, and the provider invalidates every session on success — which is
-// exactly what the note under the button promises.
+// password"). REAL: `auth.api.resetPassword` (self-hosted @quagga/auth), and
+// `revokeSessionsOnPasswordReset` invalidates every session on success — which
+// is exactly what the note under the button promises.
 //
 // ONE field, per accounts-security-spec: no confirm-twice, show/hide toggle,
 // paste allowed, length-based strength. The 15-character rule is enforced by the

@@ -1,13 +1,20 @@
-import { AuthView } from "@neondatabase/auth/react/ui";
+import { redirect } from "next/navigation";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { ShieldCheck } from "lucide-react";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
+import { AuthForm, type AuthMode } from "@/components/auth/auth-form";
 
-// Neon Auth sign-in views for the console. `dynamicParams` stays default (true)
-// so any auth subpath renders via AuthView rather than 404ing. Env-less, the
-// views render but no session is established.
+// Branded organiser sign-in / sign-up, talking to our OWN self-hosted Better
+// Auth at /api/auth/* (@quagga/auth). Forgot- and reset-password are their own
+// STATIC routes that win over this catch-all; OAuth callbacks are handled by the
+// route handler. Any other subpath redirects to sign-in rather than 404ing.
 export const dynamic = "force-dynamic";
+
+const BRANDED_VIEWS: Record<string, AuthMode> = {
+  "sign-in": "sign-in",
+  "sign-up": "sign-up",
+};
 
 export default async function AuthPage({
   params,
@@ -16,6 +23,8 @@ export default async function AuthPage({
 }) {
   const { path } = await params;
   const view = path?.[0] ?? "sign-in";
+  const mode = BRANDED_VIEWS[view];
+  if (!mode) redirect("/auth/sign-in");
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center gap-4 px-6 py-12">
@@ -31,7 +40,7 @@ export default async function AuthPage({
       <QuiltBand opacity={0.55} className="rounded-full" />
       <Card className="overflow-hidden">
         <CardContent className="p-6">
-          <AuthView path={view} />
+          <AuthForm mode={mode} />
         </CardContent>
       </Card>
     </main>

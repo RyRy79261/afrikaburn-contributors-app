@@ -3,6 +3,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { isSanitized } from "@quagga/core";
 
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
@@ -40,20 +41,20 @@ export async function registerSupplier(
 
     const db = getDb();
 
-    // Ensure the users join row, then read its id.
+    // Ensure the users join row, then read its id. onConflictDoNothing (not
+    // Update): never clobber a sanitized (deleted) account's nulled email.
     await db
       .insert(schema.users)
       .values({ authUserId: user.id, email: user.primaryEmail })
-      .onConflictDoUpdate({
-        target: schema.users.authUserId,
-        set: { email: user.primaryEmail },
-      });
+      .onConflictDoNothing({ target: schema.users.authUserId });
     const [dbUser] = await db
-      .select({ id: schema.users.id })
+      .select({ id: schema.users.id, sanitizedAt: schema.users.sanitizedAt })
       .from(schema.users)
       .where(eq(schema.users.authUserId, user.id))
       .limit(1);
     if (!dbUser) throw new Error("Your account isn't ready yet. Try again.");
+    // A deleted-and-sanitized account cannot register as a supplier.
+    if (isSanitized(dbUser)) throw new Error("Sign in first.");
 
     // Guard against a double-register: if a row is already linked, stop.
     const [existing] = await db

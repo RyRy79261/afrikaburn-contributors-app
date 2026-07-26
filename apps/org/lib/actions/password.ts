@@ -1,0 +1,85 @@
+"use server";
+
+import { z } from "zod";
+import { assessPassword, enumerationSafeMessage } from "@quagga/core";
+import { auth } from "@quagga/auth";
+import { isAuthConfigured } from "@/lib/config";
+
+// Self-hosted password recovery for the organiser console. Thin wrappers over
+// @quagga/auth's server API (auth.api.requestPasswordReset / resetPassword),
+// kept enumeration-safe and honestly-unavailable without an email sender —
+// exactly as apps/web/lib/account-actions.ts does for the participant app.
+
+export type PasswordActionResult =
+  | { ok: true; message?: string }
+  | { ok: false; error: string };
+
+const RequestInput = z.object({
+  email: z.string().trim().email(),
+  redirectTo: z.string().trim().max(512).optional(),
+});
+
+/**
+ * Start a reset. Honestly unavailable without an email provider (the link can
+ * only reach the user by email) — a refusal that is NOT account-specific, so it
+ * leaks nothing. When it runs, the same message ships regardless of whether the
+ * account exists, and the server API's outcome is discarded.
+ */
+export async function requestPasswordReset(
+  raw: z.input<typeof RequestInput>,
+): Promise<PasswordActionResult> {
+  const input = RequestInput.parse(raw);
+  if (!isAuthConfigured() || !process.env.RESEND_API_KEY) {
+    return {
+      ok: false,
+      error:
+        "Password reset by email isn't available yet — no reset link can be sent. Ask an administrator for help.",
+    };
+  }
+  try {
+    await auth.api.requestPasswordReset({
+      body: {
+        email: input.email,
+        redirectTo: input.redirectTo ?? "/auth/reset-password",
+      },
+    });
+  } catch {
+    // Swallow — surfacing the outcome would be an account-existence oracle.
+  }
+  return { ok: true, message: enumerationSafeMessage("forgot_password") };
+}
+
+const ResetInput = z.object({
+  token: z.string().min(1),
+  newPassword: z.string(),
+});
+
+/**
+ * Complete a reset from an emailed link. `revokeSessionsOnPasswordReset` (set in
+ * @quagga/auth) ends every session on success. Needs no email provider — the
+ * token is already in hand.
+ */
+export async function resetPassword(
+  raw: z.input<typeof ResetInput>,
+): Promise<PasswordActionResult> {
+  const input = ResetInput.parse(raw);
+  if (!isAuthConfigured()) return { ok: false, error: "Sign-in isn't configured yet." };
+
+  const assessment = assessPassword(input.newPassword);
+  if (!assessment.ok) {
+    return { ok: false, error: assessment.error ?? "That password won't do." };
+  }
+
+  try {
+    await auth.api.resetPassword({
+      body: { token: input.token, newPassword: input.newPassword },
+    });
+  } catch {
+    return {
+      ok: false,
+      error:
+        "That reset link has expired or has already been used. Request a new one.",
+    };
+  }
+  return { ok: true, message: "Password reset. Sign in with your new password." };
+}

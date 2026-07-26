@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, ilike, isNull } from "drizzle-orm";
 import {
   deriveOnboardingProgress,
+  isSanitized,
   type SupplierOnboardingProgress,
 } from "@quagga/core";
 import type {
@@ -213,20 +214,37 @@ export async function resolveSupplierSession(): Promise<SupplierSessionState> {
   try {
     const db = getDb();
 
-    // Ensure the users join row (idempotent; email kept in sync).
+    // Ensure the users join row (idempotent). Deliberately NOT onConflictDoUpdate:
+    // a sanitized (deleted) account keeps its `users` row with `email` nulled, and
+    // clobbering it with the incoming email would un-erase the PII the deletion
+    // removed. Sync the email only after the sanitized guard below.
     await db
       .insert(schema.users)
       .values({ authUserId: user.id, email: user.primaryEmail })
-      .onConflictDoUpdate({
-        target: schema.users.authUserId,
-        set: { email: user.primaryEmail },
-      });
+      .onConflictDoNothing({ target: schema.users.authUserId });
     const [dbUser] = await db
-      .select({ id: schema.users.id })
+      .select({
+        id: schema.users.id,
+        email: schema.users.email,
+        sanitizedAt: schema.users.sanitizedAt,
+      })
       .from(schema.users)
       .where(eq(schema.users.authUserId, user.id))
       .limit(1);
     if (!dbUser) return { kind: "not_ready", user };
+
+    // Re-animation guard: a deleted-and-sanitized account must never resolve to a
+    // portal session. The Better Auth identity is already deleted; this stops a
+    // stale cookie-cache session (up to 5 min) sneaking through.
+    if (isSanitized(dbUser)) return { kind: "unauthenticated" };
+
+    // Keep the email fresh for a live account (never a sanitized one — guarded above).
+    if (user.primaryEmail && dbUser.email !== user.primaryEmail) {
+      await db
+        .update(schema.users)
+        .set({ email: user.primaryEmail })
+        .where(eq(schema.users.id, dbUser.id));
+    }
 
     const edition = await resolveActiveEdition(db);
     if (!edition) return { kind: "not_ready", user };

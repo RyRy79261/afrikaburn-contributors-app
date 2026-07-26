@@ -1,37 +1,23 @@
 // What our identity provider ACTUALLY supports (the capability matrix).
 //
-// docs/accounts-security-spec.md was written against stock Better Auth 1.4, whose
-// plugin catalogue includes 2FA/TOTP and passkeys. We do not run stock Better
-// Auth: we run MANAGED Neon Auth ("Managed Better Auth"), a Neon-hosted service
-// that happens to run better-auth 1.4.18 internally. Neon owns the auth tables
-// AND the server configuration, and states plainly that you "don't install or
-// configure Better Auth plugins directly" — a managed instance exposes a fixed
-// subset. Every plugin-delivered capability is therefore outside our reach, no
-// matter what the Better Auth docs say.
+// As of the self-hosted migration (docs/auth-platform-spec.md) we run our OWN
+// Better Auth (1.6.x), mounted in-process in each app by @quagga/auth against our
+// own Neon database — NOT managed Neon Auth. Self-hosting removes the managed
+// provider's fixed-subset limitation: every core email/password + session +
+// account capability is now a real server call on `auth.api.*`, and change-email
+// / unlink (which managed Neon omitted from its server allowlist) are ours.
 //
-// EVIDENCE (probe run 25 Jul 2026, @neondatabase/auth 0.4.1-beta):
-//   1. The SDK's `supportedBetterAuthClientPlugins` list is exactly:
-//      anonymous-token, better-auth-client, admin(-client), organization,
-//      email-otp, magic-link, jwt. No two-factor. No passkey.
-//   2. `grep -ric 'twoFactor|totp|backupCode|passkey|webauthn'` over the SDK's
-//      three type-declaration bundles (next/index.d.mts, next/server/index.d.mts,
-//      adapter-core.d.mts) returns 0 for every term.
-//   3. The server helper's typed endpoint allowlist (`API_ENDPOINTS`, from which
-//      `NeonAuthServer = Pick<VanillaBetterAuthClient, ServerAuthMethods>` is
-//      derived) contains change-password, request-password-reset, reset-password,
-//      send-verification-email, verify-email, list-sessions, revoke-session,
-//      revoke-sessions, revoke-all-sessions, update-user, delete-user,
-//      list-accounts, account-info — and NOT change-email, link-social, or
-//      unlink-account.
-//   4. neon.com/docs/auth/guides/plugins lists the supported plugins as Admin,
-//      Email OTP, JWT, Magic Link, Organization, Open API, Phone Number.
-//      neon.com/docs/auth/roadmap lists "MFA support" as "coming soon".
-//   5. docs/platform-architecture-spec.md Part 2 already recorded the same
-//      boundary from the IdP research ("doesn't yet support bringing your own
-//      Better Auth plugins or custom server-side handlers").
+// WHAT IS STILL UNAVAILABLE, AND WHY IT CHANGED: 2FA/TOTP, backup codes, and
+// passkeys are no longer blocked by the PROVIDER — they are Better Auth PLUGINS
+// (twoFactor, @better-auth/passkey) that we have not installed YET. They land in a
+// later task (auth-platform-spec P1-2 for 2FA + backup codes, P1-14b for
+// passkeys), each adding its own append-only table. Until those plugins are wired
+// into @quagga/auth, the surfaces render an honest "not available yet" state and
+// their actions fail closed — this file is where that flips, in one reviewed diff,
+// the day the plugin ships.
 //
-// THE RULE THIS FILE EXISTS TO ENFORCE: never fake an unsupported capability.
-// A surface for an `unavailable` capability must render an honest "not available
+// THE RULE THIS FILE EXISTS TO ENFORCE: never fake an unsupported capability. A
+// surface for an `unavailable` capability must render an honest "not available
 // yet" state and its action must fail closed — never a silent no-op that looks
 // like success. `assertCapability` is the fail-closed helper.
 
@@ -41,8 +27,8 @@ export interface AuthCapability {
   key: AuthCapabilityKey;
   support: AuthCapabilitySupport;
   /**
-   * The SDK method backing it, or null when nothing backs it. `server:` names
-   * are on `createNeonAuth(...)`; `client:` names are on `createAuthClient()`.
+   * The Better Auth method backing it, or null when nothing backs it yet.
+   * `auth.api.*` names are the in-process server API exposed by @quagga/auth.
    */
   method: string | null;
   /** Why it is in this state — surfaced verbatim in dev diagnostics. */
@@ -61,84 +47,81 @@ export const AUTH_CAPABILITIES: Readonly<
   passwordChange: {
     key: "passwordChange",
     support: "supported",
-    method: "server:changePassword",
+    method: "auth.api.changePassword",
     reason:
-      "`change-password` is in the Neon Auth server endpoint allowlist; re-auth with the current password is enforced upstream.",
+      "Self-hosted email/password is enabled; `changePassword` re-auths with the current password and can revoke other sessions.",
   },
   passwordReset: {
     key: "passwordReset",
     support: "supported",
-    method: "server:requestPasswordReset + server:resetPassword",
+    method: "auth.api.requestPasswordReset + auth.api.resetPassword",
     reason:
-      "`request-password-reset` and `reset-password` are both in the server endpoint allowlist.",
+      "Native to self-hosted email/password. `revokeSessionsOnPasswordReset` is set true in @quagga/auth so a reset ends every session. Reset EMAIL delivery still depends on an email provider (RESEND_API_KEY); the flow presents as unavailable to the user until a key exists, but the capability itself is supported.",
   },
   emailVerification: {
     key: "emailVerification",
     support: "supported",
-    method: "server:sendVerificationEmail + server:verifyEmail",
+    method: "auth.api.sendVerificationEmail + auth.api.verifyEmail",
     reason:
-      "`send-verification-email` and `verify-email` are both in the server endpoint allowlist.",
+      "Native to self-hosted Better Auth. Whether verification is REQUIRED is derived from provider presence (@quagga/auth resolveRequireEmailVerification); the endpoints exist regardless.",
   },
   sessionList: {
     key: "sessionList",
     support: "supported",
-    method: "server:listSessions",
-    reason: "`list-sessions` is in the server endpoint allowlist.",
+    method: "auth.api.listSessions",
+    reason:
+      "Database sessions (Better Auth default) give the revocable active-session list.",
   },
   sessionRevoke: {
     key: "sessionRevoke",
     support: "supported",
-    method: "server:revokeSession / revokeSessions / revokeOtherSessions",
+    method: "auth.api.revokeSession / revokeSessions / revokeOtherSessions",
     reason:
-      "`revoke-session`, `revoke-sessions` and `revoke-all-sessions` are all in the server endpoint allowlist.",
+      "Database sessions are individually revocable; a cookie-cache read may honour a revoked session for up to its 5-minute maxAge.",
+  },
+  emailChange: {
+    key: "emailChange",
+    support: "supported",
+    method: "auth.api.changeEmail",
+    reason:
+      "Self-hosting unlocks server-side change-email (`user.changeEmail.enabled` is set in @quagga/auth, with `sendChangeEmailVerification` wired to Resend) — it was ABSENT from managed Neon's server allowlist. Better Auth owns the identity-side token; the 48h revocation window and POPIA state machine stay ours in @quagga/core + `email_change_requests`. Committing the new address still requires an email provider to deliver the confirmation, so the user-facing flow is gated on RESEND_API_KEY.",
   },
   accountDeletion: {
     key: "accountDeletion",
     support: "supported",
-    method: "server:deleteUser",
+    method: "sanitizeAccount (@quagga/web) — direct identity delete + app-row sanitization",
     reason:
-      "`delete-user` is in the server endpoint allowlist. Note this deletes the IDENTITY at the provider only — erasing our application rows is our own sanitization step, which runs first and is the POPIA-relevant one.",
+      "Deletion is a 14-day-grace + sweeper flow, not a single call. The sweeper's `sanitizeAccount` erases our application rows (the 'Lost Cat' plan; our `users` row survives as a stub) AND hard-deletes the Better Auth IDENTITY — the `session`, `account` (password hash) and `user` (email PII) rows — by direct transactional delete on the shared DB (SANITIZATION_IDENTITY_TABLES). We do this ourselves rather than via `auth.api.deleteUser` because the sanitization ordering, tombstone and audit trail are ours to own; the effect (identity gone, sessions revoked, cannot sign back in) is the same. The `users` tombstone (`sanitizedAt`) is enforced at every session resolver via `assertNotSanitized`/`isSanitized`.",
   },
   linkedAccounts: {
     key: "linkedAccounts",
     support: "supported",
-    method: "server:listAccounts + server:accountInfo",
+    method: "auth.api.listUserAccounts + auth.api.accountInfo",
     reason:
-      "`list-accounts` and `account-info` are in the server endpoint allowlist — enough to SHOW linked sign-in methods and to enforce the last-method guard.",
-  },
-  emailChange: {
-    key: "emailChange",
-    support: "client_only",
-    method: "client:changeEmail",
-    reason:
-      "The browser client exposes `changeEmail`, and the /api/auth/* proxy forwards arbitrary paths upstream — but `change-email` is absent from the server endpoint allowlist, and Better Auth gates it behind a server option (`user.changeEmail.enabled`) we cannot set on a managed instance. Whether the upstream instance accepts it is UNVERIFIABLE without a live NEON_AUTH_BASE_URL. Separately, Better Auth's own flow has no 48-hour revocation window, which the spec requires — so the request/confirm/revoke record is ours regardless (`email_change_requests`).",
-    userMessage:
-      "Changing your sign-in email isn't available yet. We'll switch it on once it's confirmed working — nothing has changed on your account.",
+      "Lists linked sign-in methods (password, Google) and backs the last-method guard.",
   },
   unlinkAccount: {
     key: "unlinkAccount",
-    support: "client_only",
-    method: "client:unlinkAccount",
+    support: "supported",
+    method: "auth.api.unlinkAccount",
     reason:
-      "Exposed on the browser client but absent from the server endpoint allowlist, so we cannot perform or re-verify it server-side. The last-sign-in-method guard is enforced by us from `listAccounts` regardless of where the unlink is executed.",
-    userMessage:
-      "Unlinking a sign-in method isn't available yet. Your sign-in methods are unchanged.",
+      "Self-hosting exposes `unlinkAccount` server-side (managed Neon omitted it). The last-sign-in-method guard is still enforced by us from `listUserAccounts` — a member can never unlink their only method.",
   },
   twoFactor: {
     key: "twoFactor",
     support: "unavailable",
     method: null,
     reason:
-      "The two-factor plugin is not in Neon's supported plugin set and cannot be installed on a managed instance. Zero occurrences of `twoFactor`/`totp` anywhere in the SDK's type declarations. Neon's roadmap lists MFA as 'coming soon'.",
+      "The `twoFactor` plugin (TOTP + backup codes) is not yet installed in @quagga/auth. It is a self-host plugin we CAN add — unblocked by the migration — and is scheduled (auth-platform-spec P1-2), not blocked by the provider. Flip to supported when the plugin and its `two_factor` table land.",
     userMessage:
-      "Two-factor authentication isn't available on this account yet. It depends on a feature our sign-in provider hasn't shipped — we'll turn it on the day it lands.",
+      "Two-factor authentication isn't available on this account yet. We're rolling it out — we'll turn it on the day it lands.",
   },
   backupCodes: {
     key: "backupCodes",
     support: "unavailable",
     method: null,
     reason:
-      "Backup codes ship inside the two-factor plugin; unavailable for the same reason.",
+      "Backup codes ship inside the `twoFactor` plugin (store them encrypted, never plaintext); unavailable until that plugin is installed.",
     userMessage:
       "Backup codes arrive with two-factor authentication, which isn't available yet.",
   },
@@ -147,7 +130,7 @@ export const AUTH_CAPABILITIES: Readonly<
     support: "unavailable",
     method: null,
     reason:
-      "The passkey plugin is not in Neon's supported plugin set and does not appear on the roadmap. (The spec already queued passkeys as phase 2 — this confirms it is blocked on the provider, not on us.)",
+      "The `@better-auth/passkey` plugin is not yet installed. Self-hosting unblocks it (rpID must be the apex from day one), but it is a later phase (auth-platform-spec P1-14b) with an open single-vs-array `origin` spike; not a provider block.",
     userMessage:
       "Passkeys aren't available on this account yet.",
   },
@@ -159,9 +142,9 @@ export function isCapabilitySupported(key: AuthCapabilityKey): boolean {
 }
 
 /**
- * True when a capability is structurally impossible on our managed instance.
- * Surfaces MUST render an honest unavailable state for these, never a control
- * that appears to work.
+ * True when a capability is not currently deliverable (its plugin is not yet
+ * installed). Surfaces MUST render an honest unavailable state for these, never a
+ * control that appears to work.
  */
 export function isCapabilityUnavailable(key: AuthCapabilityKey): boolean {
   return AUTH_CAPABILITIES[key].support === "unavailable";
@@ -189,13 +172,9 @@ export type CapabilityGuardResult =
 
 /**
  * FAIL-CLOSED gate for an action that needs a provider capability. Call this at
- * the TOP of any server action touching an unsupported flow: it returns a
+ * the TOP of any server action touching a not-yet-shipped flow: it returns a
  * refusal the caller surfaces honestly, so the flow can never report success it
  * did not achieve.
- *
- * `client_only` capabilities are refused server-side on purpose — we will not
- * pretend a server action performed something only the browser might manage and
- * that we cannot verify.
  */
 export function assertCapability(
   key: AuthCapabilityKey,

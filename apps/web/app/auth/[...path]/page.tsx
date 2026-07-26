@@ -1,14 +1,16 @@
-import { AuthView } from "@neondatabase/auth/react/ui";
+import { redirect } from "next/navigation";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
 import { AuthForm, type AuthMode } from "@/components/auth/auth-form";
 import { getEditionLabel } from "@/lib/edition";
 
-// `dynamicParams` stays at the default (true) so any auth subpath Neon Auth
-// redirects to (callback, reset, verify-email, …) renders via AuthView rather
-// than 404ing. Sign-in and sign-up use the branded @quagga/ui form (design
-// canvas frame u87N7); everything else falls back to the Neon Auth views.
+// Branded sign-in / sign-up (design canvas frame u87N7), talking to our OWN
+// self-hosted Better Auth at /api/auth/* (@quagga/auth). Forgot- and
+// reset-password are their own STATIC routes (app/auth/forgot-password +
+// reset-password) that win over this catch-all; verification and OAuth callbacks
+// are handled by the route handler, not a page. Any other auth subpath has no
+// branded view, so it redirects to sign-in rather than 404ing.
 export const dynamic = "force-dynamic";
 
 const BRANDED_VIEWS: Record<string, AuthMode> = {
@@ -24,6 +26,8 @@ export default async function AuthPage({
   const { path } = await params;
   const view = path?.[0] ?? "sign-in";
   const mode = BRANDED_VIEWS[view];
+  if (!mode) redirect("/auth/sign-in");
+
   const editionLabel = await getEditionLabel();
 
   return (
@@ -35,7 +39,7 @@ export default async function AuthPage({
         <NotConfiguredBanner />
         <Card className="overflow-hidden">
           <CardContent className="p-6">
-            {mode ? <AuthForm mode={mode} /> : <AuthView path={view} />}
+            <AuthForm mode={mode} />
           </CardContent>
         </Card>
         <p className="text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">

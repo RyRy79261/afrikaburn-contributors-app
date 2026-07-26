@@ -16,8 +16,8 @@ that every migration applied.
 ## 1. Neon
 
 1. Create a Neon project (e.g. `afrikaburn-contributors`). Copy the **pooled** connection string → `DATABASE_URL`, and the **direct/unpooled** connection string → `DATABASE_URL_UNPOOLED`. The deploy migrator needs the unpooled one (its advisory lock does not hold on Neon's pooled PgBouncer endpoint); the apps use the pooled one at runtime.
-2. Enable **Neon Auth** on the project (Console → Auth). Copy `NEON_AUTH_BASE_URL`; generate `NEON_AUTH_COOKIE_SECRET` (`openssl rand -base64 32`).
-3. Add Google as an OAuth provider in Neon Auth config (Google Cloud Console OAuth client; redirect URIs per Neon's instructions). Email+password works without this.
+2. Auth is now **self-hosted Better Auth** (`@quagga/auth`, mounted per app at `/api/auth/[...all]`) against this same Neon DB — managed Neon Auth is not used. Generate one shared `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) and set the **identical** value on all three projects (a session signed by one app must verify in another). Set `BETTER_AUTH_URL` per app to its own apex origin in production (previews derive it from `VERCEL_URL`).
+3. Add Google as an OAuth provider (Google Cloud Console OAuth client) and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; the callback is `<BETTER_AUTH_URL>/api/auth/callback/google`. Email+password works without this. Email verification and password-reset delivery switch on automatically once `RESEND_API_KEY` is set (until then verification is not required and reset presents as honestly unavailable).
 
 ## 2. Seed the reference data (one-time)
 
@@ -85,7 +85,8 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
 - Install command: `pnpm install` at repo root (Vercel detects the monorepo; if needed set it explicitly).
 - Env vars on **all three** projects: `DATABASE_URL`, `DATABASE_URL_UNPOOLED` (the
   direct endpoint — the migrator's advisory lock does not hold on the pooled one),
-  `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
+  `BETTER_AUTH_SECRET` (identical across all three), `BETTER_AUTH_URL` (per app),
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
   `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
 
 **Preview deployments.** Neon preview branching is enabled, so each preview/PR gets

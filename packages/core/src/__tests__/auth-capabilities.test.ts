@@ -9,10 +9,10 @@ import {
 } from "../auth-capabilities";
 import { AuthCapabilityKey } from "@quagga/types";
 
-// These tests pin the PROBED reality of managed Neon Auth (25 Jul 2026,
-// @neondatabase/auth 0.4.1-beta). They are not aspirational: when Neon ships MFA
-// and the probe is re-run, the matrix changes here first and these assertions
-// change with it — deliberately, in one place, with a diff someone reviews.
+// These tests pin the SHIPPED reality of self-hosted Better Auth
+// (docs/auth-platform-spec.md). They are not aspirational: when the twoFactor /
+// passkey plugins are installed, the matrix changes here first and these
+// assertions change with it — deliberately, in one place, with a reviewed diff.
 
 describe("AUTH_CAPABILITIES", () => {
   it("covers every capability key exactly once", () => {
@@ -23,7 +23,7 @@ describe("AUTH_CAPABILITIES", () => {
     }
   });
 
-  it("marks the capabilities the server SDK genuinely exposes as supported", () => {
+  it("marks every core email/password + session + account capability supported", () => {
     for (const key of [
       "passwordChange",
       "passwordReset",
@@ -32,25 +32,25 @@ describe("AUTH_CAPABILITIES", () => {
       "sessionRevoke",
       "accountDeletion",
       "linkedAccounts",
+      // Self-hosting unlocks these two — absent from managed Neon's allowlist.
+      "emailChange",
+      "unlinkAccount",
     ] as const) {
       expect(isCapabilitySupported(key)).toBe(true);
       expect(AUTH_CAPABILITIES[key].method).not.toBeNull();
     }
   });
 
-  it("marks 2FA, backup codes and passkeys UNAVAILABLE — no plugin on a managed instance", () => {
+  it("marks 2FA, backup codes and passkeys UNAVAILABLE — plugins not installed yet", () => {
     for (const key of ["twoFactor", "backupCodes", "passkeys"] as const) {
       expect(isCapabilityUnavailable(key)).toBe(true);
       expect(AUTH_CAPABILITIES[key].method).toBeNull();
     }
   });
 
-  it("marks email change and unlink as client-only / unverified, not supported", () => {
-    // Both exist on the browser client but are absent from the server endpoint
-    // allowlist, so we can neither perform nor verify them server-side.
-    for (const key of ["emailChange", "unlinkAccount"] as const) {
-      expect(AUTH_CAPABILITIES[key].support).toBe("client_only");
-      expect(isCapabilitySupported(key)).toBe(false);
+  it("no capability is left in the interim client_only state", () => {
+    for (const cap of Object.values(AUTH_CAPABILITIES)) {
+      expect(cap.support).not.toBe("client_only");
     }
   });
 
@@ -87,12 +87,9 @@ describe("assertCapability — fail closed", () => {
     }
   });
 
-  it("REFUSES a client-only capability server-side", () => {
-    // We will not pretend a server action performed something only the browser
-    // might manage and that we cannot verify.
-    const result = assertCapability("emailChange");
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.support).toBe("client_only");
+  it("passes email change and unlink now that self-hosting exposes them", () => {
+    expect(assertCapability("emailChange")).toEqual({ ok: true });
+    expect(assertCapability("unlinkAccount").ok).toBe(true);
   });
 
   it("never returns ok for anything the matrix does not call supported", () => {

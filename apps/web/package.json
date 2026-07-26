@@ -12,11 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neondatabase/auth": "0.4.1-beta",
+    "@quagga/auth": "workspace:*",
     "@quagga/core": "workspace:*",
     "@quagga/db": "workspace:*",
     "@quagga/types": "workspace:*",
     "@quagga/ui": "workspace:*",
+    "better-auth": "1.6.25",
     "@vercel/blob": "^2.4.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",

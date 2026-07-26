@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { Toaster } from "@quagga/ui/components/toast";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
-import { Providers } from "./providers";
 import "@quagga/ui/styles.css";
 
 // AfrikaBurn's brand face. Exposed as --font-brand; globals.css falls through
@@ -41,7 +40,7 @@ export default function RootLayout({
     <html lang="en" className={`dark supplier-accent ${montserrat.variable}`}>
       <body className="font-sans antialiased">
         <QuiltBand />
-        <Providers>{children}</Providers>
+        {children}
         <Toaster />
       </body>
     </html>
