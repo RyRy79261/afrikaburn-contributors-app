@@ -16,10 +16,36 @@ operations for the first real deployment.
 ```bash
 cp .env.example .env       # fill DATABASE_URL (+ PGCRYPTO_KEY: openssl rand -hex 32)
 pnpm --filter @quagga/db db:migrate   # applies committed migrations
-pnpm --filter @quagga/db db:seed      # org group, edition 2027, camps, suppliers, payments
+pnpm --filter @quagga/db db:seed      # reference data only — see below
 ```
 
 Seeding is idempotent — safe to re-run.
+
+### What the seed does and does not contain
+
+**Binding principle (Ryan, 26 Jul 2026): seeds contain ONLY org-owned
+reference/catalog data. Every burner, camp, membership, registration and
+questionnaire response — in every environment, including the kickoff demo — is
+created live through the app.**
+
+Seeded: the **edition** (AfrikaBurn 2027, 26 Apr – 2 May 2027), the **org group**
+"AfrikaBurn" (no memberships — staff elevate live via `GOD_EMAILS`), the **8
+canonical camp categories**, the **supplier repository** (the scrubbed AB sheet
+snapshot + each supplier's per-edition onboarding step map, `user_id` deliberately
+`null` so a real supplier can self-register and claim the row by email overlap),
+and **one org-authored questionnaire template** (`org-safety-checkin-2027` —
+definition only, no activation, no audience, no responses).
+
+Not seeded, ever: users, burner bios, theme camps / artworks / mutant vehicles,
+memberships, invites, registrations, supplier declarations, section reviews,
+questionnaire activations / required actions / responses, notifications,
+bulletins, audit events, supplier notes. And **no payments** — AfrikaBurn never
+receives payment from theme camps; registration is free. The `payments` table
+stays frozen in the schema for future logistics apps.
+
+Consequences worth knowing: an empty directory, an empty registrations queue and
+an empty status board are the **correct** first-boot state. The first rows appear
+when a human signs up.
 
 ## 3. Resend
 
@@ -46,17 +72,24 @@ sender for the MVP.
   build step. `NEXT_PUBLIC_APP_URL` (also optional) is the origin used to build
   email-change confirm/revoke links.
 
-## 5. Smoke test
+## 5. Smoke test — the live path
 
-1. Web: sign up → Burner Bio → create a camp → see the directory.
-2. Your account (GOD_EMAILS + verified email) → open the org app → you're in.
-3. Org → Accounts: elevate a second account to org_staff.
-4. Org → Registrations: Mad Hatters shows approved; Camp 404 under review — walk the review loop against a fictional camp.
+There are no seeded accounts to sign in as, by design. The smoke test **creates**
+the data it verifies, which is also exactly the kickoff demo script.
 
-## Known gap for the demo
+1. **Web**: sign up as a real burner (real inbox, verify the email) → complete the
+   Burner Bio (exercise a privacy toggle; confirm phone / emergency contacts /
+   ID are hard-locked private) → **register Camp 404 through the wizard**, all six
+   sections → submit.
+2. **Org**: sign in with the `GOD_EMAILS` account (verified email self-elevates to
+   god on first sign-in) → the org console lets you in.
+3. **Org → Accounts**: elevate a second account to `org_staff`.
+4. **Org → Registrations**: Camp 404 is in the queue on `submitted`. Walk the real
+   review loop — request changes on a section, watch the notification land on the
+   camp side, resolve it, approve.
+5. **Suppliers**: self-register a supplier against an email that overlaps a seeded
+   catalog row (claim-by-email) and one that doesn't (fresh row); walk the
+   onboarding steps and a document acknowledgement.
 
-Seeded camp leads are placeholder users (`authUserId = seed:<email>`), not real auth
-accounts — you can't literally sign in as Mad Hatters' lead. Options for the 28th:
-(a) live-create a camp in the demo (good theatre anyway), or (b) sign up a real
-account and have god reassign it as lead of a seeded camp via a small linking action —
-not built yet; say the word and it gets added.
+Every smoke assertion is against **live-created** rows. Nothing is verified
+against a seeded row, because no user-generated seeded row exists.

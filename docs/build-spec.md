@@ -89,13 +89,29 @@ PaymentDetailsBlock survive only for future logistics apps.
 
 ## Seeds (`packages/db/src/seed.ts`, runnable script, idempotent)
 
-Org group "AfrikaBurn" · edition AfrikaBurn 2027 · camps: **Mad Hatters** (approved
-registration, realistic content), **Camp 404** (submitted/under review), 6 fictional
-camps in varied states (draft, changes_requested, free camps with no registration) ·
-suppliers imported from the AB public sheet (CSV export of Google Sheet
+**Law (Ryan, 26 Jul 2026): seeds contain ONLY org-owned reference/catalog data. Every
+burner, camp, membership, registration and questionnaire response — in every
+environment, including the kickoff demo — is created live through the app.** There are
+no seeded accounts. This supersedes the earlier seed set (Mad Hatters, Camp 404, six
+fictional camps, fictional burners, payment references), which is deleted: seeded leads
+carried placeholder `authUserId = seed:<email>` strings and could never sign in, so
+every "sign in as the seeded owner" path was a dead end.
+
+**Seeded:** org group "AfrikaBurn" (no memberships — staff elevate live via
+`GOD_EMAILS`) · edition AfrikaBurn 2027 · the 8 canonical camp categories for that
+edition · suppliers imported from the AB public sheet (CSV export of Google Sheet
 `1XU2gAt5E9GczVHZWpcD0_CsEeE--iX9aWmnWd19bgMI`; committed as JSON snapshot so seeding
-works offline) · a few payment references in mixed states. No real people: seed users
-are obviously fictional (e.g. `dusty.prototype@example.com`).
+works offline) with their per-edition onboarding step maps and `user_id` **null**, so a
+real supplier can self-register and claim the row by email overlap · one org-authored
+questionnaire **template** (definition only — no activation, no audience, no responses).
+
+**Never seeded:** users, burner bios, `theme_camp`/`artwork`/`mutant_vehicle` groups,
+memberships, invites, registrations, supplier declarations, section reviews,
+questionnaire activations/required actions/responses, notifications, bulletins, audit
+events, supplier notes, payments.
+
+An empty directory, registrations queue and status board on a fresh database are the
+**correct** first-boot state. Close that gap with honest empty states, never a seeded row.
 
 ## Core logic that MUST have vitest coverage (`packages/core`)
 
@@ -177,5 +193,7 @@ tooling; packages/db remains the interim single owner of schema + migrations.
 
 The four headline cards are: BURNERS (total + bios complete %), CAMPS (total +
 registered/free split), MUTANT VEHICLES (total + registered/in-review), ARTWORKS
-(total + grant requests). Same cards on the org Overview page. Numbers must agree
-with seeds (47 camps = 28 registered + 19 free; 12 MV = 9 + 3).
+(total + grant requests). Same cards on the org Overview page. Numbers are **derived
+live from real rows** — the canvas figures (47 camps = 28 registered + 19 free; 12 MV =
+9 + 3) are illustrative design copy only, not a seed contract; nothing is seeded, so a
+fresh database correctly shows zeroes until burners create camps.

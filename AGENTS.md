@@ -65,6 +65,13 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
   placement maps, camp treasuries/dues.
 - Blocking questionnaires are labeled explicitly everywhere and gate hard (fill page +
   sign-out only); org-internal questionnaires never leak into the participant app.
+- **Seeds contain ONLY org-owned reference/catalog data** (edition, org group, camp
+  categories, the scrubbed supplier catalog, org questionnaire templates). Every burner,
+  camp, membership, registration and questionnaire response — in **every** environment,
+  including the kickoff demo — is created live through the app. No seeded accounts, ever.
+  An empty directory / registrations queue on a fresh DB is the *correct* first-boot
+  state; fix it with honest empty-state copy, never with a seeded row.
+  *(Ryan, 26 Jul 2026. See `packages/db/src/seed.ts` header + `docs/deploy.md`.)*
 
 ## Process
 
@@ -111,15 +118,18 @@ design work, and never stage `design/ab-initial-app.pen` from a code-focused com
   first. Push after milestones (the orchestrator pushes; task agents usually don't).
 - The repo is PUBLIC: no real personal contact data (supplier contacts are scrubbed on
   import), no naming real businesses in negative demo states (use fictional names like
-  "LosKop Catering"), seeds use `@example.com` humans.
+  "LosKop Catering").
 - History was rewritten once (24 Jul 2026) to purge unredacted originals — the
   `archive/source-documents` branch exists ONLY locally on Ryan's machine; never
   recreate or push it.
 
 ## Cast, for realistic copy
 
-Camps: Mad Hatters (registered), Camp 404 (under review), Karoo Kombuis
-(changes requested), Dust Bunnies, The Long Drop Inn, Vuurvlieg Collective, Stofpad
-Saloon. Humans: Alice Hatter, Ren Notfound, Jabu (all fictional, @example.com).
+**Design frames, mockups, docs and test fixtures only — never the seed** (see the
+seeding law above). Camps: Mad Hatters (registered), Camp 404 (under review), Karoo
+Kombuis (changes requested), Dust Bunnies, The Long Drop Inn, Vuurvlieg Collective,
+Stofpad Saloon. Humans: Alice Hatter, Ren Notfound, Jabu (all fictional, @example.com).
 Edition: AfrikaBurn 2027 · 26 April – 2 May 2027. Ref codes: `MAH-M017`. Suppliers:
 real ones from the AB sheet (scrubbed) + fictional LosKop Catering (suspended demo).
+At the live kickoff the "cast" is real: Ryan signs up as himself and registers Camp 404
+through the wizard.
