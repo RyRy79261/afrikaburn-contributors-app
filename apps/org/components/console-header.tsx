@@ -16,6 +16,13 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/suppliers", label: "Suppliers" },
   { href: "/categories", label: "Categories" },
   { href: "/accounts", label: "Accounts" },
+  // The audit trail is not a nice-to-have here: it is the ONLY compensating
+  // control over medical-note enumeration. The read path deliberately fails
+  // open (an emergency read must never wait on a log write), so detection
+  // depends entirely on a human opening this page. Unreachable, the whole
+  // control is decorative — which is exactly what supplier sign-up management
+  // shipped as until someone noticed.
+  { href: "/audit", label: "Audit" },
 ];
 
 /**
