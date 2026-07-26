@@ -3,16 +3,24 @@
 // The single most important new-burner invariant (AGENTS.md Product laws; core
 // privacy.ts; roadmap M3-20): a third party sees a burner's PUBLIC fields, never
 // their PRIVATE ones, and NEVER — under any flag — the hard-locked classes
-// (phone, both emergency contacts, medical notes, ID/passport).
+// (phone, both emergency contacts, ID/passport).
 //
 // This drives it through the real app with two separate accounts: burner B fills
-// a fully-populated bio (one field flipped private, all hard-locked classes set
-// to unique sentinels); burner A — a camp-mate, the app's only real path to a
+// a fully-populated bio (one field flipped private, all locked classes set to
+// unique sentinels); burner A — a camp-mate, the app's only real path to a
 // third party's profile — opens B's public profile and we assert what crossed
 // the wire. The assertions read the SERVER-RENDERED HTML (`page.content()`), so
 // they prove the field was never sent, not merely that CSS hid it: if the public
 // projection (getPublicBurnerProfile + publicBioView) stopped stripping a class,
 // its sentinel would appear in the HTML and the spec would go red.
+//
+// MEDICAL IS THE ONE DELIBERATE EXCEPTION (Ryan, 26 Jul 2026). It is never
+// public, but it IS visible to the audience the burner disclosed it to — and here
+// burner A is the LEAD of the camp B joined, so A is exactly that audience. The
+// spec asserts A DOES see it (the consent-at-entry model working) while every
+// hard-locked sentinel stays absent. A plain camp-mate who leads nothing is
+// refused — proven in specs/anon/burner-profile-privacy.spec.ts and
+// specs/camp-member/camp-member-cross-camp-isolation.spec.ts.
 //
 // SCOPE NOTE (honest boundary): "the server refuses if the flag is *forced*
 // public" is a persistence-layer coercion (core enforcePrivacyFlags /
@@ -94,14 +102,23 @@ test.describe("new burner · privacy projection", () => {
     // The PRIVATE-flipped field is gone from the rendered page.
     await expect(webPage.getByText(sentinels.city)).toHaveCount(0);
 
-    // Server-side proof: the sentinels are absent from the delivered HTML — the
-    // server never selected/projected them — while the public control IS present.
+    // Server-side proof: the hard-locked sentinels are absent from the delivered
+    // HTML — the server never selected/projected them — while the public control
+    // IS present.
     const html = await webPage.content();
     expect(html).toContain(publicAbout); // control: the page really rendered
-    for (const [field, value] of Object.entries(sentinels)) {
+    const { medical, ...neverVisible } = sentinels;
+    for (const [field, value] of Object.entries(neverVisible)) {
       expect(html, `hard-locked/private "${field}" leaked into public HTML`).not.toContain(
         value,
       );
     }
+
+    // MEDICAL: A leads the camp B joined, so A is the audience B consented to at
+    // the point of entry — the notes render on B's DETAIL view (and only there).
+    expect(
+      html,
+      "a camp lead must see their own member's medical notes on the member detail view",
+    ).toContain(medical);
   });
 });

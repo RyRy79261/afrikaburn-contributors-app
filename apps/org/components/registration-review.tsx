@@ -16,12 +16,14 @@ import type {
   DecisionLogRow,
   OfficerContactRow,
   RegistrationDetail,
+  RosterMemberRow,
 } from "@/lib/queries";
 import type { OfficersCopy } from "@/lib/project-review";
 import { formatDate } from "@/lib/labels";
 import { FieldList, type FieldSpec } from "@/components/field-list";
 import { DecisionPanel } from "@/components/decision-panel";
 import { SectionReviewThread } from "@/components/section-review-thread";
+import { MemberRoster } from "@/components/member-roster";
 
 /** One review section as the shell renders it (fields already resolved to JSX). */
 export interface ReviewSectionView {
@@ -46,6 +48,7 @@ export function RegistrationReview({
   subjectNoun,
   officersCopy,
   showWrangler,
+  roster,
 }: {
   detail: RegistrationDetail;
   decisionLog: DecisionLogRow[];
@@ -55,6 +58,7 @@ export function RegistrationReview({
   subjectNoun: string;
   officersCopy: OfficersCopy;
   showWrangler: boolean;
+  roster: RosterMemberRow[];
 }) {
   const { registration, group, edition } = detail;
 
@@ -186,6 +190,33 @@ export function RegistrationReview({
                   ))}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Members. NOTHING medical is listed here — not the notes, and not a
+              has/has-not signpost either: whether a named person has declared a
+              condition is itself special personal information, and a column of
+              it is an un-audited census. Open a member to see theirs on their
+              detail page, where the read is authorized AND recorded (privacy
+              law: medical is never public, never in a list, roster, card or
+              export, and visible only to the burner's camp leads + org staff). */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Lock className="h-4 w-4" aria-hidden />
+                Members
+              </CardTitle>
+              <CardDescription>
+                Open a member to see their medical notes. Nothing medical — not
+                even whether notes exist — appears in this list or any export,
+                and every view on a member&apos;s page is logged.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MemberRoster
+                registrationId={registration.id}
+                members={roster}
+              />
             </CardContent>
           </Card>
         </div>

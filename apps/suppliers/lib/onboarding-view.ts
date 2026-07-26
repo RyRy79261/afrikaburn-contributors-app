@@ -17,6 +17,29 @@ import type { SupplierOnboardingStepStatus } from "@quagga/types";
 export type StepStatusTone = "done" | "awaiting" | "pending";
 
 /**
+ * What the Progress panel's SUPPLIER CODE chip (canvas `D6Xsb`) should show —
+ * or `null` when it must not render at all.
+ *
+ * `suppliers.code` is nullable: rows imported from the AB sheet predate the
+ * issuance scheme and are backfilled lazily, so a real, signed-in supplier can
+ * legitimately have no code yet. The honest answer then is NOTHING — no chip,
+ * no em-dash, no "pending" placeholder. A greyed-out stand-in in a mono chip
+ * reads as an identifier, and this identifier leaves the platform (depot gate
+ * lists, delivery manifests), so implying one exists when it does not is worse
+ * than silence.
+ *
+ * The stored value is passed through as-is once trimmed (never reformatted):
+ * the code is a promise made off-platform, and the portal is a reader of it,
+ * not an authority on it.
+ */
+export function supplierCodeChipValue(
+  code: string | null | undefined,
+): string | null {
+  const trimmed = code?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
  * The card eyebrow line, e.g. "Step 3 · Org confirms" (canvas Q4fye). Encodes
  * the who-completes / who-confirms model from the step's confirmation type so
  * suppliers see, at a glance, who drives each step:

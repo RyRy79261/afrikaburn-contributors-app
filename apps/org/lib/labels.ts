@@ -38,3 +38,19 @@ export function formatDate(value: Date | string | null | undefined): string {
     year: "numeric",
   });
 }
+
+/** Date + time to the minute (e.g. "26 Apr 2027, 14:03") — the audit trail
+ * needs the clock, not just the day: a burst is only visible with minutes. */
+export function formatDateTime(value: Date | string | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-ZA", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}

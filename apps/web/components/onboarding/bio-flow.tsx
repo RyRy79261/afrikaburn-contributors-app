@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Check, Lock } from "lucide-react";
 import {
   BIO_PRIVACY_FIELDS,
+  INVITE_RESUME_PATH,
+  MEDICAL_AUDIENCE_NOTE,
   type BioPrivacyField,
 } from "@quagga/core";
 import {
@@ -39,6 +41,7 @@ import {
   type BioExtrasState,
 } from "../questionnaire/burns-step";
 import type { CampSearchResult } from "@/lib/groups-store";
+import { navigateOnwards } from "@/lib/client-navigation";
 
 // The 5-step Burner Bio flow (design canvas `h3ak0` / `Z2300W`): Welcome ·
 // Your details · Burns & volunteering · Privacy · Done. Per-field privacy is set
@@ -191,7 +194,7 @@ export function BioFlow({
       return;
     }
     if (step === "done") {
-      router.push(redirectTo);
+      navigateOnwards(router, redirectTo);
       return;
     }
     if (step === "details" && !validateDetails()) return;
@@ -199,7 +202,7 @@ export function BioFlow({
     if (isLastInput) {
       persist(true, () => {
         if (mode === "onboarding") goTo(stepIndex + 1);
-        else router.push(redirectTo);
+        else navigateOnwards(router, redirectTo);
       });
       return;
     }
@@ -215,7 +218,13 @@ export function BioFlow({
 
   const primaryLabel = (() => {
     if (step === "welcome") return "Get started";
-    if (step === "done") return "Go to the directory";
+    // Honest copy: when an invite is waiting behind this gate, the button
+    // finishes THAT, not a trip to the directory.
+    if (step === "done") {
+      return redirectTo === INVITE_RESUME_PATH
+        ? "Continue to your camp"
+        : "Go to the directory";
+    }
     if (isLastInput) return mode === "edit" ? "Save changes" : "Complete my bio";
     return "Save & continue";
   })();
@@ -370,7 +379,8 @@ function WelcomeStep() {
       <p className="text-muted-foreground">
         A short, self-serve profile you carry year to year. Fill it once — every
         field you set means one less form later. Sensitive details (phone,
-        emergency contacts, medical, ID) stay locked private, always.
+        emergency contacts, ID) stay locked private, always; medical notes are
+        never public either, and each field tells you who can see it.
       </p>
     </div>
   );
@@ -532,8 +542,10 @@ function DetailsStep({
             Held privately — safety &amp; logistics
           </CardTitle>
           <CardDescription>
-            These are locked private. They&apos;re never shown in the directory
-            or to other camps — only safety teams and AfrikaBurn logistics.
+            These are locked private — never shown in the directory or to other
+            camps. Phone, emergency contacts and ID reach only AfrikaBurn safety
+            and logistics; medical notes also reach your camp leads, so someone
+            close by can help you.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -593,10 +605,16 @@ function DetailsStep({
             </div>
           </Field>
 
+          {/* CONSENT AT THE POINT OF ENTRY. Medical notes are never public, but
+              they ARE visible to the burner's camp leads and AfrikaBurn's safety
+              team — so this help text, shared with the questionnaire definition
+              and the privacy review via MEDICAL_AUDIENCE_NOTE, must name that
+              audience wherever medical is captured or edited. The honest label
+              IS the privacy control (Ryan, 26 Jul 2026). */}
           <Field
             label="Medical notes"
             htmlFor="medicalNotes"
-            help="Allergies, conditions, medication a medic should know."
+            help={`Allergies, conditions, medication a medic should know. ${MEDICAL_AUDIENCE_NOTE}`}
             privacyToggle={lockedSwitch("Medical notes")}
           >
             <Textarea

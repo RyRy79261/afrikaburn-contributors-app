@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   HARD_LOCKED_PRIVATE_FIELDS,
+  SAFETY_VISIBLE_FIELDS,
+  ALWAYS_PRIVATE_FIELDS,
   isHardLockedPrivate,
+  isSafetyVisibleField,
+  isAlwaysPrivate,
   canBePublic,
   enforcePrivacyFlags,
   privacyViolations,
@@ -9,7 +13,7 @@ import {
 import { officerContactVisibleToOrg } from "../officers";
 
 describe("privacy hard-lock", () => {
-  it("locks id, passport, phone, both emergency contacts, and medical", () => {
+  it("hard-locks id, passport, phone, and both emergency contacts (no access path)", () => {
     for (const field of [
       "saId",
       "passport",
@@ -18,12 +22,27 @@ describe("privacy hard-lock", () => {
       "onsiteContactPhone",
       "offsiteContactName",
       "offsiteContactPhone",
-      "medical",
     ]) {
       expect(isHardLockedPrivate(field)).toBe(true);
+      expect(isSafetyVisibleField(field)).toBe(false);
+      expect(isAlwaysPrivate(field)).toBe(true);
       expect(canBePublic(field)).toBe(false);
     }
-    expect(HARD_LOCKED_PRIVATE_FIELDS).toHaveLength(8);
+    expect(HARD_LOCKED_PRIVATE_FIELDS).toHaveLength(7);
+  });
+
+  it("classes medical as safety-visible — never public, but NOT hard-locked", () => {
+    // Medical is visible to the audience the burner disclosed it to (their camp
+    // leads + AfrikaBurn safety staff), consented at the point of entry (Ryan,
+    // 26 Jul 2026). It is still absolutely excluded from public views.
+    expect(isSafetyVisibleField("medical")).toBe(true);
+    expect(isHardLockedPrivate("medical")).toBe(false);
+    expect(isAlwaysPrivate("medical")).toBe(true);
+    expect(canBePublic("medical")).toBe(false);
+    expect(SAFETY_VISIBLE_FIELDS).toEqual(["medical"]);
+    // The union is what every public projection excludes.
+    expect(ALWAYS_PRIVATE_FIELDS).toContain("medical");
+    expect(ALWAYS_PRIVATE_FIELDS).toHaveLength(8);
   });
 
   it("allows ordinary fields to be public", () => {

@@ -5,7 +5,7 @@ import {
   type SupplierOnboardingStepView,
 } from "@quagga/core";
 import type { SupplierOnboardingStepStatus } from "@quagga/types";
-import { buildStepCardModel } from "../onboarding-view";
+import { buildStepCardModel, supplierCodeChipValue } from "../onboarding-view";
 
 function view(
   key: Parameters<typeof supplierOnboardingStep>[0],
@@ -83,5 +83,38 @@ describe("buildStepCardModel", () => {
         expect(m.statusLabel).toMatch(/awaiting afrikaburn/i);
       }
     });
+  });
+});
+
+// Regression: the Progress panel's SUPPLIER CODE chip (canvas `D6Xsb`) was
+// designed but never rendered — `SupplierIdentity` did not carry the column at
+// all. Now that it does, the one rule that must not regress is the honest-empty
+// one: a supplier with no code yet renders NOTHING, never a stand-in that reads
+// like a real identifier.
+describe("supplierCodeChipValue", () => {
+  it("passes an issued code straight through", () => {
+    expect(supplierCodeChipValue("SUP-2027-0416")).toBe("SUP-2027-0416");
+  });
+
+  it("renders nothing for an imported row that has no code yet", () => {
+    expect(supplierCodeChipValue(null)).toBeNull();
+    expect(supplierCodeChipValue(undefined)).toBeNull();
+  });
+
+  it("treats a blank or whitespace-only value as no code", () => {
+    expect(supplierCodeChipValue("")).toBeNull();
+    expect(supplierCodeChipValue("   ")).toBeNull();
+  });
+
+  it("trims incidental whitespace without reformatting the code", () => {
+    expect(supplierCodeChipValue("  SUP-2027-0416 ")).toBe("SUP-2027-0416");
+  });
+
+  it("never invents a placeholder for a missing code", () => {
+    // Guards the specific defect shape: any non-null return here would put a
+    // fake identifier on a chip that suppliers quote off-platform.
+    for (const empty of [null, undefined, "", " ", "\t\n"]) {
+      expect(supplierCodeChipValue(empty)).toBeNull();
+    }
   });
 });

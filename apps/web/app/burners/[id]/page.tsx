@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { Pencil, ShieldCheck } from "lucide-react";
+import { Pencil, ShieldCheck, Stethoscope } from "lucide-react";
 import { publicMemberName } from "@quagga/core";
 import { volunteerPortfolioLabel } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
@@ -11,6 +11,7 @@ import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getPublicBurnerProfile } from "@/lib/groups-store";
+import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
 import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { ProfileHero } from "@/components/profile-public/profile-hero";
@@ -28,6 +29,14 @@ export const dynamic = "force-dynamic";
 // filtered out there too (the undiscoverability law). This page therefore has
 // no privacy logic of its own — a field it cannot render is a field it was
 // never given.
+//
+// ONE exception, server-resolved the same way: MEDICAL NOTES. They are never
+// public, but they ARE visible to the audience the burner disclosed them to —
+// their own camp's leads and AfrikaBurn's safety/org staff — which is exactly
+// what the field's label says at the point of entry. This member DETAIL view is
+// the only place they render (never a roster, never an export);
+// `resolveMedicalNotesForViewer` re-derives the authz from memberships
+// server-side and audits the read.
 
 // Zod-validate the dynamic segment at the boundary (build-spec §Hard constraints
 // 6). User ids are uuids; anything else is a 404, not a query.
@@ -67,6 +76,12 @@ export default async function BurnerProfilePage({
   const profile = await getPublicBurnerProfile(id, edition.id);
   if (!profile) notFound();
 
+  const medical = await resolveMedicalNotesForViewer({
+    viewerUserId: viewer.id,
+    subjectUserId: profile.userId,
+    editionId: edition.id,
+  });
+
   const isOwn = profile.userId === viewer.id;
   const pf = profile.publicFields;
 
@@ -103,6 +118,24 @@ export default async function BurnerProfilePage({
             ) : null
           }
         />
+
+        {medical.visible && medical.notes && (
+          <ProfileSection
+            label="Medical notes"
+            icon={
+              <Stethoscope className="h-3.5 w-3.5 text-accent" aria-hidden />
+            }
+          >
+            <p className="whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-sm leading-relaxed">
+              {medical.notes}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {isOwn
+                ? "Only your camp leads and AfrikaBurn's safety team can see this."
+                : "Shared with you as a camp lead / AfrikaBurn safety staff. Never public, and this view is logged."}
+            </p>
+          </ProfileSection>
+        )}
 
         {about && (
           <ProfileSection label="About">

@@ -18,8 +18,15 @@
 //     completedSectionsFor (./registration-sections)
 //   - sound scale (SOUND_SCALE, isNoAmplifiedSound) (./sound)
 //   - placement zones per edition (getPlacementZones) (./placement-zones)
-//   - privacy hard-lock: HARD_LOCKED_PRIVATE_FIELDS, enforcePrivacyFlags,
-//     privacyViolations, canBePublic (./privacy)
+//   - privacy classes: HARD_LOCKED_PRIVATE_FIELDS (no access path),
+//     SAFETY_VISIBLE_FIELDS (camp leads + org safety staff),
+//     ALWAYS_PRIVATE_FIELDS (union), enforcePrivacyFlags, privacyViolations,
+//     canBePublic, isHardLockedPrivate/isSafetyVisibleField (./privacy)
+//   - medical access: canViewMedicalNotes, medicalAccessBasis, isOrgStaffRole,
+//     MEDICAL_VIEW_AUDIT_ACTION (./medical-access)
+//   - medical audit READ side (the fail-open path's compensating control):
+//     summarizeMedicalAccess, detectMedicalEnumeration — distinct-subject
+//     bursts per actor, so a roster walk is visible to a human (./medical-audit)
 //   - payment references: generatePaymentReference, deriveSubjectCode
 //     (./payment-reference)
 //   - camp-scoped member ref codes: deriveCampPrefix, disambiguateCampPrefix,
@@ -59,6 +66,10 @@
 //     canActivateAudience, canViewActivationResults, canManageProjectRoles
 //     (./questionnaire-authz)
 //   - invite redemption: canRedeemInvite(As), single-use logic (./invite)
+//   - invite landing state: resolveInviteView (valid/used/expired/not-found for
+//     signed-out AND signed-in viewers), the token-free auth round trip
+//     (PENDING_INVITE_COOKIE, INVITE_RESUME_PATH, authPathForInvite),
+//     isWellFormedInviteToken, invitePath, inviteExpiryLabel (./invite-view)
 //   - god-email bootstrap parsing: parseGodEmails, isGodEmailIn (./god-emails)
 //   - supplier CSV import: parseCsv, parseSuppliersCsv (./supplier-import)
 //   - supplier onboarding: SUPPLIER_ONBOARDING_STEPS, deriveOnboardingProgress,
@@ -110,6 +121,8 @@ export * from "./registration-sections";
 export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
+export * from "./medical-access";
+export * from "./medical-audit";
 export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";
@@ -124,6 +137,7 @@ export * from "./audience";
 export * from "./questionnaire-activation";
 export * from "./questionnaire-authz";
 export * from "./invite";
+export * from "./invite-view";
 export * from "./god-emails";
 export * from "./supplier-import";
 export * from "./supplier-onboarding";

@@ -18,7 +18,7 @@
 // writes. Keeping it pure is what lets the tests prove — without a database —
 // that no personal field survives and no foreign key is touched.
 
-import { HARD_LOCKED_PRIVATE_FIELDS } from "./privacy";
+import { ALWAYS_PRIVATE_FIELDS } from "./privacy";
 
 /** What an anonymized account is called everywhere it still appears. */
 export const DEPARTED_BURNER_NAME = "Departed Burner";
@@ -66,10 +66,12 @@ export function buildUserSanitizationPatch(
  * outright and the one field that becomes the visible stub, so the test can
  * assert completeness against the schema rather than trusting this list by eye.
  *
- * The HARD-LOCKED classes (phone, both emergency contacts, medical, SA ID,
- * passport — see ./privacy) are all present by construction: `assertBioPatchCovers`
- * proves it, and the sanitization test fails loudly if a future migration adds a
- * personal column that nobody added here.
+ * The always-private classes (phone, both emergency contacts, SA ID, passport —
+ * hard-locked — plus medical — safety-visible; see ./privacy) are all present by
+ * construction: `assertBioPatchCovers` proves it, and the sanitization test fails
+ * loudly if a future migration adds a personal column that nobody added here.
+ * The safety-visible class changes who may READ medical notes on a live account;
+ * it changes nothing about erasure — POPIA erasure still nulls the column.
  */
 export const SANITIZED_BIO_NULL_FIELDS = [
   // Identity + self-description
@@ -85,7 +87,7 @@ export const SANITIZED_BIO_NULL_FIELDS = [
   "onsiteContactPhone",
   "offsiteContactName",
   "offsiteContactPhone",
-  // Medical (hard-locked)
+  // Medical (safety-visible — never public; still erased on deletion)
   "medicalNotes",
   // Government identifiers (hard-locked, pgcrypto-encrypted at rest)
   "saIdEncrypted",
@@ -281,15 +283,16 @@ export function assertNotSanitized(user: {
 // --- Verification helpers (used by the sanitization-integrity tests) ------
 
 /**
- * The personal fields that must be gone. Every hard-locked field maps into the
- * bio patch, plus the non-locked personal free text. Returns the fields a given
- * patch FAILS to cover — empty means the patch is complete.
+ * The personal fields that must be gone. Every always-private field (both the
+ * hard-locked classes AND the safety-visible medical class) maps into the bio
+ * patch, plus the non-locked personal free text. Returns the fields a given patch
+ * FAILS to cover — empty means the patch is complete.
  *
  * The mapping exists because ./privacy names fields as the privacy-flag map does
  * (`saId`, `passport`, `medical`) while the columns are named as the schema does
  * (`saIdEncrypted`, `passportEncrypted`, `medicalNotes`).
  */
-const HARD_LOCKED_TO_COLUMN: Readonly<Record<string, string>> = {
+const ALWAYS_PRIVATE_TO_COLUMN: Readonly<Record<string, string>> = {
   saId: "saIdEncrypted",
   passport: "passportEncrypted",
   phone: "phone",
@@ -301,16 +304,17 @@ const HARD_LOCKED_TO_COLUMN: Readonly<Record<string, string>> = {
 };
 
 /**
- * Prove a bio patch erases every HARD-LOCKED private field. Returns the
- * hard-locked field keys left uncovered; empty ⇒ compliant. This is the guard
- * that fails when someone adds a hard-locked class to ./privacy and forgets the
- * erasure path.
+ * Prove a bio patch erases every ALWAYS-PRIVATE field (hard-locked +
+ * safety-visible medical). Returns the field keys left uncovered; empty ⇒ compliant. This is the
+ * guard that fails when someone adds an always-private class to ./privacy and
+ * forgets the erasure path. Named `HardLocked` for backwards compatibility — the
+ * scope is now the full never-public union so medical stays covered.
  */
 export function uncoveredHardLockedFields(
   patch: Record<string, unknown>,
 ): string[] {
-  return HARD_LOCKED_PRIVATE_FIELDS.filter((field) => {
-    const column = HARD_LOCKED_TO_COLUMN[field];
+  return ALWAYS_PRIVATE_FIELDS.filter((field) => {
+    const column = ALWAYS_PRIVATE_TO_COLUMN[field];
     if (column === undefined) return true;
     return patch[column] !== null;
   });

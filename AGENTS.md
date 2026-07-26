@@ -87,10 +87,37 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
   codes (`MAH-M017`) are allowed — they're the camp's own EFT reconciliation.
 - **Fewer forms, not more.** Every field must earn its place; derive over ask; carry
   forward by default; progressive disclosure over blanket collection.
-- **Privacy hard-locks**: phone, emergency contacts, ID/passport are NEVER publicly
-  exposable, regardless of flags. The ONLY path that shares a phone with the org is an
-  accepted officer registration (explicit consent flow). Free camps are undiscoverable
-  to strangers (directory, profiles, type-aheads all enforce this).
+- **Privacy classes** (two, both enforced in `@quagga/core` `privacy.ts`, never in
+  the UI; both are excluded from EVERY public projection unconditionally):
+  - **Hard-locked (`HARD_LOCKED_PRIVATE_FIELDS`)** — phone, both emergency contacts,
+    SA ID and passport. NEVER publicly exposable and with **no reveal path of any
+    kind**. The ONLY path that shares a phone with the org is an accepted officer
+    registration (explicit consent flow).
+  - **Safety-visible (`SAFETY_VISIBLE_FIELDS`)** — **medical notes only**. Never
+    public either, but **visible** to the audience the burner disclosed them to: a
+    camp lead/admin of a camp the burner is a member of (their OWN camp only; a lead
+    of camp A is refused for a member of camp B) and org staff (`org_staff`/`god`).
+    **The consent lives at the point of entry** — the medical field's own label says
+    who can see it ("Your camp leads and AfrikaBurn's safety team can see this…",
+    `MEDICAL_AUDIENCE_NOTE`, shown wherever medical is captured or edited). That
+    honest label is the load-bearing privacy control, exactly as the paper form
+    already works: if you disclose it, you consent to that audience holding it.
+    There is **no reveal ceremony** — no reason prompt, no dialog, no per-view
+    notification; friction in an emergency protects nobody. What remains, because it
+    costs nothing and matters: **encrypted at rest**; **never in any public
+    projection** (`canBePublic("medical") === false`, unconditional); **never in a
+    list, roster, card or export** — only on a member's DETAIL view (`/burners/[id]`
+    in `apps/web`, `/registrations/[id]/members/[userId]` in `apps/org`), because
+    casual bulk exposure is a different risk from purposeful access; and **every
+    disclosing read writes an `audit_events` row** (`bio.medical.view` — actor,
+    subject, basis, timestamp) server-side via `after()`, so the audit never blocks
+    or slows the read but enumeration stays detectable. The authz predicate is
+    `canViewMedicalNotes` (`@quagga/core` `medical-access.ts`), enforced server-side.
+    *(Ryan, 26 Jul 2026: "if you disclose it, aren't you consenting to that audience
+    to hold that data?" — this replaces both the earlier hard-lock and the
+    short-lived break-glass/reason-prompt design.)*
+  - Free camps are undiscoverable to strangers (directory, profiles, type-aheads all
+    enforce this).
 - **Structural roles (`lead`/`admin`) hold every project permission irrevocably** — the
   no-lockout backstop. Custom-role privileges are grants on top.
 - **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's),

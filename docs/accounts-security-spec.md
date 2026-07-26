@@ -185,6 +185,139 @@ for the owner on read, and dropped rather than stored plaintext when no key is
 configured. The `medical_notes` column stays `text`, so this needed **no
 migration** — only the write/read code in `apps/web/lib/bio-store.ts`.
 
+## Medical notes — consent at the point of entry (Ryan, 26 Jul 2026)
+
+Medical notes are **never public**, but they are **visible** to the audience the
+burner disclosed them to. Ryan's correction, which supersedes the short-lived
+break-glass design of the same day: *"These would be similar to how burn currently
+manages medical data — if you disclose it, aren't you consenting to that audience
+to hold that data?"* AfrikaBurn already runs this on paper: you write your medical
+info on a form knowing the safety team and your camp hold it. **The disclosure is
+the consent.** A reason prompt adds friction at exactly the wrong moment — an
+emergency — without adding protection, so there is none.
+
+**What is still absolutely locked.** Phone, both emergency contacts, SA ID and
+passport stay `HARD_LOCKED_PRIVATE_FIELDS` with **no access path of any kind** —
+unchanged. Nothing here weakened them.
+
+**The consent control is the field's own label.** `MEDICAL_AUDIENCE_NOTE`
+(`@quagga/core` `bio.ts`) is the single string that states the audience — *"Your
+camp leads and AfrikaBurn's safety team can see this. It's here so someone can help
+you if something goes wrong on site."* It is rendered wherever medical is captured
+or edited: the onboarding bio flow, the profile editor (same `BioFlow` component),
+the privacy-review lock reason (`BIO_PRIVACY_FIELDS` → `medical.lockReason`), and
+the code questionnaire definition's helper. Because that label is now the
+load-bearing privacy control, a test asserts it names both audiences — if it stops
+doing so, the consent basis is gone.
+
+**Who may see it** (pure predicate `canViewMedicalNotes` in `@quagga/core`
+`medical-access.ts`, fail-closed):
+- the owner (their own notes);
+- **org staff** (`org_staff` / `god`) — AfrikaBurn's safety/ops tier, any burner;
+- a **camp lead/admin** — but only for a member of a camp *they* lead. A lead of
+  camp A is refused for a member of camp B (the lead-camp id set must intersect the
+  subject's camp ids). Custom project roles do NOT grant it — structural leads only.
+
+Server-side authz is the boundary; UI hiding never is. The predicates are the same
+ones the break-glass design used — only the ceremony around them is gone.
+
+**Detail views only — never lists or exports, and no has/has-not signpost either.**
+Notes render on a member's DETAIL view and nowhere else: `/burners/[id]` in
+`apps/web` (resolved by `resolveMedicalNotesForViewer` in
+`apps/web/lib/medical-access.ts`) and `/registrations/[id]/members/[userId]` in
+`apps/org` (resolved by `getRosterMemberDetail`). Casual bulk exposure — forty
+people down a roster, or a CSV — is a different risk from purposeful access, so the
+roster query deliberately never selects the notes.
+
+**Authorise, then select.** Both detail resolvers run the access predicate
+*before* the query that would read the column, and pass the answer in:
+`resolveMedicalNotesForViewer` checks `canViewMedicalNotes` and only then reads
+`burner_bios`, and `getRosterMemberDetail` takes an explicit
+`includeMedicalNotes` flag that its caller derives from the same predicate. On a
+refusal the ciphertext is never loaded, so there is no plaintext in render scope
+for a later careless edit — a debug dump, a widened props object — to ship in an
+RSC payload. Deciding *after* the decrypt would leave correctness resting on a
+conditional in the JSX.
+
+The org roster briefly rendered a *"Medical notes on file" / "No medical notes"*
+signpost per row. **That is gone** (26 Jul 2026), because it was the same leak in
+miniature: whether a NAMED person has declared a health condition is itself
+special-category-adjacent under POPIA s26, and a column of it hands a reviewer a
+complete census of who has disclosed — obtained in one server-rendered page load,
+with **no `bio.medical.view` audit row written for any of it**, which is exactly the
+bulk scan the detail-view-only rule exists to prevent. AGENTS.md:108-111 already said
+"never in a list, roster, **card** or export"; the code now agrees with it.
+`RosterMemberRow` carries no medical field and `getRegistrationRoster` never selects
+`medical_notes`, so there is nothing left for a later edit to leak
+(`apps/org/lib/__tests__/roster-privacy.test.ts` fails if either returns).
+
+The cost is real and was weighed: without the signpost, staff who want to know
+whether a camp has disclosures must open member pages. That is the intended
+friction — each of those opens is authorized and *recorded*, which the signpost was
+not. **If Ryan rules the other way**, the amendment belongs in AGENTS.md:109 first
+("the notes themselves are never listed; a has/has-not signpost is"), and the
+signpost read should then write its own audit row; it must not reappear as a silent
+divergence from the stated law.
+
+**Encrypted at rest.** Unchanged: AES-256-GCM on write, decrypted on read, dropped
+rather than stored plaintext when no key is configured, erased on account deletion
+(POPIA erasure — `SANITIZED_BIO_NULL_FIELDS`).
+
+**Every disclosing read is audited.** When a detail view resolves someone else's
+non-empty notes it writes an `audit_events` row: `action = "bio.medical.view"`,
+actor, subject, `meta.basis` (`self` / `org_staff` / `camp_lead`), timestamp. The
+write happens in Next's `after()` — **off the critical path**, so the audit can
+never block or slow the read (an emergency read must not wait on a log row), and a
+failed insert is logged, not surfaced. Reading your own notes is not an access
+event and is not audited; an empty field discloses nothing and is not audited.
+
+**The audit FAILS OPEN, and that is deliberate — so the reader is the control.**
+Because the insert runs in `after()`, the notes are already rendered and streamed
+before the row is attempted, and a failed insert is swallowed to `console.error`: a
+dropped serverless instance, a DB blip or a constraint failure yields a *silent,
+unlogged disclosure*. Fail-open is the right call for this path (an emergency medic
+read must never be blocked by an audit write), which means **prevention is not the
+control here — detection is**, and detection only exists if something reads the rows.
+
+Until 26 Jul 2026 nothing did. `getRegistrationDecisionLog` filters
+`subject = registrationId`, and medical rows carry a *user* id, so they never appeared
+there; the only other reader was the overview's six-row `getRecentActivity`, unfiltered
+and unlabeled. "Enumeration stays detectable" was aspirational. What closes it:
+
+- **`@quagga/core` `medical-audit.ts`** — pure derivations over the rows.
+  `detectMedicalEnumeration` flags an actor who read **8 or more DISTINCT burners'**
+  notes inside a **1-hour sliding window** (`MEDICAL_ENUMERATION_SUBJECT_THRESHOLD` /
+  `_WINDOW_MS`). The signal is distinct subjects, never read volume — a medic
+  re-opening one patient ten times is not enumeration, and flagging it would train
+  staff to ignore the alert. `summarizeMedicalAccess` adds reads / actors / subjects /
+  last-read.
+- **`apps/org/lib/medical-audit.ts`** — `getMedicalAccessLog` (30-day window, actor
+  email + subject display name resolved, capped at 500 rows), `getMedicalAccessGlance`
+  (the cheap roll-up) and `getAuditTrail` (the whole trail).
+- **`/audit` in the console** (`guardConsole` → god / org_staff) — the alert banner,
+  the who/whose/when table, and the full activity list. It shows **who looked at whose
+  notes, never the notes**; reading the trail is not a disclosure, so it writes no
+  audit row of its own.
+- **A standing alert on the Overview and Status board** (`MedicalAccessStrip`) so a
+  burst is visible without anyone thinking to visit `/audit`.
+- **Medical reads are excluded from the six-row glance feed** (`FEED_EXCLUDED_ACTIONS`
+  in `apps/org/lib/status-board-format.ts`, applied in SQL). One roster walk emits
+  dozens of rows in a minute and would evict every registration decision from that
+  card. They are not hidden — `/audit` shows them with the alerts a six-row card could
+  never carry — and `activityLabel` now renders `bio.medical.view` as English instead
+  of leaking the raw key.
+
+**No rate limit, on purpose.** The anti-enumeration limiter is not coming back: a
+throttle on this path fails closed in an emergency, which is the outcome the whole
+consent-at-entry model refuses. The trade is stated plainly — the read always
+succeeds, and the abuse is *seen*.
+(Regression: `packages/core/src/__tests__/medical-audit.test.ts` and
+`apps/org/lib/__tests__/medical-audit-surface.test.ts`.)
+
+**No per-view notification.** Removed deliberately. Notifying a burner every time
+their camp lead opens their profile is noise, not consent — the consent was given
+at entry, in writing, with the audience named.
+
 ## Security events log (the "recent security events" feed)
 
 The `/account/security` feed reads a real append-only `security_events` table

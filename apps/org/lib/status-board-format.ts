@@ -4,6 +4,8 @@
 // derivation here is unit-testable (lib/__tests__/status-board-format.test.ts).
 // The DB reads that feed these live in lib/status-board.ts.
 
+import { MEDICAL_VIEW_AUDIT_ACTION } from "@quagga/core";
+
 /** Human label for an audit action. Unknown actions fall back to the key. */
 const ACTIVITY_LABELS: Record<string, string> = {
   "registration.start_review": "started reviewing a registration",
@@ -29,6 +31,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "category.update": "edited a camp category",
   "category.delete": "removed a camp category",
   "category.assign": "changed a camp's categories",
+  [MEDICAL_VIEW_AUDIT_ACTION]: "read a burner's medical notes",
 };
 
 export function activityLabel(action: string): string {
@@ -43,11 +46,31 @@ export function activityTone(action: string): ActivityTone {
   if (action === "registration.reject") return "reject";
   if (
     action === "registration.request_changes" ||
-    action === "registration.start_review"
+    action === "registration.start_review" ||
+    action === MEDICAL_VIEW_AUDIT_ACTION
   ) {
     return "attention";
   }
   return "neutral";
+}
+
+/**
+ * Audit actions kept OUT of the six-row "Recent activity" card.
+ *
+ * Only medical reads, and not because they are unimportant — the opposite. A
+ * `bio.medical.view` row is written on every disclosing read, so one camp lead
+ * walking a roster emits dozens in a minute and would push every registration
+ * decision off a six-row feed. They get a surface that can actually hold them
+ * (`/audit`, with the enumeration alerts), instead of drowning the one that
+ * cannot. `activityLabel` still names them there.
+ */
+export const FEED_EXCLUDED_ACTIONS: readonly string[] = [
+  MEDICAL_VIEW_AUDIT_ACTION,
+];
+
+/** True when an audit action belongs in the short overview activity feed. */
+export function isFeedAction(action: string): boolean {
+  return !FEED_EXCLUDED_ACTIONS.includes(action);
 }
 
 /** Compact relative time ("12 min ago", "3 h ago", "2 d ago"). */

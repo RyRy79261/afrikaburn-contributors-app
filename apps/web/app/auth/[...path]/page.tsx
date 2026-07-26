@@ -1,4 +1,9 @@
 import { redirect } from "next/navigation";
+import {
+  INVITE_AUTH_PARAM,
+  INVITE_RESUME_PATH,
+  wantsInviteResume,
+} from "@quagga/core";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
@@ -20,13 +25,23 @@ const BRANDED_VIEWS: Record<string, AuthMode> = {
 
 export default async function AuthPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ path: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { path } = await params;
   const view = path?.[0] ?? "sign-in";
   const mode = BRANDED_VIEWS[view];
   if (!mode) redirect("/auth/sign-in");
+
+  // `?next=invite` says "an invite is waiting on the far side of this". It is an
+  // OPAQUE MARKER, never a caller-supplied url and never the invite token: the
+  // token itself rides in an httpOnly cookie, so there is nothing here to leak
+  // and nothing to abuse as an open redirect — the only value that resolves to
+  // anything is the one fixed internal path below.
+  const resumeInvite = wantsInviteResume((await searchParams)?.[INVITE_AUTH_PARAM]);
+  const redirectTo = resumeInvite ? INVITE_RESUME_PATH : "/";
 
   const editionLabel = await getEditionLabel();
 
@@ -39,7 +54,7 @@ export default async function AuthPage({
         <NotConfiguredBanner />
         <Card className="overflow-hidden">
           <CardContent className="p-6">
-            <AuthForm mode={mode} />
+            <AuthForm mode={mode} redirectTo={redirectTo} />
           </CardContent>
         </Card>
         <p className="text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">

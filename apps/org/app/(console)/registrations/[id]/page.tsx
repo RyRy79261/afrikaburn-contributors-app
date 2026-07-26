@@ -10,6 +10,7 @@ import {
   getRegistrationDetail,
   getRegistrationDecisionLog,
   getRegistrationOfficers,
+  getRegistrationRoster,
   type RegistrationDetail,
 } from "@/lib/queries";
 import {
@@ -60,9 +61,10 @@ export default async function RegistrationDetailPage({
   const detail = await getRegistrationDetail(id);
   if (!detail) notFound();
 
-  const [decisionLog, officers] = await Promise.all([
+  const [decisionLog, officers, roster] = await Promise.all([
     getRegistrationDecisionLog(id),
     getRegistrationOfficers(detail.group.id, detail.edition.id),
+    getRegistrationRoster(detail.group.id, detail.edition.id),
   ]);
 
   const projectKind = asProjectKind(detail.group.kind);
@@ -114,6 +116,7 @@ export default async function RegistrationDetailPage({
         subjectNoun={PROJECT_SUBJECT_NOUN[detail.group.kind] ?? "project"}
         officersCopy={officersCopy(detail.group.kind)}
         showWrangler={false}
+        roster={roster}
       />
     );
   }
@@ -151,6 +154,7 @@ export default async function RegistrationDetailPage({
       subjectNoun="camp"
       officersCopy={officersCopy("theme_camp")}
       showWrangler
+      roster={roster}
     />
   );
 }

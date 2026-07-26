@@ -64,6 +64,12 @@ const ROLE_LABEL: Record<MembershipRole, string> = {
   member: "Member",
 };
 
+/**
+ * The camp member roster. Names link to each member's DETAIL page — which is
+ * where a camp lead sees that member's medical notes (never here: casual bulk
+ * exposure down a list of forty people is a different risk from purposeful
+ * access, so medical stays off every list, card and export).
+ */
 export function CampMembers(props: CampMembersProps) {
   const router = useRouter();
   const [members, setMembers] = React.useState<CampMemberVM[]>(props.members);

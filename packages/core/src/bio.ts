@@ -14,7 +14,7 @@ import {
   type QuestionnaireResponses,
 } from "@quagga/types";
 import {
-  HARD_LOCKED_PRIVATE_FIELDS,
+  ALWAYS_PRIVATE_FIELDS,
   canBePublic,
   enforcePrivacyFlags,
 } from "./privacy";
@@ -131,11 +131,26 @@ export interface BioPrivacyField {
   lockReason?: string;
 }
 
-const HARD_LOCKED = new Set<string>(HARD_LOCKED_PRIVATE_FIELDS);
+const ALWAYS_PRIVATE = new Set<string>(ALWAYS_PRIVATE_FIELDS);
+
+/**
+ * THE consent control for medical notes. Medical is never public, but it IS
+ * visible to the burner's camp leads and AfrikaBurn's safety/org staff — and the
+ * thing that makes that disclosure informed is this sentence, shown wherever the
+ * field is captured or edited (onboarding bio flow, profile edit, the privacy
+ * review, and the questionnaire definition). Consent lives at the point of
+ * entry, exactly like the paper form AfrikaBurn already runs: if you write it
+ * down, you know who holds it. Keep this string in ONE place so no surface can
+ * quietly collect medical data without stating its audience.
+ * (Ryan, 26 Jul 2026.)
+ */
+export const MEDICAL_AUDIENCE_NOTE =
+  "Your camp leads and AfrikaBurn's safety team can see this. It's here so someone can help you if something goes wrong on site.";
 
 /** The ordered privacy registry. Toggleable fields first, then the locked
- * always-private classes. The `locked` flags are derived from
- * HARD_LOCKED_PRIVATE_FIELDS so the two can never drift. */
+ * always-private classes (both hard-locked AND safety-visible render as a
+ * locked, never-public toggle). The `locked` flags are derived from
+ * ALWAYS_PRIVATE_FIELDS so the registry and the privacy law can never drift. */
 export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
   { key: "displayName", label: "Display name", locked: false, defaultPublic: true },
   { key: "legalName", label: "Legal name", locked: false, defaultPublic: false },
@@ -200,7 +215,7 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
     label: "Medical notes",
     locked: true,
     defaultPublic: false,
-    lockReason: "Always private — held for medics only.",
+    lockReason: `Never public. ${MEDICAL_AUDIENCE_NOTE}`,
   },
   {
     key: "saId",
@@ -216,7 +231,7 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
     defaultPublic: false,
     lockReason: "Always private + encrypted at rest (POPIA).",
   },
-].map((f) => ({ ...f, locked: HARD_LOCKED.has(f.key) || f.locked }));
+].map((f) => ({ ...f, locked: ALWAYS_PRIVATE.has(f.key) || f.locked }));
 
 /** The default privacy-flags map for a brand-new bio — non-locked fields take
  * their `defaultPublic`, locked fields are forced private. */
@@ -275,8 +290,8 @@ export function publicMemberName(
 
 /**
  * A third-party-safe projection of a bio. Only the fields the OWNER flagged
- * public are populated; every other field is null/empty. The hard-locked
- * always-private classes (phone, emergency contacts, medical, ID) are never
+ * public are populated; every other field is null/empty. The always-private
+ * classes (phone, emergency contacts, medical, ID) are never
  * even eligible — they are not part of this shape AND `publicBioView` gates on
  * `canBePublic`, so a corrupted flag map claiming one is public can never
  * surface it.
@@ -397,7 +412,7 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         id: "intro",
         kind: "intro",
         heading: "Your Burner Bio",
-        body: "A short, self-serve profile you carry year to year. Fill it once — every field you set means one less form later. Sensitive details (phone, medical, ID) stay locked private, always.",
+        body: "A short, self-serve profile you carry year to year. Fill it once — every field you set means one less form later. Sensitive details (phone, emergency contacts, ID) stay locked private, always; medical notes are never public either, and each field says who can see it.",
       },
       {
         id: "identity",
@@ -504,7 +519,7 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         kind: "questions",
         title: "Emergency contacts",
         subtitle:
-          "Always private — held for safety teams only, never shown to camps. Give us one person on-site and one off-site.",
+          "Emergency contacts are always private — held for safety teams only, never shown to camps. Give us one person on-site and one off-site.",
         questions: [
           {
             id: "onsite.name",
@@ -538,7 +553,7 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
             id: "medicalNotes",
             kind: "long_text",
             prompt: "Medical notes",
-            helper: "Allergies, conditions, medication a medic should know. Always private.",
+            helper: `Allergies, conditions, medication a medic should know. Never public. ${MEDICAL_AUDIENCE_NOTE}`,
             maxLength: 1000,
             required: false,
           },

@@ -6,7 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
-import { Badge } from "@quagga/ui/components/badge";
 import { supplierOnboardingStep } from "@quagga/core";
 import { guardPortal } from "@/lib/gate";
 import { PageHeading } from "@/components/page-heading";
@@ -18,7 +17,11 @@ import {
   DocumentsPanel,
   type DocumentRow,
 } from "@/components/documents-panel";
-import { buildStepCardModel, stepEyebrow } from "@/lib/onboarding-view";
+import {
+  buildStepCardModel,
+  stepEyebrow,
+  supplierCodeChipValue,
+} from "@/lib/onboarding-view";
 import { loadSupplierDocumentsPanel } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +43,11 @@ export default async function OnboardingPage() {
   }));
 
   const pct = Math.round((progress.completed / progress.total) * 100);
+
+  // The SUPPLIER CODE chip (canvas `D6Xsb` desktop / `FqxsW` mobile). Null for
+  // an imported row that has not been backfilled yet — the chip then renders
+  // nothing at all, never a placeholder that reads like a real code.
+  const supplierCode = supplierCodeChipValue(supplier.code);
 
   // Documents & links for this edition, joined to this supplier's acks. The step
   // TITLE is resolved here (server side) from the core catalog so the client
@@ -64,21 +72,28 @@ export default async function OnboardingPage() {
         eyebrow={`Supplier Depot onboarding · ${edition.name}`}
         title="Your onboarding checklist"
         description="Seven steps from the real Supplier Depot process. You complete some yourself; AfrikaBurn confirms the deposit, briefing, and fee. Read each rule right where you act on it."
-        actions={
-          <Badge variant={progress.isOnboarded ? "success" : "secondary"}>
-            {progress.completed}/{progress.total} done
-          </Badge>
-        }
       />
 
       <Card className="mb-6">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-base">
-                {progress.isOnboarded
-                  ? "Onboarding complete"
-                  : "Onboarding progress"}
+          {/*
+            Frame `Q4fye` node `rRVfg` (desktop) / `lm3jO` node `M1YX5` (mobile):
+            one row on desktop — count + sub-copy left, the SUPPLIER CODE chip
+            right-aligned; stacked on mobile with the chip left-aligned beneath.
+          */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                {/* Canvas `xHZmz`: the count IS the headline, not a bare label. */}
+                <span>
+                  {progress.completed} of {progress.total} steps complete
+                </span>
+                {progress.isOnboarded && (
+                  <CheckCircle2
+                    className="h-5 w-5 shrink-0 text-success"
+                    aria-hidden
+                  />
+                )}
               </CardTitle>
               <CardDescription>
                 {progress.isOnboarded
@@ -88,8 +103,15 @@ export default async function OnboardingPage() {
                     : "Work through each step below. Progress saves as you go."}
               </CardDescription>
             </div>
-            {progress.isOnboarded && (
-              <CheckCircle2 className="h-6 w-6 text-success" aria-hidden />
+            {supplierCode && (
+              <dl className="flex shrink-0 flex-col gap-0.5 sm:items-end">
+                <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                  Supplier code
+                </dt>
+                <dd className="select-all font-mono text-[15px] font-bold leading-none text-primary">
+                  {supplierCode}
+                </dd>
+              </dl>
             )}
           </div>
         </CardHeader>

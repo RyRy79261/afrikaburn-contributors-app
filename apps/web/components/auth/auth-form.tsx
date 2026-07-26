@@ -8,7 +8,13 @@ import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
 import { PasswordInput } from "@quagga/ui/components/password-input";
 import { AccountTwoFactorChallenge } from "@quagga/ui/components/account-two-factor-challenge";
+import {
+  INVITE_AUTH_PARAM,
+  INVITE_AUTH_MARKER,
+  INVITE_RESUME_PATH,
+} from "@quagga/core";
 import { authClient } from "@/lib/auth-client";
+import { navigateOnwards } from "@/lib/client-navigation";
 
 // Branded email/password + Google auth form (design canvas frame u87N7). One
 // password field (no confirm), show/hide toggle, length-based strength on
@@ -30,9 +36,28 @@ const SIGN_UP_GENERIC =
 const GENERIC_PROBLEM =
   "Something went wrong. Please try again in a moment.";
 
-export function AuthForm({ mode }: { mode: AuthMode }) {
+export function AuthForm({
+  mode,
+  redirectTo = "/",
+}: {
+  mode: AuthMode;
+  /**
+   * Where a completed sign-in lands. Only ever an INTERNAL path chosen by the
+   * server (see app/auth/[...path]/page.tsx) — never read from user input — so
+   * it cannot become an open redirect. `/join/continue` is the invite round
+   * trip's far side.
+   */
+  redirectTo?: string;
+}) {
   const router = useRouter();
   const isSignUp = mode === "sign-up";
+  // Keep "an invite is waiting" attached when the visitor switches between
+  // sign-in, sign-up and forgot-password, so the round trip is not dropped by a
+  // change of mind. Opaque marker only — the token lives in an httpOnly cookie.
+  const resumingInvite = redirectTo === INVITE_RESUME_PATH;
+  const authQuery = resumingInvite
+    ? `?${INVITE_AUTH_PARAM}=${INVITE_AUTH_MARKER}`
+    : "";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -59,11 +84,16 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         // Keep the form to email + password (fewer forms — the Burner Bio
         // collects the rest). Derive a placeholder display name from the email.
         const name = email.split("@")[0] || "Burner";
-        const { error: signUpError } = await authClient.signUp.email({
-          email,
-          password,
-          name,
-        });
+        const { error: signUpError } =
+          await authClient.signUp.email({
+            email,
+            password,
+            name,
+            // Where the VERIFICATION email's link returns to. With email
+            // verification on (production), this is the only thing that carries
+            // an invite across the inbox round trip.
+            callbackURL: redirectTo,
+          });
         if (signUpError) {
           const msg = (signUpError.message ?? "").toLowerCase();
           // Surface real, actionable password problems; keep everything else
@@ -72,9 +102,35 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             setError(
               `That password can't be used. Use at least ${PASSWORD_MIN_LENGTH} characters.`,
             );
+          } else if (resumingInvite) {
+            // ENUMERATION: in the invite flow the success path navigates to the
+            // camp, so stopping here with a notice would make "already has an
+            // account" observable to anyone holding an invite token — the exact
+            // oracle SIGN_UP_GENERIC exists to prevent. It only bit when email
+            // verification is off (local, preview, demo), because with it on no
+            // session comes back either way; but the property must not depend
+            // on a deployment setting. Both outcomes now go to the same url,
+            // and `/join/continue` bounces a signed-out arrival to sign-in.
+            navigateOnwards(router, redirectTo);
           } else {
             setNotice(SIGN_UP_GENERIC);
           }
+          return;
+        }
+        // With verification REQUIRED (production) no session comes back, both
+        // outcomes show the same generic notice, and nothing is observable —
+        // the enumeration-safety property this copy exists for. When
+        // verification is off, Better Auth signs the new account straight in;
+        // an invitee must then be carried to their camp rather than left
+        // staring at "check your inbox", so we follow the session we were
+        // handed. (Only the invite flow moves; the plain sign-up path keeps its
+        // existing stay-and-notice behaviour byte for byte.)
+        if (resumingInvite) {
+          // Navigate whether or not a session came back, so this path is
+          // byte-identical to the already-registered branch above. With
+          // verification on there is no session yet and `/join/continue` sends
+          // them to sign-in; with it off they arrive signed in and confirm.
+          navigateOnwards(router, redirectTo);
           return;
         }
         setNotice(SIGN_UP_GENERIC);
@@ -85,7 +141,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       const { data, error: signInError } = await authClient.signIn.email({
         email,
         password,
-        callbackURL: "/",
+        callbackURL: redirectTo,
       });
       if (signInError) {
         setError(SIGN_IN_FAILED);
@@ -96,8 +152,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         setNeedsTwoFactor(true);
         return;
       }
-      router.push("/");
-      router.refresh();
+      navigateOnwards(router, redirectTo);
     } catch {
       setError(GENERIC_PROBLEM);
     } finally {
@@ -110,7 +165,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setNotice(null);
     setGooglePending(true);
     try {
-      await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+      // Better Auth keeps this callback in ITS OWN server-side state record; the
+      // value never travels to Google, so the invite round trip stays private.
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: redirectTo,
+      });
     } catch {
       setError(GENERIC_PROBLEM);
       setGooglePending(false);
@@ -126,10 +186,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     return (
       <AccountTwoFactorChallenge
         client={authClient}
-        onVerified={() => {
-          router.push("/");
-          router.refresh();
-        }}
+        onVerified={() => navigateOnwards(router, redirectTo)}
       />
     );
   }
@@ -175,7 +232,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       {isSignUp ? null : (
         <div className="-mt-1 text-right">
           <Link
-            href="/auth/forgot-password"
+            href={`/auth/forgot-password${authQuery}`}
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             Forgot your password?
@@ -227,7 +284,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           <>
             Already have an account?{" "}
             <Link
-              href="/auth/sign-in"
+              href={`/auth/sign-in${authQuery}`}
               className="font-medium text-primary hover:underline"
             >
               Sign in
@@ -237,7 +294,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           <>
             New here?{" "}
             <Link
-              href="/auth/sign-up"
+              href={`/auth/sign-up${authQuery}`}
               className="font-medium text-primary hover:underline"
             >
               Create an account

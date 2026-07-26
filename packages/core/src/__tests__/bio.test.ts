@@ -20,6 +20,7 @@ import {
 } from "../bio";
 import {
   HARD_LOCKED_PRIVATE_FIELDS,
+  ALWAYS_PRIVATE_FIELDS,
   enforcePrivacyFlags,
   privacyViolations,
 } from "../privacy";
@@ -32,9 +33,13 @@ import {
 } from "@quagga/types";
 
 describe("bio privacy registry ↔ hard-lock", () => {
-  it("marks exactly the hard-locked classes as locked", () => {
+  it("marks exactly the always-private classes as locked (hard-lock + safety-visible)", () => {
     const locked = BIO_PRIVACY_FIELDS.filter((f) => f.locked).map((f) => f.key);
-    expect(locked.sort()).toEqual([...HARD_LOCKED_PRIVATE_FIELDS].sort());
+    expect(locked.sort()).toEqual([...ALWAYS_PRIVATE_FIELDS].sort());
+    // Medical (safety-visible) is a locked, never-public toggle even though it
+    // is not in the hard-locked (no-access-path) set.
+    expect(locked).toContain("medical");
+    expect(HARD_LOCKED_PRIVATE_FIELDS).not.toContain("medical");
   });
 
   it("never defaults a locked field public", () => {
@@ -236,15 +241,16 @@ describe("publicBioView (third-party profile projection)", () => {
       rangerCurious: true,
       greenDotTraining: false,
     };
-    // Every flag true — including the hard-locked classes.
+    // Every flag true — including the always-private classes (hard-lock +
+    // safety-visible medical).
     const ALL_PUBLIC: Record<string, boolean> = {};
     for (const field of BIO_PRIVACY_FIELDS) ALL_PUBLIC[field.key] = true;
-    for (const field of HARD_LOCKED_PRIVATE_FIELDS) ALL_PUBLIC[field] = true;
+    for (const field of ALWAYS_PRIVATE_FIELDS) ALL_PUBLIC[field] = true;
 
-    it("structurally omits every hard-locked field from the public shape", () => {
+    it("structurally omits every always-private field from the public shape", () => {
       const view = publicBioView(FULL, ALL_PUBLIC, EXTRAS);
       const keys = Object.keys(view);
-      for (const locked of HARD_LOCKED_PRIVATE_FIELDS) {
+      for (const locked of ALWAYS_PRIVATE_FIELDS) {
         expect(keys).not.toContain(locked);
       }
       // The bio's own column names for those classes are absent too — the
@@ -525,9 +531,9 @@ describe("v3 privacy registry (self-promotional — never hard-locked)", () => {
     }
   });
 
-  it("keeps the hard-locked set unchanged after v3 was added", () => {
+  it("keeps the always-private locked set unchanged after v3 was added", () => {
     const locked = BIO_PRIVACY_FIELDS.filter((f) => f.locked).map((f) => f.key);
-    expect(locked.sort()).toEqual([...HARD_LOCKED_PRIVATE_FIELDS].sort());
+    expect(locked.sort()).toEqual([...ALWAYS_PRIVATE_FIELDS].sort());
   });
 
   it("defaults every v3 field to public", () => {

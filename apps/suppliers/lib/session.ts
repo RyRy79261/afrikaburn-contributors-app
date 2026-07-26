@@ -28,6 +28,14 @@ export interface PortalEdition {
 export interface SupplierIdentity {
   id: string;
   name: string;
+  /**
+   * The human-quotable supplier reference (`SUP-2027-0416`) — the canvas
+   * Progress-panel chip (frames `Q4fye`/`lm3jO`, node `D6Xsb`). NULLABLE by
+   * design: imported rows predate the scheme and are backfilled lazily, so the
+   * portal must render NOTHING for them rather than a placeholder that reads
+   * like a real code (`supplierCodeChipValue` in `lib/onboarding-view`).
+   */
+  code: string | null;
   services: string | null;
   contact: string | null;
   website: string | null;
@@ -118,6 +126,7 @@ async function resolveSupplierForUser(
   const cols = {
     id: schema.suppliers.id,
     name: schema.suppliers.name,
+    code: schema.suppliers.code,
     services: schema.suppliers.services,
     contact: schema.suppliers.contact,
     website: schema.suppliers.website,

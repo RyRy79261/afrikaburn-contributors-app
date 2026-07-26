@@ -7,10 +7,25 @@ import { getUnreadNotificationCount } from "@/lib/notifications";
 import { SignOutButton } from "./sign-out-button";
 import { HeaderNotificationBell } from "./header-notification-bell";
 
-/** App chrome: brand nav, the edition banner, and the page body. Server
- * component — reads the session cheaply and degrades gracefully env-less. */
-export async function AppShell({ children }: { children: React.ReactNode }) {
+/**
+ * App chrome: brand nav, the edition banner, and the page body. Server
+ * component — reads the session cheaply and degrades gracefully env-less.
+ *
+ * `minimalNav` is for the signed-out-friendly surfaces the design draws with
+ * nothing but the brand and "Sign in" (the invite landing page, frames qhcHh +
+ * MttcT): a stranger arriving on a one-purpose page should be offered that one
+ * purpose, not the whole app's navigation. It only ever affects SIGNED-OUT
+ * viewers; a signed-in visitor keeps the full nav wherever they are.
+ */
+export async function AppShell({
+  children,
+  minimalNav = false,
+}: {
+  children: React.ReactNode;
+  minimalNav?: boolean;
+}) {
   const user = await getAuthenticatedUser();
+  const showBrowseLinks = !minimalNav || Boolean(user);
   const editionLabel = await getEditionLabel();
   // Signed-in only: the bell renders in the header; count is a placeholder
   // seam until the notifications backend lands (see lib/notifications.ts).
@@ -26,20 +41,24 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <span className="tracking-tight">Contributors</span>
           </Link>
           <div className="flex items-center gap-5 text-sm">
-            <Link
-              href="/directory"
-              className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Compass className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Directory</span>
-            </Link>
-            <Link
-              href="/camps/new"
-              className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <TentTree className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Create camp</span>
-            </Link>
+            {showBrowseLinks && (
+              <>
+                <Link
+                  href="/directory"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Compass className="h-4 w-4" aria-hidden />
+                  <span className="hidden sm:inline">Directory</span>
+                </Link>
+                <Link
+                  href="/camps/new"
+                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <TentTree className="h-4 w-4" aria-hidden />
+                  <span className="hidden sm:inline">Create camp</span>
+                </Link>
+              </>
+            )}
             {user ? (
               <>
                 <Link

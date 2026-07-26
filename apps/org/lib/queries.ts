@@ -14,6 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type {
+  MembershipRole,
   OfficerKey,
   RegistrationStatus,
   SupplierNoteKind,
@@ -29,6 +30,7 @@ import {
   deriveStatusBoardKpis,
   deriveSupplierOnboardingRollup,
   deriveSupplierStandingRollup,
+  publicMemberName,
   soundLevelFromValue,
   type OfficerCoverage,
   type ProjectStatInput,
@@ -37,6 +39,7 @@ import {
   type StatusBoardKpis,
   type SupplierOnboardingRollup,
 } from "@quagga/core";
+import { decryptOrNull } from "@quagga/db/crypto";
 
 import { getDb, schema } from "@/lib/db";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
@@ -608,6 +611,128 @@ export async function getRegistrationOfficers(
     phone: r.phone,
     consent: r.consent,
   }));
+}
+
+export interface RosterMemberRow {
+  userId: string;
+  displayName: string;
+  role: MembershipRole;
+}
+
+/**
+ * A camp/project's member roster for the review screen. It carries NOTHING
+ * medical — not the notes, and not a has/has-not flag either.
+ *
+ * The flag mattered as much as the notes: the FACT that a named person has
+ * declared a health condition is itself special personal information (POPIA
+ * s26/27), and rendering it down forty rows hands a reviewer a complete census
+ * of who has disclosed — in one un-audited page load. That is exactly the
+ * casual bulk exposure AGENTS.md forbids ("never in a list, roster, card or
+ * export — only on a member's DETAIL view, because casual bulk exposure is a
+ * different risk from purposeful access"), and the detail view is where the
+ * `bio.medical.view` audit row gets written. A signpost is a list read with no
+ * trail, so the query deliberately never selects `medical_notes` at all —
+ * there is nothing here for a future edit to leak.
+ *
+ * Enforced by `lib/__tests__/roster-privacy.test.ts`.
+ */
+export async function getRegistrationRoster(
+  groupId: string,
+  editionId: string,
+): Promise<RosterMemberRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.memberships.userId,
+      role: schema.memberships.role,
+      displayName: schema.burnerBios.displayName,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .leftJoin(
+      schema.burnerBios,
+      and(
+        eq(schema.burnerBios.userId, schema.memberships.userId),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    )
+    .where(eq(schema.memberships.groupId, groupId))
+    .orderBy(asc(schema.burnerBios.displayName));
+
+  return rows.map((r) => ({
+    userId: r.userId,
+    displayName: publicMemberName(r.displayName),
+    role: r.role,
+  }));
+}
+
+/** One member's DETAIL row for the org console — the only org surface that
+ * resolves medical notes, and one subject at a time. */
+export interface RosterMemberDetail {
+  userId: string;
+  displayName: string;
+  role: MembershipRole;
+  /** Decrypted medical notes, or null when the burner recorded none. */
+  medicalNotes: string | null;
+}
+
+/**
+ * A single camp member's detail for the org console. Medical notes are decrypted
+ * HERE and nowhere else on the org side — the caller must have cleared
+ * `guardConsole` (god / org_staff) and must record the read. `decryptOrNull`
+ * yields null when no key is configured, exactly as the owner's own read does.
+ *
+ * `includeMedicalNotes` is the AUTHORISATION, passed in rather than assumed: the
+ * caller runs `canViewMedicalNotes` first and this function neither selects nor
+ * decrypts the column when the answer is no. Deciding after the decrypt — the
+ * shape this replaced — left plaintext sitting in render scope behind nothing
+ * but a conditional, which is one careless `<pre>{JSON.stringify(member)}</pre>`
+ * away from shipping it in the RSC payload. `apps/web`'s resolver has always
+ * ordered it this way; now both sides match.
+ */
+export async function getRosterMemberDetail(
+  groupId: string,
+  editionId: string,
+  userId: string,
+  options: { includeMedicalNotes: boolean },
+): Promise<RosterMemberDetail | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      userId: schema.memberships.userId,
+      role: schema.memberships.role,
+      displayName: schema.burnerBios.displayName,
+      ...(options.includeMedicalNotes
+        ? { medicalNotes: schema.burnerBios.medicalNotes }
+        : {}),
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .leftJoin(
+      schema.burnerBios,
+      and(
+        eq(schema.burnerBios.userId, schema.memberships.userId),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.memberships.groupId, groupId),
+        eq(schema.memberships.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  const ciphertext =
+    "medicalNotes" in row ? (row.medicalNotes as string | null) : null;
+  return {
+    userId: row.userId,
+    displayName: publicMemberName(row.displayName),
+    role: row.role,
+    medicalNotes: options.includeMedicalNotes
+      ? decryptOrNull(ciphertext)
+      : null,
+  };
 }
 
 export interface DecisionLogRow {

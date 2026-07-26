@@ -163,6 +163,13 @@ const C = {
     app: "web",
     action: "complete their Burner Bio",
   },
+  acceptInviteSignedOut: {
+    id: "accept-invite-signed-out",
+    app: "web",
+    action:
+      "open a valid invite link with NO session, see the inviting camp, and " +
+      "join through sign-up (the invite token is the authorisation)",
+  },
   onboardSupplier: {
     id: "onboard-supplier",
     app: "suppliers",
@@ -175,8 +182,10 @@ const C = {
 export const PERSONAS: Record<PersonaKind, PersonaSpec> = {
   anonymous: {
     kind: "anonymous",
-    summary: "No session. Sees only public surfaces.",
-    allowed: [],
+    summary:
+      "No session. Sees public surfaces — plus any single camp whose invite " +
+      "token they hold, which is the whole point of an invite link.",
+    allowed: [C.acceptInviteSignedOut],
     forbidden: [
       C.reachOrgConsole,
       C.discoverFreeCamp,
@@ -275,6 +284,12 @@ export function forbiddenMatrix(): Array<{
  * (source of truth: packages/core/src/privacy.ts). Kept here as a literal so the
  * harness stays pointable at a remote deployment without the monorepo, but any
  * drift is a bug: the PII-projection guard (M3-12) pins the canonical list.
+ *
+ * `medical` is deliberately NOT here. It belongs to the second never-public
+ * class, SAFETY_VISIBLE_FIELDS: never public, but visible to the burner's own
+ * camp leads and org staff on a member DETAIL view (Ryan, 26 Jul 2026 —
+ * consented at the point of entry). A spec that asserted medical was invisible
+ * to a camp LEAD would be asserting the wrong law.
  */
 export const HARD_LOCKED_PRIVATE_FIELDS = [
   "saId",
@@ -284,5 +299,4 @@ export const HARD_LOCKED_PRIVATE_FIELDS = [
   "onsiteContactPhone",
   "offsiteContactName",
   "offsiteContactPhone",
-  "medical",
 ] as const;

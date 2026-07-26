@@ -1,36 +1,23 @@
 "use client";
 
-import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useFormStatus } from "react-dom";
 import { Button } from "@quagga/ui/components/button";
-import { toast } from "@quagga/ui/components/toast";
-import type { RedeemActionResult } from "@/app/join/[token]/actions";
 
-interface JoinButtonProps {
-  token: string;
-  label: string;
-  action: (raw: unknown) => Promise<RedeemActionResult>;
-}
-
-export function JoinButton({ token, label, action }: JoinButtonProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = React.useTransition();
-
-  function redeem() {
-    startTransition(async () => {
-      const result = await action({ token });
-      if (result.ok) {
-        toast.success("Welcome aboard");
-        router.push(`/camps/${result.slug}`);
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
-
+/**
+ * The invite's primary call-to-action (design frames qhcHh + MttcT).
+ *
+ * It is the submit button of a plain `<form action={acceptInviteAction}>` — not
+ * a fetch-and-route client widget — because the person clicking it is very often
+ * SIGNED OUT and about to be carried through sign-up. A server-side redirect is
+ * the only thing that reliably survives that journey, and the button keeps
+ * working with JavaScript disabled. `useFormStatus` gives the pending label
+ * without owning any of the flow.
+ */
+export function JoinButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
   return (
-    <Button onClick={redeem} disabled={isPending} size="lg">
-      {isPending ? "Joining…" : label}
+    <Button type="submit" size="lg" className="w-full" disabled={pending}>
+      {pending ? "Joining…" : label}
     </Button>
   );
 }

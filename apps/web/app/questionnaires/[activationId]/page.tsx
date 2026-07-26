@@ -11,7 +11,9 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
+import { INVITE_RESUME_PATH } from "@quagga/core";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { readPendingInvite } from "@/lib/pending-invite";
 import { requireCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getFillView, type ActivationRow } from "@/lib/questionnaire-store";
@@ -98,6 +100,11 @@ export default async function QuestionnaireFillPage({
   // stripped to a band + brand mark + sign-out — no nav can leak an escape.
   if (activation.blocking) {
     const asker = await authorName(activation);
+    // If an invite is waiting behind this gate, clearing the gate completes the
+    // join and lands them on the camp — the same resume the Burner Bio does.
+    const afterGate = (await readPendingInvite())
+      ? INVITE_RESUME_PATH
+      : "/directory";
     return (
       <div className="flex min-h-svh flex-col bg-background">
         <header className="border-b border-border">
@@ -138,7 +145,7 @@ export default async function QuestionnaireFillPage({
                   activationId={activationId}
                   questionnaire={activation.definition}
                   initialResponses={initialResponses}
-                  redirectTo="/directory"
+                  redirectTo={afterGate}
                   submitLabel="Submit answers"
                   gate
                   respondentSeed={user.id}

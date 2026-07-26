@@ -294,6 +294,80 @@ export async function joinByInvite(
   return { slug };
 }
 
+/**
+ * THE signed-out invite journey, end to end — the one an invite link actually
+ * exists for. Opens `/join/<token>` with NO session, accepts it from the landing
+ * page, creates the account there and then, clears the Burner-Bio gate, and
+ * lands on the camp as a member. Returns the freshly-created account + slug.
+ *
+ * The invite is carried across the auth round trip by an httpOnly cookie set on
+ * the accept click, so nothing in this journey ever puts the token back in a
+ * url; the spec proves the OUTCOME (a membership on the far side), which is the
+ * only thing a mechanism change should be allowed to break.
+ *
+ * @throws MailUnavailableError if the deployment requires verification but
+ *   E2E_MAIL_MODE is off — the caller should skip in that case.
+ */
+export async function acceptInviteAsNewBurner(
+  page: Page,
+  tokenOrUrl: string,
+  opts: { displayName?: string } = {},
+): Promise<{ account: Account; slug: string }> {
+  const token = tokenOrUrl.includes("/join/")
+    ? tokenOrUrl.split("/join/").pop()!.trim()
+    : tokenOrUrl;
+
+  await page.goto(`/join/${token}`);
+  await assertConfigured(page);
+  // The whole point: a signed-out visitor is NOT bounced to the auth wall.
+  await expect(page).not.toHaveURL(/\/auth\/sign-in/);
+
+  await page
+    .getByRole("button", { name: /^(join |accept lead role)/i })
+    .first()
+    .click();
+
+  // Accepting carries them into account creation with the invite still live.
+  await page.waitForURL(/\/auth\/sign-up/);
+
+  const needsVerification = requiresEmailVerification();
+  let mailbox: Mailbox | undefined;
+  let email: string;
+  if (needsVerification) {
+    mailbox = await requireMailbox("invitee");
+    email = mailbox.address;
+  } else {
+    email = uniqueEmail("invitee");
+  }
+  const password = TEST_PASSWORD;
+
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  if (needsVerification && mailbox) {
+    const link = await mailbox.waitForLink(/verify|verification|token/i);
+    await page.goto(link); // autoSignInAfterVerification + the invite callback
+  }
+
+  // The Burner Bio gate stands between the new account and the join; it is NOT
+  // bypassed, and the invite survives it.
+  await page.waitForURL(/\/onboarding/);
+  const displayName = opts.displayName ?? uniqueName("Invitee");
+  await completeBio(page, { displayName });
+
+  // The done step's primary action finishes the invite rather than dumping them
+  // on the directory — that copy is the visible proof the invite was preserved.
+  await page.getByRole("button", { name: /continue to your camp/i }).click();
+  await page.waitForURL(isCampDetailUrl);
+  const slug = new URL(page.url()).pathname.split("/").filter(Boolean).pop()!;
+
+  const account: Account = mailbox
+    ? { email, password, mailbox, name: displayName }
+    : { email, password, name: displayName };
+  return { account, slug };
+}
+
 // --- Registration (six-section wizard) -------------------------------------
 
 /** Values the caller may override; anything omitted gets a valid default. */

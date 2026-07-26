@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
-import { defaultPrivacyFlags, mapBioToResponses } from "@quagga/core";
+import {
+  INVITE_RESUME_PATH,
+  defaultPrivacyFlags,
+  mapBioToResponses,
+} from "@quagga/core";
+import { readPendingInvite } from "@/lib/pending-invite";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -45,6 +50,13 @@ export default async function OnboardingPage() {
     : {};
   const initialFlags = bio?.privacyFlags ?? defaultPrivacyFlags();
 
+  // Someone who arrived via an invite is only here because the Burner Bio gates
+  // the join. Finish the bio and the invite completes itself — they land on
+  // their camp instead of a generic page, having lost the link they clicked.
+  const redirectTo = (await readPendingInvite())
+    ? INVITE_RESUME_PATH
+    : "/directory";
+
   return (
     <AppShell>
       <div className="mx-auto max-w-2xl">
@@ -64,7 +76,7 @@ export default async function OnboardingPage() {
           initialExtras={toBioExtrasState(bio?.extras)}
           action={saveOnboardingBioAction}
           searchCamps={searchCampsAction}
-          redirectTo="/directory"
+          redirectTo={redirectTo}
         />
       </div>
     </AppShell>

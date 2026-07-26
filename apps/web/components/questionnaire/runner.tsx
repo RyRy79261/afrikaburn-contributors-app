@@ -31,6 +31,7 @@ import {
   type BioExtrasState,
 } from "./burns-step";
 import type { CampSearchResult } from "@/lib/groups-store";
+import { navigateOnwards } from "@/lib/client-navigation";
 
 // Runner v2 (questionnaire-spec §"Respondent (runner) UX"). Every navigation
 // and completeness decision is delegated to the @quagga/core questionnaire
@@ -311,7 +312,7 @@ export function QuestionnaireRunner({
       if (page && !validatePage(page)) return;
     }
     persist(true, () => {
-      if (redirectTo) router.push(redirectTo);
+      if (redirectTo) navigateOnwards(router, redirectTo);
       else router.refresh();
     });
   }

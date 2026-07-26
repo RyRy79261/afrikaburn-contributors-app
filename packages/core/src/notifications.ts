@@ -7,7 +7,7 @@
 //
 // PRIVACY LAW: a builder only ever receives + emits safe, display-level fields
 // (camp names, statuses, role/officer labels, standing labels, bulletin titles).
-// It NEVER takes or echoes a hard-locked private field (phone, emergency
+// It NEVER takes or echoes an always-private field (phone, emergency
 // contacts, SA ID / passport, medical). `notificationMentionsAny` is the
 // test-facing guard that proves a payload leaks none of a forbidden value set.
 //
@@ -150,6 +150,12 @@ export function supplierStepConfirmedNotification(input: {
     link: "/onboarding",
   };
 }
+
+// (No per-view medical notification. Medical notes are disclosed to a stated
+// audience — the burner's camp leads and AfrikaBurn's safety staff — at the
+// point of entry, so a notification every time one of them opens the burner's
+// detail would be noise, not consent. The read is still audited server-side; see
+// ./medical-access.)
 
 /** 📣 A bulletin broadcast landed in this recipient's inbox. */
 export function bulletinNotification(input: {

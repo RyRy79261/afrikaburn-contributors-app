@@ -30,7 +30,7 @@ export const NOTIFICATION_KINDS = NotificationKind.options;
 /**
  * A notification payload — the safe, already-projected copy that lands in an
  * inbox. Built ONLY by the @quagga/core payload builders, which never include
- * hard-locked private fields (phone, emergency contacts, ID/passport, medical)
+ * always-private fields (phone, emergency contacts, ID/passport, medical)
  * in `title`/`body`/`link` (privacy law). `link` is an in-app relative path.
  */
 export const NotificationPayload = z.object({

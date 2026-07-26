@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, notInArray } from "drizzle-orm";
 
 import { getDb, schema } from "@/lib/db";
 import {
   bucketSubmissionsByMonth,
+  FEED_EXCLUDED_ACTIONS,
   type SeriesPoint,
 } from "@/lib/status-board-format";
 
@@ -20,7 +21,9 @@ export {
   activityTone,
   bucketSubmissionsByMonth,
   hasSeries,
+  isFeedAction,
   relativeTime,
+  FEED_EXCLUDED_ACTIONS,
   type ActivityTone,
   type SeriesPoint,
 } from "@/lib/status-board-format";
@@ -35,7 +38,17 @@ export interface ActivityRow {
   createdAt: Date;
 }
 
-/** The most recent audit events across the console (newest first). */
+/**
+ * The most recent audit events across the console (newest first), minus the
+ * actions `FEED_EXCLUDED_ACTIONS` keeps out of a six-row card.
+ *
+ * Today that is medical reads only: one `bio.medical.view` row lands per
+ * disclosing read, so a single roster walk emits dozens in a minute and would
+ * evict every registration decision from this feed. They are not hidden — they
+ * get `/audit`, which shows them WITH the enumeration alerts a six-row card
+ * could never carry. The exclusion is a display decision made in one pure,
+ * tested place (lib/status-board-format.ts), never an ad-hoc filter here.
+ */
 export async function getRecentActivity(limit = 6): Promise<ActivityRow[]> {
   const db = getDb();
   return db
@@ -48,6 +61,7 @@ export async function getRecentActivity(limit = 6): Promise<ActivityRow[]> {
     })
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
+    .where(notInArray(schema.auditEvents.action, [...FEED_EXCLUDED_ACTIONS]))
     .orderBy(desc(schema.auditEvents.createdAt))
     .limit(limit);
 }

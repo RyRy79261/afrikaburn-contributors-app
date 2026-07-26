@@ -2,7 +2,12 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { canRedeemInviteAs, inviteRejectionMessage } from "@quagga/core";
+import {
+  canBePublic,
+  canRedeemInviteAs,
+  inviteRejectionMessage,
+  type InviteLike,
+} from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
 import { db, schema, withTransaction } from "./db";
 import { getViewerRole, ensureMembershipWithRefCode } from "./groups-store";
@@ -91,6 +96,8 @@ export async function listInvites(groupId: string): Promise<InviteRow[]> {
 export interface InvitePreview {
   token: string;
   kind: InviteKind;
+  /** The invited group — needed to resolve the viewer's existing membership. */
+  groupId: string;
   groupName: string;
   groupSlug: string;
   groupDescription: string | null;
@@ -98,8 +105,20 @@ export interface InvitePreview {
   inviterName: string | null;
   expiresAt: Date | null;
   usedAt: Date | null;
+  /** Set once a redeemer has claimed the link (single-use, with `usedAt`). */
+  usedByUserId: string | null;
   /** Whether the camp is registered (approved) for the passed edition. */
   registered: boolean;
+}
+
+/** The `@quagga/core` redemption shape carried by a preview row. */
+export function previewAsInviteLike(preview: InvitePreview): InviteLike {
+  return {
+    kind: preview.kind,
+    expiresAt: preview.expiresAt,
+    usedAt: preview.usedAt,
+    usedByUserId: preview.usedByUserId,
+  };
 }
 
 /**
@@ -122,6 +141,7 @@ export async function getInvitePreview(
       groupDescription: schema.groups.description,
       expiresAt: schema.invites.expiresAt,
       usedAt: schema.invites.usedAt,
+      usedByUserId: schema.invites.usedByUserId,
       createdByUserId: schema.invites.createdByUserId,
     })
     .from(schema.invites)
@@ -149,7 +169,10 @@ export async function getInvitePreview(
 
     if (row.createdByUserId) {
       const bio = await db()
-        .select({ displayName: schema.burnerBios.displayName })
+        .select({
+          displayName: schema.burnerBios.displayName,
+          privacyFlags: schema.burnerBios.privacyFlags,
+        })
         .from(schema.burnerBios)
         .where(
           and(
@@ -158,19 +181,33 @@ export async function getInvitePreview(
           ),
         )
         .limit(1);
-      inviterName = bio[0]?.displayName?.trim() || null;
+      // The inviter's display name is a FLAGGABLE field, and this card is the
+      // most widely-shared surface in the app: the invite link is meant to be
+      // forwarded, so anyone holding it — signed out, unknown to us — reads
+      // whatever we put here. Gate it exactly as the public profile does
+      // (`publicBioView`): the flag must be explicitly true AND the field must
+      // be allowed public at all. An inviter who marked their burner name
+      // private gets no name on the card rather than a leak to a group chat;
+      // the page's "{name} invited you" block is already conditional on this
+      // being non-null, so the card simply drops that line.
+      const flags = (bio[0]?.privacyFlags ?? {}) as Record<string, boolean>;
+      const namePublic =
+        canBePublic("displayName") && flags.displayName === true;
+      inviterName = namePublic ? bio[0]?.displayName?.trim() || null : null;
     }
   }
 
   return {
     token: row.token,
     kind: row.kind,
+    groupId: row.groupId,
     groupName: row.groupName,
     groupSlug: row.groupSlug,
     groupDescription: row.groupDescription,
     inviterName,
     expiresAt: row.expiresAt,
     usedAt: row.usedAt,
+    usedByUserId: row.usedByUserId,
     registered,
   };
 }

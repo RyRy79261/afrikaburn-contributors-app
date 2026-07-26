@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import {
   activityLabel,
@@ -8,8 +10,9 @@ import {
 import type { ActivityRow } from "@/lib/status-board";
 
 // The audit-event activity feed. Rows are real `audit_events` — actor, what
-// they did, when. There is no audit-log page yet, so there is no "view all"
-// link here; when one ships this card gains it.
+// they did, when. Six rows is a glance, not the record: `/audit` holds the full
+// trail, including the medical-notes reads this card deliberately excludes
+// (`FEED_EXCLUDED_ACTIONS`) so one roster walk cannot evict every decision.
 
 const TONE_DOT: Record<ActivityTone, string> = {
   approve: "bg-ab-sage",
@@ -28,7 +31,16 @@ export function RecentActivity({ rows }: { rows: ActivityRow[] }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-5">
-        <h2 className="text-base font-semibold">Recent activity</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">Recent activity</h2>
+          <Link
+            href="/audit"
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+          >
+            Audit log
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing has happened in the console yet.
