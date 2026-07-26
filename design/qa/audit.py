@@ -37,7 +37,17 @@ from penctl import Pen
 
 TOL = 2.5
 OVERLAP_MIN = 4.0
-ARCHIVE = {"cyMi6", "CwVWw", "OLb9g", "bi8Au"}
+# Frames parked in the CONCEPTS / ARCHIVE band (y>=16800): excluded from --all.
+# ONLY the Camp Plot concepts, which have no route by design (parked post-MVP —
+# AfrikaBurn still does placement on paper). Do NOT add a frame here just because
+# it was superseded: sCEHP/ELUfI (Builder v1) were briefly added and that
+# silently dropped two real, still-drawn frames out of every `--all` run. An
+# archive label is a naming concern; the audit should keep measuring anything
+# that is still on the canvas.
+# because they are not shipped product. Keep this set == that band's contents.
+#   cyMi6/CwVWw/OLb9g  Camp Plot v2 — PARKED post-MVP, deliberately route-less
+#   sCEHP/ELUfI        Questionnaire Builder v1 — superseded by Builder v2 (AssNH/ZBw8O)
+ARCHIVE = {"cyMi6", "CwVWw", "OLb9g"}
 FORBIDDEN = re.compile(r"(payment|reconcil|yoco|lorem ipsum|\bTODO\b)", re.I)
 ALLOWED_FONTS = {"$font-brand", "Montserrat", "JetBrains Mono", "$font-mono"}
 

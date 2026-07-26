@@ -68,6 +68,29 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
 - `batch_get` elides deep children on big requests — audit.py crawls in 15-id chunks.
 - Phantom "+50px partially clipped" on fit-content bodies and
   "fill_container not inside flexbox" on disabled nodes: known tool noise.
+- **A brand-new frame does not settle.** Freshly created nodes come back from
+  `snapshot_layout` with a uniform **+50px y bias** (and `space_between` children
+  pinned to the container's right edge), and `get_screenshot` / `export_nodes`
+  render them blank — so audit.py reports *hundreds* of phantom V-OVERFLOW and
+  OVERLAP defects on a frame that is actually fine. Waiting, resizing, toggling
+  layout/theme, Move, forcing a `batch_design` error, screenshotting and
+  exporting all fail to clear it.
+  **The fix: Copy the finished frame to a scratch position** — the copy lays out
+  correctly and audits truthfully — **then delete the original and Update the
+  copy's x/y/name.** Expect the surviving frame to carry a different node id
+  than the one you built; update any notes that cite it.
+- **Never delete children to restructure a container.** Removing children from an
+  existing frame genuinely corrupts that frame's layout in this app (an in-place
+  rebuild of one card left it rendering as an empty coloured box — not a
+  measurement artefact, a real corruption). The "Insert-new + disable/Delete-old"
+  advice above is for swapping a *leaf*; when a container needs restructuring,
+  rebuild the whole frame and swap it in via the Copy trick.
+- **The canvas is not saved by the MCP tools.** Everything an agent draws lives in
+  the Pen app's memory until the app itself writes the file. `git status` showing
+  `design/ab-initial-app.pen` unchanged after a drawing session does **not** mean
+  nothing happened — it means nothing has been persisted yet. Confirm with
+  `md5sum` against `git show HEAD:design/ab-initial-app.pen` and ask the user to
+  save before treating any design work as done.
 
 ## Definition of done for any design change
 
