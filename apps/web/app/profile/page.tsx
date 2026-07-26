@@ -5,6 +5,7 @@ import { KeyRound, Lock, Pencil, ShieldCheck, Tent } from "lucide-react";
 import {
   initialsFromName,
   mapBioToResponses,
+  publicMemberName,
   type BioExtras,
   type BurnerBioFields,
 } from "@quagga/core";
@@ -31,6 +32,7 @@ import { PreviewNotice } from "@/components/preview-notice";
 import { BioFlow } from "@/components/onboarding/bio-flow";
 import { SignOutButton } from "@/components/sign-out-button";
 import { toBioExtrasState } from "@/components/questionnaire/extras-state";
+import { checkUsernameAvailabilityAction } from "../onboarding/actions";
 import { updateBioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -150,11 +152,12 @@ export default async function ProfilePage({
           </div>
           <BioFlow
             mode="edit"
-            initialResponses={mapBioToResponses(bio.fields)}
+            initialResponses={mapBioToResponses(bio.fields, bio.username)}
             initialFlags={bio.privacyFlags}
             initialExtras={toBioExtrasState(bio.extras)}
             action={updateBioAction}
             searchCamps={searchCampsAction}
+            checkUsername={checkUsernameAvailabilityAction}
             redirectTo="/profile"
           />
         </div>
@@ -206,11 +209,11 @@ export default async function ProfilePage({
             className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-primary"
             aria-hidden
           >
-            {initialsFromName(fields.displayName)}
+            {initialsFromName(bio.username)}
           </span>
           <div className="min-w-0">
             <p className="truncate text-xl font-semibold tracking-tight">
-              {fields.displayName ?? "Unnamed burner"}
+              {publicMemberName(bio.username)}
             </p>
             <p className="truncate text-sm text-muted-foreground">
               {fields.homeCity ?? "Home city not set"}
@@ -231,10 +234,12 @@ export default async function ProfilePage({
           </CardHeader>
           <CardContent>
             <div className="flex flex-col divide-y divide-border">
+              {/* The username is not privacy-flaggable: it is a unique public
+                  handle, so a "private" badge here would be a lie. */}
               <BioRow
-                label="Burner name"
-                value={fields.displayName}
-                visibility={vis(flags, "displayName")}
+                label="Username"
+                value={bio.username}
+                visibility="public"
               />
               <BioRow
                 label="Real name"

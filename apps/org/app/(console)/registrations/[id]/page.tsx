@@ -64,7 +64,7 @@ export default async function RegistrationDetailPage({
   const [decisionLog, officers, roster] = await Promise.all([
     getRegistrationDecisionLog(id),
     getRegistrationOfficers(detail.group.id, detail.edition.id),
-    getRegistrationRoster(detail.group.id, detail.edition.id),
+    getRegistrationRoster(detail.group.id),
   ]);
 
   const projectKind = asProjectKind(detail.group.kind);

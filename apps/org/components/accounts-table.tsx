@@ -11,7 +11,7 @@ import { AccountActions } from "@/components/account-actions";
 export interface AccountTableRow {
   userId: string;
   email: string | null;
-  burnerName: string | null;
+  username: string | null;
   role: "god" | "org_staff" | null;
 }
 
@@ -42,10 +42,10 @@ export function AccountsTable({
         ),
     },
     {
-      id: "burnerName",
-      header: "Burner name",
+      id: "username",
+      header: "Username",
       cellClassName: "text-muted-foreground",
-      cell: (a) => a.burnerName ?? "—",
+      cell: (a) => a.username ?? "—",
     },
     {
       id: "role",
@@ -72,7 +72,7 @@ export function AccountsTable({
             userId={a.userId}
             // Frame node `xPit0` names the person by email in mono; the burner
             // name is the fallback when the account has no address.
-            personLabel={a.email ?? a.burnerName ?? "this account"}
+            personLabel={a.email ?? a.username ?? "this account"}
             role={a.role}
             isSelf={a.userId === selfUserId}
           />

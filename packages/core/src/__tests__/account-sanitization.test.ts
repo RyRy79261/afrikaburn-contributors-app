@@ -49,9 +49,12 @@ const REAL_BIO = {
 describe("buildBioSanitizationPatch", () => {
   const patch = buildBioSanitizationPatch(AT);
 
-  it("replaces the display name with the Departed Burner stub", () => {
+  it("erases the retired per-edition display name outright", () => {
+    // The "Departed Burner" stub used to live on this column so a roster still
+    // rendered. It moved to the RENDER layer (`publicMemberName` reads the
+    // tombstone), which lets erasure be total here.
     expect(DEPARTED_BURNER_NAME).toBe("Departed Burner");
-    expect(patch.displayName).toBe(DEPARTED_BURNER_NAME);
+    expect(patch.displayName).toBeNull();
   });
 
   it("nulls every personal field in the erasure list", () => {
@@ -117,8 +120,11 @@ describe("buildBioSanitizationPatch", () => {
 describe("buildUserSanitizationPatch", () => {
   const patch = buildUserSanitizationPatch(USER_ID, AT);
 
-  it("nulls the email and stamps the tombstone", () => {
+  it("nulls the email + username and stamps the tombstone", () => {
     expect(patch.email).toBeNull();
+    // The handle is personal data AND a scarce unique resource: erasing it both
+    // satisfies POPIA and frees it for the next person.
+    expect(patch.username).toBeNull();
     expect(patch.sanitizedAt).toEqual(AT);
   });
 
@@ -129,7 +135,11 @@ describe("buildUserSanitizationPatch", () => {
     // silently minted a fresh, clean account instead of refusing. The patch must
     // NOT carry an authUserId key at all — the column is deliberately preserved.
     expect(Object.keys(patch)).not.toContain("authUserId");
-    expect(Object.keys(patch).sort()).toEqual(["email", "sanitizedAt"]);
+    expect(Object.keys(patch).sort()).toEqual([
+      "email",
+      "sanitizedAt",
+      "username",
+    ]);
   });
 });
 

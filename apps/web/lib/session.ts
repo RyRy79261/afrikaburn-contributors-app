@@ -23,6 +23,9 @@ export interface CampUser {
   id: string;
   authUserId: string;
   email: string | null;
+  /** The account-level handle (@quagga/core `username.ts`), or null — it is
+   * OPTIONAL, so every reader must cope with its absence. */
+  username: string | null;
 }
 
 /** The single seeded org group ("AfrikaBurn"), or null if not seeded. */
@@ -115,6 +118,7 @@ export async function ensureCampUser(
       id: schema.users.id,
       authUserId: schema.users.authUserId,
       email: schema.users.email,
+      username: schema.users.username,
       sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.users)

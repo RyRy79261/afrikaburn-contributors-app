@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { Pencil, ShieldCheck, Stethoscope } from "lucide-react";
-import { publicMemberName } from "@quagga/core";
 import { volunteerPortfolioLabel } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -85,11 +84,11 @@ export default async function BurnerProfilePage({
   const isOwn = profile.userId === viewer.id;
   const pf = profile.publicFields;
 
-  // The display name is a FLAGGABLE field like any other: a burner who marked
-  // it private renders as the neutral placeholder to third parties (camp member
-  // lists are a different surface — there, camp-mates always see names).
-  // `publicMemberName` guarantees the fallback is never the account email.
-  const heading = publicMemberName(pf.displayName);
+  // The username is a public handle by construction — unique, no privacy toggle
+  // (see @quagga/core `username.ts`) — so it needs no flag check here; the
+  // resolver already ran it through `publicMemberName`, which guarantees the
+  // fallback is a neutral placeholder and never the account email or legal name.
+  const heading = profile.displayName;
 
   const about = pf.about ?? pf.bio;
   const volunteeringLabels = pf.volunteeringInterests.map(volunteerPortfolioLabel);

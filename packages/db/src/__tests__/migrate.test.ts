@@ -92,10 +92,48 @@ describe("planMigration", () => {
         DATABASE_URL: DIRECT,
         VERCEL_ENV: "production",
       } as NodeJS.ProcessEnv),
-    ).toThrow(/PRODUCTION DEPLOY without DATABASE_URL_UNPOOLED/);
+    ).toThrow(/DEPLOY without DATABASE_URL_UNPOOLED/);
   });
 
-  it("warns-and-falls-back (runs) outside production when DATABASE_URL host is not a pooler", () => {
+  // REGRESSION — this exact gap double-seeded the real database.
+  //
+  // The fallback refusal used to be scoped to `VERCEL_ENV === "production"`, so
+  // a PREVIEW build with no DATABASE_URL_UNPOOLED silently used DATABASE_URL.
+  // Neon's Vercel integration points that at the pooled endpoint, whose host
+  // string does not reliably say "pooler", so `isPoolerConnection` waved it
+  // through — and a session advisory lock on a transaction-pooling connection
+  // does not hold. Two builders each took a lock that protected nothing, both
+  // saw an empty `editions`, and both seeded: 40 suppliers instead of 20.
+  //
+  // The hazard was never specific to production. Only the guard was.
+  it("ABORTS on a PREVIEW deploy without DATABASE_URL_UNPOOLED", () => {
+    for (const env of [
+      { DATABASE_URL: DIRECT, VERCEL_ENV: "preview" },
+      { DATABASE_URL: DIRECT, VERCEL_ENV: "development" },
+      { DATABASE_URL: DIRECT, VERCEL: "1" },
+    ]) {
+      expect(() => planMigration(env as NodeJS.ProcessEnv)).toThrow(
+        /DEPLOY without DATABASE_URL_UNPOOLED/,
+      );
+    }
+  });
+
+  it("still RUNS on a deploy when DATABASE_URL_UNPOOLED is present", () => {
+    const plan = planMigration({
+      DATABASE_URL: POOLED,
+      DATABASE_URL_UNPOOLED: DIRECT,
+      VERCEL_ENV: "preview",
+    } as NodeJS.ProcessEnv);
+    expect(plan).toEqual({
+      kind: "run",
+      connectionString: DIRECT,
+      usingUnpooled: true,
+    });
+  });
+
+  // Off Vercel entirely (a laptop, CI without the VERCEL vars): still falls back,
+  // because there is no concurrent-builder hazard to serialise against.
+  it("warns-and-falls-back (runs) OFF-DEPLOY when DATABASE_URL host is not a pooler", () => {
     const plan = planMigration({
       DATABASE_URL: DIRECT,
     } as NodeJS.ProcessEnv);

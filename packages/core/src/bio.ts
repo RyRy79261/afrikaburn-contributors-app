@@ -18,16 +18,25 @@ import {
   canBePublic,
   enforcePrivacyFlags,
 } from "./privacy";
+import { USERNAME_HELP, USERNAME_MAX_LENGTH } from "./username";
 
 /** Bump when the questionnaire SHAPE changes (a question added/removed or a
  * required flag flipped). Stored on `burner_bios.version`. */
-export const BURNER_BIO_VERSION = "2027.1";
+export const BURNER_BIO_VERSION = "2027.2";
+
+/**
+ * The bio flow's identity question. It rides in the response map like every
+ * other question so the runner, the validator and the pre-fill all keep working
+ * — but it is the ONE answer that does NOT land on `burner_bios`: it writes
+ * `users.username`, because a handle is account-level (see ./username). Pull it
+ * out with `usernameFromResponses` before mapping the rest to bio columns.
+ */
+export const USERNAME_QUESTION_ID = "username";
 
 /** Plaintext, column-shaped view of a bio — what the mapping produces/consumes.
  * Mirrors the toggleable + locked columns on `burner_bios`; the ID document is
  * carried as plaintext here and encrypted by apps/web at the write boundary. */
 export interface BurnerBioFields {
-  displayName: string | null;
   legalName: string | null;
   homeCity: string | null;
   bio: string | null;
@@ -151,8 +160,12 @@ export const MEDICAL_AUDIENCE_NOTE =
  * always-private classes (both hard-locked AND safety-visible render as a
  * locked, never-public toggle). The `locked` flags are derived from
  * ALWAYS_PRIVATE_FIELDS so the registry and the privacy law can never drift. */
+// NB: the USERNAME is deliberately absent from this registry. It is the handle
+// other burners address you by and it is globally unique, so "private username"
+// is not a state that can honestly exist — the availability check alone reveals
+// that a handle is held. Everything the registry governs is bio data; identity
+// is not negotiable per-field.
 export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
-  { key: "displayName", label: "Display name", locked: false, defaultPublic: true },
   { key: "legalName", label: "Legal name", locked: false, defaultPublic: false },
   { key: "homeCity", label: "Home city", locked: false, defaultPublic: true },
   { key: "bio", label: "About you", locked: false, defaultPublic: true },
@@ -274,18 +287,6 @@ export function resolvePrivacyFlagsUpdate(
   return { privacyFlags: initialPrivacyFlags(rawPrivacyFlags) };
 }
 
-/**
- * A member's PUBLIC-facing display name. Falls back to a neutral placeholder —
- * NEVER to the account email, which is POPIA-relevant PII that must not leak
- * onto public camp pages or the directory.
- */
-export function publicMemberName(
-  displayName: string | null | undefined,
-): string {
-  const trimmed = displayName?.trim();
-  return trimmed ? trimmed : "Unnamed burner";
-}
-
 // --- Third-party (public) profile view ----------------------------------
 
 /**
@@ -297,7 +298,6 @@ export function publicMemberName(
  * surface it.
  */
 export interface PublicBioView {
-  displayName: string | null;
   legalName: string | null;
   homeCity: string | null;
   bio: string | null;
@@ -337,7 +337,6 @@ export function publicBioView(
   const showRanger = show("ranger");
 
   return {
-    displayName: show("displayName") ? fields.displayName : null,
     legalName: show("legalName") ? fields.legalName : null,
     homeCity: show("homeCity") ? fields.homeCity : null,
     bio: show("bio") ? fields.bio : null,
@@ -360,11 +359,12 @@ export function publicBioView(
 }
 
 /**
- * Up-to-two-letter initials for an avatar, derived from a display name. Falls
- * back to a neutral glyph so a nameless burner still renders.
+ * Up-to-two-letter initials for an avatar. Splits on whitespace AND underscores
+ * so a handle reads the way its owner wrote it (`dusty_prototype` → DP, not DU).
+ * Falls back to a neutral glyph so a nameless burner still renders.
  */
 export function initialsFromName(name: string | null | undefined): string {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  const parts = (name ?? "").trim().split(/[\s_]+/).filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0] ?? "";
   const last = parts[parts.length - 1] ?? "";
@@ -421,12 +421,12 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         subtitle: "How you show up in the directory and to camps you join.",
         questions: [
           {
-            id: "displayName",
+            id: USERNAME_QUESTION_ID,
             kind: "short_text",
-            prompt: "Display name",
-            helper: "The name other burners see. A playa name is fine.",
-            maxLength: 80,
-            required: true,
+            prompt: "Username",
+            helper: USERNAME_HELP,
+            maxLength: USERNAME_MAX_LENGTH,
+            required: false,
           },
           {
             id: "legalName",
@@ -595,6 +595,18 @@ function asString(v: unknown): string | null {
   return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }
 
+/**
+ * The username answer, trimmed — or null when the (optional) field was left
+ * blank. Null is meaningful: it CLEARS a previously-held handle and frees it for
+ * someone else, which is the only way to change your mind about having one.
+ * Format is not checked here; that is `validateUsername`'s single job.
+ */
+export function usernameFromResponses(
+  responses: QuestionnaireResponses,
+): string | null {
+  return asString(responses[USERNAME_QUESTION_ID]);
+}
+
 /** Convert a questionnaire response map into column-shaped bio fields. */
 export function mapResponsesToBio(
   responses: QuestionnaireResponses,
@@ -609,7 +621,6 @@ export function mapResponsesToBio(
     idTypeRaw === "passport" || idTypeRaw === "sa_id" ? idTypeRaw : null;
 
   return {
-    displayName: asString(responses["displayName"]),
     legalName: asString(responses["legalName"]),
     homeCity: asString(responses["homeCity"]),
     bio: asString(responses["bio"]),
@@ -629,12 +640,14 @@ export function mapResponsesToBio(
 }
 
 /** Convert column-shaped bio fields back into a response map (for pre-fill on
- * replay / profile edit). The ID number is passed in decrypted by the caller. */
+ * replay / profile edit). The ID number is passed in decrypted by the caller;
+ * the username lives on `users`, so the caller threads it in via `username`. */
 export function mapBioToResponses(
   fields: Partial<BurnerBioFields>,
+  username?: string | null,
 ): QuestionnaireResponses {
   const r: QuestionnaireResponses = {};
-  if (fields.displayName) r["displayName"] = fields.displayName;
+  if (username) r[USERNAME_QUESTION_ID] = username;
   if (fields.legalName) r["legalName"] = fields.legalName;
   if (fields.homeCity) r["homeCity"] = fields.homeCity;
   if (fields.bio) r["bio"] = fields.bio;
@@ -655,8 +668,25 @@ export function mapBioToResponses(
   return r;
 }
 
-/** The bio is complete once a display name is captured — the one required
- * identity anchor. Gates the rest of the app via `required_actions`. */
-export function isBioComplete(fields: Pick<BurnerBioFields, "displayName">): boolean {
-  return Boolean(fields.displayName && fields.displayName.trim() !== "");
+/**
+ * ⚠ PROVISIONAL — RYAN HAS NOT RULED ON THE REPLACEMENT (27 Jul 2026).
+ *
+ * The bio is complete once the burner has REACHED THE END OF THE FLOW AND SAVED
+ * (`saveBio({ final: true })` stamps `completed_at`). Nothing inside the bio is
+ * mandatory any more, so completion is an ACT rather than a filled field.
+ *
+ * This replaced `Boolean(displayName)`. That predicate was the only thing
+ * standing between a brand-new account and the rest of the app, and making the
+ * username optional (Ryan: "its optional and should be treated like an alias,
+ * not a root identity") would otherwise have deleted the onboarding gate
+ * outright. The safe default keeps the gate firing exactly once per new burner
+ * while making nothing newly mandatory.
+ *
+ * THE ALTERNATIVE, if Ryan wants a real anchor: require the LEGAL NAME. It is
+ * the one field with an operational reason to exist — the SA ID / passport are
+ * collected to match a person to their ticket at the gate, and a name is what
+ * that match is against. Do NOT invent a third field for this.
+ */
+export function isBioComplete(bio: { completedAt?: Date | null }): boolean {
+  return bio.completedAt != null;
 }

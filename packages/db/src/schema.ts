@@ -263,20 +263,42 @@ export const questionnaireAuthoredScopeEnum = pgEnum(
 // Camp-specific identity join. Minimal by design: NO role columns — every role
 // is a `memberships` row. Account persists; per-edition data hangs elsewhere.
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  authUserId: text("auth_user_id").notNull().unique(),
-  email: text("email"),
-  // Set when the account has been SANITIZED after a completed deletion request
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    authUserId: text("auth_user_id").notNull().unique(),
+    email: text("email"),
+    // THE handle (migration 0016). Account-level on purpose: the thing it
+    // replaced (`burner_bios.display_name`) is PER-EDITION, so a handle there
+    // would let one person hold a different name every year and "unique" would
+    // mean nothing. Nullable because it is OPTIONAL — a burner can finish
+    // onboarding without one and render as the neutral placeholder
+    // (@quagga/core `publicMemberName`). Stored AS ENTERED; uniqueness is
+    // enforced case-insensitively by the `users_username_lower_idx` unique index
+    // on `lower(username)`, and the format rules live in @quagga/core
+    // `username.ts` (never duplicated in SQL or in a form).
+    username: text("username"),
+    // Set when the account has been SANITIZED after a completed deletion request
   // (docs/accounts-security-spec.md §Deletion — the "Lost Cat" precedent). The
   // row survives so memberships, questionnaire responses, and audit events keep
   // referential integrity, but every personal field is erased and the identity
   // renders as the "Departed Burner" stub. A non-null value is also the tombstone
   // that stops a sanitized account being silently re-animated by a later sign-in
   // (@quagga/core `isSanitized` / `assertNotSanitized`).
-  sanitizedAt: timestamp("sanitized_at", { mode: "date" }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-});
+    sanitizedAt: timestamp("sanitized_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (u) => ({
+    // Case-INSENSITIVE uniqueness. A plain unique index on `username` would let
+    // `Dusty` and `dusty` coexist, which is exactly the impersonation the handle
+    // exists to prevent. Postgres treats NULLs as distinct, so the optional
+    // no-username case is unconstrained for free.
+    usernameLowerIdx: uniqueIndex("users_username_lower_idx").on(
+      sql`lower(${u.username})`,
+    ),
+  }),
+);
 
 // --- Better Auth identity (self-hosted) ----------------------------------
 // The Better Auth core tables, owned by @quagga/db and consumed by @quagga/auth's

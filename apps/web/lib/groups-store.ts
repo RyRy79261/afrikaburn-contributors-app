@@ -343,25 +343,20 @@ export async function getCampBySlug(
   const registrationStatus = regs[0]?.status ?? null;
 
   // NB: never select the account email here — this list renders on the public
-  // (registered) camp page, and email is POPIA-relevant PII. Public display
-  // names fall back to a neutral placeholder, never to email.
+  // (registered) camp page, and email is POPIA-relevant PII. The name comes from
+  // the account-level username and falls back to a neutral placeholder, never to
+  // email and never to a legal name.
   const memberRows = await db()
     .select({
       membershipId: schema.memberships.id,
       userId: schema.memberships.userId,
       role: schema.memberships.role,
       refCode: schema.memberships.refCode,
-      displayName: schema.burnerBios.displayName,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .leftJoin(
-      schema.burnerBios,
-      and(
-        eq(schema.burnerBios.userId, schema.memberships.userId),
-        eq(schema.burnerBios.editionId, editionId),
-      ),
-    )
     .where(eq(schema.memberships.groupId, group.id));
 
   const members: CampMember[] = memberRows.map((m) => ({
@@ -369,7 +364,7 @@ export async function getCampBySlug(
     userId: m.userId,
     role: m.role,
     refCode: m.refCode,
-    displayName: publicMemberName(m.displayName),
+    displayName: publicMemberName(m.username, { sanitizedAt: m.sanitizedAt }),
     isViewer: m.userId === viewerId,
   }));
   const roleRank: Record<MembershipRole, number> = {
@@ -589,17 +584,21 @@ export async function getPublicBurnerProfile(
   editionId: string,
 ): Promise<PublicBurnerProfile | null> {
   const userRows = await db()
-    .select({ id: schema.users.id })
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+    })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
     .limit(1);
-  if (!userRows[0]) return null;
+  const userRow = userRows[0];
+  if (!userRow) return null;
 
   // Non-sensitive bio columns only — never select phone / emergency / medical /
   // encrypted ID here; publicBioView additionally gates on the privacy flags.
   const bioRows = await db()
     .select({
-      displayName: schema.burnerBios.displayName,
       legalName: schema.burnerBios.legalName,
       homeCity: schema.burnerBios.homeCity,
       bio: schema.burnerBios.bio,
@@ -626,7 +625,6 @@ export async function getPublicBurnerProfile(
   const bioRow = bioRows[0] ?? null;
 
   const fields: BurnerBioFields = {
-    displayName: bioRow?.displayName ?? null,
     legalName: bioRow?.legalName ?? null,
     homeCity: bioRow?.homeCity ?? null,
     bio: bioRow?.bio ?? null,
@@ -709,7 +707,9 @@ export async function getPublicBurnerProfile(
 
   return {
     userId,
-    displayName: publicMemberName(bioRow?.displayName ?? null),
+    displayName: publicMemberName(userRow.username, {
+      sanitizedAt: userRow.sanitizedAt,
+    }),
     publicFields,
     campHistory,
     camps,

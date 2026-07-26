@@ -20,7 +20,7 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import {
   assignRoleToMember,
   createCustomRole,
@@ -59,13 +59,13 @@ test.describe("camp lead — a granted privilege unlocks, a revoked one re-locks
   }) => {
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
-    const memberName = uniqueName("Member Ren");
+    const memberName = uniqueUsername("member_ren");
 
     await signUpBurner(leadPage, { onboard: true });
     const camp = await createCamp(leadPage);
     const invite = await inviteToCamp(leadPage, camp.slug, "member");
 
-    await signUpBurner(memberPage, { onboard: true, displayName: memberName });
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
     await joinByInvite(memberPage, invite.url);
 
     const roleName = uniqueName("Crew Boss");

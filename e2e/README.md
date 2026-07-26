@@ -71,14 +71,14 @@ per worker (`e2e/lib/identity.ts`) so parallel runs never collide.
 
 | Factory              | Signature                                                       | Returns           | Notes                                                                                                                                                                                          |
 | -------------------- | --------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signUpBurner`       | `(page, { onboard?, displayName? }?)`                           | `Account`         | web app. Handles verification-off (synthetic email, auto sign-in) **and** verification-on (disposable inbox + link) transparently. `onboard:true` chains `completeBio`.                        |
-| `completeBio`        | `(page, { displayName?, homeCity? }?)`                          | `{ displayName }` | Walks the 5-step Burner Bio; releases the onboarding gate. Idempotent if already complete.                                                                                                     |
+| `signUpBurner`       | `(page, { onboard?, username? }?)`                              | `Account`         | web app. Handles verification-off (synthetic email, auto sign-in) **and** verification-on (disposable inbox + link) transparently. `onboard:true` chains `completeBio`.                        |
+| `completeBio`        | `(page, { username?, homeCity? }?)`                             | `{ username }`    | Walks the 5-step Burner Bio; releases the onboarding gate. Idempotent if already complete. **Nothing in the bio is required** — pass `username: null` to prove the flow completes without one. |
 | `signInAs`           | `(page, { email, password }, app?)`                             | `void`            | `app` = `"web" \| "org" \| "suppliers"` (default web). Asserts success by leaving the sign-in route (copy is enumeration-safe).                                                                |
 | `signOut`            | `(page)`                                                        | `void`            | Header sign-out.                                                                                                                                                                               |
 | `createCamp`         | `(page, { name?, description?, joinability? }?)`                | `{ slug, name }`  | web. Creator becomes structural **lead**. Requires an onboarded session. Creates a `theme_camp`.                                                                                               |
 | `inviteToCamp`       | `(page, slug, kind?)`                                           | `{ token, url }`  | `kind` = `"member"` (default) \| `"lead_transfer"`. Reads the invite URL from the rendered `<code>`.                                                                                           |
 | `joinByInvite`       | `(page, tokenOrUrl)`                                            | `{ slug }`        | Redeems as the current onboarded user.                                                                                                                                                         |
-| `acceptInviteAsNewBurner` | `(page, tokenOrUrl, { displayName? }?)`                    | `{ account, slug }` | The **signed-out** journey: opens the link with no session, accepts, creates the account, clears the Burner Bio gate, and lands on the camp. Handles verification-on/off like `signUpBurner`. |
+| `acceptInviteAsNewBurner` | `(page, tokenOrUrl, { username? }?)`                       | `{ account, slug }` | The **signed-out** journey: opens the link with no session, accepts, creates the account, clears the Burner Bio gate, and lands on the camp. Handles verification-on/off like `signUpBurner`. |
 | `submitRegistration` | `(page, slug, input?)`                                          | `void`            | Fills **all six** wizard sections and submits; asserts "Registration submitted". Completeness mirrors `packages/core` `SECTION_PREDICATES` exactly. Overridable fields in `RegistrationInput`. |
 | `registerSupplier`   | `(page, { email?, businessName?, contactPerson?, category? }?)` | `Account`         | suppliers app. Pass `email` overlapping a seeded catalog row to exercise **claim-by-email**; omit for a fresh row.                                                                             |
 | `elevateToGod`       | `(orgPage)`                                                     | `{ email }`       | Signs the **pre-provisioned** god account in and triggers the GOD_EMAILS bootstrap. **Not** self-service (see below). Throws `GodUnavailableError` if creds absent.                            |
@@ -167,7 +167,15 @@ unnoticed until the suite was first executed.
 - **Burner Bio text fields collide with their own privacy switch.** The switch's
   aria-label is `"Home city — public or private"`, so `getByLabel(/home city/i)`
   is a strict-mode violation. Scope to the control:
-  `getByRole("textbox", { name: /home city/i })`.
+  `getByRole("textbox", { name: /home city/i })`. (The **Username** field is the
+  one exception — it has no privacy switch, because a unique public handle has
+  no honest "private" state — but use the same `getByRole("textbox", …)` form
+  anyway so every bio selector reads alike.)
+- **A username is not a display name.** `uniqueName()` emits spaces, capitals and
+  hyphens; the field rejects all three. Use `uniqueUsername()` (`lib/identity.ts`)
+  for anything typed into the Username box, and remember handles are unique
+  ACROSS THE WHOLE DATABASE — a collision surfaces as "That username is already
+  taken" inside whatever factory happened to run second.
 - **`.click()` is not "the request finished".** It resolves when the event is
   dispatched. Navigating straight afterwards raced the sign-up POST and the
   session cookie did not exist yet, so the gate bounced to sign-in and ~100

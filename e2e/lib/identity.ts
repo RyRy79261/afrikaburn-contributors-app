@@ -71,6 +71,32 @@ export function uniqueName(prefix: string): string {
   return `${prefix} ${workerSlot()}-${counter}-${RUN_ID}${token(4)}`;
 }
 
+/**
+ * A unique USERNAME — the account handle, which has real rules
+ * (@quagga/core `username.ts`): 3–20 chars, must start with a letter, only
+ * `[a-z0-9_]`, no doubled or trailing underscore, and globally unique.
+ *
+ * `uniqueName` cannot be reused here: it emits spaces, capitals and hyphens,
+ * every one of which the field rejects. Usernames are also unique ACROSS the
+ * whole database rather than per-camp, so the worker/counter/run entropy matters
+ * more here than anywhere else — a collision would surface as "That username is
+ * already taken" inside a factory, in a test about something else entirely.
+ *
+ * The 20-char cap is tight, so the prefix is truncated rather than the entropy.
+ */
+export function uniqueUsername(prefix = "dusty"): string {
+  counter += 1;
+  const suffix = `${workerSlot()}${counter}${RUN_ID}${token(3)}`;
+  const stem = prefix
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, Math.max(1, 19 - suffix.length));
+  // Guaranteed to start with a letter: the stem is letter-initial by
+  // construction here, and a digits-only prefix would break the rule.
+  const head = /^[a-z]/.test(stem) ? stem : `u${stem}`;
+  return `${head}_${suffix}`.slice(0, 20);
+}
+
 /** A unique camp name (fictional per AGENTS.md — never a real business). */
 export function uniqueCampName(): string {
   return uniqueName("Dust Bunnies");

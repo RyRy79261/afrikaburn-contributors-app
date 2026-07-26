@@ -28,8 +28,8 @@ import {
   TEST_PASSWORD,
   uniqueCampName,
   uniqueEmail,
-  uniqueName,
   uniqueSupplierName,
+  uniqueUsername,
 } from "../lib/identity";
 
 // --- Credentials returned by the sign-up factories -------------------------
@@ -118,7 +118,7 @@ async function assertConfigured(page: Page): Promise<void> {
  */
 export async function signUpBurner(
   page: Page,
-  opts: { onboard?: boolean; displayName?: string } = {},
+  opts: { onboard?: boolean; username?: string } = {},
 ): Promise<Account> {
   const needsVerification = requiresEmailVerification();
   let mailbox: Mailbox | undefined;
@@ -172,7 +172,7 @@ export async function signUpBurner(
   const account: Account = mailbox
     ? { email, password, mailbox, name }
     : { email, password, name };
-  if (opts.onboard) await completeBio(page, { displayName: opts.displayName });
+  if (opts.onboard) await completeBio(page, { username: opts.username });
   return account;
 }
 
@@ -241,28 +241,34 @@ export async function signOut(page: Page): Promise<void> {
 // --- Burner Bio (onboarding) ----------------------------------------------
 
 /**
- * Complete the 5-step Burner Bio. Only the burner name is required; everything
- * else is left at defaults, which is enough to release the onboarding gate.
- * `privacyPublic` optionally flips a public-eligible field to PUBLIC so the
- * privacy-projection journey (M3-20) can assert it appears on the profile while
- * hard-locked fields never do.
+ * Complete the 5-step Burner Bio and return the username it set.
+ *
+ * NOTHING in the bio is required any more — the username is an optional alias
+ * (@quagga/core `username.ts`), and completion is the ACT of reaching the end
+ * and saving (`isBioComplete`). The factory still sets a username because almost
+ * every downstream assertion needs a name to find a burner BY; pass
+ * `username: null` for the journeys that must prove the flow completes without
+ * one.
  */
 export async function completeBio(
   page: Page,
-  opts: { displayName?: string; homeCity?: string } = {},
-): Promise<{ displayName: string }> {
-  const displayName = opts.displayName ?? uniqueName("Dusty");
+  opts: { username?: string | null; homeCity?: string } = {},
+): Promise<{ username: string | null }> {
+  const username =
+    opts.username === null ? null : (opts.username ?? uniqueUsername("dusty"));
   await page.goto("/onboarding");
   await assertConfigured(page);
 
   // If a completed bio already exists the app redirects to /profile — treat as done.
-  if (/\/profile/.test(page.url())) return { displayName };
+  if (/\/profile/.test(page.url())) return { username };
 
   // Step 1 — Welcome.
   await page.getByRole("button", { name: "Get started" }).click();
 
-  // Step 2 — Your details (Burner name is the only required field).
-  await page.getByRole("textbox", { name: /burner name/i }).fill(displayName);
+  // Step 2 — Your details. Every field here is optional now.
+  if (username !== null) {
+    await page.getByRole("textbox", { name: /username/i }).fill(username);
+  }
   if (opts.homeCity) await page.getByRole("textbox", { name: /home city/i }).fill(opts.homeCity);
   await page.getByRole("button", { name: "Save & continue" }).click();
 
@@ -274,7 +280,7 @@ export async function completeBio(
 
   // Step 5 — Done.
   await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
-  return { displayName };
+  return { username };
 }
 
 // --- Camps -----------------------------------------------------------------
@@ -411,7 +417,7 @@ export async function joinByInvite(
 export async function acceptInviteAsNewBurner(
   page: Page,
   tokenOrUrl: string,
-  opts: { displayName?: string } = {},
+  opts: { username?: string } = {},
 ): Promise<{ account: Account; slug: string }> {
   const token = tokenOrUrl.includes("/join/")
     ? tokenOrUrl.split("/join/").pop()!.trim()
@@ -470,8 +476,8 @@ export async function acceptInviteAsNewBurner(
   // The Burner Bio gate stands between the new account and the join; it is NOT
   // bypassed, and the invite survives it.
   await page.waitForURL(/\/onboarding/);
-  const displayName = opts.displayName ?? uniqueName("Invitee");
-  await completeBio(page, { displayName });
+  const username = opts.username ?? uniqueUsername("invitee");
+  await completeBio(page, { username });
 
   // The done step's primary action finishes the invite rather than dumping them
   // on the directory — that copy is the visible proof the invite was preserved.
@@ -496,8 +502,8 @@ export async function acceptInviteAsNewBurner(
   const slug = new URL(page.url()).pathname.split("/").filter(Boolean).pop()!;
 
   const account: Account = mailbox
-    ? { email, password, mailbox, name: displayName }
-    : { email, password, name: displayName };
+    ? { email, password, mailbox, name: username }
+    : { email, password, name: username };
   return { account, slug };
 }
 

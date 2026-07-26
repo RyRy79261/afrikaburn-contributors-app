@@ -11,15 +11,15 @@
 
 import { test, expect } from "../../fixtures";
 import { signUpBurner, createCamp } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import { attemptCreateCamp, confirmWarnedCreate } from "./support";
 
 test.describe("camp lead — create & become lead", () => {
   test("creating a camp with the three-field form makes the creator its lead", async ({
     webPage,
   }) => {
-    const leadName = uniqueName("Lead Alice");
-    await signUpBurner(webPage, { onboard: true, displayName: leadName });
+    const leadName = uniqueUsername("lead_alice");
+    await signUpBurner(webPage, { onboard: true, username: leadName });
 
     // The whole form is three fields: name, description, joinability. Nothing
     // about kind, approval, or payment — created camps are free theme camps.

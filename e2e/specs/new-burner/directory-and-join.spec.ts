@@ -14,7 +14,7 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 
 test.describe("new burner · directory & joining", () => {
   test("an onboarded burner can browse the directory", async ({ webPage }) => {
@@ -65,8 +65,8 @@ test.describe("new burner · directory & joining", () => {
 
     // The invitee — a second, independent burner — redeems the link.
     const joiner = await makeAppPage("web");
-    const joinerName = uniqueName("Joiner");
-    await signUpBurner(joiner, { onboard: true, displayName: joinerName });
+    const joinerName = uniqueUsername("joiner");
+    await signUpBurner(joiner, { onboard: true, username: joinerName });
     const joined = await joinByInvite(joiner, invite.url);
     expect(joined.slug).toBe(camp.slug);
 

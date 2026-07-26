@@ -31,7 +31,7 @@ import {
   submitRegistration,
   type Account,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 
 /** The fixed org catalog display names — camps may NOT alias these (officers.ts). */
 export const OFFICER_NAMES = {
@@ -85,24 +85,24 @@ export async function setBioPhone(page: Page): Promise<{ marker: string }> {
 
 export interface OfficerActor {
   account: Account;
-  /** The burner-bio display name — what the member picker + org card show. */
-  displayName: string;
+  /** The account username — what the member picker + org card show. */
+  username: string;
   /** Digit run that appears in the org card only once the phone is shared. */
   phoneMarker: string;
 }
 
 /** Sign up + onboard a burner and give them a bio phone (a would-be officer). */
 export async function onboardOfficerWithPhone(page: Page): Promise<OfficerActor> {
-  const displayName = uniqueName("Officer");
-  const account = await signUpBurner(page, { onboard: true, displayName });
+  const username = uniqueUsername("officer");
+  const account = await signUpBurner(page, { onboard: true, username });
   const { marker } = await setBioPhone(page);
-  return { account, displayName, phoneMarker: marker };
+  return { account, username, phoneMarker: marker };
 }
 
 export interface CampWithOfficer {
   slug: string;
   campName: string;
-  leadDisplayName: string;
+  leadUsername: string;
   officer: OfficerActor;
 }
 
@@ -117,8 +117,8 @@ export async function setUpCampWithMember(
   leadPage: Page,
   officerPage: Page,
 ): Promise<CampWithOfficer> {
-  const leadDisplayName = uniqueName("Lead");
-  await signUpBurner(leadPage, { onboard: true, displayName: leadDisplayName });
+  const leadUsername = uniqueUsername("lead");
+  await signUpBurner(leadPage, { onboard: true, username: leadUsername });
   const { slug, name: campName } = await createCamp(leadPage);
   await submitRegistration(leadPage, slug);
   const { url } = await inviteToCamp(leadPage, slug, "member");
@@ -126,7 +126,7 @@ export async function setUpCampWithMember(
   const officer = await onboardOfficerWithPhone(officerPage);
   await joinByInvite(officerPage, url);
 
-  return { slug, campName, leadDisplayName, officer };
+  return { slug, campName, leadUsername, officer };
 }
 
 /** Expand a roles/officers accordion row whose trigger contains `nameRe`. */

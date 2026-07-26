@@ -47,7 +47,7 @@ test.describe("god privilege-escalation refused", () => {
     // Belt and braces: no accounts search field rendered behind the gate.
     await expect(
       orgPage.getByRole("searchbox", {
-        name: /search accounts by email or burner name/i,
+        name: /search accounts by email or username/i,
       }),
     ).toHaveCount(0);
   });
@@ -73,7 +73,7 @@ test.describe("god privilege-escalation refused", () => {
     // They reached the surface (org_staff may read it) …
     await expect(
       staffOrg.getByRole("searchbox", {
-        name: /search accounts by email or burner name/i,
+        name: /search accounts by email or username/i,
       }),
     ).toBeVisible();
     // … but the copy tells them access is the owner's to change …

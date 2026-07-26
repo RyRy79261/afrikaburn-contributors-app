@@ -20,7 +20,7 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 
 test.describe("camp lead — invites", () => {
   test("a one-time member invite adds the invitee, and the spent link is then refused to a stranger", async ({
@@ -30,16 +30,16 @@ test.describe("camp lead — invites", () => {
     const memberPage = await makeAppPage("web");
     const strangerPage = await makeAppPage("web");
 
-    const leadName = uniqueName("Lead Alice");
-    const memberName = uniqueName("Member Ren");
+    const leadName = uniqueUsername("lead_alice");
+    const memberName = uniqueUsername("member_ren");
 
-    await signUpBurner(leadPage, { onboard: true, displayName: leadName });
+    await signUpBurner(leadPage, { onboard: true, username: leadName });
     const camp = await createCamp(leadPage, { description: "Chai at dawn." });
     const invite = await inviteToCamp(leadPage, camp.slug, "member");
     expect(invite.token).toBeTruthy();
 
     // The invitee redeems and lands on the camp with a membership.
-    await signUpBurner(memberPage, { onboard: true, displayName: memberName });
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
     const joined = await joinByInvite(memberPage, invite.url);
     expect(joined.slug).toBe(camp.slug);
 

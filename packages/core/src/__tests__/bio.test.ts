@@ -4,12 +4,12 @@ import {
   defaultPrivacyFlags,
   initialPrivacyFlags,
   resolvePrivacyFlagsUpdate,
-  publicMemberName,
   publicBioView,
   initialsFromName,
   buildBurnerBioQuestionnaire,
   mapResponsesToBio,
   mapBioToResponses,
+  usernameFromResponses,
   parseAttendedYears,
   isBioComplete,
   emptyBioExtras,
@@ -54,7 +54,7 @@ describe("bio privacy registry ↔ hard-lock", () => {
     // Locked keys explicitly private, a toggleable public field public.
     expect(flags.phone).toBe(false);
     expect(flags.saId).toBe(false);
-    expect(flags.displayName).toBe(true);
+    expect(flags.homeCity).toBe(true);
   });
 
   it("cannot be coaxed public — enforce wins over a tampered flag map", () => {
@@ -69,8 +69,8 @@ describe("bio privacy registry ↔ hard-lock", () => {
 describe("privacy-flags write helpers (regression: bio edit must not reset flags)", () => {
   it("initialPrivacyFlags merges defaults, overlays input, and enforces the lock", () => {
     // A brand-new row: caller marks a default-public field private.
-    const flags = initialPrivacyFlags({ displayName: false, phone: true });
-    expect(flags.displayName).toBe(false); // caller choice honoured
+    const flags = initialPrivacyFlags({ bio: false, phone: true });
+    expect(flags.bio).toBe(false); // caller choice honoured
     expect(flags.homeCity).toBe(true); // default retained
     expect(flags.phone).toBe(false); // hard-lock wins over illegal input
   });
@@ -88,13 +88,13 @@ describe("privacy-flags write helpers (regression: bio edit must not reset flags
   });
 
   it("resolvePrivacyFlagsUpdate returns enforced flags when explicitly supplied", () => {
-    const patch = resolvePrivacyFlagsUpdate({ displayName: false, saId: true });
+    const patch = resolvePrivacyFlagsUpdate({ homeCity: false, saId: true });
     expect(patch).toEqual({
-      privacyFlags: initialPrivacyFlags({ displayName: false, saId: true }),
+      privacyFlags: initialPrivacyFlags({ homeCity: false, saId: true }),
     });
     // Confirm the user's private choice survives and the lock still applies.
     if ("privacyFlags" in patch) {
-      expect(patch.privacyFlags.displayName).toBe(false);
+      expect(patch.privacyFlags.homeCity).toBe(false);
       expect(patch.privacyFlags.saId).toBe(false);
     }
   });
@@ -107,29 +107,9 @@ describe("privacy-flags write helpers (regression: bio edit must not reset flags
   });
 });
 
-describe("publicMemberName (regression: never leak account email)", () => {
-  it("uses the display name when present", () => {
-    expect(publicMemberName("Dusty Prototype")).toBe("Dusty Prototype");
-  });
-
-  it("falls back to a neutral placeholder — never to email — when absent", () => {
-    expect(publicMemberName(null)).toBe("Unnamed burner");
-    expect(publicMemberName(undefined)).toBe("Unnamed burner");
-    expect(publicMemberName("")).toBe("Unnamed burner");
-    expect(publicMemberName("   ")).toBe("Unnamed burner");
-    // The placeholder must never look like an email address.
-    expect(publicMemberName(null)).not.toContain("@");
-  });
-
-  it("trims surrounding whitespace on a real name", () => {
-    expect(publicMemberName("  Ember  ")).toBe("Ember");
-  });
-});
-
 describe("publicBioView (third-party profile projection)", () => {
   // A fully-populated bio, including every hard-locked sensitive field.
   const FULL: BurnerBioFields = {
-    displayName: "Ember",
     legalName: "Jordan Vale",
     homeCity: "Cape Town",
     bio: "Second-year builder.",
@@ -149,12 +129,10 @@ describe("publicBioView (third-party profile projection)", () => {
 
   it("returns only the fields explicitly flagged public", () => {
     const view = publicBioView(FULL, {
-      displayName: true,
       homeCity: true,
       attendedYears: true,
       // legalName + bio + skills + firstTime + contactEmail NOT flagged public
     });
-    expect(view.displayName).toBe("Ember");
     expect(view.homeCity).toBe("Cape Town");
     expect(view.attendedYears).toEqual([2019, 2024]);
     // Unflagged toggleable fields are withheld.
@@ -170,7 +148,7 @@ describe("publicBioView (third-party profile projection)", () => {
     const view = publicBioView(FULL, flags);
     expect(view.homeCity).toBeNull();
     // Other defaults still public.
-    expect(view.displayName).toBe("Ember");
+    expect(view.bio).toBe("Second-year builder.");
   });
 
   it("NEVER leaks a hard-locked field, even when flags claim it is public", () => {
@@ -201,7 +179,6 @@ describe("publicBioView (third-party profile projection)", () => {
     }
     // And nothing at all was flagged public here, so everything is empty.
     expect(view).toEqual({
-      displayName: null,
       legalName: null,
       homeCity: null,
       bio: null,
@@ -221,7 +198,7 @@ describe("publicBioView (third-party profile projection)", () => {
 
   it("treats a missing flag as private (absent ⇒ not public)", () => {
     const view = publicBioView(FULL, {});
-    expect(view.displayName).toBeNull();
+    expect(view.legalName).toBeNull();
     expect(view.homeCity).toBeNull();
   });
 
@@ -286,7 +263,6 @@ describe("publicBioView (third-party profile projection)", () => {
       }
       // …while the genuinely public, self-promotional v3 fields DO come
       // through, so the test can't pass by returning an empty object.
-      expect(view.displayName).toBe("Ember");
       expect(view.about).toBe(EXTRAS.about);
       expect(view.volunteeringInterests).toEqual(["rangers", "kitchen"]);
       expect(view.rangerTraining).toBe(true);
@@ -315,16 +291,16 @@ describe("initialsFromName", () => {
 describe("bio questionnaire definition", () => {
   it("is a valid, self-consistent questionnaire", () => {
     const q = buildBurnerBioQuestionnaire();
-    // displayName is the single required identity anchor.
+    // Nothing in the bio is required any more — the username is an optional
+    // alias, so an empty response set is a VALID (if bare) bio.
     const empty = validateResponses(q, {});
-    expect(empty.ok).toBe(false);
-    if (!empty.ok) expect(empty.errors.displayName).toBeDefined();
+    expect(empty.ok).toBe(true);
   });
 
   it("accepts a filled-in response set", () => {
     const q = buildBurnerBioQuestionnaire();
     const result = validateResponses(q, {
-      displayName: "Dusty Prototype",
+      username: "dusty_prototype",
       attendedYears: ["2019", "2024"],
       skills: ["build", "sound"],
       firstTime: false,
@@ -338,7 +314,7 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
 
   it("accepts real burn years and preserves them", () => {
     const r = validateResponses(q, {
-      displayName: "Veteran",
+      username: "veteran",
       attendedYears: ["2019", "2023", "2024", "2026"],
     });
     expect(r.ok).toBe(true);
@@ -348,7 +324,7 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
   it("rejects 2020 and 2021 — no burn was held", () => {
     for (const year of ["2020", "2021"]) {
       const r = validateResponses(q, {
-        displayName: "X",
+        username: "x_burner",
         attendedYears: [year],
       });
       expect(r.ok).toBe(false);
@@ -359,7 +335,7 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
   it("rejects years outside 2007–2026", () => {
     for (const year of ["2006", "2027", "1999", "3000"]) {
       const r = validateResponses(q, {
-        displayName: "X",
+        username: "x_burner",
         attendedYears: [year],
       });
       expect(r.ok).toBe(false);
@@ -368,7 +344,7 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
 
   it("de-duplicates repeated years", () => {
     const r = validateResponses(q, {
-      displayName: "X",
+      username: "x_burner",
       attendedYears: ["2019", "2019", "2024"],
     });
     expect(r.ok).toBe(true);
@@ -394,7 +370,6 @@ describe("parseAttendedYears", () => {
 describe("bio response ⇄ column mapping", () => {
   it("round-trips the core fields", () => {
     const fields: BurnerBioFields = {
-      displayName: "Ember",
       legalName: "Jordan Vale",
       homeCity: "Cape Town",
       bio: "Second-year builder.",
@@ -411,24 +386,46 @@ describe("bio response ⇄ column mapping", () => {
       idType: "sa_id",
       idNumber: "9001015800089",
     };
-    const responses = mapBioToResponses(fields);
+    const responses = mapBioToResponses(fields, "ember");
     const back = mapResponsesToBio(responses);
     expect(back).toEqual(fields);
+    // The username rides in the response map but is NOT a bio column — it is
+    // the one answer that lands on `users`.
+    expect(usernameFromResponses(responses)).toBe("ember");
   });
 
   it("collapses empty emergency contacts to null and empty years to []", () => {
-    const back = mapResponsesToBio({ displayName: "Solo" });
+    const back = mapResponsesToBio({ username: "solo" });
     expect(back.onsiteContactName).toBeNull();
     expect(back.onsiteContactPhone).toBeNull();
     expect(back.offsiteContactName).toBeNull();
     expect(back.offsiteContactPhone).toBeNull();
     expect(back.attendedYears).toEqual([]);
-    expect(isBioComplete(back)).toBe(true);
   });
 
-  it("treats a missing display name as incomplete", () => {
-    expect(isBioComplete({ displayName: null })).toBe(false);
-    expect(isBioComplete({ displayName: "  " })).toBe(false);
+  it("ignores an unknown key rather than inventing a column", () => {
+    expect(usernameFromResponses({})).toBeNull();
+    expect(usernameFromResponses({ username: "   " })).toBeNull();
+  });
+});
+
+// PROVISIONAL rule (see isBioComplete): completion is reaching the end of the
+// flow and saving, not filling any particular field. These tests exist to make
+// a future change to that rule deliberate rather than accidental.
+describe("isBioComplete (provisional: the final save IS the completion)", () => {
+  it("is complete once completedAt is stamped", () => {
+    expect(isBioComplete({ completedAt: new Date("2026-07-27") })).toBe(true);
+  });
+
+  it("is incomplete before the final save", () => {
+    expect(isBioComplete({ completedAt: null })).toBe(false);
+    expect(isBioComplete({})).toBe(false);
+  });
+
+  it("does NOT depend on a username — nothing in the bio is mandatory", () => {
+    // The whole point of the change: an anonymous-but-finished bio releases the
+    // onboarding gate exactly like a fully-filled one.
+    expect(isBioComplete({ completedAt: new Date() })).toBe(true);
   });
 });
 
@@ -544,7 +541,6 @@ describe("v3 privacy registry (self-promotional — never hard-locked)", () => {
 
 describe("publicBioView projects v3 fields (extras + flags)", () => {
   const FIELDS: BurnerBioFields = {
-    displayName: "Alice",
     legalName: null,
     homeCity: null,
     bio: null,

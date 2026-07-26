@@ -15,7 +15,10 @@ import { AppShell } from "@/components/app-shell";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BioFlow } from "@/components/onboarding/bio-flow";
 import { toBioExtrasState } from "@/components/questionnaire/extras-state";
-import { saveOnboardingBioAction } from "./actions";
+import {
+  checkUsernameAvailabilityAction,
+  saveOnboardingBioAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +48,9 @@ export default async function OnboardingPage() {
   if (bio?.completedAt) redirect("/profile");
 
   // Pre-fill from any in-progress bio so "save & finish later" resumes cleanly.
+  // The username lives on `users`, not the bio row, so it is threaded in.
   const initialResponses = bio
-    ? mapBioToResponses(bio.fields)
+    ? mapBioToResponses(bio.fields, bio.username)
     : {};
   const initialFlags = bio?.privacyFlags ?? defaultPrivacyFlags();
 
@@ -76,6 +80,7 @@ export default async function OnboardingPage() {
           initialExtras={toBioExtrasState(bio?.extras)}
           action={saveOnboardingBioAction}
           searchCamps={searchCampsAction}
+          checkUsername={checkUsernameAvailabilityAction}
           redirectTo={redirectTo}
         />
       </div>

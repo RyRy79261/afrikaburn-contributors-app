@@ -22,7 +22,7 @@ import {
   submitRegistration,
   elevateToGod,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 import {
   acceptOfficerRequest,
   assignOfficer,
@@ -36,13 +36,13 @@ test.describe("camp lead — officers are consent requests", () => {
   }) => {
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
-    const memberName = uniqueName("Officer Ren");
+    const memberName = uniqueUsername("officer_ren");
 
     await signUpBurner(leadPage, { onboard: true });
     const camp = await createCamp(leadPage);
     const invite = await inviteToCamp(leadPage, camp.slug, "member");
 
-    await signUpBurner(memberPage, { onboard: true, displayName: memberName });
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
     await joinByInvite(memberPage, invite.url);
 
     // Lead names the member as Safety Officer. `assignOfficer` asserts the row
@@ -77,7 +77,7 @@ test.describe("camp lead — officers are consent requests", () => {
 
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
-    const memberName = uniqueName("Safety Sam");
+    const memberName = uniqueUsername("safety_sam");
     // A distinctive number so its last four digits are an unambiguous probe.
     const phone = "+27825550147";
     const phoneProbe = /0147/;
@@ -91,7 +91,7 @@ test.describe("camp lead — officers are consent requests", () => {
 
     // The member onboards WITH a phone (hard-locked private for everyone else).
     await signUpBurner(memberPage, { onboard: true });
-    await completeBioWithPhone(memberPage, { displayName: memberName, phone });
+    await completeBioWithPhone(memberPage, { username: memberName, phone });
     await joinByInvite(memberPage, invite.url);
 
     // Assigned but NOT yet accepted → pending.

@@ -6,6 +6,7 @@ import {
   buildActivationRequiredActions,
   isParticipantFacingActivation,
   parseActivationActionKey,
+  publicMemberName,
   resolveActivationDefinition,
   resolveAudience,
   tallyActivationCompletion,
@@ -420,7 +421,9 @@ export interface ActivationResults {
  */
 export async function getActivationResults(
   activationId: string,
-  editionId: string,
+  /** Kept for call-site symmetry with the org loader; respondent names are now
+   * account-level (`users.username`), so nothing here is edition-scoped. */
+  _editionId: string,
 ): Promise<ActivationResults | null> {
   const activation = await getActivation(activationId);
   if (!activation) return null;
@@ -430,16 +433,11 @@ export async function getActivationResults(
       userId: schema.requiredActions.userId,
       status: schema.requiredActions.status,
       completedAt: schema.requiredActions.completedAt,
-      displayName: schema.burnerBios.displayName,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.requiredActions)
-    .leftJoin(
-      schema.burnerBios,
-      and(
-        eq(schema.burnerBios.userId, schema.requiredActions.userId),
-        eq(schema.burnerBios.editionId, editionId),
-      ),
-    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.requiredActions.userId))
     .where(eq(schema.requiredActions.activationId, activationId));
 
   const userIds = actionRows.map((r) => r.userId);
@@ -470,7 +468,9 @@ export async function getActivationResults(
   const respondents: ActivationRespondent[] = actionRows
     .map((r) => ({
       userId: r.userId,
-      displayName: r.displayName ?? "Unnamed burner",
+      displayName: publicMemberName(r.username, {
+        sanitizedAt: r.sanitizedAt,
+      }),
       status: r.status,
       completedAt: r.completedAt,
       responses: responseByUser.get(r.userId) ?? null,

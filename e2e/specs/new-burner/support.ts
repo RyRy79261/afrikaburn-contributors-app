@@ -22,7 +22,8 @@ import { expect, type Page } from "@playwright/test";
 /** A full Burner-Bio payload the suite can assert against on the public profile.
  * Every string is a caller-supplied sentinel so a leak is unambiguous. */
 export interface DetailedBioInput {
-  displayName: string;
+  /** The account handle — the only name any public surface shows. */
+  username: string;
   /** Public-eligible city sentinel. */
   homeCity: string;
   /** false ⇒ flip the (default-public) Home-city toggle to PRIVATE before saving. */
@@ -58,7 +59,7 @@ export async function fillDetailedBio(
   await page.getByRole("button", { name: "Get started" }).click();
 
   // Step 2 — Your details.
-  await page.getByRole("textbox", { name: /burner name/i }).fill(input.displayName);
+  await page.getByRole("textbox", { name: /username/i }).fill(input.username);
   await page.getByRole("textbox", { name: /home city/i }).fill(input.homeCity);
 
   for (const year of input.attendedYears) {
@@ -106,12 +107,12 @@ export async function fillDetailedBio(
  */
 export async function readBurnerIdFromRoster(
   page: Page,
-  displayName: string,
+  username: string,
 ): Promise<string> {
-  const link = page.getByRole("link", { name: displayName }).first();
+  const link = page.getByRole("link", { name: username }).first();
   await expect(link).toBeVisible();
   const href = await link.getAttribute("href");
   const id = href?.split("/burners/").pop()?.trim();
-  expect(id, `roster link for ${displayName} → ${href}`).toBeTruthy();
+  expect(id, `roster link for ${username} → ${href}`).toBeTruthy();
   return id as string;
 }

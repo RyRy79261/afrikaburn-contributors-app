@@ -33,6 +33,10 @@
 //     (./member-ref-code)
 //   - burner bio code questionnaire: buildBurnerBioQuestionnaire, mapping
 //     helpers, BIO_PRIVACY_FIELDS, defaultPrivacyFlags, isBioComplete (./bio)
+//   - usernames: the account-level handle that replaced the per-edition playa
+//     name — validateUsername (3–20, letter-initial, [a-z0-9_], no edge/double
+//     underscore, reserved list), normalizeUsername (the case-insensitive
+//     uniqueness key), publicMemberName (THE display fallback) (./username)
 //   - questionnaire engine: code-side registry + gating helpers
 //     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
 //   - questionnaire Builder v2 definition validation: structural integrity
@@ -124,6 +128,7 @@ export * from "./medical-access";
 export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";
+export * from "./username";
 export * from "./questionnaire-engine";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";

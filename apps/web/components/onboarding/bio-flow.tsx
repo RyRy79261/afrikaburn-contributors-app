@@ -7,6 +7,10 @@ import {
   BIO_PRIVACY_FIELDS,
   INVITE_RESUME_PATH,
   MEDICAL_AUDIENCE_NOTE,
+  USERNAME_HELP,
+  USERNAME_MAX_LENGTH,
+  USERNAME_QUESTION_ID,
+  validateUsername,
   type BioPrivacyField,
 } from "@quagga/core";
 import {
@@ -57,6 +61,13 @@ export type BioFlowAction = (
   extras?: BioExtrasState | null,
 ) => Promise<SaveResult>;
 
+/** Mirrors `checkUsernameAvailabilityAction`'s result (kept structural so this
+ * client component never imports a "use server" module's internals). */
+export type UsernameCheckResult =
+  | { status: "available" }
+  | { status: "taken"; message: string }
+  | { status: "invalid"; message: string };
+
 interface BioFlowProps {
   mode: "onboarding" | "edit";
   initialResponses: QuestionnaireResponses;
@@ -64,6 +75,9 @@ interface BioFlowProps {
   initialExtras: BioExtrasState;
   action: BioFlowAction;
   searchCamps: (query: string) => Promise<CampSearchResult[]>;
+  /** Live "is this handle free?" check. Debounced here; authorised + validated
+   * server-side (the client hint is a courtesy, never the gate). */
+  checkUsername: (candidate: string) => Promise<UsernameCheckResult>;
   /** Where to land after a successful final submit. */
   redirectTo: string;
 }
@@ -116,6 +130,7 @@ export function BioFlow({
   initialExtras,
   action,
   searchCamps,
+  checkUsername,
   redirectTo,
 }: BioFlowProps) {
   const router = useRouter();
@@ -124,6 +139,12 @@ export function BioFlow({
   const [stepIndex, setStepIndex] = React.useState(0);
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
+  // The handle they arrived holding. Re-checking it would tell someone their own
+  // username is taken, so the availability probe skips it entirely.
+  const [initialUsername] = React.useState(() => {
+    const v = initialResponses[USERNAME_QUESTION_ID];
+    return typeof v === "string" ? v.trim().toLowerCase() : "";
+  });
   const [flags, setFlags] =
     React.useState<Record<string, boolean>>(initialFlags);
   const [extras, setExtras] = React.useState<BioExtrasState>(initialExtras);
@@ -158,10 +179,23 @@ export function BioFlow({
   const describedBy = (id: string): string =>
     errors[id] ? `${id}-error` : `${id}-help`;
 
+  const usernameState = useUsernameAvailability(
+    str(USERNAME_QUESTION_ID),
+    initialUsername,
+    checkUsername,
+  );
+
+  // Nothing on this step is required — the username is an optional alias, so
+  // the only way to fail here is to type a MALFORMED one. Blank sails through.
   function validateDetails(): boolean {
     const next: Record<string, string> = {};
-    if (!str("displayName").trim()) {
-      next.displayName = "A burner name is required.";
+    const candidate = str(USERNAME_QUESTION_ID).trim();
+    if (candidate !== "") {
+      const checked = validateUsername(candidate);
+      if (!checked.ok) next[USERNAME_QUESTION_ID] = checked.error;
+      else if (usernameState.status === "taken") {
+        next[USERNAME_QUESTION_ID] = usernameState.message;
+      }
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -243,6 +277,7 @@ export function BioFlow({
           setResp={setResp}
           flags={flags}
           setFlag={setFlag}
+          usernameState={usernameState}
         />
       )}
 
@@ -404,6 +439,84 @@ function DoneStep() {
   );
 }
 
+// --- Username availability ------------------------------------------------
+
+type UsernameState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "available" }
+  | { status: "taken"; message: string }
+  | { status: "invalid"; message: string };
+
+/** How long the field sits quiet before asking the server. Long enough that
+ * typing a 12-character handle costs ONE request rather than twelve — the whole
+ * reason the check is affordable to expose at all. */
+const USERNAME_DEBOUNCE_MS = 400;
+
+/**
+ * Debounced "is this handle free?". Client-side format rules run first, so a
+ * malformed candidate never reaches the network; only well-formed, changed
+ * candidates are asked about. The verdict is a HINT — `saveBio` re-validates and
+ * the unique index is the actual guarantee.
+ */
+function useUsernameAvailability(
+  candidate: string,
+  initialUsername: string,
+  check: (candidate: string) => Promise<UsernameCheckResult>,
+): UsernameState {
+  const [state, setState] = React.useState<UsernameState>({ status: "idle" });
+
+  React.useEffect(() => {
+    const trimmed = candidate.trim();
+    if (trimmed === "" || trimmed.toLowerCase() === initialUsername) {
+      setState({ status: "idle" });
+      return;
+    }
+    const checked = validateUsername(trimmed);
+    if (!checked.ok) {
+      setState({ status: "invalid", message: checked.error });
+      return;
+    }
+
+    setState({ status: "checking" });
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      check(trimmed)
+        .then((result) => {
+          if (cancelled) return;
+          setState(
+            result.status === "available" ? { status: "available" } : result,
+          );
+        })
+        // A failed probe must not look like a verdict: fall silent and let the
+        // save path be the one that says no.
+        .catch(() => {
+          if (!cancelled) setState({ status: "idle" });
+        });
+    }, USERNAME_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [candidate, initialUsername, check]);
+
+  return state;
+}
+
+function UsernameStatus({ state }: { state: UsernameState }) {
+  if (state.status === "idle") return null;
+  if (state.status === "checking") {
+    return <p className="text-xs text-muted-foreground">Checking…</p>;
+  }
+  if (state.status === "available") {
+    return (
+      <p className="text-xs text-success">That username is free — nice one.</p>
+    );
+  }
+  return <p className="text-xs text-destructive">{state.message}</p>;
+}
+
 // --- Details step --------------------------------------------------------
 
 interface DetailsStepProps {
@@ -414,6 +527,7 @@ interface DetailsStepProps {
   setResp: (id: string, value: QuestionnaireResponseValue) => void;
   flags: Record<string, boolean>;
   setFlag: (key: string, isPublic: boolean) => void;
+  usernameState: UsernameState;
 }
 
 function DetailsStep({
@@ -424,6 +538,7 @@ function DetailsStep({
   setResp,
   flags,
   setFlag,
+  usernameState,
 }: DetailsStepProps) {
   const privacySwitch = (key: string) => {
     const f = PRIVACY_BY_KEY.get(key);
@@ -452,21 +567,29 @@ function DetailsStep({
 
       <Card>
         <CardContent className="flex flex-col gap-5 pt-6">
+          {/* No privacy toggle: a username is globally unique and is how other
+              burners address you, so "private handle" is not an honest state to
+              offer. Everything below it stays individually toggleable. */}
           <Field
-            label="Burner name"
-            htmlFor="displayName"
-            required
-            help="The name other burners see. A playa name is fine."
-            error={errors.displayName}
-            privacyToggle={privacySwitch("displayName")}
+            label="Username"
+            htmlFor={USERNAME_QUESTION_ID}
+            help={USERNAME_HELP}
+            error={errors[USERNAME_QUESTION_ID]}
           >
             <Input
-              id="displayName"
-              value={str("displayName")}
-              placeholder="e.g. Dusty"
-              aria-describedby={describedBy("displayName")}
-              onChange={(e) => setResp("displayName", e.target.value)}
+              id={USERNAME_QUESTION_ID}
+              value={str(USERNAME_QUESTION_ID)}
+              placeholder="e.g. dusty_prototype"
+              maxLength={USERNAME_MAX_LENGTH}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-describedby={describedBy(USERNAME_QUESTION_ID)}
+              onChange={(e) => setResp(USERNAME_QUESTION_ID, e.target.value)}
             />
+            {!errors[USERNAME_QUESTION_ID] && (
+              <UsernameStatus state={usernameState} />
+            )}
           </Field>
 
           <Field

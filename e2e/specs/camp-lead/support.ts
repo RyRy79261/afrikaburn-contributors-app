@@ -20,7 +20,7 @@
 //                     apps/org/app/(console)/registrations/[id]/page.tsx
 
 import { expect, type Locator, type Page } from "@playwright/test";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 import { appAlerts } from "../../lib/dom";
 
 // --- Camp creation (raw form, for the dedupe paths) ------------------------
@@ -116,12 +116,12 @@ export async function confirmWarnedCreate(
 
 export async function completeBioWithPhone(
   page: Page,
-  opts: { displayName?: string; phone: string },
-): Promise<{ displayName: string; phone: string }> {
-  const displayName = opts.displayName ?? uniqueName("Officer Ren");
+  opts: { username?: string; phone: string },
+): Promise<{ username: string; phone: string }> {
+  const username = opts.username ?? uniqueUsername("officer_ren");
   await page.goto("/onboarding");
   await page.getByRole("button", { name: "Get started" }).click();
-  await page.getByRole("textbox", { name: /burner name/i }).fill(displayName);
+  await page.getByRole("textbox", { name: /username/i }).fill(username);
   // The Field wires htmlFor="phone" to the react-phone-number-input's input id,
   // so the accessible label is exactly "Phone" (distinct from the emergency-
   // contact phones, which are labelled "On-site … contact" etc).
@@ -130,7 +130,7 @@ export async function completeBioWithPhone(
   await page.getByRole("button", { name: "Save & continue" }).click(); // burns
   await page.getByRole("button", { name: "Complete my bio" }).click();
   await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
-  return { displayName, phone: opts.phone };
+  return { username, phone: opts.phone };
 }
 
 // --- Custom roles (Roles & Officers settings) ------------------------------

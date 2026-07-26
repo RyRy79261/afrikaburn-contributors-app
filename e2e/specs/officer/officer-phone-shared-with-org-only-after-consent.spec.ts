@@ -41,7 +41,7 @@ test.describe("officer phone → org, only after consent", () => {
       leadPage,
       camp.slug,
       OFFICER_NAMES.lnt,
-      camp.officer.displayName,
+      camp.officer.username,
     );
 
     // The consent is still PENDING (assigned, not yet accepted).
@@ -62,7 +62,7 @@ test.describe("officer phone → org, only after consent", () => {
     // AFTER: re-fetch the same review; the officer's name and phone now appear.
     await orgPage.goto(detailUrl);
     await expect(
-      orgPage.getByText(new RegExp(camp.officer.displayName)),
+      orgPage.getByText(new RegExp(camp.officer.username)),
     ).toBeVisible();
     await expect(
       orgPage.getByText(new RegExp(marker)).first(),

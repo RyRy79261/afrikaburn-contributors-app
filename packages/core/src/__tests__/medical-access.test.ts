@@ -124,7 +124,6 @@ describe("consent at the point of entry — the medical field states its audienc
 
 describe("REGRESSION: medical notes never appear in ANY public projection", () => {
   const FIELDS: BurnerBioFields = {
-    displayName: "Ren Notfound",
     legalName: "Ren N.",
     homeCity: "Cape Town",
     bio: "Dust enthusiast",

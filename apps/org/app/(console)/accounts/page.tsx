@@ -34,7 +34,7 @@ export default async function AccountsPage({
   const rows: AccountTableRow[] = accounts.map((a) => ({
     userId: a.userId,
     email: a.email,
-    burnerName: a.burnerName,
+    username: a.username,
     role: a.role,
   }));
 
@@ -59,9 +59,9 @@ export default async function AccountsPage({
             type="search"
             name="q"
             defaultValue={query}
-            placeholder="Search by email or burner name…"
+            placeholder="Search by email or username…"
             className="pl-9"
-            aria-label="Search accounts by email or burner name"
+            aria-label="Search accounts by email or username"
           />
         </div>
         <Button type="submit" variant="secondary">

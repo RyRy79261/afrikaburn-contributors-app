@@ -92,8 +92,10 @@ export default async function AccountPage() {
     buildEmailChangeView(user.id),
   ]);
 
-  const displayName =
-    bio?.fields.displayName?.trim() || authUser.displayName?.trim() || null;
+  // The account-level handle, and ONLY that: the old fallback to the identity
+  // provider's `name` quietly surfaced whatever the sign-up form put there
+  // (usually the email local-part), which is not a name the burner chose.
+  const username = bio?.username?.trim() || user.username?.trim() || null;
   const email = user.email ?? authUser.primaryEmail;
 
   const password = linked.find((a) => a.providerId === "credential");
@@ -115,13 +117,13 @@ export default async function AccountPage() {
         </CardHeader>
         <CardContent className="flex flex-col">
           <Row
-            label="Display name"
+            label="Username"
             value={
-              displayName ?? (
+              username ?? (
                 <span className="text-muted-foreground">Not set yet</span>
               )
             }
-            help="Shown on your camp roster and your public Burner profile. It lives in your Burner Bio, so it's edited there."
+            help="Optional. How you appear on your camp roster and your public Burner profile. It lives in your Burner Bio, so it's edited there."
             action={
               <Button variant="outline" size="sm" asChild>
                 <Link href="/profile?edit=1">Edit in your bio</Link>

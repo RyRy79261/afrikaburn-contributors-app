@@ -26,15 +26,15 @@ import {
   inviteToCamp,
   acceptInviteAsNewBurner,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 
 test.describe("anonymous visitor — signed-out invite acceptance", () => {
   test("a signed-out invitee sees the invite, signs up, and lands on the camp as a member", async ({
     webPage, // the lead
     makeAppPage,
   }) => {
-    const leadName = uniqueName("Lead Alice");
-    await signUpBurner(webPage, { onboard: true, displayName: leadName });
+    const leadName = uniqueUsername("lead_alice");
+    await signUpBurner(webPage, { onboard: true, username: leadName });
     const camp = await createCamp(webPage, {
       description: "A tea-fuelled village of makers on the Binnekring edge.",
       // Invite-only (free) — the invite is the ONLY way in, and the only thing
@@ -53,11 +53,11 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
       invitee.getByRole("heading", { name: camp.name }),
     ).toBeVisible();
     await expect(invitee.getByText(/you['’]ve been invited to join/i)).toBeVisible();
-    // The inviter IS named, because `displayName` is defaultPublic: true
-    // (packages/core/src/bio.ts) and this lead never changed it. The card gates
-    // that line on the burner's own privacy flag — the same canBePublic + flag
-    // pair the public profile uses — so a lead who marks their burner name
-    // private is NOT named to everyone the link gets forwarded to. Default
+    // The inviter IS named, because the card shows their USERNAME — a public
+    // handle by construction (unique, no privacy toggle: @quagga/core
+    // `username.ts`). There is no flag to consult any more; what the card must
+    // never carry is a legal name or an email, and a lead with no username at
+    // all simply gets no name line. Default
     // public, opt-out honoured.
     await expect(
       invitee.getByText(`${leadName} invited you to join.`),
@@ -81,9 +81,9 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
     await expect(invitee.getByText(/^members \(/i)).toHaveCount(0);
 
     // Accept → sign-up → Burner Bio gate → the camp, join completed for them.
-    const inviteeName = uniqueName("Invitee Ren");
+    const inviteeName = uniqueUsername("invitee_ren");
     const { slug } = await acceptInviteAsNewBurner(invitee, invite.token, {
-      displayName: inviteeName,
+      username: inviteeName,
     });
     expect(slug).toBe(camp.slug);
     await expect(

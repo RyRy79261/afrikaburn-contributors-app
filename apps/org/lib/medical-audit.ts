@@ -116,17 +116,19 @@ export async function getMedicalAccessLog(
 
   const names = new Map<string, string>();
   if (subjectIds.length > 0) {
-    const bios = await db
+    const subjects = await db
       .select({
-        userId: schema.burnerBios.userId,
-        displayName: schema.burnerBios.displayName,
+        userId: schema.users.id,
+        username: schema.users.username,
+        sanitizedAt: schema.users.sanitizedAt,
       })
-      .from(schema.burnerBios)
-      .where(inArray(schema.burnerBios.userId, subjectIds));
-    for (const bio of bios) {
-      if (!names.has(bio.userId)) {
-        names.set(bio.userId, publicMemberName(bio.displayName));
-      }
+      .from(schema.users)
+      .where(inArray(schema.users.id, subjectIds));
+    for (const s of subjects) {
+      names.set(
+        s.userId,
+        publicMemberName(s.username, { sanitizedAt: s.sanitizedAt }),
+      );
     }
   }
 

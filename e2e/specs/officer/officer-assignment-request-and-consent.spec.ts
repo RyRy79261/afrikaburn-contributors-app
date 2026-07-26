@@ -34,7 +34,7 @@ test.describe("officer assignment request + consent", () => {
       leadPage,
       camp.slug,
       OFFICER_NAMES.lnt,
-      camp.officer.displayName,
+      camp.officer.username,
     );
 
     // --- The member receives the assignment request (notification) ----------

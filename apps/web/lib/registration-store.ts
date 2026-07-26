@@ -6,6 +6,7 @@ import {
   deriveOnboardingProgress,
   filterPickerEligible,
   isSubmittable,
+  publicMemberName,
   resolveCampAction,
   type CampAction,
   type RegistrationSectionData,
@@ -142,12 +143,14 @@ export interface CampSectionReview {
  * The camp-visible section-review threads (AB feedback + the two-way reply
  * conversation) for a registration. Replies live in `section_review_replies`
  * (org-authored `section_reviews` carry only the AB comment). Author labels are
- * resolved for the registration's edition so a reply reads with a name, and org
- * staff authors collapse to "AfrikaBurn" to match how review comments present.
+ * account-level usernames, and org staff authors collapse to "AfrikaBurn" to
+ * match how review comments present.
  */
 export async function getSectionReviews(
   registrationId: string,
-  editionId: string,
+  /** Kept so every registration loader takes the same pair; author names are no
+   * longer edition-scoped now that the handle lives on `users`. */
+  _editionId: string,
 ): Promise<CampSectionReview[]> {
   const reviews = await db()
     .select({
@@ -178,7 +181,7 @@ export async function getSectionReviews(
   const authorIds = [
     ...new Set(replyRows.map((r) => r.authorUserId).filter((id): id is string => Boolean(id))),
   ];
-  const { names, orgStaff } = await resolveReplyAuthors(authorIds, editionId);
+  const { names, orgStaff } = await resolveReplyAuthors(authorIds);
 
   const repliesByReview = new Map<string, CampReviewReply[]>();
   for (const r of replyRows) {
@@ -204,28 +207,30 @@ export async function getSectionReviews(
   }));
 }
 
-/** Resolve reply-author display names (for the edition) + which are org staff. */
+/** Resolve reply-author names (account-level usernames) + which are org staff. */
 async function resolveReplyAuthors(
   authorIds: string[],
-  editionId: string,
 ): Promise<{ names: Map<string, string>; orgStaff: Set<string> }> {
   const names = new Map<string, string>();
   const orgStaff = new Set<string>();
   if (authorIds.length === 0) return { names, orgStaff };
 
-  const bios = await db()
+  const authors = await db()
     .select({
-      userId: schema.burnerBios.userId,
-      displayName: schema.burnerBios.displayName,
+      userId: schema.users.id,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
     })
-    .from(schema.burnerBios)
-    .where(
-      and(
-        inArray(schema.burnerBios.userId, authorIds),
-        eq(schema.burnerBios.editionId, editionId),
-      ),
-    );
-  for (const b of bios) if (b.displayName) names.set(b.userId, b.displayName);
+    .from(schema.users)
+    .where(inArray(schema.users.id, authorIds));
+  for (const a of authors) {
+    if (a.username || a.sanitizedAt) {
+      names.set(
+        a.userId,
+        publicMemberName(a.username, { sanitizedAt: a.sanitizedAt }),
+      );
+    }
+  }
 
   const [org] = await db()
     .select({ id: schema.groups.id })

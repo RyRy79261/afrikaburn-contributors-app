@@ -24,14 +24,14 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 
 // Unique, free-text sentinels for the hard-locked fields. They are distinctive
 // strings so their ABSENCE from the rendered profile is an unambiguous proof —
 // not a formatting coincidence. (Phone is normalised to E.164, so we assert on
 // the raw digit run, which survives normalisation.)
 interface Sentinels {
-  displayName: string;
+  username: string;
   homeCity: string;
   phoneDigits: string;
   onsiteName: string;
@@ -43,7 +43,7 @@ interface Sentinels {
 function makeSentinels(): Sentinels {
   const tag = Math.random().toString(36).slice(2, 8).toUpperCase();
   return {
-    displayName: uniqueName("Dusty"),
+    username: uniqueUsername("dusty"),
     homeCity: `HomeCity${tag}`,
     phoneDigits: "825550137",
     onsiteName: `OnsiteName${tag}`,
@@ -69,7 +69,7 @@ async function completePiiBioAllPublic(
   await page.getByRole("button", { name: "Get started" }).click();
 
   // Step 2 — Your details (public-eligible + hard-locked fields).
-  await page.getByRole("textbox", { name: /burner name/i }).fill(s.displayName);
+  await page.getByRole("textbox", { name: /username/i }).fill(s.username);
   await page.getByRole("textbox", { name: /home city/i }).fill(s.homeCity);
   await page.locator("#phone").fill(s.phoneDigits);
   await page.getByLabel("On-site contact name").fill(s.onsiteName);
@@ -134,7 +134,7 @@ test.describe("anonymous visitor — burner profile privacy", () => {
     // From the roster, the camp-mate opens the owner's public profile. (Camp-mates
     // always see each other's display names, so we locate the owner by name.)
     await strangerPage.goto(`/camps/${camp.slug}`);
-    const ownerLink = strangerPage.getByRole("link", { name: s.displayName });
+    const ownerLink = strangerPage.getByRole("link", { name: s.username });
     await expect(ownerLink).toBeVisible();
     const href = await ownerLink.getAttribute("href");
     expect(href).toMatch(/^\/burners\/[0-9a-f-]{36}$/);
@@ -143,7 +143,7 @@ test.describe("anonymous visitor — burner profile privacy", () => {
     // We are on the owner's profile (proves the surface rendered, so the absence
     // assertions below are meaningful — not an empty page passing by accident).
     await expect(
-      strangerPage.getByRole("heading", { name: s.displayName }),
+      strangerPage.getByRole("heading", { name: s.username }),
     ).toBeVisible();
 
     // POSITIVE control: a public-eligible field the owner set PUBLIC IS shown.

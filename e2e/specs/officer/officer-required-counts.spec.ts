@@ -10,7 +10,7 @@
 import { test, expect } from "../../fixtures";
 import type { Page } from "@playwright/test";
 import { signUpBurner, createCamp, submitRegistration } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueUsername } from "../../lib/identity";
 import { OFFICER_NAMES, assignOfficer } from "./support";
 
 /** Parse the "{n} outstanding" figure from the officers-section badge. */
@@ -30,8 +30,8 @@ test.describe("required-officer counts", () => {
   }) => {
     test.slow();
 
-    const leadName = uniqueName("Lead");
-    await signUpBurner(webPage, { onboard: true, displayName: leadName });
+    const leadName = uniqueUsername("lead");
+    await signUpBurner(webPage, { onboard: true, username: leadName });
     const { slug } = await createCamp(webPage);
 
     // --- Free camp: officers are optional — no requirement, no count ---------

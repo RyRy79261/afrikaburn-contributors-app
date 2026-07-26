@@ -30,7 +30,7 @@ test.describe("officer decline", () => {
       leadPage,
       camp.slug,
       OFFICER_NAMES.lnt,
-      camp.officer.displayName,
+      camp.officer.username,
     );
 
     await respondToConsent(officerPage, camp.slug, "decline");
@@ -65,7 +65,7 @@ test.describe("officer decline", () => {
       leadPage,
       camp.slug,
       OFFICER_NAMES.lnt,
-      camp.officer.displayName,
+      camp.officer.username,
     );
     await respondToConsent(officerPage, camp.slug, "decline");
 

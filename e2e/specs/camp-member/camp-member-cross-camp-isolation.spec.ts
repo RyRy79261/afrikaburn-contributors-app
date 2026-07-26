@@ -18,7 +18,7 @@ import {
   joinByInvite,
   submitRegistration,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import {
   authorCampQuestionnaire,
   setHardLockedBioData,
@@ -117,12 +117,12 @@ test.describe("camp member — cross-camp isolation", () => {
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
 
-    const leadName = uniqueName("Lead Jabu");
+    const leadName = uniqueUsername("lead_jabu");
     const onsiteContactName = uniqueName("EMERGENCYSENTINEL Contact");
     const medicalNotes = uniqueName("MEDICALSENTINEL peanut allergy");
 
     // The lead fills REAL hard-locked private data (emergency contact + medical).
-    await signUpBurner(leadPage, { onboard: true, displayName: leadName });
+    await signUpBurner(leadPage, { onboard: true, username: leadName });
     const camp = await createCamp(leadPage);
     await setHardLockedBioData(leadPage, { onsiteContactName, medicalNotes });
     const invite = await inviteToCamp(leadPage, camp.slug, "member");

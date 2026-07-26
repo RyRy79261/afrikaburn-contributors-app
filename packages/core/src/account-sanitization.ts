@@ -25,8 +25,16 @@ export const DEPARTED_BURNER_NAME = "Departed Burner";
 
 /**
  * Patch applied to the `users` row. The row itself SURVIVES — only its personal
- * content goes: `email` is nulled and `sanitizedAt` is stamped (the tombstone the
- * guards read).
+ * content goes: `email` and `username` are nulled and `sanitizedAt` is stamped
+ * (the tombstone the guards read).
+ *
+ * `username` is personal data — a self-chosen handle that people recognise
+ * offline — so POPIA erasure takes it, and nulling it also FREES it for someone
+ * else (the unique index treats NULLs as distinct). It is not replaced with a
+ * stub: the stub would have to be unique per departed account, and a username
+ * has a format. The stub is a RENDER concern instead — `publicMemberName` reads
+ * the tombstone and shows "Departed Burner", so a roster keeps saying what
+ * happened without the departed account still holding a handle.
  *
  * `authUserId` is DELIBERATELY LEFT UNCHANGED. It is the key the session
  * resolvers look the row up by (`ensureCampUser` / `resolveOrgSession` /
@@ -46,19 +54,20 @@ export const DEPARTED_BURNER_NAME = "Departed Burner";
  */
 export interface UserSanitizationPatch {
   email: null;
+  username: null;
   sanitizedAt: Date;
 }
 
 /**
- * Build the `users` patch. Nulls the email and stamps the tombstone; leaves
- * `authUserId` untouched so the row stays findable by the session resolvers (see
- * the interface note above).
+ * Build the `users` patch. Nulls the email + username and stamps the tombstone;
+ * leaves `authUserId` untouched so the row stays findable by the session
+ * resolvers (see the interface note above).
  */
 export function buildUserSanitizationPatch(
   _userId: string,
   at: Date,
 ): UserSanitizationPatch {
-  return { email: null, sanitizedAt: at };
+  return { email: null, username: null, sanitizedAt: at };
 }
 
 /**
@@ -74,7 +83,13 @@ export function buildUserSanitizationPatch(
  * it changes nothing about erasure — POPIA erasure still nulls the column.
  */
 export const SANITIZED_BIO_NULL_FIELDS = [
-  // Identity + self-description
+  // Identity + self-description. `displayName` is the RETIRED per-edition playa
+  // name (superseded by `users.username`): nothing writes it any more, but rows
+  // created before the switch still hold a real one, so erasure still takes it.
+  // It used to be stubbed with DEPARTED_BURNER_NAME so a roster rendered — that
+  // job moved to `publicMemberName`, which reads the tombstone, so this column
+  // can now be nulled outright (strictly more erasure).
+  "displayName",
   "legalName",
   "homeCity",
   "bio",
@@ -101,10 +116,9 @@ export type SanitizedBioNullField = (typeof SANITIZED_BIO_NULL_FIELDS)[number];
  * edition). Personal free text and identifiers go to null; the arrays and
  * booleans that could re-identify someone (skills, attendance years, camp
  * history, volunteering interests, ranger flags) are reset to their empty
- * defaults; `displayName` becomes the stub so a roster still renders a row.
+ * defaults.
  */
 export type BurnerBioSanitizationPatch = Record<SanitizedBioNullField, null> & {
-  displayName: string;
   skills: string[];
   attendedYears: number[];
   campHistory: null;
@@ -129,7 +143,6 @@ export function buildBioSanitizationPatch(at: Date): BurnerBioSanitizationPatch 
 
   return {
     ...nulls,
-    displayName: DEPARTED_BURNER_NAME,
     skills: [],
     attendedYears: [],
     campHistory: null,

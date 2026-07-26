@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   BURNER_BIO_VERSION,
@@ -10,9 +10,11 @@ import {
   parseVolunteering,
   resolvePrivacyFlagsUpdate,
   serializeVolunteering,
-  isBioComplete,
   mapBioToResponses,
   mapResponsesToBio,
+  normalizeUsername,
+  usernameFromResponses,
+  validateUsername,
   type BioExtras,
   type BurnerBioFields,
 } from "@quagga/core";
@@ -31,6 +33,9 @@ export interface BioView {
   fields: BurnerBioFields;
   /** v3 additions — carried alongside the questionnaire-mapped fields. */
   extras: BioExtras;
+  /** The account-level handle (`users.username`), threaded through here so the
+   * bio flow can pre-fill it — it is NOT a `burner_bios` column. */
+  username: string | null;
   responses: QuestionnaireResponses;
   privacyFlags: Record<string, boolean>;
   completedAt: Date | null;
@@ -56,6 +61,8 @@ export async function getBio(
   const row = rows[0];
   if (!row) return null;
 
+  const username = await getUsername(userId);
+
   const idNumber =
     decryptOrNull(row.saIdEncrypted) ?? decryptOrNull(row.passportEncrypted);
   const idType = row.saIdEncrypted
@@ -65,7 +72,6 @@ export async function getBio(
       : null;
 
   const fields: BurnerBioFields = {
-    displayName: row.displayName,
     legalName: row.legalName,
     homeCity: row.homeCity,
     bio: row.bio,
@@ -101,11 +107,57 @@ export async function getBio(
   return {
     fields,
     extras,
-    responses: mapBioToResponses(fields),
+    username,
+    responses: mapBioToResponses(fields, username),
     privacyFlags: { ...defaultPrivacyFlags(), ...row.privacyFlags },
     completedAt: row.completedAt,
     cryptoConfigured: isCryptoConfigured(),
   };
+}
+
+/** The account's current handle, or null. */
+export async function getUsername(userId: string): Promise<string | null> {
+  const rows = await db()
+    .select({ username: schema.users.username })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return rows[0]?.username ?? null;
+}
+
+/** Postgres unique-violation. The `lower(username)` index is the ONLY real
+ * guarantee of uniqueness — a pre-check is a hint that races, so the write path
+ * must handle losing the race rather than assume it cannot happen. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
+}
+
+/**
+ * Is this handle free for `userId` to take? Case-insensitive, and the caller's
+ * OWN current handle counts as available (re-saving a bio must not tell someone
+ * their own username is taken).
+ *
+ * Deliberately returns a bare verdict: a unique handle is inherently
+ * enumerable — that is what "unique" means — but WHO holds it is nobody's
+ * business, so no id, name, camp or "similar to" hint ever leaves this function.
+ */
+export async function isUsernameAvailable(
+  userId: string,
+  candidate: string,
+): Promise<boolean> {
+  const normalized = normalizeUsername(candidate);
+  const rows = await db()
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(sql`lower(${schema.users.username}) = ${normalized}`)
+    .limit(1);
+  const holder = rows[0];
+  return !holder || holder.id === userId;
 }
 
 /**
@@ -146,6 +198,10 @@ export type SaveBioResult =
   | { ok: true }
   | { ok: false; errors: Record<string, string> };
 
+/** Said the same way by the pre-check and by the lost-race path, so a user can
+ * never tell which one fired — and it names no holder. */
+const USERNAME_TAKEN = "That username is already taken. Try another.";
+
 /**
  * Validate + persist a bio from questionnaire responses. Enforces the privacy
  * hard-lock, encrypts the ID document (dropping it if crypto is unconfigured),
@@ -167,9 +223,29 @@ export async function saveBio(input: {
 
   const fields = mapResponsesToBio(validated.responses);
 
-  if (input.final && !isBioComplete(fields)) {
-    return { ok: false, errors: { displayName: "A display name is required." } };
+  // The username is the one answer that does NOT belong to `burner_bios` — it
+  // is account-level (see @quagga/core `username.ts`). Validate it here, before
+  // anything is written, so a bad handle never half-saves a bio. A blank field
+  // is legitimate: the handle is OPTIONAL, and clearing it frees it.
+  const rawUsername = usernameFromResponses(validated.responses);
+  let usernamePatch: { username: string | null } | null = null;
+  if (rawUsername !== null) {
+    const checked = validateUsername(rawUsername);
+    if (!checked.ok) {
+      return { ok: false, errors: { username: checked.error } };
+    }
+    if (!(await isUsernameAvailable(input.userId, checked.username))) {
+      return { ok: false, errors: { username: USERNAME_TAKEN } };
+    }
+    usernamePatch = { username: checked.username };
+  } else {
+    const current = await getUsername(input.userId);
+    if (current !== null) usernamePatch = { username: null };
   }
+
+  // NOTE: there is deliberately NO "a name is required" guard here any more.
+  // Completion is now the ACT of finishing the flow (see `isBioComplete`), so a
+  // burner who wants no handle still reaches the end and clears the gate.
 
   // v3 extras — validated (Zod) at this boundary; camp-history linked entries
   // are resolved against real groups. Omitted ⇒ the columns are left untouched
@@ -223,7 +299,10 @@ export async function saveBio(input: {
   const baseValues = {
     userId: input.userId,
     editionId: input.editionId,
-    displayName: fields.displayName,
+    // NB: `display_name` is deliberately absent. It is the RETIRED per-edition
+    // playa name — superseded by `users.username` — so nothing writes it any
+    // more, and leaving it out means an existing row's legacy value is preserved
+    // rather than silently nulled by every save.
     legalName: fields.legalName,
     homeCity: fields.homeCity,
     bio: fields.bio,
@@ -263,6 +342,21 @@ export async function saveBio(input: {
         ...(input.final ? { completedAt } : {}),
       },
     });
+
+  if (usernamePatch) {
+    try {
+      await db()
+        .update(schema.users)
+        .set(usernamePatch)
+        .where(eq(schema.users.id, input.userId));
+    } catch (error) {
+      // Lost the race between the availability check and the write. The unique
+      // index caught it, which is the point of having one; report it as the
+      // ordinary "taken" outcome rather than a 500.
+      if (!isUniqueViolation(error)) throw error;
+      return { ok: false, errors: { username: USERNAME_TAKEN } };
+    }
+  }
 
   await ensureProfileKeypair(input.userId);
 

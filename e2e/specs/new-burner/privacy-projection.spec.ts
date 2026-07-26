@@ -39,7 +39,7 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import { fillDetailedBio, readBurnerIdFromRoster } from "./support";
 
 test.describe("new burner · privacy projection", () => {
@@ -58,7 +58,7 @@ test.describe("new burner · privacy projection", () => {
     const bPage = await makeAppPage("web");
     await signUpBurner(bPage);
 
-    const bName = uniqueName("Burner B");
+    const bName = uniqueUsername("burner_b");
     const publicAbout = uniqueName("about the dust");
     const sentinels = {
       city: uniqueName("SecretCity"),
@@ -70,7 +70,7 @@ test.describe("new burner · privacy projection", () => {
     };
 
     await fillDetailedBio(bPage, {
-      displayName: bName, // default PUBLIC → the profile heading
+      username: bName, // the public handle → the profile heading
       homeCity: sentinels.city,
       homeCityPublic: false, // flipped PRIVATE → must be absent
       attendedYears: [2019, 2022], // default PUBLIC → the years render

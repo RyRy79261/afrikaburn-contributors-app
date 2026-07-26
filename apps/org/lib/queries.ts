@@ -6,7 +6,6 @@ import {
   count,
   desc,
   eq,
-  exists,
   ilike,
   inArray,
   lt,
@@ -133,15 +132,18 @@ export interface AccountRow {
   userId: string;
   email: string | null;
   /** Latest Burner Bio display name, when the account has one. */
-  burnerName: string | null;
+  username: string | null;
   role: "god" | "org_staff" | null;
   createdAt: Date;
 }
 
 /**
- * Search users by email OR Burner Bio display name (case-insensitive
- * substring), annotated with their org role and most-recent display name.
- * Empty query returns the most recent accounts. One row per user.
+ * Search users by email OR username (case-insensitive substring), annotated with
+ * their org role. Empty query returns the most recent accounts. One row per user.
+ *
+ * The name is now a single column on `users` rather than a per-edition bio
+ * lookup, so the EXISTS sub-query and the "newest bio wins" pass both went away:
+ * one account has one handle, full stop.
  */
 export async function searchAccounts(
   orgGroupId: string,
@@ -155,6 +157,7 @@ export async function searchAccounts(
     .select({
       userId: schema.users.id,
       email: schema.users.email,
+      username: schema.users.username,
       role: schema.memberships.role,
       createdAt: schema.users.createdAt,
     })
@@ -170,47 +173,17 @@ export async function searchAccounts(
       q
         ? or(
             ilike(schema.users.email, like),
-            exists(
-              db
-                .select({ one: sql`1` })
-                .from(schema.burnerBios)
-                .where(
-                  and(
-                    eq(schema.burnerBios.userId, schema.users.id),
-                    ilike(schema.burnerBios.displayName, like),
-                  ),
-                ),
-            ),
+            ilike(schema.users.username, like),
           )
         : undefined,
     )
     .orderBy(desc(schema.users.createdAt))
     .limit(50);
 
-  // Latest display name per returned user (bios are per-edition; newest wins).
-  const userIds = rows.map((r) => r.userId);
-  const nameByUser = new Map<string, string>();
-  if (userIds.length > 0) {
-    const bios = await db
-      .select({
-        userId: schema.burnerBios.userId,
-        displayName: schema.burnerBios.displayName,
-        updatedAt: schema.burnerBios.updatedAt,
-      })
-      .from(schema.burnerBios)
-      .where(inArray(schema.burnerBios.userId, userIds))
-      .orderBy(desc(schema.burnerBios.updatedAt));
-    for (const b of bios) {
-      if (b.displayName && !nameByUser.has(b.userId)) {
-        nameByUser.set(b.userId, b.displayName);
-      }
-    }
-  }
-
   return rows.map((r) => ({
     userId: r.userId,
     email: r.email,
-    burnerName: nameByUser.get(r.userId) ?? null,
+    username: r.username,
     role: r.role === "god" || r.role === "org_staff" ? r.role : null,
     createdAt: r.createdAt,
   }));
@@ -390,7 +363,6 @@ export async function getRegistrationDetail(
 
   const repliesByReview = await getSectionReviewReplies(
     reviews.map((r) => r.id),
-    registration.editionId,
   );
 
   const supplierDeclarations = await db
@@ -461,7 +433,6 @@ export async function getRegistrationDetail(
  */
 async function getSectionReviewReplies(
   reviewIds: string[],
-  editionId: string,
 ): Promise<Map<string, SectionReviewReplyRow[]>> {
   const byReview = new Map<string, SectionReviewReplyRow[]>();
   if (reviewIds.length === 0) return byReview;
@@ -488,19 +459,22 @@ async function getSectionReviewReplies(
   const names = new Map<string, string>();
   const orgStaff = new Set<string>();
   if (authorIds.length > 0) {
-    const bios = await db
+    const authors = await db
       .select({
-        userId: schema.burnerBios.userId,
-        displayName: schema.burnerBios.displayName,
+        userId: schema.users.id,
+        username: schema.users.username,
+        sanitizedAt: schema.users.sanitizedAt,
       })
-      .from(schema.burnerBios)
-      .where(
-        and(
-          inArray(schema.burnerBios.userId, authorIds),
-          eq(schema.burnerBios.editionId, editionId),
-        ),
-      );
-    for (const b of bios) if (b.displayName) names.set(b.userId, b.displayName);
+      .from(schema.users)
+      .where(inArray(schema.users.id, authorIds));
+    for (const a of authors) {
+      if (a.username || a.sanitizedAt) {
+        names.set(
+          a.userId,
+          publicMemberName(a.username, { sanitizedAt: a.sanitizedAt }),
+        );
+      }
+    }
 
     const [org] = await db
       .select({ id: schema.groups.id })
@@ -570,7 +544,8 @@ export async function getRegistrationOfficers(
       officerName: schema.projectRoles.name,
       emoji: schema.projectRoles.emoji,
       consent: schema.memberRoleAssignments.consentStatus,
-      displayName: schema.burnerBios.displayName,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
       bioEmail: schema.burnerBios.contactEmail,
       phone: schema.burnerBios.phone,
       userEmail: schema.users.email,
@@ -606,7 +581,7 @@ export async function getRegistrationOfficers(
     officerKey: r.officerKey ?? "",
     officerName: r.officerName,
     emoji: r.emoji,
-    displayName: r.displayName,
+    displayName: publicMemberName(r.username, { sanitizedAt: r.sanitizedAt }),
     email: r.bioEmail ?? r.userEmail ?? null,
     phone: r.phone,
     consent: r.consent,
@@ -638,30 +613,23 @@ export interface RosterMemberRow {
  */
 export async function getRegistrationRoster(
   groupId: string,
-  editionId: string,
 ): Promise<RosterMemberRow[]> {
   const db = getDb();
   const rows = await db
     .select({
       userId: schema.memberships.userId,
       role: schema.memberships.role,
-      displayName: schema.burnerBios.displayName,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .leftJoin(
-      schema.burnerBios,
-      and(
-        eq(schema.burnerBios.userId, schema.memberships.userId),
-        eq(schema.burnerBios.editionId, editionId),
-      ),
-    )
     .where(eq(schema.memberships.groupId, groupId))
-    .orderBy(asc(schema.burnerBios.displayName));
+    .orderBy(asc(schema.users.username));
 
   return rows.map((r) => ({
     userId: r.userId,
-    displayName: publicMemberName(r.displayName),
+    displayName: publicMemberName(r.username, { sanitizedAt: r.sanitizedAt }),
     role: r.role,
   }));
 }
@@ -701,7 +669,8 @@ export async function getRosterMemberDetail(
     .select({
       userId: schema.memberships.userId,
       role: schema.memberships.role,
-      displayName: schema.burnerBios.displayName,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
       ...(options.includeMedicalNotes
         ? { medicalNotes: schema.burnerBios.medicalNotes }
         : {}),
@@ -727,7 +696,9 @@ export async function getRosterMemberDetail(
     "medicalNotes" in row ? (row.medicalNotes as string | null) : null;
   return {
     userId: row.userId,
-    displayName: publicMemberName(row.displayName),
+    displayName: publicMemberName(row.username, {
+      sanitizedAt: row.sanitizedAt,
+    }),
     role: row.role,
     medicalNotes: options.includeMedicalNotes
       ? decryptOrNull(ciphertext)

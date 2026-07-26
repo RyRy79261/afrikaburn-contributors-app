@@ -19,7 +19,7 @@ import {
   inviteToCamp,
   joinByInvite,
 } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import { authorCampQuestionnaire, answerRequiredQuestion } from "./support";
 
 test.describe("camp member — lifecycle", () => {
@@ -29,16 +29,16 @@ test.describe("camp member — lifecycle", () => {
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
 
-    const leadName = uniqueName("Lead Alice");
-    const memberName = uniqueName("Member Ren");
+    const leadName = uniqueUsername("lead_alice");
+    const memberName = uniqueUsername("member_ren");
 
     // Counterpart: a real lead with a real camp + a real member invite.
-    await signUpBurner(leadPage, { onboard: true, displayName: leadName });
+    await signUpBurner(leadPage, { onboard: true, username: leadName });
     const camp = await createCamp(leadPage, { description: "Chai at dawn." });
     const invite = await inviteToCamp(leadPage, camp.slug, "member");
 
     // The persona: a second burner redeems the invite.
-    await signUpBurner(memberPage, { onboard: true, displayName: memberName });
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
     const joined = await joinByInvite(memberPage, invite.url);
     expect(joined.slug).toBe(camp.slug);
 

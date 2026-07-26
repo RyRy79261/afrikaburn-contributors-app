@@ -3,7 +3,6 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
-  canBePublic,
   canRedeemInviteAs,
   inviteRejectionMessage,
   type InviteLike,
@@ -123,7 +122,7 @@ export function previewAsInviteLike(preview: InvitePreview): InviteLike {
 
 /**
  * Look up an invite + its group for the redemption landing page. Pass the active
- * `editionId` to also resolve the inviter's display name and the camp's
+ * `editionId` to also resolve the inviter's username and the camp's
  * registration badge (both edition-scoped); the used/expired state is derived by
  * the caller from `usedAt` / `expiresAt`.
  */
@@ -168,32 +167,27 @@ export async function getInvitePreview(
     registered = approved.length > 0;
 
     if (row.createdByUserId) {
-      const bio = await db()
+      // This card is the most widely-shared surface in the app: the invite link
+      // is meant to be forwarded, so anyone holding it — signed out, unknown to
+      // us — reads whatever we put here. Only the USERNAME is safe to put on it.
+      // It is a public handle by construction (unique, no privacy toggle, see
+      // @quagga/core `username.ts`), so unlike the per-edition display name it
+      // replaced there is no flag to consult; and a burner with no handle simply
+      // gets no name on the card. What must NEVER appear here is a legal name or
+      // an email — the page's "{name} invited you" block is conditional on this
+      // being non-null, so the card just drops that line instead.
+      const inviter = await db()
         .select({
-          displayName: schema.burnerBios.displayName,
-          privacyFlags: schema.burnerBios.privacyFlags,
+          username: schema.users.username,
+          sanitizedAt: schema.users.sanitizedAt,
         })
-        .from(schema.burnerBios)
-        .where(
-          and(
-            eq(schema.burnerBios.userId, row.createdByUserId),
-            eq(schema.burnerBios.editionId, editionId),
-          ),
-        )
+        .from(schema.users)
+        .where(eq(schema.users.id, row.createdByUserId))
         .limit(1);
-      // The inviter's display name is a FLAGGABLE field, and this card is the
-      // most widely-shared surface in the app: the invite link is meant to be
-      // forwarded, so anyone holding it — signed out, unknown to us — reads
-      // whatever we put here. Gate it exactly as the public profile does
-      // (`publicBioView`): the flag must be explicitly true AND the field must
-      // be allowed public at all. An inviter who marked their burner name
-      // private gets no name on the card rather than a leak to a group chat;
-      // the page's "{name} invited you" block is already conditional on this
-      // being non-null, so the card simply drops that line.
-      const flags = (bio[0]?.privacyFlags ?? {}) as Record<string, boolean>;
-      const namePublic =
-        canBePublic("displayName") && flags.displayName === true;
-      inviterName = namePublic ? bio[0]?.displayName?.trim() || null : null;
+      const handle = inviter[0]?.sanitizedAt
+        ? null
+        : inviter[0]?.username?.trim() || null;
+      inviterName = handle;
     }
   }
 

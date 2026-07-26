@@ -11,8 +11,8 @@
 // Primary journey → runs on desktop AND 360px mobile via the config's projects.
 
 import { test, expect } from "../../fixtures";
-import { signUpBurner } from "../../personas/factories";
-import { uniqueName } from "../../lib/identity";
+import { completeBio, signUpBurner } from "../../personas/factories";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
 import { fillDetailedBio } from "./support";
 
 test.describe("new burner · Burner Bio", () => {
@@ -20,11 +20,11 @@ test.describe("new burner · Burner Bio", () => {
     webPage,
   }) => {
     await signUpBurner(webPage);
-    const displayName = uniqueName("Dusty");
+    const username = uniqueUsername("dusty");
     const homeCity = uniqueName("Springbok");
 
     await fillDetailedBio(webPage, {
-      displayName,
+      username,
       homeCity,
       homeCityPublic: true,
       attendedYears: [2019, 2022],
@@ -41,7 +41,7 @@ test.describe("new burner · Burner Bio", () => {
     await expect(
       webPage.getByRole("heading", { name: /your profile/i }),
     ).toBeVisible();
-    await expect(webPage.getByText(displayName).first()).toBeVisible();
+    await expect(webPage.getByText(username).first()).toBeVisible();
     await expect(webPage.getByText(homeCity).first()).toBeVisible();
     await expect(webPage.getByText("2019").first()).toBeVisible();
   });
@@ -52,7 +52,9 @@ test.describe("new burner · Burner Bio", () => {
     await signUpBurner(webPage);
     await webPage.goto("/onboarding");
     await webPage.getByRole("button", { name: "Get started" }).click();
-    await webPage.getByRole("textbox", { name: /burner name/i }).fill(uniqueName("Toggler"));
+    await webPage
+      .getByRole("textbox", { name: /username/i })
+      .fill(uniqueUsername("toggler"));
 
     // Home city defaults PUBLIC; a click makes it private.
     const city = webPage.getByRole("switch", {
@@ -102,7 +104,9 @@ test.describe("new burner · Burner Bio", () => {
     await signUpBurner(webPage);
     await webPage.goto("/onboarding");
     await webPage.getByRole("button", { name: "Get started" }).click();
-    await webPage.getByRole("textbox", { name: /burner name/i }).fill(uniqueName("Locked"));
+    await webPage
+      .getByRole("textbox", { name: /username/i })
+      .fill(uniqueUsername("locked"));
 
     // On the details step every hard-locked class renders an "always private"
     // switch that is DISABLED — it cannot be flipped on.
@@ -126,5 +130,96 @@ test.describe("new burner · Burner Bio", () => {
     await expect(
       webPage.getByRole("switch", { name: /home city/i }),
     ).toHaveCount(1);
+  });
+});
+
+// --- The username -----------------------------------------------------------
+//
+// The handle replaced the required "burner name". Three things have to hold at
+// once and only a browser can prove the combination: it is genuinely OPTIONAL
+// (the gate still releases without one), it is genuinely UNIQUE (a second
+// burner cannot take it), and it is genuinely VALIDATED (a malformed one is
+// refused with a sentence, not a regex). The gate change is the risky half —
+// `isBioComplete` used to BE the username check, so an off-by-one here either
+// locks every new burner out of the app or lets an unfinished bio through.
+
+test.describe("new burner · username", () => {
+  test("the bio completes with NO username and still releases the gate", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await completeBio(webPage, { username: null });
+
+    // The gate is released: the app's own redirect proves it. A pending blocking
+    // Burner Bio action would bounce /profile straight back to /onboarding.
+    await webPage.goto("/profile");
+    await expect(webPage).toHaveURL(/\/profile/);
+    await expect(
+      webPage.getByRole("heading", { name: /your profile/i }),
+    ).toBeVisible();
+
+    // …and the nameless burner renders as the neutral placeholder. (This is the
+    // OWNER's own page, where seeing your own email is correct — the "never fall
+    // back to an email or a legal name" half of the rule is proven on a
+    // third-party surface, in privacy-projection.spec.ts.)
+    await expect(webPage.getByText(/unnamed burner/i).first()).toBeVisible();
+    await expect(webPage.getByText(/not set/i).first()).toBeVisible();
+  });
+
+  test("refuses a malformed username with a human message", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    const field = webPage.getByRole("textbox", { name: /username/i });
+    await field.fill("Dusty Prototype"); // spaces are not in the charset
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+
+    const message = webPage.getByText(/letters, numbers and underscores/i);
+    await expect(message).toBeVisible();
+    // A human sentence, not a character class dumped at the user.
+    await expect(message).not.toHaveText(/\[a-z|\^|\$/);
+    // Still on the details step — the malformed handle blocked the step.
+    await expect(field).toBeVisible();
+
+    // Fixing it lets the step through — proven by ARRIVING on the next step,
+    // not by the presence of a button both steps share.
+    await field.fill(uniqueUsername("dusty"));
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+
+  test("a second burner cannot take a username that is already held", async ({
+    webPage,
+    makeAppPage,
+  }) => {
+    const handle = uniqueUsername("twinned");
+    await signUpBurner(webPage, { onboard: true, username: handle });
+
+    // A different account, in its own context, tries the SAME handle — and the
+    // case-insensitive index is what it is really up against, so try the
+    // upper-cased variant rather than an identical string.
+    const second = await makeAppPage("web");
+    await signUpBurner(second);
+    await second.goto("/onboarding");
+    await second.getByRole("button", { name: "Get started" }).click();
+    await second
+      .getByRole("textbox", { name: /username/i })
+      .fill(handle.toUpperCase());
+    await second.getByRole("button", { name: "Save & continue" }).click();
+
+    // Refused — and the refusal names no holder: no email, no camp, no profile
+    // link. Being told a handle is TAKEN is inherent to unique handles; being
+    // told WHO holds it is not.
+    // The refusal is a bare verdict: no email, no camp, and no route to the
+    // holder's profile. Being told a handle is TAKEN is inherent to unique
+    // handles; being told WHO holds it is not.
+    await expect(second.getByText(/already taken/i)).toBeVisible();
+    await expect(second.locator('a[href^="/burners/"]')).toHaveCount(0);
+    await expect(second.getByText(/@/)).toHaveCount(0);
   });
 });
