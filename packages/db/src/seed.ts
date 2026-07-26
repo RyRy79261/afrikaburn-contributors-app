@@ -91,18 +91,18 @@ type GroupRow = typeof schema.groups.$inferSelect;
 
 // ---------------------------------------------------------------------------
 
-async function main(): Promise<void> {
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      "[seed] DATABASE_URL is not set — nothing to seed. Set it in .env first.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  const { db, pool } = createPooledDb();
-
-  try {
+/**
+ * Insert the reference data the app cannot function without: the active edition,
+ * the AfrikaBurn org group, the camp categories, the scrubbed supplier catalogue
+ * and the org questionnaire template. NO accounts, camps or registrations — demo
+ * data is created live through the app.
+ *
+ * Exported so the DEPLOY can bootstrap a brand-new database (see migrate.ts).
+ * Every write goes through an idempotent `ensure*` helper, so calling it twice is
+ * safe; the caller owns the connection.
+ */
+export async function seedReferenceData(db: Db): Promise<void> {
+  {
     // --- Edition -------------------------------------------------------------
     const edition = firstOrThrow(
       await db
@@ -216,6 +216,21 @@ async function main(): Promise<void> {
     );
 
     console.log("[seed] done.");
+  }
+}
+
+async function main(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    console.error(
+      "[seed] DATABASE_URL is not set — nothing to seed. Set it in .env first.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const { db, pool } = createPooledDb();
+  try {
+    await seedReferenceData(db);
   } finally {
     await pool.end();
   }

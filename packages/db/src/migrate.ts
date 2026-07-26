@@ -69,6 +69,7 @@
 import { Pool } from "@neondatabase/serverless";
 import { configureLocalProxy } from "./local-proxy";
 import { drizzle } from "drizzle-orm/neon-serverless";
+import * as schema from "./schema";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -237,6 +238,31 @@ async function main(): Promise<void> {
     console.log(`[migrate] applying migrations from ${migrationsFolder} ...`);
     await migrate(db, { migrationsFolder });
     console.log("[migrate] migrations applied (up to date).");
+
+    // BOOTSTRAP the reference data a brand-new database needs, on the same
+    // locked connection so two concurrent deploys cannot both seed.
+    //
+    // Migrations create the tables; nothing created the rows the app cannot
+    // start without — the active edition above all. A first deployment
+    // therefore came up with a perfect schema and no edition, and every
+    // DB-backed page fell through to "Preview mode", which read as an env-var
+    // problem when the environment was correct. Seeding was a manual step that
+    // nothing told you about.
+    //
+    // ONLY WHEN THERE IS NO EDITION. This is a bootstrap, not a sync: camp
+    // categories and supplier records are editable in the org console, and
+    // re-asserting canonical rows on every deploy would quietly revert an
+    // organiser's edits or resurrect something they deleted. If the database
+    // has an edition it has been seeded, and the deploy leaves it alone.
+    const seeded = await client.query("SELECT 1 FROM editions LIMIT 1");
+    if (seeded.rowCount === 0) {
+      console.log("[migrate] no edition found — seeding reference data...");
+      const { seedReferenceData } = await import("./seed");
+      await seedReferenceData(drizzle(client, { schema }));
+      console.log("[migrate] reference data seeded.");
+    } else {
+      console.log("[migrate] reference data present — not re-seeding.");
+    }
   } finally {
     // Explicit release even though session locks free on disconnect anyway.
     try {
