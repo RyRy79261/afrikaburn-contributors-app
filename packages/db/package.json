@@ -13,6 +13,7 @@
   "scripts": {
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint .",

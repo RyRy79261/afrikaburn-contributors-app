@@ -30,8 +30,31 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
 
 ## Hard engineering rules
 
-1. **No migration step in any build script, ever.** Migrations are generated offline
-   (`db:generate`), committed, and applied manually once a `DATABASE_URL` exists.
+1. **Migrations are generated offline, committed append-only, and applied
+   automatically at deploy time by the advisory-locked runner.** Generate with
+   `db:generate` (offline, from `schema.ts`); commit the file. At deploy, every app's
+   `build` runs `db:migrate:deploy` (`packages/db/src/migrate.ts`) before `next build`:
+   it takes a Postgres session advisory lock on the UNPOOLED connection so the three
+   concurrent Vercel builds serialise safely, then applies any pending migrations
+   (idempotent — drizzle's own table makes the losers no-ops). A migration is NEVER
+   hand-edited, NEVER regenerated, and NEVER applied by an agent from a developer
+   machine against production — the build is the only thing that applies them.
+   **The UNPOOLED endpoint is mandatory and ENFORCED, not merely preferred**: the
+   runner reads `DATABASE_URL_UNPOOLED` (Neon's direct endpoint) first, and it
+   *aborts the build* rather than silently falling back to a pooled URL — because
+   session advisory locks do not hold on Neon's PgBouncer (transaction-pooling)
+   endpoint, which is what Neon's Vercel integration puts in `DATABASE_URL` by default.
+   Specifically it fails hard if the resolved host is a `-pooler`/`pgbouncer` endpoint
+   (any env), and, on a `VERCEL_ENV=production` deploy, if `DATABASE_URL_UNPOOLED` is
+   unset at all or if no DB is configured at all (a production build that migrates
+   nothing is a broken build, not a valid DB-less one). So Vercel env for each app
+   must set **both** `DATABASE_URL` (pooled, for the app) and `DATABASE_URL_UNPOOLED`
+   (direct, for the migrator). Non-production, non-pooler fallback still works (with a
+   loud warning) for local dev / Neon Local.
+   *(Ryan, 26 Jul 2026: this replaces the earlier "no migration step in any build,
+   ever", which over-hardened the real constraint — don't migrate in the very first
+   build, before any DB existed. Now that a DB exists, deploy-time migration is the law.
+   Amended same day: fallback-to-pooled is a hard failure, not a warning.)*
 2. **Migrations are append-only.** Never edit or regenerate an existing migration;
    `packages/db/src/schema.ts` is the single source of truth.
 3. **Pins that must not move**: `better-auth` = 1.4.18 exactly; `@radix-ui/react-slot`

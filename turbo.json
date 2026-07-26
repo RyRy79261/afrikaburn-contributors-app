@@ -5,6 +5,7 @@
   "globalEnv": [
     "NODE_ENV",
     "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
     "NEON_AUTH_BASE_URL",
     "NEON_AUTH_COOKIE_SECRET",
     "RESEND_API_KEY",
@@ -37,6 +38,9 @@
       "cache": false
     },
     "db:migrate": {
+      "cache": false
+    },
+    "db:migrate:deploy": {
       "cache": false
     },
     "db:seed": {

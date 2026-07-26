@@ -1,25 +1,39 @@
 # First deployment runbook
 
-The codebase is deliberately deploy-ready-but-unconfigured: both apps build and boot
-with zero env vars, no build step runs migrations, and the initial migration
-(`packages/db/migrations/0000_*.sql`) is committed but unapplied. This is the order of
-operations for the first real deployment.
+The codebase is deliberately deploy-ready-but-unconfigured: all three apps build and
+boot with zero env vars. **Migrations apply automatically on deploy** — every app's
+`build` runs `db:migrate:deploy` before `next build`, so as soon as the DB env is set
+the committed migrations (`packages/db/migrations/0000_*` … `0012_*`) are applied by
+the build. With no DB env (a fork, a preview without env, CI) the migrator prints a
+skip line and exits 0, so the build still succeeds. This is the order of operations
+for the first real deployment.
+
+**The only remaining manual data step is the one-time reference seed** (§2 below).
+On the **first** deploy the migrator applies 0000–0012 in a single run — **watch the
+Vercel build log** for the `[migrate]` lines to confirm which connection it used and
+that every migration applied.
 
 ## 1. Neon
 
-1. Create a Neon project (e.g. `afrikaburn-contributors`). Copy the pooled connection string → `DATABASE_URL`.
+1. Create a Neon project (e.g. `afrikaburn-contributors`). Copy the **pooled** connection string → `DATABASE_URL`, and the **direct/unpooled** connection string → `DATABASE_URL_UNPOOLED`. The deploy migrator needs the unpooled one (its advisory lock does not hold on Neon's pooled PgBouncer endpoint); the apps use the pooled one at runtime.
 2. Enable **Neon Auth** on the project (Console → Auth). Copy `NEON_AUTH_BASE_URL`; generate `NEON_AUTH_COOKIE_SECRET` (`openssl rand -base64 32`).
 3. Add Google as an OAuth provider in Neon Auth config (Google Cloud Console OAuth client; redirect URIs per Neon's instructions). Email+password works without this.
 
-## 2. Apply the schema + seed (one-time, from your machine)
+## 2. Seed the reference data (one-time)
+
+Migrations are **not** run here any more — the deploy build applies them (see the
+top of this doc). The one remaining manual step is the reference seed, which runs
+once from your machine (or any box with the env) against the live DB:
 
 ```bash
 cp .env.example .env       # fill DATABASE_URL (+ PGCRYPTO_KEY: openssl rand -hex 32)
-pnpm --filter @quagga/db db:migrate   # applies committed migrations
 pnpm --filter @quagga/db db:seed      # reference data only — see below
 ```
 
-Seeding is idempotent — safe to re-run.
+Run this **after the first deploy has applied the migrations** (so the tables
+exist). Seeding is idempotent — safe to re-run. If you want to apply migrations
+by hand for a local DB, `pnpm --filter @quagga/db db:migrate` (drizzle-kit) still
+exists for that; it is never run against production by a person.
 
 ### What the seed does and does not contain
 
@@ -53,16 +67,31 @@ Create an API key → `RESEND_API_KEY`. Without it, all email logs to the server
 (fine for local, not for the live demo). Verify a sending domain or use Resend's test
 sender for the MVP.
 
-## 4. Vercel — two projects, one repo
+## 4. Vercel — three projects, one repo
 
 | Project | Root Directory | Port locally |
 |---|---|---|
 | `afrikaburn-contributors-web` | `apps/web` | 3000 |
 | `afrikaburn-contributors-org` | `apps/org` | 3001 |
+| `afrikaburn-contributors-suppliers` | `apps/suppliers` | 3002 |
 
-- Build command: leave default (`next build`). **Do not add a migrate step.**
+All three depend on `@quagga/db`, so any committed migration invalidates all three
+builds and each one applies migrations on deploy — that is intentional. Safety comes
+from the advisory lock in `db:migrate:deploy`, not from nominating one owner app.
+
+- Build command: leave default — each app's `build` script already runs
+  `db:migrate:deploy && next build`. **Do not remove the migrate step.** Watch the
+  `[migrate]` lines in the build log on the first deploy.
 - Install command: `pnpm install` at repo root (Vercel detects the monorepo; if needed set it explicitly).
-- Env vars on **both** projects: `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`, `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
+- Env vars on **all three** projects: `DATABASE_URL`, `DATABASE_URL_UNPOOLED` (the
+  direct endpoint — the migrator's advisory lock does not hold on the pooled one),
+  `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
+  `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
+
+**Preview deployments.** Neon preview branching is enabled, so each preview/PR gets
+its own Neon branch with its own `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The deploy
+migrator runs against that branch — which is correct and desired: every preview
+migrates its own isolated branch, never production.
 - `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
 - **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
   `POST /api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
