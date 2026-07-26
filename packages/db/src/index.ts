@@ -1,11 +1,13 @@
-import { neon, neonConfig, Pool } from "@neondatabase/serverless";
+import { neon, Pool } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { drizzle as drizzleServerless } from "drizzle-orm/neon-serverless";
 import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import * as schema from "./schema";
+import { configureLocalProxy } from "./local-proxy";
 
 export * as schema from "./schema";
+export { configureLocalProxy } from "./local-proxy";
 
 export type Database = NeonHttpDatabase<typeof schema>;
 export type PooledDatabase = { db: NeonDatabase<typeof schema>; pool: Pool };
@@ -28,6 +30,7 @@ function requireDatabaseUrl(): string {
  * No transactions.
  */
 export function createHttpDb(): Database {
+  configureLocalProxy();
   const sql = neon(requireDatabaseUrl());
   return drizzleHttp(sql, { schema });
 }
@@ -37,10 +40,7 @@ export function createHttpDb(): Database {
  * Caller closes the pool on long-running processes.
  */
 export function createPooledDb(): PooledDatabase {
-  if (process.env.NEON_LOCAL_PROXY === "1") {
-    neonConfig.useSecureWebSocket = false;
-    neonConfig.wsProxy = (host) => `${host}:5433/v1`;
-  }
+  configureLocalProxy();
   const pool = new Pool({ connectionString: requireDatabaseUrl() });
   const db = drizzleServerless(pool, { schema });
   return { db, pool };

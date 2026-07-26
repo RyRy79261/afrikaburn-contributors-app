@@ -66,7 +66,8 @@
  * nonetheless explicit: the `finally` block unlocks, releases the client, and
  * ends the pool, so a mid-migration failure never strands the lock.
  */
-import { neonConfig, Pool } from "@neondatabase/serverless";
+import { Pool } from "@neondatabase/serverless";
+import { configureLocalProxy } from "./local-proxy";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -203,11 +204,9 @@ async function main(): Promise<void> {
     );
   }
 
-  // Mirror index.ts: allow running against a Neon Local proxy container in dev.
-  if (process.env.NEON_LOCAL_PROXY === "1") {
-    neonConfig.useSecureWebSocket = false;
-    neonConfig.wsProxy = (host) => `${host}:5433/v1`;
-  }
+  // ONE shared definition with index.ts. A duplicated copy here is how the
+  // local-proxy config drifted out of sync in the first place.
+  configureLocalProxy();
 
   const pool = new Pool({ connectionString });
   // One dedicated connection: the advisory lock and the migration MUST share it.
