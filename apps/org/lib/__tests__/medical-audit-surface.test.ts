@@ -16,12 +16,17 @@ import {
 // disclosure. That trade is only defensible if the rows that DO land are read
 // by a human. Before `/audit` they were not: the registration decision log
 // filters `subject = registrationId` (medical rows carry a user id), and the
-// overview feed was six unfiltered rows. "Enumeration stays detectable" was a
-// claim with no reader behind it.
+// overview feed was six unfiltered rows, so medical reads were written and
+// never read back by anyone.
 //
 // These tests pin the reader down: the action renders as English, it is kept
-// out of the six-row glance so a roster walk cannot evict every decision, and a
+// out of the six-row feed so a burst of reads cannot evict every decision, and a
 // module + page actually query and render it.
+
+/** Drop block and line comments so assertions read CODE, not the prose about it. */
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
 
 function source(relative: string): string {
   return readFileSync(
@@ -86,8 +91,22 @@ describe("REGRESSION: something actually READS the medical audit rows", () => {
     expect(reader).toMatch(/schema\.auditEvents\.action/);
   });
 
-  it("runs the rows through the enumeration detector", () => {
-    expect(reader).toMatch(/summarizeMedicalAccess/);
+  it("is a plain record — no aggregation, threshold or alerting", () => {
+    // Ryan's call, 26 Jul 2026: reading many members' notes in one sitting is
+    // ordinary medic work, so flagging it reports normal care as an incident
+    // and tells safety staff the tool watches them. If this ever comes back it
+    // is a product decision, not a refactor.
+    // Strip comments first: the prose in these files EXPLAINS why there is no
+    // threshold or alerting, so matching raw source would fail on the very
+    // sentence that records the decision.
+    expect(stripComments(reader)).not.toMatch(
+      /summarizeMedicalAccess|detectMedicalEnumeration|threshold|alert/i,
+    );
+    const panel = source("components/audit/medical-access-panel.tsx");
+    expect(stripComments(panel)).not.toMatch(/alert/i);
+    for (const p of ["app/(console)/page.tsx", "app/(console)/status/page.tsx"]) {
+      expect(source(p)).not.toMatch(/MedicalAccessStrip|getMedicalAccessGlance/);
+    }
   });
 
   it("a gated console page renders that log", () => {
@@ -95,12 +114,6 @@ describe("REGRESSION: something actually READS the medical audit rows", () => {
     expect(page).toMatch(/guardConsole/);
     expect(page).toMatch(/getMedicalAccessLog/);
     expect(page).toMatch(/MedicalAccessPanel/);
-  });
-
-  it("the console surfaces the alert without needing that page to be visited", () => {
-    const overview = source("app/(console)/page.tsx");
-    expect(overview).toMatch(/getMedicalAccessGlance/);
-    expect(overview).toMatch(/MedicalAccessStrip/);
   });
 
   it("the audit surfaces show who/whose/when but never the notes", () => {

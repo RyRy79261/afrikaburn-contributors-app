@@ -4,9 +4,7 @@ import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import {
   MEDICAL_VIEW_AUDIT_ACTION,
   publicMemberName,
-  summarizeMedicalAccess,
   type MedicalAccessBasis,
-  type MedicalAccessSummary,
 } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
@@ -28,7 +26,7 @@ import { getDb, schema } from "@/lib/db";
 /** How far back the console looks. Long enough to cover a whole build week. */
 export const MEDICAL_AUDIT_LOOKBACK_DAYS = 30;
 
-/** Hard cap on rows pulled for detection — a busy edition must not OOM a page. */
+/** Hard cap on rows pulled — a busy edition must not OOM a page. */
 const MEDICAL_AUDIT_ROW_CAP = 500;
 
 const UUID_RE =
@@ -51,12 +49,9 @@ export interface MedicalReadRow {
 
 export interface MedicalAccessLog {
   rows: MedicalReadRow[];
-  summary: MedicalAccessSummary;
   /** True when the row cap was hit, so the page can say the view is partial. */
   truncated: boolean;
   lookbackDays: number;
-  /** Actor email per flagged actor id, for the alert banner. */
-  actorEmails: Record<string, string | null>;
 }
 
 function parseBasis(meta: Record<string, unknown> | null): MedicalAccessBasis | null {
@@ -72,8 +67,14 @@ function lookbackStart(days: number): Date {
 
 /**
  * Every `bio.medical.view` row in the lookback window, newest first, with the
- * actor's email and the subject's display name resolved, plus the derived
- * summary and enumeration alerts (`@quagga/core` `medical-audit.ts`).
+ * actor's email and the subject's display name resolved.
+ *
+ * A PLAIN CHRONOLOGICAL RECORD, deliberately. It carries no per-actor
+ * aggregation, no volume threshold and no alerting, because reading many
+ * members' notes in one sitting is what the job looks like — a medic working
+ * out what to prepare for on site does exactly that, and flagging it would
+ * report normal care as an incident while teaching staff that the safety tool
+ * watches them. (Ryan, 26 Jul 2026.)
  *
  * `audit_events.subject` is `text` and holds ids for several row kinds, so
  * subject names are resolved in a SECOND query over the ids that actually look
@@ -139,82 +140,13 @@ export async function getMedicalAccessLog(
     createdAt: r.createdAt,
   }));
 
-  const summary = summarizeMedicalAccess(
-    resolved.map((r) => ({
-      actorId: r.actorId,
-      subjectId: r.subjectId,
-      at: r.createdAt,
-    })),
-  );
-
-  const actorEmails: Record<string, string | null> = {};
-  for (const row of resolved) {
-    if (row.actorId && !(row.actorId in actorEmails)) {
-      actorEmails[row.actorId] = row.actorEmail;
-    }
-  }
-
   return {
     rows: resolved,
-    summary,
     truncated: rows.length >= limit,
     lookbackDays,
-    actorEmails,
   };
 }
 
-/** The compact numbers the Overview / Status board strip shows. */
-export interface MedicalAccessGlance {
-  reads: number;
-  subjects: number;
-  lastReadAt: Date | null;
-  alertCount: number;
-  lookbackDays: number;
-}
-
-/**
- * A cheap roll-up for the overview strip: the same window, ids only. Kept
- * separate from `getMedicalAccessLog` so a landing page never pays for name
- * resolution it does not render.
- */
-export async function getMedicalAccessGlance(
-  lookbackDays = MEDICAL_AUDIT_LOOKBACK_DAYS,
-): Promise<MedicalAccessGlance> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      actorId: schema.auditEvents.actorId,
-      subjectId: schema.auditEvents.subject,
-      createdAt: schema.auditEvents.createdAt,
-    })
-    .from(schema.auditEvents)
-    .where(
-      and(
-        eq(schema.auditEvents.action, MEDICAL_VIEW_AUDIT_ACTION),
-        gte(schema.auditEvents.createdAt, lookbackStart(lookbackDays)),
-      ),
-    )
-    .orderBy(desc(schema.auditEvents.createdAt))
-    .limit(MEDICAL_AUDIT_ROW_CAP);
-
-  const summary = summarizeMedicalAccess(
-    rows.map((r) => ({
-      actorId: r.actorId,
-      subjectId: r.subjectId,
-      at: r.createdAt,
-    })),
-  );
-
-  return {
-    reads: summary.reads,
-    subjects: summary.subjects,
-    lastReadAt: summary.lastReadAt,
-    alertCount: summary.alerts.length,
-    lookbackDays,
-  };
-}
-
-/** The full console trail (all actions), newest first — the `/audit` list. */
 export interface AuditTrailRow {
   id: string;
   action: string;

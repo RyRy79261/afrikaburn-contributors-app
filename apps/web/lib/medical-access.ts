@@ -57,15 +57,15 @@ export async function resolveMedicalNotesForViewer(input: {
   // data is not an access event, and an empty field discloses nothing. Written
   // after the response so a slow/failed audit never degrades the read.
   //
-  // This FAILS OPEN twice over — the notes are already streamed before the
-  // insert is attempted, and the error is swallowed below — so a dropped
-  // instance or a DB blip is a silent, unlogged disclosure. That is the right
-  // trade for an emergency read, and it means the compensating control is not
-  // here: it is the READER. Every row lands in the org console's `/audit` page,
-  // where `@quagga/core` `medical-audit.ts` flags an actor who read many
-  // DIFFERENT burners' notes in one window (a camp lead walking their roster).
-  // No rate limit gates this path on purpose — a throttle fails closed in an
-  // emergency. If you ever remove the reader, this write becomes decorative.
+  // This FAILS OPEN — the notes are already streamed before the insert is
+  // attempted, and the error is swallowed below. That is the right trade for an
+  // emergency read: nobody should wait on a log row to find out someone is
+  // diabetic. No rate limit gates this path either, for the same reason.
+  //
+  // The row is a RECORD, not surveillance. It answers "who saw my medical
+  // information?" if a burner asks, and lets a real incident be reconstructed.
+  // It is deliberately not aggregated, thresholded or alerted on: reading a lot
+  // of notes in one sitting is normal medic work, not a red flag.
   if (!isSelf && notes) {
     const basis = medicalAccessBasis(ctx);
     after(async () => {

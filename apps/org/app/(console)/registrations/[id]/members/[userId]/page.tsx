@@ -42,10 +42,10 @@ export const dynamic = "force-dynamic";
 // `after()` so it can never block or slow the read.
 //
 // That `after()` write FAILS OPEN (already-streamed response, swallowed error),
-// which is deliberate: an emergency read must not wait on a log row. The
-// compensating control is therefore the reader, not a limiter — these rows are
-// surfaced on `/audit`, where the enumeration detector flags an actor who reads
-// many different burners in one window.
+// which is deliberate: an emergency read must not wait on a log row. The rows
+// are a plain record on `/audit` — who read whose notes, when — with no volume
+// threshold or alerting, because reading many members' notes in one sitting is
+// ordinary medic work rather than something to flag.
 
 const ParamsSchema = z.object({
   id: z.string().uuid(),

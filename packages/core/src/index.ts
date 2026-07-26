@@ -26,7 +26,6 @@
 //     MEDICAL_VIEW_AUDIT_ACTION (./medical-access)
 //   - medical audit READ side (the fail-open path's compensating control):
 //     summarizeMedicalAccess, detectMedicalEnumeration — distinct-subject
-//     bursts per actor, so a roster walk is visible to a human (./medical-audit)
 //   - payment references: generatePaymentReference, deriveSubjectCode
 //     (./payment-reference)
 //   - camp-scoped member ref codes: deriveCampPrefix, disambiguateCampPrefix,
@@ -122,7 +121,6 @@ export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
 export * from "./medical-access";
-export * from "./medical-audit";
 export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";

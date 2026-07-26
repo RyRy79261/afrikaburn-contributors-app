@@ -1,4 +1,4 @@
-import { AlertTriangle, ShieldCheck, Stethoscope } from "lucide-react";
+import { Stethoscope } from "lucide-react";
 import { Badge } from "@quagga/ui/components/badge";
 import {
   Card,
@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@quagga/ui/components/table";
-import type { MedicalAccessBasis, MedicalEnumerationAlert } from "@quagga/core";
+import type { MedicalAccessBasis } from "@quagga/core";
 
 import type { MedicalAccessLog, MedicalReadRow } from "@/lib/medical-audit";
 import { formatDateTime } from "@/lib/labels";
@@ -42,54 +42,6 @@ function actorName(email: string | null | undefined): string {
   return email.split("@")[0] ?? email;
 }
 
-function AlertBanner({
-  alerts,
-  actorEmails,
-}: {
-  alerts: readonly MedicalEnumerationAlert[];
-  actorEmails: Record<string, string | null>;
-}) {
-  if (alerts.length === 0) {
-    return (
-      <p className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-ab-sage" aria-hidden />
-        No enumeration pattern in this window. Nobody has read an unusual number
-        of different burners&apos; notes in a short span.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-destructive/50 bg-destructive/5 p-3">
-      <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
-        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-        {alerts.length === 1
-          ? "One account looks like it enumerated medical notes"
-          : `${alerts.length} accounts look like they enumerated medical notes`}
-      </p>
-      <ul className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-        {alerts.map((alert) => (
-          <li key={alert.actorId}>
-            <span className="font-medium text-foreground">
-              {actorName(actorEmails[alert.actorId])}
-            </span>{" "}
-            read <span className="font-medium text-foreground">
-              {alert.subjectCount} different burners&apos;
-            </span>{" "}
-            notes ({alert.readCount} reads) between{" "}
-            {formatDateTime(alert.windowStart)} and{" "}
-            {formatDateTime(alert.windowEnd)}.
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-muted-foreground">
-        Medical reads are never blocked — an emergency must not wait on a check.
-        This is the compensating control: the pattern is recorded and surfaced so
-        it can be asked about.
-      </p>
-    </div>
-  );
-}
 
 function ReadRow({ row }: { row: MedicalReadRow }) {
   return (
@@ -126,7 +78,7 @@ export function MedicalAccessPanel({
   log: MedicalAccessLog;
   displayLimit?: number;
 }) {
-  const { rows, summary, truncated, lookbackDays, actorEmails } = log;
+  const { rows, truncated, lookbackDays } = log;
   const shown = rows.slice(0, displayLimit);
 
   return (
@@ -138,15 +90,11 @@ export function MedicalAccessPanel({
         </CardTitle>
         <CardDescription>
           Every time someone opened a burner&apos;s medical notes in the last{" "}
-          {lookbackDays} days. {summary.reads} read
-          {summary.reads === 1 ? "" : "s"} by {summary.actors} account
-          {summary.actors === 1 ? "" : "s"}, covering {summary.subjects} burner
-          {summary.subjects === 1 ? "" : "s"}. Notes themselves are never shown
+          {lookbackDays} days. Notes themselves are never shown
           here — only who looked, at whose, and when.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <AlertBanner alerts={summary.alerts} actorEmails={actorEmails} />
 
         {shown.length === 0 ? (
           <p className="text-sm text-muted-foreground">

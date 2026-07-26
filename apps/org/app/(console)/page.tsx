@@ -15,7 +15,6 @@ import { Card, CardContent } from "@quagga/ui/components/card";
 import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getStatusBoard } from "@/lib/queries";
-import { getMedicalAccessGlance } from "@/lib/medical-audit";
 import { getRecentActivity } from "@/lib/status-board";
 import { formatDate } from "@/lib/labels";
 import { PageHeading } from "@/components/page-heading";
@@ -26,7 +25,6 @@ import {
   SupplierOnboardingCard,
 } from "@/components/status-board/coverage";
 import { RecentActivity } from "@/components/status-board/recent-activity";
-import { MedicalAccessStrip } from "@/components/status-board/medical-access-strip";
 
 // The console landing page (build-spec §"Org stats dashboard" — the 25 Jul
 // overhaul, canvas frame obd4x / pKW7z): the four entity KPI cards, the
@@ -97,7 +95,6 @@ export default async function OverviewPage() {
   const board = await getStatusBoard(edition);
   const activity = await getRecentActivity(6);
   // Standing visibility for the one action nothing prevents (see the strip).
-  const medicalAccess = await getMedicalAccessGlance();
 
   const updatedAt = new Date().toLocaleTimeString("en-ZA", {
     hour: "2-digit",
@@ -183,8 +180,6 @@ export default async function OverviewPage() {
           </Link>
         </CardContent>
       </Card>
-
-      <MedicalAccessStrip glance={medicalAccess} />
 
       <section
         aria-label="Console sections"

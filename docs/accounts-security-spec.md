@@ -275,44 +275,42 @@ event and is not audited; an empty field discloses nothing and is not audited.
 Because the insert runs in `after()`, the notes are already rendered and streamed
 before the row is attempted, and a failed insert is swallowed to `console.error`: a
 dropped serverless instance, a DB blip or a constraint failure yields a *silent,
-unlogged disclosure*. Fail-open is the right call for this path (an emergency medic
-read must never be blocked by an audit write), which means **prevention is not the
-control here — detection is**, and detection only exists if something reads the rows.
+unlogged disclosure*. Fail-open is the right call for this path: an emergency medic
+read must never be blocked by an audit write.
 
-Until 26 Jul 2026 nothing did. `getRegistrationDecisionLog` filters
-`subject = registrationId`, and medical rows carry a *user* id, so they never appeared
-there; the only other reader was the overview's six-row `getRecentActivity`, unfiltered
-and unlabeled. "Enumeration stays detectable" was aspirational. What closes it:
+**The trail is a record, not monitoring.** Its job is to answer *"who saw my medical
+information?"* if a burner asks, and to let a real incident be reconstructed. That is
+all it is for.
 
-- **`@quagga/core` `medical-audit.ts`** — pure derivations over the rows.
-  `detectMedicalEnumeration` flags an actor who read **8 or more DISTINCT burners'**
-  notes inside a **1-hour sliding window** (`MEDICAL_ENUMERATION_SUBJECT_THRESHOLD` /
-  `_WINDOW_MS`). The signal is distinct subjects, never read volume — a medic
-  re-opening one patient ten times is not enumeration, and flagging it would train
-  staff to ignore the alert. `summarizeMedicalAccess` adds reads / actors / subjects /
-  last-read.
+There is deliberately **no volume threshold, no per-actor profiling and no alerting**,
+and none should be added. An earlier build shipped an enumeration detector that flagged
+any account reading 8+ distinct burners' notes in an hour. It was removed on 26 Jul 2026
+because the premise was wrong: **reading a lot of medical notes in one sitting is what
+the job looks like.** A safety lead working out what to prepare for on site goes through
+every member of a camp in one pass. Flagging that reports ordinary care as an incident,
+buries any real signal in false positives, and — worst — teaches the people we most need
+reading this information that the tool is watching them. That makes burners less safe,
+not more. If a detector is ever wanted again it is a product decision with a stated
+threat model, not a refactor.
+
+What exists now:
+
 - **`apps/org/lib/medical-audit.ts`** — `getMedicalAccessLog` (30-day window, actor
-  email + subject display name resolved, capped at 500 rows), `getMedicalAccessGlance`
-  (the cheap roll-up) and `getAuditTrail` (the whole trail).
-- **`/audit` in the console** (`guardConsole` → god / org_staff) — the alert banner,
-  the who/whose/when table, and the full activity list. It shows **who looked at whose
-  notes, never the notes**; reading the trail is not a disclosure, so it writes no
-  audit row of its own.
-- **A standing alert on the Overview and Status board** (`MedicalAccessStrip`) so a
-  burst is visible without anyone thinking to visit `/audit`.
+  email + subject display name resolved, capped at 500 rows) and `getAuditTrail` (the
+  whole trail). Plain, chronological, no derived judgement.
+- **`/audit` in the console** (`guardConsole` → god / org_staff) — the who/whose/when
+  table and the full activity list. It shows **who looked at whose notes, never the
+  notes**; reading the trail is not a disclosure, so it writes no audit row of its own.
 - **Medical reads are excluded from the six-row glance feed** (`FEED_EXCLUDED_ACTIONS`
-  in `apps/org/lib/status-board-format.ts`, applied in SQL). One roster walk emits
-  dozens of rows in a minute and would evict every registration decision from that
-  card. They are not hidden — `/audit` shows them with the alerts a six-row card could
-  never carry — and `activityLabel` now renders `bio.medical.view` as English instead
-  of leaking the raw key.
+  in `apps/org/lib/status-board-format.ts`, applied in SQL) — one camp's worth of reads
+  would otherwise evict every registration decision from that card. They are not hidden;
+  `/audit` carries them, and `activityLabel` renders `bio.medical.view` as English
+  rather than leaking the raw key.
 
-**No rate limit, on purpose.** The anti-enumeration limiter is not coming back: a
-throttle on this path fails closed in an emergency, which is the outcome the whole
-consent-at-entry model refuses. The trade is stated plainly — the read always
-succeeds, and the abuse is *seen*.
-(Regression: `packages/core/src/__tests__/medical-audit.test.ts` and
-`apps/org/lib/__tests__/medical-audit-surface.test.ts`.)
+**No rate limit, on purpose.** A throttle on this path fails closed in an emergency,
+which is the outcome the whole consent-at-entry model refuses.
+(Regression: `apps/org/lib/__tests__/medical-audit-surface.test.ts`, which pins the
+absence of aggregation/alerting as well as the presence of the record.)
 
 **No per-view notification.** Removed deliberately. Notifying a burner every time
 their camp lead opens their profile is noise, not consent — the consent was given

@@ -4,16 +4,19 @@ import { PageHeading } from "@/components/page-heading";
 import { MedicalAccessPanel } from "@/components/audit/medical-access-panel";
 import { AuditTrailList } from "@/components/audit/audit-trail-list";
 
-// The audit log — the READER the trail never had.
+// The audit log — a plain, chronological record.
 //
-// Medical notes are disclosed on a fail-open path: no rate limit, no reveal
-// ceremony, and the `bio.medical.view` row is written in `after()` so an
-// emergency read is never blocked or slowed by its own logging (AGENTS.md).
-// That trade is only honest if the rows are read by someone. Before this page
-// they were not: the registration decision log filters by `subject =
-// registrationId`, so medical rows (subject = a user id) never appeared there,
-// and the Overview feed was six rows with no filter. "Enumeration stays
-// detectable" was aspirational. This page is where it becomes true.
+// It exists so that if a burner ever asks "who saw my medical information?", or
+// something goes wrong and it has to be reconstructed, there is an honest
+// answer. That is its whole job.
+//
+// IT IS NOT STAFF MONITORING. There is deliberately no volume threshold, no
+// per-actor profiling and no alerting, and there must not be. Reading many
+// members' notes in one sitting is what the work looks like — a medic working
+// out what to prepare for on site does exactly that — so flagging it would
+// report ordinary care as an incident, and would teach the people we most need
+// reading this information that the safety tool is watching them. That is worse
+// for burners, not better. (Ryan's call, 26 Jul 2026.)
 //
 // Org-gated at the page (`guardConsole` → god / org_staff). It shows WHO read
 // WHOSE notes and when — never the notes. Reading the trail is not itself a

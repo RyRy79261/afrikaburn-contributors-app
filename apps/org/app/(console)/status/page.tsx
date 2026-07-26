@@ -15,8 +15,6 @@ import {
 } from "@/components/status-board/coverage";
 import { RegistrationsChart } from "@/components/status-board/registrations-chart";
 import { RecentActivity } from "@/components/status-board/recent-activity";
-import { MedicalAccessStrip } from "@/components/status-board/medical-access-strip";
-import { getMedicalAccessGlance } from "@/lib/medical-audit";
 
 // The status board (build-spec §"Org stats dashboard" + §"Status board KPI
 // row", canvas frame RTfFF / w6X0wA): the same four KPI cards as the Overview,
@@ -35,7 +33,6 @@ export default async function StatusBoardPage() {
   const board = await getStatusBoard(edition);
   const series = await getSubmissionSeries(edition?.id ?? null);
   const activity = await getRecentActivity(6);
-  const medicalAccess = await getMedicalAccessGlance();
 
   const updatedAt = new Date().toLocaleTimeString("en-ZA", {
     hour: "2-digit",
@@ -72,8 +69,6 @@ export default async function StatusBoardPage() {
           />
         </div>
       </div>
-
-      <MedicalAccessStrip glance={medicalAccess} />
 
       <RecentActivity rows={activity} />
     </div>

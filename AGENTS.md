@@ -111,7 +111,13 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
     casual bulk exposure is a different risk from purposeful access; and **every
     disclosing read writes an `audit_events` row** (`bio.medical.view` — actor,
     subject, basis, timestamp) server-side via `after()`, so the audit never blocks
-    or slows the read but enumeration stays detectable. The authz predicate is
+    or slows the read. That row is a **record, not monitoring**: it answers "who saw
+    my medical information?" and lets an incident be reconstructed. Do **not** add
+    volume thresholds, per-actor profiling or alerting on top of it — reading many
+    members' notes in one sitting is ordinary safety work, and flagging it reports
+    normal care as an incident while teaching staff the tool watches them.
+    *(Ryan, 26 Jul 2026 — an enumeration detector was built and removed for exactly
+    this reason.)* The authz predicate is
     `canViewMedicalNotes` (`@quagga/core` `medical-access.ts`), enforced server-side.
     *(Ryan, 26 Jul 2026: "if you disclose it, aren't you consenting to that audience
     to hold that data?" — this replaces both the earlier hard-lock and the

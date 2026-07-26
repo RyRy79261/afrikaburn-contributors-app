@@ -84,7 +84,7 @@ export function AuthForm({
         // Keep the form to email + password (fewer forms — the Burner Bio
         // collects the rest). Derive a placeholder display name from the email.
         const name = email.split("@")[0] || "Burner";
-        const { error: signUpError } =
+        const { data: signUpData, error: signUpError } =
           await authClient.signUp.email({
             email,
             password,
@@ -125,11 +125,33 @@ export function AuthForm({
         // staring at "check your inbox", so we follow the session we were
         // handed. (Only the invite flow moves; the plain sign-up path keeps its
         // existing stay-and-notice behaviour byte for byte.)
+        // A SESSION CAME BACK — verification is off, so Better Auth signed the
+        // new account straight in. Carry them onward.
+        //
+        // Showing SIGN_UP_GENERIC here instead was a dead end, and it is the
+        // defect that running the suite against a real database finally
+        // surfaced: the account existed, the session cookie was set, and the
+        // user was left staring at "check your inbox" on the auth page for a
+        // verification email that this deployment structurally cannot send.
+        // Every new burner at a no-mail demo hit it. `redirectTo` defaults to
+        // "/", and the blocking gate routes them to the Burner Bio from there.
+        //
+        // The cost is that with verification OFF, a new address navigates while
+        // an existing one shows the notice, so sign-up becomes an
+        // account-existence oracle. That trade is unavoidable — with no mail
+        // there is no third outcome — and it is the honest way round: a usable
+        // sign-up beats a private one that nobody can complete. With
+        // verification ON (production) no session comes back either way, both
+        // paths fall through to the notice, and enumeration-safety holds.
+        if (signUpData?.token) {
+          navigateOnwards(router, redirectTo);
+          return;
+        }
         if (resumingInvite) {
-          // Navigate whether or not a session came back, so this path is
-          // byte-identical to the already-registered branch above. With
-          // verification on there is no session yet and `/join/continue` sends
-          // them to sign-in; with it off they arrive signed in and confirm.
+          // No session (verification on) but an invite is pending: still go to
+          // the same url the already-registered branch uses, so the two are
+          // indistinguishable. `/join/continue` bounces a signed-out arrival to
+          // sign-in.
           navigateOnwards(router, redirectTo);
           return;
         }
