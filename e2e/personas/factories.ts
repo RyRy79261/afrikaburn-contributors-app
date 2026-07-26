@@ -93,7 +93,7 @@ async function waitForSessionCookie(page: Page, what: string): Promise<void> {
 
 /** Fail loudly if a factory landed on a "not configured" preview surface. */
 async function assertConfigured(page: Page): Promise<void> {
-  const banner = page.getByText(/not configured|preview mode|isn't set up/i);
+  const banner = page.getByText(/not configured|preview mode|isn['’]t set up/i);
   if (await banner.count()) {
     throw new Error(
       "[e2e] The deployment under test is not fully configured (auth/DB banner " +
@@ -273,7 +273,7 @@ export async function completeBio(
   await page.getByRole("button", { name: "Complete my bio" }).click();
 
   // Step 5 — Done.
-  await expect(page.getByText(/you're all set/i)).toBeVisible();
+  await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
   return { displayName };
 }
 
@@ -476,6 +476,22 @@ export async function acceptInviteAsNewBurner(
   // The done step's primary action finishes the invite rather than dumping them
   // on the directory — that copy is the visible proof the invite was preserved.
   await page.getByRole("button", { name: /continue to your camp/i }).click();
+
+  // /join/continue is a CONFIRM page, not an auto-complete redirect: the join
+  // writes a membership row and burns a single-use invite, so it must not happen
+  // merely by landing on a url, and the page names the signed-in account first
+  // in case a shared browser is about to spend someone else's link. Click
+  // through it. (Kept tolerant of arriving straight on the camp, so this factory
+  // does not silently depend on the confirm step existing.)
+  const confirmJoin = page.getByRole("button", { name: /^join /i });
+  await Promise.race([
+    page.waitForURL(isCampDetailUrl).catch(() => undefined),
+    confirmJoin
+      .waitFor({ state: "visible", timeout: 20_000 })
+      .catch(() => undefined),
+  ]);
+  if (await confirmJoin.count()) await confirmJoin.click();
+
   await page.waitForURL(isCampDetailUrl);
   const slug = new URL(page.url()).pathname.split("/").filter(Boolean).pop()!;
 
@@ -603,12 +619,24 @@ export async function submitRegistration(
     );
   await page.getByRole("checkbox", { name: /plug.*play/i }).check(); // anti-commerce ack (mandatory)
 
+  // Let the autosave land BEFORE submitting. The wizard commits field changes
+  // asynchronously, and the server re-checks completeness against what it has
+  // stored — so clicking submit in the same tick can be judged against a draft
+  // that is still missing the last answer. The button is enabled either way
+  // (the CLIENT thinks it is complete), which is what makes this look like a
+  // broken submit rather than a race.
+  await expect(page.getByText(/saved just now/i)).toBeVisible({ timeout: 15_000 });
+
   // Submit — the gate opens only when the client sees all six sections complete;
   // handleSubmit force-saves the draft before the server re-checks completeness.
   const submit = page.getByRole("button", { name: /submit registration/i });
   await expect(submit).toBeEnabled();
   await submit.click();
-  await expect(page.getByText(/registration submitted/i)).toBeVisible();
+  // The post-submit surface is the SUMMARY, whose status header reads
+  // "Submitted — awaiting review" (registration-summary.tsx). There is no
+  // "Registration submitted" string anywhere in the app; the factory was
+  // asserting copy that never shipped.
+  await expect(page.getByText(/submitted\s+—\s+awaiting review/i)).toBeVisible();
 }
 
 // --- Suppliers -------------------------------------------------------------

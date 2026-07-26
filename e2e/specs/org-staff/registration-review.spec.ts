@@ -159,7 +159,7 @@ test.describe("org staff · registration review loop", () => {
     // The camp sees the approval on its own registration view.
     await camp.web.goto(`/camps/${camp.slug}/registration`);
     await expect(
-      camp.web.getByText(/approved — you're registered/i),
+      camp.web.getByText(/approved — you['’]re registered/i),
     ).toBeVisible();
   });
 

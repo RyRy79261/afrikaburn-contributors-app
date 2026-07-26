@@ -53,7 +53,7 @@ test.describe("supplier document acknowledgement", () => {
     await ack.check();
     await expect(suppliersPage.getByText(/2\/7 done/i)).toBeVisible();
     await expect(
-      agreement.getByText(/you've acknowledged the supplier agreement/i),
+      agreement.getByText(/you['’]ve acknowledged the supplier agreement/i),
     ).toBeVisible();
 
     // Withdraw the acknowledgement → the step reverts (2/7 → 1/7).

@@ -163,6 +163,6 @@ export async function expectServerNotFound(
     res?.status(),
     `expected 404 from ${url}, got ${res?.status()} at ${page.url()}`,
   ).toBe(404);
-  await expect(page.getByText(/we couldn't find/i)).toBeVisible();
+  await expect(page.getByText(/we couldn['’]t find/i)).toBeVisible();
   return { finalUrl: page.url() };
 }

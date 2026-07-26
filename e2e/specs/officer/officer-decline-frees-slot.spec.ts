@@ -39,7 +39,7 @@ test.describe("officer decline", () => {
     await leadPage.goto(`/camps/${camp.slug}/settings/roles`);
     await expandRow(leadPage, new RegExp(OFFICER_NAMES.lnt));
     await expect(
-      leadPage.getByText(/not yet assigned — that's a normal state/i),
+      leadPage.getByText(/not yet assigned — that['’]s a normal state/i),
     ).toBeVisible();
     // And no lingering "awaiting acceptance" / "shared" language for this officer.
     await expect(

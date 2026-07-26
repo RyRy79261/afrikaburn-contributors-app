@@ -134,7 +134,7 @@ test.describe("camp member — cross-camp isolation", () => {
     await memberPage.getByRole("link", { name: leadName }).first().click();
     await expect(memberPage).toHaveURL(/\/burners\/[0-9a-f-]{36}/i);
     // The profile actually rendered (it's not a 404 masquerading as absence).
-    await expect(memberPage.getByText(/we couldn't find/i)).toHaveCount(0);
+    await expect(memberPage.getByText(/we couldn['’]t find/i)).toHaveCount(0);
 
     // The hard-locked values are NEVER selected server-side (getPublicBurnerProfile
     // never reads phone/emergency/medical/ID columns), so they appear nowhere.

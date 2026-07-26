@@ -53,7 +53,7 @@ test.describe("camp member — blocking questionnaire gate", () => {
       memberPage.getByText(/required · blocks until done/i),
     ).toBeVisible();
     await expect(
-      memberPage.getByText(/you can't use the portal until this is done/i),
+      memberPage.getByText(/you can['’]t use the portal until this is done/i),
     ).toBeVisible();
     await expect(
       memberPage.getByRole("button", { name: /sign out/i }),

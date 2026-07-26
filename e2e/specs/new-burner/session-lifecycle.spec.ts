@@ -81,6 +81,6 @@ test.describe("new burner · session lifecycle", () => {
 
     // Identical copy for both cases → sign-in cannot enumerate accounts.
     expect(knownText).toBe(unknownText);
-    expect(knownText).toMatch(/don't match/i);
+    expect(knownText).toMatch(/don['’]t match/i);
   });
 });

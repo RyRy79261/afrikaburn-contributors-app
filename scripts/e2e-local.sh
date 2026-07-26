@@ -89,4 +89,10 @@ fi
 
 echo "==> playwright"
 cd e2e
-exec pnpm exec playwright test --project=desktop-chromium "$@"
+# TWO workers by default. The suite is parallel-safe, but these journeys drive a
+# real browser through a real database on one laptop, and the longest ones (full
+# six-section registration, the two-user invite round trips) start timing out at
+# four — a resource problem that reads exactly like a broken product. Override
+# with E2E_WORKERS if the machine can take it.
+exec pnpm exec playwright test --project=desktop-chromium \
+  --workers="${E2E_WORKERS:-2}" "$@"

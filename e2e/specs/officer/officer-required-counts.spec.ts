@@ -38,7 +38,7 @@ test.describe("required-officer counts", () => {
     await webPage.goto(`/camps/${slug}/settings/roles`);
     await expect(webPage).not.toHaveURL(/\/auth\/sign-in|\/onboarding/);
     await expect(
-      webPage.getByText(/free camps don't have required officers/i),
+      webPage.getByText(/free camps don['’]t have required officers/i),
     ).toBeVisible();
     await expect(webPage.getByText(/\d+ outstanding/)).toHaveCount(0);
     await expect(

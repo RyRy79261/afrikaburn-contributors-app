@@ -40,7 +40,7 @@ test.describe("officer roles cannot be aliased by the camp", () => {
     ).toBeVisible();
     // Each officer row carries the "set by AfrikaBurn — can't be renamed" lock.
     await expect(
-      webPage.getByLabel(/officers can't be renamed/i).first(),
+      webPage.getByLabel(/officers can['’]t be renamed/i).first(),
     ).toBeVisible();
 
     // Expand an officer row: it offers NO rename field and NO delete control.

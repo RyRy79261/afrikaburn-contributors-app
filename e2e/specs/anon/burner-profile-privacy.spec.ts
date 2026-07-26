@@ -94,7 +94,7 @@ async function completePiiBioAllPublic(
     }
   }
   await page.getByRole("button", { name: "Complete my bio" }).click();
-  await expect(page.getByText(/you're all set/i)).toBeVisible();
+  await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
 }
 
 test.describe("anonymous visitor — burner profile privacy", () => {

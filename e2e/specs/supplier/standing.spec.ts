@@ -31,11 +31,11 @@ test.describe("supplier standing visibility", () => {
       suppliersPage.getByText(/good standing/i).first(),
     ).toBeVisible();
     await expect(
-      suppliersPage.getByText(/you're in good standing with afrikaburn/i),
+      suppliersPage.getByText(/you['’]re in good standing with afrikaburn/i),
     ).toBeVisible();
     // The legend marks the supplier's current band.
     await expect(
-      suppliersPage.getByText(/you're here/i),
+      suppliersPage.getByText(/you['’]re here/i),
     ).toBeVisible();
 
     // The privacy promise is always on this page (the #56 law made visible).

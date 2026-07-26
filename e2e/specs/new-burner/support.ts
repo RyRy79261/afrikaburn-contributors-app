@@ -95,7 +95,7 @@ export async function fillDetailedBio(
   await page.getByRole("button", { name: "Complete my bio" }).click();
 
   // Step 5 — Done.
-  await expect(page.getByText(/you're all set/i)).toBeVisible();
+  await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
 }
 
 /**

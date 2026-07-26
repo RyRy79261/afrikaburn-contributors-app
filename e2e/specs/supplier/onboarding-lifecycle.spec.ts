@@ -42,7 +42,7 @@ test.describe("supplier onboarding lifecycle", () => {
     await agreement.getByRole("button", { name: /sign the agreement/i }).click();
 
     await expect(
-      agreement.getByText(/you've acknowledged the supplier agreement/i),
+      agreement.getByText(/you['’]ve acknowledged the supplier agreement/i),
     ).toBeVisible();
     // Registration form (1) + agreement (2) = 2/7 done.
     await expect(suppliersPage.getByText(/2\/7 done/i)).toBeVisible();

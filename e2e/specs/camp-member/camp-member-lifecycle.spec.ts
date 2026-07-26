@@ -141,7 +141,7 @@ test.describe("camp member — lifecycle", () => {
     // The optional fill page shows the Optional badge — NOT the blocking gate.
     await expect(memberPage.getByText("Optional")).toBeVisible();
     await expect(
-      memberPage.getByText(/you can't use the portal until this is done/i),
+      memberPage.getByText(/you can['’]t use the portal until this is done/i),
     ).toHaveCount(0);
 
     await answerRequiredQuestion(memberPage, { prompt, answer });

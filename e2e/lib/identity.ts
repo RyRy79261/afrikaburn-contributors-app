@@ -34,6 +34,18 @@ function workerSlot(): number {
 
 let counter = 0;
 
+/**
+ * Random once per PROCESS, mixed into every generated name.
+ *
+ * Without it the only cross-run variation was a 4-hex-char suffix (65k values):
+ * the worker slot is stable and the counter restarts at 1 every run, so run two
+ * against the same database regenerates run one's names. Camp names must be
+ * exactly unique — `checkCampName` refuses an exact normalized match — so a
+ * repeat surfaced as "A camp of this kind already uses that name", inside a
+ * factory, in a test about something else entirely.
+ */
+const RUN_ID = randomBytes(16).toString("hex").slice(0, 6);
+
 /** A short, filename-safe random token. */
 function token(len = 6): string {
   return randomBytes(16).toString("hex").slice(0, len);
@@ -50,13 +62,13 @@ export function uniqueEmail(label = "burner"): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return `${slug}-w${workerSlot()}-${counter}-${token()}@${SYNTHETIC_DOMAIN}`;
+  return `${slug}-w${workerSlot()}-${counter}-${RUN_ID}${token()}@${SYNTHETIC_DOMAIN}`;
 }
 
 /** A unique display/business name, for camps, suppliers, people. */
 export function uniqueName(prefix: string): string {
   counter += 1;
-  return `${prefix} ${workerSlot()}-${counter}-${token(4)}`;
+  return `${prefix} ${workerSlot()}-${counter}-${RUN_ID}${token(4)}`;
 }
 
 /** A unique camp name (fictional per AGENTS.md — never a real business). */

@@ -129,7 +129,7 @@ export async function completeBioWithPhone(
   await page.getByRole("button", { name: "Save & continue" }).click(); // details
   await page.getByRole("button", { name: "Save & continue" }).click(); // burns
   await page.getByRole("button", { name: "Complete my bio" }).click();
-  await expect(page.getByText(/you're all set/i)).toBeVisible();
+  await expect(page.getByText(/you['’]re all set/i)).toBeVisible();
   return { displayName, phone: opts.phone };
 }
 
