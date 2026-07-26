@@ -52,6 +52,7 @@ import { toast } from "@quagga/ui/components/toast";
 import { cn } from "@quagga/ui/lib/utils";
 
 import {
+  BlobConfigProvider,
   BlockEditor,
   withCurrentTarget,
   type BranchTarget,
@@ -72,6 +73,7 @@ import {
   IssueNote,
   sectionIssues,
 } from "./definition-issues";
+import { QuestionnairePreview } from "./questionnaire-preview";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { saveDefinitionV2 } from "@/app/(console)/questionnaires/builder-actions";
 import { previewAudienceCount } from "@/lib/questionnaires/actions";
@@ -146,9 +148,12 @@ function emptyDraft(): Questionnaire {
 export function QuestionnaireBuilderV2({
   initial,
   editionId,
+  blobConfigured = false,
 }: {
   initial?: BuilderV2Initial;
   editionId: string | null;
+  /** Deployment has BLOB_READ_WRITE_TOKEN → image controls show the uploader. */
+  blobConfigured?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -347,7 +352,8 @@ export function QuestionnaireBuilderV2({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <BlobConfigProvider value={blobConfigured}>
+      <div className="flex flex-col gap-6">
       {/* Fewer-forms warning — the builder holds ITSELF to the principle. */}
       <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
         <Tent className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
@@ -468,6 +474,7 @@ export function QuestionnaireBuilderV2({
         <Button variant="ghost" onClick={() => router.push("/questionnaires")}>
           Cancel
         </Button>
+        <QuestionnairePreview definition={definition} />
         <Button
           variant="outline"
           onClick={() => save(false)}
@@ -480,7 +487,8 @@ export function QuestionnaireBuilderV2({
           {pending ? "Saving…" : "Publish & choose audience"}
         </Button>
       </div>
-    </div>
+      </div>
+    </BlobConfigProvider>
   );
 }
 

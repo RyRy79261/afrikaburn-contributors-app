@@ -10,9 +10,9 @@ import {
 import { AuthCapabilityKey } from "@quagga/types";
 
 // These tests pin the SHIPPED reality of self-hosted Better Auth
-// (docs/auth-platform-spec.md). They are not aspirational: when the twoFactor /
-// passkey plugins are installed, the matrix changes here first and these
-// assertions change with it — deliberately, in one place, with a reviewed diff.
+// (docs/auth-platform-spec.md). They are not aspirational: the twoFactor and
+// passkey plugins are now installed (migration 0015), so the matrix marks them
+// supported and these assertions moved with it — deliberately, in one place.
 
 describe("AUTH_CAPABILITIES", () => {
   it("covers every capability key exactly once", () => {
@@ -41,10 +41,18 @@ describe("AUTH_CAPABILITIES", () => {
     }
   });
 
-  it("marks 2FA, backup codes and passkeys UNAVAILABLE — plugins not installed yet", () => {
+  it("marks 2FA, backup codes and passkeys SUPPORTED — plugins installed (migration 0015)", () => {
     for (const key of ["twoFactor", "backupCodes", "passkeys"] as const) {
-      expect(isCapabilityUnavailable(key)).toBe(true);
-      expect(AUTH_CAPABILITIES[key].method).toBeNull();
+      expect(isCapabilitySupported(key)).toBe(true);
+      expect(isCapabilityUnavailable(key)).toBe(false);
+      expect(AUTH_CAPABILITIES[key].method).not.toBeNull();
+    }
+  });
+
+  it("leaves NOTHING unavailable — every capability now ships", () => {
+    expect(unavailableCapabilities()).toEqual([]);
+    for (const key of AuthCapabilityKey.options) {
+      expect(isCapabilitySupported(key)).toBe(true);
     }
   });
 
@@ -78,16 +86,10 @@ describe("assertCapability — fail closed", () => {
     expect(assertCapability("sessionRevoke").ok).toBe(true);
   });
 
-  it("REFUSES an unavailable capability with an honest message", () => {
-    const result = assertCapability("twoFactor");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.support).toBe("unavailable");
-      expect(result.message).toContain("isn't available");
-    }
-  });
-
-  it("passes email change and unlink now that self-hosting exposes them", () => {
+  it("passes 2FA, passkeys, email change and unlink now that self-hosting ships them", () => {
+    expect(assertCapability("twoFactor")).toEqual({ ok: true });
+    expect(assertCapability("passkeys").ok).toBe(true);
+    expect(assertCapability("backupCodes").ok).toBe(true);
     expect(assertCapability("emailChange")).toEqual({ ok: true });
     expect(assertCapability("unlinkAccount").ok).toBe(true);
   });

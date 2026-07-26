@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { applyDocumentAcksToSteps } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { schema, withTransaction } from "@/lib/db";
 import { requireSupplierSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import {
@@ -48,94 +48,105 @@ export async function setDocumentAcknowledgement(
     const session = await requireSupplierSession();
     const input = SetAckInput.parse(raw);
 
-    const db = getDb();
-
+    // Edition-authz read against committed state — the document catalog isn't
+    // touched by this action, so this can run before the transaction (and fail
+    // fast, without opening a pool).
     if (!(await documentBelongsToEdition(input.documentId, session.edition.id))) {
       throw new Error("That document isn't part of this edition.");
     }
 
-    if (input.acknowledged) {
-      await db
-        .insert(schema.supplierDocumentAcks)
-        .values({
-          supplierId: session.supplier.id,
+    // The ack write, the step reconciliation, and every audit event are one
+    // atomic unit. The reconcile MUST read this transaction's own uncommitted
+    // ack (a separate HTTP connection would not see it), so it is passed the tx.
+    await withTransaction(async (tx) => {
+      if (input.acknowledged) {
+        await tx
+          .insert(schema.supplierDocumentAcks)
+          .values({
+            supplierId: session.supplier.id,
+            documentId: input.documentId,
+          })
+          .onConflictDoNothing({
+            target: [
+              schema.supplierDocumentAcks.supplierId,
+              schema.supplierDocumentAcks.documentId,
+            ],
+          });
+      } else {
+        await tx
+          .delete(schema.supplierDocumentAcks)
+          .where(
+            and(
+              eq(schema.supplierDocumentAcks.supplierId, session.supplier.id),
+              eq(schema.supplierDocumentAcks.documentId, input.documentId),
+            ),
+          );
+      }
+
+      // Reconcile bound onboarding steps against the acknowledgements as they
+      // now stand — read on the SAME tx so the just-written ack is visible.
+      const { documents, acks } = await loadDocumentsForReconcile(
+        session.supplier.id,
+        session.edition.id,
+        tx,
+      );
+      const reconciled = applyDocumentAcksToSteps(
+        session.steps,
+        documents,
+        acks,
+      );
+
+      if (reconciled.completed.length > 0 || reconciled.reverted.length > 0) {
+        await tx
+          .update(schema.supplierOnboarding)
+          .set({ steps: reconciled.steps, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.supplierOnboarding.supplierId, session.supplier.id),
+              eq(schema.supplierOnboarding.editionId, session.edition.id),
+            ),
+          );
+
+        for (const stepKey of reconciled.completed) {
+          await writeAuditEvent(tx, {
+            actorId: session.dbUserId,
+            action: "supplier.onboarding_step",
+            subject: session.supplier.id,
+            meta: {
+              step: stepKey,
+              to: "completed",
+              via: "document_ack",
+              edition: session.edition.year,
+            },
+          });
+        }
+        for (const stepKey of reconciled.reverted) {
+          await writeAuditEvent(tx, {
+            actorId: session.dbUserId,
+            action: "supplier.onboarding_step",
+            subject: session.supplier.id,
+            meta: {
+              step: stepKey,
+              to: "pending",
+              via: "document_ack_withdrawn",
+              edition: session.edition.year,
+            },
+          });
+        }
+      }
+
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.document_ack",
+        subject: session.supplier.id,
+        meta: {
           documentId: input.documentId,
-        })
-        .onConflictDoNothing({
-          target: [
-            schema.supplierDocumentAcks.supplierId,
-            schema.supplierDocumentAcks.documentId,
-          ],
-        });
-    } else {
-      await db
-        .delete(schema.supplierDocumentAcks)
-        .where(
-          and(
-            eq(schema.supplierDocumentAcks.supplierId, session.supplier.id),
-            eq(schema.supplierDocumentAcks.documentId, input.documentId),
-          ),
-        );
-    }
-
-    // Reconcile bound onboarding steps against the acknowledgements as they now
-    // stand. Read AFTER the write so the decision is made on committed state.
-    const { documents, acks } = await loadDocumentsForReconcile(
-      session.supplier.id,
-      session.edition.id,
-    );
-    const reconciled = applyDocumentAcksToSteps(session.steps, documents, acks);
-
-    if (reconciled.completed.length > 0 || reconciled.reverted.length > 0) {
-      await db
-        .update(schema.supplierOnboarding)
-        .set({ steps: reconciled.steps, updatedAt: new Date() })
-        .where(
-          and(
-            eq(schema.supplierOnboarding.supplierId, session.supplier.id),
-            eq(schema.supplierOnboarding.editionId, session.edition.id),
-          ),
-        );
-
-      for (const stepKey of reconciled.completed) {
-        await writeAuditEvent(db, {
-          actorId: session.dbUserId,
-          action: "supplier.onboarding_step",
-          subject: session.supplier.id,
-          meta: {
-            step: stepKey,
-            to: "completed",
-            via: "document_ack",
-            edition: session.edition.year,
-          },
-        });
-      }
-      for (const stepKey of reconciled.reverted) {
-        await writeAuditEvent(db, {
-          actorId: session.dbUserId,
-          action: "supplier.onboarding_step",
-          subject: session.supplier.id,
-          meta: {
-            step: stepKey,
-            to: "pending",
-            via: "document_ack_withdrawn",
-            edition: session.edition.year,
-          },
-        });
-      }
-    }
-
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.document_ack",
-      subject: session.supplier.id,
-      meta: {
-        documentId: input.documentId,
-        acknowledged: input.acknowledged,
-        stepsCompleted: reconciled.completed,
-        stepsReverted: reconciled.reverted,
-        edition: session.edition.year,
-      },
+          acknowledged: input.acknowledged,
+          stepsCompleted: reconciled.completed,
+          stepsReverted: reconciled.reverted,
+          edition: session.edition.year,
+        },
+      });
     });
 
     revalidatePath("/onboarding");

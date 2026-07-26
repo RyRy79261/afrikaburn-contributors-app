@@ -26,6 +26,19 @@ function formatValue(
   if (Array.isArray(value)) {
     return value.map((v) => labels.get(v) ?? v).join(", ") || "—";
   }
+  if (typeof value === "object") {
+    // Grid answer: { rowId: columnValue[] } → "Row: Col A, Col B · …".
+    const parts: string[] = [];
+    for (const [rowId, picks] of Object.entries(value)) {
+      if (!Array.isArray(picks) || picks.length === 0) continue;
+      parts.push(
+        `${labels.get(rowId) ?? rowId}: ${picks
+          .map((v) => labels.get(v) ?? v)
+          .join(", ")}`,
+      );
+    }
+    return parts.join(" · ") || "—";
+  }
   return labels.get(String(value)) ?? String(value);
 }
 
@@ -48,6 +61,10 @@ export function ResponseViewer({
   for (const q of questions) {
     if (q.kind === "single_select" || q.kind === "multi_select") {
       for (const o of q.options) optionLabels.set(o.value, o.label);
+    }
+    if (q.kind === "multi_choice_grid" || q.kind === "checkbox_grid") {
+      for (const r of q.rows) optionLabels.set(r.id, r.label);
+      for (const c of q.columns) optionLabels.set(c.value, c.label);
     }
   }
 

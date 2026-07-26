@@ -1,4 +1,8 @@
-import type { RegistrationStatus, SectionReviewStatus } from "@quagga/types";
+import type {
+  MembershipRole,
+  RegistrationStatus,
+  SectionReviewStatus,
+} from "@quagga/types";
 
 // Registration + section-review state machines (build-spec §Core logic): only
 // legal transitions. The skeleton is defined here; wave 1 (registration lane)
@@ -97,4 +101,21 @@ export function canTransitionSectionReview(
   to: SectionReviewStatus,
 ): boolean {
   return SECTION_REVIEW_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Who may post a REPLY under a section review (design frames: the camp answering
+ * the placement team). Server-side authz predicate — the app resolves the two
+ * facts and this decides. A reply is allowed when the caller is a member of the
+ * camp under review (ANY role — a member can answer, not only leads) OR is org
+ * staff (god / org_staff). Pure so the rule is one implementation, tested without
+ * a DB. The UI is built by a later agent; this is the boundary check it relies on.
+ */
+export function canReplyToSectionReview(ctx: {
+  /** The caller's membership role on the camp under review, or null if none. */
+  campRole: MembershipRole | null;
+  /** Whether the caller is org staff (god or org_staff). */
+  isOrgStaff: boolean;
+}): boolean {
+  return ctx.campRole !== null || ctx.isOrgStaff;
 }

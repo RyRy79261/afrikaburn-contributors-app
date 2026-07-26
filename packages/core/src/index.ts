@@ -96,6 +96,11 @@
 //     nextSupplierSequence, issueSupplierCode (./supplier-code)
 //   - supplier documents: buildDocumentViews, deriveDocumentAckProgress,
 //     validateDocumentBinding, applyDocumentAcksToSteps (./supplier-documents)
+//   - security events: describeSecurityEvent, SECURITY_EVENT_TITLES — display
+//     titles for the account "recent security events" feed (./security-events)
+//   - ID retention: identifyPurgeableIdBios, isIdRetentionExpired,
+//     buildIdPurgePatch, ID_RETENTION_GRACE_DAYS — POPIA storage-limitation rule
+//     for gate-verification ID data after an edition ends (./id-retention)
 
 export * from "./entitlements";
 export * from "./name-dedupe";
@@ -132,3 +137,5 @@ export * from "./account-sanitization";
 export * from "./security-notifications";
 export * from "./supplier-code";
 export * from "./supplier-documents";
+export * from "./security-events";
+export * from "./id-retention";

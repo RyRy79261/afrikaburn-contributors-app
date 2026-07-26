@@ -32,7 +32,7 @@ import type {
   RoleAssignmentConsent,
   RoleColor,
 } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction } from "./db";
 import { insertNotifications } from "./notifications";
 
 /** Camp name + slug for an officer notification (best-effort lookup). */
@@ -405,36 +405,41 @@ export async function setMemberRoles(
     }
   }
 
-  // Remove only assignable (non-officer, non-baseline) assignments, then re-add.
+  // Replace the assignable (non-officer, non-baseline) assignment set: remove the
+  // old ones then add the wanted ones, atomically. Without a transaction a
+  // failure between the delete and the insert would strip a member of their roles
+  // without granting the replacements — a silent authz downgrade.
   const assignableIds = [...assignable.keys()];
-  if (assignableIds.length > 0) {
-    await db()
-      .delete(schema.memberRoleAssignments)
-      .where(
-        and(
-          eq(schema.memberRoleAssignments.membershipId, membershipId),
-          inArray(schema.memberRoleAssignments.projectRoleId, assignableIds),
-        ),
-      );
-  }
-  if (wanted.length > 0) {
-    await db()
-      .insert(schema.memberRoleAssignments)
-      .values(
-        wanted.map((projectRoleId) => ({
-          membershipId,
-          projectRoleId,
-          consentStatus: "accepted" as RoleAssignmentConsent,
-          orgVisible: false,
-        })),
-      )
-      .onConflictDoNothing({
-        target: [
-          schema.memberRoleAssignments.membershipId,
-          schema.memberRoleAssignments.projectRoleId,
-        ],
-      });
-  }
+  await withTransaction(async (tx) => {
+    if (assignableIds.length > 0) {
+      await tx
+        .delete(schema.memberRoleAssignments)
+        .where(
+          and(
+            eq(schema.memberRoleAssignments.membershipId, membershipId),
+            inArray(schema.memberRoleAssignments.projectRoleId, assignableIds),
+          ),
+        );
+    }
+    if (wanted.length > 0) {
+      await tx
+        .insert(schema.memberRoleAssignments)
+        .values(
+          wanted.map((projectRoleId) => ({
+            membershipId,
+            projectRoleId,
+            consentStatus: "accepted" as RoleAssignmentConsent,
+            orgVisible: false,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [
+            schema.memberRoleAssignments.membershipId,
+            schema.memberRoleAssignments.projectRoleId,
+          ],
+        });
+    }
+  });
   return { ok: true };
 }
 

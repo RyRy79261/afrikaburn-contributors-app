@@ -65,6 +65,7 @@ const CHART_LABEL: Record<QuestionAggregate["chart"], string> = {
   boolean: "Yes / No",
   timeline: "Dates & times",
   text: "Text answers",
+  grid: "Grid",
 };
 
 export function ResultsView({
@@ -360,6 +361,39 @@ function AggregateChart({ aggregate }: { aggregate: QuestionAggregate }) {
 
     case "text":
       return <TextAnswers answers={aggregate.answers} />;
+
+    case "grid":
+      return (
+        <div className="flex flex-col gap-4">
+          {aggregate.rows.map((row) => (
+            <div key={row.id} className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-medium">{row.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {row.responded}{" "}
+                  {row.responded === 1 ? "response" : "responses"}
+                </span>
+              </div>
+              {row.responded === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nobody answered this row.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {row.columns.map((column) => (
+                    <BarRow
+                      key={column.value}
+                      label={column.label || column.value}
+                      count={column.count}
+                      percent={column.percent}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      );
   }
 }
 
@@ -466,6 +500,10 @@ function optionLabelMap(questions: readonly Question[]): Map<string, string> {
     if (q.kind === "single_select" || q.kind === "multi_select") {
       for (const o of q.options) labels.set(`${q.id}:${o.value}`, o.label);
     }
+    if (q.kind === "multi_choice_grid" || q.kind === "checkbox_grid") {
+      for (const row of q.rows) labels.set(`${q.id}:row:${row.id}`, row.label);
+      for (const col of q.columns) labels.set(`${q.id}:col:${col.value}`, col.label);
+    }
   }
   return labels;
 }
@@ -483,6 +521,19 @@ function formatCell(
       : (labels.get(`${questionId}:${v}`) ?? v);
   if (Array.isArray(value)) return value.map(one).join("; ");
   if (typeof value === "number") return String(value);
+  if (typeof value === "object") {
+    // Grid answer: { rowId: columnValue[] } → "Row: Col A, Col B | Row2: …".
+    const parts: string[] = [];
+    for (const [rowId, picks] of Object.entries(value)) {
+      if (!Array.isArray(picks) || picks.length === 0) continue;
+      const rowLabel = labels.get(`${questionId}:row:${rowId}`) ?? rowId;
+      const cols = picks
+        .map((v) => labels.get(`${questionId}:col:${v}`) ?? v)
+        .join(", ");
+      parts.push(`${rowLabel}: ${cols}`);
+    }
+    return parts.join(" | ");
+  }
   return one(value);
 }
 

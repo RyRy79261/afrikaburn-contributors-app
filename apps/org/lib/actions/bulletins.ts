@@ -12,7 +12,7 @@ import {
 } from "@quagga/core";
 import { BulletinComposeInput } from "@quagga/types";
 
-import { getDb, schema } from "@/lib/db";
+import { schema, withTransaction, type DbHandle } from "@/lib/db";
 import { requireOrgSession, type OrgSession } from "@/lib/session";
 import { getActiveEdition } from "@/lib/queries";
 import { writeAuditEvent } from "@/lib/audit";
@@ -66,43 +66,50 @@ export async function saveBulletin(
     const edition = await getActiveEdition();
     if (!edition) throw new Error("No active edition to attach the bulletin to.");
 
-    const db = getDb();
     const now = new Date();
 
     // --- Update path -----------------------------------------------------
+    // The row write, the notification fan-out (on publish) and the audit row
+    // are one atomic unit — a published bulletin must never exist without its
+    // recipients' notifications, nor notifications without the published row.
     if (input.id) {
-      const [existing] = await db
-        .select({
-          id: schema.bulletins.id,
-          publishedAt: schema.bulletins.publishedAt,
-        })
-        .from(schema.bulletins)
-        .where(eq(schema.bulletins.id, input.id))
-        .limit(1);
-      if (!existing) throw new Error("That bulletin no longer exists.");
-      const alreadyPublished = existing.publishedAt !== null;
+      await withTransaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: schema.bulletins.id,
+            publishedAt: schema.bulletins.publishedAt,
+          })
+          .from(schema.bulletins)
+          .where(eq(schema.bulletins.id, input.id!))
+          .limit(1);
+        if (!existing) throw new Error("That bulletin no longer exists.");
+        const alreadyPublished = existing.publishedAt !== null;
 
-      await db
-        .update(schema.bulletins)
-        .set({
-          title: input.title,
-          bodyMd: input.bodyMd,
-          audience: input.audience,
-          pinned: input.pinned,
-          // Publishing a draft stamps published_at; never un-publish or restamp.
-          ...(input.publish && !alreadyPublished ? { publishedAt: now } : {}),
-          updatedAt: now,
-        })
-        .where(eq(schema.bulletins.id, input.id));
+        await tx
+          .update(schema.bulletins)
+          .set({
+            title: input.title,
+            bodyMd: input.bodyMd,
+            audience: input.audience,
+            pinned: input.pinned,
+            // Publishing a draft stamps published_at; never un-publish or restamp.
+            ...(input.publish && !alreadyPublished ? { publishedAt: now } : {}),
+            updatedAt: now,
+          })
+          .where(eq(schema.bulletins.id, input.id!));
 
-      if (input.publish && !alreadyPublished) {
-        await fanOut(db, input.id, input.title, input.audience, edition.id, session);
-      }
+        if (input.publish && !alreadyPublished) {
+          await fanOut(tx, input.id!, input.title, input.audience, edition.id, session);
+        }
 
-      await writeAuditEvent(db, {
-        actorId: session.dbUserId,
-        action: input.publish && !alreadyPublished ? "bulletin.publish" : "bulletin.update",
-        subject: input.id,
+        await writeAuditEvent(tx, {
+          actorId: session.dbUserId,
+          action:
+            input.publish && !alreadyPublished
+              ? "bulletin.publish"
+              : "bulletin.update",
+          subject: input.id!,
+        });
       });
 
       revalidatePath("/bulletins");
@@ -111,32 +118,36 @@ export async function saveBulletin(
     }
 
     // --- Create path -----------------------------------------------------
-    const [created] = await db
-      .insert(schema.bulletins)
-      .values({
-        editionId: edition.id,
-        title: input.title,
-        bodyMd: input.bodyMd,
-        audience: input.audience,
-        createdByUserId: session.dbUserId,
-        pinned: input.pinned,
-        publishedAt: input.publish ? now : null,
-      })
-      .returning({ id: schema.bulletins.id });
-    if (!created) throw new Error("Could not create the bulletin.");
+    const createdId = await withTransaction(async (tx) => {
+      const [created] = await tx
+        .insert(schema.bulletins)
+        .values({
+          editionId: edition.id,
+          title: input.title,
+          bodyMd: input.bodyMd,
+          audience: input.audience,
+          createdByUserId: session.dbUserId,
+          pinned: input.pinned,
+          publishedAt: input.publish ? now : null,
+        })
+        .returning({ id: schema.bulletins.id });
+      if (!created) throw new Error("Could not create the bulletin.");
 
-    if (input.publish) {
-      await fanOut(db, created.id, input.title, input.audience, edition.id, session);
-    }
+      if (input.publish) {
+        await fanOut(tx, created.id, input.title, input.audience, edition.id, session);
+      }
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: input.publish ? "bulletin.publish" : "bulletin.create",
-      subject: created.id,
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: input.publish ? "bulletin.publish" : "bulletin.create",
+        subject: created.id,
+      });
+
+      return created.id;
     });
 
     revalidatePath("/bulletins");
-    return { ok: true, id: created.id };
+    return { ok: true, id: createdId };
   } catch (err) {
     return {
       ok: false,
@@ -147,7 +158,7 @@ export async function saveBulletin(
 
 /** Resolve the audience and fan out bulletin notifications (shared resolver). */
 async function fanOut(
-  db: ReturnType<typeof getDb>,
+  db: DbHandle,
   bulletinId: string,
   title: string,
   audience: BulletinComposeInput["audience"],
@@ -170,40 +181,42 @@ export async function publishBulletin(
     const session = await requireOrgSession();
     const input = PublishInput.parse(raw);
 
-    const db = getDb();
-    const [bulletin] = await db
-      .select()
-      .from(schema.bulletins)
-      .where(eq(schema.bulletins.id, input.id))
-      .limit(1);
-    if (!bulletin) throw new Error("That bulletin no longer exists.");
-    if (bulletin.publishedAt !== null) {
-      throw new Error("That bulletin is already published.");
-    }
-    // Re-check the stored audience is one this actor may broadcast to.
-    if (
-      bulletin.audience.kind === "project" ||
-      !canActivateAudience(authzMemberships(session), bulletin.audience, session.orgGroupId)
-    ) {
-      throw new Error("You are not allowed to broadcast to that audience.");
-    }
+    // Guard read, publish stamp, fan-out and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [bulletin] = await tx
+        .select()
+        .from(schema.bulletins)
+        .where(eq(schema.bulletins.id, input.id))
+        .limit(1);
+      if (!bulletin) throw new Error("That bulletin no longer exists.");
+      if (bulletin.publishedAt !== null) {
+        throw new Error("That bulletin is already published.");
+      }
+      // Re-check the stored audience is one this actor may broadcast to.
+      if (
+        bulletin.audience.kind === "project" ||
+        !canActivateAudience(authzMemberships(session), bulletin.audience, session.orgGroupId)
+      ) {
+        throw new Error("You are not allowed to broadcast to that audience.");
+      }
 
-    const now = new Date();
-    await db
-      .update(schema.bulletins)
-      .set({ publishedAt: now, updatedAt: now })
-      .where(eq(schema.bulletins.id, input.id));
+      const now = new Date();
+      await tx
+        .update(schema.bulletins)
+        .set({ publishedAt: now, updatedAt: now })
+        .where(eq(schema.bulletins.id, input.id));
 
-    await fanOut(db, bulletin.id, bulletin.title, bulletin.audience, bulletin.editionId, session);
+      await fanOut(tx, bulletin.id, bulletin.title, bulletin.audience, bulletin.editionId, session);
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "bulletin.publish",
-      subject: bulletin.id,
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "bulletin.publish",
+        subject: bulletin.id,
+      });
     });
 
     revalidatePath("/bulletins");
-    revalidatePath(`/bulletins/${bulletin.id}`);
+    revalidatePath(`/bulletins/${input.id}`);
   });
 }
 
@@ -216,16 +229,18 @@ export async function setBulletinPinned(
   return runAction(async () => {
     const session = await requireOrgSession();
     const input = SetPinnedInput.parse(raw);
-    const db = getDb();
-    await db
-      .update(schema.bulletins)
-      .set({ pinned: input.pinned, updatedAt: new Date() })
-      .where(eq(schema.bulletins.id, input.id));
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "bulletin.pin",
-      subject: input.id,
-      meta: { pinned: input.pinned },
+    // Pin toggle + audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      await tx
+        .update(schema.bulletins)
+        .set({ pinned: input.pinned, updatedAt: new Date() })
+        .where(eq(schema.bulletins.id, input.id));
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "bulletin.pin",
+        subject: input.id,
+        meta: { pinned: input.pinned },
+      });
     });
     revalidatePath("/bulletins");
   });

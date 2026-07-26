@@ -276,6 +276,52 @@ export const FileLinkQuestion = z.object({
 });
 export type FileLinkQuestion = z.infer<typeof FileLinkQuestion>;
 
+// --- Grid question kinds (Google-Forms parity) ---------------------------
+// A grid is ONE question with named rows and shared columns. The response value
+// is a per-row map `{ [rowId]: columnValue[] }` — one entry per answered row.
+// `multi_choice_grid` allows one column per row (radio); `checkbox_grid` allows
+// any number of columns per row (checkboxes). Rows carry an `id` (it keys the
+// response map, allocated once like a question id and never re-derived); columns
+// carry a `value` (the stored answer) plus a display `label`.
+
+export const GridRow = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+});
+export type GridRow = z.infer<typeof GridRow>;
+
+export const GridColumn = z.object({
+  value: z.string().min(1),
+  label: z.string().min(1),
+});
+export type GridColumn = z.infer<typeof GridColumn>;
+
+// Multiple-choice grid — exactly one column may be chosen per row. `required`
+// (default true, matching Google Forms) means EVERY row must be answered.
+export const MultiChoiceGridQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("multi_choice_grid"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  rows: z.array(GridRow).min(1),
+  columns: z.array(GridColumn).min(1),
+  required: z.boolean().default(true),
+});
+export type MultiChoiceGridQuestion = z.infer<typeof MultiChoiceGridQuestion>;
+
+// Checkbox grid — any number of columns may be chosen per row. `required`
+// (default false) means every row must carry at least one selection.
+export const CheckboxGridQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("checkbox_grid"),
+  prompt: z.string().min(1),
+  helper: z.string().optional(),
+  rows: z.array(GridRow).min(1),
+  columns: z.array(GridColumn).min(1),
+  required: z.boolean().default(false),
+});
+export type CheckboxGridQuestion = z.infer<typeof CheckboxGridQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SingleSelectQuestion,
   MultiSelectQuestion,
@@ -290,6 +336,8 @@ export const Question = z.discriminatedUnion("kind", [
   RatingQuestion,
   TimeQuestion,
   FileLinkQuestion,
+  MultiChoiceGridQuestion,
+  CheckboxGridQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -340,6 +388,8 @@ const ANSWERABLE_KINDS: ReadonlySet<string> = new Set([
   "rating",
   "time",
   "file_link",
+  "multi_choice_grid",
+  "checkbox_grid",
 ]);
 
 /** True when a block takes an answer (i.e. is a Question, not an info/image
@@ -391,6 +441,12 @@ export const Questionnaire = z.object({
 });
 export type Questionnaire = z.infer<typeof Questionnaire>;
 
+// A grid answer: `{ [rowId]: columnValue[] }`. Nested inside the flat response
+// map (keyed by the grid question's id) so Builder v2 needs no schema change —
+// it is JSONB either way. An empty map / all-empty rows means "unanswered".
+export const GridAnswer = z.record(z.string(), z.array(z.string()));
+export type GridAnswer = z.infer<typeof GridAnswer>;
+
 // Responses are a flat map keyed by question id; each value's shape depends on
 // the question kind. Stored as JSONB on `questionnaire_responses.responses`.
 export const QuestionnaireResponseValue = z.union([
@@ -398,6 +454,7 @@ export const QuestionnaireResponseValue = z.union([
   z.string(),
   z.array(z.string()),
   z.boolean(),
+  GridAnswer,
   z.null(),
 ]);
 export type QuestionnaireResponseValue = z.infer<
@@ -619,6 +676,42 @@ export function validateOne(
       if (!URL_RE.test(raw.trim()))
         return { ok: false, error: "Enter a link starting with http:// or https://" };
       return { ok: true, value: raw.trim() };
+    }
+    case "multi_choice_grid":
+    case "checkbox_grid": {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+        return { ok: false, error: "Expected a grid of answers" };
+      const incoming = raw as Record<string, unknown>;
+      const columnValues = new Set(q.columns.map((c) => c.value));
+      const single = q.kind === "multi_choice_grid";
+      const value: GridAnswer = {};
+      // Iterate the DEFINITION's rows so unknown/extra row keys are dropped and
+      // the answer is normalised to known rows and known columns only.
+      for (const row of q.rows) {
+        const cell = incoming[row.id];
+        if (cell === undefined || cell === null) continue;
+        if (!Array.isArray(cell) || cell.some((v) => typeof v !== "string"))
+          return { ok: false, error: `Malformed answer for "${row.label}"` };
+        const picks: string[] = [];
+        for (const v of cell as string[]) {
+          if (columnValues.has(v) && !picks.includes(v)) picks.push(v);
+        }
+        if (single && picks.length > 1)
+          return { ok: false, error: `Pick one column for "${row.label}"` };
+        if (picks.length > 0) value[row.id] = picks;
+      }
+      const answeredRows = Object.keys(value).length;
+      if (q.required) {
+        const missing = q.rows.find((r) => (value[r.id] ?? []).length === 0);
+        if (missing)
+          return {
+            ok: false,
+            error: `Answer every row — "${missing.label}" is missing`,
+          };
+      }
+      // An optional grid left entirely blank is a valid skip.
+      if (answeredRows === 0) return { ok: true, value: undefined };
+      return { ok: true, value };
     }
     case "years": {
       if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string"))

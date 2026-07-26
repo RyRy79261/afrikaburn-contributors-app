@@ -15,12 +15,14 @@ import type { DefinitionIssue } from "@quagga/core";
 import {
   SUBMIT_TARGET,
   isAnswerableBlock,
+  type ImageBlock,
   type PageBlock,
   type Question,
   type QuestionOption,
 } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
 import { Card, CardContent } from "@quagga/ui/components/card";
+import { FileUpload } from "@quagga/ui/components/file-upload";
 import { Input } from "@quagga/ui/components/input";
 import { Switch } from "@quagga/ui/components/switch";
 import { Textarea } from "@quagga/ui/components/textarea";
@@ -52,6 +54,30 @@ import { IssueNote, blockIssues, optionIssues } from "./definition-issues";
 
 /** "Continue to the next section" — Radix Select forbids an empty item value. */
 const CONTINUE = "__continue__";
+
+// Whether this deployment has Blob storage, provided once at the builder root so
+// the deeply-nested image controls (image blocks + image-choice options) don't
+// each need it threaded through SectionEditor/BlockEditor. Defaults to false →
+// the FileUpload primitive shows its URL-paste fallback.
+const BlobConfigContext = React.createContext(false);
+
+export function BlobConfigProvider({
+  value,
+  children,
+}: {
+  value: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <BlobConfigContext.Provider value={value}>
+      {children}
+    </BlobConfigContext.Provider>
+  );
+}
+
+function useBlobConfigured(): boolean {
+  return React.useContext(BlobConfigContext);
+}
 
 export interface BranchTarget {
   value: string;
@@ -134,6 +160,22 @@ function allocateOptionValue(options: readonly QuestionOption[]): string {
   let n = options.length + 1;
   while (taken.has(`option_${n}`)) n += 1;
   return `option_${n}`;
+}
+
+/** Free grid row id — allocated once (it keys the per-row response map). */
+function allocateRowId(rows: readonly { id: string }[]): string {
+  const taken = new Set(rows.map((r) => r.id));
+  let n = rows.length + 1;
+  while (taken.has(`row_${n}`)) n += 1;
+  return `row_${n}`;
+}
+
+/** Free grid column value — allocated once (it is the stored answer). */
+function allocateColumnValue(columns: readonly { value: string }[]): string {
+  const taken = new Set(columns.map((c) => c.value));
+  let n = columns.length + 1;
+  while (taken.has(`col_${n}`)) n += 1;
+  return `col_${n}`;
 }
 
 export function BlockEditor({
@@ -338,27 +380,7 @@ function BlockBody({
       );
 
     case "image_block":
-      return (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Labelled
-            label="Image URL"
-            hint="A link to the image — no upload storage yet."
-          >
-            <Input
-              value={block.url}
-              onChange={(e) => onChange({ ...block, url: e.target.value })}
-              placeholder="https://…"
-            />
-          </Labelled>
-          <Labelled label="Alt text" hint="Required — never ship a blind image.">
-            <Input
-              value={block.alt}
-              onChange={(e) => onChange({ ...block, alt: e.target.value })}
-              placeholder="What the image shows"
-            />
-          </Labelled>
-        </div>
-      );
+      return <ImageBlockBody block={block} onChange={onChange} />;
 
     case "single_select":
     case "multi_select":
@@ -372,6 +394,10 @@ function BlockBody({
           onChange={onChange}
         />
       );
+
+    case "multi_choice_grid":
+    case "checkbox_grid":
+      return <GridBody block={block} onChange={onChange} />;
 
     case "short_text":
       return <ShortTextBody block={block} onChange={onChange} />;
@@ -652,6 +678,40 @@ function ShortTextBody({
   );
 }
 
+function ImageBlockBody({
+  block,
+  onChange,
+}: {
+  block: ImageBlock;
+  onChange: (next: PageBlock) => void;
+}) {
+  const blobConfigured = useBlobConfigured();
+  return (
+    <div className="flex flex-col gap-3">
+      <Labelled label="Image" hint="Upload or paste a link to the image.">
+        <FileUpload
+          value={block.url ? [block.url] : []}
+          onChange={(urls) => onChange({ ...block, url: urls[0] ?? "" })}
+          blobConfigured={blobConfigured}
+          handleUploadUrl="/api/blob/upload"
+          kind="questionnaire-images"
+          variant="image"
+          maxFiles={1}
+          hint="PNG, JPEG, WebP or GIF, up to 8 MB"
+          ariaLabel="Upload questionnaire image"
+        />
+      </Labelled>
+      <Labelled label="Alt text" hint="Required — never ship a blind image.">
+        <Input
+          value={block.alt}
+          onChange={(e) => onChange({ ...block, alt: e.target.value })}
+          placeholder="What the image shows"
+        />
+      </Labelled>
+    </div>
+  );
+}
+
 function ChoiceBody({
   block,
   pageIndex,
@@ -669,6 +729,7 @@ function ChoiceBody({
 }) {
   const single = block.kind === "single_select";
   const showImages = block.display === "image_grid";
+  const blobConfigured = useBlobConfigured();
   // Branching is a single-choice-only affordance — the validator rejects a
   // `goTo` on checkboxes, so we never offer one.
   const canBranch = single;
@@ -806,19 +867,23 @@ function ChoiceBody({
               </Button>
             </div>
             {showImages ? (
-              <div className="grid gap-2 pl-1 sm:grid-cols-2">
-                <Input
-                  value={option.imageUrl ?? ""}
-                  onChange={(e) => {
+              <div className="flex flex-col gap-2 pl-1">
+                <FileUpload
+                  value={option.imageUrl ? [option.imageUrl] : []}
+                  onChange={(urls) => {
                     const next = [...block.options];
                     next[optionIndex] = {
                       ...option,
-                      imageUrl: e.target.value || undefined,
+                      imageUrl: urls[0] || undefined,
                     };
                     setOptions(next);
                   }}
-                  placeholder="Image URL"
-                  aria-label={`Option ${optionIndex + 1} image URL`}
+                  blobConfigured={blobConfigured}
+                  handleUploadUrl="/api/blob/upload"
+                  kind="questionnaire-images"
+                  variant="image"
+                  maxFiles={1}
+                  ariaLabel={`Option ${optionIndex + 1} image`}
                 />
                 <Input
                   value={option.imageAlt ?? ""}
@@ -904,6 +969,131 @@ function ChoiceBody({
           }
         />
       </div>
+    </div>
+  );
+}
+
+function GridBody({
+  block,
+  onChange,
+}: {
+  block: Extract<Question, { kind: "multi_choice_grid" | "checkbox_grid" }>;
+  onChange: (next: PageBlock) => void;
+}) {
+  const single = block.kind === "multi_choice_grid";
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {/* Rows — the labels down the left; each row keys the response map. */}
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+        <span className="text-xs font-medium text-muted-foreground">Rows</span>
+        {block.rows.map((row, rowIndex) => (
+          <div key={row.id} className="flex items-center gap-2">
+            <Input
+              value={row.label}
+              onChange={(e) => {
+                const rows = [...block.rows];
+                rows[rowIndex] = { ...row, label: e.target.value };
+                onChange({ ...block, rows });
+              }}
+              placeholder={`Row ${rowIndex + 1}`}
+              aria-label={`Row ${rowIndex + 1} label`}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove row ${rowIndex + 1}`}
+              disabled={block.rows.length <= 1}
+              onClick={() =>
+                onChange({
+                  ...block,
+                  rows: block.rows.filter((_, j) => j !== rowIndex),
+                })
+              }
+            >
+              <X aria-hidden />
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() =>
+            onChange({
+              ...block,
+              rows: [
+                ...block.rows,
+                { id: allocateRowId(block.rows), label: "" },
+              ],
+            })
+          }
+        >
+          <Plus aria-hidden />
+          Add row
+        </Button>
+      </div>
+
+      {/* Columns — shared across every row. */}
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+        <span className="text-xs font-medium text-muted-foreground">
+          Columns
+        </span>
+        {block.columns.map((column, columnIndex) => (
+          <div key={column.value} className="flex items-center gap-2">
+            <Input
+              value={column.label}
+              onChange={(e) => {
+                const columns = [...block.columns];
+                columns[columnIndex] = { ...column, label: e.target.value };
+                onChange({ ...block, columns });
+              }}
+              placeholder={`Column ${columnIndex + 1}`}
+              aria-label={`Column ${columnIndex + 1} label`}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove column ${columnIndex + 1}`}
+              disabled={block.columns.length <= 1}
+              onClick={() =>
+                onChange({
+                  ...block,
+                  columns: block.columns.filter((_, j) => j !== columnIndex),
+                })
+              }
+            >
+              <X aria-hidden />
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() =>
+            onChange({
+              ...block,
+              columns: [
+                ...block.columns,
+                { value: allocateColumnValue(block.columns), label: "" },
+              ],
+            })
+          }
+        >
+          <Plus aria-hidden />
+          Add column
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground sm:col-span-2">
+        {single
+          ? "Respondents pick one column per row."
+          : "Respondents can pick any number of columns per row."}{" "}
+        {block.required
+          ? "Every row must be answered."
+          : "Rows are optional."}
+      </p>
     </div>
   );
 }

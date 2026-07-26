@@ -19,7 +19,10 @@ export default async function NewQuestionnairePage() {
         title="Build a questionnaire"
         description="Sections, questions, validation rules and branching — then choose who receives it."
       />
-      <QuestionnaireBuilderV2 editionId={edition?.id ?? null} />
+      <QuestionnaireBuilderV2
+        editionId={edition?.id ?? null}
+        blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+      />
     </div>
   );
 }

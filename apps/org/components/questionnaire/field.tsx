@@ -191,6 +191,168 @@ function Control({
       );
     }
 
+    case "time":
+      return (
+        <Input
+          id={question.id}
+          type="time"
+          className="max-w-[10rem]"
+          value={typeof value === "string" ? value : ""}
+          aria-describedby={describedBy}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
+    case "file_link":
+      return (
+        <Input
+          id={question.id}
+          type="url"
+          inputMode="url"
+          value={typeof value === "string" ? value : ""}
+          placeholder={question.placeholder ?? "https://…"}
+          aria-describedby={describedBy}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
+    case "linear_scale": {
+      const current = typeof value === "number" ? value : null;
+      const steps: number[] = [];
+      for (let n = question.min; n <= question.max; n++) steps.push(n);
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div role="radiogroup" aria-describedby={describedBy} className="flex flex-wrap gap-2">
+            {steps.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={current === n}
+                onClick={() => onChange(n)}
+                className={cn(
+                  "h-9 w-9 rounded-full border text-sm tabular-nums transition-colors",
+                  current === n
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-input bg-background hover:bg-muted",
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {(question.minLabel || question.maxLabel) && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{question.minLabel ?? ""}</span>
+              <span>{question.maxLabel ?? ""}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case "rating": {
+      const current = typeof value === "number" ? value : 0;
+      const steps = Array.from({ length: question.steps }, (_, i) => i + 1);
+      return (
+        <div role="radiogroup" aria-describedby={describedBy} className="flex flex-wrap gap-1">
+          {steps.map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={current === n}
+              aria-label={`${n} out of ${question.steps}`}
+              onClick={() => onChange(n)}
+              className={cn(
+                "h-9 w-9 rounded-md border text-sm tabular-nums transition-colors",
+                current === n
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : "border-input bg-background hover:bg-muted",
+              )}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    case "multi_choice_grid":
+    case "checkbox_grid": {
+      const single = question.kind === "multi_choice_grid";
+      const answer: Record<string, string[]> =
+        value && typeof value === "object" && !Array.isArray(value)
+          ? (value as Record<string, string[]>)
+          : {};
+      const setCell = (rowId: string, columnValue: string) => {
+        const current = answer[rowId] ?? [];
+        const on = current.includes(columnValue);
+        const nextRow = single
+          ? on
+            ? []
+            : [columnValue]
+          : on
+            ? current.filter((v) => v !== columnValue)
+            : [...current, columnValue];
+        const next: Record<string, string[]> = { ...answer };
+        if (nextRow.length === 0) delete next[rowId];
+        else next[rowId] = nextRow;
+        onChange(next);
+      };
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm" aria-describedby={describedBy}>
+            <thead>
+              <tr>
+                <td className="p-2" />
+                {question.columns.map((column) => (
+                  <th key={column.value} scope="col" className="p-2 text-center text-xs font-medium text-muted-foreground">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {question.rows.map((row) => {
+                const picks = answer[row.id] ?? [];
+                return (
+                  <tr key={row.id} className="border-t border-border">
+                    <th scope="row" className="p-2 text-left text-sm font-normal text-foreground">
+                      {row.label}
+                    </th>
+                    {question.columns.map((column) => {
+                      const on = picks.includes(column.value);
+                      return (
+                        <td key={column.value} className="p-2 text-center">
+                          <button
+                            type="button"
+                            role={single ? "radio" : "checkbox"}
+                            aria-checked={on}
+                            aria-label={`${row.label}: ${column.label}`}
+                            onClick={() => setCell(row.id, column.value)}
+                            className={cn(
+                              "inline-flex h-6 w-6 items-center justify-center border transition-colors",
+                              single ? "rounded-full" : "rounded",
+                              on
+                                ? "border-accent bg-accent text-accent-foreground"
+                                : "border-input bg-background hover:bg-muted",
+                            )}
+                          >
+                            {on && <Check className="h-3.5 w-3.5" aria-hidden />}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
     // The console builder never emits these, but seeded definitions may — render
     // a plain text fallback so the fill view never breaks on an unknown kind.
     case "years":

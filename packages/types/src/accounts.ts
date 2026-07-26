@@ -2,14 +2,15 @@ import { z } from "zod";
 
 // Account management & security vocabularies (docs/accounts-security-spec.md).
 //
-// IMPORTANT CONTEXT — what the identity provider actually gives us. We run on
-// MANAGED Neon Auth ("Managed Better Auth", better-auth 1.4.18 under the hood).
-// Neon owns the auth tables and the server config; we cannot install Better Auth
-// server plugins (neon.com/docs/auth/guides/plugins: "You don't install or
-// configure Better Auth plugins directly"). The capability matrix below is the
-// machine-readable record of that boundary — see `AUTH_CAPABILITIES` in
+// IMPORTANT CONTEXT — what the identity provider actually gives us. We run
+// SELF-HOSTED Better Auth (@quagga/auth, better-auth 1.6.25), mounted in-process
+// in each app against our own Neon DB. Self-hosting lets us install Better Auth
+// server plugins, so the full surface — including TOTP two-factor + encrypted
+// backup codes (twoFactor plugin) and WebAuthn passkeys (@better-auth/passkey),
+// both landed in migration 0015 — is now real. The capability matrix is the
+// machine-readable record of what actually ships — see `AUTH_CAPABILITIES` in
 // @quagga/core for the authority, and `docs/accounts-security-spec.md` for the
-// narrative. Nothing in this file assumes a capability the SDK does not expose.
+// narrative. Nothing in this file assumes a capability the stack does not expose.
 //
 // Keep every enum here in sync with the matching pgEnum in @quagga/db schema.ts.
 
@@ -107,3 +108,26 @@ export const SecurityEventKind = z.enum([
   "deletion_completed",
 ]);
 export type SecurityEventKind = z.infer<typeof SecurityEventKind>;
+
+/**
+ * The typed kinds of the `security_events` LOG (distinct from the Resend
+ * `SecurityEventKind` above, which types outbound notifications). This mirrors the
+ * `security_event_kind` pgEnum in @quagga/db schema.ts — the account security
+ * page's "recent security events" feed reads real rows of these, and
+ * @quagga/core `describeSecurityEvent` turns each into a display title/detail.
+ * Every value corresponds to an event that already fires in the account actions:
+ * password change, password reset completion, single-session revoke, sign-out-
+ * everywhere, the three email-change steps, and deletion request/cancel.
+ */
+export const SecurityEventLogKind = z.enum([
+  "password_changed",
+  "password_reset_completed",
+  "session_revoked",
+  "sessions_revoked_others",
+  "email_change_requested",
+  "email_change_confirmed",
+  "email_change_revoked",
+  "deletion_requested",
+  "deletion_cancelled",
+]);
+export type SecurityEventLogKind = z.infer<typeof SecurityEventLogKind>;

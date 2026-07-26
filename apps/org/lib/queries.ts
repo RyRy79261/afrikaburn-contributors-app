@@ -285,6 +285,19 @@ async function getGroupsWithPriorRegistrations(
   return new Set(rows.map((r) => r.groupId));
 }
 
+/** One reply threaded under a section review (camp answering, or AB following up). */
+export interface SectionReviewReplyRow {
+  id: string;
+  authorUserId: string | null;
+  /** Display label: the author's Burner Bio name for this edition, "AfrikaBurn"
+   * for org staff, or "A camp member" fallback. */
+  authorName: string;
+  /** True when the author is org staff (god / org_staff). */
+  isOrg: boolean;
+  body: string;
+  createdAt: Date;
+}
+
 export interface SectionReviewRow {
   id: string;
   sectionKey: string;
@@ -292,6 +305,8 @@ export interface SectionReviewRow {
   comment: string;
   reviewerEmail: string | null;
   createdAt: Date;
+  /** The camp/AB reply conversation under this review, oldest first. */
+  replies: SectionReviewReplyRow[];
 }
 
 export interface SupplierDeclarationRow {
@@ -370,6 +385,11 @@ export async function getRegistrationDetail(
     .where(eq(schema.sectionReviews.registrationId, id))
     .orderBy(asc(schema.sectionReviews.createdAt));
 
+  const repliesByReview = await getSectionReviewReplies(
+    reviews.map((r) => r.id),
+    registration.editionId,
+  );
+
   const supplierDeclarations = await db
     .select({
       supplierId: schema.suppliers.id,
@@ -422,11 +442,100 @@ export async function getRegistrationDetail(
       comment: r.comment,
       reviewerEmail: r.reviewerEmail,
       createdAt: r.createdAt,
+      replies: repliesByReview.get(r.id) ?? [],
     })),
     supplierDeclarations,
     decidedByEmail,
     cohort: deriveCohort(group ? prior.has(group.id) : false),
   };
+}
+
+/**
+ * Load the reply threads for a set of section reviews, grouped by review id.
+ * Author labels resolve against the registration's edition; org-staff authors
+ * collapse to "AfrikaBurn" so the review team presents as one voice, mirroring
+ * the camp-side thread.
+ */
+async function getSectionReviewReplies(
+  reviewIds: string[],
+  editionId: string,
+): Promise<Map<string, SectionReviewReplyRow[]>> {
+  const byReview = new Map<string, SectionReviewReplyRow[]>();
+  if (reviewIds.length === 0) return byReview;
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.sectionReviewReplies.id,
+      reviewId: schema.sectionReviewReplies.reviewId,
+      authorUserId: schema.sectionReviewReplies.authorUserId,
+      body: schema.sectionReviewReplies.body,
+      createdAt: schema.sectionReviewReplies.createdAt,
+    })
+    .from(schema.sectionReviewReplies)
+    .where(inArray(schema.sectionReviewReplies.reviewId, reviewIds))
+    .orderBy(asc(schema.sectionReviewReplies.createdAt));
+  if (rows.length === 0) return byReview;
+
+  const authorIds = [
+    ...new Set(
+      rows.map((r) => r.authorUserId).filter((v): v is string => Boolean(v)),
+    ),
+  ];
+  const names = new Map<string, string>();
+  const orgStaff = new Set<string>();
+  if (authorIds.length > 0) {
+    const bios = await db
+      .select({
+        userId: schema.burnerBios.userId,
+        displayName: schema.burnerBios.displayName,
+      })
+      .from(schema.burnerBios)
+      .where(
+        and(
+          inArray(schema.burnerBios.userId, authorIds),
+          eq(schema.burnerBios.editionId, editionId),
+        ),
+      );
+    for (const b of bios) if (b.displayName) names.set(b.userId, b.displayName);
+
+    const [org] = await db
+      .select({ id: schema.groups.id })
+      .from(schema.groups)
+      .where(eq(schema.groups.kind, "org"))
+      .limit(1);
+    if (org) {
+      const orgMembers = await db
+        .select({ userId: schema.memberships.userId })
+        .from(schema.memberships)
+        .where(
+          and(
+            eq(schema.memberships.groupId, org.id),
+            inArray(schema.memberships.userId, authorIds),
+            inArray(schema.memberships.role, ["god", "org_staff"]),
+          ),
+        );
+      for (const m of orgMembers) orgStaff.add(m.userId);
+    }
+  }
+
+  for (const r of rows) {
+    const isOrg = r.authorUserId ? orgStaff.has(r.authorUserId) : false;
+    const authorName = isOrg
+      ? "AfrikaBurn"
+      : (r.authorUserId ? names.get(r.authorUserId) : null) ?? "A camp member";
+    const list = byReview.get(r.reviewId) ?? [];
+    list.push({
+      id: r.id,
+      authorUserId: r.authorUserId,
+      authorName,
+      isOrg,
+      body: r.body,
+      createdAt: r.createdAt,
+    });
+    byReview.set(r.reviewId, list);
+  }
+  return byReview;
 }
 
 export interface OfficerContactRow {

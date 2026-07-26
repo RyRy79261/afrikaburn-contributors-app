@@ -1,10 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { OperatingHours, PROJECT_ADMIN_ROLES } from "@quagga/types";
-import { requireCampUser } from "@/lib/session";
+import { canReplyToSectionReview } from "@quagga/core";
+import {
+  OperatingHours,
+  PROJECT_ADMIN_ROLES,
+  type MembershipRole,
+} from "@quagga/types";
+import { requireCampUser, getOrgGroup } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
 import { db, schema } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
@@ -191,6 +196,100 @@ export async function withdrawRegistrationAction(
     revalidatePath(`/camps/${slug}`);
   }
   return result;
+}
+
+const ReplyToReviewInput = z.object({
+  reviewId: z.string().uuid(),
+  body: z.string().trim().min(1, "Write a reply.").max(2000),
+});
+
+export type ReplyResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Post a camp-side (or org-side) reply under a section review (design frames: a
+ * camp answering the placement team). `section_reviews` is org-authored only, so
+ * replies live in `section_review_replies`.
+ *
+ * AUTHZ (server-side, the boundary — never the UI): the target group is resolved
+ * from the review itself (review → registration → group), then the caller's camp
+ * role and org-staff status are established and handed to @quagga/core
+ * `canReplyToSectionReview`. Only a MEMBER of the camp under review may reply, and
+ * org staff (god / org_staff) may reply too. `slug` is used only to revalidate the
+ * page — it is never trusted for authz.
+ *
+ * The reply UI itself is built by a later agent; this is the write path it calls.
+ */
+export async function replyToSectionReviewAction(
+  slug: string,
+  raw: z.input<typeof ReplyToReviewInput>,
+): Promise<ReplyResult> {
+  const parsed = ReplyToReviewInput.safeParse(raw);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0]?.message ?? "Invalid reply.";
+    return { ok: false, error: first };
+  }
+
+  const user = await requireCampUser();
+
+  // Resolve the group under review from the review row — the source of truth for
+  // authz, so a caller cannot smuggle in an unrelated slug.
+  const [target] = await db()
+    .select({ groupId: schema.registrations.groupId })
+    .from(schema.sectionReviews)
+    .innerJoin(
+      schema.registrations,
+      eq(schema.sectionReviews.registrationId, schema.registrations.id),
+    )
+    .where(eq(schema.sectionReviews.id, parsed.data.reviewId))
+    .limit(1);
+  if (!target) return { ok: false, error: "That review no longer exists." };
+
+  // The caller's membership role on the camp under review (any role may reply).
+  const [membership] = await db()
+    .select({ role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, user.id),
+        eq(schema.memberships.groupId, target.groupId),
+      ),
+    )
+    .limit(1);
+  const campRole: MembershipRole | null = membership?.role ?? null;
+
+  // Org staff (god / org_staff on the org group) may reply too.
+  let isOrgStaff = false;
+  const org = await getOrgGroup();
+  if (org) {
+    const [orgMembership] = await db()
+      .select({ role: schema.memberships.role })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.userId, user.id),
+          eq(schema.memberships.groupId, org.id),
+          inArray(schema.memberships.role, ["god", "org_staff"]),
+        ),
+      )
+      .limit(1);
+    isOrgStaff = Boolean(orgMembership);
+  }
+
+  if (!canReplyToSectionReview({ campRole, isOrgStaff })) {
+    return {
+      ok: false,
+      error: "Only members of this camp (or AfrikaBurn staff) can reply.",
+    };
+  }
+
+  await db().insert(schema.sectionReviewReplies).values({
+    reviewId: parsed.data.reviewId,
+    authorUserId: user.id,
+    body: parsed.data.body,
+  });
+
+  revalidatePath(`/camps/${slug}/registration`);
+  return { ok: true };
 }
 
 /** Fire the submission notification (Resend when configured; console otherwise). */

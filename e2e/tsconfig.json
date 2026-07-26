@@ -1,0 +1,21 @@
+{
+  "extends": "@quagga/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false
+  },
+  "include": [
+    "playwright.config.ts",
+    "fixtures.ts",
+    "lib/**/*.ts",
+    "personas/**/*.ts",
+    "tests/**/*.ts",
+    "specs/**/*.ts"
+  ],
+  "exclude": ["node_modules", "playwright-report", "test-results"]
+}

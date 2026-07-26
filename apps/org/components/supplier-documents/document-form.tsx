@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { FileUp, Link2, Info } from "lucide-react";
+import { FileUp, Link2 } from "lucide-react";
 import type {
   SupplierDocumentSourceType,
   SupplierOnboardingStepKey,
 } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
 import { Field } from "@quagga/ui/components/field";
+import { FileUpload } from "@quagga/ui/components/file-upload";
 import { Input } from "@quagga/ui/components/input";
 import {
   Select,
@@ -34,18 +35,16 @@ import { BINDABLE_STEPS, UNBOUND_VALUE, asStepKey } from "./steps";
 // document or link" card; the same body is reused inside the row edit dialog).
 //
 // ── ON "UPLOAD" ──────────────────────────────────────────────────────────────
-// The canvas drew a drag-and-drop dropzone. THIS DEPLOYMENT HAS NO BLOB
-// STORAGE, so there is nothing behind an uploader — and a control that looks
-// like it accepts a file but silently does nothing is exactly the kind of faked
-// capability the accounts-security spec forbids. So the `file` source is what
-// it honestly is: the URL of an already-hosted file, plus a plain statement
-// that in-app upload isn't available yet.
+// The `file` source is a real drag-and-drop uploader (shared @quagga/ui
+// FileUpload → Vercel Blob client upload) when the deployment has
+// BLOB_READ_WRITE_TOKEN; otherwise it degrades honestly to the URL-paste
+// fallback with a plain note (the accounts-security spec forbids a control that
+// looks like it accepts a file but silently does nothing).
 //
 // `file` vs `link` is still a real distinction and is stored: `url` holds the
-// address either way, and the source type is what makes the supplier portal
-// label the action "Download" rather than "Open" (see @quagga/types
-// `SupplierDocumentSourceType`). When blob storage is provisioned, this branch
-// gains a real uploader that writes the resulting blob URL into the same field.
+// address either way (the uploaded blob URL or a hosted URL), and the source
+// type is what makes the supplier portal label the action "Download" rather
+// than "Open" (see @quagga/types `SupplierDocumentSourceType`).
 
 export interface DocumentFormValues {
   title: string;
@@ -68,6 +67,7 @@ export function DocumentForm({
   editionId,
   documentId,
   initial,
+  blobConfigured = false,
   onDone,
   onCancel,
 }: {
@@ -77,6 +77,8 @@ export function DocumentForm({
   /** Required when editing. */
   documentId?: string;
   initial?: DocumentFormValues;
+  /** Deployment has BLOB_READ_WRITE_TOKEN → show the real uploader. */
+  blobConfigured?: boolean;
   onDone?: () => void;
   onCancel?: () => void;
 }) {
@@ -193,42 +195,49 @@ export function DocumentForm({
         </ToggleGroup>
 
         {values.sourceType === "file" ? (
-          <p className="flex items-start gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>
-              Uploading files from the console isn&apos;t available yet — this
-              deployment has no blob storage. Host the PDF where AfrikaBurn
-              already keeps its documents and paste its address below; suppliers
-              get a <strong className="font-medium">Download</strong> action for
-              it.
-            </span>
-          </p>
-        ) : null}
-
-        <Field
-          label={
-            values.sourceType === "file" ? "File address" : "Link address"
-          }
-          htmlFor="doc-url"
-          required
-          help="Must be a full URL, including https://"
-        >
-          <Input
-            id="doc-url"
-            type="url"
-            inputMode="url"
-            value={values.url}
-            onChange={(e) => set("url", e.target.value)}
-            placeholder={
-              values.sourceType === "file"
-                ? "https://www.afrikaburn.org/…/supplier-agreement-2027.pdf"
-                : "https://quaggapedia.afrikaburn.com/…"
-            }
-            disabled={pending}
-            maxLength={2048}
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium leading-none text-foreground">
+              Hosted file
+            </p>
+            <FileUpload
+              value={values.url ? [values.url] : []}
+              onChange={(urls) => set("url", urls[0] ?? "")}
+              blobConfigured={blobConfigured}
+              handleUploadUrl="/api/blob/upload"
+              kind="supplier-documents"
+              variant="file"
+              maxFiles={1}
+              maxSizeBytes={25 * 1024 * 1024}
+              hint="PDF, image, or document — up to 25 MB"
+              urlPlaceholder="https://www.afrikaburn.org/…/supplier-agreement-2027.pdf"
+              disabled={pending}
+              ariaLabel="Upload a document"
+            />
+            <p className="text-xs text-muted-foreground">
+              Suppliers get a{" "}
+              <strong className="font-medium">Download</strong> action for it.
+            </p>
+          </div>
+        ) : (
+          <Field
+            label="Link address"
+            htmlFor="doc-url"
             required
-          />
-        </Field>
+            help="Must be a full URL, including https://"
+          >
+            <Input
+              id="doc-url"
+              type="url"
+              inputMode="url"
+              value={values.url}
+              onChange={(e) => set("url", e.target.value)}
+              placeholder="https://quaggapedia.afrikaburn.com/…"
+              disabled={pending}
+              maxLength={2048}
+              required
+            />
+          </Field>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import type { Database } from "@quagga/db";
 import {
   groupNotificationsByDay,
   type DayGroup,
@@ -9,7 +8,7 @@ import {
 } from "@quagga/core";
 import type { NotificationFilter, NotificationKind } from "@quagga/types";
 
-import { getDb, schema } from "./db";
+import { getDb, schema, type DbHandle } from "./db";
 import { isDatabaseConfigured } from "./config";
 import { resolveOrgSession } from "./session";
 
@@ -109,7 +108,7 @@ export async function recentNotifications(
  * the @quagga/core payload builders (never carry hard-locked private fields).
  */
 export async function insertNotifications(
-  handle: Database,
+  handle: DbHandle,
   rows: readonly NotificationRow[],
 ): Promise<void> {
   if (rows.length === 0) return;

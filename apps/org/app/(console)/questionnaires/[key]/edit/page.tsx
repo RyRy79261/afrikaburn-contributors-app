@@ -45,6 +45,7 @@ export default async function EditQuestionnairePage({
       <QuestionnaireBuilderV2
         initial={initial}
         editionId={edition?.id ?? null}
+        blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
       />
     </div>
   );

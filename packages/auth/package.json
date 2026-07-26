@@ -19,12 +19,14 @@
     "@quagga/core": "workspace:*",
     "@quagga/db": "workspace:*",
     "@quagga/types": "workspace:*",
+    "@better-auth/passkey": "1.6.25",
     "better-auth": "1.6.25",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",
+    "@simplewebauthn/server": "^13.3.2",
     "@types/node": "^25.9.1",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",

@@ -21,6 +21,7 @@ import type {
   CampSectionReview,
   RegistrationRow,
 } from "@/lib/registration-store";
+import { SectionReplyThread } from "./section-reply-thread";
 
 // Read-only post-submission view (build-spec §apps/web): status banner +
 // read-only sections + per-section AB feedback threads. The resubmit loop lives
@@ -148,12 +149,18 @@ export function RegistrationSummary({
   description,
   supplierNames,
   reviews,
+  slug,
+  viewerUserId,
 }: {
   registration: RegistrationRow;
   campName: string;
   description: string | null;
   supplierNames: string[];
   reviews: CampSectionReview[];
+  /** Camp slug — for the reply action (never trusted for authz server-side). */
+  slug: string;
+  /** The viewer's db user id — labels their own replies "You". */
+  viewerUserId: string | null;
 }) {
   const r = registration;
   const banner = STATUS_BANNER[r.status];
@@ -285,7 +292,7 @@ export function RegistrationSummary({
               </div>
 
               {secReviews.length > 0 && (
-                <div className="flex flex-col gap-3 border-t border-border px-4 py-4">
+                <div className="flex flex-col gap-4 border-t border-border px-4 py-4">
                   {secReviews.map((rev) => (
                     <div key={rev.id} className="flex gap-3">
                       <span
@@ -307,6 +314,12 @@ export function RegistrationSummary({
                         <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
                           {rev.comment}
                         </p>
+                        <SectionReplyThread
+                          slug={slug}
+                          reviewId={rev.id}
+                          replies={rev.replies}
+                          viewerUserId={viewerUserId}
+                        />
                       </div>
                     </div>
                   ))}

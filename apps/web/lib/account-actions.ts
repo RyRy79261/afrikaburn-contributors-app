@@ -35,9 +35,10 @@ import {
   EMAIL_CHANGE_REVOCATION_HOURS,
   type NotificationPayload,
 } from "@quagga/core";
+import type { SecurityEventLogKind } from "@quagga/types";
 
 import { auth } from "@quagga/auth";
-import { db, schema } from "@/lib/db";
+import { db, schema, withTransaction } from "@/lib/db";
 import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
@@ -62,6 +63,16 @@ export type AccountActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string };
 
+/** Postgres unique-violation SQLSTATE, surfaced by the Neon driver as `.code`. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "23505"
+  );
+}
+
 async function run(
   fn: () => Promise<{ message?: string } | void>,
 ): Promise<AccountActionResult> {
@@ -74,6 +85,28 @@ async function run(
       error:
         err instanceof Error ? err.message : "Something went wrong. Try again.",
     };
+  }
+}
+
+/**
+ * Best-effort append to the `security_events` log (docs/accounts-security-spec.md
+ * §"recent security events"). THIN: it records the request context (IP + user
+ * agent) at the moment an account action succeeds. It must NEVER break or roll
+ * back the primary action — a failed insert, or a missing request context, is
+ * swallowed. Feeds the account security page's "recent security events" card.
+ */
+async function recordSecurityEvent(
+  userId: string,
+  kind: SecurityEventLogKind,
+): Promise<void> {
+  try {
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const ip = forwarded || h.get("x-real-ip") || null;
+    const userAgent = h.get("user-agent") || null;
+    await db().insert(schema.securityEvents).values({ userId, kind, ip, userAgent });
+  } catch {
+    // The change already happened; the log is a record, never a gate.
   }
 }
 
@@ -154,6 +187,7 @@ export async function changePassword(
       passwordChangedNotification(),
       passwordChangedEmail({ when: new Date() }),
     );
+    await recordSecurityEvent(user.id, "password_changed");
 
     revalidatePath("/account/security");
     return { message: "Password changed." };
@@ -258,6 +292,7 @@ export async function notifyPasswordResetCompleted(): Promise<AccountActionResul
       passwordResetCompletedNotification(),
       passwordResetCompletedEmail({ when: new Date() }),
     );
+    await recordSecurityEvent(user.id, "password_reset_completed");
   });
 }
 
@@ -270,7 +305,7 @@ export async function revokeSession(
   raw: z.input<typeof RevokeSessionInput>,
 ): Promise<AccountActionResult> {
   return run(async () => {
-    await requireCampUser();
+    const user = await requireCampUser();
     const input = RevokeSessionInput.parse(raw);
     if (!isAuthConfigured()) throw new Error("Sign-in isn't configured yet.");
 
@@ -285,6 +320,8 @@ export async function revokeSession(
       throw new Error("That session couldn't be ended. Try again.");
     }
 
+    await recordSecurityEvent(user.id, "session_revoked");
+
     revalidatePath("/account/security");
     return { message: "Session ended." };
   });
@@ -297,13 +334,14 @@ export async function revokeSession(
  */
 export async function revokeOtherSessions(): Promise<AccountActionResult> {
   return run(async () => {
-    await requireCampUser();
+    const user = await requireCampUser();
     if (!isAuthConfigured()) throw new Error("Sign-in isn't configured yet.");
     try {
       await auth.api.revokeOtherSessions({ headers: await headers() });
     } catch {
       throw new Error("Those sessions couldn't be ended. Try again.");
     }
+    await recordSecurityEvent(user.id, "sessions_revoked_others");
     revalidatePath("/account/security");
     return { message: "Every other device has been signed out." };
   });
@@ -350,31 +388,34 @@ export async function requestEmailChange(
     }
 
     const now = new Date();
-    const handle = db();
-
-    // Supersede any request still awaiting confirmation — the partial unique
-    // index allows exactly one `pending` row per user.
-    await handle
-      .update(schema.emailChangeRequests)
-      .set({ status: "cancelled", updatedAt: now })
-      .where(
-        and(
-          eq(schema.emailChangeRequests.userId, user.id),
-          eq(schema.emailChangeRequests.status, "pending"),
-        ),
-      );
 
     const confirmToken = newToken();
     const revokeToken = newToken();
 
-    await handle.insert(schema.emailChangeRequests).values({
-      userId: user.id,
-      currentEmail,
-      newEmail: input.newEmail,
-      status: "pending",
-      confirmTokenHash: hashToken(confirmToken),
-      revokeTokenHash: hashToken(revokeToken),
-      expiresAt: emailChangeExpiresAt(now),
+    // Superseding the old pending request and creating the new one are ONE
+    // transaction: the partial unique index allows exactly one `pending` row per
+    // user, so a non-atomic pair could either leave the user with no request (old
+    // cancelled, new insert failed) or collide with itself. Commit both together.
+    await withTransaction(async (tx) => {
+      await tx
+        .update(schema.emailChangeRequests)
+        .set({ status: "cancelled", updatedAt: now })
+        .where(
+          and(
+            eq(schema.emailChangeRequests.userId, user.id),
+            eq(schema.emailChangeRequests.status, "pending"),
+          ),
+        );
+
+      await tx.insert(schema.emailChangeRequests).values({
+        userId: user.id,
+        currentEmail,
+        newEmail: input.newEmail,
+        status: "pending",
+        confirmTokenHash: hashToken(confirmToken),
+        revokeTokenHash: hashToken(revokeToken),
+        expiresAt: emailChangeExpiresAt(now),
+      });
     });
 
     const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
@@ -401,6 +442,7 @@ export async function requestEmailChange(
       }),
       notifyOld,
     );
+    await recordSecurityEvent(user.id, "email_change_requested");
 
     revalidatePath("/account");
     return { message: enumerationSafeMessage("email_change_request") };
@@ -469,39 +511,51 @@ export async function confirmEmailChange(
       throw new Error(capability.message);
     }
 
-    // Apply the address at the identity layer FIRST — if it fails (e.g. the new
-    // address is already taken by another identity), the request is NOT marked
-    // confirmed and nothing is announced. Only a real identity update proceeds to
-    // stamp `providerCommittedAt`, which is what `isEmailChangeEffective` reads.
+    // Apply the address at the identity layer, mark the request confirmed, and
+    // sync our own users.email row — as ONE transaction. If the identity update
+    // fails (e.g. the new address is already taken by another identity), the
+    // whole change rolls back: the request is NOT marked confirmed, `users.email`
+    // is untouched, and nothing is announced. Only a real, committed identity
+    // update stamps `providerCommittedAt`, which is what `isEmailChangeEffective`
+    // reads — so the tombstone can never claim a change that didn't land.
     const confirmedAt = now;
     try {
-      await db()
-        .update(schema.user)
-        .set({ email: request.newEmail, emailVerified: true, updatedAt: now })
-        .where(eq(schema.user.id, user.authUserId));
-    } catch {
-      throw new Error(
-        "That address can't be used — it may already be linked to another account.",
-      );
+      await withTransaction(async (tx) => {
+        await tx
+          .update(schema.user)
+          .set({ email: request.newEmail, emailVerified: true, updatedAt: now })
+          .where(eq(schema.user.id, user.authUserId));
+
+        await tx
+          .update(schema.emailChangeRequests)
+          .set({
+            status: "confirmed",
+            confirmedAt,
+            revocableUntil: emailChangeRevocableUntil(confirmedAt),
+            providerCommittedAt: confirmedAt,
+            updatedAt: now,
+          })
+          .where(eq(schema.emailChangeRequests.id, request.id));
+
+        // Keep our own users.email row in step immediately (the session resolver
+        // also syncs it on next sign-in, but /account should reflect it now).
+        await tx
+          .update(schema.users)
+          .set({ email: request.newEmail })
+          .where(eq(schema.users.id, user.id));
+      });
+    } catch (err) {
+      // A unique violation on either identity row means the address is taken.
+      if (isUniqueViolation(err)) {
+        throw new Error(
+          "That address can't be used — it may already be linked to another account.",
+          { cause: err },
+        );
+      }
+      throw err;
     }
 
-    await db()
-      .update(schema.emailChangeRequests)
-      .set({
-        status: "confirmed",
-        confirmedAt,
-        revocableUntil: emailChangeRevocableUntil(confirmedAt),
-        providerCommittedAt: confirmedAt,
-        updatedAt: now,
-      })
-      .where(eq(schema.emailChangeRequests.id, request.id));
-
-    // Keep our own users.email row in step immediately (the session resolver also
-    // syncs it on next sign-in, but /account should reflect the change now).
-    await db()
-      .update(schema.users)
-      .set({ email: request.newEmail })
-      .where(eq(schema.users.id, user.id));
+    await recordSecurityEvent(user.id, "email_change_confirmed");
 
     revalidatePath("/account");
     return { message: "Your sign-in email has been updated." };
@@ -561,6 +615,7 @@ export async function revokeEmailChange(
       emailChangeRevokedNotification(),
       emailChangeRevokedEmail(),
     );
+    await recordSecurityEvent(request.userId, "email_change_revoked");
 
     revalidatePath("/account");
     return {
@@ -642,19 +697,24 @@ export async function requestAccountDeletion(
     const now = new Date();
     const graceEndsAt = deletionGraceEndsAt(now);
 
-    await db().insert(schema.accountDeletionRequests).values({
-      userId: user.id,
-      status: "pending",
-      requestedAt: now,
-      graceEndsAt,
-      requestedFromApp: "web",
-    });
+    // The deletion request and its audit record commit together: a scheduled
+    // deletion must never exist without the audit trail that proves who asked and
+    // when, and an audit line must never claim a request that didn't persist.
+    await withTransaction(async (tx) => {
+      await tx.insert(schema.accountDeletionRequests).values({
+        userId: user.id,
+        status: "pending",
+        requestedAt: now,
+        graceEndsAt,
+        requestedFromApp: "web",
+      });
 
-    await db().insert(schema.auditEvents).values({
-      actorId: user.id,
-      action: "account.deletion_requested",
-      subject: user.id,
-      meta: { graceEndsAt: graceEndsAt.toISOString(), app: "web" },
+      await tx.insert(schema.auditEvents).values({
+        actorId: user.id,
+        action: "account.deletion_requested",
+        subject: user.id,
+        meta: { graceEndsAt: graceEndsAt.toISOString(), app: "web" },
+      });
     });
 
     await notifySecurity(
@@ -666,6 +726,7 @@ export async function requestAccountDeletion(
         graceEndsAt,
       }),
     );
+    await recordSecurityEvent(user.id, "deletion_requested");
 
     revalidatePath("/account/delete");
     return {
@@ -706,21 +767,25 @@ export async function cancelDeletionOnSignInFor(
   const request = await getDeletionRequest(userId);
   if (!request || !canCancelDeletion(request, now)) return false;
 
-  await db()
-    .update(schema.accountDeletionRequests)
-    .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(schema.accountDeletionRequests.id, request.id),
-        eq(schema.accountDeletionRequests.status, "pending"),
-      ),
-    );
+  // Cancel + audit atomically — same reasoning as the request path: the state
+  // change and the record of it must land together.
+  await withTransaction(async (tx) => {
+    await tx
+      .update(schema.accountDeletionRequests)
+      .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(schema.accountDeletionRequests.id, request.id),
+          eq(schema.accountDeletionRequests.status, "pending"),
+        ),
+      );
 
-  await db().insert(schema.auditEvents).values({
-    actorId: userId,
-    action: "account.deletion_cancelled",
-    subject: userId,
-    meta: { via: "sign_in" },
+    await tx.insert(schema.auditEvents).values({
+      actorId: userId,
+      action: "account.deletion_cancelled",
+      subject: userId,
+      meta: { via: "sign_in" },
+    });
   });
 
   await notifySecurity(
@@ -729,5 +794,6 @@ export async function cancelDeletionOnSignInFor(
     deletionCancelledNotification(),
     deletionCancelledEmail(),
   );
+  await recordSecurityEvent(userId, "deletion_cancelled");
   return true;
 }

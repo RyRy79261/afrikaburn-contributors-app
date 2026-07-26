@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, Heart, Link2, Star } from "lucide-react";
+import { Check, Heart, Star } from "lucide-react";
 import {
   attendedYearOptions,
   isOtherAnswer,
@@ -11,6 +11,7 @@ import {
   type QuestionOption,
   type QuestionnaireResponseValue,
 } from "@quagga/types";
+import { FileUpload } from "@quagga/ui/components/file-upload";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
 import { PhoneInput } from "@quagga/ui/components/phone-input";
@@ -35,6 +36,9 @@ interface FieldProps {
   /** Presentation-ordered options (from `presentationOptions` — seeded shuffle).
    * Falls back to the definition's own order. */
   options?: readonly QuestionOption[];
+  /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
+   *  uploader instead of only the URL-paste field. */
+  blobConfigured?: boolean;
 }
 
 /** Sentinel for the "Other…" choice in a dropdown (never a stored value — the
@@ -50,6 +54,7 @@ export function QuestionField({
   error,
   onChange,
   options,
+  blobConfigured = false,
 }: FieldProps) {
   const describedBy = error
     ? `${question.id}-error`
@@ -79,6 +84,7 @@ export function QuestionField({
         onChange={onChange}
         options={options}
         describedBy={describedBy}
+        blobConfigured={blobConfigured}
       />
 
       {error && (
@@ -96,6 +102,7 @@ function Control({
   onChange,
   options,
   describedBy,
+  blobConfigured = false,
 }: FieldProps & { describedBy?: string }) {
   switch (question.kind) {
     case "short_text":
@@ -158,38 +165,26 @@ function Control({
         />
       );
 
-    // Builder v2: "file upload" as a LINK — no blob infrastructure yet, so the
-    // respondent pastes a URL to a file they host.
+    // Builder v2 "file upload": a real Blob uploader when the deployment has
+    // BLOB_READ_WRITE_TOKEN; otherwise the respondent pastes a URL to a file
+    // they host. The stored value is a URL either way.
     case "file_link": {
       const url = typeof value === "string" ? value : "";
       return (
         <div className="flex flex-col gap-1.5">
-          <div className="relative">
-            <Link2
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              id={question.id}
-              type="url"
-              inputMode="url"
-              className="pl-9"
-              value={url}
-              placeholder={question.placeholder ?? "https://…"}
-              aria-describedby={describedBy}
-              onChange={(e) => onChange(e.target.value)}
-            />
-          </div>
-          {/^https?:\/\//i.test(url.trim()) && (
-            <a
-              href={url.trim()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-fit text-xs text-primary underline-offset-2 hover:underline"
-            >
-              Open the link to check it
-            </a>
-          )}
+          <FileUpload
+            value={url ? [url] : []}
+            onChange={(urls) => onChange(urls[0] ?? "")}
+            blobConfigured={blobConfigured}
+            handleUploadUrl="/api/blob/upload"
+            kind="questionnaire-files"
+            variant="file"
+            maxFiles={1}
+            maxSizeBytes={25 * 1024 * 1024}
+            hint="PDF, image, or document — up to 25 MB"
+            urlPlaceholder={question.placeholder ?? "https://…"}
+            ariaLabel="Upload your file"
+          />
         </div>
       );
     }
@@ -562,6 +557,17 @@ function Control({
       );
     }
 
+    case "multi_choice_grid":
+    case "checkbox_grid":
+      return (
+        <GridControl
+          question={question}
+          value={value}
+          onChange={onChange}
+          describedBy={describedBy}
+        />
+      );
+
     case "years": {
       const selected = Array.isArray(value) ? value.map((v) => String(v)) : [];
       return (
@@ -597,6 +603,105 @@ function Control({
       );
     }
   }
+}
+
+/** Grid question control — rows down the side, shared columns across. A
+ * multiple-choice grid takes one column per row (radio); a checkbox grid takes
+ * any number (checkbox). The value is a `{ [rowId]: columnValue[] }` map. */
+function GridControl({
+  question,
+  value,
+  onChange,
+  describedBy,
+}: {
+  question: Extract<Question, { kind: "multi_choice_grid" | "checkbox_grid" }>;
+  value: QuestionnaireResponseValue | undefined;
+  onChange: (value: QuestionnaireResponseValue) => void;
+  describedBy?: string;
+}) {
+  const single = question.kind === "multi_choice_grid";
+  const answer: Record<string, string[]> =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, string[]>)
+      : {};
+
+  function setCell(rowId: string, columnValue: string) {
+    const current = answer[rowId] ?? [];
+    const on = current.includes(columnValue);
+    const nextRow = single
+      ? on
+        ? [] // clicking the chosen column again clears the row
+        : [columnValue]
+      : on
+        ? current.filter((v) => v !== columnValue)
+        : [...current, columnValue];
+    const next: Record<string, string[]> = { ...answer };
+    if (nextRow.length === 0) delete next[rowId];
+    else next[rowId] = nextRow;
+    onChange(next);
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table
+        className="w-full border-collapse text-sm"
+        aria-describedby={describedBy}
+      >
+        <thead>
+          <tr>
+            <td className="p-2" />
+            {question.columns.map((column) => (
+              <th
+                key={column.value}
+                scope="col"
+                className="p-2 text-center text-xs font-medium text-muted-foreground"
+              >
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {question.rows.map((row) => {
+            const picks = answer[row.id] ?? [];
+            return (
+              <tr key={row.id} className="border-t border-border">
+                <th
+                  scope="row"
+                  className="p-2 text-left text-sm font-normal text-foreground"
+                >
+                  {row.label}
+                </th>
+                {question.columns.map((column) => {
+                  const on = picks.includes(column.value);
+                  return (
+                    <td key={column.value} className="p-2 text-center">
+                      <button
+                        type="button"
+                        role={single ? "radio" : "checkbox"}
+                        aria-checked={on}
+                        aria-label={`${row.label}: ${column.label}`}
+                        onClick={() => setCell(row.id, column.value)}
+                        className={cn(
+                          "inline-flex h-6 w-6 items-center justify-center border transition-colors",
+                          single ? "rounded-full" : "rounded",
+                          on
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background hover:bg-muted",
+                        )}
+                      >
+                        {on && <Check className="h-3.5 w-3.5" aria-hidden />}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 /** The `<input type>` for a short-text question, following its format preset. */

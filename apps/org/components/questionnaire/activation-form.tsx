@@ -73,7 +73,12 @@ export function ActivationForm({
   const [pending, startTransition] = React.useTransition();
 
   const [mode, setMode] = React.useState<AudienceMode>(
-    initialAudience && initialAudience.kind !== "project"
+    // Questionnaires target the three org modes only — never `project` or the
+    // bulletin-only `org_suppliers` audience.
+    initialAudience &&
+      (initialAudience.kind === "org_internal" ||
+        initialAudience.kind === "org_outbound" ||
+        initialAudience.kind === "org_officer")
       ? initialAudience.kind
       : "org_outbound",
   );

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   activationRequiredActionKey,
@@ -71,6 +71,8 @@ export function audienceLabel(spec: AudienceSpec | null): string {
       return spec.officerKeys
         .map((k) => OFFICER_AUDIENCE_LABELS[k] ?? k)
         .join(", ");
+    case "org_suppliers":
+      return "Suppliers";
     case "project":
       return "Project members";
   }
@@ -365,8 +367,15 @@ export async function buildAudienceContext(
 ): Promise<AudienceContext> {
   const db = getDb();
 
-  const [memberships, groups, registrations, bios, roleAssignments, projectRoles] =
-    await Promise.all([
+  const [
+    memberships,
+    groups,
+    registrations,
+    bios,
+    roleAssignments,
+    projectRoles,
+    suppliers,
+  ] = await Promise.all([
       db
         .select({
           membershipId: schema.memberships.id,
@@ -409,6 +418,13 @@ export async function buildAudienceContext(
           officerKey: schema.projectRoles.officerKey,
         })
         .from(schema.projectRoles),
+      // Suppliers with a claimed portal account — the `org_suppliers` audience.
+      // Accountless catalog rows (`user_id` null) have nobody to notify, so the
+      // NOT NULL filter is the whole audience definition.
+      db
+        .select({ userId: schema.suppliers.userId })
+        .from(schema.suppliers)
+        .where(isNotNull(schema.suppliers.userId)),
     ]);
 
   return {
@@ -425,6 +441,8 @@ export async function buildAudienceContext(
       kind: r.kind,
       officerKey: (r.officerKey as OfficerKey | null) ?? null,
     })),
+    // The NOT NULL filter guarantees userId is present; assert it for the type.
+    suppliers: suppliers.map((s) => ({ userId: s.userId as string })),
   };
 }
 

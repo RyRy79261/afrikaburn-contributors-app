@@ -46,6 +46,10 @@ function audienceChipLabel(spec: AudienceSpec | null): string | null {
         .join(", ");
     case "project":
       return "Your camp";
+    case "org_suppliers":
+      // Supplier broadcasts never reach a burner's bulletin page (they target
+      // supplier accounts), but the label keeps the switch exhaustive.
+      return "Suppliers";
     case "org_internal":
       return null;
   }

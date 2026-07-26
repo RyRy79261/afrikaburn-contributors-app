@@ -20,59 +20,106 @@ import { isDatabaseConfigured } from "@/lib/config";
 // failing closed here costs nothing (nothing is erased until someone configures
 // it). This keeps the env-less boot rule intact — the route exists, responds, and
 // declines.
+//
+// HOW IT IS TRIGGERED. A Vercel Cron entry (apps/web/vercel.json) hits this path
+// daily. Vercel Cron can only issue GET requests and authenticates them by
+// injecting `Authorization: Bearer $CRON_SECRET` (only when CRON_SECRET is set).
+// So a GET that carries a bearer matching CRON_SECRET *or* ACCOUNT_SWEEP_SECRET
+// runs the sweep; every other GET stays status-only and erases nothing. POST is
+// unchanged (operator/manual trigger with the ACCOUNT_SWEEP_SECRET bearer). The
+// refusal behaviour is intact end-to-end: no configured secret ⇒ no sweep, and an
+// unauthenticated caller (GET or POST) never erases anything.
 
 export const dynamic = "force-dynamic";
 
-function authorised(request: NextRequest): boolean {
-  const secret = process.env.ACCOUNT_SWEEP_SECRET;
-  if (!secret) return false;
+/** The presented `Authorization: Bearer …` token, or "". */
+function presentedToken(request: NextRequest): string {
   const header = request.headers.get("authorization") ?? "";
-  const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
+  return header.startsWith("Bearer ") ? header.slice(7) : "";
+}
+
+/** Timing-safe equality of the presented token against a configured secret. */
+function tokenMatches(presented: string, secret: string | undefined): boolean {
+  if (!secret) return false;
   const a = Buffer.from(presented);
   const b = Buffer.from(secret);
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  if (!process.env.ACCOUNT_SWEEP_SECRET) {
-    return NextResponse.json(
-      {
-        ok: false,
-        job: "account.deletion_sweep",
-        status: "disabled",
-        message:
-          "ACCOUNT_SWEEP_SECRET is not set. The sweeper refuses to run unauthenticated — nothing was erased.",
-      },
-      { status: 503 },
-    );
-  }
-  if (!authorised(request)) {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
-  }
+/** Authorised to run the sweep (manual POST or Vercel cron GET). Accepts the
+ * ACCOUNT_SWEEP_SECRET bearer, and — for cron — the CRON_SECRET bearer Vercel
+ * injects. Either way ACCOUNT_SWEEP_SECRET must be configured (checked before). */
+function authorisedToSweep(request: NextRequest): boolean {
+  const presented = presentedToken(request);
+  return (
+    tokenMatches(presented, process.env.ACCOUNT_SWEEP_SECRET) ||
+    tokenMatches(presented, process.env.CRON_SECRET)
+  );
+}
+
+/** Run the sweep and shape the response (shared by POST and cron GET). */
+async function runSweep(): Promise<NextResponse> {
   if (!isDatabaseConfigured()) {
     return NextResponse.json(
       { ok: false, job: "account.deletion_sweep", status: "no_database" },
       { status: 503 },
     );
   }
-
   const results = await sweepDueDeletions();
   return NextResponse.json({
     ok: true,
     job: "account.deletion_sweep",
     processed: results.length,
     sanitized: results.filter((r) => r.ok).length,
-    failed: results.filter((r) => !r.ok).map((r) => ({ userId: r.userId, error: r.error })),
+    failed: results
+      .filter((r) => !r.ok)
+      .map((r) => ({ userId: r.userId, error: r.error })),
   });
 }
 
-/** GET reports status only — it never erases anything. */
-export function GET(): NextResponse {
+const DISABLED_RESPONSE = {
+  ok: false,
+  job: "account.deletion_sweep",
+  status: "disabled",
+  message:
+    "ACCOUNT_SWEEP_SECRET is not set. The sweeper refuses to run unauthenticated — nothing was erased.",
+} as const;
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!process.env.ACCOUNT_SWEEP_SECRET) {
+    return NextResponse.json(DISABLED_RESPONSE, { status: 503 });
+  }
+  if (!authorisedToSweep(request)) {
+    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  }
+  return runSweep();
+}
+
+/**
+ * GET is the Vercel Cron entry point. A GET carrying a valid cron bearer
+ * (CRON_SECRET, or ACCOUNT_SWEEP_SECRET) runs the sweep exactly like POST; any
+ * other GET reports status only and never erases anything. When
+ * ACCOUNT_SWEEP_SECRET is unset the sweeper stays disabled regardless.
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  if (!process.env.ACCOUNT_SWEEP_SECRET) {
+    // Never sweep without the secret; report the disabled status truthfully.
+    return NextResponse.json({
+      ok: true,
+      job: "account.deletion_sweep",
+      enabled: false,
+      method: "POST with `Authorization: Bearer $ACCOUNT_SWEEP_SECRET`",
+    });
+  }
+  if (authorisedToSweep(request)) {
+    return runSweep();
+  }
+  // Unauthenticated status probe — enabled, but nothing is erased.
   return NextResponse.json({
     ok: true,
     job: "account.deletion_sweep",
-    enabled: Boolean(process.env.ACCOUNT_SWEEP_SECRET),
+    enabled: true,
     method: "POST with `Authorization: Bearer $ACCOUNT_SWEEP_SECRET`",
   });
 }

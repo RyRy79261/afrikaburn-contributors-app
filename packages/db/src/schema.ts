@@ -186,6 +186,24 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "waived",
 ]);
 
+// Security events (docs/accounts-security-spec.md §"recent security events").
+// The account security page's feed reads a real append-only log of what happened
+// to the account, rather than deriving it from `notifications`. Kinds mirror the
+// SecurityEventLogKind Zod enum in @quagga/types accounts.ts and the label map in
+// @quagga/core (`describeSecurityEvent`). Each value corresponds to an event that
+// ALREADY fires in the account actions.
+export const securityEventKindEnum = pgEnum("security_event_kind", [
+  "password_changed",
+  "password_reset_completed",
+  "session_revoked",
+  "sessions_revoked_others",
+  "email_change_requested",
+  "email_change_confirmed",
+  "email_change_revoked",
+  "deletion_requested",
+  "deletion_cancelled",
+]);
+
 // Notifications & bulletins (docs/notifications-spec.md, build-spec §Notifications).
 // One inbox, two origins: personal event notifications + org `bulletin`
 // broadcasts. Kinds mirror the NotificationKind Zod enum in @quagga/types and
@@ -304,6 +322,11 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  // Added by the Better Auth `twoFactor` plugin (migration 0015). Flipped true
+  // once a user has verified a TOTP enrolment; drives the sign-in second-factor
+  // challenge. This is a lean flag on the identity — the secret and backup codes
+  // live in the separate `two_factor` table (never returned to the client).
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" })
     .notNull()
@@ -393,6 +416,72 @@ export const rateLimit = pgTable("rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+// --- Two-factor authentication (TOTP + backup codes) ---------------------
+// Owned by the Better Auth `twoFactor` plugin (better-auth/plugins/two-factor),
+// wired in @quagga/auth (migration 0015). One row per user who has STARTED 2FA
+// enrolment; `user.twoFactorEnabled` is the "actually on" flag flipped after the
+// first TOTP verify. THE SECRET AND BACKUP CODES ARE STORED ENCRYPTED
+// (backupCodeOptions.storeBackupCodes:'encrypted' + Better Auth's own secret
+// encryption) — never plaintext, which for POPIA-hard-locked accounts would be a
+// security failure. Both columns are `returned:false` at the plugin layer, so
+// they never leave the server. `failedVerificationCount` + `lockedUntil` back the
+// plugin's account-level lockout on the /two-factor/* verify endpoints.
+//
+// The JS property keys are the Better Auth FIELD names (camelCase) the drizzle
+// adapter reads by key; the SQL column names are snake_case, matching how the
+// core `user`/`session` tables above are declared.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count")
+      .notNull()
+      .default(0),
+    lockedUntil: timestamp("locked_until", { mode: "date" }),
+  },
+  (t) => ({
+    userIdx: index("two_factor_user_id_idx").on(t.userId),
+    secretIdx: index("two_factor_secret_idx").on(t.secret),
+  }),
+);
+
+// --- Passkeys (WebAuthn) --------------------------------------------------
+// Owned by the @better-auth/passkey plugin, wired in @quagga/auth (migration
+// 0015). One row per registered credential. `rpID` is scoped to the apex
+// (quagga.ryanjnoble.dev) in @quagga/auth so a single passkey works across app.,
+// org. and suppliers. subdomains. Passkeys are ADDITIVE — an accelerator on top
+// of password/Google, never the only way in — so losing one is never a lockout
+// (recovery: password or 2FA backup code). `counter` is the WebAuthn signature
+// counter (clone-detection); `credentialID` is the credential handle.
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
+    aaguid: text("aaguid"),
+  },
+  (t) => ({
+    userIdx: index("passkey_user_id_idx").on(t.userId),
+    credentialIdx: index("passkey_credential_id_idx").on(t.credentialID),
+  }),
+);
+
 // --- Editions ------------------------------------------------------------
 // Years are the root namespace. Bios and registrations hang off an edition.
 // Seed: AfrikaBurn 2027 (2027-04-26 → 2027-05-02, active).
@@ -412,10 +501,21 @@ export const editions = pgTable("editions", {
 // wave 2+). Field set mirrored from Camp 404's burner profile. `privacy_flags`
 // is a per-field public/private map; the HARD-LOCKED always-private fields
 // (id_number, passport_number, phone, both emergency contacts, medical) can
-// NEVER be set public — enforced in @quagga/core (privacy hard-lock). SA ID /
-// passport are pgcrypto-encrypted (never stored plaintext); encryption happens
-// in route handlers via @quagga/db/crypto. `attended_years` is the set of
-// specific AfrikaBurn years attended (2007–2026, never 2020/2021).
+// NEVER be set public — enforced in @quagga/core (privacy hard-lock).
+//
+// ENCRYPTED-AT-REST columns: SA ID / passport AND medical notes are all
+// AES-256-GCM encrypted (never stored plaintext); encryption/decryption happens
+// at the apps/web write/read boundary via @quagga/db/crypto (`safeEncrypt` /
+// `decryptOrNull`). Medical notes are SPECIAL personal information under POPIA
+// s26/27 — encrypting them (Ryan, 26 Jul 2026) fixes an earlier sensitivity
+// inversion where lower-risk ID data was encrypted while medical was plaintext.
+// The `medical_notes` column stays `text` (base64 ciphertext fits), so this
+// change needed NO migration — only the write/read code. Like the ID columns,
+// medical notes are DROPPED (never persisted) when no PGCRYPTO_KEY is set,
+// because SPECIAL data must never fall back to plaintext.
+//
+// `attended_years` is the set of specific AfrikaBurn years attended (2007–2026,
+// never 2020/2021).
 
 export const burnerBios = pgTable(
   "burner_bios",
@@ -453,9 +553,26 @@ export const burnerBios = pgTable(
     onsiteContactPhone: text("onsite_contact_phone"),
     offsiteContactName: text("offsite_contact_name"),
     offsiteContactPhone: text("offsite_contact_phone"),
+    // HARD-LOCKED private + AES-256-GCM ENCRYPTED at rest (base64 ciphertext in a
+    // plain text column — no migration needed to encrypt). Medical is SPECIAL
+    // personal information (POPIA s26/27); it is encrypted like the ID columns and
+    // dropped rather than stored plaintext when no key is configured.
     medicalNotes: text("medical_notes"),
 
     // HARD-LOCKED private + pgcrypto-encrypted (base64 ciphertext columns).
+    //
+    // LAWFUL PURPOSE (Ryan, 26 Jul 2026): SA ID / passport are collected for a
+    // single, documented purpose — ON-SITE IDENTITY VERIFICATION against the
+    // ticket at the gate (confirming the person arriving is the ticket holder).
+    // They are never shared publicly, never shown to other camps, and never used
+    // for anything else.
+    //
+    // BOUNDED RETENTION: because the purpose is spent once the gate closes, this
+    // data is PURGEABLE after an edition ends. The purge rule (which editions are
+    // expired, plus a small post-event grace) is the pure @quagga/core
+    // `id-retention` module (`identifyPurgeableIdBios` / `buildIdPurgePatch`);
+    // wiring a scheduled purge job that applies `{ saIdEncrypted: null,
+    // passportEncrypted: null }` to expired editions' bios is a LATER task.
     saIdEncrypted: text("sa_id_encrypted"),
     passportEncrypted: text("passport_encrypted"),
 
@@ -801,6 +918,34 @@ export const sectionReviews = pgTable(
     registrationIdx: index("section_reviews_registration_idx").on(
       sr.registrationId,
     ),
+  }),
+);
+
+// --- Section review replies ----------------------------------------------
+// Camp-side (and org-side) replies THREADED under a `section_reviews` row. The
+// design frames show a per-section reply box beneath a flagged review so a camp
+// can answer the placement team; `section_reviews` is org-authored only, so this
+// carries the responses. Authz (server-side, @quagga/core `canReplyToSectionReview`):
+// only a MEMBER of the camp under review may reply, and org staff may reply too.
+// `author_user_id` is nullable + `set null` on user delete, matching the other
+// authored-content tables (`section_reviews.reviewer_id`, `supplier_notes.author_id`)
+// — our `users` rows survive account sanitization as stubs, so authorship persists
+// in practice. The reply UI is built by a LATER agent (this is schema + action only).
+export const sectionReviewReplies = pgTable(
+  "section_review_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => sectionReviews.id, { onDelete: "cascade" }),
+    authorUserId: uuid("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (srr) => ({
+    reviewIdx: index("section_review_replies_review_idx").on(srr.reviewId),
   }),
 );
 
@@ -1425,5 +1570,38 @@ export const emailChangeRequests = pgTable(
     onePendingPerUser: uniqueIndex("email_change_requests_one_pending_idx")
       .on(r.userId)
       .where(sql`${r.status} = 'pending'`),
+  }),
+);
+
+// --- Security events ------------------------------------------------------
+// docs/accounts-security-spec.md §"recent security events". An append-only log of
+// what actually happened to an account, recorded at the moment each account action
+// succeeds. This REPLACES the earlier stopgap where the security page derived its
+// feed from `notifications` (which conflated inbox messages with the event record).
+//
+// Recording is THIN and BEST-EFFORT — a failed insert here must never roll back
+// (or fail) the primary security action it describes. `ip`/`user_agent` are the
+// request context at the time of the event (both nullable — not every event has a
+// request, e.g. the sign-in-driven deletion cancel). `kind` is the typed event
+// class (mirrors SecurityEventLogKind in @quagga/types; display strings come from
+// @quagga/core `describeSecurityEvent` so no PII/labels are stored here).
+export const securityEvents = pgTable(
+  "security_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: securityEventKindEnum("kind").notNull(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (e) => ({
+    // The feed query: an account's events, newest first.
+    userCreatedIdx: index("security_events_user_created_idx").on(
+      e.userId,
+      e.createdAt.desc(),
+    ),
   }),
 );

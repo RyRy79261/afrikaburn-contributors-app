@@ -19,7 +19,7 @@ import {
   supplierStepConfirmedNotification,
 } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { insertNotifications } from "@/lib/notifications";
@@ -47,13 +47,28 @@ export async function setSupplierStanding(
       .limit(1);
     if (!supplier) throw new Error("That supplier no longer exists.");
 
-    await db
-      .update(schema.suppliers)
-      .set({ standing: input.standing, updatedAt: new Date() })
-      .where(eq(schema.suppliers.id, input.supplierId));
+    // The standing change and its audit row are one atomic unit.
+    await withTransaction(async (tx) => {
+      await tx
+        .update(schema.suppliers)
+        .set({ standing: input.standing, updatedAt: new Date() })
+        .where(eq(schema.suppliers.id, input.supplierId));
+
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.standing",
+        subject: input.supplierId,
+        meta: {
+          name: supplier.name,
+          standing: input.standing,
+          label: standingLabel(input.standing),
+        },
+      });
+    });
 
     // Event hook: a supplier only ever sees their OWN standing value change
-    // (never notes). Thin + best-effort; only when an account is linked.
+    // (never notes). Thin + best-effort, AFTER commit; only when an account is
+    // linked. A notification failure never rolls the standing change back.
     if (supplier.userId) {
       try {
         await insertNotifications(db, [
@@ -68,17 +83,6 @@ export async function setSupplierStanding(
         console.error("[notifications] supplier standing hook failed", err);
       }
     }
-
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.standing",
-      subject: input.supplierId,
-      meta: {
-        name: supplier.name,
-        standing: input.standing,
-        label: standingLabel(input.standing),
-      },
-    });
 
     revalidatePath("/suppliers");
   });
@@ -112,43 +116,61 @@ export async function setSupplierOnboardingStep(
       .limit(1);
     if (!supplier) throw new Error("That supplier no longer exists.");
 
-    const [existing] = await db
-      .select({ steps: schema.supplierOnboarding.steps })
-      .from(schema.supplierOnboarding)
-      .where(
-        and(
-          eq(schema.supplierOnboarding.supplierId, input.supplierId),
-          eq(schema.supplierOnboarding.editionId, input.editionId),
-        ),
-      )
-      .limit(1);
+    // The current-step read, the transition (validated in @quagga/core), the
+    // upsert and the audit row are one atomic unit — the persisted step map and
+    // its audit trail can never disagree.
+    await withTransaction(async (tx) => {
+      const [existing] = await tx
+        .select({ steps: schema.supplierOnboarding.steps })
+        .from(schema.supplierOnboarding)
+        .where(
+          and(
+            eq(schema.supplierOnboarding.supplierId, input.supplierId),
+            eq(schema.supplierOnboarding.editionId, input.editionId),
+          ),
+        )
+        .limit(1);
 
-    const applied = applyStepTransition(
-      existing?.steps ?? null,
-      "org",
-      input.stepKey,
-      input.status,
-    );
-    if (!applied.ok) throw new Error(applied.reason);
+      const applied = applyStepTransition(
+        existing?.steps ?? null,
+        "org",
+        input.stepKey,
+        input.status,
+      );
+      if (!applied.ok) throw new Error(applied.reason);
 
-    await db
-      .insert(schema.supplierOnboarding)
-      .values({
-        supplierId: input.supplierId,
-        editionId: input.editionId,
-        steps: applied.steps,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.supplierOnboarding.supplierId,
-          schema.supplierOnboarding.editionId,
-        ],
-        set: { steps: applied.steps, updatedAt: new Date() },
+      await tx
+        .insert(schema.supplierOnboarding)
+        .values({
+          supplierId: input.supplierId,
+          editionId: input.editionId,
+          steps: applied.steps,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.supplierOnboarding.supplierId,
+            schema.supplierOnboarding.editionId,
+          ],
+          set: { steps: applied.steps, updatedAt: new Date() },
+        });
+
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.onboarding",
+        subject: input.supplierId,
+        meta: {
+          name: supplier.name,
+          editionId: input.editionId,
+          step: input.stepKey,
+          status: input.status,
+        },
       });
+    });
 
     // Event hook: notify the supplier when the ORG confirms a step to completed
     // (deposit / briefing / fee, and org-reviewed inventory / crew — never a
-    // self-service step the supplier drove themselves). Thin + best-effort.
+    // self-service step the supplier drove themselves). Thin + best-effort,
+    // AFTER commit.
     if (supplier.userId && input.status === "completed") {
       const step = supplierOnboardingStep(input.stepKey);
       if (step && !isSelfServiceStep(step)) {
@@ -164,18 +186,6 @@ export async function setSupplierOnboardingStep(
         }
       }
     }
-
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.onboarding",
-      subject: input.supplierId,
-      meta: {
-        name: supplier.name,
-        editionId: input.editionId,
-        step: input.stepKey,
-        status: input.status,
-      },
-    });
 
     revalidatePath("/suppliers");
   });
@@ -195,29 +205,31 @@ export async function addSupplierNote(
     const session = await requireOrgSession();
     const input = AddNoteInput.parse(raw);
 
-    const db = getDb();
-    const [supplier] = await db
-      .select({ name: schema.suppliers.name })
-      .from(schema.suppliers)
-      .where(eq(schema.suppliers.id, input.supplierId))
-      .limit(1);
-    if (!supplier) throw new Error("That supplier no longer exists.");
+    // Existence check, note insert and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [supplier] = await tx
+        .select({ name: schema.suppliers.name })
+        .from(schema.suppliers)
+        .where(eq(schema.suppliers.id, input.supplierId))
+        .limit(1);
+      if (!supplier) throw new Error("That supplier no longer exists.");
 
-    const [created] = await db
-      .insert(schema.supplierNotes)
-      .values({
-        supplierId: input.supplierId,
-        authorId: session.dbUserId,
-        kind: input.kind,
-        body: input.body,
-      })
-      .returning({ id: schema.supplierNotes.id });
+      const [created] = await tx
+        .insert(schema.supplierNotes)
+        .values({
+          supplierId: input.supplierId,
+          authorId: session.dbUserId,
+          kind: input.kind,
+          body: input.body,
+        })
+        .returning({ id: schema.supplierNotes.id });
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.note",
-      subject: input.supplierId,
-      meta: { name: supplier.name, kind: input.kind, noteId: created?.id },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.note",
+        subject: input.supplierId,
+        meta: { name: supplier.name, kind: input.kind, noteId: created?.id },
+      });
     });
 
     revalidatePath("/suppliers");
@@ -264,22 +276,24 @@ export async function addSupplier(
     const session = await requireOrgSession();
     const input = AddSupplierInput.parse(raw);
 
-    const db = getDb();
-    const [created] = await db
-      .insert(schema.suppliers)
-      .values({
-        name: input.name,
-        services: input.services || null,
-        contact: input.contact || null,
-        website: input.website || null,
-      })
-      .returning({ id: schema.suppliers.id });
+    // Supplier insert and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [created] = await tx
+        .insert(schema.suppliers)
+        .values({
+          name: input.name,
+          services: input.services || null,
+          contact: input.contact || null,
+          website: input.website || null,
+        })
+        .returning({ id: schema.suppliers.id });
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.add",
-      subject: created?.id,
-      meta: { name: input.name },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.add",
+        subject: created?.id,
+        meta: { name: input.name },
+      });
     });
 
     revalidatePath("/suppliers");

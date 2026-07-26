@@ -7,6 +7,7 @@ import { Button } from "@quagga/ui/components/button";
 import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
 import { PasswordInput } from "@quagga/ui/components/password-input";
+import { AccountTwoFactorChallenge } from "@quagga/ui/components/account-two-factor-challenge";
 import { authClient } from "@/lib/auth-client";
 
 // Branded email/password + Google auth form (design canvas frame u87N7). One
@@ -39,6 +40,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [googlePending, setGooglePending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  // Set when a correct password returns a 2FA challenge instead of a session.
+  const [needsTwoFactor, setNeedsTwoFactor] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,13 +82,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         return;
       }
 
-      const { error: signInError } = await authClient.signIn.email({
+      const { data, error: signInError } = await authClient.signIn.email({
         email,
         password,
         callbackURL: "/",
       });
       if (signInError) {
         setError(SIGN_IN_FAILED);
+        return;
+      }
+      // With 2FA on, a correct password returns a challenge, not a session yet.
+      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+        setNeedsTwoFactor(true);
         return;
       }
       router.push("/");
@@ -110,6 +118,21 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   const busy = pending || googlePending;
+
+  // 2FA gate: password verified, now the second factor. The shared challenge
+  // offers both an authenticator code and a backup code, so a lost authenticator
+  // is never a dead end.
+  if (needsTwoFactor) {
+    return (
+      <AccountTwoFactorChallenge
+        client={authClient}
+        onVerified={() => {
+          router.push("/");
+          router.refresh();
+        }}
+      />
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>

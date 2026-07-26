@@ -151,6 +151,64 @@ export function deviceLabel(userAgent: string | null): string {
   return `${browser} on ${os}`;
 }
 
+// --- Two-factor + passkeys (self-hosted plugins, migration 0015) ----------
+
+/**
+ * Whether TOTP two-factor is switched ON for this auth identity. Read straight
+ * from `user.two_factor_enabled` (the flag the twoFactor plugin flips after the
+ * first successful TOTP verify). Returns false — never throws — when the DB is
+ * unconfigured or the row is missing, so the security page still renders.
+ */
+export async function getTwoFactorEnabled(authUserId: string): Promise<boolean> {
+  if (!isDatabaseConfigured()) return false;
+  try {
+    const [row] = await db()
+      .select({ enabled: schema.user.twoFactorEnabled })
+      .from(schema.user)
+      .where(eq(schema.user.id, authUserId))
+      .limit(1);
+    return row?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** One registered passkey, as the security page shows it. */
+export interface AccountPasskey {
+  id: string;
+  name: string | null;
+  deviceType: string | null;
+  createdAt: string | null;
+}
+
+/**
+ * The account's registered passkeys, backed by `auth.api.listPasskeys`. Returns
+ * [] (never throws) when auth is unconfigured or the call fails — an unreachable
+ * provider must degrade the security page, not break it.
+ */
+export async function listAccountPasskeys(): Promise<AccountPasskey[]> {
+  if (!isAuthConfigured()) return [];
+  try {
+    const data = await auth.api.listPasskeys({ headers: await headers() });
+    const rows = (data ?? []) as {
+      id?: string | null;
+      name?: string | null;
+      deviceType?: string | null;
+      createdAt?: string | Date | null;
+    }[];
+    return rows
+      .map((p) => ({
+        id: p.id ?? "",
+        name: p.name ?? null,
+        deviceType: p.deviceType ?? null,
+        createdAt: toDate(p.createdAt)?.toISOString() ?? null,
+      }))
+      .filter((p) => p.id !== "");
+  } catch {
+    return [];
+  }
+}
+
 // --- Linked sign-in methods ----------------------------------------------
 
 export interface LinkedAccount {

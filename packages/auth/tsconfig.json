@@ -3,6 +3,16 @@
   "include": ["src/**/*.ts"],
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    // @quagga/auth is consumed as SOURCE (`main`/`types` → ./src/index.ts), so no
+    // .d.ts is ever emitted or read. Declaration emit is disabled here ONLY to
+    // avoid TS2883: the @better-auth/passkey plugin's inferred option/return types
+    // reference @simplewebauthn/server through pnpm's virtual store path, which is
+    // not a portable declaration reference. Turning off declaration output (there
+    // is no `composite` project reference depending on it) keeps FULL type
+    // inference for consumers — apps still get a fully-typed `auth.api.*` — without
+    // asking tsc to write an unportable .d.ts.
+    "declaration": false,
+    "declarationMap": false
   }
 }

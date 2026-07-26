@@ -14,12 +14,22 @@ import {
 } from "@/lib/actions/registrations";
 import { formatDate } from "@/lib/labels";
 
+export interface ThreadReply {
+  id: string;
+  authorName: string;
+  isOrg: boolean;
+  body: string;
+  createdAt: Date;
+}
+
 export interface ThreadComment {
   id: string;
   status: "open" | "resolved";
   comment: string;
   reviewerEmail: string | null;
   createdAt: Date;
+  /** The camp/AB reply conversation under this review (read-only here). */
+  replies: ThreadReply[];
 }
 
 /** Per-section comment thread: existing comments + open/resolve + add form. */
@@ -130,6 +140,26 @@ export function SectionReviewThread({
                 </div>
               </div>
               <p className="whitespace-pre-wrap text-foreground">{c.comment}</p>
+
+              {c.replies.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-2 border-l-2 border-border pl-3">
+                  {c.replies.map((reply) => (
+                    <li key={reply.id}>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-xs font-medium text-foreground">
+                          {reply.authorName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(reply.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 whitespace-pre-wrap text-foreground">
+                        {reply.body}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

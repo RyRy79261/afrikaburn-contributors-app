@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { canRedeemInviteAs, inviteRejectionMessage } from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction } from "./db";
 import { getViewerRole, ensureMembershipWithRefCode } from "./groups-store";
 
 export interface InviteRow {
@@ -219,64 +219,68 @@ export async function redeemInvite(
     return { ok: false, error: inviteRejectionMessage(check.reason) };
   }
 
-  // Atomic claim — only one caller can flip used_at from NULL.
-  const claimed = await db()
-    .update(schema.invites)
-    .set({ usedByUserId: userId, usedAt: new Date() })
-    .where(
-      and(eq(schema.invites.id, invite.id), isNull(schema.invites.usedAt)),
-    )
-    .returning({ id: schema.invites.id });
-  if (!claimed[0]) {
-    return {
-      ok: false,
-      error: inviteRejectionMessage("already_used"),
-    };
-  }
-
   const group = await groupNameAndSlug(invite.groupId);
   if (!group) return { ok: false, error: "Camp not found." };
 
-  if (invite.kind === "lead_transfer") {
-    // Demote existing leads to admin, then make the redeemer the lead.
-    await db()
-      .update(schema.memberships)
-      .set({ role: "admin" })
+  // The claim + the membership change are ONE transaction: an invite whose
+  // `used_at` is flipped must always yield the membership it granted, and a
+  // failed membership write must roll the claim back so the link stays usable.
+  return withTransaction(async (tx): Promise<RedeemResult> => {
+    // Atomic claim — only one caller can flip used_at from NULL. If another
+    // redeemer already won the race, no rows return and we abort with nothing
+    // written (the transaction commits an empty change).
+    const claimed = await tx
+      .update(schema.invites)
+      .set({ usedByUserId: userId, usedAt: new Date() })
       .where(
-        and(
-          eq(schema.memberships.groupId, invite.groupId),
-          eq(schema.memberships.role, "lead"),
-        ),
-      );
-    if (currentRole) {
-      // Already a member (keeps their existing ref code) — just take the lead.
-      await db()
+        and(eq(schema.invites.id, invite.id), isNull(schema.invites.usedAt)),
+      )
+      .returning({ id: schema.invites.id });
+    if (!claimed[0]) {
+      return { ok: false, error: inviteRejectionMessage("already_used") };
+    }
+
+    if (invite.kind === "lead_transfer") {
+      // Demote existing leads to admin, then make the redeemer the lead.
+      await tx
         .update(schema.memberships)
-        .set({ role: "lead" })
+        .set({ role: "admin" })
         .where(
           and(
             eq(schema.memberships.groupId, invite.groupId),
-            eq(schema.memberships.userId, userId),
+            eq(schema.memberships.role, "lead"),
           ),
         );
+      if (currentRole) {
+        // Already a member (keeps their existing ref code) — just take the lead.
+        await tx
+          .update(schema.memberships)
+          .set({ role: "lead" })
+          .where(
+            and(
+              eq(schema.memberships.groupId, invite.groupId),
+              eq(schema.memberships.userId, userId),
+            ),
+          );
+      } else {
+        await ensureMembershipWithRefCode(tx, {
+          userId,
+          groupId: invite.groupId,
+          groupName: group.name,
+          role: "lead",
+        });
+      }
     } else {
-      await ensureMembershipWithRefCode({
+      await ensureMembershipWithRefCode(tx, {
         userId,
         groupId: invite.groupId,
         groupName: group.name,
-        role: "lead",
+        role: "member",
       });
     }
-  } else {
-    await ensureMembershipWithRefCode({
-      userId,
-      groupId: invite.groupId,
-      groupName: group.name,
-      role: "member",
-    });
-  }
 
-  return { ok: true, slug: group.slug };
+    return { ok: true, slug: group.slug };
+  });
 }
 
 async function groupNameAndSlug(

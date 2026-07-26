@@ -62,6 +62,27 @@ export function ResponseViewer({
       }
       return optMap.get(String(value)) ?? String(value);
     }
+    if (
+      q &&
+      (q.kind === "multi_choice_grid" || q.kind === "checkbox_grid") &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const rowMap = new Map(q.rows.map((r) => [r.id, r.label]));
+      const colMap = new Map(q.columns.map((c) => [c.value, c.label]));
+      const parts: string[] = [];
+      for (const [rowId, picks] of Object.entries(
+        value as Record<string, string[]>,
+      )) {
+        if (!Array.isArray(picks) || picks.length === 0) continue;
+        parts.push(
+          `${rowMap.get(rowId) ?? rowId}: ${picks
+            .map((v) => colMap.get(v) ?? v)
+            .join(", ")}`,
+        );
+      }
+      return parts.join(" · ") || "—";
+    }
     if (typeof value === "boolean") return value ? "Yes" : "No";
     if (Array.isArray(value)) return value.join(", ") || "—";
     return String(value);

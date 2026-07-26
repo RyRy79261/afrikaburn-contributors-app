@@ -21,7 +21,7 @@ import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
 import { CheckGroup, YesNoField } from "@/components/registration/field-kit";
-import type { ArtworkRegistrationActionResult } from "@/app/artworks/new/actions";
+import type { ArtworkRegistrationActionResult } from "@/app/artworks/new/shared";
 import {
   ART_GRANT_NOTE,
   ARTWORK_POWER_OPTIONS,
@@ -35,10 +35,33 @@ import {
 // One responsive page — the mobile pair is the same route at a narrower width:
 // single column throughout, ≥44px touch targets on the controls and buttons.
 
+/** Prefill values for the edit-resubmit flow (create leaves these blank). */
+export interface ArtworkFormInitialValues {
+  name: string;
+  artist: string;
+  description: string;
+  imageUrls: string[];
+  widthM: number | null;
+  depthM: number | null;
+  heightM: number | null;
+  placementNotes: string;
+  burnIntent: boolean | null;
+  powerNeeds: ArtworkPowerKey[];
+  buildPlan: string;
+  strikePlan: string;
+  grantInterest: boolean;
+}
+
 export interface ArtworkRegistrationFormProps {
   action: (raw: unknown) => Promise<ArtworkRegistrationActionResult>;
   /** Whether Vercel Blob is wired up; false → paste-a-URL fallback only. */
   blobConfigured: boolean;
+  /** Prefill (edit mode). Absent → a blank create form. */
+  initialValues?: ArtworkFormInitialValues;
+  /** Edit mode locks the name (renaming would re-key the project URL). */
+  nameLocked?: boolean;
+  /** Submit-button label ("Submit project" on create, "Resubmit…" on edit). */
+  submitLabel?: string;
 }
 
 /**
@@ -275,21 +298,46 @@ function MetreField({
 export function ArtworkRegistrationForm({
   action,
   blobConfigured,
+  initialValues,
+  nameLocked = false,
+  submitLabel = "Submit project",
 }: ArtworkRegistrationFormProps) {
   const router = useRouter();
-  const [name, setName] = React.useState("");
-  const [artist, setArtist] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [imageUrls, setImageUrls] = React.useState<string[]>([]);
-  const [widthM, setWidthM] = React.useState<number | null>(null);
-  const [depthM, setDepthM] = React.useState<number | null>(null);
-  const [heightM, setHeightM] = React.useState<number | null>(null);
-  const [placementNotes, setPlacementNotes] = React.useState("");
-  const [burnIntent, setBurnIntent] = React.useState<boolean | null>(null);
-  const [powerNeeds, setPowerNeeds] = React.useState<ArtworkPowerKey[]>([]);
-  const [buildPlan, setBuildPlan] = React.useState("");
-  const [strikePlan, setStrikePlan] = React.useState("");
-  const [grantInterest, setGrantInterest] = React.useState(false);
+  const [name, setName] = React.useState(initialValues?.name ?? "");
+  const [artist, setArtist] = React.useState(initialValues?.artist ?? "");
+  const [description, setDescription] = React.useState(
+    initialValues?.description ?? "",
+  );
+  const [imageUrls, setImageUrls] = React.useState<string[]>(
+    initialValues?.imageUrls ?? [],
+  );
+  const [widthM, setWidthM] = React.useState<number | null>(
+    initialValues?.widthM ?? null,
+  );
+  const [depthM, setDepthM] = React.useState<number | null>(
+    initialValues?.depthM ?? null,
+  );
+  const [heightM, setHeightM] = React.useState<number | null>(
+    initialValues?.heightM ?? null,
+  );
+  const [placementNotes, setPlacementNotes] = React.useState(
+    initialValues?.placementNotes ?? "",
+  );
+  const [burnIntent, setBurnIntent] = React.useState<boolean | null>(
+    initialValues?.burnIntent ?? null,
+  );
+  const [powerNeeds, setPowerNeeds] = React.useState<ArtworkPowerKey[]>(
+    initialValues?.powerNeeds ?? [],
+  );
+  const [buildPlan, setBuildPlan] = React.useState(
+    initialValues?.buildPlan ?? "",
+  );
+  const [strikePlan, setStrikePlan] = React.useState(
+    initialValues?.strikePlan ?? "",
+  );
+  const [grantInterest, setGrantInterest] = React.useState(
+    initialValues?.grantInterest ?? false,
+  );
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -316,7 +364,7 @@ export function ArtworkRegistrationForm({
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
       });
-      if (result.status === "created") {
+      if (result.status === "created" || result.status === "updated") {
         router.push(`/camps/${result.slug}`);
       } else if (result.status === "warn") {
         setWarnings(result.warnings);
@@ -354,6 +402,8 @@ export function ArtworkRegistrationForm({
             placeholder="e.g. The Whispering Baobab"
             aria-describedby="art-name-help"
             required
+            disabled={nameLocked}
+            readOnly={nameLocked}
           />
         </Field>
         {awaitingConfirm && (
@@ -540,7 +590,7 @@ export function ArtworkRegistrationForm({
             className="min-h-11"
             disabled={isPending || name.trim().length < 2}
           >
-            {isPending ? "Sending…" : "Submit project"}
+            {isPending ? "Sending…" : submitLabel}
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         </div>

@@ -11,7 +11,7 @@ import {
   type DocumentAckProgress,
 } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { getDb, schema, type DbOrTx } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 
 // Read side of the supplier Documents panel (docs/accounts-security-spec.md
@@ -113,12 +113,16 @@ export async function loadSupplierDocumentsPanel(
  * because the action needs the un-joined values, and because it must NOT swallow
  * errors — a write path that silently reconciles against an empty document list
  * would wrongly revert completed steps.
+ *
+ * Accepts an explicit db/tx so the ack action can reconcile INSIDE its
+ * transaction — reading its own just-written (uncommitted) ack row, which a
+ * separate HTTP connection could not see. Defaults to the HTTP db otherwise.
  */
 export async function loadDocumentsForReconcile(
   supplierId: string,
   editionId: string,
+  db: DbOrTx = getDb(),
 ): Promise<{ documents: SupplierDocument[]; acks: SupplierDocumentAck[] }> {
-  const db = getDb();
   const rows = await db
     .select({
       id: schema.supplierDocuments.id,

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Fingerprint, KeyRound } from "lucide-react";
 import { AUTH_CAPABILITIES } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
@@ -19,8 +20,8 @@ import { ChangePasswordForm } from "./change-password-form";
 //  • Unlink — `client_only`, i.e. exposed on the browser client but absent from
 //    the server allowlist and unverifiable server-side. The button is disabled
 //    and carries the capability's own message.
-//  • Passkeys — `unavailable` (no plugin on a managed instance). Phase 2 in the
-//    spec, and provider-blocked besides.
+//  • Passkeys — now REAL (self-hosted @better-auth/passkey, migration 0015). They
+//    are set up and managed on the Security page, so this row just links there.
 //
 // The last-method rule is shown as a note AND enforced server-side in
 // @quagga/core `canUnlinkSignInMethod` / `assessDeletionEligibility` — this list
@@ -83,7 +84,6 @@ export function SignInMethods({
   const [changing, setChanging] = React.useState(false);
   const isLastMethod = methodCount <= 1;
   const unlinkCap = AUTH_CAPABILITIES.unlinkAccount;
-  const passkeyCap = AUTH_CAPABILITIES.passkeys;
 
   return (
     <div className="flex flex-col">
@@ -180,11 +180,15 @@ export function SignInMethods({
       <MethodRow
         icon={<Fingerprint className="h-4 w-4" />}
         title="Passkeys"
-        badge={<Badge variant="outline">Phase 2</Badge>}
-        detail={passkeyCap.userMessage}
+        detail={
+          <>
+            Sign in with your fingerprint, face or device PIN. Set them up and
+            manage them on the Security page.
+          </>
+        }
         action={
-          <Button variant="ghost" size="sm" disabled title={passkeyCap.userMessage}>
-            Add
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/account/security">Manage</Link>
           </Button>
         }
       />

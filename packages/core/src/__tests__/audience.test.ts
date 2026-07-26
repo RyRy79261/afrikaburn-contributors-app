@@ -81,6 +81,9 @@ function baseCtx(): AudienceContext {
       { userId: "staleBurner", editionId: OTHER_EDITION },
     ],
     roleAssignments: [],
+    // Two suppliers with claimed accounts; accountless catalog rows are absent
+    // by construction (the caller filters `user_id IS NULL` out).
+    suppliers: [{ userId: "supplierA" }, { userId: "supplierB" }],
   };
 }
 
@@ -183,6 +186,59 @@ describe("resolveAudience — org outbound selectors", () => {
       "campRegLead",
       "campUnregLead",
     ]);
+  });
+});
+
+describe("resolveAudience — org suppliers", () => {
+  it("returns every account-linked supplier, sorted + de-duplicated", () => {
+    const spec: AudienceSpec = { kind: "org_suppliers" };
+    expect(resolveAudience(spec, baseCtx())).toEqual(["supplierA", "supplierB"]);
+  });
+
+  it("resolves to nobody when no supplier has claimed an account", () => {
+    const ctx = baseCtx();
+    ctx.suppliers = [];
+    const spec: AudienceSpec = { kind: "org_suppliers" };
+    expect(resolveAudience(spec, ctx)).toEqual([]);
+  });
+
+  it("treats an absent suppliers set as empty (optional field)", () => {
+    const ctx = baseCtx();
+    delete ctx.suppliers;
+    const spec: AudienceSpec = { kind: "org_suppliers" };
+    expect(resolveAudience(spec, ctx)).toEqual([]);
+  });
+
+  it("ADVERSARIAL: reaches ONLY suppliers — no burner, lead, officer or org member leaks in", () => {
+    const spec: AudienceSpec = { kind: "org_suppliers" };
+    const result = resolveAudience(spec, baseCtx());
+    // Every non-supplier principal in the fixture must be absent.
+    for (const outsider of [
+      "god",
+      "staff",
+      "orgMember",
+      "campRegLead",
+      "campRegAdmin",
+      "campRegMember",
+      "campUnregLead",
+      "mvLead",
+      "mvMember",
+      "artLead",
+    ]) {
+      expect(result).not.toContain(outsider);
+    }
+    expect(result).toEqual(["supplierA", "supplierB"]);
+  });
+
+  it("de-duplicates a supplier that appears twice (multi-edition claim rows)", () => {
+    const ctx = baseCtx();
+    ctx.suppliers = [
+      { userId: "supplierA" },
+      { userId: "supplierA" },
+      { userId: "supplierB" },
+    ];
+    const spec: AudienceSpec = { kind: "org_suppliers" };
+    expect(resolveAudience(spec, ctx)).toEqual(["supplierA", "supplierB"]);
   });
 });
 

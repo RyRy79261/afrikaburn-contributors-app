@@ -17,6 +17,7 @@
     "@quagga/db": "workspace:*",
     "@quagga/types": "workspace:*",
     "@quagga/ui": "workspace:*",
+    "@better-auth/passkey": "1.6.25",
     "better-auth": "1.6.25",
     "@vercel/blob": "^2.4.0",
     "drizzle-orm": "^0.45.2",

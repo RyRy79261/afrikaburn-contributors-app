@@ -142,6 +142,7 @@ export default async function QuestionnaireFillPage({
                   submitLabel="Submit answers"
                   gate
                   respondentSeed={user.id}
+                  blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
                 />
               </CardContent>
             </Card>
@@ -182,6 +183,7 @@ export default async function QuestionnaireFillPage({
           redirectTo="/directory"
           submitLabel="Submit"
           respondentSeed={user.id}
+          blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
         />
       </div>
     </AppShell>

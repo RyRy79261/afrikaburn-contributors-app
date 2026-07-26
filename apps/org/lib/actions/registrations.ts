@@ -12,7 +12,7 @@ import {
 } from "@quagga/core";
 import { SectionKey, SectionReviewStatus } from "@quagga/types";
 
-import { getDb, schema } from "@/lib/db";
+import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { insertNotifications } from "@/lib/notifications";
@@ -137,45 +137,51 @@ export async function decideRegistration(
     const nextStatus = resolveReviewAction(registration.status, input.action);
     const isDecision = nextStatus === "approved" || nextStatus === "rejected";
 
-    // TOCTOU guard: the status we validated the transition against must still be
-    // the row's status when we write. Guarding the UPDATE's WHERE on that exact
-    // status means a concurrent decision (another reviewer, a resubmit) makes
-    // this update a no-op, and we abort before stamping a stale audit event.
-    const updated = await db
-      .update(schema.registrations)
-      .set({
-        status: nextStatus,
-        updatedAt: new Date(),
-        ...(isDecision
-          ? { decidedAt: new Date(), decidedByUserId: session.dbUserId }
-          : {}),
-      })
-      .where(
-        and(
-          eq(schema.registrations.id, input.registrationId),
-          eq(schema.registrations.status, registration.status),
-        ),
-      )
-      .returning({ id: schema.registrations.id });
-    if (updated.length === 0) {
-      throw new Error(
-        "This registration changed since you opened it — reload and try again.",
-      );
-    }
+    // The status flip and its audit row are one atomic unit: a committed
+    // decision must never exist without its audit trail, and vice versa.
+    await withTransaction(async (tx) => {
+      // TOCTOU guard: the status we validated the transition against must still
+      // be the row's status when we write. Guarding the UPDATE's WHERE on that
+      // exact status means a concurrent decision (another reviewer, a resubmit)
+      // makes this update a no-op, and — because a no-op throws here and rolls
+      // the transaction back — we never stamp a stale audit event.
+      const updated = await tx
+        .update(schema.registrations)
+        .set({
+          status: nextStatus,
+          updatedAt: new Date(),
+          ...(isDecision
+            ? { decidedAt: new Date(), decidedByUserId: session.dbUserId }
+            : {}),
+        })
+        .where(
+          and(
+            eq(schema.registrations.id, input.registrationId),
+            eq(schema.registrations.status, registration.status),
+          ),
+        )
+        .returning({ id: schema.registrations.id });
+      if (updated.length === 0) {
+        throw new Error(
+          "This registration changed since you opened it — reload and try again.",
+        );
+      }
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: `registration.${input.action}`,
-      subject: input.registrationId,
-      meta: {
-        from: registration.status,
-        to: nextStatus,
-        ...(reason ? { reason } : {}),
-      },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: `registration.${input.action}`,
+        subject: input.registrationId,
+        meta: {
+          from: registration.status,
+          to: nextStatus,
+          ...(reason ? { reason } : {}),
+        },
+      });
     });
 
     // Event hook: notify the camp's leads/admins of the decision (thin — best-
-    // effort, never alters the decision outcome).
+    // effort, never alters the committed decision; runs AFTER commit so a
+    // notification failure cannot roll the decision back).
     if (DECISION_STATUSES.has(nextStatus as RegistrationDecision)) {
       await notifyRegistrationDecision(
         db,
@@ -205,20 +211,22 @@ export async function addSectionReview(
     const session = await requireOrgSession();
     const input = AddReviewInput.parse(raw);
 
-    const db = getDb();
-    await db.insert(schema.sectionReviews).values({
-      registrationId: input.registrationId,
-      sectionKey: input.sectionKey,
-      status: "open",
-      comment: input.comment,
-      reviewerId: session.dbUserId,
-    });
+    // Insert + audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      await tx.insert(schema.sectionReviews).values({
+        registrationId: input.registrationId,
+        sectionKey: input.sectionKey,
+        status: "open",
+        comment: input.comment,
+        reviewerId: session.dbUserId,
+      });
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "review.comment",
-      subject: input.registrationId,
-      meta: { sectionKey: input.sectionKey },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "review.comment",
+        subject: input.registrationId,
+        meta: { sectionKey: input.sectionKey },
+      });
     });
 
     revalidatePath(`/registrations/${input.registrationId}`);

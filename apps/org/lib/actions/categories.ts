@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { CampCategoryInput } from "@quagga/types";
 import { validateCampCategory } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { schema, withTransaction, type DbHandle } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
@@ -18,7 +18,7 @@ import { runAction, type ActionResult } from "./result";
 
 /** Load the edition's existing categories (for dedupe), excluding `exceptId`. */
 async function existingCategories(
-  db: ReturnType<typeof getDb>,
+  db: DbHandle,
   editionId: string,
 ): Promise<{ id: string; label: string }[]> {
   return db
@@ -39,37 +39,39 @@ export async function createCategory(
     const session = await requireOrgSession();
     const { editionId, ...rest } = CreateCategoryInput.parse(raw);
 
-    const db = getDb();
-    const existing = await existingCategories(db, editionId);
-    const valid = validateCampCategory(rest, existing);
-    if (!valid.ok) throw new Error(valid.error);
+    // Dedupe read, sort computation, insert and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const existing = await existingCategories(tx, editionId);
+      const valid = validateCampCategory(rest, existing);
+      if (!valid.ok) throw new Error(valid.error);
 
-    // Default sort to the end of the edition's list when not supplied.
-    let sort = valid.sort;
-    if (sort == null) {
-      const [{ max } = { max: null }] = await db
-        .select({ max: sql<number | null>`max(${schema.campCategories.sort})` })
-        .from(schema.campCategories)
-        .where(eq(schema.campCategories.editionId, editionId));
-      sort = max == null ? 0 : Number(max) + 1;
-    }
+      // Default sort to the end of the edition's list when not supplied.
+      let sort = valid.sort;
+      if (sort == null) {
+        const [{ max } = { max: null }] = await tx
+          .select({ max: sql<number | null>`max(${schema.campCategories.sort})` })
+          .from(schema.campCategories)
+          .where(eq(schema.campCategories.editionId, editionId));
+        sort = max == null ? 0 : Number(max) + 1;
+      }
 
-    const [created] = await db
-      .insert(schema.campCategories)
-      .values({
-        editionId,
-        label: valid.label,
-        labelNormalized: valid.labelNormalized,
-        emoji: valid.emoji,
-        sort,
-      })
-      .returning({ id: schema.campCategories.id });
+      const [created] = await tx
+        .insert(schema.campCategories)
+        .values({
+          editionId,
+          label: valid.label,
+          labelNormalized: valid.labelNormalized,
+          emoji: valid.emoji,
+          sort,
+        })
+        .returning({ id: schema.campCategories.id });
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "category.create",
-      subject: created?.id,
-      meta: { editionId, label: valid.label, emoji: valid.emoji },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "category.create",
+        subject: created?.id,
+        meta: { editionId, label: valid.label, emoji: valid.emoji },
+      });
     });
 
     revalidatePath("/categories");
@@ -88,38 +90,40 @@ export async function updateCategory(
     const session = await requireOrgSession();
     const { categoryId, ...rest } = UpdateCategoryInput.parse(raw);
 
-    const db = getDb();
-    const [current] = await db
-      .select({
-        id: schema.campCategories.id,
-        editionId: schema.campCategories.editionId,
-        sort: schema.campCategories.sort,
-      })
-      .from(schema.campCategories)
-      .where(eq(schema.campCategories.id, categoryId))
-      .limit(1);
-    if (!current) throw new Error("That category no longer exists.");
+    // Read, dedupe-validate, update and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          id: schema.campCategories.id,
+          editionId: schema.campCategories.editionId,
+          sort: schema.campCategories.sort,
+        })
+        .from(schema.campCategories)
+        .where(eq(schema.campCategories.id, categoryId))
+        .limit(1);
+      if (!current) throw new Error("That category no longer exists.");
 
-    const existing = await existingCategories(db, current.editionId);
-    const valid = validateCampCategory(rest, existing, categoryId);
-    if (!valid.ok) throw new Error(valid.error);
+      const existing = await existingCategories(tx, current.editionId);
+      const valid = validateCampCategory(rest, existing, categoryId);
+      if (!valid.ok) throw new Error(valid.error);
 
-    await db
-      .update(schema.campCategories)
-      .set({
-        label: valid.label,
-        labelNormalized: valid.labelNormalized,
-        emoji: valid.emoji,
-        sort: valid.sort ?? current.sort,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.campCategories.id, categoryId));
+      await tx
+        .update(schema.campCategories)
+        .set({
+          label: valid.label,
+          labelNormalized: valid.labelNormalized,
+          emoji: valid.emoji,
+          sort: valid.sort ?? current.sort,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.campCategories.id, categoryId));
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "category.update",
-      subject: categoryId,
-      meta: { label: valid.label, emoji: valid.emoji },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "category.update",
+        subject: categoryId,
+        meta: { label: valid.label, emoji: valid.emoji },
+      });
     });
 
     revalidatePath("/categories");
@@ -136,29 +140,31 @@ export async function deleteCategory(
     const session = await requireOrgSession();
     const { categoryId } = DeleteCategoryInput.parse(raw);
 
-    const db = getDb();
-    const [current] = await db
-      .select({ label: schema.campCategories.label })
-      .from(schema.campCategories)
-      .where(eq(schema.campCategories.id, categoryId))
-      .limit(1);
-    if (!current) throw new Error("That category no longer exists.");
+    // Read, picker-count, delete and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [current] = await tx
+        .select({ label: schema.campCategories.label })
+        .from(schema.campCategories)
+        .where(eq(schema.campCategories.id, categoryId))
+        .limit(1);
+      if (!current) throw new Error("That category no longer exists.");
 
-    // Count pickers before deleting, for the audit trail.
-    const [{ pickers } = { pickers: 0 }] = await db
-      .select({ pickers: sql<number>`count(*)::int` })
-      .from(schema.groupCategories)
-      .where(eq(schema.groupCategories.categoryId, categoryId));
+      // Count pickers before deleting, for the audit trail.
+      const [{ pickers } = { pickers: 0 }] = await tx
+        .select({ pickers: sql<number>`count(*)::int` })
+        .from(schema.groupCategories)
+        .where(eq(schema.groupCategories.categoryId, categoryId));
 
-    await db
-      .delete(schema.campCategories)
-      .where(eq(schema.campCategories.id, categoryId));
+      await tx
+        .delete(schema.campCategories)
+        .where(eq(schema.campCategories.id, categoryId));
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "category.delete",
-      subject: categoryId,
-      meta: { label: current.label, pickers: Number(pickers) },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "category.delete",
+        subject: categoryId,
+        meta: { label: current.label, pickers: Number(pickers) },
+      });
     });
 
     revalidatePath("/categories");
@@ -184,40 +190,42 @@ export async function setGroupCategory(
     const session = await requireOrgSession();
     const input = AssignCategoryInput.parse(raw);
 
-    const db = getDb();
-    const [category] = await db
-      .select({ id: schema.campCategories.id })
-      .from(schema.campCategories)
-      .where(eq(schema.campCategories.id, input.categoryId))
-      .limit(1);
-    if (!category) throw new Error("That category no longer exists.");
+    // Existence check, link write and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [category] = await tx
+        .select({ id: schema.campCategories.id })
+        .from(schema.campCategories)
+        .where(eq(schema.campCategories.id, input.categoryId))
+        .limit(1);
+      if (!category) throw new Error("That category no longer exists.");
 
-    if (input.assigned) {
-      await db
-        .insert(schema.groupCategories)
-        .values({ groupId: input.groupId, categoryId: input.categoryId })
-        .onConflictDoNothing({
-          target: [
-            schema.groupCategories.groupId,
-            schema.groupCategories.categoryId,
-          ],
-        });
-    } else {
-      await db
-        .delete(schema.groupCategories)
-        .where(
-          and(
-            eq(schema.groupCategories.groupId, input.groupId),
-            eq(schema.groupCategories.categoryId, input.categoryId),
-          ),
-        );
-    }
+      if (input.assigned) {
+        await tx
+          .insert(schema.groupCategories)
+          .values({ groupId: input.groupId, categoryId: input.categoryId })
+          .onConflictDoNothing({
+            target: [
+              schema.groupCategories.groupId,
+              schema.groupCategories.categoryId,
+            ],
+          });
+      } else {
+        await tx
+          .delete(schema.groupCategories)
+          .where(
+            and(
+              eq(schema.groupCategories.groupId, input.groupId),
+              eq(schema.groupCategories.categoryId, input.categoryId),
+            ),
+          );
+      }
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "category.assign",
-      subject: input.categoryId,
-      meta: { groupId: input.groupId, assigned: input.assigned },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "category.assign",
+        subject: input.categoryId,
+        meta: { groupId: input.groupId, assigned: input.assigned },
+      });
     });
 
     revalidatePath("/categories");

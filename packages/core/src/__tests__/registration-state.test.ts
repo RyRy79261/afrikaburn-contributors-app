@@ -5,6 +5,7 @@ import {
   canTransitionRegistration,
   assertRegistrationTransition,
   canTransitionSectionReview,
+  canReplyToSectionReview,
   REGISTRATION_TRANSITIONS,
   SECTION_REVIEW_TRANSITIONS,
   canCampSubmit,
@@ -126,5 +127,31 @@ describe("section-review state machine", () => {
   it("has no self-transitions", () => {
     expect(SECTION_REVIEW_TRANSITIONS.open).not.toContain("open");
     expect(SECTION_REVIEW_TRANSITIONS.resolved).not.toContain("resolved");
+  });
+});
+
+describe("canReplyToSectionReview", () => {
+  it("allows any camp member of the camp under review", () => {
+    expect(canReplyToSectionReview({ campRole: "member", isOrgStaff: false })).toBe(
+      true,
+    );
+    expect(canReplyToSectionReview({ campRole: "lead", isOrgStaff: false })).toBe(
+      true,
+    );
+    expect(canReplyToSectionReview({ campRole: "admin", isOrgStaff: false })).toBe(
+      true,
+    );
+  });
+
+  it("allows org staff even with no camp membership", () => {
+    expect(canReplyToSectionReview({ campRole: null, isOrgStaff: true })).toBe(
+      true,
+    );
+  });
+
+  it("refuses a non-member who is not org staff", () => {
+    expect(canReplyToSectionReview({ campRole: null, isOrgStaff: false })).toBe(
+      false,
+    );
   });
 });

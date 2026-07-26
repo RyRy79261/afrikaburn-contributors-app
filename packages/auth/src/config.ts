@@ -11,14 +11,19 @@
 
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { twoFactor } from "better-auth/plugins/two-factor";
+import { passkey } from "@better-auth/passkey";
 import { createHttpDb, schema } from "@quagga/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@quagga/core";
 import { sendAuthEmail } from "./email";
 import {
+  AUTH_RP_NAME,
   authConfigWarnings,
   isGoogleConfigured,
   resolveBaseURL,
   resolveCookieDomain,
+  resolvePasskeyOrigins,
+  resolvePasskeyRpID,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
   isEmailProviderConfigured,
@@ -43,6 +48,8 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
   const baseURL = resolveBaseURL(env);
   const cookieDomain = resolveCookieDomain(env);
   const emailProvider = isEmailProviderConfigured(env);
+  const passkeyRpID = resolvePasskeyRpID(env);
+  const passkeyOrigins = resolvePasskeyOrigins(env);
 
   return {
     appName: "AfrikaBurn Contributors",
@@ -64,6 +71,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
         account: schema.account,
         verification: schema.verification,
         rateLimit: schema.rateLimit,
+        // Plugin-owned tables (migration 0015). The adapter maps each Better
+        // Auth model name to the drizzle table by these keys.
+        twoFactor: schema.twoFactor,
+        passkey: schema.passkey,
       },
     }),
 
@@ -143,6 +154,43 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
       storage: "database",
       modelName: "rateLimit",
     },
+
+    // Optional second factors / passwordless accelerators (auth-platform-spec §3).
+    // Both are self-host-only Better Auth plugins — the whole reason we moved off
+    // managed Neon. Neither is ever the ONLY way in: password (or Google) stays
+    // the primary credential, so a lost passkey or authenticator is never a dead
+    // end (recovery: password + 2FA backup codes).
+    plugins: [
+      twoFactor({
+        // Names the account in authenticator apps ("AfrikaBurn Contributors").
+        issuer: AUTH_RP_NAME,
+        // FOOTGUN GUARD (auth-platform-spec §3): the raw backup-code option
+        // defaults to plaintext storage. Store them ENCRYPTED — plaintext
+        // recovery codes in our Neon DB would be a POPIA + security failure.
+        backupCodeOptions: { storeBackupCodes: "encrypted" },
+        // Let Google-only / passkey-only accounts still enrol a second factor
+        // (a password is still required to enrol when a credential account
+        // exists). The built-in account lockout (10 fails → 15 min) on the
+        // /two-factor/verify endpoints stays at its default.
+        allowPasswordless: true,
+      }),
+      passkey({
+        // rpID scoped to the apex so ONE passkey works across all three
+        // subdomains; undefined off-apex (localhost/preview) so the browser
+        // accepts a request-host rpID. See resolvePasskeyRpID.
+        ...(passkeyRpID ? { rpID: passkeyRpID } : {}),
+        rpName: AUTH_RP_NAME,
+        // Array of expected origins (1.6.25 supports it) — all three prod
+        // origins under the apex; undefined off-apex to derive from the request.
+        ...(passkeyOrigins ? { origin: passkeyOrigins } : {}),
+        // Discoverable (resident) credentials + user verification for a
+        // one-tap, username-less sign-in on the non-technical volunteer base.
+        authenticatorSelection: {
+          residentKey: "preferred",
+          userVerification: "preferred",
+        },
+      }),
+    ],
 
     advanced: {
       cookiePrefix: "quagga",

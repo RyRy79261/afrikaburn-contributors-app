@@ -83,6 +83,9 @@ interface RunnerProps {
   /** Enables local draft autosave under this key (survives reload/offline).
    * Answers still only reach the server on submit. */
   draftKey?: string;
+  /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
+   *  uploader instead of only the URL-paste field. */
+  blobConfigured?: boolean;
 }
 
 type Step =
@@ -105,6 +108,7 @@ export function QuestionnaireRunner({
   fullWidthSubmit = false,
   shuffleSeed = "",
   draftKey,
+  blobConfigured = false,
 }: RunnerProps) {
   const router = useRouter();
   const firstPageId = questionnaire.pages[0]?.id ?? null;
@@ -433,6 +437,7 @@ export function QuestionnaireRunner({
                   error={errors[block.id]}
                   options={presentationOptions(block, shuffleSeed)}
                   onChange={(value) => setResponse(block.id, value)}
+                  blobConfigured={blobConfigured}
                 />
               ) : (
                 <ContentBlockView key={block.id} block={block} />

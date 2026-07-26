@@ -26,6 +26,7 @@ export interface BulletinAudienceOption {
 const OUTBOUND_PREFIX = "outbound:";
 const OFFICER_PREFIX = "officer:";
 const INTERNAL_VALUE = "org_internal";
+const SUPPLIERS_VALUE = "org_suppliers";
 
 /** Options for the AudienceSelect, in broadcast-reach order. */
 export const BULLETIN_AUDIENCE_OPTIONS: readonly BulletinAudienceOption[] = [
@@ -37,12 +38,16 @@ export const BULLETIN_AUDIENCE_OPTIONS: readonly BulletinAudienceOption[] = [
     value: `${OFFICER_PREFIX}${key}`,
     label: OFFICER_AUDIENCE_LABELS[key],
   })),
+  // Suppliers are a separate account kind; the resolver reaches only supplier-
+  // linked accounts (canvas `U8CqE` "Suppliers").
+  { value: SUPPLIERS_VALUE, label: "Suppliers" },
   { value: INTERNAL_VALUE, label: "Org members (internal)" },
 ];
 
 /** Option value → the audience spec the action stores. `null` when unknown. */
 export function audienceSpecForOption(value: string): AudienceSpec | null {
   if (value === INTERNAL_VALUE) return { kind: "org_internal" };
+  if (value === SUPPLIERS_VALUE) return { kind: "org_suppliers" };
   if (value.startsWith(OUTBOUND_PREFIX)) {
     const selector = value.slice(OUTBOUND_PREFIX.length) as OrgOutboundSelector;
     return ORG_OUTBOUND_SELECTORS.includes(selector)
@@ -68,6 +73,7 @@ export function optionForAudienceSpec(
 ): string | undefined {
   if (!spec) return undefined;
   if (spec.kind === "org_internal") return INTERNAL_VALUE;
+  if (spec.kind === "org_suppliers") return SUPPLIERS_VALUE;
   if (spec.kind === "org_outbound" && spec.selectors.length === 1) {
     return `${OUTBOUND_PREFIX}${spec.selectors[0]}`;
   }
@@ -81,6 +87,7 @@ export function optionForAudienceSpec(
 export function audienceCountNoun(value: string | undefined): string {
   if (!value) return "burners";
   if (value === INTERNAL_VALUE) return "org staff";
+  if (value === SUPPLIERS_VALUE) return "suppliers";
   if (value.startsWith(OFFICER_PREFIX)) return "officers";
   if (value === `${OUTBOUND_PREFIX}all_current_burners`) return "burners";
   return "recipients";

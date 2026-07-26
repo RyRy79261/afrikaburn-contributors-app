@@ -7,14 +7,15 @@
 // account capability is now a real server call on `auth.api.*`, and change-email
 // / unlink (which managed Neon omitted from its server allowlist) are ours.
 //
-// WHAT IS STILL UNAVAILABLE, AND WHY IT CHANGED: 2FA/TOTP, backup codes, and
-// passkeys are no longer blocked by the PROVIDER — they are Better Auth PLUGINS
-// (twoFactor, @better-auth/passkey) that we have not installed YET. They land in a
-// later task (auth-platform-spec P1-2 for 2FA + backup codes, P1-14b for
-// passkeys), each adding its own append-only table. Until those plugins are wired
-// into @quagga/auth, the surfaces render an honest "not available yet" state and
-// their actions fail closed — this file is where that flips, in one reviewed diff,
-// the day the plugin ships.
+// TWO-FACTOR AND PASSKEYS NOW SHIP. As of migration 0015 both Better Auth plugins
+// (twoFactor — TOTP + encrypted backup codes; @better-auth/passkey — WebAuthn,
+// rpID scoped to the apex) are wired into @quagga/auth, with their tables owned by
+// @quagga/db. So `twoFactor`, `backupCodes` and `passkeys` are `supported` here —
+// the account-security surface renders the REAL enrolment/management flows instead
+// of the honest "not available yet" cards it showed while the plugins were
+// pending. Neither factor is ever the ONLY way in (password/Google stays primary),
+// so a lost authenticator or passkey is never a dead end — recovery is a password
+// or a 2FA backup code.
 //
 // THE RULE THIS FILE EXISTS TO ENFORCE: never fake an unsupported capability. A
 // surface for an `unavailable` capability must render an honest "not available
@@ -109,30 +110,27 @@ export const AUTH_CAPABILITIES: Readonly<
   },
   twoFactor: {
     key: "twoFactor",
-    support: "unavailable",
-    method: null,
+    support: "supported",
+    method:
+      "authClient.twoFactor.enable/verifyTotp/disable + auth.api.enableTwoFactor",
     reason:
-      "The `twoFactor` plugin (TOTP + backup codes) is not yet installed in @quagga/auth. It is a self-host plugin we CAN add — unblocked by the migration — and is scheduled (auth-platform-spec P1-2), not blocked by the provider. Flip to supported when the plugin and its `two_factor` table land.",
-    userMessage:
-      "Two-factor authentication isn't available on this account yet. We're rolling it out — we'll turn it on the day it lands.",
+      "The `twoFactor` plugin (TOTP) is installed in @quagga/auth (migration 0015: `two_factor` table + `user.two_factor_enabled`). Enrolment is: enable (password-checked) → scan the QR / enter the setup key → verify a 6-digit code → 2FA switches on. The plugin's own account lockout (10 fails → 15 min) guards the verify endpoints, and sign-in issues a second-factor challenge once enabled.",
   },
   backupCodes: {
     key: "backupCodes",
-    support: "unavailable",
-    method: null,
+    support: "supported",
+    method:
+      "authClient.twoFactor.generateBackupCodes + verifyBackupCode (backup codes issued at 2FA enrolment)",
     reason:
-      "Backup codes ship inside the `twoFactor` plugin (store them encrypted, never plaintext); unavailable until that plugin is installed.",
-    userMessage:
-      "Backup codes arrive with two-factor authentication, which isn't available yet.",
+      "Backup codes ship inside the `twoFactor` plugin and are stored ENCRYPTED (backupCodeOptions.storeBackupCodes:'encrypted' in @quagga/auth — never plaintext). Ten single-use codes are shown once at enrolment, downloadable, and regenerable; one satisfies the sign-in second-factor challenge when the authenticator is lost.",
   },
   passkeys: {
     key: "passkeys",
-    support: "unavailable",
-    method: null,
+    support: "supported",
+    method:
+      "authClient.passkey.addPasskey / signIn.passkey + auth.api.listPasskeys/deletePasskey",
     reason:
-      "The `@better-auth/passkey` plugin is not yet installed. Self-hosting unblocks it (rpID must be the apex from day one), but it is a later phase (auth-platform-spec P1-14b) with an open single-vs-array `origin` spike; not a provider block.",
-    userMessage:
-      "Passkeys aren't available on this account yet.",
+      "The `@better-auth/passkey` plugin is installed in @quagga/auth (migration 0015: `passkey` table). rpID is scoped to the apex (quagga.ryanjnoble.dev) so one passkey works across app./org./suppliers. Passkeys are ADDITIVE — an accelerator on top of password/Google, never the only way in — so a lost passkey is never a lockout (recovery: password or a 2FA backup code).",
   },
 };
 

@@ -24,7 +24,7 @@ import {
   RadioChoiceGroup,
   YesNoField,
 } from "@/components/registration/field-kit";
-import type { VehicleRegistrationActionResult } from "@/app/vehicles/new/actions";
+import type { VehicleRegistrationActionResult } from "@/app/vehicles/new/shared";
 import {
   EBIKE_NOTE,
   FLAME_EFFECTS_NOTE,
@@ -42,10 +42,28 @@ import {
 // single source of truth for the stored value, and `soundLevelFromValue` turns
 // that value into the officer triggers on the org side.
 
+/** Prefill values for the edit-resubmit flow (create leaves these blank). */
+export interface VehicleFormInitialValues {
+  name: string;
+  baseVehicle: string;
+  mutation: string;
+  photoUrls: string[];
+  soundLevel: string | null;
+  flameEffects: boolean | null;
+  nightDriving: boolean | null;
+  acks: VehicleAckKey[];
+}
+
 export interface VehicleRegistrationFormProps {
   action: (raw: unknown) => Promise<VehicleRegistrationActionResult>;
   /** Whether Vercel Blob is wired up; false → paste-a-URL fallback only. */
   blobConfigured: boolean;
+  /** Prefill (edit mode). Absent → a blank create form. */
+  initialValues?: VehicleFormInitialValues;
+  /** Edit mode locks the name (renaming a mutant would re-key its URL). */
+  nameLocked?: boolean;
+  /** Submit-button label ("Submit to DMV" on create, "Resubmit…" on edit). */
+  submitLabel?: string;
 }
 
 /**
@@ -248,16 +266,31 @@ function PhotoGrid({
 export function VehicleRegistrationForm({
   action,
   blobConfigured,
+  initialValues,
+  nameLocked = false,
+  submitLabel = "Submit to DMV",
 }: VehicleRegistrationFormProps) {
   const router = useRouter();
-  const [name, setName] = React.useState("");
-  const [baseVehicle, setBaseVehicle] = React.useState("");
-  const [mutation, setMutation] = React.useState("");
-  const [photoUrls, setPhotoUrls] = React.useState<string[]>([]);
-  const [soundLevel, setSoundLevel] = React.useState<string | null>(null);
-  const [flameEffects, setFlameEffects] = React.useState<boolean | null>(null);
-  const [nightDriving, setNightDriving] = React.useState<boolean | null>(null);
-  const [acks, setAcks] = React.useState<VehicleAckKey[]>([]);
+  const [name, setName] = React.useState(initialValues?.name ?? "");
+  const [baseVehicle, setBaseVehicle] = React.useState(
+    initialValues?.baseVehicle ?? "",
+  );
+  const [mutation, setMutation] = React.useState(initialValues?.mutation ?? "");
+  const [photoUrls, setPhotoUrls] = React.useState<string[]>(
+    initialValues?.photoUrls ?? [],
+  );
+  const [soundLevel, setSoundLevel] = React.useState<string | null>(
+    initialValues?.soundLevel ?? null,
+  );
+  const [flameEffects, setFlameEffects] = React.useState<boolean | null>(
+    initialValues?.flameEffects ?? null,
+  );
+  const [nightDriving, setNightDriving] = React.useState<boolean | null>(
+    initialValues?.nightDriving ?? null,
+  );
+  const [acks, setAcks] = React.useState<VehicleAckKey[]>(
+    initialValues?.acks ?? [],
+  );
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -285,7 +318,7 @@ export function VehicleRegistrationForm({
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
       });
-      if (result.status === "created") {
+      if (result.status === "created" || result.status === "updated") {
         router.push(`/camps/${result.slug}`);
       } else if (result.status === "warn") {
         setWarnings(result.warnings);
@@ -323,6 +356,8 @@ export function VehicleRegistrationForm({
             placeholder="e.g. The Dust Kraken"
             aria-describedby="mv-name-help"
             required
+            disabled={nameLocked}
+            readOnly={nameLocked}
           />
         </Field>
         {awaitingConfirm && (
@@ -459,7 +494,7 @@ export function VehicleRegistrationForm({
             className="min-h-11"
             disabled={isPending || name.trim().length < 2}
           >
-            {isPending ? "Sending…" : "Submit to DMV"}
+            {isPending ? "Sending…" : submitLabel}
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Button>
         </div>

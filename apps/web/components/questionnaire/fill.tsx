@@ -22,6 +22,7 @@ export function QuestionnaireFill({
   submitLabel,
   gate = false,
   respondentSeed,
+  blobConfigured = false,
 }: {
   activationId: string;
   questionnaire: Questionnaire;
@@ -33,6 +34,9 @@ export function QuestionnaireFill({
   /** Per-respondent shuffle seed (the user id). Combined with the activation id
    * it keeps a shuffled page/option order stable across reloads. */
   respondentSeed?: string;
+  /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
+   *  uploader instead of only the URL-paste field. */
+  blobConfigured?: boolean;
 }) {
   const action = (
     responses: QuestionnaireResponses,
@@ -53,6 +57,7 @@ export function QuestionnaireFill({
       fullWidthSubmit={gate}
       shuffleSeed={seed}
       draftKey={seed}
+      blobConfigured={blobConfigured}
     />
   );
 }

@@ -29,7 +29,7 @@ import type {
   MembershipRole,
   RegistrationStatus,
 } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 
 /** One category chip on a directory card (org-defined per-edition taxonomy). */
 export interface DirectoryCategory {
@@ -256,33 +256,45 @@ export async function nextMemberRefCode(
 
 /**
  * Insert a membership (no-op if the user is already a member of the group),
- * assigning a fresh camp-scoped ref code on creation. Retries on the
- * `memberships_group_ref_code_idx` unique-index race so two concurrent joins
- * can't collide on a sequence.
+ * assigning a fresh camp-scoped ref code on creation. Runs on the caller's
+ * transaction handle so the join commits atomically with the rest of that action
+ * (e.g. the invite-claim in {@link redeemInvite}).
+ *
+ * Retries on the `memberships_group_ref_code_idx` unique-index race so two
+ * concurrent joins can't collide on a sequence. Each attempt runs inside a
+ * SAVEPOINT (`tx.transaction`), because a raw unique-violation would otherwise
+ * poison the whole enclosing transaction — the savepoint lets a colliding
+ * attempt roll back on its own and the loop recompute the next sequence.
  */
-export async function ensureMembershipWithRefCode(input: {
-  userId: string;
-  groupId: string;
-  groupName: string;
-  role: MembershipRole;
-}): Promise<void> {
+export async function ensureMembershipWithRefCode(
+  tx: Tx,
+  input: {
+    userId: string;
+    groupId: string;
+    groupName: string;
+    role: MembershipRole;
+  },
+): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const refCode = await nextMemberRefCode(input.groupId, input.groupName);
     try {
-      await db()
-        .insert(schema.memberships)
-        .values({
-          userId: input.userId,
-          groupId: input.groupId,
-          role: input.role,
-          refCode,
-        })
-        .onConflictDoNothing({
-          target: [schema.memberships.userId, schema.memberships.groupId],
-        });
+      await tx.transaction(async (sp) => {
+        await sp
+          .insert(schema.memberships)
+          .values({
+            userId: input.userId,
+            groupId: input.groupId,
+            role: input.role,
+            refCode,
+          })
+          .onConflictDoNothing({
+            target: [schema.memberships.userId, schema.memberships.groupId],
+          });
+      });
       return;
     } catch (err) {
-      // A ref-code collision (different unique index) — recompute and retry.
+      // A ref-code collision (different unique index) — the savepoint rolled
+      // back, so recompute and retry without poisoning the outer transaction.
       if (isUniqueViolation(err)) continue;
       throw err;
     }
@@ -746,14 +758,30 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-/** Create a project group (instant free camp); the creator becomes its lead. */
-export async function createCamp(input: {
+export interface PreparedCampCreate {
+  creatorId: string;
+  name: string;
+  slug: string;
+  kind: GroupKind;
+  description: string | null;
+  joinability: Joinability;
+}
+
+/**
+ * Validate a camp-create request and resolve a unique slug — the read-only half
+ * of {@link createCamp}, split out so a composite flow (e.g. project
+ * registration) can validate BEFORE opening its transaction. Reads run on the
+ * HTTP client; the caller performs the writes via {@link createCampWrites}.
+ */
+export async function prepareCampCreate(input: {
   creatorId: string;
   name: string;
   kind: GroupKind;
   description: string | null;
   joinability: Joinability;
-}): Promise<CreateCampResult> {
+}): Promise<
+  { ok: true; prepared: PreparedCampCreate } | { ok: false; error: string }
+> {
   const name = input.name.trim();
   if (name.length < 2) return { ok: false, error: "Give your camp a name." };
   if (
@@ -787,25 +815,86 @@ export async function createCamp(input: {
     slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
-  // checkCampName above is a SELECT-then-decide with a TOCTOU window: two
-  // concurrent creates with the same normalized name can both pass it. The
-  // unique index groups_kind_name_normalized_idx is the real guarantee — catch
-  // its violation and surface the same graceful message rather than a 500. A
-  // slug collision that survives the retry loop maps to the same handling.
-  let inserted: { id: string; slug: string }[];
+  return {
+    ok: true,
+    prepared: {
+      creatorId: input.creatorId,
+      name,
+      slug,
+      kind: input.kind,
+      description: input.description,
+      joinability: input.joinability,
+    },
+  };
+}
+
+/**
+ * The WRITE half of camp creation, on a transaction handle: insert the group and
+ * the creator's `lead` membership as ONE atomic unit, so a failure can never
+ * leave a group with no lead (the no-lockout backstop would be broken by such an
+ * orphan). Both writes go through `tx`; the ref-code read is a harmless HTTP
+ * read (a brand-new group has no members yet). Returns the new group id + slug.
+ *
+ * Throws on a unique violation (concurrent same-name create, or a surviving slug
+ * collision) — the caller catches it and surfaces the graceful message. Because
+ * the group insert is the first write, a throw here rolls the transaction back
+ * with nothing persisted.
+ */
+export async function createCampWrites(
+  tx: Tx,
+  prepared: PreparedCampCreate,
+): Promise<{ slug: string; groupId: string }> {
+  const [group] = await tx
+    .insert(schema.groups)
+    .values({
+      kind: prepared.kind,
+      name: prepared.name,
+      nameNormalized: normalizeName(prepared.name),
+      slug: prepared.slug,
+      description: prepared.description,
+      joinability: prepared.joinability,
+      createdByUserId: prepared.creatorId,
+    })
+    .returning({ id: schema.groups.id, slug: schema.groups.slug });
+  if (!group) throw new Error("Could not create the camp.");
+
+  const refCode = await nextMemberRefCode(group.id, prepared.name);
+  await tx.insert(schema.memberships).values({
+    userId: prepared.creatorId,
+    groupId: group.id,
+    role: "lead",
+    refCode,
+  });
+
+  return { slug: group.slug, groupId: group.id };
+}
+
+/**
+ * Create a project group (instant free camp); the creator becomes its lead.
+ *
+ * Group + membership are written in a single transaction so a partial failure
+ * can never orphan a camp without its lead. `checkCampName` (in `prepareCampCreate`)
+ * is a SELECT-then-decide with a TOCTOU window: two concurrent creates with the
+ * same normalized name can both pass it. The unique index
+ * `groups_kind_name_normalized_idx` is the real guarantee — its violation aborts
+ * the transaction and is caught here as the same graceful message rather than a
+ * 500. A slug collision that survives the retry loop maps to the same handling.
+ */
+export async function createCamp(input: {
+  creatorId: string;
+  name: string;
+  kind: GroupKind;
+  description: string | null;
+  joinability: Joinability;
+}): Promise<CreateCampResult> {
+  const prep = await prepareCampCreate(input);
+  if (!prep.ok) return prep;
+
   try {
-    inserted = await db()
-      .insert(schema.groups)
-      .values({
-        kind: input.kind,
-        name,
-        nameNormalized: normalizeName(name),
-        slug,
-        description: input.description,
-        joinability: input.joinability,
-        createdByUserId: input.creatorId,
-      })
-      .returning({ id: schema.groups.id, slug: schema.groups.slug });
+    const { slug } = await withTransaction((tx) =>
+      createCampWrites(tx, prep.prepared),
+    );
+    return { ok: true, slug };
   } catch (err) {
     if (isUniqueViolation(err)) {
       return {
@@ -815,18 +904,6 @@ export async function createCamp(input: {
     }
     throw err;
   }
-  const group = inserted[0];
-  if (!group) return { ok: false, error: "Could not create the camp." };
-
-  const refCode = await nextMemberRefCode(group.id, name);
-  await db().insert(schema.memberships).values({
-    userId: input.creatorId,
-    groupId: group.id,
-    role: "lead",
-    refCode,
-  });
-
-  return { ok: true, slug: group.slug };
 }
 
 /** The viewer's role in a group, or null if not a member. */

@@ -36,6 +36,7 @@ export default async function SupplierSignupManagementPage() {
 
   const edition = await getActiveEdition();
   const documents = edition ? await listSupplierDocuments(edition.id) : [];
+  const blobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
   return (
     <div>
@@ -94,7 +95,10 @@ export default async function SupplierSignupManagementPage() {
                own stacked cards (frame D6IGel), so an outer bordered box would
                double-nest. */
             <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
-              <DocumentsTable documents={documents} />
+              <DocumentsTable
+                documents={documents}
+                blobConfigured={blobConfigured}
+              />
             </div>
           )}
 
@@ -116,7 +120,11 @@ export default async function SupplierSignupManagementPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <DocumentForm mode="create" editionId={edition.id} />
+              <DocumentForm
+                mode="create"
+                editionId={edition.id}
+                blobConfigured={blobConfigured}
+              />
             </CardContent>
           </Card>
         </div>

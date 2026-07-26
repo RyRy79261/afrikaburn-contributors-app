@@ -1,7 +1,6 @@
 import "server-only";
 
-import type { Database } from "@quagga/db";
-import { schema } from "@/lib/db";
+import { schema, type DbHandle } from "@/lib/db";
 
 /**
  * Append an audit event. Written on the transitions build-spec §audit_events
@@ -10,7 +9,7 @@ import { schema } from "@/lib/db";
  * complete trail. `actorId` is the acting staff member's `users.id`.
  */
 export async function writeAuditEvent(
-  db: Database,
+  db: DbHandle,
   event: {
     actorId: string;
     action: string;

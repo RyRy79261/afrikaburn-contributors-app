@@ -5,7 +5,6 @@ import {
   Droplets,
   MapPin,
   CalendarClock,
-  Wallet,
   LayoutGrid,
   FileCheck2,
   CheckCircle2,
@@ -185,6 +184,22 @@ export default async function CampPage({
 
   const myRefCode = camp.members.find((m) => m.isViewer)?.refCode ?? null;
 
+  // MV / artwork projects register + re-edit through their OWN forms (never the
+  // camp wizard, which would overwrite their kind-specific fields). This is the
+  // edit-resubmit entry point for those kinds.
+  const projectEditHref =
+    camp.kind === "mutant_vehicle"
+      ? `/vehicles/${camp.slug}/edit`
+      : camp.kind === "artwork"
+        ? `/artworks/${camp.slug}/edit`
+        : null;
+  const projectEditLabel =
+    camp.registrationStatus === "changes_requested"
+      ? "Update & resubmit"
+      : camp.registrationStatus === "draft"
+        ? "Continue registration"
+        : "Edit registration";
+
   // Pinned-bulletin banner (canvas RGcNS `adNWQ`). Only pinned, PUBLISHED
   // bulletins this viewer was actually targeted by resolve — the query joins
   // through their own notification rows, so an untargeted (or org-internal)
@@ -355,14 +370,24 @@ export default async function CampPage({
                       Registered for {edition.name} — your entitlements are live.
                     </span>
                   </div>
-                  {isAdmin && (
-                    <Link
-                      href={`/camps/${camp.slug}/registration`}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      View submission
-                    </Link>
-                  )}
+                  {isAdmin &&
+                    // Theme camps view the camp-shaped submission; MV/art view
+                    // their own (locked, once approved) registration form.
+                    (camp.kind === "theme_camp" ? (
+                      <Link
+                        href={`/camps/${camp.slug}/registration`}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        View submission
+                      </Link>
+                    ) : projectEditHref ? (
+                      <Link
+                        href={projectEditHref}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        View registration
+                      </Link>
+                    ) : null)}
                 </>
               ) : (
                 isAdmin &&
@@ -370,8 +395,9 @@ export default async function CampPage({
                 // CAMP-shaped: its section predicates, labels and stored columns
                 // all assume a theme camp. Mutant vehicles and artworks register
                 // through their own forms (/vehicles/new, /artworks/new) and
-                // must never be sent here — following this CTA would let camp
-                // answers overwrite their sound/LNT/dimension fields.
+                // re-open through their own edit routes — following the camp CTA
+                // would let camp answers overwrite their sound/LNT/dimension
+                // fields.
                 (camp.kind === "theme_camp" ? (
                   <Button asChild size="sm" className="w-full">
                     <Link href={`/camps/${camp.slug}/registration`}>
@@ -379,6 +405,10 @@ export default async function CampPage({
                         ? "Continue registration"
                         : "Begin registration"}
                     </Link>
+                  </Button>
+                ) : projectEditHref ? (
+                  <Button asChild size="sm" className="w-full">
+                    <Link href={projectEditHref}>{projectEditLabel}</Link>
                   </Button>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -471,20 +501,14 @@ export default async function CampPage({
               icon={<CalendarClock className="h-4 w-4" />}
             />
             {/*
-              PENDING RYAN'S RULING: the "Budget" capability sits in tension with
-              the product law that AfrikaBurn never runs camp treasuries/dues
-              (AGENTS.md §Product laws — "camp treasuries/dues" are out of scope
-              "permanently unless Ryan says otherwise"). It is rendered here only
-              as a disabled "topic under exploration" hint tile — no budgeting UI,
-              no money handling. Do NOT build any budget/treasury feature behind
-              this tile until Ryan explicitly reverses the no-treasuries stance.
+              The "Budget" hint tile was REMOVED (Ryan, 26 Jul 2026): it sat in
+              tension with the product law that AfrikaBurn never runs camp
+              treasuries/dues (AGENTS.md §Product laws — out of scope
+              "permanently unless Ryan says otherwise"). Even as a disabled
+              "coming soon" tile it implied a treasury feature was on the roadmap,
+              which it is not. Do NOT reintroduce any budget/treasury tile or UI
+              unless Ryan explicitly reverses the no-treasuries stance.
             */}
-            <DisabledHintTile
-              title="Budget"
-              hint="Topic under exploration with camp leads."
-              tag="Exploring"
-              icon={<Wallet className="h-4 w-4" />}
-            />
             <DisabledHintTile
               title="Layout"
               hint="Topic under exploration with camp leads."

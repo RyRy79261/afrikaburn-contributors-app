@@ -7,7 +7,7 @@ import {
   isSanitizationDue,
 } from "@quagga/core";
 
-import { db, schema } from "@/lib/db";
+import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
 
@@ -18,22 +18,29 @@ import { sendEmail } from "@/lib/email";
 // own `users` row (it survives as the "Departed Burner" stub). It DOES hard-delete
 // the Better Auth IDENTITY (user/account/session) — that is the POPIA erasure.
 // @quagga/core `buildSanitizationPlan` decides WHAT to erase; this module applies
-// it, in a deliberate order, and records that it happened.
+// it, and records that it happened.
 //
-// ORDERING MATTERS, because the HTTP Drizzle driver has no transactions:
-//   1. capture the address to notify + the auth_user_id (after step 5 the email
-//      is gone; the auth_user_id is needed to delete the identity in step 4);
-//   2. purge the secrets tables (profile keys, in-flight email-change tokens);
+// ATOMICITY: every erasure write runs inside ONE pooled transaction, so a
+// partial POPIA erasure is impossible — either the identity + bios + secrets are
+// all gone and the tombstone is stamped, or nothing changed and the request
+// stays `pending` for the next sweep. ORDERING still matters WITHIN the
+// transaction (foreign keys, and the tombstone-last invariant):
+//   1. capture the address to notify + the auth_user_id BEFORE the transaction
+//      (after the erasure the email is gone; the auth_user_id is needed to delete
+//      the identity);
+//   2. purge the secrets/context tables (profile keys, in-flight email-change
+//      tokens, security events);
 //   3. patch every `burner_bios` row for the account;
 //   4. HARD-DELETE the Better Auth identity — sessions, then credential/OAuth
 //      accounts, then the user row (email PII). This signs the account out
 //      everywhere and destroys the password hash, so a "deleted" account can
 //      neither sign in with its password nor ride a lingering cookie;
-//   5. patch the `users` row LAST — `sanitized_at` is the tombstone, so it is
-//      only set once the erasure it claims has actually happened. `auth_user_id`
-//      is left unchanged so the tombstone stays findable by the session
-//      resolvers. A crash before step 5 leaves the request `pending` and the
-//      sweep simply runs again; every step is idempotent, so a re-run is harmless.
+//   5. patch the `users` row LAST — `sanitized_at` is the tombstone, committed in
+//      the same transaction as the erasure it attests to. `auth_user_id` is left
+//      unchanged so the tombstone stays findable by the session resolvers. A
+//      crash mid-way rolls the whole transaction back, leaving the request
+//      `pending`; the sweep simply runs again (every step is also idempotent, so
+//      a re-run is harmless).
 //
 // Note what is NOT here: no delete of memberships, questionnaire responses,
 // required actions, supplier acks, or audit events. Preserving those is the
@@ -130,65 +137,73 @@ export async function sanitizeAccount(
     membershipCount: Number(memberships),
   });
 
-  // 2. Purge the secrets-only tables. Nothing references these rows.
-  await handle
-    .delete(schema.profileKeys)
-    .where(eq(schema.profileKeys.userId, userId));
-  await handle
-    .delete(schema.emailChangeRequests)
-    .where(eq(schema.emailChangeRequests.userId, userId));
+  // Steps 2–5 + the request/audit writes all commit as ONE transaction, so the
+  // POPIA erasure is all-or-nothing. Ordering within it still follows the notes
+  // above (foreign keys; tombstone last).
+  await withTransaction(async (tx) => {
+    // 2. Purge the secrets-and-context tables. Nothing references these rows.
+    //    `security_events` holds captured IP/user-agent (personal data), so it is
+    //    erased with the account (plan.purgedTables).
+    await tx
+      .delete(schema.profileKeys)
+      .where(eq(schema.profileKeys.userId, userId));
+    await tx
+      .delete(schema.emailChangeRequests)
+      .where(eq(schema.emailChangeRequests.userId, userId));
+    await tx
+      .delete(schema.securityEvents)
+      .where(eq(schema.securityEvents.userId, userId));
 
-  // 3. Erase every bio row (one per edition). The plan's patch nulls all
-  //    personal columns including the hard-locked classes, and replaces the
-  //    display name with the "Departed Burner" stub.
-  await handle
-    .update(schema.burnerBios)
-    .set(plan.bio)
-    .where(eq(schema.burnerBios.userId, userId));
+    // 3. Erase every bio row (one per edition). The plan's patch nulls all
+    //    personal columns including the hard-locked classes, and replaces the
+    //    display name with the "Departed Burner" stub.
+    await tx
+      .update(schema.burnerBios)
+      .set(plan.bio)
+      .where(eq(schema.burnerBios.userId, userId));
 
-  // 4. HARD-DELETE the Better Auth identity (plan.identityTables): the live
-  //    sessions (revokes every cookie — the account is signed out everywhere),
-  //    the credential/OAuth `account` rows (the password hash goes, so the old
-  //    password can never authenticate again), and finally the `user` row (its
-  //    email PII). Without this the identity layer keeps the person's email,
-  //    password and valid session tokens forever — the POPIA erasure failure this
-  //    whole plan exists to prevent, and the door through which a "deleted"
-  //    account could sign straight back in. Deleting `user` alone would cascade
-  //    (FK onDelete: cascade), but we delete all three explicitly and in order so
-  //    the erasure is unambiguous and idempotent under the no-transaction HTTP
-  //    driver — a crashed sweep simply re-runs each delete as a harmless no-op.
-  //    This runs BEFORE the tombstone (step 5) so the tombstone only ever marks
-  //    an erasure that has actually happened.
-  await handle
-    .delete(schema.session)
-    .where(eq(schema.session.userId, user.authUserId));
-  await handle
-    .delete(schema.account)
-    .where(eq(schema.account.userId, user.authUserId));
-  await handle.delete(schema.user).where(eq(schema.user.id, user.authUserId));
+    // 4. HARD-DELETE the Better Auth identity (plan.identityTables): the live
+    //    sessions (revokes every cookie — the account is signed out everywhere),
+    //    the credential/OAuth `account` rows (the password hash goes, so the old
+    //    password can never authenticate again), and finally the `user` row (its
+    //    email PII). Without this the identity layer keeps the person's email,
+    //    password and valid session tokens forever — the POPIA erasure failure
+    //    this whole plan exists to prevent, and the door through which a "deleted"
+    //    account could sign straight back in. Deleting `user` alone would cascade
+    //    (FK onDelete: cascade), but we delete all three explicitly and in order
+    //    so the erasure is unambiguous. This runs BEFORE the tombstone (step 5)
+    //    so the tombstone only ever marks an erasure that has actually happened.
+    await tx
+      .delete(schema.session)
+      .where(eq(schema.session.userId, user.authUserId));
+    await tx
+      .delete(schema.account)
+      .where(eq(schema.account.userId, user.authUserId));
+    await tx.delete(schema.user).where(eq(schema.user.id, user.authUserId));
 
-  // 5. The users row LAST — the tombstone only lands once erasure is real.
-  //    `authUserId` is left unchanged (plan.user does not touch it) so the row
-  //    stays findable by the session resolvers' `where authUserId = …` lookup:
-  //    that is what lets `assertNotSanitized` fire instead of the resolver
-  //    minting a fresh account (the re-animation hole).
-  await handle
-    .update(schema.users)
-    .set(plan.user)
-    .where(eq(schema.users.id, userId));
+    // 5. The users row LAST — the tombstone only lands once erasure is real.
+    //    `authUserId` is left unchanged (plan.user does not touch it) so the row
+    //    stays findable by the session resolvers' `where authUserId = …` lookup:
+    //    that is what lets `assertNotSanitized` fire instead of the resolver
+    //    minting a fresh account (the re-animation hole).
+    await tx
+      .update(schema.users)
+      .set(plan.user)
+      .where(eq(schema.users.id, userId));
 
-  await handle
-    .update(schema.accountDeletionRequests)
-    .set({ status: "completed", completedAt: now, updatedAt: now })
-    .where(eq(schema.accountDeletionRequests.id, requestId));
+    await tx
+      .update(schema.accountDeletionRequests)
+      .set({ status: "completed", completedAt: now, updatedAt: now })
+      .where(eq(schema.accountDeletionRequests.id, requestId));
 
-  // The proof that erasure happened. Names no personal data — only our internal
-  // id and counts — so recording it does not undo what it records.
-  await handle.insert(schema.auditEvents).values({
-    actorId: userId,
-    action: plan.audit.action,
-    subject: plan.audit.subject,
-    meta: plan.audit.meta,
+    // The proof that erasure happened. Names no personal data — only our internal
+    // id and counts — so recording it does not undo what it records.
+    await tx.insert(schema.auditEvents).values({
+      actorId: userId,
+      action: plan.audit.action,
+      subject: plan.audit.subject,
+      meta: plan.audit.meta,
+    });
   });
 
   // The last message this address will ever get from us.

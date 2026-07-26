@@ -161,6 +161,7 @@ describe("buildSanitizationPlan — referential integrity", () => {
     expect([...plan.purgedTables].sort()).toEqual([
       "email_change_requests",
       "profile_keys",
+      "security_events",
     ]);
   });
 

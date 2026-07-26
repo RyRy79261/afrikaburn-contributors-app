@@ -21,7 +21,7 @@ import {
   type QuestionnaireResponses,
   type SaveResult,
 } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
 
@@ -76,72 +76,89 @@ export async function createAndActivateProjectQuestionnaire(
 ): Promise<CreateProjectQuestionnaireResult> {
   const key = projectDefinitionKey(input.groupId);
 
-  await db().insert(schema.questionnaireDefinitions).values({
-    key,
-    title: input.title,
-    definition: input.definition,
-    status: "published",
-    version: DEFINITION_VERSION,
-    createdByUserId: input.createdByUserId,
-  });
-
-  const inserted = await db()
-    .insert(schema.questionnaireActivations)
-    .values({
-      questionnaireKey: key,
-      version: DEFINITION_VERSION,
-      title: input.title,
-      description: input.description,
-      scope: "everyone",
-      blocking: input.blocking,
-      status: "open",
-      dueAt: input.dueAt,
-      authoredScope: "group",
-      groupId: input.groupId,
-      editionId: input.editionId,
-      audience: input.audience,
-      // Snapshot the definition AS SENT so later edits to the live definition
-      // never mutate what these respondents were shown.
-      definition: input.definition,
-      activatedByUserId: input.createdByUserId,
-      openedAt: new Date(),
-    })
-    .returning({ id: schema.questionnaireActivations.id });
-  const activationId = inserted[0]!.id;
-
+  // The audience → user-id resolution is read-only and independent of the rows
+  // we're about to write, so compute it before opening the transaction.
   const userIds = await resolveProjectTargets(
     input.groupId,
     input.editionId,
     input.audience,
   );
 
-  const rows = buildActivationRequiredActions(
-    { id: activationId, title: input.title, blocking: input.blocking, dueAt: input.dueAt },
-    userIds,
-  );
-  if (rows.length > 0) {
-    await db()
-      .insert(schema.requiredActions)
-      .values(
-        rows.map((r) => ({
-          userId: r.userId,
-          type: r.type,
-          actionKey: r.actionKey,
-          activationId: r.activationId,
-          title: r.title,
-          blocking: r.blocking,
-          status: r.status,
-          dueAt: r.dueAt,
-        })),
-      )
-      .onConflictDoNothing({
-        target: [
-          schema.requiredActions.userId,
-          schema.requiredActions.actionKey,
-        ],
-      });
-  }
+  // The definition, its activation, and the one required-action per target are
+  // written as ONE transaction. Otherwise a failure after the definition (or
+  // after the activation) leaves an orphan definition, or an activation nobody
+  // was actually gated to complete — a questionnaire that silently reaches no
+  // one. Email is a side effect and stays OUTSIDE the transaction (below).
+  const activationId = await withTransaction(async (tx) => {
+    await tx.insert(schema.questionnaireDefinitions).values({
+      key,
+      title: input.title,
+      definition: input.definition,
+      status: "published",
+      version: DEFINITION_VERSION,
+      createdByUserId: input.createdByUserId,
+    });
 
+    const inserted = await tx
+      .insert(schema.questionnaireActivations)
+      .values({
+        questionnaireKey: key,
+        version: DEFINITION_VERSION,
+        title: input.title,
+        description: input.description,
+        scope: "everyone",
+        blocking: input.blocking,
+        status: "open",
+        dueAt: input.dueAt,
+        authoredScope: "group",
+        groupId: input.groupId,
+        editionId: input.editionId,
+        audience: input.audience,
+        // Snapshot the definition AS SENT so later edits to the live definition
+        // never mutate what these respondents were shown.
+        definition: input.definition,
+        activatedByUserId: input.createdByUserId,
+        openedAt: new Date(),
+      })
+      .returning({ id: schema.questionnaireActivations.id });
+    const newActivationId = inserted[0]!.id;
+
+    const rows = buildActivationRequiredActions(
+      {
+        id: newActivationId,
+        title: input.title,
+        blocking: input.blocking,
+        dueAt: input.dueAt,
+      },
+      userIds,
+    );
+    if (rows.length > 0) {
+      await tx
+        .insert(schema.requiredActions)
+        .values(
+          rows.map((r) => ({
+            userId: r.userId,
+            type: r.type,
+            actionKey: r.actionKey,
+            activationId: r.activationId,
+            title: r.title,
+            blocking: r.blocking,
+            status: r.status,
+            dueAt: r.dueAt,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [
+            schema.requiredActions.userId,
+            schema.requiredActions.actionKey,
+          ],
+        });
+    }
+
+    return newActivationId;
+  });
+
+  // Best-effort delivery, AFTER the rows are durably committed.
   const emailDelivered = await notifyTargets(userIds, {
     activationId,
     title: input.title,

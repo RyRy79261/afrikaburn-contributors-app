@@ -11,7 +11,7 @@ import {
 } from "@quagga/core";
 import { SupplierOnboardingStepKey, SupplierOnboardingStepStatus } from "@quagga/types";
 
-import { getDb, schema } from "@/lib/db";
+import { schema, withTransaction } from "@/lib/db";
 import { requireSupplierSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
@@ -50,22 +50,29 @@ export async function setOnboardingStep(
     );
     if (!result.ok) throw new Error(result.reason);
 
-    const db = getDb();
-    await db
-      .update(schema.supplierOnboarding)
-      .set({ steps: result.steps, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.supplierOnboarding.supplierId, session.supplier.id),
-          eq(schema.supplierOnboarding.editionId, session.edition.id),
-        ),
-      );
+    // Step transition + its audit event land together, so the trail can never
+    // disagree with the stored step map.
+    await withTransaction(async (tx) => {
+      await tx
+        .update(schema.supplierOnboarding)
+        .set({ steps: result.steps, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.supplierOnboarding.supplierId, session.supplier.id),
+            eq(schema.supplierOnboarding.editionId, session.edition.id),
+          ),
+        );
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier.onboarding_step",
-      subject: session.supplier.id,
-      meta: { step: input.stepKey, to: input.to, edition: session.edition.year },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier.onboarding_step",
+        subject: session.supplier.id,
+        meta: {
+          step: input.stepKey,
+          to: input.to,
+          edition: session.edition.year,
+        },
+      });
     });
 
     revalidatePath("/onboarding");

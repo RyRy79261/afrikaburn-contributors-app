@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { SupplierDocumentInput } from "@quagga/types";
 import { validateDocumentBinding } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
@@ -38,43 +38,46 @@ export async function createSupplierDocument(
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
     if (!binding.ok) throw new Error(binding.reason);
 
-    const db = getDb();
+    // Sort computation, insert and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      // Default sort to the end of the edition's list when not supplied.
+      let sort = input.sort;
+      if (sort == null) {
+        const [{ max } = { max: null }] = await tx
+          .select({
+            max: sql<number | null>`max(${schema.supplierDocuments.sort})`,
+          })
+          .from(schema.supplierDocuments)
+          .where(eq(schema.supplierDocuments.editionId, editionId));
+        sort = max == null ? 0 : Number(max) + 1;
+      }
 
-    // Default sort to the end of the edition's list when not supplied.
-    let sort = input.sort;
-    if (sort == null) {
-      const [{ max } = { max: null }] = await db
-        .select({ max: sql<number | null>`max(${schema.supplierDocuments.sort})` })
-        .from(schema.supplierDocuments)
-        .where(eq(schema.supplierDocuments.editionId, editionId));
-      sort = max == null ? 0 : Number(max) + 1;
-    }
+      const [created] = await tx
+        .insert(schema.supplierDocuments)
+        .values({
+          editionId,
+          title: input.title,
+          sourceType: input.sourceType,
+          url: input.url,
+          requiredAck: input.requiredAck,
+          stepKey: input.stepKey,
+          sort,
+          createdByUserId: session.dbUserId,
+        })
+        .returning({ id: schema.supplierDocuments.id });
 
-    const [created] = await db
-      .insert(schema.supplierDocuments)
-      .values({
-        editionId,
-        title: input.title,
-        sourceType: input.sourceType,
-        url: input.url,
-        requiredAck: input.requiredAck,
-        stepKey: input.stepKey,
-        sort,
-        createdByUserId: session.dbUserId,
-      })
-      .returning({ id: schema.supplierDocuments.id });
-
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier_document.create",
-      subject: created?.id,
-      meta: {
-        editionId,
-        title: input.title,
-        sourceType: input.sourceType,
-        requiredAck: input.requiredAck,
-        stepKey: input.stepKey,
-      },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier_document.create",
+        subject: created?.id,
+        meta: {
+          editionId,
+          title: input.title,
+          sourceType: input.sourceType,
+          requiredAck: input.requiredAck,
+          stepKey: input.stepKey,
+        },
+      });
     });
 
     revalidatePath("/suppliers");
@@ -105,39 +108,41 @@ export async function updateSupplierDocument(
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
     if (!binding.ok) throw new Error(binding.reason);
 
-    const db = getDb();
-    const [current] = await db
-      .select({
-        id: schema.supplierDocuments.id,
-        sort: schema.supplierDocuments.sort,
-      })
-      .from(schema.supplierDocuments)
-      .where(eq(schema.supplierDocuments.id, documentId))
-      .limit(1);
-    if (!current) throw new Error("That document no longer exists.");
+    // Read, update and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          id: schema.supplierDocuments.id,
+          sort: schema.supplierDocuments.sort,
+        })
+        .from(schema.supplierDocuments)
+        .where(eq(schema.supplierDocuments.id, documentId))
+        .limit(1);
+      if (!current) throw new Error("That document no longer exists.");
 
-    await db
-      .update(schema.supplierDocuments)
-      .set({
-        title: input.title,
-        sourceType: input.sourceType,
-        url: input.url,
-        requiredAck: input.requiredAck,
-        stepKey: input.stepKey,
-        sort: input.sort ?? current.sort,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.supplierDocuments.id, documentId));
+      await tx
+        .update(schema.supplierDocuments)
+        .set({
+          title: input.title,
+          sourceType: input.sourceType,
+          url: input.url,
+          requiredAck: input.requiredAck,
+          stepKey: input.stepKey,
+          sort: input.sort ?? current.sort,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.supplierDocuments.id, documentId));
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier_document.update",
-      subject: documentId,
-      meta: {
-        title: input.title,
-        requiredAck: input.requiredAck,
-        stepKey: input.stepKey,
-      },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier_document.update",
+        subject: documentId,
+        meta: {
+          title: input.title,
+          requiredAck: input.requiredAck,
+          stepKey: input.stepKey,
+        },
+      });
     });
 
     revalidatePath("/suppliers");
@@ -159,35 +164,37 @@ export async function deleteSupplierDocument(
     const session = await requireOrgSession();
     const { documentId } = DeleteDocumentInput.parse(raw);
 
-    const db = getDb();
-    const [current] = await db
-      .select({
-        title: schema.supplierDocuments.title,
-        stepKey: schema.supplierDocuments.stepKey,
-      })
-      .from(schema.supplierDocuments)
-      .where(eq(schema.supplierDocuments.id, documentId))
-      .limit(1);
-    if (!current) throw new Error("That document no longer exists.");
+    // Read, ack-count, delete and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [current] = await tx
+        .select({
+          title: schema.supplierDocuments.title,
+          stepKey: schema.supplierDocuments.stepKey,
+        })
+        .from(schema.supplierDocuments)
+        .where(eq(schema.supplierDocuments.id, documentId))
+        .limit(1);
+      if (!current) throw new Error("That document no longer exists.");
 
-    const [{ acks } = { acks: 0 }] = await db
-      .select({ acks: sql<number>`count(*)::int` })
-      .from(schema.supplierDocumentAcks)
-      .where(eq(schema.supplierDocumentAcks.documentId, documentId));
+      const [{ acks } = { acks: 0 }] = await tx
+        .select({ acks: sql<number>`count(*)::int` })
+        .from(schema.supplierDocumentAcks)
+        .where(eq(schema.supplierDocumentAcks.documentId, documentId));
 
-    await db
-      .delete(schema.supplierDocuments)
-      .where(eq(schema.supplierDocuments.id, documentId));
+      await tx
+        .delete(schema.supplierDocuments)
+        .where(eq(schema.supplierDocuments.id, documentId));
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "supplier_document.delete",
-      subject: documentId,
-      meta: {
-        title: current.title,
-        stepKey: current.stepKey,
-        acknowledgementsDiscarded: Number(acks),
-      },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "supplier_document.delete",
+        subject: documentId,
+        meta: {
+          title: current.title,
+          stepKey: current.stepKey,
+          acknowledgementsDiscarded: Number(acks),
+        },
+      });
     });
 
     revalidatePath("/suppliers");

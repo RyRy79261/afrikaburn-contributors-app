@@ -9,6 +9,7 @@ import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
 import { PasswordInput } from "@quagga/ui/components/password-input";
 
+import { AccountTwoFactorChallenge } from "@quagga/ui/components/account-two-factor-challenge";
 import { authClient } from "@/lib/auth-client";
 
 // Supplier sign-in (canvas `OX6KJ` desktop / `xgCd7` mobile), redesigned to
@@ -31,6 +32,8 @@ export function SupplierSignInForm() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [pending, setPending] = React.useState(false);
+  // Correct password + 2FA enrolled returns a challenge, not a session.
+  const [needsTwoFactor, setNeedsTwoFactor] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -38,13 +41,19 @@ export function SupplierSignInForm() {
     setError(null);
     setPending(true);
     try {
-      const { error: signInError } = await authClient.signIn.email({
+      const { data, error: signInError } = await authClient.signIn.email({
         email: email.trim(),
         password,
         callbackURL: "/onboarding",
       });
       if (signInError) {
         setError(enumerationSafeMessage("sign_in"));
+        return;
+      }
+      // Accounts are shared across all three apps, so a supplier who enrolled
+      // TOTP elsewhere must be able to clear the second factor here too.
+      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+        setNeedsTwoFactor(true);
         return;
       }
       router.push("/onboarding");
@@ -54,6 +63,18 @@ export function SupplierSignInForm() {
     } finally {
       setPending(false);
     }
+  }
+
+  if (needsTwoFactor) {
+    return (
+      <AccountTwoFactorChallenge
+        client={authClient}
+        onVerified={() => {
+          router.push("/onboarding");
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (

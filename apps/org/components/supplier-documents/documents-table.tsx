@@ -84,8 +84,10 @@ function displayUrl(url: string): string {
 
 export function DocumentsTable({
   documents,
+  blobConfigured = false,
 }: {
   documents: OrgSupplierDocumentRow[];
+  blobConfigured?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -395,6 +397,7 @@ export function DocumentsTable({
             <DocumentForm
               mode="edit"
               documentId={editing.id}
+              blobConfigured={blobConfigured}
               initial={{
                 title: editing.title,
                 sourceType: editing.sourceType,

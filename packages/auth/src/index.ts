@@ -30,6 +30,7 @@ export { sendAuthEmail, type AuthEmailInput, type AuthEmailKind } from "./email"
 export {
   AUTH_APEX_DOMAIN,
   AUTH_COOKIE_DOMAIN,
+  AUTH_RP_NAME,
   PRODUCTION_ORIGINS,
   authConfigWarnings,
   isAuthConfigured,
@@ -39,6 +40,8 @@ export {
   parseBoolEnv,
   resolveBaseURL,
   resolveCookieDomain,
+  resolvePasskeyOrigins,
+  resolvePasskeyRpID,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
   type AuthEnv,

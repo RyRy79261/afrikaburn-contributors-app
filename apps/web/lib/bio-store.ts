@@ -78,7 +78,11 @@ export async function getBio(
     onsiteContactPhone: row.onsiteContactPhone,
     offsiteContactName: row.offsiteContactName,
     offsiteContactPhone: row.offsiteContactPhone,
-    medicalNotes: row.medicalNotes,
+    // Medical notes are SPECIAL personal information (POPIA s26/27) and are
+    // AES-256-GCM encrypted at rest, exactly like the ID document — decrypt for
+    // the owner here. `decryptOrNull` also degrades a legacy/unkeyed value to null
+    // rather than surfacing ciphertext.
+    medicalNotes: decryptOrNull(row.medicalNotes),
     idType,
     idNumber,
   };
@@ -204,6 +208,12 @@ export async function saveBio(input: {
   const passportEncrypted =
     fields.idType === "passport" ? safeEncrypt(fields.idNumber) : null;
 
+  // Medical notes are SPECIAL personal information (POPIA s26/27): encrypt like
+  // the ID document. `safeEncrypt` returns null when no PGCRYPTO_KEY is set, so
+  // the notes are DROPPED rather than persisted in the clear — SPECIAL data must
+  // never fall back to plaintext.
+  const medicalNotesEncrypted = safeEncrypt(fields.medicalNotes);
+
   const now = new Date();
   const completedAt = input.final ? now : null;
 
@@ -226,7 +236,7 @@ export async function saveBio(input: {
     onsiteContactPhone: fields.onsiteContactPhone,
     offsiteContactName: fields.offsiteContactName,
     offsiteContactPhone: fields.offsiteContactPhone,
-    medicalNotes: fields.medicalNotes,
+    medicalNotes: medicalNotesEncrypted,
     saIdEncrypted,
     passportEncrypted,
     // v3 columns only when the caller supplied extras (else left untouched).

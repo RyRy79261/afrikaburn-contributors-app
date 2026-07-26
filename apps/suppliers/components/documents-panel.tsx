@@ -45,6 +45,20 @@ export interface DocumentsPanelProps {
   required: number;
 }
 
+// A Vercel Blob URL serves inline by default; `?download=1` makes it a real
+// attachment download. Only applied to blob-hosted files — an external "file"
+// URL is opened as-is (we can't assume it honours the param).
+function downloadHref(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith(".blob.vercel-storage.com")) return url;
+    parsed.searchParams.set("download", "1");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function DocumentsPanel({
   documents,
   acked,
@@ -141,7 +155,9 @@ export function DocumentsPanel({
             </div>
 
             <a
-              href={doc.url}
+              href={
+                doc.sourceType === "file" ? downloadHref(doc.url) : doc.url
+              }
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-muted"

@@ -157,6 +157,49 @@ ordinal to derive a sequence from. Format `SUP-{YYYY}-{NNNN}` is deterministic
 (`@quagga/core formatSupplierCode`); only sequence allocation touches the database,
 and `suppliers.code UNIQUE` is the arbiter of the allocation race.
 
+## ID document — lawful purpose + bounded retention (Ryan, 26 Jul 2026)
+
+SA ID / passport on `burner_bios` are collected for **one documented purpose:
+on-site identity verification against the ticket at the gate** — confirming the
+person arriving is the ticket holder. They are always private (hard-locked, never
+public, never shown to other camps), AES-256-GCM encrypted at rest, and used for
+nothing else. This is the lawful basis that makes the collection POPIA-defensible;
+it is documented in `schema.ts` on the `sa_id_encrypted` / `passport_encrypted`
+columns.
+
+**Bounded retention.** Because the purpose is spent once the gate closes, this
+data is **purgeable after an edition ends** (POPIA storage-limitation). The rule
+lives in `@quagga/core` `id-retention` (pure, tested): an edition's ID data ages
+out `ID_RETENTION_GRACE_DAYS` (30) after its end date — a small grace for late
+arrivals and gate/access reconciliation — and `identifyPurgeableIdBios` returns
+the bios still holding ID data for expired editions, to which a purge applies
+`buildIdPurgePatch()` (`{ sa_id_encrypted: null, passport_encrypted: null }`).
+**Wiring a scheduled purge job that applies this is a LATER task** — only the pure
+rule + tests exist now (mirroring how the deletion sweeper stayed out of the build
+until deliberately triggered).
+
+**Medical notes** are also encrypted at rest now (POPIA s26/27 SPECIAL personal
+information), fixing an earlier inversion where lower-risk ID data was encrypted
+while medical was plaintext. Same treatment as ID: encrypted on write, decrypted
+for the owner on read, and dropped rather than stored plaintext when no key is
+configured. The `medical_notes` column stays `text`, so this needed **no
+migration** — only the write/read code in `apps/web/lib/bio-store.ts`.
+
+## Security events log (the "recent security events" feed)
+
+The `/account/security` feed reads a real append-only `security_events` table
+(migration 0014), not the `notifications` table. Every already-firing account
+action records an event thinly and best-effort (`recordSecurityEvent` in
+`apps/web/lib/account-actions.ts` — a failed insert never breaks or rolls back the
+primary action): password changed, password reset completed, single-session
+revoke, sign-out-everywhere, email change requested/confirmed/revoked, deletion
+requested/cancelled. Each row stores the typed `kind` plus request context
+(`ip`, `user_agent`, both nullable); display titles come from `@quagga/core`
+`describeSecurityEvent` so no strings live in the DB. The captured IP/user-agent
+is personal data, so `security_events` is one of the sanitization **purged**
+tables (erased with the account, POPIA erasure). New-device sign-in alerts remain
+unwired (no device-fingerprint record); the active-session list is the check.
+
 ## Rollout
 
 1. Design pass (all frames, both accents + supplier sage): supplier sign-up + sign-in,
@@ -177,6 +220,10 @@ and `suppliers.code UNIQUE` is the arbiter of the allocation race.
   `users.sanitized_at`. Partial unique indexes keep exactly one *pending* deletion
   and one *pending* email-change per user, while allowing a burner who cancels to
   request again.
+- Migration **0014** (append-only): `security_events` (the real security-events
+  log the feed reads) + `section_review_replies` (camp-side replies under a section
+  review). No column change was needed to encrypt medical notes — `medical_notes`
+  was already `text`, so the encryption landed in code only.
 - `@quagga/core`: `auth-capabilities`, `account-security` (password policy,
   enumeration-safe messaging, deletion grace state machine, email-change state
   machine, the three guards), `account-sanitization` (the Lost Cat plan),

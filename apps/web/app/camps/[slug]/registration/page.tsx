@@ -132,7 +132,7 @@ export default async function RegistrationPage({
       ? await getDeclaredSupplierIds(registration.id)
       : [];
     const reviews = registration
-      ? await getSectionReviews(registration.id)
+      ? await getSectionReviews(registration.id, context.editionId)
       : [];
 
     const initialValues: RegistrationValues = registration
@@ -181,6 +181,7 @@ export default async function RegistrationPage({
           initialValues={initialValues}
           suppliers={suppliers}
           reviews={reviews}
+          viewerUserId={campUser.id}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
           saveAction={saveRegistrationDraftAction}
           submitAction={submitRegistrationAction}
@@ -191,7 +192,9 @@ export default async function RegistrationPage({
   }
 
   // Locked path: submitted / under_review / approved / rejected / withdrawn.
-  const reviews = registration ? await getSectionReviews(registration.id) : [];
+  const reviews = registration
+    ? await getSectionReviews(registration.id, context.editionId)
+    : [];
   const declaredIds = registration
     ? await getDeclaredSupplierIds(registration.id)
     : [];
@@ -209,6 +212,8 @@ export default async function RegistrationPage({
           description={context.group.description}
           supplierNames={supplierNames}
           reviews={reviews}
+          slug={slug}
+          viewerUserId={campUser.id}
         />
       ) : (
         <PreviewNotice feature="Camp registration" />

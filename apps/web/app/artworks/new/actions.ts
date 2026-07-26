@@ -1,92 +1,22 @@
 "use server";
 
-import { z } from "zod";
-import { CAMP_DESCRIPTION_WORD_LIMIT, isWithinWordLimit } from "@quagga/core";
-import { MAX_LAYOUT_UPLOADS, type QuestionnaireResponses } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
 import { checkCampName } from "@/lib/groups-store";
 import { createProjectRegistration } from "@/lib/project-registration-store";
-import { ARTWORK_POWER_KEYS } from "./copy";
+import {
+  ArtworkRegistrationInput,
+  artworkSubmitGate,
+  buildArtworkPayload,
+  type ArtworkRegistrationActionResult,
+} from "./shared";
 
 // Art project registration (canvas §d3pOJI / H2DP4 · docs/synthesis.md "art
 // project registration draws on the participate/ARTeria/fire-safety pages").
-// Registration is an invitation, not a requirement — but burning, sound,
-// placement, the WTF Guide and grant eligibility all depend on it, so the
-// submit gate asks only for what those decisions need.
-
-const metres = z
-  .number()
-  .finite()
-  .positive("Dimensions are in metres and must be greater than zero.")
-  .max(200)
-  .nullable()
-  .default(null);
-
-const wordLimited = (label: string) =>
-  z
-    .string()
-    .trim()
-    .max(4000)
-    .optional()
-    .refine(
-      (v) => !v || isWithinWordLimit(v, CAMP_DESCRIPTION_WORD_LIMIT),
-      `${label} must be ${CAMP_DESCRIPTION_WORD_LIMIT} words or fewer.`,
-    );
-
-const ArtworkRegistrationInput = z.object({
-  name: z.string().trim().min(2, "Give your artwork a name.").max(120),
-  artist: z.string().trim().max(160).optional(),
-  description: wordLimited("The description"),
-  imageUrls: z.array(z.string().url()).max(MAX_LAYOUT_UPLOADS).default([]),
-  widthM: metres,
-  depthM: metres,
-  heightM: metres,
-  placementNotes: wordLimited("Placement notes"),
-  burnIntent: z.boolean().nullable().default(null),
-  powerNeeds: z.array(z.enum(ARTWORK_POWER_KEYS)).default([]),
-  buildPlan: wordLimited("The build plan"),
-  strikePlan: wordLimited("The strike & Leave No Trace plan"),
-  grantInterest: z.boolean().default(false),
-  submit: z.boolean().default(false),
-  confirmWarnings: z.boolean().default(false),
-});
-
-export type ArtworkRegistrationActionResult =
-  | { status: "created"; slug: string }
-  | { status: "error"; message: string }
-  | { status: "warn"; warnings: string[] };
-
-function submitGate(
-  input: z.infer<typeof ArtworkRegistrationInput>,
-): string | null {
-  if (!input.artist) return "Who's making it? Name the artist or collective.";
-  if (!input.description) {
-    return "Describe the artwork — this is what the Art crew and the WTF Guide read.";
-  }
-  if (input.widthM === null || input.depthM === null || input.heightM === null) {
-    return "Give the footprint in metres — width, depth and height.";
-  }
-  if (input.burnIntent === null) {
-    return "Say whether the piece is intended to burn (all burns need approval).";
-  }
-  if (!input.buildPlan) return "Add a build plan — how it gets made on site.";
-  if (!input.strikePlan) {
-    return "Add a strike & Leave No Trace plan. Pack it in, pack it out.";
-  }
-  return null;
-}
-
-/** Render the footprint for `registrations.s4_area_dimensions` (metres, per
- * AfrikaBurn's structural-safety guidance: "present all dimensions in meters"). */
-function formatFootprint(
-  width: number | null,
-  depth: number | null,
-  height: number | null,
-): string | null {
-  if (width === null || depth === null || height === null) return null;
-  return `${width} m W × ${depth} m D × ${height} m H`;
-}
+// The Zod boundary, submit gate and payload builder live in ./shared (a
+// "use server" file exports only async actions); this file owns the create
+// action. Registration is an invitation, not a requirement — the submit gate
+// asks only for what burn/sound/placement/grant decisions need.
 
 /**
  * Register (or draft) an art project. Creates the `artwork` group via the
@@ -108,7 +38,7 @@ export async function createArtworkRegistrationAction(
   const user = await requireCampUser();
 
   if (input.submit) {
-    const gate = submitGate(input);
+    const gate = artworkSubmitGate(input);
     if (gate) return { status: "error", message: gate };
   }
 
@@ -131,39 +61,17 @@ export async function createArtworkRegistrationAction(
     return { status: "warn", warnings: check.warnings };
   }
 
-  const footprint = formatFootprint(input.widthM, input.depthM, input.heightM);
-
-  const answers: QuestionnaireResponses = {
-    artist_or_collective: input.artist ?? "",
-    description: input.description ?? "",
-    images: input.imageUrls,
-    width_m: input.widthM,
-    depth_m: input.depthM,
-    height_m: input.heightM,
-    placement_notes: input.placementNotes ?? "",
-    burn_intent: input.burnIntent,
-    power_needs: [...new Set(input.powerNeeds)],
-    build_plan: input.buildPlan ?? "",
-    strike_plan: input.strikePlan ?? "",
-    grant_interest: input.grantInterest,
-  };
-
+  const payload = buildArtworkPayload(input);
   const result = await createProjectRegistration({
     creatorId: user.id,
     creatorEmail: user.email,
     editionId: edition.id,
     kind: "artwork",
     name: input.name,
-    description: input.description ?? null,
+    description: payload.description,
     submit: input.submit,
-    columns: {
-      imageUrls: input.imageUrls,
-      areaDimensions: footprint,
-      placementNotes: input.placementNotes ?? null,
-      lntPlan: input.strikePlan ?? null,
-      grantsInterest: input.grantInterest,
-    },
-    answers,
+    columns: payload.columns,
+    answers: payload.answers,
   });
   if (!result.ok) return { status: "error", message: result.error };
   return { status: "created", slug: result.slug };

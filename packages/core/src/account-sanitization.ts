@@ -162,13 +162,16 @@ export const SANITIZATION_PRESERVED_TABLES = [
 
 /**
  * Tables whose rows are deleted outright, because they hold nothing BUT secrets
- * for an account that no longer exists and nothing references them.
- * `profile_keys` is a keypair; `email_change_requests` holds live tokens and the
- * old/new addresses (i.e. personal data) and must not outlive the account.
+ * or request context for an account that no longer exists and nothing references
+ * them. `profile_keys` is a keypair; `email_change_requests` holds live tokens and
+ * the old/new addresses (i.e. personal data); `security_events` holds the IP
+ * addresses and user-agents captured with each account action (personal data
+ * under POPIA) — none of it may outlive the account.
  */
 export const SANITIZATION_PURGED_TABLES = [
   "profile_keys",
   "email_change_requests",
+  "security_events",
 ] as const;
 
 /**

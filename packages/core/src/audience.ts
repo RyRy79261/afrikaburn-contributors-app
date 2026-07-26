@@ -47,6 +47,13 @@ export interface AudienceBio {
   editionId: string;
 }
 
+/** A supplier row that has claimed a portal account (`suppliers.user_id`). */
+export interface AudienceSupplier {
+  /** The linked burner/supplier account id (never null — accountless catalog
+   * rows are filtered out by the caller before they reach here). */
+  userId: string;
+}
+
 /** A custom-role assignment (membership × project_role). */
 export interface AudienceRoleAssignment {
   membershipId: string;
@@ -80,6 +87,10 @@ export interface AudienceContext {
   /** All project_roles (needed for baseline derivation + officer resolution).
    * Optional so pre-Roles-v2 callers still type-check; absent ⇒ empty. */
   projectRoles?: readonly AudienceProjectRole[];
+  /** Suppliers with a claimed portal account (the `org_suppliers` audience).
+   * Optional so callers that never target suppliers still type-check; absent ⇒
+   * empty (a bulletin to suppliers then reaches nobody, a valid outcome). */
+  suppliers?: readonly AudienceSupplier[];
 }
 
 const LEAD_ADMIN = new Set<MembershipRole>(PROJECT_ADMIN_ROLES);
@@ -285,6 +296,13 @@ export function resolveAudience(
     }
     case "org_officer": {
       return finalize(resolveOfficerAudience(ctx, spec.officerKeys));
+    }
+    case "org_suppliers": {
+      // Suppliers are a different account kind: they live in `ctx.suppliers`
+      // (linked via suppliers.user_id), never in memberships/bios. Only account-
+      // linked suppliers can receive an in-app notification, so that is exactly
+      // the set this returns — no burner, lead, or officer can leak in.
+      return finalize((ctx.suppliers ?? []).map((s) => s.userId));
     }
     case "project": {
       return finalize(

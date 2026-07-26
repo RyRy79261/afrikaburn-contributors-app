@@ -26,7 +26,7 @@ import {
 } from "@quagga/types";
 import { z } from "zod";
 
-import { getDb, schema } from "@/lib/db";
+import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession, type OrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { insertNotifications } from "@/lib/notifications";
@@ -107,48 +107,50 @@ export async function saveQuestionnaireDefinition(
       throw new Error("You are not allowed to author org questionnaires.");
     }
 
-    const db = getDb();
-
     if (input.key) {
       // Edit an existing org-owned definition.
       if (!input.key.startsWith("org-")) {
         throw new Error("That questionnaire is not editable in the console.");
       }
-      const [current] = await db
-        .select({ version: schema.questionnaireDefinitions.version })
-        .from(schema.questionnaireDefinitions)
-        .where(eq(schema.questionnaireDefinitions.key, input.key))
-        .limit(1);
-      if (!current) throw new Error("That questionnaire no longer exists.");
+      const editKey = input.key;
+      // Version read, definition update and audit are one atomic unit.
+      await withTransaction(async (tx) => {
+        const [current] = await tx
+          .select({ version: schema.questionnaireDefinitions.version })
+          .from(schema.questionnaireDefinitions)
+          .where(eq(schema.questionnaireDefinitions.key, editKey))
+          .limit(1);
+        if (!current) throw new Error("That questionnaire no longer exists.");
 
-      const nextVersion = String((Number(current.version) || 0) + 1);
-      const definition = normalizeDefinition(
-        input.definition,
-        nextVersion,
-        input.title,
-        input.description,
-      );
+        const nextVersion = String((Number(current.version) || 0) + 1);
+        const definition = normalizeDefinition(
+          input.definition,
+          nextVersion,
+          input.title,
+          input.description,
+        );
 
-      await db
-        .update(schema.questionnaireDefinitions)
-        .set({
-          title: input.title,
-          definition,
-          version: nextVersion,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.questionnaireDefinitions.key, input.key));
+        await tx
+          .update(schema.questionnaireDefinitions)
+          .set({
+            title: input.title,
+            definition,
+            version: nextVersion,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.questionnaireDefinitions.key, editKey));
 
-      await writeAuditEvent(db, {
-        actorId: session.dbUserId,
-        action: "questionnaire.definition.update",
-        subject: input.key,
-        meta: { version: nextVersion },
+        await writeAuditEvent(tx, {
+          actorId: session.dbUserId,
+          action: "questionnaire.definition.update",
+          subject: editKey,
+          meta: { version: nextVersion },
+        });
       });
 
       revalidatePath("/questionnaires");
-      revalidatePath(`/questionnaires/${input.key}/edit`);
-      return { ok: true, key: input.key };
+      revalidatePath(`/questionnaires/${editKey}/edit`);
+      return { ok: true, key: editKey };
     }
 
     // Create.
@@ -160,20 +162,23 @@ export async function saveQuestionnaireDefinition(
       input.description,
     );
 
-    await db.insert(schema.questionnaireDefinitions).values({
-      key,
-      title: input.title,
-      definition,
-      status: "published",
-      version: "1",
-      createdByUserId: session.dbUserId,
-    });
+    // Definition insert and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      await tx.insert(schema.questionnaireDefinitions).values({
+        key,
+        title: input.title,
+        definition,
+        status: "published",
+        version: "1",
+        createdByUserId: session.dbUserId,
+      });
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "questionnaire.definition.create",
-      subject: key,
-      meta: { title: input.title },
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "questionnaire.definition.create",
+        subject: key,
+        meta: { title: input.title },
+      });
     });
 
     revalidatePath("/questionnaires");
@@ -282,77 +287,100 @@ export async function activateQuestionnaire(
       throw new Error("The due date is not a valid date.");
     }
 
-    // Resolve the audience at send time.
+    // Resolve the audience at send time (read — kept OUTSIDE the transaction so
+    // the write transaction stays short).
     const ctx = await buildAudienceContext(input.editionId, session.orgGroupId);
     const userIds = resolveAudience(input.audience, ctx);
 
     const now = new Date();
-    const [activation] = await db
-      .insert(schema.questionnaireActivations)
-      .values({
-        questionnaireKey: def.key,
-        version: def.version ?? input.version,
-        title: input.title,
-        description: input.description ?? null,
-        blocking: input.blocking,
-        status: "open",
-        dueAt,
-        authoredScope: authoredScopeForAudience(input.audience),
-        groupId: groupIdForAudience(input.audience),
-        editionId: input.editionId,
-        audience: input.audience,
-        // Snapshot the definition AS SENT — the activation must render/validate/
-        // aggregate against exactly this, immune to later edits/re-versions.
-        definition: def.definition,
-        activatedByUserId: session.dbUserId,
-        openedAt: now,
-      })
-      .returning({ id: schema.questionnaireActivations.id });
-    if (!activation) throw new Error("Could not create the activation.");
 
-    // Fan out required_actions (idempotent on user + action_key).
-    const rows = buildActivationRequiredActions(
-      {
-        id: activation.id,
-        title: input.title,
-        blocking: input.blocking,
-        dueAt,
-      },
-      userIds,
-    );
-    if (rows.length > 0) {
-      await db
-        .insert(schema.requiredActions)
-        .values(
-          rows.map((r) => ({
-            userId: r.userId,
-            type: r.type,
-            actionKey: r.actionKey,
-            version: def.version ?? input.version,
-            activationId: activation.id,
-            title: r.title,
-            blocking: r.blocking,
-            status: r.status,
-            dueAt: r.dueAt,
-          })),
-        )
-        .onConflictDoNothing({
-          target: [
-            schema.requiredActions.userId,
-            schema.requiredActions.actionKey,
-          ],
-        });
-    }
+    // The activation row, its fanned-out required_actions and the audit row are
+    // one atomic unit — an activation must never exist without the required
+    // actions that make it reach its audience, and neither without the audit
+    // trail. A partial send would either strand recipients or gate them.
+    const activationId = await withTransaction(async (tx) => {
+      const [activation] = await tx
+        .insert(schema.questionnaireActivations)
+        .values({
+          questionnaireKey: def.key,
+          version: def.version ?? input.version,
+          title: input.title,
+          description: input.description ?? null,
+          blocking: input.blocking,
+          status: "open",
+          dueAt,
+          authoredScope: authoredScopeForAudience(input.audience),
+          groupId: groupIdForAudience(input.audience),
+          editionId: input.editionId,
+          audience: input.audience,
+          // Snapshot the definition AS SENT — the activation must render/
+          // validate/aggregate against exactly this, immune to later edits.
+          definition: def.definition,
+          activatedByUserId: session.dbUserId,
+          openedAt: now,
+        })
+        .returning({ id: schema.questionnaireActivations.id });
+      if (!activation) throw new Error("Could not create the activation.");
+
+      // Fan out required_actions (idempotent on user + action_key).
+      const rows = buildActivationRequiredActions(
+        {
+          id: activation.id,
+          title: input.title,
+          blocking: input.blocking,
+          dueAt,
+        },
+        userIds,
+      );
+      if (rows.length > 0) {
+        await tx
+          .insert(schema.requiredActions)
+          .values(
+            rows.map((r) => ({
+              userId: r.userId,
+              type: r.type,
+              actionKey: r.actionKey,
+              version: def.version ?? input.version,
+              activationId: activation.id,
+              title: r.title,
+              blocking: r.blocking,
+              status: r.status,
+              dueAt: r.dueAt,
+            })),
+          )
+          .onConflictDoNothing({
+            target: [
+              schema.requiredActions.userId,
+              schema.requiredActions.actionKey,
+            ],
+          });
+      }
+
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "questionnaire.activate",
+        subject: activation.id,
+        meta: {
+          questionnaireKey: def.key,
+          audience: input.audience,
+          blocking: input.blocking,
+          recipients: userIds.length,
+          editionId: input.editionId,
+        },
+      });
+
+      return activation.id;
+    });
 
     // Event hook: notify the resolved audience that a questionnaire was
     // released (blocking flag surfaced), + immediate email for blocking ones.
-    // Thin + best-effort — never blocks the activation itself.
+    // Thin + best-effort, AFTER commit — never blocks or rolls back the send.
     if (userIds.length > 0) {
       try {
         const payload = questionnaireReleasedNotification({
           title: input.title,
           blocking: input.blocking,
-          activationId: activation.id,
+          activationId,
         });
         await insertNotifications(
           db,
@@ -379,19 +407,6 @@ export async function activateQuestionnaire(
       }
     }
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "questionnaire.activate",
-      subject: activation.id,
-      meta: {
-        questionnaireKey: def.key,
-        audience: input.audience,
-        blocking: input.blocking,
-        recipients: userIds.length,
-        editionId: input.editionId,
-      },
-    });
-
     revalidatePath("/questionnaires");
     revalidatePath(`/questionnaires/${def.key}/activate`);
   });
@@ -406,26 +421,28 @@ export async function closeActivation(
   return runAction(async () => {
     const session = await requireOrgSession();
     const input = CloseInput.parse(raw);
-    const db = getDb();
 
-    const [a] = await db
-      .select({ authoredScope: schema.questionnaireActivations.authoredScope })
-      .from(schema.questionnaireActivations)
-      .where(eq(schema.questionnaireActivations.id, input.activationId))
-      .limit(1);
-    if (!a || a.authoredScope !== "org") {
-      throw new Error("That activation is not managed by the console.");
-    }
+    // Scope check, close and audit are one atomic unit.
+    await withTransaction(async (tx) => {
+      const [a] = await tx
+        .select({ authoredScope: schema.questionnaireActivations.authoredScope })
+        .from(schema.questionnaireActivations)
+        .where(eq(schema.questionnaireActivations.id, input.activationId))
+        .limit(1);
+      if (!a || a.authoredScope !== "org") {
+        throw new Error("That activation is not managed by the console.");
+      }
 
-    await db
-      .update(schema.questionnaireActivations)
-      .set({ status: "closed", closedAt: new Date(), updatedAt: new Date() })
-      .where(eq(schema.questionnaireActivations.id, input.activationId));
+      await tx
+        .update(schema.questionnaireActivations)
+        .set({ status: "closed", closedAt: new Date(), updatedAt: new Date() })
+        .where(eq(schema.questionnaireActivations.id, input.activationId));
 
-    await writeAuditEvent(db, {
-      actorId: session.dbUserId,
-      action: "questionnaire.close",
-      subject: input.activationId,
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "questionnaire.close",
+        subject: input.activationId,
+      });
     });
 
     revalidatePath("/questionnaires");
@@ -491,40 +508,46 @@ export async function submitConsoleQuestionnaire(
     if (!validated.ok) return { ok: false, errors: validated.errors };
 
     const now = new Date();
-    await db
-      .insert(schema.questionnaireResponses)
-      .values({
-        userId: session.dbUserId,
-        definitionKey: activation.key,
-        definitionVersion: activation.version,
-        responses: validated.responses,
-        activationId: activation.id,
-        completedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.questionnaireResponses.userId,
-          schema.questionnaireResponses.definitionKey,
-        ],
-        set: {
-          responses: validated.responses,
+    // The response upsert and the required-action completion are one atomic
+    // unit: a saved response that failed to flip the gate would lock the staff
+    // member out of the console, and a flipped gate with no stored response
+    // would lose their answers. Both, or neither.
+    await withTransaction(async (tx) => {
+      await tx
+        .insert(schema.questionnaireResponses)
+        .values({
+          userId: session.dbUserId,
+          definitionKey: activation.key,
           definitionVersion: activation.version,
+          responses: validated.responses,
           activationId: activation.id,
           completedAt: now,
-          updatedAt: now,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.questionnaireResponses.userId,
+            schema.questionnaireResponses.definitionKey,
+          ],
+          set: {
+            responses: validated.responses,
+            definitionVersion: activation.version,
+            activationId: activation.id,
+            completedAt: now,
+            updatedAt: now,
+          },
+        });
 
-    const patch = completeRequiredActionPatch(now);
-    await db
-      .update(schema.requiredActions)
-      .set({ status: patch.status, completedAt: patch.completedAt })
-      .where(
-        and(
-          eq(schema.requiredActions.userId, session.dbUserId),
-          eq(schema.requiredActions.activationId, activation.id),
-        ),
-      );
+      const patch = completeRequiredActionPatch(now);
+      await tx
+        .update(schema.requiredActions)
+        .set({ status: patch.status, completedAt: patch.completedAt })
+        .where(
+          and(
+            eq(schema.requiredActions.userId, session.dbUserId),
+            eq(schema.requiredActions.activationId, activation.id),
+          ),
+        );
+    });
 
     revalidatePath("/", "layout");
     return { ok: true };

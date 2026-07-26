@@ -98,6 +98,20 @@ export type QuestionAggregate =
       buckets: { value: string; count: number; percent: number }[];
       earliest: string | null;
       latest: string | null;
+    })
+  | (AggregateBase & {
+      chart: "grid";
+      /** Shared columns, in definition order. */
+      columns: { value: string; label: string }[];
+      /** One row per grid row, each with a per-column tally. `responded` is how
+       * many responses answered THIS row; `percent` on each column cell is of
+       * that row's respondents (Google Forms' per-row denominator). */
+      rows: {
+        id: string;
+        label: string;
+        responded: number;
+        columns: OptionTally[];
+      }[];
     });
 
 /** Answers whose question no longer exists in the definition — kept visible so
@@ -120,7 +134,22 @@ function pct(count: number, denominator: number): number {
 
 function isBlank(value: unknown): boolean {
   if (value === undefined || value === null || value === "") return true;
-  return Array.isArray(value) && value.length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  // A grid answer ({ rowId: columnValue[] }) is blank when no row has a pick.
+  if (typeof value === "object") {
+    return !Object.values(value).some(
+      (v) => Array.isArray(v) && v.length > 0,
+    );
+  }
+  return false;
+}
+
+/** A grid answer, or null when the value isn't a grid map. */
+function asGrid(value: unknown): Record<string, string[]> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, string[]>;
 }
 
 function asNumber(value: unknown): number | null {
@@ -261,6 +290,41 @@ function aggregateOne(
         .map((v) => (typeof v === "string" ? v : String(v)))
         .filter((v) => v !== "");
       return { ...base, chart: "text", answers };
+    }
+
+    case "multi_choice_grid":
+    case "checkbox_grid": {
+      const columns = question.columns.map((c) => ({
+        value: c.value,
+        label: c.label,
+      }));
+      const rows = question.rows.map((row) => {
+        const counts = new Map<string, number>();
+        let rowResponded = 0;
+        for (const value of present) {
+          const picks = asGrid(value)?.[row.id];
+          if (!picks || picks.length === 0) continue;
+          rowResponded += 1;
+          for (const pick of picks) {
+            counts.set(pick, (counts.get(pick) ?? 0) + 1);
+          }
+        }
+        return {
+          id: row.id,
+          label: row.label,
+          responded: rowResponded,
+          columns: question.columns.map((c) => {
+            const count = counts.get(c.value) ?? 0;
+            return {
+              value: c.value,
+              label: c.label,
+              count,
+              percent: pct(count, rowResponded),
+            };
+          }),
+        };
+      });
+      return { ...base, chart: "grid", columns, rows };
     }
   }
 }

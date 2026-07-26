@@ -99,6 +99,20 @@
       "when": 1785061395148,
       "tag": "0013_tiny_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785072655241,
+      "tag": "0014_lumpy_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785076482237,
+      "tag": "0015_right_guardsmen",
+      "breakpoints": true
     }
   ]
 }

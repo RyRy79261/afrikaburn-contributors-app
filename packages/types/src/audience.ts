@@ -105,6 +105,19 @@ export const OFFICER_AUDIENCE_LABELS: Record<z.infer<typeof OfficerKey>, string>
   };
 
 /**
+ * Org SUPPLIERS audience (notifications-spec §"Audiences"; design frame `U8CqE`
+ * "Suppliers"): broadcast to every supplier that has claimed a portal account.
+ * Suppliers are a DIFFERENT account kind from burners — they are not in any
+ * `memberships`/`bios` set — so this resolves through `suppliers.user_id`
+ * (the account link established by claim-by-email). Accountless catalog rows
+ * (`user_id` null) have nobody to notify and resolve to nothing.
+ */
+export const OrgSuppliersAudience = z.object({
+  kind: z.literal("org_suppliers"),
+});
+export type OrgSuppliersAudience = z.infer<typeof OrgSuppliersAudience>;
+
+/**
  * PROJECT audience — the project's own members, either everyone or a subset by
  * custom project role. `groupId` is the project group; `roleIds` are
  * `project_roles.id` values (ignored when `mode` is `everyone`).
@@ -122,6 +135,7 @@ export const AudienceSpec = z.discriminatedUnion("kind", [
   OrgInternalAudience,
   OrgOutboundAudience,
   OrgOfficerAudience,
+  OrgSuppliersAudience,
   ProjectAudience,
 ]);
 export type AudienceSpec = z.infer<typeof AudienceSpec>;

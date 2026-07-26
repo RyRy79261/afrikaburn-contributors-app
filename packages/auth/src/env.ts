@@ -34,6 +34,9 @@ export interface AuthEnv {
 /** The registrable apex every app is a subdomain of. */
 export const AUTH_APEX_DOMAIN = "quagga.ryanjnoble.dev";
 
+/** Human-readable Relying Party / issuer name shown in authenticator + TOTP UIs. */
+export const AUTH_RP_NAME = "AfrikaBurn Contributors";
+
 /**
  * The Domain= all session cookies are scoped to (leading dot), so a session
  * minted by one app verifies on the others — this is what gives cross-app SSO.
@@ -131,6 +134,38 @@ export function resolveRequireEmailVerification(env: AuthEnv): boolean {
 /** True when Google social sign-in is fully configured. */
 export function isGoogleConfigured(env: AuthEnv): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+}
+
+/**
+ * The WebAuthn Relying Party ID for passkeys. THE ONE near-irreversible passkey
+ * decision (auth-platform-spec §3): scope it to the registrable APEX so a single
+ * passkey works across app./org./suppliers. A passkey scoped to a subdomain would
+ * NOT work on the others and cannot be widened without re-enrolling every user.
+ *
+ * Returned only when the app is actually served under the apex. On localhost /
+ * *.vercel.app previews the browser rejects an apex rpID that is not a suffix of
+ * the current origin, so we return undefined and let the plugin derive rpID from
+ * the request host — local passkeys work host-only, exactly like the cookie
+ * scoping. (Ryan: the domain may be nuked & rebuilt later; rpID binding is not a
+ * blocker — this resolves to the apex the moment production serves under it.)
+ */
+export function resolvePasskeyRpID(env: AuthEnv): string | undefined {
+  return isUnderApex(env) ? AUTH_APEX_DOMAIN : undefined;
+}
+
+/**
+ * The expected WebAuthn origin(s) passkey registration/authentication is
+ * validated against. The @better-auth/passkey plugin accepts an ARRAY (verified
+ * against the installed 1.6.25 types — this resolves the spec's single-vs-array
+ * open fork), so under the apex we trust all three production subdomain origins:
+ * a challenge issued on app. then verifies for org./suppliers., which is what
+ * makes ONE apex-scoped passkey usable everywhere. Off-apex we return undefined
+ * so the plugin derives the expected origin from the request/baseURL (localhost
+ * and preview hosts work host-only).
+ */
+export function resolvePasskeyOrigins(env: AuthEnv): string[] | undefined {
+  if (!isUnderApex(env)) return undefined;
+  return resolveTrustedOrigins(env);
 }
 
 /**

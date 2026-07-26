@@ -6,9 +6,11 @@ import {
   ChevronDown,
   CircleDot,
   Clock,
+  Grid3x3,
   Hash,
   Image as ImageIcon,
   Images,
+  LayoutGrid,
   Mail,
   Paperclip,
   Phone,
@@ -49,6 +51,8 @@ export type PaletteKind =
   | "dropdown"
   | "image_choice"
   | "multi_select"
+  | "multi_choice_grid"
+  | "checkbox_grid"
   | "linear_scale"
   | "rating"
   | "boolean"
@@ -75,6 +79,8 @@ export const PALETTE: readonly PaletteEntry[] = [
   { kind: "long_text", label: "Paragraph", group: "question", icon: AlignLeft, short: "Paragraph" },
   { kind: "single_select", label: "Multiple choice", group: "question", icon: CircleDot, short: "Multiple choice" },
   { kind: "multi_select", label: "Checkboxes", group: "question", icon: CheckSquare, short: "Checkboxes" },
+  { kind: "multi_choice_grid", label: "Multiple-choice grid", group: "question", icon: Grid3x3, short: "MC grid" },
+  { kind: "checkbox_grid", label: "Checkbox grid", group: "question", icon: LayoutGrid, short: "Checkbox grid" },
   { kind: "dropdown", label: "Dropdown", group: "question", icon: ChevronDown, short: "Dropdown" },
   { kind: "image_choice", label: "Image choices", group: "question", icon: Images, short: "Image choices" },
   { kind: "linear_scale", label: "Linear scale", group: "question", icon: SlidersHorizontal, short: "Linear scale" },
@@ -141,6 +147,21 @@ function defaultOptions(): { value: string; label: string }[] {
   ];
 }
 
+function defaultGridRows(): { id: string; label: string }[] {
+  return [
+    { id: "row_1", label: "" },
+    { id: "row_2", label: "" },
+  ];
+}
+
+function defaultGridColumns(): { value: string; label: string }[] {
+  return [
+    { value: "col_1", label: "" },
+    { value: "col_2", label: "" },
+    { value: "col_3", label: "" },
+  ];
+}
+
 /** A brand-new block of the given palette kind, with `id` already fixed. */
 export function createBlock(kind: PaletteKind, id: string): PageBlock {
   switch (kind) {
@@ -198,6 +219,24 @@ export function createBlock(kind: PaletteKind, id: string): PageBlock {
         options: defaultOptions(),
         required: false,
         display: "checkbox",
+      };
+    case "multi_choice_grid":
+      return {
+        id,
+        kind: "multi_choice_grid",
+        prompt: "",
+        rows: defaultGridRows(),
+        columns: defaultGridColumns(),
+        required: false,
+      };
+    case "checkbox_grid":
+      return {
+        id,
+        kind: "checkbox_grid",
+        prompt: "",
+        rows: defaultGridRows(),
+        columns: defaultGridColumns(),
+        required: false,
       };
     case "linear_scale":
       return {

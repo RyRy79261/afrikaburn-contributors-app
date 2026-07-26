@@ -16,7 +16,7 @@ import type {
   SectionReviewStatus,
   SupplierStanding,
 } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 
 // Camp-side data access + mutations for the registration wizard. Server-only;
 // the state machine + completeness predicates live in @quagga/core so this
@@ -115,19 +115,41 @@ export async function getRegistration(
   return row ?? null;
 }
 
+/** One camp-or-org reply threaded under a section review (design frame P0Tcl). */
+export interface CampReviewReply {
+  id: string;
+  authorUserId: string | null;
+  /** Display label for the author: their Burner Bio display name, "AfrikaBurn"
+   * for org staff (the review team speaks as one), or "A camp member" fallback. */
+  authorName: string;
+  /** True when the author is org staff (god / org_staff) — renders as AfrikaBurn. */
+  isOrg: boolean;
+  body: string;
+  createdAt: Date;
+}
+
 export interface CampSectionReview {
   id: string;
   sectionKey: string;
   status: SectionReviewStatus;
   comment: string;
   createdAt: Date;
+  /** The camp/AB reply conversation under this review, oldest first. */
+  replies: CampReviewReply[];
 }
 
-/** The camp-visible section-review threads (AB feedback) for a registration. */
+/**
+ * The camp-visible section-review threads (AB feedback + the two-way reply
+ * conversation) for a registration. Replies live in `section_review_replies`
+ * (org-authored `section_reviews` carry only the AB comment). Author labels are
+ * resolved for the registration's edition so a reply reads with a name, and org
+ * staff authors collapse to "AfrikaBurn" to match how review comments present.
+ */
 export async function getSectionReviews(
   registrationId: string,
+  editionId: string,
 ): Promise<CampSectionReview[]> {
-  return db()
+  const reviews = await db()
     .select({
       id: schema.sectionReviews.id,
       sectionKey: schema.sectionReviews.sectionKey,
@@ -138,6 +160,93 @@ export async function getSectionReviews(
     .from(schema.sectionReviews)
     .where(eq(schema.sectionReviews.registrationId, registrationId))
     .orderBy(asc(schema.sectionReviews.createdAt));
+  if (reviews.length === 0) return [];
+
+  const reviewIds = reviews.map((r) => r.id);
+  const replyRows = await db()
+    .select({
+      id: schema.sectionReviewReplies.id,
+      reviewId: schema.sectionReviewReplies.reviewId,
+      authorUserId: schema.sectionReviewReplies.authorUserId,
+      body: schema.sectionReviewReplies.body,
+      createdAt: schema.sectionReviewReplies.createdAt,
+    })
+    .from(schema.sectionReviewReplies)
+    .where(inArray(schema.sectionReviewReplies.reviewId, reviewIds))
+    .orderBy(asc(schema.sectionReviewReplies.createdAt));
+
+  const authorIds = [
+    ...new Set(replyRows.map((r) => r.authorUserId).filter((id): id is string => Boolean(id))),
+  ];
+  const { names, orgStaff } = await resolveReplyAuthors(authorIds, editionId);
+
+  const repliesByReview = new Map<string, CampReviewReply[]>();
+  for (const r of replyRows) {
+    const isOrg = r.authorUserId ? orgStaff.has(r.authorUserId) : false;
+    const authorName = isOrg
+      ? "AfrikaBurn"
+      : (r.authorUserId ? names.get(r.authorUserId) : null) ?? "A camp member";
+    const list = repliesByReview.get(r.reviewId) ?? [];
+    list.push({
+      id: r.id,
+      authorUserId: r.authorUserId,
+      authorName,
+      isOrg,
+      body: r.body,
+      createdAt: r.createdAt,
+    });
+    repliesByReview.set(r.reviewId, list);
+  }
+
+  return reviews.map((r) => ({
+    ...r,
+    replies: repliesByReview.get(r.id) ?? [],
+  }));
+}
+
+/** Resolve reply-author display names (for the edition) + which are org staff. */
+async function resolveReplyAuthors(
+  authorIds: string[],
+  editionId: string,
+): Promise<{ names: Map<string, string>; orgStaff: Set<string> }> {
+  const names = new Map<string, string>();
+  const orgStaff = new Set<string>();
+  if (authorIds.length === 0) return { names, orgStaff };
+
+  const bios = await db()
+    .select({
+      userId: schema.burnerBios.userId,
+      displayName: schema.burnerBios.displayName,
+    })
+    .from(schema.burnerBios)
+    .where(
+      and(
+        inArray(schema.burnerBios.userId, authorIds),
+        eq(schema.burnerBios.editionId, editionId),
+      ),
+    );
+  for (const b of bios) if (b.displayName) names.set(b.userId, b.displayName);
+
+  const [org] = await db()
+    .select({ id: schema.groups.id })
+    .from(schema.groups)
+    .where(eq(schema.groups.kind, "org"))
+    .limit(1);
+  if (org) {
+    const orgMembers = await db()
+      .select({ userId: schema.memberships.userId })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.groupId, org.id),
+          inArray(schema.memberships.userId, authorIds),
+          inArray(schema.memberships.role, ["god", "org_staff"]),
+        ),
+      );
+    for (const m of orgMembers) orgStaff.add(m.userId);
+  }
+
+  return { names, orgStaff };
 }
 
 export interface SupplierOption {
@@ -297,12 +406,6 @@ export async function saveRegistrationDraft(input: {
   const v = input.values;
   const completed = completedSectionsFor(toSectionData(input.group.name, v));
 
-  // Camp description lives on the group row.
-  await db()
-    .update(schema.groups)
-    .set({ description: v.campDescription, updatedAt: new Date() })
-    .where(eq(schema.groups.id, input.group.id));
-
   const columns = {
     s1ContactEmail: v.s1ContactEmail,
     s1AltContactName: v.s1AltContactName,
@@ -336,32 +439,49 @@ export async function saveRegistrationDraft(input: {
     updatedAt: new Date(),
   };
 
-  let registrationId: string;
-  let created = false;
-  if (existing) {
-    await db()
-      .update(schema.registrations)
-      .set(columns)
-      .where(eq(schema.registrations.id, existing.id));
-    registrationId = existing.id;
-  } else {
-    const [row] = await db()
-      .insert(schema.registrations)
-      .values({
-        groupId: input.group.id,
-        editionId: input.editionId,
-        status: "draft",
-        ...columns,
-      })
-      .returning({ id: schema.registrations.id });
-    if (!row) return { ok: false, error: "Could not start the registration." };
-    registrationId = row.id;
-    created = true;
-  }
+  // The camp-description write (on `groups`), the registration upsert, and the
+  // supplier-declaration replace (delete-then-insert) are ONE transaction. The
+  // delete-then-insert is the sharpest hazard: without a transaction, a failure
+  // between the two leaves the registration with NO supplier declarations at all
+  // (silent data loss). Committing them together means an autosave either lands
+  // whole or not at all.
+  const result = await withTransaction(
+    async (tx): Promise<{ registrationId: string; created: boolean }> => {
+      // Camp description lives on the group row.
+      await tx
+        .update(schema.groups)
+        .set({ description: v.campDescription, updatedAt: new Date() })
+        .where(eq(schema.groups.id, input.group.id));
 
-  await replaceSupplierDeclarations(registrationId, v.supplierIds);
+      let registrationId: string;
+      let created = false;
+      if (existing) {
+        await tx
+          .update(schema.registrations)
+          .set(columns)
+          .where(eq(schema.registrations.id, existing.id));
+        registrationId = existing.id;
+      } else {
+        const [row] = await tx
+          .insert(schema.registrations)
+          .values({
+            groupId: input.group.id,
+            editionId: input.editionId,
+            status: "draft",
+            ...columns,
+          })
+          .returning({ id: schema.registrations.id });
+        if (!row) throw new Error("Could not start the registration.");
+        registrationId = row.id;
+        created = true;
+      }
 
-  return { ok: true, completedSections: completed, created };
+      await replaceSupplierDeclarations(tx, registrationId, v.supplierIds);
+      return { registrationId, created };
+    },
+  );
+
+  return { ok: true, completedSections: completed, created: result.created };
 }
 
 /**
@@ -374,10 +494,11 @@ export async function saveRegistrationDraft(input: {
  * persisting, rather than inserting whatever ids arrived.
  */
 async function replaceSupplierDeclarations(
+  tx: Tx,
   registrationId: string,
   supplierIds: string[],
 ): Promise<void> {
-  await db()
+  await tx
     .delete(schema.supplierDeclarations)
     .where(eq(schema.supplierDeclarations.registrationId, registrationId));
   const unique = [...new Set(supplierIds)];
@@ -385,7 +506,9 @@ async function replaceSupplierDeclarations(
 
   // Re-filter against standing (suspended excluded) at the write boundary. Only
   // standing gates eligibility here; onboarding completeness merely tags a row,
-  // so pass `isOnboarded: true` (it never changes the eligible verdict).
+  // so pass `isOnboarded: true` (it never changes the eligible verdict). The
+  // standing read may use the HTTP client — it reads committed supplier rows,
+  // which are unrelated to the declarations being rewritten in this transaction.
   const rows = await db()
     .select({ id: schema.suppliers.id, standing: schema.suppliers.standing })
     .from(schema.suppliers)
@@ -395,7 +518,7 @@ async function replaceSupplierDeclarations(
   ).map((r) => r.id);
   if (eligible.length === 0) return;
 
-  await db()
+  await tx
     .insert(schema.supplierDeclarations)
     .values(eligible.map((supplierId) => ({ registrationId, supplierId })))
     .onConflictDoNothing();

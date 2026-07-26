@@ -48,6 +48,7 @@ import {
 } from "./field-kit";
 import { LayoutUploads } from "./layout-uploads";
 import { SupplierPicker } from "./supplier-picker";
+import { SectionReplyThread } from "./section-reply-thread";
 
 const OPERATING_HOURS = [
   { value: "morning", label: "Morning" },
@@ -72,6 +73,8 @@ interface WizardProps {
   initialValues: RegistrationValues;
   suppliers: SupplierOption[];
   reviews: CampSectionReview[];
+  /** The viewer's db user id — labels their own replies "You" in the thread. */
+  viewerUserId: string | null;
   blobConfigured: boolean;
   saveAction: (slug: string, values: RegistrationValues) => Promise<SaveDraftResult>;
   submitAction: (slug: string) => Promise<TransitionResult>;
@@ -358,7 +361,7 @@ export function RegistrationWizard(props: WizardProps) {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Org feedback
                 </p>
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col gap-4">
                   {activeReviews.map((r) => (
                     <li key={r.id} className="text-sm">
                       <Badge
@@ -369,6 +372,12 @@ export function RegistrationWizard(props: WizardProps) {
                       <p className="mt-1 whitespace-pre-wrap text-foreground">
                         {r.comment}
                       </p>
+                      <SectionReplyThread
+                        slug={props.slug}
+                        reviewId={r.id}
+                        replies={r.replies}
+                        viewerUserId={props.viewerUserId}
+                      />
                     </li>
                   ))}
                 </ul>

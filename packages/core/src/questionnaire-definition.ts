@@ -181,6 +181,44 @@ export function validateQuestionnaireDefinition(
       if (!isAnswerableBlock(block)) return;
       issues.push(...rangeIssues(block, blockPath));
 
+      if (block.kind === "multi_choice_grid" || block.kind === "checkbox_grid") {
+        // Row ids key the response map (per-row answers), so a duplicate would
+        // silently overwrite a row's answer; column values are the stored
+        // answers, so they must be unique and not collide with `other:`.
+        const seenRows = new Set<string>();
+        block.rows.forEach((row, rowIndex) => {
+          const rowPath = `${blockPath}.rows[${rowIndex}]`;
+          if (seenRows.has(row.id)) {
+            issues.push({
+              path: rowPath,
+              code: "duplicate_id",
+              message: `duplicate row id "${row.id}" — rows must be unique so answers stay attached to the right row`,
+            });
+          }
+          seenRows.add(row.id);
+        });
+        const seenColumns = new Set<string>();
+        block.columns.forEach((column, columnIndex) => {
+          const columnPath = `${blockPath}.columns[${columnIndex}]`;
+          if (column.value.startsWith(OTHER_PREFIX)) {
+            issues.push({
+              path: columnPath,
+              code: "reserved_option_value",
+              message: `column values may not start with "${OTHER_PREFIX}"`,
+            });
+          }
+          if (seenColumns.has(column.value)) {
+            issues.push({
+              path: columnPath,
+              code: "duplicate_option_value",
+              message: `duplicate column value "${column.value}"`,
+            });
+          }
+          seenColumns.add(column.value);
+        });
+        return;
+      }
+
       if (block.kind !== "single_select" && block.kind !== "multi_select") {
         return;
       }

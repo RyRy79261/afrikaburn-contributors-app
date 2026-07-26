@@ -95,12 +95,16 @@ migrator runs against that branch — which is correct and desired: every previe
 migrates its own isolated branch, never production.
 - `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
 - **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
-  `POST /api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
+  `/api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
   grace period has elapsed (docs/accounts-security-spec.md §Deletion). **Leave it
   unset until you want the sweeper live** — without it the route refuses to run and
-  nothing is ever erased. Point a scheduler at the route once it is set; never a
-  build step. `NEXT_PUBLIC_APP_URL` (also optional) is the origin used to build
-  email-change confirm/revoke links.
+  nothing is ever erased. A **Vercel Cron** entry (`apps/web/vercel.json`) hits the
+  route daily at 03:00 UTC. Vercel Cron can only GET and authenticates by injecting
+  `Authorization: Bearer $CRON_SECRET`, so **also set `CRON_SECRET`** (web only) for
+  the cron to run — the same value as `ACCOUNT_SWEEP_SECRET` is fine. The route
+  accepts either secret and still refuses any unauthenticated caller. Crons run on
+  production deployments only. `NEXT_PUBLIC_APP_URL` (also optional) is the origin
+  used to build email-change confirm/revoke links.
 
 ## 5. Smoke test — the live path
 
