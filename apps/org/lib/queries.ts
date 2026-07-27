@@ -57,7 +57,7 @@ import {
   type StatusBoardKpis,
   type SupplierOnboardingRollup,
 } from "@quagga/core";
-import { decryptOrNull } from "@quagga/db/crypto";
+import { decryptField } from "@quagga/db/crypto";
 
 import { getDb, schema } from "@/lib/db";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
@@ -1323,13 +1323,22 @@ export interface RosterMemberDetail {
   role: MembershipRole;
   /** Decrypted medical notes, or null when the burner recorded none. */
   medicalNotes: string | null;
+  /**
+   * TRUE when ciphertext IS on file but this process could not decrypt it
+   * (wrong/rotated PGCRYPTO_KEY, or a pre-encryption plaintext row). The view
+   * must then say so — rendering the usual "no medical notes on file" would be
+   * an affirmative all-clear derived from a failure, on a safety path.
+   */
+  medicalNotesUnreadable: boolean;
 }
 
 /**
  * A single camp member's detail for the org console. Medical notes are decrypted
  * HERE and nowhere else on the org side — the caller must have cleared
- * `guardConsole` (god / org_staff) and must record the read. `decryptOrNull`
- * yields null when no key is configured, exactly as the owner's own read does.
+ * `guardConsole` (god / org_staff) and must record the read. `decryptField`
+ * separates "the burner recorded none" from "there is ciphertext we cannot
+ * read" — collapsing the two is how a decrypt failure used to render as an
+ * affirmative all-clear.
  *
  * `includeMedicalNotes` is the AUTHORISATION, passed in rather than assumed: the
  * caller runs `canViewMedicalNotes` first and this function neither selects nor
@@ -1375,15 +1384,17 @@ export async function getRosterMemberDetail(
   if (!row) return null;
   const ciphertext =
     "medicalNotes" in row ? (row.medicalNotes as string | null) : null;
+  const decrypted = options.includeMedicalNotes
+    ? decryptField(ciphertext)
+    : null;
   return {
     userId: row.userId,
     displayName: publicMemberName(row.username, {
       sanitizedAt: row.sanitizedAt,
     }),
     role: row.role,
-    medicalNotes: options.includeMedicalNotes
-      ? decryptOrNull(ciphertext)
-      : null,
+    medicalNotes: decrypted?.value ?? null,
+    medicalNotesUnreadable: decrypted?.state === "unreadable",
   };
 }
 

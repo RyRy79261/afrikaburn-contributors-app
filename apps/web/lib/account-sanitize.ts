@@ -196,6 +196,25 @@ export async function sanitizeAccount(
       .set({ status: "completed", completedAt: now, updatedAt: now })
       .where(eq(schema.accountDeletionRequests.id, requestId));
 
+    // 6. Strip PII out of the AUDIT TRAIL without destroying it.
+    //
+    //    The trail itself is deliberately preserved — it is the record of what
+    //    this account did, keyed by our internal id, and POPIA erasure does not
+    //    require forgetting that an actor existed. But some writers put the
+    //    person's EMAIL ADDRESS in `meta` (the god-bootstrap rows in
+    //    lib/session.ts do, and the supplier overlap rows do), and that address
+    //    survived erasure verbatim — 32 such rows on the live database at the
+    //    time this was found — while the farewell email told them nothing
+    //    identifying remained. Drop just those keys; the row, its action, its
+    //    timestamp and its internal ids all stay.
+    await tx.execute(sql`
+      UPDATE audit_events
+         SET meta = meta - 'email' - 'contactEmail' - 'primaryEmail'
+       WHERE (actor_id = ${userId} OR subject = ${userId})
+         AND meta IS NOT NULL
+         AND (meta ? 'email' OR meta ? 'contactEmail' OR meta ? 'primaryEmail')
+    `);
+
     // The proof that erasure happened. Names no personal data — only our internal
     // id and counts — so recording it does not undo what it records.
     await tx.insert(schema.auditEvents).values({

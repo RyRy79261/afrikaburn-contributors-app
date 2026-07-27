@@ -3,6 +3,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 
 import { db, schema } from "./db";
 import { requireCampUser } from "./session";
@@ -37,6 +38,8 @@ export async function markNotificationRead(
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
+    // redirect()/notFound() are thrown control flow — never an error message.
+    unstable_rethrow(err);
     return {
       ok: false,
       error:
@@ -64,6 +67,8 @@ export async function markAllNotificationsRead(): Promise<NotificationActionResu
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (err) {
+    // redirect()/notFound() are thrown control flow — never an error message.
+    unstable_rethrow(err);
     return {
       ok: false,
       error:

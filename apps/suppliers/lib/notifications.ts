@@ -113,3 +113,58 @@ export async function insertNotifications(
     })),
   );
 }
+
+/** A published bulletin, as a supplier may read it. */
+export interface SupplierBulletin {
+  id: string;
+  title: string;
+  bodyMd: string;
+  pinned: boolean;
+  publishedAt: Date | null;
+}
+
+/**
+ * One bulletin, IF this supplier was in its audience.
+ *
+ * Authorisation is the notification row, exactly as apps/web does it: the
+ * bulletin is readable only when a `notifications` row ties it to this user, so
+ * an org-internal or participant-targeted broadcast 404s here rather than
+ * leaking. Unpublished bulletins are never returned.
+ *
+ * Added 27 Jul 2026 (audit B3): supplier bulletin notifications have always
+ * linked to `/bulletins/<id>`, a route this app did not have — so every bulletin
+ * in the supplier inbox was a 404 and the Bulletins tab was a dead end.
+ */
+export async function getBulletinForSupplier(
+  userId: string,
+  bulletinId: string,
+): Promise<SupplierBulletin | null> {
+  if (!isDatabaseConfigured()) return null;
+  const db = getDb();
+
+  const [received] = await db
+    .select({ id: schema.notifications.id })
+    .from(schema.notifications)
+    .where(
+      and(
+        eq(schema.notifications.userId, userId),
+        eq(schema.notifications.bulletinId, bulletinId),
+      ),
+    )
+    .limit(1);
+  if (!received) return null;
+
+  const [bulletin] = await db
+    .select({
+      id: schema.bulletins.id,
+      title: schema.bulletins.title,
+      bodyMd: schema.bulletins.bodyMd,
+      pinned: schema.bulletins.pinned,
+      publishedAt: schema.bulletins.publishedAt,
+    })
+    .from(schema.bulletins)
+    .where(eq(schema.bulletins.id, bulletinId))
+    .limit(1);
+  if (!bulletin || bulletin.publishedAt === null) return null;
+  return bulletin;
+}

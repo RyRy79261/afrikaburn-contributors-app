@@ -185,7 +185,32 @@ async function main(): Promise<void> {
     if (seeded.rowCount === 0) {
       console.log("[migrate] no edition found — seeding reference data...");
       const { seedReferenceData } = await import("./seed");
-      await seedReferenceData(drizzle(client, { schema }));
+
+      // ALL OR NOTHING. The sentinel above is "does an edition exist", and the
+      // seed's own first write is what creates one — so an unwrapped seed that
+      // died halfway left an edition row behind with the org group (or the
+      // categories, or the suppliers) missing, and every subsequent deploy read
+      // the sentinel, concluded "already seeded", and skipped the repair. The
+      // database was then permanently half-built with no in-product way out:
+      // resolveOrgSurface finds no org group and the console is unreachable.
+      //
+      // Inside a transaction the failure rolls the edition back too, the
+      // sentinel stays empty, and the next deploy simply seeds again.
+      //
+      // The advisory lock is SESSION-scoped, so it spans this transaction and
+      // still keeps two concurrent deploys from seeding at once.
+      await client.query("BEGIN");
+      try {
+        await seedReferenceData(drizzle(client, { schema }));
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        console.error(
+          "[migrate] seeding FAILED and was rolled back — the database is " +
+            "unseeded, not half-seeded. Redeploy to retry.",
+        );
+        throw err;
+      }
       console.log("[migrate] reference data seeded.");
     } else {
       console.log("[migrate] reference data present — not re-seeding.");

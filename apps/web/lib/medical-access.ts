@@ -14,7 +14,7 @@ import {
   type MedicalAccessContext,
 } from "@quagga/core";
 import { db, schema } from "./db";
-import { decryptOrNull } from "./crypto-guard";
+import { decryptField } from "./crypto-guard";
 
 /**
  * Resolve a burner's medical notes FOR A VIEWER on that burner's detail page.
@@ -38,12 +38,13 @@ export async function resolveMedicalNotesForViewer(input: {
   viewerUserId: string;
   subjectUserId: string;
   editionId: string;
-}): Promise<{ visible: boolean; notes: string | null }> {
+}): Promise<{ visible: boolean; notes: string | null; unreadable: boolean }> {
   const { viewerUserId, subjectUserId, editionId } = input;
   const isSelf = viewerUserId === subjectUserId;
 
   const ctx = await buildMedicalAccessContext(viewerUserId, subjectUserId);
-  if (!canViewMedicalNotes(ctx)) return { visible: false, notes: null };
+  if (!canViewMedicalNotes(ctx))
+    return { visible: false, notes: null, unreadable: false };
 
   const [bio] = await db()
     .select({ medicalNotes: schema.burnerBios.medicalNotes })
@@ -55,7 +56,12 @@ export async function resolveMedicalNotesForViewer(input: {
       ),
     )
     .limit(1);
-  const notes = bio ? decryptOrNull(bio.medicalNotes) : null;
+  // Three-state, not two: ciphertext we cannot decrypt must not present as
+  // "this burner recorded nothing". Silently hiding the section from a camp
+  // lead in an emergency is the same failure as the console's false all-clear.
+  const decrypted = bio ? decryptField(bio.medicalNotes) : null;
+  const notes = decrypted?.value ?? null;
+  const unreadable = decrypted?.state === "unreadable";
 
   // Audit only an actual disclosure of someone ELSE's notes: reading your own
   // data is not an access event, and an empty field discloses nothing. Written
@@ -86,7 +92,7 @@ export async function resolveMedicalNotesForViewer(input: {
     });
   }
 
-  return { visible: true, notes };
+  return { visible: true, notes, unreadable };
 }
 
 /**

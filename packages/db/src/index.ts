@@ -8,6 +8,22 @@ import { configureLocalProxy } from "./local-proxy";
 
 export * as schema from "./schema";
 export { configureLocalProxy } from "./local-proxy";
+// Shared by @quagga/auth's session-create hook AND apps/web's explicit Cancel
+// button, so "signing in cancels it" and "pressing Cancel cancels it" cannot
+// drift into two different behaviours.
+export {
+  cancelPendingDeletion,
+  type CancelDeletionResult,
+} from "./deletion";
+// Server actions that call `auth.api.*` in-process skip Better Auth's HTTP
+// limiter entirely; this is the counter that covers them.
+export {
+  consumeRateLimit,
+  rateLimitIp,
+  FORGOT_PASSWORD_MAX_PER_WINDOW,
+  FORGOT_PASSWORD_WINDOW_SECONDS,
+  type RateLimitVerdict,
+} from "./rate-limit";
 // What the deploy-time migration runner WOULD do, resolved from env alone. The
 // org console's System panel renders this verdict so an engineer can see whether
 // the deployment is set up to migrate safely without reading a build log.

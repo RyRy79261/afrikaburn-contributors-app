@@ -67,15 +67,36 @@ async function runSweep(): Promise<NextResponse> {
     );
   }
   const results = await sweepDueDeletions();
-  return NextResponse.json({
-    ok: true,
-    job: "account.deletion_sweep",
-    processed: results.length,
-    sanitized: results.filter((r) => r.ok).length,
-    failed: results
-      .filter((r) => !r.ok)
-      .map((r) => ({ userId: r.userId, error: r.error })),
-  });
+  const failed = results
+    .filter((r) => !r.ok)
+    .map((r) => ({ userId: r.userId, error: r.error }));
+
+  // A FAILED ERASURE IS NOT A SUCCESSFUL RUN. This used to answer 200 `ok:true`
+  // with the failures tucked in the body and nothing written to the log — so a
+  // POPIA erasure that had been failing every night for a fortnight looked
+  // exactly like a healthy cron entry in the Vercel dashboard. Log each failure,
+  // and answer 500 so the scheduler's own alerting sees it.
+  for (const f of failed) {
+    console.error(
+      `[deletion-sweep] sanitization FAILED for user ${f.userId}: ${f.error}`,
+    );
+  }
+  if (failed.length > 0) {
+    console.error(
+      `[deletion-sweep] ${failed.length} of ${results.length} due deletions did not complete`,
+    );
+  }
+
+  return NextResponse.json(
+    {
+      ok: failed.length === 0,
+      job: "account.deletion_sweep",
+      processed: results.length,
+      sanitized: results.filter((r) => r.ok).length,
+      failed,
+    },
+    { status: failed.length > 0 ? 500 : 200 },
+  );
 }
 
 const DISABLED_RESPONSE = {

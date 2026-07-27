@@ -3,6 +3,13 @@
 import { z } from "zod";
 import { assessPassword, enumerationSafeMessage } from "@quagga/core";
 import { auth } from "@quagga/auth";
+import {
+  consumeRateLimit,
+  rateLimitIp,
+  FORGOT_PASSWORD_MAX_PER_WINDOW,
+  FORGOT_PASSWORD_WINDOW_SECONDS,
+} from "@quagga/db";
+import { headers } from "next/headers";
 import { isAuthConfigured } from "@/lib/config";
 
 // Self-hosted password recovery for the supplier portal. Thin wrappers over
@@ -29,6 +36,22 @@ export async function requestPasswordReset(
         "Password reset by email isn't available yet — no reset link can be sent. Contact AfrikaBurn for help.",
     };
   }
+  // RATE LIMITED HERE: this is a server action calling `auth.api.*` in-process,
+  // so Better Auth's HTTP limiter on /api/auth/forget-password never sees it.
+  // Same budget as the participant app — the three front doors share one bucket
+  // per IP so they cannot be played off against each other.
+  const rl = await consumeRateLimit({
+    key: `forgot_password:${rateLimitIp(await headers())}`,
+    max: FORGOT_PASSWORD_MAX_PER_WINDOW,
+    windowSeconds: FORGOT_PASSWORD_WINDOW_SECONDS,
+  });
+  if (!rl.allowed) {
+    return {
+      ok: false,
+      error: `Too many reset requests. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).`,
+    };
+  }
+
   try {
     await auth.api.requestPasswordReset({
       body: {

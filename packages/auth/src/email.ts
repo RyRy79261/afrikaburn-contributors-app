@@ -14,6 +14,7 @@
 // emailChangeConfirmEmail, which already takes a URL.
 
 import {
+  deletionCancelledEmail,
   emailChangeConfirmEmail,
   passwordResetCompletedEmail,
 } from "@quagga/core";
@@ -42,7 +43,8 @@ export type AuthEmailKind =
   | "reset"
   | "verify"
   | "change-email"
-  | "password-reset-completed";
+  | "password-reset-completed"
+  | "deletion-cancelled";
 
 export interface AuthEmailInput {
   to: string;
@@ -85,6 +87,10 @@ function buildAuthEmail(input: AuthEmailInput): AuthEmailBody {
       });
     case "password-reset-completed":
       return passwordResetCompletedEmail({ when: new Date() });
+    case "deletion-cancelled":
+      // Sent by the session-create hook when signing in rescued a pending
+      // deletion — the confirmation that the promise was actually kept.
+      return deletionCancelledEmail();
   }
 }
 

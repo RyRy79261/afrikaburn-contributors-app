@@ -14,7 +14,7 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
-import { buildDeletionView } from "@/lib/account";
+import { buildDeletionView, listLinkedAccounts } from "@/lib/account";
 import { PreviewNotice } from "@/components/preview-notice";
 import { AccountShell } from "@/components/account/account-shell";
 import {
@@ -66,6 +66,13 @@ export default async function AccountDeletePage() {
 
   const blockedGroupIds = eligibility.blocks.flatMap((b) => b.groupIds ?? []);
   const blockedProjects = await resolveBlockedProjects(blockedGroupIds);
+
+  // Which confirmation the form should draw. A Google-only account has no
+  // `credential` provider, so a password field there is a control that can
+  // never succeed; it confirms by typing its own address instead. The server
+  // re-derives this independently — this only chooses what to render.
+  const linked = await listLinkedAccounts();
+  const hasPassword = linked.some((a) => a.providerId === "credential");
 
   const scheduled = view.phase === "grace" || view.phase === "due";
 
@@ -213,12 +220,18 @@ export default async function AccountDeletePage() {
           <CardHeader>
             <CardTitle>Confirm and request deletion</CardTitle>
             <CardDescription>
-              We&rsquo;ll ask for your password, then start the{" "}
+              {hasPassword
+                ? "We\u2019ll ask for your password, then start the "
+                : "We\u2019ll ask you to type your email address, then start the "}
               {DELETION_GRACE_PERIOD_DAYS}-day countdown.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <DeleteAccountForm blocked={!eligibility.ok} />
+            <DeleteAccountForm
+              blocked={!eligibility.ok}
+              hasPassword={hasPassword}
+              email={user.email}
+            />
           </CardContent>
         </Card>
       )}

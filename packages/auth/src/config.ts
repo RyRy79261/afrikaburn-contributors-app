@@ -13,9 +13,10 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
-import { createHttpDb, schema } from "@quagga/db";
+import { cancelPendingDeletion, createHttpDb, schema } from "@quagga/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@quagga/core";
 import { sendAuthEmail } from "./email";
+import { isReauth } from "./reauth";
 import {
   AUTH_RP_NAME,
   AUTH_SESSION,
@@ -140,6 +141,34 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
 
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
+    },
+
+    // THE SIGN-IN PROMISE, KEPT. Every deletion surface tells the burner they
+    // have 14 days to change their mind and that signing in cancels it. This is
+    // the only thing that makes that true, and it hangs off session creation
+    // rather than any one app's sign-in page because the promise does not say
+    // WHERE to sign in — a session minted by any of the three apps counts.
+    //
+    // Fail-open by construction: cancelPendingDeletion never throws, so a DB
+    // hiccup here can never lock someone out of their account. The cost of that
+    // choice is that a failed rescue is silent to the user, so it logs loudly.
+    databaseHooks: {
+      session: {
+        create: {
+          after: async (session: { userId: string }) => {
+            // A password check on the way to REQUESTING deletion is not the
+            // burner coming back. See ./reauth.
+            if (isReauth()) return;
+            const { cancelled, email } = await cancelPendingDeletion({
+              userId: session.userId,
+              via: "sign_in",
+            });
+            if (cancelled && email) {
+              await sendAuthEmail(env, { to: email, kind: "deletion-cancelled" });
+            }
+          },
+        },
+      },
     },
 
     // Google social sign-in (existing behaviour), wired only when credentials

@@ -65,7 +65,14 @@ export function decrypt(stored: string): string {
   ]).toString("utf8");
 }
 
-/** Decrypt-or-null helper for nullable stored columns. */
+/** Decrypt-or-null helper for nullable stored columns.
+ *
+ * COLLAPSES TWO DIFFERENT FACTS INTO `null`: "nothing was stored" and "something
+ * was stored but could not be read". That is fine for an ID document, where the
+ * page shows a field as absent either way. It is NOT fine for medical notes,
+ * where `null` renders as the affirmative "no medical notes on file" — a
+ * reassurance that must never be produced by a failed decrypt. Safety-critical
+ * columns use `decryptField` below. */
 export function decryptOrNull(
   stored: string | null | undefined,
 ): string | null {
@@ -74,5 +81,33 @@ export function decryptOrNull(
     return decrypt(stored);
   } catch {
     return null;
+  }
+}
+
+/**
+ * The three genuinely distinct outcomes of reading an encrypted column.
+ *
+ * `unreadable` is the one that matters: ciphertext is present but this process
+ * cannot decrypt it — a wrong or rotated PGCRYPTO_KEY, or a pre-encryption
+ * plaintext row. Callers on a safety path MUST surface it as "we cannot read
+ * this", never as "there is nothing here".
+ */
+export type DecryptedField =
+  | { state: "empty"; value: null }
+  | { state: "ok"; value: string }
+  | { state: "unreadable"; value: null };
+
+const EMPTY_FIELD: DecryptedField = { state: "empty", value: null };
+
+/** Decrypt a nullable column, distinguishing absent from unreadable. */
+export function decryptField(
+  stored: string | null | undefined,
+): DecryptedField {
+  if (!stored) return EMPTY_FIELD;
+  try {
+    return { state: "ok", value: decrypt(stored) };
+  } catch {
+    // Deliberately not logged with the ciphertext — this runs on a POPIA column.
+    return { state: "unreadable", value: null };
   }
 }

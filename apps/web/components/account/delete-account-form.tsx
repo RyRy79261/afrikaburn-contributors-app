@@ -14,28 +14,49 @@ import {
 
 // The re-auth + request control (canvas Q3pQj6 §"Confirm and request deletion").
 //
-// Re-auth is PASSWORD ONLY, and that is not a shortcut: the spec's alternative
-// second factor is 2FA, which is structurally unavailable on our managed Neon
-// Auth instance (see docs/accounts-security-spec.md §"Provider capability
-// probe"). There is nothing else to offer, so we don't pretend there is.
+// TWO CONFIRMATION SHAPES, because accounts come in two shapes:
+//   · password accounts re-enter their password (verified upstream);
+//   · Google-only accounts type their own email address, because there is no
+//     local credential to verify and a server action cannot round-trip a
+//     Google re-consent.
+//
+// Until 27 Jul 2026 only the first existed, so a Google-only burner was shown a
+// password field that could never succeed — POPIA erasure was unreachable for
+// them. The server decides which applies from the linked providers; `hasPassword`
+// here only picks the control to draw.
 //
 // `blocked` disables the button, but the real guard is server-side —
 // `requestAccountDeletion` re-runs `assessDeletionEligibility` after re-auth,
 // so a burner who defeats the disabled attribute still gets refused.
 
-export function DeleteAccountForm({ blocked }: { blocked: boolean }) {
+export function DeleteAccountForm({
+  blocked,
+  hasPassword,
+  email,
+}: {
+  blocked: boolean;
+  /** False for a Google-only account: confirm by typing the address instead. */
+  hasPassword: boolean;
+  email: string | null;
+}) {
   const router = useRouter();
   const [password, setPassword] = React.useState("");
+  const [confirmEmail, setConfirmEmail] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+
+  const answer = hasPassword ? password : confirmEmail;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await requestAccountDeletion({ password });
+      const result = await requestAccountDeletion(
+        hasPassword ? { password } : { confirmEmail },
+      );
       if (result.ok) {
         setPassword("");
+        setConfirmEmail("");
         toast.success(result.message ?? "Deletion scheduled.");
         router.refresh();
       } else {
@@ -46,23 +67,48 @@ export function DeleteAccountForm({ blocked }: { blocked: boolean }) {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <Field
-        label="Confirm your password"
-        htmlFor="delete-password"
-        help="We ask again because a stolen session shouldn't be enough to erase someone."
-      >
-        <Input
-          id="delete-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="Enter your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={pending || blocked}
-          required
-        />
-      </Field>
+      {hasPassword ? (
+        <Field
+          label="Confirm your password"
+          htmlFor="delete-password"
+          help="We ask again because a stolen session shouldn't be enough to erase someone."
+        >
+          <Input
+            id="delete-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={pending || blocked}
+            required
+          />
+        </Field>
+      ) : (
+        <Field
+          label="Type your email address to confirm"
+          htmlFor="delete-confirm-email"
+          help={
+            email
+              ? `You sign in with Google, so there's no password to check. Type ${email} to confirm it's you.`
+              : "You sign in with Google, so there's no password to check. Type your account email address to confirm."
+          }
+        >
+          <Input
+            id="delete-confirm-email"
+            name="confirmEmail"
+            type="email"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={email ?? "you@example.com"}
+            value={confirmEmail}
+            onChange={(e) => setConfirmEmail(e.target.value)}
+            disabled={pending || blocked}
+            required
+          />
+        </Field>
+      )}
 
       <p className="text-xs text-muted-foreground">
         You have {DELETION_GRACE_PERIOD_DAYS} days to change your mind — just
@@ -81,7 +127,7 @@ export function DeleteAccountForm({ blocked }: { blocked: boolean }) {
         <Button
           type="submit"
           variant="destructive"
-          disabled={blocked || pending || password.length === 0}
+          disabled={blocked || pending || answer.trim().length === 0}
         >
           {pending ? "Requesting…" : "Request deletion"}
         </Button>

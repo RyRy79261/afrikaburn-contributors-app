@@ -130,9 +130,9 @@ export function RegistrationWizard(props: WizardProps) {
 
   const valuesRef = React.useRef(values);
   valuesRef.current = values;
-  const savingRef = React.useRef(false);
-  const pendingRef = React.useRef(false);
   const dirtyRef = React.useRef(false);
+  /** The in-flight flush, so concurrent callers join it instead of racing it. */
+  const flushRef = React.useRef<Promise<boolean> | null>(null);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const zones = React.useMemo(
@@ -147,33 +147,53 @@ export function RegistrationWizard(props: WizardProps) {
   const allComplete = completed.size === SECTION_KEYS.length;
   const missing = SECTION_KEYS.filter((k) => !completed.has(k));
 
-  const saveNow = React.useCallback(async () => {
+  /**
+   * Flush the draft to the server. Resolves TRUE only once the server holds
+   * every edit made so far.
+   *
+   * This used to return early when a save was already in flight, merely setting
+   * a `pending` flag and firing an unawaited follow-up. `handleSubmit` awaited
+   * it and took the resolution to mean "draft is saved" — so submitting while an
+   * autosave was in flight validated the PREVIOUS draft. That is how the wizard
+   * could show "6 of 6 sections complete" in the header and refuse with
+   * "Complete all six sections" from the server in the same click.
+   *
+   * Now: concurrent callers JOIN the in-flight flush rather than skipping it,
+   * and the flush loops until the draft is clean, so an edit made mid-write is
+   * written by the next iteration instead of being dropped.
+   */
+  const saveNow = React.useCallback((): Promise<boolean> => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    if (!dirtyRef.current) return;
-    if (savingRef.current) {
-      pendingRef.current = true;
-      return;
-    }
-    savingRef.current = true;
-    dirtyRef.current = false;
-    setSaveState("saving");
-    const result = await props.saveAction(props.slug, valuesRef.current);
-    savingRef.current = false;
-    if (result.ok) {
-      setSaveState("saved");
-      setLastSavedAt(new Date());
-    } else {
-      setSaveState("error");
-      dirtyRef.current = true; // keep it dirty so a later flush retries
-      toast.error("Couldn't save", { description: result.error });
-    }
-    if (pendingRef.current) {
-      pendingRef.current = false;
-      void saveNow();
-    }
+    if (flushRef.current) return flushRef.current;
+    if (!dirtyRef.current) return Promise.resolve(true);
+
+    const run = (async (): Promise<boolean> => {
+      while (dirtyRef.current) {
+        // Clear BEFORE the await: an edit that lands during the write re-dirties
+        // it and is caught by the next pass. Clearing after would swallow it.
+        dirtyRef.current = false;
+        setSaveState("saving");
+        const result = await props.saveAction(props.slug, valuesRef.current);
+        if (!result.ok) {
+          dirtyRef.current = true; // stay dirty so a later flush retries
+          setSaveState("error");
+          toast.error("Couldn't save", { description: result.error });
+          return false;
+        }
+        setSaveState("saved");
+        setLastSavedAt(new Date());
+      }
+      return true;
+    })();
+
+    flushRef.current = run;
+    void run.finally(() => {
+      if (flushRef.current === run) flushRef.current = null;
+    });
+    return run;
   }, [props]);
 
   // Update a field, mark dirty, and debounce an autosave.
@@ -204,9 +224,19 @@ export function RegistrationWizard(props: WizardProps) {
 
   async function handleSubmit() {
     setSubmitting(true);
-    // Persist any pending edits before the gate check.
+    // Persist every pending edit BEFORE the server re-checks completeness —
+    // the server validates what it has stored, not what is on screen. If the
+    // flush fails, stop: submitting now would judge a stale draft and produce
+    // a refusal that contradicts the header.
     dirtyRef.current = true;
-    await saveNow();
+    const flushed = await saveNow();
+    if (!flushed) {
+      setSubmitting(false);
+      toast.error("Couldn't submit", {
+        description: "Your latest changes haven't saved yet. Try again.",
+      });
+      return;
+    }
     const result = await props.submitAction(props.slug);
     setSubmitting(false);
     if (result.ok) {

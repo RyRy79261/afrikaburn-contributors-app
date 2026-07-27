@@ -131,6 +131,31 @@ export default async function BurnerProfilePage({
           </ProfileSection>
         )}
 
+        {/* Ciphertext on file that this deployment cannot decrypt. Showing
+            nothing would read as "no medical notes", which on a safety surface
+            is a false all-clear — so say plainly that something exists and
+            cannot be read. */}
+        {medical.visible && medical.unreadable && (
+          <ProfileSection
+            label="Medical notes"
+            icon={
+              <Stethoscope className="h-3.5 w-3.5 text-accent" aria-hidden />
+            }
+          >
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm leading-relaxed"
+            >
+              <strong className="font-medium">
+                There are medical notes on file that cannot be read.
+              </strong>{" "}
+              {isOwn
+                ? "Your notes were saved with a different encryption key than this site is using. Re-save them from your profile, and tell an organiser."
+                : "This is a configuration fault, not an empty field — do not read it as “no medical notes”. Ask an organiser to check the encryption key, and ask the burner directly if you need this now."}
+            </p>
+          </ProfileSection>
+        )}
+
         {about && (
           <ProfileSection label="About">
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">

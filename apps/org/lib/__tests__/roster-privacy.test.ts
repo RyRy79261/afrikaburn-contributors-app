@@ -85,7 +85,12 @@ describe("REGRESSION: the org roster carries nothing medical", () => {
     // the legitimate, audited purposeful-access path.
     const detail = functionBody(queries, "getRosterMemberDetail");
     expect(detail).toMatch(/medicalNotes/);
-    expect(detail).toMatch(/decryptOrNull/);
+    // `decryptField`, not `decryptOrNull`: the detail view must distinguish
+    // "the burner recorded none" from "there is ciphertext we cannot read",
+    // because the latter rendered as an affirmative "no medical notes on file"
+    // — a false all-clear on a safety surface (audit M2, 27 Jul 2026).
+    expect(detail).toMatch(/decryptField/);
+    expect(detail).not.toMatch(/decryptOrNull/);
   });
 
   it("the DETAIL query authorises BEFORE it selects the column", () => {

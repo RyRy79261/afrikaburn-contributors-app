@@ -169,6 +169,24 @@ export default async function RegistrationMemberPage({
               <p className="whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-sm leading-relaxed">
                 {medicalNotes}
               </p>
+            ) : member.medicalNotesUnreadable ? (
+              // NOT "no notes". There IS something on file and this deployment
+              // cannot read it — almost always a wrong or rotated PGCRYPTO_KEY.
+              // On a medical surface the difference between "nothing recorded"
+              // and "we cannot read what was recorded" is the whole point.
+              <p
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm leading-relaxed text-foreground"
+              >
+                <strong className="font-medium">
+                  This member has medical notes on file that cannot be read.
+                </strong>{" "}
+                The encryption key this deployment is using does not match the
+                one they were saved with. Do not treat this as &quot;no medical
+                notes&quot; — ask an administrator to check{" "}
+                <code className="rounded bg-muted px-1">PGCRYPTO_KEY</code>, and
+                ask the member directly if you need the information now.
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 No medical notes on file for this member.

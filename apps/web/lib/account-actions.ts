@@ -4,19 +4,18 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 
 import {
   assertCapability,
   assessPassword,
   assessDeletionEligibility,
-  canCancelDeletion,
   canConfirmEmailChange,
   canRevokeEmailChange,
   deletionGraceEndsAt,
   deletionRequestedEmail,
   deletionCancelledEmail,
   deletionRequestedNotification,
-  deletionCancelledNotification,
   emailChangeConfirmEmail,
   emailChangeExpiresAt,
   emailChangeNotifyOldEmail,
@@ -37,13 +36,24 @@ import {
 } from "@quagga/core";
 import type { SecurityEventLogKind } from "@quagga/types";
 
-import { auth } from "@quagga/auth";
+import { auth, withReauth } from "@quagga/auth";
+import {
+  cancelPendingDeletion,
+  consumeRateLimit,
+  rateLimitIp,
+  FORGOT_PASSWORD_MAX_PER_WINDOW,
+  FORGOT_PASSWORD_WINDOW_SECONDS,
+} from "@quagga/db";
 import { db, schema, withTransaction } from "@/lib/db";
 import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { insertNotifications } from "@/lib/notifications";
-import { buildDeletionGuardContext, getDeletionRequest } from "@/lib/account";
+import {
+  buildDeletionGuardContext,
+  getDeletionRequest,
+  listLinkedAccounts,
+} from "@/lib/account";
 import { hashToken, newToken } from "@/lib/account-tokens";
 
 // Write side of the account surfaces (docs/accounts-security-spec.md).
@@ -79,6 +89,12 @@ async function run(
     const out = await fn();
     return { ok: true, message: out?.message };
   } catch (err) {
+    // Next signals redirect() and notFound() by THROWING a control-flow error.
+    // Catching it here turned every one into a rendered error string: because
+    // `requireCampUser()` redirects to /auth/sign-in and is the first line of
+    // nearly every action below, a burner whose session had expired was shown
+    // the literal text "NEXT_REDIRECT" instead of the sign-in page.
+    unstable_rethrow(err);
     return {
       ok: false,
       error:
@@ -229,6 +245,25 @@ export async function requestPasswordReset(
     };
   }
   return run(async () => {
+    // RATE LIMITED HERE, not by Better Auth. This is a server action calling
+    // `auth.api.*` in-process, so it never passes through the HTTP limiter that
+    // /api/auth/forget-password's customRule configures — without this counter
+    // the strictest-configured endpoint in the app was effectively unlimited,
+    // and each accepted call queues a real email to a third party.
+    const rl = await consumeRateLimit({
+      key: `forgot_password:${rateLimitIp(await headers())}`,
+      max: FORGOT_PASSWORD_MAX_PER_WINDOW,
+      windowSeconds: FORGOT_PASSWORD_WINDOW_SECONDS,
+    });
+    if (!rl.allowed) {
+      // Deliberately the same shape of refusal for everyone: a limit message
+      // that varied by whether the account existed would be the oracle this
+      // action exists to avoid.
+      throw new Error(
+        `Too many reset requests. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).`,
+      );
+    }
+
     try {
       await auth.api.requestPasswordReset({
         body: {
@@ -642,8 +677,14 @@ export async function revokeEmailChange(
 // --- Deletion -------------------------------------------------------------
 
 const RequestDeletionInput = z.object({
-  /** Re-auth: the account password, verified upstream by re-signing in. */
-  password: z.string().min(1, "Enter your password to confirm."),
+  /** Re-auth for a password account, verified upstream by re-signing in. */
+  password: z.string().optional(),
+  /**
+   * Re-auth for an account with NO password (Google-only): the burner types
+   * their own email address. Which of the two is required is decided
+   * server-side from the linked providers — never from what the client sent.
+   */
+  confirmEmail: z.string().optional(),
 });
 
 /**
@@ -669,6 +710,36 @@ export async function requestAccountDeletion(
     // Re-auth. Deleting an account is the most destructive thing a session can
     // do, so a stolen session alone must not be enough.
     //
+    // WHICH re-auth depends on what the account actually has. This used to be
+    // password-only, which made POPIA erasure UNREACHABLE for every Google-only
+    // burner: there is no `credential` row to verify against, so `signInEmail`
+    // could only ever throw, and the page showed a password field that could
+    // never work while eligibility cheerfully reported "eligible".
+    const linked = await listLinkedAccounts();
+    const hasPassword = linked.some((a) => a.providerId === "credential");
+
+    if (!hasPassword) {
+      // No local credential exists to check, and re-consenting through Google
+      // mid-action isn't possible from a server action. The confirmation is
+      // therefore typing the account's own address — the standard destructive
+      // confirmation, and NOT a claim of cryptographic re-authentication. What
+      // actually protects this account is the 14-day grace period, which any
+      // sign-in now cancels (see @quagga/auth's session-create hook).
+      const typed = (input.confirmEmail ?? "").trim().toLowerCase();
+      if (!typed) {
+        throw new Error(
+          "Type your account email address to confirm.",
+        );
+      }
+      if (typed !== user.email.toLowerCase()) {
+        throw new Error(
+          "That doesn't match the email address on this account.",
+        );
+      }
+    } else if (!input.password) {
+      throw new Error("Enter your password to confirm.");
+    }
+
     // We re-authenticate by verifying the password through `signInEmail`, which
     // throws on a mismatch. Not returning it as a Response (no asResponse /
     // nextCookies) means NO session cookie reaches the caller — but Better Auth
@@ -677,23 +748,34 @@ export async function requestAccountDeletion(
     // and account deletion is precisely when stray sessions must not survive. So
     // we capture the freshly-minted token and delete that row immediately: the
     // credential is verified with zero lasting session side effect.
-    try {
-      const reauth = await auth.api.signInEmail({
-        body: { email: user.email, password: input.password },
-      });
-      const reauthToken = reauth?.token;
-      if (reauthToken) {
-        try {
-          await db()
-            .delete(schema.session)
-            .where(eq(schema.session.token, reauthToken));
-        } catch {
-          // Best-effort: a lingering re-auth session is cleaned up by the
-          // sweeper's identity deletion anyway; never fail deletion over it.
+    if (hasPassword) {
+      try {
+        // withReauth: this signInEmail is a password CHECK. Without the marker
+        // the session it mints fires the sign-in hook, which would cancel the
+        // very deletion request being made (or an existing one) before we ever
+        // reach the "already scheduled" guard below.
+        const reauth = await withReauth(() =>
+          auth.api.signInEmail({
+            body: {
+              email: user.email as string,
+              password: input.password as string,
+            },
+          }),
+        );
+        const reauthToken = reauth?.token;
+        if (reauthToken) {
+          try {
+            await db()
+              .delete(schema.session)
+              .where(eq(schema.session.token, reauthToken));
+          } catch {
+            // Best-effort: a lingering re-auth session is cleaned up by the
+            // sweeper's identity deletion anyway; never fail deletion over it.
+          }
         }
+      } catch {
+        throw new Error("That password didn't match. Try again.");
       }
-    } catch {
-      throw new Error("That password didn't match. Try again.");
     }
 
     const eligibility = assessDeletionEligibility(
@@ -752,65 +834,53 @@ export async function requestAccountDeletion(
 }
 
 /**
- * Cancel a pending deletion. Called explicitly from /account/delete, and
- * implicitly by `cancelDeletionOnSignInFor` on every sign-in.
+ * Cancel a pending deletion from the /account/delete page.
+ *
+ * The IMPLICIT cancellation — the "just sign in" promise — is not here and never
+ * was: it is a Better Auth `session.create.after` hook in @quagga/auth, so it
+ * fires for a sign-in in any of the three apps. Both paths call the same
+ * `cancelPendingDeletion` in @quagga/db; the only difference is that this one
+ * has request headers to attribute the security-event row with, and reports the
+ * outcome to a waiting UI.
  */
 export async function cancelAccountDeletion(): Promise<AccountActionResult> {
   return run(async () => {
     const user = await requireCampUser();
-    const cancelled = await cancelDeletionOnSignInFor(user.id, user.email);
+    if (!isDatabaseConfigured())
+      throw new Error("The database isn't configured yet.");
+
+    const h = await headers();
+    const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const { cancelled } = await cancelPendingDeletion({
+      userId: user.id,
+      via: "explicit",
+      context: {
+        ip: forwarded || h.get("x-real-ip") || null,
+        userAgent: h.get("user-agent") || null,
+      },
+    });
+
     if (!cancelled)
       throw new Error("There's no deletion scheduled on this account.");
+
+    // The inbox row and security event are written by cancelPendingDeletion;
+    // only the confirmation email is sent from here, through this app's Resend
+    // seam rather than the auth package's.
+    if (user.email) {
+      const mail = deletionCancelledEmail();
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: mail.subject,
+          text: mail.text,
+        });
+      } catch {
+        // The cancellation already committed; delivery is best-effort.
+      }
+    }
+
     revalidatePath("/account/delete");
+    revalidatePath("/account");
     return { message: "Cancelled — nothing was erased." };
   });
-}
-
-/**
- * The sign-in hook: coming back cancels a running deletion, exactly as the spec
- * promises ("cancelable by simply signing in"). Safe to call on every sign-in —
- * it no-ops when there is nothing pending.
- *
- * A request whose grace has ALREADY elapsed is deliberately not rescued here:
- * @quagga/core `cancelDeletionOnSignIn` refuses it, so a login cannot race the
- * sweeper into an ambiguous half-deleted state.
- */
-export async function cancelDeletionOnSignInFor(
-  userId: string,
-  email: string | null,
-  now: Date = new Date(),
-): Promise<boolean> {
-  if (!isDatabaseConfigured()) return false;
-  const request = await getDeletionRequest(userId);
-  if (!request || !canCancelDeletion(request, now)) return false;
-
-  // Cancel + audit atomically — same reasoning as the request path: the state
-  // change and the record of it must land together.
-  await withTransaction(async (tx) => {
-    await tx
-      .update(schema.accountDeletionRequests)
-      .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
-      .where(
-        and(
-          eq(schema.accountDeletionRequests.id, request.id),
-          eq(schema.accountDeletionRequests.status, "pending"),
-        ),
-      );
-
-    await tx.insert(schema.auditEvents).values({
-      actorId: userId,
-      action: "account.deletion_cancelled",
-      subject: userId,
-      meta: { via: "sign_in" },
-    });
-  });
-
-  await notifySecurity(
-    userId,
-    email,
-    deletionCancelledNotification(),
-    deletionCancelledEmail(),
-  );
-  await recordSecurityEvent(userId, "deletion_cancelled");
-  return true;
 }

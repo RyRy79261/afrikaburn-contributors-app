@@ -27,6 +27,9 @@
 
 export { auth, createAuth, buildAuthOptions, type Auth } from "./config";
 export { sendAuthEmail, type AuthEmailInput, type AuthEmailKind } from "./email";
+// Wrap any `auth.api.signInEmail` call made purely to VERIFY a password, so the
+// session-create hook does not read it as the burner returning.
+export { withReauth, isReauth } from "./reauth";
 // The pure env module is ALSO published as `@quagga/auth/env`. Importing it
 // there gets the resolvers without evaluating this file's `auth` singleton (a
 // betterAuth() construction with a drizzle adapter bound to it), which is what

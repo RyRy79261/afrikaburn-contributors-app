@@ -1,6 +1,6 @@
 import "server-only";
 
-import { encrypt, decryptOrNull } from "@quagga/db/crypto";
+import { encrypt, decryptOrNull, decryptField } from "@quagga/db/crypto";
 
 /** Whether the pgcrypto/AES key is configured (POPIA-sensitive columns and the
  * profile private key are only ever stored encrypted). */
@@ -16,4 +16,4 @@ export function safeEncrypt(plaintext: string | null): string | null {
   return encrypt(plaintext);
 }
 
-export { decryptOrNull };
+export { decryptOrNull, decryptField };

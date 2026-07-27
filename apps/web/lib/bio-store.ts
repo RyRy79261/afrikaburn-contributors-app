@@ -278,15 +278,31 @@ export async function saveBio(input: {
     };
   }
 
+  // REFUSE, DON'T DROP. Medical notes and ID documents are SPECIAL personal
+  // information (POPIA s26/27) and must never fall back to plaintext — but
+  // silently discarding them while the form reports "Saved" is worse than
+  // either storing or refusing them. A burner who typed an allergy and saw a
+  // success message is entitled to believe a medic can read it back.
+  //
+  // So: with no PGCRYPTO_KEY, a save that CARRIES sensitive values fails loudly.
+  // A save that carries none is unaffected, so the rest of the bio still works
+  // on a deployment without the key.
+  const carriesSensitive = Boolean(
+    fields.medicalNotes || (fields.idNumber && fields.idType),
+  );
+  if (carriesSensitive && !isCryptoConfigured()) {
+    throw new Error(
+      "This site can't store medical notes or ID documents right now — its " +
+        "encryption key isn't configured. Nothing was saved. Tell an organiser " +
+        "(PGCRYPTO_KEY is missing); the rest of your bio will save once you " +
+        "clear those fields.",
+    );
+  }
+
   const saIdEncrypted =
     fields.idType === "sa_id" ? safeEncrypt(fields.idNumber) : null;
   const passportEncrypted =
     fields.idType === "passport" ? safeEncrypt(fields.idNumber) : null;
-
-  // Medical notes are SPECIAL personal information (POPIA s26/27): encrypt like
-  // the ID document. `safeEncrypt` returns null when no PGCRYPTO_KEY is set, so
-  // the notes are DROPPED rather than persisted in the clear — SPECIAL data must
-  // never fall back to plaintext.
   const medicalNotesEncrypted = safeEncrypt(fields.medicalNotes);
 
   const now = new Date();
