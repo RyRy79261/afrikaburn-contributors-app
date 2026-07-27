@@ -50,6 +50,8 @@ async function notifyReopened(reopened: readonly ReopenedStep[]): Promise<void> 
       ...supplierStepReopenedNotification({
         stepLabel: supplierOnboardingStep(r.stepKey)?.title ?? r.stepKey,
       }),
+      origin: "org" as const,
+      linkApp: "suppliers" as const,
     }));
   if (rows.length === 0) return;
   try {

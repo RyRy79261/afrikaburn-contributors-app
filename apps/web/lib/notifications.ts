@@ -4,6 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@quagga/db";
 import {
   groupNotificationsByDay,
+  notificationLinkIsLocal,
   type DayGroup,
   type NotificationRow,
 } from "@quagga/core";
@@ -80,7 +81,10 @@ export async function listNotificationGroups(
       kind: r.kind,
       title: r.title,
       body: r.body,
-      link: r.link,
+      // A link minted for ANOTHER app is a path this one cannot serve —
+      // render the row without a link rather than a guaranteed 404.
+      // Null linkApp (pre-migration rows) counts as local.
+      link: notificationLinkIsLocal(r.linkApp, "web") ? r.link : null,
       bulletinId: r.bulletinId,
       createdAt: r.createdAt,
       readAt: r.readAt,
@@ -106,7 +110,10 @@ export async function recentNotifications(
     kind: r.kind,
     title: r.title,
     body: r.body,
-    link: r.link,
+    // A link minted for ANOTHER app is a path this one cannot serve —
+    // render the row unlinked rather than as a guaranteed 404. Null
+    // linkApp (every pre-migration row) counts as local.
+    link: notificationLinkIsLocal(r.linkApp, "web") ? r.link : null,
     bulletinId: r.bulletinId,
     createdAt: r.createdAt,
     readAt: r.readAt,
@@ -141,6 +148,11 @@ export async function insertNotifications(
         title: r.title,
         body: r.body ?? null,
         link: r.link ?? null,
+        // Provenance and destination (migration 0021). A caller that knows
+        // better overrides; otherwise the link belongs to THIS app, which is
+        // what the bare relative path always implicitly assumed.
+        origin: r.origin ?? null,
+        linkApp: r.linkApp ?? "web",
         bulletinId: r.bulletinId ?? null,
       })),
     );

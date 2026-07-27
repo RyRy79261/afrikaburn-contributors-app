@@ -198,10 +198,45 @@ export function bulletinNotification(input: {
 
 // --- Bulletin fan-out (shared audience resolver) -------------------------
 
+/**
+ * WHO sent a notification. Provenance for the reader: a questionnaire from
+ * AfrikaBurn and one from your own camp lead are different things, and the row
+ * used to say neither.
+ */
+export type NotificationOrigin = "org" | "camp" | "system";
+
+/**
+ * WHICH APP a notification's `link` resolves in.
+ *
+ * Separate from `NotificationOrigin` because they differ in practice — the org
+ * console writes the supplier inbox, so those rows are sent by `org` and read
+ * in `suppliers`. Treating one table's bare relative links as universal is what
+ * produced a supplier bulletin pointing at a route the suppliers app lacked.
+ */
+export type NotificationApp = "web" | "org" | "suppliers";
+
 /** A ready-to-insert notification row (payload + its recipient). */
 export interface NotificationRow extends NotificationPayload {
   userId: string;
   bulletinId?: string | null;
+  origin?: NotificationOrigin | null;
+  /** Defaults to the writing app when omitted. */
+  linkApp?: NotificationApp | null;
+}
+
+/**
+ * Should this app render the row's `link` as a link?
+ *
+ * Only when the link belongs here. A row minted for another app carries a path
+ * this app cannot serve, so linking it produces a 404 — the row still shows,
+ * it just does not pretend to be clickable. `null` (pre-migration rows, and
+ * anything unstamped) is treated as local, which is the old behaviour exactly.
+ */
+export function notificationLinkIsLocal(
+  linkApp: string | null | undefined,
+  thisApp: NotificationApp,
+): boolean {
+  return !linkApp || linkApp === thisApp;
 }
 
 /**

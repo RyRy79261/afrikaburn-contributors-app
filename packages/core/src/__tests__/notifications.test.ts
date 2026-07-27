@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { AudienceSpec } from "@quagga/types";
 import {
-  bulletinNotification,
   buildBulletinNotifications,
+  bulletinNotification,
   countUnread,
   groupNotificationsByDay,
+  notificationLinkIsLocal,
   notificationMentionsAny,
   officerAcceptedNotification,
   officerAssignmentRequestNotification,
@@ -14,8 +15,8 @@ import {
   shouldSendImmediateEmail,
   supplierStandingNotification,
   supplierStepConfirmedNotification,
-  wranglerAssignedNotification,
   type NotificationPayload,
+  wranglerAssignedNotification,
 } from "../notifications";
 import { resolveAudience, type AudienceContext } from "../audience";
 
@@ -251,5 +252,29 @@ describe("groupNotificationsByDay", () => {
   });
   it("returns [] for an empty inbox", () => {
     expect(groupNotificationsByDay([], now)).toEqual([]);
+  });
+});
+
+// --- audit M13: a link belongs to ONE app ---------------------------------
+
+describe("notificationLinkIsLocal", () => {
+  it("treats an unstamped row as local — every pre-migration row", () => {
+    // The column is nullable precisely so a staggered three-app deploy cannot
+    // break: null must behave exactly as before it existed.
+    expect(notificationLinkIsLocal(null, "web")).toBe(true);
+    expect(notificationLinkIsLocal(undefined, "suppliers")).toBe(true);
+  });
+
+  it("is local when the row was minted for this app", () => {
+    expect(notificationLinkIsLocal("web", "web")).toBe(true);
+    expect(notificationLinkIsLocal("suppliers", "suppliers")).toBe(true);
+  });
+
+  it("is NOT local across apps — the proven 404 class", () => {
+    // A supplier bulletin linking at a participant route, read in the supplier
+    // portal, is the exact shape that 404'd.
+    expect(notificationLinkIsLocal("web", "suppliers")).toBe(false);
+    expect(notificationLinkIsLocal("suppliers", "org")).toBe(false);
+    expect(notificationLinkIsLocal("org", "web")).toBe(false);
   });
 });

@@ -410,7 +410,13 @@ export async function activateQuestionnaire(
         });
         await insertNotifications(
           db,
-          userIds.map((userId) => ({ ...payload, userId })),
+          // /questionnaires/<id> is a participant route.
+          userIds.map((userId) => ({
+            ...payload,
+            userId,
+            origin: "org" as const,
+            linkApp: "web" as const,
+          })),
         );
         if (
           shouldSendImmediateEmail("questionnaire", {

@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   groupNotificationsByDay,
+  notificationLinkIsLocal,
   type DayGroup,
   type NotificationRow,
 } from "@quagga/core";
@@ -62,7 +63,10 @@ function toView(r: typeof schema.notifications.$inferSelect): NotificationView {
     kind: r.kind,
     title: r.title,
     body: r.body,
-    link: r.link,
+    // A link minted for ANOTHER app is a path this one cannot serve —
+    // render the row unlinked rather than as a guaranteed 404. Null
+    // linkApp (every pre-migration row) counts as local.
+    link: notificationLinkIsLocal(r.linkApp, "org") ? r.link : null,
     bulletinId: r.bulletinId,
     createdAt: r.createdAt,
     readAt: r.readAt,
@@ -130,6 +134,11 @@ export async function insertNotifications(
         title: r.title,
         body: r.body ?? null,
         link: r.link ?? null,
+        // Provenance and destination (migration 0021). A caller that knows
+        // better overrides; otherwise the link belongs to THIS app, which is
+        // what the bare relative path always implicitly assumed.
+        origin: r.origin ?? null,
+        linkApp: r.linkApp ?? "org",
         bulletinId: r.bulletinId ?? null,
       })),
     );

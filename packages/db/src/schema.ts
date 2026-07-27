@@ -1639,6 +1639,31 @@ export const notifications = pgTable(
     title: text("title").notNull(),
     body: text("body"),
     link: text("link"),
+    /**
+     * WHO SENT IT (migration 0021) — `org`, `camp`, or `system`.
+     *
+     * Provenance, and only provenance: "AfrikaBurn asked you this" and "your
+     * camp lead asked you this" are different things to the person reading the
+     * inbox, and nothing on the row said which.
+     */
+    origin: text("origin"),
+    /**
+     * WHICH APP THE LINK RESOLVES IN (migration 0021) — `web`, `org` or
+     * `suppliers`.
+     *
+     * Deliberately SEPARATE from `origin`, because they genuinely differ: the
+     * org console writes the supplier inbox, so those rows are sent BY org and
+     * read IN the suppliers app. Conflating the two is what produced the proven
+     * 404 — one table, three apps, and a bare app-relative `link` that means a
+     * different route depending on who reads it.
+     *
+     * Nullable on purpose. All three apps run migrations at build time, so
+     * whichever deploys first would otherwise be writing a column the other two
+     * do not yet bind — and every notification insert swallows its own
+     * exception, so that failure would be silent. Null means "unknown, treat as
+     * local", which is exactly the pre-migration behaviour.
+     */
+    linkApp: text("link_app"),
     bulletinId: uuid("bulletin_id").references(() => bulletins.id, {
       onDelete: "cascade",
     }),

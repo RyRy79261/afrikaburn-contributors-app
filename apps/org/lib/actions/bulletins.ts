@@ -201,7 +201,16 @@ async function fanOut(
   const ctx = await buildAudienceContext(editionId, session.orgGroupId);
   const userIds = resolveBulletinAudience(audience, ctx);
   const rows = buildBulletinNotifications({ bulletinId, title }, userIds);
-  await insertNotifications(db, rows);
+  // linkApp stays NULL for bulletins, and that is correct rather than lazy:
+  // /bulletins/<id> now exists in all three apps and each authorises the read
+  // from the recipient's own notification row, so the same relative path
+  // resolves wherever the recipient happens to read it. A supplier and a burner
+  // in one audience genuinely need different hosts, and null ("treat as local")
+  // is the only value that is right for both.
+  await insertNotifications(
+    db,
+    rows.map((r) => ({ ...r, origin: "org" as const, linkApp: null })),
+  );
 }
 
 const PublishInput = z.object({ id: z.string().uuid() });

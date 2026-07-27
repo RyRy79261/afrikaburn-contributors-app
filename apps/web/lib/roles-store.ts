@@ -516,6 +516,9 @@ export async function assignOfficer(
             campSlug: camp.slug,
           }),
           userId: m.userId,
+          // A camp asked one of its own members to take a role.
+          origin: "camp" as const,
+          linkApp: "web" as const,
         },
       ]);
     }
@@ -668,6 +671,8 @@ export async function respondToOfficer(
             campSlug: camp.slug,
           }),
           userId,
+          origin: "camp" as const,
+          linkApp: "web" as const,
         },
       ]);
     }

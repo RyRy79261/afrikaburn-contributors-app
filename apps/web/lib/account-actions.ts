@@ -135,7 +135,9 @@ async function notifySecurity(
   mail: { subject: string; text: string } | null,
 ): Promise<void> {
   try {
-    await insertNotifications(db(), [{ userId, ...payload }]);
+    await insertNotifications(db(), [
+      { userId, ...payload, origin: "system" as const, linkApp: "web" as const },
+    ]);
   } catch {
     // A failed inbox write must not roll back a completed security change.
   }

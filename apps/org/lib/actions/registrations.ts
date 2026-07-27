@@ -66,7 +66,13 @@ async function notifyRegistrationDecision(
     });
     await insertNotifications(
       db,
-      userIds.map((userId) => ({ ...payload, userId })),
+      // Sent by the org, read by participants — /camps/<slug> is a web route.
+      userIds.map((userId) => ({
+        ...payload,
+        userId,
+        origin: "org" as const,
+        linkApp: "web" as const,
+      })),
     );
 
     // Immediate email for registration decisions (env-less no-op otherwise).

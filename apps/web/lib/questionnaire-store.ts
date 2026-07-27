@@ -268,7 +268,14 @@ async function notifyTargets(
   try {
     await insertNotifications(
       db(),
-      userIds.map((userId) => ({ userId, ...payload })),
+      // A CAMP sent this, not AfrikaBurn — that distinction is the whole
+      // point of `origin`, and the title already names the camp.
+      userIds.map((userId) => ({
+        userId,
+        ...payload,
+        origin: "camp" as const,
+        linkApp: "web" as const,
+      })),
     );
   } catch (err) {
     // Never fail an activation that already committed over its inbox rows.

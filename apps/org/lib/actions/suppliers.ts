@@ -77,6 +77,10 @@ export async function setSupplierStanding(
               standingLabel: standingLabel(input.standing),
             }),
             userId: supplier.userId,
+            // Sent BY the org, read IN the suppliers app: /onboarding is a
+            // suppliers route, not a console one.
+            origin: "org" as const,
+            linkApp: "suppliers" as const,
           },
         ]);
       } catch (err) {
@@ -179,6 +183,8 @@ export async function setSupplierOnboardingStep(
             {
               ...supplierStepConfirmedNotification({ stepLabel: step.title }),
               userId: supplier.userId,
+              origin: "org" as const,
+              linkApp: "suppliers" as const,
             },
           ]);
         } catch (err) {
