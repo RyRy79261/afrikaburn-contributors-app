@@ -2,7 +2,11 @@
 //
 // Ryan's brief (27 Jul 2026): "IT can have two ranks, engineer, and system
 // manager. Engineer cant see personal information, and cant delete things, but
-// has access everywhere."
+// has access everywhere." Refined the same day: "You can consider an engineer as
+// part of all staff… they're a step up" — so "access everywhere" became literal
+// REACH (an engineer is in every department) while the two carve-outs became a
+// ceiling on the RANK rather than a default on the seeded row. Broader in reach,
+// deliberately narrower in depth.
 //
 // So there are three things to prove, and this spec proves them in that order:
 //   1. ACCESS EVERYWHERE — the engineer reaches the same console pages org staff
@@ -64,9 +68,14 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     const engineer = await provisionEngineer(makeAppPage);
 
     await engineer.org.goto("/accounts?q=");
-    // The rank is told plainly why the column is missing.
+    // The rank is told plainly why the column is missing — and the copy is the
+    // ONE refusal from @quagga/core rather than a sentence this page wrote, so
+    // an engineer and a department lead each get the reason that is true of
+    // them instead of both being told they are engineers.
     await expect(
-      engineer.org.getByText(/don't see email addresses/i),
+      engineer.org.getByText(
+        /engineer accounts reach every department, and deliberately never see personal information/i,
+      ),
     ).toBeVisible();
     // The search field itself narrows to the username.
     await expect(
@@ -126,8 +135,16 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     await expect(
       engineer.org.getByRole("heading", { name: /audit log/i }),
     ).toBeVisible();
+    // …and the refusal names the REAL reason: it is the rank, not a missing
+    // role. Sending an engineer off to ask for a role edit that cannot work
+    // would waste two people's afternoon.
     await expect(
-      engineer.org.getByText(/none of your org roles see personal information/i),
+      engineer.org.getByText(
+        /engineer accounts reach every department, and deliberately never see personal information/i,
+      ),
+    ).toBeVisible();
+    await expect(
+      engineer.org.getByText(/no role edit changes that/i),
     ).toBeVisible();
   });
 });

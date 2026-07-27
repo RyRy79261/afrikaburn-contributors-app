@@ -134,6 +134,13 @@
       "when": 1785140339591,
       "tag": "0018_tidy_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785153992282,
+      "tag": "0019_burly_paibok",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ import {
   sanitizeOrgPermissions,
   uniqueDepartmentKey,
   ORG_DEPARTMENT_CAP,
+  ORG_DOMAINS,
   ORG_ROLE_CAP,
 } from "@quagga/core";
 import { OrgCapabilityKey, RoleColor } from "@quagga/types";
@@ -239,6 +240,106 @@ export async function deleteDepartment(
     revalidatePath("/system/roles");
     revalidatePath("/system");
     revalidatePath("/accounts");
+  });
+}
+
+const SetDepartmentDomainsInput = z.object({
+  departmentId: z.string().uuid(),
+  domains: z.array(z.enum(ORG_DOMAINS)).max(ORG_DOMAINS.length),
+});
+
+/**
+ * SET WHAT A DEPARTMENT OWNS — the change that makes department scoping mean
+ * something.
+ *
+ * A domain has exactly one owner (`org_department_domains.domain` is the primary
+ * key), so assigning one to a department TAKES IT from whichever department had
+ * it. That is deliberate and it is why this action writes the whole set at once
+ * rather than toggling one key: "Suppliers now owns supplier documents" and
+ * "Safety no longer does" are the same fact, and two code paths for one fact is
+ * how they drift.
+ *
+ * The audit row records the before and the after, because this is a
+ * PERMISSIONS change wearing an org-chart costume: giving Suppliers the
+ * `registrations` domain hands every Suppliers lead every camp member's medical
+ * notes. `input.domains` is validated against the code's own vocabulary, so a
+ * forged payload cannot store a key the resolver would not recognise (it would
+ * be dropped at read anyway — belt and braces, as with permissions).
+ */
+export async function setDepartmentDomains(
+  raw: z.input<typeof SetDepartmentDomainsInput>,
+): Promise<ActionResult> {
+  return runAction(async () => {
+    const session = await requireSystemManager();
+    const input = SetDepartmentDomainsInput.parse(raw);
+    const domains = [...new Set(input.domains)];
+
+    await withTransaction(async (tx) => {
+      const [department] = await tx
+        .select({
+          id: schema.orgDepartments.id,
+          name: schema.orgDepartments.name,
+        })
+        .from(schema.orgDepartments)
+        .where(eq(schema.orgDepartments.id, input.departmentId))
+        .limit(1);
+      if (!department) throw new Error("That department is gone.");
+
+      const before = await tx
+        .select({
+          domain: schema.orgDepartmentDomains.domain,
+          departmentId: schema.orgDepartmentDomains.departmentId,
+        })
+        .from(schema.orgDepartmentDomains);
+
+      const held = before
+        .filter((d) => d.departmentId === department.id)
+        .map((d) => d.domain);
+      // Which departments are LOSING something to this one — named in the audit
+      // row, because "who can read supply-related details now?" is a question
+      // that gets asked six months later.
+      const takenFrom = before.filter(
+        (d) =>
+          d.departmentId !== department.id &&
+          domains.includes(d.domain as (typeof ORG_DOMAINS)[number]),
+      );
+
+      // Whole-set write: drop this department's rows, drop any row for a domain
+      // it is claiming, then insert the new set.
+      await tx
+        .delete(schema.orgDepartmentDomains)
+        .where(eq(schema.orgDepartmentDomains.departmentId, department.id));
+      if (domains.length > 0) {
+        await tx
+          .delete(schema.orgDepartmentDomains)
+          .where(inArray(schema.orgDepartmentDomains.domain, domains));
+        await tx.insert(schema.orgDepartmentDomains).values(
+          domains.map((domain) => ({
+            domain,
+            departmentId: department.id,
+          })),
+        );
+      }
+
+      await writeAuditEvent(tx, {
+        actorId: session.dbUserId,
+        action: "org.department.domains",
+        subject: department.id,
+        meta: {
+          name: department.name,
+          before: held,
+          after: domains,
+          takenFrom: takenFrom.map((d) => d.domain),
+        },
+      });
+    });
+
+    revalidatePath("/system/roles");
+    revalidatePath("/system");
+    revalidatePath("/accounts");
+    // Every scoped read resolves through the ownership map, so this changes what
+    // whole pages contain — not just this screen.
+    revalidatePath("/");
   });
 }
 

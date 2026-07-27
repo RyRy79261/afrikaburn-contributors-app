@@ -66,7 +66,11 @@ export default async function ActivationResultsPage({
           <CardContent className="flex flex-col gap-2 p-6">
             <p className="flex items-start gap-2 text-sm font-medium">
               <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {orgCapabilityRefusal(session.actor, "read_personal_information")}
+              {orgCapabilityRefusal(
+                session.actor,
+                "read_personal_information",
+                "questionnaires",
+              )}
             </p>
             <p className="text-sm text-muted-foreground">
               Responses are people&apos;s answers under their own names, so the

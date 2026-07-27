@@ -161,7 +161,13 @@ export async function deleteSupplierDocument(
   raw: z.input<typeof DeleteDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "delete" });
+    // Its own domain, not `suppliers`: the document library and the supplier
+    // repository are separate parts of the console and an org may well give
+    // them to different departments.
+    const session = await requireOrgSession({
+      capability: "delete",
+      domain: "supplier_documents",
+    });
     const { documentId } = DeleteDocumentInput.parse(raw);
 
     // Read, ack-count, delete and audit are one atomic unit.

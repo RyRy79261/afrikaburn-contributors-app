@@ -31,6 +31,18 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "category.update": "edited a camp category",
   "category.delete": "removed a camp category",
   "category.assign": "changed a camp's categories",
+  // THE PERMISSION MODEL ITSELF. These are the changes that decide what everyone
+  // else can read and destroy, so they must read as English in the trail rather
+  // than as a dotted key — the audit log is the only thing keeping the System
+  // manager rank honest, and a row nobody can read is not a control.
+  "org.department.create": "created an org department",
+  "org.department.rename": "renamed an org department",
+  "org.department.delete": "deleted an org department and its roles",
+  "org.department.domains": "changed what a department owns",
+  "org.role.create": "created an org role",
+  "org.role.update": "changed what an org role may do",
+  "org.role.delete": "deleted an org role",
+  "org.roles.assign": "changed which org roles someone holds",
   [MEDICAL_VIEW_AUDIT_ACTION]: "read a burner's medical notes",
 };
 

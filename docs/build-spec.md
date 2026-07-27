@@ -147,6 +147,15 @@ deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental 
 - **`org_departments`** — created by a System manager, never hardcoded (the org still
   cannot say how many there are). Creating one SEEDS its permanent LEAD and MEMBER roles;
   deleting it cascades them away.
+- **`org_department_domains`** (migration 0019) — WHAT each department owns. Ryan,
+  27 Jul 2026: *"supplier leads would be able to read the PII of anything supply-related."*
+  The operative word is RELATED, so a department owns DOMAIN KEYS — subject areas — rather
+  than tagged rows, and an entity's department is whichever department owns the domain it
+  lives in. `domain` is the PRIMARY KEY, so exactly one department owns each; claiming one
+  takes it. The domain LIST is hardcoded in `@quagga/core` `org-domains` because it is a
+  fact about the console's own routes (`registrations`, `suppliers`, `supplier_documents`,
+  `questionnaires`, `bulletins`, `camp_categories`, `accounts`, `audit`) — the
+  DEPARTMENTS remain data. A domain nobody owns is reachable only by an org-wide role.
 - **`org_roles`** — `key`, label, `kind`, colour, a `permissions` JSONB object over the
   capability vocabulary, and an optional `department_id`. `kind = system` is seeded,
   UNDELETABLE and RIGHTS-EDITABLE (Ryan's "set permanent ones"); `kind = custom` is a
@@ -168,9 +177,30 @@ not law:
 | `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅ |
 | `read_system` — the System panel (`/system`) | ✅ | ❌ | ✅ |
 
-**A System manager may now edit any of those ticks** — including granting an Engineer role
-`read_personal_information`. That is a real consequence of making rights data, and it is
-audited (`org.role.update` records before/after).
+**A System manager may edit any of those ticks** — with ONE ceiling, added 27 Jul 2026
+with the tier correction below: the `engineer` RANK never resolves
+`read_personal_information` or `delete`, whatever role it is given
+(`ENGINEER_RANK_CARVE_OUTS`). Every other tick is data, and every edit is audited
+(`org.role.update` records before/after).
+
+**The ranks are cumulative in REACH, not in DEPTH** (Ryan, 27 Jul 2026: *"you got org staff
+and then whatever departments they're in. You can have an engineer who is still also org
+staff but they're a step up and then sys admin or gods are still org but they're above
+that"*). All three are org; what differs is how many departments their grants apply in:
+
+| rank | reach | depth |
+| --- | --- | --- |
+| `org_staff` | the departments whose roles they hold (org-wide roles: all) | whatever their roles grant |
+| `engineer` | EVERY department, always — they run the system | **never** personal information, **never** delete |
+| `god` | everything | everything, whatever any row says |
+
+So the engineer tier is **not a superset of org_staff**: broader in reach, deliberately
+narrower in depth. Given identical roles, an org_staff account can read a phone number and
+destroy a supplier and an engineer cannot, anywhere. The cost is stated rather than hidden:
+an engineer who genuinely needs people's details cannot be given them by a role edit — they
+need the org_staff door. That is the safe direction of the trade, because an engineer's
+universal reach with no ceiling is one role assignment away from every burner's details in
+every department at once.
 
 **Four rails keep editable rights survivable** (each has a named lockout test in
 `apps/org/lib/__tests__/org-role-lockout.test.ts`):
@@ -189,20 +219,42 @@ audited (`org.role.update` records before/after).
 4. **Fail closed.** An account with the door and no roles clears the gate and resolves
    nothing — the correct state, said out loud in the UI rather than left to be discovered.
 
-**Department scoping replaces the hardcoded domain→department map.** A role scoped to a
-department grants its capabilities only for that department's things: `orgCan` asks "may
+**Department scoping is a role's department × its department's domains.** A role scoped to
+a department grants its scoped capabilities only for what that department OWNS. Three
+questions, three functions, and using the wrong one is the whole hazard: `orgCan` asks "may
 they, anywhere?" (the right question for a nav entry), `orgCanIn(actor, cap, departmentId)`
-asks "may they, HERE?" (the right question for the action). A null-department role is
-org-wide; a thing with no department is reachable only by an org-wide role. This is how
-"org staff may only delete in their related department" is now expressed.
+asks "may they, in this department?", and `orgCanInDomain(actor, cap, domain)` is what
+guards and queries actually ask — a call site knows which screen it is on, never a
+department id (which is data a System manager can change). A null-department role is
+org-wide; a domain nobody owns is reachable only by an org-wide role; a department that
+owns nothing makes every role scoped to it grant nothing, and the console says so
+(`departmentDomainsNote`) rather than letting it be discovered by a refusal.
+
+**TWO capabilities are department-scoped** (`DEPARTMENT_SCOPED_CAPABILITIES`):
+
+- **`delete`** — destruction, scoped first, and the one that cannot be undone.
+- **`read_personal_information`** — scoped 27 Jul 2026, and the reason this change exists.
+  A Suppliers lead reads supply-related contact details and is REFUSED a theme camp's
+  members. While it was global, a department lead read everyone's — silently, in an RSC
+  payload, with no refusal anywhere to notice.
+
+`read`/`write` are deliberately NOT scoped: ordinary work spans a console whose screens
+mostly are not filed under anything, and confining it would turn every departmental role
+into a role that looks granted and does nothing.
 
 **The roles are NOT a ladder**, and now cannot become one: they are sets of grants that
 need not nest. Any check shaped like `rank >= org_staff` is wrong in both directions — ask
 `orgCan`.
 
-**Personal information is enforced at the QUERY, never in the JSX.** Every org
-query that returns a person resolves the predicate BEFORE its select (the
-`canViewMedicalNotes` pattern), so a refused caller's payload never contains medical notes,
+**Personal information is enforced at the QUERY, PER DOMAIN, never in the JSX.** Every org
+query that returns a person resolves `canReadPersonalInformationIn(actor, domain)` BEFORE
+its select (the `canViewMedicalNotes` pattern), NAMING the part of the console it serves —
+`accounts` for the accounts screen and the org-access roster, `registrations` for a camp's
+members and officers, `suppliers` for supplier notes, `questionnaires` for results, `audit`
+for the trail and the medical-access log. The domain argument is the enforcement, so the
+predicate takes no default and the un-domained `canReadPersonalInformationAnywhere` is for
+affordances only — a regression test refuses it in any server read model. A refused
+caller's payload never contains medical notes,
 phone numbers, emergency contacts, ID/passport, legal names or email addresses — not even
 as an unrendered field. Two consequences worth stating: the accounts search matches on
 username only for such a caller (an email match would be a lookup oracle), and the
@@ -286,11 +338,20 @@ key — someone here is deciding what a colleague can destroy:
 - **Assignment** — on `/accounts`, where it belongs, with the same resolved-union renderer
   as the table and a live preview of the draft selection.
 
+- **What a department owns** — a checklist of the console's domains on each department,
+  each naming what it covers and, when another department holds it, saying so ("Safety owns
+  this today — ticking it takes it from them"). It is a PERMISSIONS change in an org-chart
+  costume: giving Suppliers the `registrations` domain hands every Suppliers lead every camp
+  member's medical notes, so it is System-manager-anchored like every other rights edit and
+  audited (`org.department.domains`, recording before/after and who lost what). Domains no
+  department owns are listed, because "only org-wide roles reach these" is the state a fresh
+  deployment is in and a surprise if nobody says it.
+
 The union arithmetic is `summarizeOrgActor` in @quagga/core: **one pure function** behind
 the table cell, the dialog preview and the editor preview, so the console cannot describe
-an access it would refuse. `DEPARTMENT_SCOPE_TODAY` states the honest gap wherever a
-department-scoped `delete` appears — no console entity carries a department column yet, so
-such a grant permits nothing until one does.
+an access it would refuse. Every scoped grant it reports carries the DOMAINS it reaches, so
+a scope with nothing behind it renders as "in Safety only — which owns no part of the
+console, so this reaches nothing" rather than as access.
 
 **It never prints a secret** — only whether one is set, and what follows. The single
 deliberate exception is a database *hostname*, parsed out so a password in the connection

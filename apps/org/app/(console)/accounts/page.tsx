@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { orgCan, ORG_RANK_LABELS } from "@quagga/core";
+import {
+  canReadPersonalInformationIn,
+  orgCan,
+  orgCapabilityRefusal,
+} from "@quagga/core";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { Input } from "@quagga/ui/components/input";
 import { Button } from "@quagga/ui/components/button";
@@ -33,7 +37,9 @@ export default async function AccountsPage({
   // server actions re-check — so a control that renders is a control that works,
   // and a control that is missing is an action that would have been refused.
   const canManage = orgCan(session.actor, "manage_accounts");
-  const seesEmail = orgCan(session.actor, "read_personal_information");
+  // Scoped to the `accounts` domain: a suppliers lead reads supply-related
+  // details and not the org’s address book, unless their department owns it.
+  const seesEmail = canReadPersonalInformationIn(session.actor, "accounts");
   const [accounts, assignableRoles] = await Promise.all([
     searchAccounts(session.orgGroupId, query, session.actor),
     // Only a System manager may assign, so only they need the list. Fetching it
@@ -58,6 +64,7 @@ export default async function AccountsPage({
     capabilities: a.capabilities.map((c) => ({
       capability: c.capability,
       departments: c.departments,
+      domains: c.domains,
     })),
   }));
 
@@ -70,7 +77,13 @@ export default async function AccountsPage({
             ? "Who can open the console, and which org roles they hold. Access is the door; roles are what they may do once inside."
             : seesEmail
               ? "Find a burner and see the org access they hold. Only the system owner can change access."
-              : `Find a burner by username and see the org access they hold. ${ORG_RANK_LABELS.engineer} accounts don't see email addresses, and only the system owner can change access.`
+              : // Two different people land here without email addresses and the
+                // old copy named only one of them: an ENGINEER (whose rank
+                // never sees personal information anywhere) and a DEPARTMENT
+                // LEAD (whose department does not own the accounts screen).
+                // Telling a suppliers lead they are an engineer is the kind of
+                // small lie that teaches people to stop reading the console.
+                `Find a burner by username and see the org access they hold. ${orgCapabilityRefusal(session.actor, "read_personal_information", "accounts")}`
         }
       />
 
@@ -138,6 +151,7 @@ export default async function AccountsPage({
               color: r.color,
               departmentId: r.departmentId,
               departmentName: r.departmentName,
+              departmentDomains: r.departmentDomains,
               capabilities: r.capabilities,
             }))}
           />

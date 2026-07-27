@@ -331,7 +331,14 @@ export async function deleteSupplier(
   raw: z.input<typeof DeleteSupplierInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "delete" });
+    // NAMES ITS DOMAIN. `delete` is department-scoped, so the guard resolves
+    // `suppliers` to whichever department owns it and refuses a role scoped
+    // anywhere else. Omitting this would resolve to "belongs to no department"
+    // and refuse every departmental lead — fail-closed, but wrong.
+    const session = await requireOrgSession({
+      capability: "delete",
+      domain: "suppliers",
+    });
     const { supplierId } = DeleteSupplierInput.parse(raw);
     const db = getDb();
 

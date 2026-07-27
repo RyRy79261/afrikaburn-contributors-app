@@ -28,9 +28,14 @@
 //     A person holds zero or more ORG ROLES and `orgCan` resolves the UNION of
 //     their permissions; `memberships.role` is only the door, except `god`
 //     (the System manager) which resolves everything whatever any row says:
-//     orgCan, orgCanIn (department-scoped), isSystemManager, orgCapabilitiesFor,
-//     canReadPersonalInformation, orgCapabilityRefusal, sanitizeOrgPermissions
-//     (./org-permissions)
+//     orgCan, orgCanIn (department-scoped), orgCanInDomain (what guards ask),
+//     isSystemManager, orgCapabilitiesFor, canReadPersonalInformationIn,
+//     orgCapabilityRefusal, sanitizeOrgPermissions (./org-permissions)
+//   - WHAT A DEPARTMENT OWNS: ORG_DOMAINS — the console's subject areas as the
+//     code demonstrably has them — plus the ownership map a System manager fills
+//     in (departmentForDomain, domainsOwnedBy, departmentDomainsNote).
+//     Departments stay data; the domain list is a fact about this repo
+//     (./org-domains)
 //   - ORG DEPARTMENTS + ORG ROLES as data: SEEDED_ORG_ROLES (the migrated
 //     engineer/org_staff rights), departmentRoleRows (a department's permanent
 //     LEAD + MEMBER pair), kind guards, name/key normalizers (./org-roles)
@@ -135,6 +140,7 @@ export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
 export * from "./medical-access";
+export * from "./org-domains";
 export * from "./org-permissions";
 export * from "./org-roles";
 export * from "./payment-reference";

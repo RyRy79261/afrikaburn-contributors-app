@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import {
-  canReadPersonalInformation,
+  canReadPersonalInformationIn,
   MEDICAL_VIEW_AUDIT_ACTION,
   publicMemberName,
   type MedicalAccessBasis,
@@ -77,12 +77,19 @@ function lookbackStart(days: number): Date {
  * it inside `if (medicalNotes …)`), so a named list of these rows is a census of
  * which burners have disclosed a health condition — the exact bulk exposure the
  * member roster refuses to carry, arriving by the back door. It is therefore
- * personal information in its own right, and a rank that may not read personal
+ * personal information in its own right, and an actor who may not read personal
  * information may not read this panel. Redacting the actor column would not
  * help: the leak is the SUBJECT list.
+ *
+ * IT ASKS THE `audit` DOMAIN, not "anywhere". The log spans the whole console —
+ * every camp's members, whoever read them — so a department-scoped grant does
+ * NOT open it. Only a role whose department owns the audit log, or an org-wide
+ * one, reads a census that is by definition org-wide. (A suppliers lead reading
+ * supply-related details is exactly right; a suppliers lead reading which
+ * burners have disclosed a health condition is exactly what Ryan corrected.)
  */
 export function canReadMedicalAccessLog(actor: OrgActor): boolean {
-  return canReadPersonalInformation(actor);
+  return canReadPersonalInformationIn(actor, "audit");
 }
 
 /**
@@ -192,9 +199,9 @@ export interface AuditTrailRow {
 /**
  * The general audit trail — who did what, newest first.
  *
- * Two things are withheld from a caller without `read_personal_information`:
- * the actor's email (a staff member's address), and the `bio.medical.view` rows
- * themselves. The latter matters more than it looks: those rows carry a subject
+ * Two things are withheld from a caller who does not read personal information
+ * IN THE AUDIT DOMAIN: the actor's email (a staff member's address), and the
+ * `bio.medical.view` rows themselves. The latter matters more than it looks: those rows carry a subject
  * id, every console rank can open `/registrations/[id]/members/[userId]`, and
  * the row only exists when the subject HAS notes — so leaving them in would let
  * an engineer walk the trail and resolve a list of burners who have disclosed a
@@ -206,7 +213,7 @@ export async function getAuditTrail(
   limit = 100,
 ): Promise<AuditTrailRow[]> {
   const db = getDb();
-  const personal = canReadPersonalInformation(actor);
+  const personal = canReadPersonalInformationIn(actor, "audit");
   const rows = await db
     .select({
       id: schema.auditEvents.id,

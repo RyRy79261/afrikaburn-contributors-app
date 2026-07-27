@@ -19,19 +19,26 @@
 // rights edited", and it is the point of the whole change: the rules that used
 // to be hardcoded law are now the DEFAULTS of a row.
 //
-// Two consequences a reader should not have to discover:
+// Three consequences a reader should not have to discover:
 //
 //   1. A System manager CAN grant `read_personal_information` to the Engineer
-//      role. Today's engineer sees no personal information because that is what
-//      the seeded row says, not because the code forbids it. If the org decides
-//      its engineers need contact details, that is now a permission toggle and
-//      an audit row rather than a migration. The hard privacy floors that remain
-//      are the ones that were never a rank rule: medical stays encrypted, stays
-//      out of every public projection, stays off lists and exports, and every
-//      disclosing read is still audited.
+//      ROLE — and it will do nothing for an account whose RANK is engineer.
+//      (Amended 27 Jul 2026.) The rank carve-out became a ceiling when the
+//      engineer's REACH became universal: `ENGINEER_RANK_CARVE_OUTS` in
+//      `org-permissions.ts` refuses personal information and deletion to that
+//      rank however its roles are written, because "in every department" plus
+//      "can read anyone's details" is one role assignment away from all of it at
+//      once. The role row still means what it says for an ORG_STAFF account
+//      holding it. The hard privacy floors are unchanged: medical stays
+//      encrypted, stays out of every public projection, stays off lists and
+//      exports, and every disclosing read is still audited.
 //   2. Deleting a department deletes its LEAD and MEMBER roles (FK cascade), and
 //      every assignment of them. They exist to express that department; without
 //      it they express nothing.
+//   3. A department's roles are only half of a scope. WHAT the department owns
+//      — its DOMAIN KEYS (`org-domains.ts`, `org_department_domains`) — is the
+//      other half, and a department that owns nothing makes every role scoped to
+//      it grant nothing at all. The console says so; do not treat it as a bug.
 
 import type { OrgPermissions, OrgRoleKind, RoleColor } from "@quagga/types";
 import { normalizeName } from "./name-dedupe";
@@ -265,13 +272,21 @@ export function seededOrgRoleRows(): OrgRoleInsert[] {
 /**
  * The DEFAULT rights of a department's two seeded roles.
  *
- * A department LEAD answers for their domain: they read it, including people's
- * details, they do the work, and they may delete — but because the role is
- * department-scoped, `orgCanIn` confines that delete to their own department's
- * things. This is how "org_staff can only delete in their related department"
- * is expressed now: a scoped role, not a hardcoded domain→department map.
+ * A department LEAD answers for their domain: they read it, INCLUDING PEOPLE'S
+ * DETAILS, they do the work, and they may delete — and because the role is
+ * department-scoped, BOTH sharp capabilities are confined to the domains that
+ * department OWNS (`orgCanInDomain`). That is Ryan's rule in full, 27 Jul 2026:
+ * "supplier leads would be able to read the PII of anything supply-related" —
+ * and, by the same sentence, of nothing else. A scoped role PLUS a domain
+ * assignment, not a hardcoded domain→department map.
  *
- * A department MEMBER reads and does ordinary work, and deletes nothing.
+ * Read that pairing before changing this row: on its own, `read_personal_
+ * information` here is a real grant over real burners' contact details and
+ * medical notes, and the only thing keeping it proportionate is the department's
+ * domain list. A department that owns everything has a lead who reads everyone.
+ *
+ * A department MEMBER reads and does ordinary work, sees no personal
+ * information, and deletes nothing.
  *
  * Both are defaults on a row a System manager may edit — which is the point.
  */

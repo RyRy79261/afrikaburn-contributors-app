@@ -769,6 +769,46 @@ export const orgDepartments = pgTable(
   }),
 );
 
+// --- Org department domains ----------------------------------------------
+// WHAT A DEPARTMENT OWNS (migration 0019). Ryan, 27 Jul 2026: "supplier leads
+// would be able to read the PII of anything supply-RELATED." That is a subject
+// area, not a set of rows — so a department owns DOMAIN KEYS
+// (@quagga/core `org-domains`: suppliers, supplier_documents, registrations,
+// questionnaires, bulletins, camp_categories, accounts, audit), and an entity's
+// department is whichever department owns the domain it lives in.
+//
+// WHY THIS INSTEAD OF `department_id` ON NINE TABLES: one answer for a whole
+// area is one row, not a column every insert path has to remember to fill (and
+// the one that forgot would silently produce an unfiled row). It also makes
+// re-assignment an upsert rather than a backfill.
+//
+// `domain` IS THE PRIMARY KEY, so a domain has AT MOST ONE owner — enforced by
+// the database, not by a convention. Two departments owning "suppliers" would
+// make "whichever department owns its domain" ambiguous, and an ambiguous
+// authorisation rule resolves differently depending on row order.
+//
+// It is TEXT rather than an enum on purpose: the domain vocabulary is a fact
+// about the application code, so adding a console area should be a code change,
+// not a migration. Unknown keys (a domain a later build removed) are dropped at
+// read time and own nothing — fail closed.
+
+export const orgDepartmentDomains = pgTable(
+  "org_department_domains",
+  {
+    /** An `OrgDomain` key from @quagga/core. Unique by construction: one owner. */
+    domain: text("domain").primaryKey(),
+    departmentId: uuid("department_id")
+      .notNull()
+      .references(() => orgDepartments.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    departmentIdx: index("org_department_domains_department_idx").on(
+      d.departmentId,
+    ),
+  }),
+);
+
 // --- Org roles -----------------------------------------------------------
 // The org's answer to `project_roles`, and deliberately the same shape: key,
 // label, KIND (permanence), a `permissions` JSONB object, a curated colour.

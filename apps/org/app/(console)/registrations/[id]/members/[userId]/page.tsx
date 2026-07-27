@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { ChevronRight, Lock, Stethoscope } from "lucide-react";
 import {
-  canReadPersonalInformation,
+  canReadPersonalInformationIn,
   canViewMedicalNotes,
   medicalAccessBasis,
   MEDICAL_VIEW_AUDIT_ACTION,
@@ -83,8 +83,13 @@ export default async function RegistrationMemberPage({
     // actor's org roles — rather than their membership rank. One definition of
     // who the org's safety tier is, so a role that gains or loses personal
     // information gains or loses medical with it.
-    actorOrgPersonalInformation: canReadPersonalInformation(
+    // …and since 27 Jul 2026 that resolution NAMES THE DOMAIN. Medical notes
+    // on a camp member belong to `registrations`, so a lead of a department
+    // that does not own registrations is refused here — which is the entire
+    // point of Ryan's correction: supply-related PII, not everyone's.
+    actorOrgPersonalInformation: canReadPersonalInformationIn(
       guard.session.actor,
+      "registrations",
     ),
     actorLeadCampIds: [],
     subjectCampIds: [],

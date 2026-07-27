@@ -3,11 +3,34 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
   ORG_CAPABILITIES,
+  ORG_DOMAINS,
+  buildDomainOwnership,
   isSystemManager,
   orgCan,
   orgCanIn,
+  orgCanInDomain,
+  type DomainOwnership,
   type OrgActor,
 } from "@quagga/core";
+
+/** A deployment where Suppliers owns the supply-related parts of the console
+ * and Theme camps owns registrations — enough for a scoped grant to mean
+ * something, and with several domains deliberately left unowned. */
+const SUPPLIERS = "dept-suppliers";
+const CAMPS = "dept-camps";
+const OWNERSHIP: DomainOwnership = buildDomainOwnership([
+  { domain: "suppliers", departmentId: SUPPLIERS, departmentName: "Suppliers" },
+  {
+    domain: "supplier_documents",
+    departmentId: SUPPLIERS,
+    departmentName: "Suppliers",
+  },
+  {
+    domain: "registrations",
+    departmentId: CAMPS,
+    departmentName: "Theme camps",
+  },
+]);
 
 // THE LOCKOUT SCENARIOS.
 //
@@ -89,8 +112,21 @@ describe("LOCKOUT SCENARIO 1: the god bootstrap still works", () => {
     expect(resolve).toContain('return { kind: "forbidden", user }');
   });
 
+  it("the ownership map is resolved in the session, not per query", () => {
+    // Every scoped answer depends on it, so it is loaded once and carried on
+    // the actor. A query resolving it for itself would be a query that could
+    // forget to.
+    const resolve = functionBody(session, "resolveOrgSession");
+    expect(resolve).toContain("loadDomainOwnership(db)");
+    expect(resolve).toContain("actor: { rank, roles, domains }");
+  });
+
   it("a god resolves every capability with no roles at all", () => {
-    const bootstrapped: OrgActor = { rank: "god", roles: [] };
+    const bootstrapped: OrgActor = {
+      rank: "god",
+      roles: [],
+      domains: OWNERSHIP,
+    };
     expect(isSystemManager(bootstrapped)).toBe(true);
     for (const capability of ORG_CAPABILITIES) {
       expect(orgCan(bootstrapped, capability)).toBe(true);
@@ -104,6 +140,7 @@ describe("LOCKOUT SCENARIO 1: the god bootstrap still works", () => {
     // grants nothing, believing roles are the whole story.
     const nerfed: OrgActor = {
       rank: "god",
+      domains: OWNERSHIP,
       roles: [
         {
           id: "r1",
@@ -221,6 +258,7 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
   it("`manage_accounts` is refused to every role, however the row was written", () => {
     const crafted: OrgActor = {
       rank: "org_staff",
+      domains: OWNERSHIP,
       roles: [
         {
           id: "r1",
@@ -249,11 +287,14 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
 describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the door", () => {
   it("an org account with no roles resolves no capability at all", () => {
     for (const rank of ["org_staff", "engineer"] as const) {
-      const fresh: OrgActor = { rank, roles: [] };
+      const fresh: OrgActor = { rank, roles: [], domains: OWNERSHIP };
       expect(isSystemManager(fresh)).toBe(false);
       for (const capability of ORG_CAPABILITIES) {
         expect(orgCan(fresh, capability)).toBe(false);
-        expect(orgCanIn(fresh, capability, "dept-1")).toBe(false);
+        expect(orgCanIn(fresh, capability, SUPPLIERS)).toBe(false);
+        for (const domain of ORG_DOMAINS) {
+          expect(orgCanInDomain(fresh, capability, domain)).toBe(false);
+        }
       }
     }
   });
@@ -304,29 +345,82 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
     const guard = functionBody(session, "requireOrgSession");
     expect(guard).toContain("isDepartmentScopedCapability(capability)");
     expect(guard).toContain(
-      "orgCanIn(state.actor, capability, options?.departmentId ?? null)",
+      "orgCanInDomain(state.actor, capability, domain)",
     );
 
     const suppliersLead: OrgActor = {
       rank: "org_staff",
+      domains: OWNERSHIP,
       roles: [
         {
           id: "r1",
           key: "dept.suppliers.lead",
           name: "Suppliers lead",
           kind: "system",
-          departmentId: "dept-suppliers",
-          permissions: { read: true, write: true, delete: true },
+          departmentId: SUPPLIERS,
+          permissions: {
+            read: true,
+            write: true,
+            delete: true,
+            read_personal_information: true,
+          },
         },
       ],
     };
-    // Their own department: yes. Another: no. Unfiled (what today's delete
-    // guards resolve, since no console entity declares a department): no.
-    expect(orgCanIn(suppliersLead, "delete", "dept-suppliers")).toBe(true);
-    expect(orgCanIn(suppliersLead, "delete", "dept-camps")).toBe(false);
-    expect(orgCanIn(suppliersLead, "delete", null)).toBe(false);
-    // …while their ordinary work is not confined by a scope nothing declares.
+    // Their own department's domains: yes. Another department's: no. A domain
+    // nobody owns: no. A guard that named none: no.
+    expect(orgCanInDomain(suppliersLead, "delete", "suppliers")).toBe(true);
+    expect(orgCanInDomain(suppliersLead, "delete", "supplier_documents")).toBe(
+      true,
+    );
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "delete", "bulletins")).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "delete", null)).toBe(false);
+    expect(orgCanIn(suppliersLead, "delete", CAMPS)).toBe(false);
+    // …while their ordinary work is not confined: read and write are not scoped.
     expect(orgCan(suppliersLead, "write")).toBe(true);
+  });
+
+  it("LOCKOUT SCENARIO: a scoped PERSONAL-INFORMATION grant stays in its department", () => {
+    // The same rail for the capability Ryan corrected. A suppliers lead reads
+    // supply-related details and is refused a theme camp's members — enforced
+    // by the same guard, so a query that names its domain cannot be bypassed by
+    // one that forgets (forgetting refuses).
+    const suppliersLead: OrgActor = {
+      rank: "org_staff",
+      domains: OWNERSHIP,
+      roles: [
+        {
+          id: "r1",
+          key: "dept.suppliers.lead",
+          name: "Suppliers lead",
+          kind: "system",
+          departmentId: SUPPLIERS,
+          permissions: { read: true, read_personal_information: true },
+        },
+      ],
+    };
+    expect(
+      orgCanInDomain(suppliersLead, "read_personal_information", "suppliers"),
+    ).toBe(true);
+    for (const domain of ORG_DOMAINS.filter(
+      (d) => d !== "suppliers" && d !== "supplier_documents",
+    )) {
+      expect(
+        orgCanInDomain(suppliersLead, "read_personal_information", domain),
+      ).toBe(false);
+    }
+  });
+
+  it("LOCKOUT SCENARIO: only a System manager decides what a department owns", () => {
+    // Ownership IS a permission: giving a department the registrations domain
+    // hands its leads every camp member's medical notes. So it sits behind the
+    // anchor with every other rights edit, never behind a capability.
+    const body = functionBody(orgRoles, "setDepartmentDomains");
+    expect(body).toContain("await requireSystemManager()");
+    expect(body).not.toContain("requireOrgSession(");
+    expect(body).toContain("writeAuditEvent(tx");
+    expect(body).toContain("withTransaction");
   });
 });
 

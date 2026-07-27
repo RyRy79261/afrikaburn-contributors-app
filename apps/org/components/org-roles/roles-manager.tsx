@@ -2,16 +2,30 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, Lock, Plus, Shield, Trash2 } from "lucide-react";
 import {
-  DEPARTMENT_SCOPE_TODAY,
+  Building2,
+  Eye,
+  Lock,
+  Plus,
+  Shield,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
+import {
+  DEPARTMENT_SCOPE_NOTE,
   GRANTABLE_ORG_CAPABILITIES,
   ORG_CAPABILITY_DESCRIPTIONS,
   ORG_CAPABILITY_LABELS,
+  ORG_DOMAINS,
+  ORG_DOMAIN_DESCRIPTIONS,
+  ORG_DOMAIN_LABELS,
   ORG_RANK_LABELS,
   canDeleteOrgRoleKind,
   canRescopeOrgRole,
+  departmentDomainsNote,
+  listDomainLabels,
   type OrgCapability,
+  type OrgDomain,
 } from "@quagga/core";
 import { ROLE_COLORS, type RoleColor } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
@@ -51,6 +65,7 @@ import {
   deleteDepartment,
   deleteOrgRole,
   renameDepartment,
+  setDepartmentDomains,
   updateOrgRole,
 } from "@/lib/actions/org-roles";
 import type { DeletionImpact } from "@/lib/org-role-impact";
@@ -79,6 +94,10 @@ import {
 //  3. Rights are described by CONSEQUENCE. Someone here is deciding what a
 //     colleague can destroy, so the checklist says "permanently removes
 //     suppliers and their documents", not "delete".
+//  4. A DEPARTMENT THAT OWNS NOTHING SAYS SO. Scoping is now two decisions —
+//     which department a role belongs to, and what that department owns — and
+//     the first is worthless without the second. Every place a scoped role
+//     appears, the domains behind it appear with it, including the empty case.
 
 const NO_DEPARTMENT = "__none__";
 
@@ -114,12 +133,27 @@ export function RolesManager({
     name: string;
     description: string | null;
   } | null>(null);
+  const [editingDomains, setEditingDomains] = useState<{
+    id: string;
+    name: string;
+    domains: OrgDomain[];
+  } | null>(null);
 
   const departments = overview.departments;
   const departmentOptions = departments.map((d) => ({
     id: d.id,
     name: d.name,
+    domains: d.domains,
   }));
+
+  // Which department currently owns each domain — so the "what it owns" dialog
+  // can say "currently Safety's" beside a checkbox instead of silently taking
+  // it. A domain has exactly one owner (primary key on the domain), so claiming
+  // one always takes it from somewhere.
+  const ownerByDomain = new Map<OrgDomain, string>();
+  for (const d of departments) {
+    for (const domain of d.domains) ownerByDomain.set(domain, d.name);
+  }
 
   function roleImpact(roleId: string): DeletionImpact {
     return impacts?.byRole[roleId] ?? NO_IMPACT;
@@ -141,6 +175,7 @@ export function RolesManager({
         setConfirmDeleteDepartment(null);
         setConfirmDeleteRole(null);
         setEditingDepartment(null);
+        setEditingDomains(null);
         setNewDepartment("");
         router.refresh();
       } else {
@@ -195,6 +230,7 @@ export function RolesManager({
                 <RoleRow
                   key={r.id}
                   role={r}
+                  departmentDomains={[]}
                   canManage={canManage}
                   pending={pending}
                   onEdit={() => setEditing(r)}
@@ -227,8 +263,8 @@ export function RolesManager({
             Nothing hardcodes this list. Create the departments AfrikaBurn
             actually has; each arrives with a permanent lead and member role
             whose rights you can change but which you cannot delete separately.
-            A role scoped to a department grants its rights only for that
-            department&rsquo;s things.
+            Then give each one the parts of the console it answers for.{" "}
+            {DEPARTMENT_SCOPE_NOTE}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -264,6 +300,26 @@ export function RolesManager({
             </form>
           )}
 
+          {/* THE GAP, NAMED. Anything no department owns is reachable only by
+              an org-wide role — which is the correct fail-closed state and a
+              surprise if nobody says it. On a fresh deployment this is every
+              domain, and that is exactly when someone needs to be told. */}
+          {overview.unownedDomains.length > 0 && departments.length > 0 && (
+            <p className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs">
+              <Eye
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <span className="text-card-foreground">
+                No department owns{" "}
+                {listDomainLabels(overview.unownedDomains)}. Only org-wide roles
+                reach {overview.unownedDomains.length === 1 ? "it" : "those"} —
+                a department-scoped role sees no personal information there and
+                deletes nothing there.
+              </span>
+            </p>
+          )}
+
           {departments.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No departments yet, so every role is org-wide.
@@ -284,6 +340,21 @@ export function RolesManager({
                       // buttons is ambiguous to a screen reader and to anyone
                       // scanning it, and this is not a page to be ambiguous on.
                       <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          aria-label={`Choose what ${d.name} owns`}
+                          onClick={() =>
+                            setEditingDomains({
+                              id: d.id,
+                              name: d.name,
+                              domains: [...d.domains],
+                            })
+                          }
+                        >
+                          What it owns
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -312,6 +383,27 @@ export function RolesManager({
                       </div>
                     )}
                   </div>
+                  {/* WHAT IT OWNS, on the department itself and not buried in
+                      a dialog: it is the other half of every scoped role below
+                      it, and the empty case is a warning rather than a blank. */}
+                  {d.domains.length === 0 ? (
+                    <p className="mt-3 flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs text-card-foreground">
+                      <TriangleAlert
+                        className="mt-px h-3.5 w-3.5 shrink-0"
+                        aria-hidden
+                      />
+                      <span>{departmentDomainsNote(d.domains)}</span>
+                    </p>
+                  ) : (
+                    <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>Owns</span>
+                      {d.domains.map((domain) => (
+                        <Badge key={domain} variant="secondary">
+                          {ORG_DOMAIN_LABELS[domain]}
+                        </Badge>
+                      ))}
+                    </p>
+                  )}
                   {d.roles.length === 0 ? (
                     <p className="mt-3 text-xs text-muted-foreground">
                       This department has no roles — which should not happen; it
@@ -323,6 +415,7 @@ export function RolesManager({
                         <RoleRow
                           key={r.id}
                           role={r}
+                          departmentDomains={d.domains}
                           canManage={canManage}
                           pending={pending}
                           onEdit={() => setEditing(r)}
@@ -460,6 +553,114 @@ export function RolesManager({
         </DialogContent>
       </Dialog>
 
+      {/* WHAT A DEPARTMENT OWNS. A permissions change in an org-chart costume:
+          giving Suppliers the registrations domain hands every Suppliers lead
+          every camp member's medical notes, so the dialog names the consequence
+          and names who is losing the domain. */}
+      <Dialog
+        open={editingDomains !== null}
+        onOpenChange={(open) => {
+          if (!open && !pending) setEditingDomains(null);
+        }}
+      >
+        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>
+              What does {editingDomains?.name ?? "this department"} own?
+            </DialogTitle>
+            <DialogDescription>
+              This is what a role scoped to this department reaches. Two rights
+              are confined by it — seeing people&rsquo;s details, and permanently
+              deleting — so ticking a box here decides whose contact details and
+              medical notes this department&rsquo;s leads can read.
+            </DialogDescription>
+          </DialogHeader>
+          {editingDomains && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="sr-only">Parts of the console</legend>
+              {ORG_DOMAINS.map((domain) => {
+                const owner = ownerByDomain.get(domain);
+                const elsewhere =
+                  owner && owner !== editingDomains.name ? owner : null;
+                return (
+                  <label
+                    key={domain}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-2.5 text-sm"
+                  >
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={editingDomains.domains.includes(domain)}
+                      disabled={pending}
+                      onChange={(e) =>
+                        setEditingDomains((d) =>
+                          d
+                            ? {
+                                ...d,
+                                domains: e.target.checked
+                                  ? [...new Set([...d.domains, domain])]
+                                  : d.domains.filter((x) => x !== domain),
+                              }
+                            : d,
+                        )
+                      }
+                    />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-medium">
+                        {ORG_DOMAIN_LABELS[domain]}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {ORG_DOMAIN_DESCRIPTIONS[domain]}
+                      </span>
+                      {elsewhere && (
+                        // The warning treatment used everywhere else on this
+                        // screen: a tinted band, not coloured text — the
+                        // warning foreground token is meant for use ON that
+                        // tint and is unreadable against a card in either
+                        // theme.
+                        <span className="mt-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-card-foreground">
+                          {elsewhere} owns this today — ticking it takes it from
+                          them, and their scoped roles stop reaching it.
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+              <p className="text-xs text-muted-foreground">
+                One department owns each of these; nothing is shared. Anything
+                left unticked by every department is reachable only by an
+                org-wide role.
+              </p>
+            </fieldset>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setEditingDomains(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={pending}
+              onClick={() =>
+                editingDomains &&
+                run(
+                  () =>
+                    setDepartmentDomains({
+                      departmentId: editingDomains.id,
+                      domains: editingDomains.domains,
+                    }),
+                  "Saved what this department owns.",
+                )
+              }
+            >
+              Save what it owns
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={confirmDeleteDepartment !== null}
         onOpenChange={(open) => {
@@ -582,11 +783,15 @@ function permanenceReason(
 
 function RoleRow({
   role,
+  departmentDomains,
   canManage,
   pending,
   onEdit,
 }: {
   role: OrgRoleView;
+  /** What this role's department owns — the other half of a scoped grant, and
+   * what turns "in Suppliers only" into a statement with a referent. */
+  departmentDomains: readonly OrgDomain[];
   canManage: boolean;
   pending: boolean;
   onEdit: () => void;
@@ -615,6 +820,7 @@ function RoleRow({
               id: role.id,
               departmentId: role.departmentId,
               departmentName: role.departmentName,
+              departmentDomains,
               capabilities: role.capabilities,
             },
           ])}
@@ -722,6 +928,16 @@ function DepartmentDeletionCost({
         impact={impact}
         nobody="Nobody holds any of them, so nobody loses access today."
       />
+      {department.domains.length > 0 && (
+        <p className="text-card-foreground">
+          {listDomainLabels(department.domains)}{" "}
+          {department.domains.length === 1 ? "goes" : "go"} back to being owned
+          by nobody, so only org-wide roles will reach{" "}
+          {department.domains.length === 1 ? "it" : "them"} until you give{" "}
+          {department.domains.length === 1 ? "it" : "them"} to another
+          department.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         Written to the audit trail with your name on it. There is no undo —
         recreating the department creates new roles, and nobody is re-assigned.
@@ -747,7 +963,7 @@ function RoleEditor({
   onDelete,
 }: {
   role: OrgRoleView | null;
-  departments: { id: string; name: string }[];
+  departments: { id: string; name: string; domains: OrgDomain[] }[];
   pending: boolean;
   onCancel: () => void;
   onSave: (draft: RoleDraft) => void;
@@ -767,15 +983,19 @@ function RoleEditor({
   const rescopable = role
     ? canRescopeOrgRole({ kind: role.kind, departmentId: role.departmentId })
     : true;
-  const departmentName =
-    departments.find((d) => d.id === draft.departmentId)?.name ?? null;
+  const chosen = departments.find((d) => d.id === draft.departmentId) ?? null;
+  const departmentName = chosen?.name ?? null;
+  const departmentDomains = chosen?.domains ?? [];
 
-  // The same resolver the server will run, on the draft in front of them.
+  // The same resolver the server will run, on the draft in front of them —
+  // including what the chosen department owns, so "scoped to Safety" is
+  // previewed as the nothing it is when Safety owns nothing.
   const preview = grantsForRoles([
     {
       id: role?.id ?? "draft",
       departmentId: draft.departmentId,
       departmentName,
+      departmentDomains,
       capabilities: draft.capabilities,
     },
   ]);
@@ -827,9 +1047,11 @@ function RoleEditor({
             label="Department"
             htmlFor="role-department"
             help={
-              rescopable
-                ? "A role scoped to a department grants its rights only for that department's things. Org-wide grants them everywhere."
-                : "This is one of the department's own permanent roles, so it stays there."
+              !rescopable
+                ? "This is one of the department's own permanent roles, so it stays there."
+                : draft.departmentId === null
+                  ? "Org-wide grants its rights everywhere. Scoping it to a department confines the sharp ones — personal information and deletion — to what that department owns."
+                  : departmentDomainsNote(departmentDomains)
             }
           >
             <Select
@@ -907,12 +1129,18 @@ function RoleEditor({
                   <span className="text-xs text-muted-foreground">
                     {ORG_CAPABILITY_DESCRIPTIONS[c]}
                   </span>
-                  {c === "delete" && draft.departmentId !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      Scoped to {departmentName ?? "this department"}.{" "}
-                      {DEPARTMENT_SCOPE_TODAY}
-                    </span>
-                  )}
+                  {/* The two department-scoped capabilities say where they
+                      land. The others are org-wide however the role is scoped,
+                      and claiming otherwise would understate the grant. */}
+                  {(c === "delete" || c === "read_personal_information") &&
+                    draft.departmentId !== null && (
+                      <span className="text-xs text-muted-foreground">
+                        Scoped to {departmentName ?? "this department"}:{" "}
+                        {departmentDomains.length === 0
+                          ? "which owns no part of the console, so ticking this grants nothing at all."
+                          : `${listDomainLabels(departmentDomains)} — and nothing else.`}
+                      </span>
+                    )}
                 </span>
               </label>
             ))}

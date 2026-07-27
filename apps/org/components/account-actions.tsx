@@ -8,6 +8,7 @@ import {
   ORG_RANK_DESCRIPTIONS,
   ORG_RANK_LABELS,
   type OrgCapability,
+  type OrgDomain,
   type OrgRank,
 } from "@quagga/core";
 import type { RoleColor } from "@quagga/types";
@@ -39,6 +40,9 @@ export interface AssignableRole {
    * only a scoped grant if the resolver knows which department it names. */
   departmentId: string | null;
   departmentName: string | null;
+  /** …and what that department OWNS, because a scope with nothing behind it is
+   * not a smaller grant, it is no grant, and the preview must say which. */
+  departmentDomains: OrgDomain[];
   capabilities: OrgCapability[];
 }
 

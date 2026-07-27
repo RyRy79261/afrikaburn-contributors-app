@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   ORG_RANK_LABELS,
+  canReadPersonalInformationIn,
   orgCan,
   orgCapabilityRefusal,
 } from "@quagga/core";
@@ -117,7 +118,11 @@ export default async function SystemPage() {
   }
 
   const canManage = orgCan(session.actor, "manage_accounts");
-  const seesEmail = orgCan(session.actor, "read_personal_information");
+  // The roster is accounts data, so it asks the `accounts` domain — holding
+  // `read_system` opens this page and decides nothing about whose email is on
+  // it, and a grant scoped to a department that does not own accounts is not a
+  // grant over this table.
+  const seesEmail = canReadPersonalInformationIn(session.actor, "accounts");
 
   // The roster read is allowed to fail without taking the page with it. This is
   // the page someone opens when things are already wrong, so every panel that
@@ -157,6 +162,7 @@ export default async function SystemPage() {
       capabilities: m.capabilities.map((c) => ({
         capability: c.capability,
         departments: c.departments,
+        domains: c.domains,
       })),
     })) ?? [];
 
@@ -275,6 +281,7 @@ export default async function SystemPage() {
                     color: r.color,
                     departmentId: r.departmentId,
                     departmentName: r.departmentName,
+                    departmentDomains: r.departmentDomains,
                     capabilities: r.capabilities,
                   }))}
                   caption="Org access"

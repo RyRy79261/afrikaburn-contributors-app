@@ -11,10 +11,14 @@ import { describe, it, expect } from "vitest";
 // IS the guarantee:
 //
 //  1. PERSONAL INFORMATION IS EXCLUDED AT THE SELECT, not in the JSX. Every
-//     query that returns a person resolves `canReadPersonalInformation` first
-//     and puts the personal columns behind that answer, so a refused caller's
-//     row never contains them — and therefore no RSC payload does either,
-//     whatever a component would or would not have rendered.
+//     query that returns a person resolves the personal-information predicate
+//     first and puts the personal columns behind that answer, so a refused
+//     caller's row never contains them — and therefore no RSC payload does
+//     either, whatever a component would or would not have rendered.
+//     Since 27 Jul 2026 it also names WHICH PART OF THE CONSOLE it is serving:
+//     the capability is department-scoped, so an un-domained check would hand a
+//     suppliers lead a theme camp's members. The domain each query names is
+//     asserted here, because getting it wrong is silent and invisible in review.
 //  2. EVERY MUTATION NAMES THE CAPABILITY IT NEEDS. A destructive action asks
 //     for `delete`, the camp-category taxonomy asks for `manage_camp_categories`,
 //     account access asks for `manage_accounts`. An engineer is then refused
@@ -97,21 +101,29 @@ const statusBoard = source("lib/status-board.ts");
 const questionnaireQueries = source("lib/questionnaires/queries.ts");
 
 describe("REGRESSION: an engineer's payload carries no personal information", () => {
-  // query name → the column expressions that must never survive the refusal.
-  const GUARDED: Record<string, string[]> = {
-    searchAccounts: ["schema.users.email"],
+  // query name → the DOMAIN it must resolve against, and the column
+  // expressions that must never survive the refusal.
+  const GUARDED: Record<string, { domain: string; columns: string[] }> = {
+    searchAccounts: { domain: "accounts", columns: ["schema.users.email"] },
     // The System panel's org-access roster. An engineer may open that page —
     // it is THEIR page — so the roster on it is the one people-returning query
     // most likely to be written as "they can see this page, so let them see the
-    // rows", which is exactly the mistake.
-    getOrgAccessRoster: ["schema.users.email"],
-    getRegistrationOfficers: [
-      "schema.burnerBios.contactEmail",
-      "schema.burnerBios.phone",
-      "schema.users.email",
-    ],
-    getRegistrationDecisionLog: ["schema.users.email"],
-    getSupplierNotes: ["schema.users.email"],
+    // rows", which is exactly the mistake. It asks `accounts`, NOT `read_system`
+    // and not the system panel's own domain: page access never implies rows.
+    getOrgAccessRoster: { domain: "accounts", columns: ["schema.users.email"] },
+    getRegistrationOfficers: {
+      domain: "registrations",
+      columns: [
+        "schema.burnerBios.contactEmail",
+        "schema.burnerBios.phone",
+        "schema.users.email",
+      ],
+    },
+    getRegistrationDecisionLog: {
+      domain: "registrations",
+      columns: ["schema.users.email"],
+    },
+    getSupplierNotes: { domain: "suppliers", columns: ["schema.users.email"] },
   };
 
   // STRONGER THAN GUARDED: this one is not rank-gated because it does not fetch
@@ -125,12 +137,17 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
     expect(body).not.toContain("seesPersonalInformation");
   });
 
-  for (const [name, columns] of Object.entries(GUARDED)) {
-    it(`${name} resolves the predicate before it selects`, () => {
+  for (const [name, { domain, columns }] of Object.entries(GUARDED)) {
+    it(`${name} resolves the predicate for \`${domain}\` before it selects`, () => {
       const body = functionBody(queries, name);
-      const predicateAt = body.indexOf("seesPersonalInformation(actor)");
+      const predicateAt = body.indexOf(
+        `seesPersonalInformation(actor, "${domain}")`,
+      );
       const selectAt = body.indexOf(".select(");
-      expect(predicateAt, `${name} never asks`).toBeGreaterThan(-1);
+      expect(
+        predicateAt,
+        `${name} never asks for the ${domain} domain`,
+      ).toBeGreaterThan(-1);
       expect(selectAt).toBeGreaterThan(-1);
       expect(predicateAt).toBeLessThan(selectAt);
     });
@@ -146,6 +163,29 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
       }
     });
   }
+
+  it("NO query decides personal information without naming a domain", () => {
+    // The un-domained predicate still exists for affordances (a nav entry, a
+    // placeholder), and a query reaching for it would silently restore the
+    // global behaviour this change removed. Server-side read models must not
+    // import it at all.
+    for (const [label, text] of [
+      ["queries.ts", queries],
+      ["medical-audit.ts", medicalAudit],
+      ["status-board.ts", statusBoard],
+      ["questionnaires/queries.ts", questionnaireQueries],
+    ] as const) {
+      expect(
+        text,
+        `${label} uses the un-domained personal-information predicate`,
+      ).not.toContain("canReadPersonalInformationAnywhere");
+    }
+    // …and the helper in queries.ts REQUIRES the argument, so there is no
+    // un-domained call to make in the first place.
+    expect(queries).toContain(
+      "function seesPersonalInformation(actor: OrgActor, domain: OrgDomain)",
+    );
+  });
 
   it("searchAccounts does not MATCH on email either — no lookup oracle", () => {
     // Dropping email from the projection while still filtering on it would turn
@@ -193,7 +233,9 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
 
   it("getRegistrationDetail asks before it loads the row", () => {
     const body = functionBody(queries, "getRegistrationDetail");
-    const predicateAt = body.indexOf("seesPersonalInformation(actor)");
+    const predicateAt = body.indexOf(
+      'seesPersonalInformation(actor, "registrations")',
+    );
     const loadAt = body.indexOf("loadRegistrationRow(");
     expect(predicateAt).toBeGreaterThan(-1);
     expect(predicateAt).toBeLessThan(loadAt);
@@ -232,8 +274,11 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
     // controls must resolve the second capability, not inherit the first — the
     // whole reason `read_system` is documented as a READ.
     expect(systemPage).toContain('orgCan(session.actor, "manage_accounts")');
+    // …and the email column resolves the `accounts` DOMAIN, so a department
+    // lead who can open the system panel still does not read the org's address
+    // book unless their department owns accounts.
     expect(systemPage).toContain(
-      'orgCan(session.actor, "read_personal_information")',
+      'canReadPersonalInformationIn(session.actor, "accounts")',
     );
   });
 
@@ -257,9 +302,11 @@ describe("REGRESSION: the medical DISCLOSURE CENSUS is not readable by rank", ()
   // A `bio.medical.view` row only exists when the subject HAS notes, so a list
   // of those rows names the burners who have disclosed a health condition.
 
-  it("the medical access log refuses a rank without personal information", () => {
+  it("the medical access log refuses anyone without personal information THERE", () => {
     const guard = functionBody(medicalAudit, "canReadMedicalAccessLog");
-    expect(guard).toContain("canReadPersonalInformation");
+    // The `audit` domain specifically: the log spans every camp, so a grant
+    // scoped to one department is not a grant over a console-wide census.
+    expect(guard).toContain('canReadPersonalInformationIn(actor, "audit")');
 
     const log = functionBody(medicalAudit, "getMedicalAccessLog");
     // Fails closed IN the query — not merely at the page that calls it.
@@ -278,6 +325,11 @@ describe("REGRESSION: the medical DISCLOSURE CENSUS is not readable by rank", ()
     expect(page).toContain("orgCapabilityRefusal");
   });
 
+  it("the recent-activity feed asks the audit domain too", () => {
+    const body = functionBody(statusBoard, "getRecentActivity");
+    expect(body).toContain('canReadPersonalInformationIn(actor, "audit")');
+  });
+
   it("the general audit trail drops medical rows for a refused caller", () => {
     // Otherwise the subject ids alone would rebuild the census, since every rank
     // can open a member's detail page.
@@ -289,6 +341,16 @@ describe("REGRESSION: the medical DISCLOSURE CENSUS is not readable by rank", ()
 });
 
 describe("REGRESSION: questionnaire responses are personal information", () => {
+  it("the results predicate names the questionnaires domain", () => {
+    const guard = functionBody(
+      questionnaireQueries,
+      "canReadActivationResults",
+    );
+    expect(guard).toContain(
+      'canReadPersonalInformationIn(actor, "questionnaires")',
+    );
+  });
+
   it("the results query fails closed", () => {
     const body = functionBody(questionnaireQueries, "getActivationResults");
     expect(body).toContain("canReadActivationResults(actor)");
@@ -313,7 +375,7 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
     action: string;
     capability: string;
   }[] = [
-    // Destructive — never an engineer.
+    // Destructive — never an engineer, and never outside its own department.
     {
       file: "lib/actions/suppliers.ts",
       action: "deleteSupplier",
@@ -383,6 +445,34 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
       );
     });
   }
+
+  it("every DESTRUCTIVE mutation also names the domain it destroys in", () => {
+    // `delete` is department-scoped, so a guard that names only the capability
+    // resolves as "belongs to no department" and refuses every departmental
+    // lead. Fail-closed, but wrong — and invisible until a lead complains.
+    const DOMAIN_BY_ACTION: {
+      file: string;
+      action: string;
+      domain: string;
+    }[] = [
+      {
+        file: "lib/actions/suppliers.ts",
+        action: "deleteSupplier",
+        domain: "suppliers",
+      },
+      {
+        file: "lib/actions/supplier-documents.ts",
+        action: "deleteSupplierDocument",
+        domain: "supplier_documents",
+      },
+    ];
+    for (const { file, action, domain } of DOMAIN_BY_ACTION) {
+      const body = functionBody(source(file), action);
+      expect(body, `${action} names no domain`).toContain(
+        `domain: "${domain}"`,
+      );
+    }
+  });
 
   it("no console mutation is left with a bare, unexplained gate", () => {
     // `requireOrgSession()` with no capability is allowed only where the actor

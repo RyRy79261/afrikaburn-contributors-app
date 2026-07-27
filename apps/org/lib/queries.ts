@@ -26,8 +26,11 @@ import type {
   SupplierStanding,
 } from "@quagga/types";
 import {
-  canReadPersonalInformation,
+  buildDomainOwnership,
+  canReadPersonalInformationIn,
   countCategoryUsage,
+  domainsOwnedBy,
+  unownedDomains,
   grantedOrgCapabilities,
   isSystemManager,
   orgCapabilityRefusal,
@@ -47,6 +50,7 @@ import {
   type ProjectStatInput,
   type OrgActor,
   type OrgCapability,
+  type OrgDomain,
   type OrgRank,
   type QuestionnaireCompletionRollup,
   type RegistrationFunnel,
@@ -68,21 +72,37 @@ import {
 //
 // EXCEPT for one thing, which they DO decide here: PERSONAL INFORMATION.
 //
-// Every query that returns a person takes the caller's `OrgActor` and runs
-// `canReadPersonalInformation` BEFORE the select — the `canViewMedicalNotes`
-// pattern (see `getRosterMemberDetail`), applied to the rest of it. An engineer
-// does not merely fail to see a contact number: the column is never selected, so
-// it is never in the row, never in the returned object, and never in the RSC
-// payload a component would have shipped it in regardless of what it rendered.
+// Every query that returns a person takes the caller's `OrgActor` and resolves
+// `seesPersonalInformation` BEFORE the select — the `canViewMedicalNotes`
+// pattern (see `getRosterMemberDetail`), applied to the rest of it. A refused
+// caller does not merely fail to see a contact number: the column is never
+// selected, so it is never in the row, never in the returned object, and never
+// in the RSC payload a component would have shipped it in regardless of what it
+// rendered.
 //
 // Deciding after the fetch is the shape this deliberately avoids. A value that
 // reached render scope is one careless `<pre>{JSON.stringify(detail)}</pre>`, one
 // `console.log`, one new prop away from shipping — and none of those look like a
 // privacy bug in review.
+//
+// SINCE 27 JUL 2026 THE ANSWER IS PER DOMAIN, NOT PER ACTOR. Ryan: "supplier
+// leads would be able to read the PII of anything supply-related" — so a
+// Suppliers lead reads supplier notes' authors and must be refused a theme
+// camp's members. Every call therefore NAMES THE PART OF THE CONSOLE it is
+// serving, and the predicate resolves the department that owns that part
+// (@quagga/core `org-domains`). There is deliberately no un-domained version
+// available here: the domain argument is the enforcement, and a default would be
+// the leak.
 
-/** Whether the caller receives personal information at all (see above). */
-function seesPersonalInformation(actor: OrgActor): boolean {
-  return canReadPersonalInformation(actor);
+/**
+ * Whether the caller receives personal information ON THIS PART OF THE CONSOLE.
+ *
+ * `domain` is required and is the whole point. An org-wide role passes for every
+ * domain; a department-scoped one passes only for the domains its department
+ * owns; a domain nobody owns is reachable by org-wide roles alone.
+ */
+function seesPersonalInformation(actor: OrgActor, domain: OrgDomain): boolean {
+  return canReadPersonalInformationIn(actor, domain);
 }
 
 export interface ActiveEdition {
@@ -191,6 +211,13 @@ export interface AssignedOrgRole {
 export interface AccountCapability {
   capability: OrgCapability;
   departments: string[] | null;
+  /**
+   * The parts of the console a scoped grant actually reaches (null when
+   * org-wide, EMPTY when the departments own nothing — a grant that looks real
+   * and is not). Carried so the table can say the true thing without the
+   * component re-deriving ownership.
+   */
+  domains: OrgDomain[] | null;
 }
 
 export interface AccountRow {
@@ -312,6 +339,10 @@ function roleChip(r: LoadedRole): AssignedOrgRole {
 function resolveAccountCapabilities(
   rank: OrgRank | null,
   roles: readonly LoadedRole[],
+  /** The deployment's ownership map, taken from the VIEWING actor — it is a fact
+   * about the console, identical for everyone, and the summarised account has no
+   * session of its own to read it from. */
+  domains: OrgActor["domains"],
 ): AccountCapability[] {
   if (!rank) return [];
   const actor: OrgActor = {
@@ -324,6 +355,7 @@ function resolveAccountCapabilities(
       departmentId: r.departmentId,
       permissions: r.permissions,
     })),
+    domains,
   };
   const names = new Map(
     roles
@@ -335,6 +367,7 @@ function resolveAccountCapabilities(
     departments:
       grant.departmentIds?.map((id) => names.get(id) ?? "another department") ??
       null,
+    domains: grant.domains,
   }));
 }
 
@@ -355,7 +388,7 @@ export async function searchAccounts(
   actor: OrgActor,
 ): Promise<AccountRow[]> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  const personal = seesPersonalInformation(actor, "accounts");
   const q = query.trim();
   const like = `%${q}%`;
 
@@ -402,19 +435,25 @@ export async function searchAccounts(
       username: r.username,
       role: rank,
       roles: held.map(roleChip),
-      capabilities: resolveAccountCapabilities(rank, held),
+      capabilities: resolveAccountCapabilities(rank, held, actor.domains),
       createdAt: r.createdAt,
     };
   });
 }
 
-/** A department, with the roles it seeded. */
+/** A department, with the roles it seeded and the console it owns. */
 export interface OrgDepartmentView {
   id: string;
   key: string;
   name: string;
   description: string | null;
   roles: OrgRoleView[];
+  /**
+   * The parts of the console this department owns. EMPTY is the state to notice:
+   * a department that owns nothing makes every role scoped to it grant nothing,
+   * so the screen says so rather than rendering a confident-looking role row.
+   */
+  domains: OrgDomain[];
 }
 
 /** One org role, with everything the editor needs to render and save it. */
@@ -436,6 +475,9 @@ export interface OrgRolesOverview {
   departments: OrgDepartmentView[];
   /** Roles belonging to no department — org-wide. */
   orgWideRoles: OrgRoleView[];
+  /** Domains no department owns: only an org-wide role reaches these, and the
+   * screen lists them so the gap is visible rather than inferred. */
+  unownedDomains: OrgDomain[];
 }
 
 /**
@@ -450,7 +492,7 @@ export async function getOrgRolesOverview(
 ): Promise<OrgRolesOverview> {
   const db = getDb();
 
-  const [departments, roles, holderCounts] = await Promise.all([
+  const [departments, roles, holderCounts, ownedDomains] = await Promise.all([
     db
       .select({
         id: schema.orgDepartments.id,
@@ -490,8 +532,23 @@ export async function getOrgRolesOverview(
       )
       .where(eq(schema.memberships.groupId, orgGroupId))
       .groupBy(schema.orgRoleAssignments.orgRoleId),
+    db
+      .select({
+        domain: schema.orgDepartmentDomains.domain,
+        departmentId: schema.orgDepartmentDomains.departmentId,
+        departmentName: schema.orgDepartments.name,
+      })
+      .from(schema.orgDepartmentDomains)
+      .innerJoin(
+        schema.orgDepartments,
+        eq(schema.orgDepartments.id, schema.orgDepartmentDomains.departmentId),
+      ),
   ]);
 
+  // Through the shared builder, so a stored key this build does not know is
+  // dropped here exactly as it is in the session — the screen never offers to
+  // manage an ownership the resolver would ignore.
+  const ownership = buildDomainOwnership(ownedDomains);
   const holders = new Map(holderCounts.map((h) => [h.orgRoleId, h.holders]));
   const views: OrgRoleView[] = roles.map((r) => ({
     id: r.id,
@@ -510,8 +567,10 @@ export async function getOrgRolesOverview(
     departments: departments.map((d) => ({
       ...d,
       roles: views.filter((r) => r.departmentId === d.id),
+      domains: domainsOwnedBy(ownership, d.id),
     })),
     orgWideRoles: views.filter((r) => r.departmentId === null),
+    unownedDomains: unownedDomains(ownership),
   };
 }
 
@@ -523,7 +582,7 @@ export async function getOrgRolesOverview(
  * will use, and a department-scoped grant cannot be resolved without the id.
  */
 export async function listAssignableOrgRoles(): Promise<
-  Pick<
+  (Pick<
     OrgRoleView,
     | "id"
     | "key"
@@ -533,26 +592,45 @@ export async function listAssignableOrgRoles(): Promise<
     | "departmentId"
     | "departmentName"
     | "capabilities"
-  >[]
+  > & {
+    /** What the role's department owns — carried so the dialog's preview can
+     * resolve a scoped grant to the parts of the console it actually reaches,
+     * including the empty case. */
+    departmentDomains: OrgDomain[];
+  })[]
 > {
   const db = getDb();
-  const rows = await db
-    .select({
-      id: schema.orgRoles.id,
-      key: schema.orgRoles.key,
-      name: schema.orgRoles.name,
-      kind: schema.orgRoles.kind,
-      color: schema.orgRoles.color,
-      departmentId: schema.orgRoles.departmentId,
-      departmentName: schema.orgDepartments.name,
-      permissions: schema.orgRoles.permissions,
-    })
-    .from(schema.orgRoles)
-    .leftJoin(
-      schema.orgDepartments,
-      eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
-    )
-    .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name));
+  const [rows, ownedDomains] = await Promise.all([
+    db
+      .select({
+        id: schema.orgRoles.id,
+        key: schema.orgRoles.key,
+        name: schema.orgRoles.name,
+        kind: schema.orgRoles.kind,
+        color: schema.orgRoles.color,
+        departmentId: schema.orgRoles.departmentId,
+        departmentName: schema.orgDepartments.name,
+        permissions: schema.orgRoles.permissions,
+      })
+      .from(schema.orgRoles)
+      .leftJoin(
+        schema.orgDepartments,
+        eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
+      )
+      .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name)),
+    db
+      .select({
+        domain: schema.orgDepartmentDomains.domain,
+        departmentId: schema.orgDepartmentDomains.departmentId,
+        departmentName: schema.orgDepartments.name,
+      })
+      .from(schema.orgDepartmentDomains)
+      .innerJoin(
+        schema.orgDepartments,
+        eq(schema.orgDepartments.id, schema.orgDepartmentDomains.departmentId),
+      ),
+  ]);
+  const ownership = buildDomainOwnership(ownedDomains);
   return rows.map((r) => ({
     id: r.id,
     key: r.key,
@@ -561,6 +639,7 @@ export async function listAssignableOrgRoles(): Promise<
     color: r.color,
     departmentId: r.departmentId,
     departmentName: r.departmentName,
+    departmentDomains: domainsOwnedBy(ownership, r.departmentId),
     capabilities: grantedOrgCapabilities(r.permissions),
   }));
 }
@@ -653,7 +732,10 @@ export async function getOrgAccessRoster(
   actor: OrgActor,
 ): Promise<OrgAccessRoster> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  // The org-access roster lives on the System panel, but the rows it carries are
+  // accounts and their email addresses — so it asks the `accounts` domain, not
+  // `read_system`. Page access must never imply the personal columns.
+  const personal = seesPersonalInformation(actor, "accounts");
 
   const rows = await db
     .select({
@@ -688,7 +770,7 @@ export async function getOrgAccessRoster(
       username: r.username,
       role: rank,
       roles: held.map(roleChip),
-      capabilities: resolveAccountCapabilities(rank, held),
+      capabilities: resolveAccountCapabilities(rank, held, actor.domains),
       createdAt: r.createdAt,
     };
   });
@@ -893,7 +975,7 @@ export async function getRegistrationDetail(
   actor: OrgActor,
 ): Promise<RegistrationDetail | null> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  const personal = seesPersonalInformation(actor, "registrations");
 
   const registration = await loadRegistrationRow(id, personal);
   if (!registration) return null;
@@ -1127,7 +1209,7 @@ export async function getRegistrationOfficers(
   actor: OrgActor,
 ): Promise<OfficerContactRow[]> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  const personal = seesPersonalInformation(actor, "registrations");
   const rows = await db
     .select({
       officerKey: schema.projectRoles.officerKey,
@@ -1324,7 +1406,7 @@ export async function getRegistrationDecisionLog(
   actor: OrgActor,
 ): Promise<DecisionLogRow[]> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  const personal = seesPersonalInformation(actor, "registrations");
   const rows = await db
     .select({
       id: schema.auditEvents.id,
@@ -1445,7 +1527,7 @@ export async function getSupplierNotes(
   actor: OrgActor,
 ): Promise<SupplierNoteRow[]> {
   const db = getDb();
-  const personal = seesPersonalInformation(actor);
+  const personal = seesPersonalInformation(actor, "suppliers");
   const rows = await db
     .select({
       id: schema.supplierNotes.id,

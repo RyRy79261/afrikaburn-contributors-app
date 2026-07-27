@@ -44,11 +44,14 @@ import type { MembershipRole } from "@quagga/types";
  * strongest of several org membership rows when a deployment has more than one
  * org group.
  *
- * `engineer` IS DELIBERATELY ABSENT here, and the Engineer ROLE ships without
- * `read_personal_information` for the same reason — medical notes are the
- * sharpest personal information in the system and running the servers is not a
- * care duty. That is now a default a System manager may change, deliberately and
- * with an audit row, rather than a rule hidden in a module.
+ * `engineer` IS DELIBERATELY ABSENT here — medical notes are the sharpest
+ * personal information in the system and running the servers is not a care duty.
+ * Since 27 Jul 2026 that is not merely the seeded row's default either: the
+ * engineer RANK never resolves `read_personal_information` at all
+ * (`ENGINEER_RANK_CARVE_OUTS`), so the org branch below is closed to them
+ * whatever roles they hold. An engineer who leads a camp still reads THEIR OWN
+ * camp's members through the camp branch — a different authority, correctly
+ * recorded as `camp_lead` on the audit row.
  */
 const ORG_STAFF_ROLES: ReadonlySet<MembershipRole> = new Set([
   "god",
@@ -68,10 +71,17 @@ export function isOrgStaffRole(
  *  - `actorOrgRole`: the actor's role on the seeded org group, or null. Only
  *    `god` decides anything on its own (the System manager anchor).
  *  - `actorOrgPersonalInformation`: the ORG CONSOLE'S RESOLVED
- *    `read_personal_information` for this actor — i.e. `orgCan(actor,
- *    "read_personal_information")` over the union of their org roles. This is
- *    the org branch of the decision, so there is ONE definition of who the org's
- *    safety tier is instead of a rank rule here and a permission there.
+ *    `read_personal_information` for this actor IN THE `registrations` DOMAIN —
+ *    i.e. `canReadPersonalInformationIn(actor, "registrations")` over the union
+ *    of their org roles. This is the org branch of the decision, so there is ONE
+ *    definition of who the org's safety tier is instead of a rank rule here and
+ *    a permission there. THE DOMAIN IS PART OF THAT DEFINITION since 27 Jul
+ *    2026: a burner's medical notes live on a camp member's page, so a lead of a
+ *    department that does not own registrations is not in the safety audience,
+ *    however sharp their department's own rights are. Both apps resolve it the
+ *    same way (apps/org's member detail page, apps/web's `medical-access.ts`)
+ *    and a caller that passed an un-domained answer would silently widen the
+ *    audience the burner consented to.
  *  - `actorLeadCampIds`: the camp (group) ids where the actor holds a STRUCTURAL
  *    lead/admin role (the permission backstop). Custom project roles do NOT
  *    grant access — this is deliberately a structural-lead capability.

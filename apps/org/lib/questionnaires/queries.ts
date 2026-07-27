@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   activationRequiredActionKey,
-  canReadPersonalInformation,
+  canReadPersonalInformationIn,
   resolveActivationDefinition,
   tallyActivationCompletion,
   type ActivationCompletion,
@@ -312,14 +312,16 @@ export interface ResultRow {
  * addresses, and free-text answers routinely carry whatever the respondent chose
  * to write about themselves. There is no useful redaction of that (a "who
  * answered what" table with the who removed is not the same screen), so the
- * whole surface needs `read_personal_information` and an engineer is told so
- * plainly instead of being 404'd.
+ * whole surface needs personal information IN THE QUESTIONNAIRES DOMAIN, and a
+ * refused caller is told so plainly instead of being 404'd. A department-scoped
+ * grant only opens this if that department owns questionnaires — a suppliers
+ * lead has no business in a theme-camp survey's named answers.
  *
  * The completion COUNT is not personal information and stays on the
  * questionnaires list for every rank.
  */
 export function canReadActivationResults(actor: OrgActor): boolean {
-  return canReadPersonalInformation(actor);
+  return canReadPersonalInformationIn(actor, "questionnaires");
 }
 
 /**

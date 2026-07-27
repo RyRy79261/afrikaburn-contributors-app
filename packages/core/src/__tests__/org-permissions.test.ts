@@ -13,14 +13,20 @@ import {
   ORG_CAPABILITY_CONSEQUENCES,
   ORG_CAPABILITY_DESCRIPTIONS,
   ORG_CAPABILITY_LABELS,
-  DEPARTMENT_SCOPE_TODAY,
+  DEPARTMENT_SCOPE_NOTE,
   orgCapabilitiesFor,
   orgCapabilityRefusal,
   orgRankFromRole,
   isSystemManager,
   isDepartmentScopedGrant,
   departmentsGranting,
-  canReadPersonalInformation,
+  grantScopeClause,
+  canReadPersonalInformationAnywhere,
+  canReadPersonalInformationIn,
+  orgCanInDomain,
+  reachesEveryDepartment,
+  isRankCarveOut,
+  ENGINEER_RANK_CARVE_OUTS,
   sanitizeOrgPermissions,
   orgPermissionsFromKeys,
   grantedOrgCapabilities,
@@ -35,6 +41,12 @@ import {
   DEPARTMENT_LEAD_PERMISSIONS,
   DEPARTMENT_MEMBER_PERMISSIONS,
 } from "../org-roles";
+import {
+  buildDomainOwnership,
+  ORG_DOMAINS,
+  type DomainOwnership,
+  type OrgDomain,
+} from "../org-domains";
 import { canViewMedicalNotes, isOrgStaffRole } from "../medical-access";
 import { ORG_APP_ROLES, MembershipRole, type OrgPermissions } from "@quagga/types";
 
@@ -54,9 +66,37 @@ function role(
   };
 }
 
-/** An actor: a door plus zero or more roles. */
-function actor(rank: OrgRank, roles: OrgRoleGrant[] = []): OrgActor {
-  return { rank, roles };
+/**
+ * THE DEPLOYMENT MOST OF THESE TESTS RUN AGAINST — a Suppliers department that
+ * owns the two supply-related domains, and a Theme camps department that owns
+ * registrations. Everything else is unowned, which is the state a real console
+ * spends its first week in and the one most likely to be got wrong.
+ */
+const SUPPLIERS = "dept-suppliers";
+const CAMPS = "dept-theme-camps";
+const SAFETY = "dept-safety";
+
+const OWNERSHIP: DomainOwnership = buildDomainOwnership([
+  { domain: "suppliers", departmentId: SUPPLIERS, departmentName: "Suppliers" },
+  {
+    domain: "supplier_documents",
+    departmentId: SUPPLIERS,
+    departmentName: "Suppliers",
+  },
+  {
+    domain: "registrations",
+    departmentId: CAMPS,
+    departmentName: "Theme camps",
+  },
+]);
+
+/** An actor: a door, zero or more roles, and the deployment's ownership map. */
+function actor(
+  rank: OrgRank,
+  roles: OrgRoleGrant[] = [],
+  domains: DomainOwnership = OWNERSHIP,
+): OrgActor {
+  return { rank, roles, domains };
 }
 
 /** The seeded role of a given key, as a grant. */
@@ -120,7 +160,11 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
   //   · the seeded Org staff   — the rights org_staff held as a hardcoded rank;
   //   · the seeded Engineer    — the rights engineer held as a hardcoded rank.
   const MATRIX: Record<
-    "god" | "seeded_org_staff" | "seeded_engineer" | "no_roles",
+    | "god"
+    | "seeded_org_staff"
+    | "seeded_engineer"
+    | "widened_engineer"
+    | "no_roles",
     Record<OrgCapability, boolean>
   > = {
     god: {
@@ -150,6 +194,18 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
       manage_accounts: false,
       read_system: true,
     },
+    // THE CEILING, stated as a row rather than a footnote: an engineer holding
+    // a role that grants EVERYTHING grantable still resolves neither personal
+    // information nor deletion. Reach widened; depth did not.
+    widened_engineer: {
+      read: true,
+      read_personal_information: false,
+      write: true,
+      delete: false,
+      manage_camp_categories: true,
+      manage_accounts: false,
+      read_system: true,
+    },
     no_roles: {
       read: false,
       read_personal_information: false,
@@ -165,6 +221,9 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     god: actor("god"),
     seeded_org_staff: actor("org_staff", [seeded("org_staff")]),
     seeded_engineer: actor("engineer", [seeded("engineer")]),
+    widened_engineer: actor("engineer", [
+      role("everything", orgPermissionsFromKeys([...ORG_CAPABILITIES])),
+    ]),
     no_roles: actor("org_staff"),
   };
 
@@ -247,6 +306,70 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     expect(engineerOnly).toEqual(["read_system"]);
     expect(staffOnly).toEqual(["read_personal_information", "delete"]);
   });
+
+  it("THE ENGINEER TIER: broader in reach, narrower in depth, not a superset", () => {
+    // Ryan: "an engineer is still org staff but a step up" — and the step up is
+    // REACH. `ENGINEER_RANK_CARVE_OUTS` is what stops it also being depth, and
+    // this test exists so that deleting the carve-out fails loudly instead of
+    // quietly handing every engineer every burner's contact details.
+    expect([...ENGINEER_RANK_CARVE_OUTS].sort()).toEqual(
+      ["delete", "read_personal_information"].sort(),
+    );
+
+    const engineer = actor("engineer", [
+      role("everything", orgPermissionsFromKeys([...ORG_CAPABILITIES])),
+    ]);
+    const staff = actor("org_staff", [
+      role("everything", orgPermissionsFromKeys([...ORG_CAPABILITIES])),
+    ]);
+
+    // Same roles. The org_staff account can do two things the engineer cannot,
+    // which is precisely what "not a strict superset" means.
+    const staffOnly = ORG_CAPABILITIES.filter(
+      (c) => orgCan(staff, c) && !orgCan(engineer, c),
+    );
+    expect(staffOnly).toEqual(["read_personal_information", "delete"]);
+
+    // REACH: the engineer is in every department for everything else, so a
+    // department-scoped role does not confine them…
+    const scopedEngineer = actor("engineer", [
+      role("camps.member", { read: true, write: true }, CAMPS),
+    ]);
+    expect(reachesEveryDepartment(scopedEngineer, "write")).toBe(true);
+    expect(orgCanIn(scopedEngineer, "write", SUPPLIERS)).toBe(true);
+    expect(orgCanIn(scopedEngineer, "write", null)).toBe(true);
+    // …and the console never tells them a grant of theirs is confined.
+    expect(isDepartmentScopedGrant(scopedEngineer, "write")).toBe(false);
+
+    // DEPTH: the reach never extends to the carve-outs, in any department.
+    expect(reachesEveryDepartment(engineer, "delete")).toBe(false);
+    expect(reachesEveryDepartment(engineer, "read_personal_information")).toBe(
+      false,
+    );
+    for (const capability of ENGINEER_RANK_CARVE_OUTS) {
+      expect(isRankCarveOut(engineer, capability)).toBe(true);
+      expect(orgCan(engineer, capability)).toBe(false);
+      expect(orgCanIn(engineer, capability, SUPPLIERS)).toBe(false);
+      expect(orgCanIn(engineer, capability, null)).toBe(false);
+      for (const domain of ORG_DOMAINS) {
+        expect(orgCanInDomain(engineer, capability, domain)).toBe(false);
+      }
+      // …and it is the RANK, not the role: org_staff with the same role holds it.
+      expect(isRankCarveOut(staff, capability)).toBe(false);
+      expect(orgCan(staff, capability)).toBe(true);
+    }
+  });
+
+  it("a System manager is above the carve-outs, not subject to them", () => {
+    // The anchor outranks every rule in this module, including this one.
+    const anchored = actor("god");
+    for (const capability of ENGINEER_RANK_CARVE_OUTS) {
+      expect(orgCan(anchored, capability)).toBe(true);
+      for (const domain of ORG_DOMAINS) {
+        expect(orgCanInDomain(anchored, capability, domain)).toBe(true);
+      }
+    }
+  });
 });
 
 describe("the System manager anchor", () => {
@@ -311,70 +434,113 @@ describe("the System manager anchor", () => {
   });
 });
 
-describe("department scoping — the delete rule", () => {
-  const SUPPLIERS = "dept-suppliers";
-  const CAMPS = "dept-theme-camps";
-
-  const scopedDeleter = actor("org_staff", [
+describe("department scoping — what a department OWNS is what it reaches", () => {
+  const suppliersLead = actor("org_staff", [
     role("suppliers.lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS),
   ]);
-  const orgWideDeleter = actor("org_staff", [seeded("org_staff")]);
+  const campsLead = actor("org_staff", [
+    role("camps.lead", DEPARTMENT_LEAD_PERMISSIONS, CAMPS),
+  ]);
+  const orgWide = actor("org_staff", [seeded("org_staff")]);
 
-  it("a department-scoped role deletes in its own department", () => {
-    expect(orgCanIn(scopedDeleter, "delete", SUPPLIERS)).toBe(true);
-  });
-
-  it("…and NOT in another department", () => {
-    expect(orgCanIn(scopedDeleter, "delete", CAMPS)).toBe(false);
-  });
-
-  it("…and NOT on a thing that belongs to no department", () => {
-    // A departmental grant is a grant over that department's things. An unfiled
-    // row belongs to no department, so only an org-wide role reaches it.
-    expect(orgCanIn(scopedDeleter, "delete", null)).toBe(false);
-  });
-
-  it("an org-wide role deletes anywhere, including unfiled things", () => {
-    expect(orgCanIn(orgWideDeleter, "delete", SUPPLIERS)).toBe(true);
-    expect(orgCanIn(orgWideDeleter, "delete", CAMPS)).toBe(true);
-    expect(orgCanIn(orgWideDeleter, "delete", null)).toBe(true);
-  });
-
-  it("`orgCan` answers 'anywhere' — which is why actions must ask `orgCanIn`", () => {
-    // The trap this test exists to document: the affordance question and the
-    // action question are different questions, and only one of them is scoped.
-    expect(orgCan(scopedDeleter, "delete")).toBe(true);
-    expect(orgCanIn(scopedDeleter, "delete", CAMPS)).toBe(false);
-  });
-
-  it("names `delete` as the department-scoped capability, and nothing else", () => {
-    // Which capabilities fail closed when a guard does not name a department.
-    // `read`/`write` are deliberately absent: a department member whose ordinary
-    // work resolved to nothing (because no console entity declares a department
-    // yet) would be a role that looks granted and does nothing.
-    expect(DEPARTMENT_SCOPED_CAPABILITIES).toEqual(["delete"]);
-    expect(isDepartmentScopedCapability("delete")).toBe(true);
+  it("names BOTH sharp capabilities as department-scoped, and nothing else", () => {
+    // `read_personal_information` joined `delete` on 27 Jul 2026: a suppliers
+    // lead reads supply-related details and not a theme camp's members.
+    // `read`/`write` are deliberately absent — a department member whose
+    // ordinary work resolved to nothing would be a role that looks granted and
+    // does nothing.
+    expect([...DEPARTMENT_SCOPED_CAPABILITIES].sort()).toEqual([
+      "delete",
+      "read_personal_information",
+    ]);
     for (const capability of ORG_CAPABILITIES) {
-      if (capability === "delete") continue;
-      expect(isDepartmentScopedCapability(capability)).toBe(false);
+      expect(isDepartmentScopedCapability(capability)).toBe(
+        capability === "delete" || capability === "read_personal_information",
+      );
     }
   });
 
-  it("names a scoped grant as scoped, so the console can say so out loud", () => {
-    expect(isDepartmentScopedGrant(scopedDeleter, "delete")).toBe(true);
-    expect(isDepartmentScopedGrant(orgWideDeleter, "delete")).toBe(false);
-    expect(isDepartmentScopedGrant(actor("god"), "delete")).toBe(false);
-    expect(departmentsGranting(scopedDeleter, "delete")).toEqual([SUPPLIERS]);
-    expect(departmentsGranting(orgWideDeleter, "delete")).toEqual([]);
+  it("RYAN'S RULE: a suppliers lead reads supply-related details", () => {
+    expect(canReadPersonalInformationIn(suppliersLead, "suppliers")).toBe(true);
+    expect(
+      canReadPersonalInformationIn(suppliersLead, "supplier_documents"),
+    ).toBe(true);
+    expect(orgCanInDomain(suppliersLead, "delete", "suppliers")).toBe(true);
   });
 
-  it("a member role in the same department still cannot delete", () => {
+  it("…AND NOT a theme camp's members' details — the thing this change fixes", () => {
+    // The whole correction, as one assertion. Before departments owned domains,
+    // `read_personal_information` was global and this returned true.
+    expect(canReadPersonalInformationIn(suppliersLead, "registrations")).toBe(
+      false,
+    );
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    // …and symmetrically, so the rule is a boundary rather than a special case.
+    expect(canReadPersonalInformationIn(campsLead, "registrations")).toBe(true);
+    expect(canReadPersonalInformationIn(campsLead, "suppliers")).toBe(false);
+  });
+
+  it("a domain NOBODY owns is reachable only by an org-wide role", () => {
+    // The state a fresh deployment is in, and the fail-closed direction.
+    for (const domain of ["bulletins", "accounts", "audit"] as OrgDomain[]) {
+      expect(canReadPersonalInformationIn(suppliersLead, domain)).toBe(false);
+      expect(orgCanInDomain(suppliersLead, "delete", domain)).toBe(false);
+      expect(canReadPersonalInformationIn(orgWide, domain)).toBe(true);
+      expect(orgCanInDomain(orgWide, "delete", domain)).toBe(true);
+    }
+  });
+
+  it("a lead of a department that owns NOTHING reaches nothing", () => {
+    // Safety exists, has a lead role with every sharp right, and owns no part
+    // of the console. That is a grant that looks real and is not — which is why
+    // the console says so rather than leaving it to be discovered.
+    const safetyLead = actor("org_staff", [
+      role("safety.lead", DEPARTMENT_LEAD_PERMISSIONS, SAFETY),
+    ]);
+    for (const domain of ORG_DOMAINS) {
+      expect(canReadPersonalInformationIn(safetyLead, domain)).toBe(false);
+      expect(orgCanInDomain(safetyLead, "delete", domain)).toBe(false);
+    }
+    // …while their ordinary work is untouched: read and write are not scoped.
+    expect(orgCan(safetyLead, "read")).toBe(true);
+    expect(orgCan(safetyLead, "write")).toBe(true);
+  });
+
+  it("a guard that names NO domain resolves as unfiled — only org-wide passes", () => {
+    // The fail-closed default that stops a forgetful call site handing a
+    // departmental role the whole console.
+    expect(orgCanInDomain(suppliersLead, "delete", null)).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "read_personal_information", null)).toBe(
+      false,
+    );
+    expect(orgCanInDomain(orgWide, "delete", null)).toBe(true);
+  });
+
+  it("an org-wide role reaches every domain, owned or not", () => {
+    for (const domain of ORG_DOMAINS) {
+      expect(orgCanInDomain(orgWide, "delete", domain)).toBe(true);
+      expect(canReadPersonalInformationIn(orgWide, domain)).toBe(true);
+    }
+  });
+
+  it("`orgCan` answers 'anywhere' — which is why guards must ask by domain", () => {
+    // The trap this test exists to document: the affordance question and the
+    // action question are different questions, and only one of them is scoped.
+    expect(orgCan(suppliersLead, "delete")).toBe(true);
+    expect(canReadPersonalInformationAnywhere(suppliersLead)).toBe(true);
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    expect(canReadPersonalInformationIn(suppliersLead, "registrations")).toBe(
+      false,
+    );
+  });
+
+  it("a member role in the same department still cannot delete or read details", () => {
     const member = actor("org_staff", [
       role("suppliers.member", DEPARTMENT_MEMBER_PERMISSIONS, SUPPLIERS),
     ]);
-    expect(orgCanIn(member, "delete", SUPPLIERS)).toBe(false);
-    expect(orgCanIn(member, "write", SUPPLIERS)).toBe(true);
-    expect(orgCanIn(member, "write", CAMPS)).toBe(false);
+    expect(orgCanInDomain(member, "delete", "suppliers")).toBe(false);
+    expect(canReadPersonalInformationIn(member, "suppliers")).toBe(false);
+    expect(orgCan(member, "write")).toBe(true);
   });
 
   it("unions scopes across roles — two departments, both reachable", () => {
@@ -382,12 +548,36 @@ describe("department scoping — the delete rule", () => {
       role("suppliers.lead", { delete: true }, SUPPLIERS),
       role("camps.lead", { delete: true }, CAMPS),
     ]);
-    expect(orgCanIn(both, "delete", SUPPLIERS)).toBe(true);
-    expect(orgCanIn(both, "delete", CAMPS)).toBe(true);
-    expect(orgCanIn(both, "delete", "dept-safety")).toBe(false);
+    expect(orgCanInDomain(both, "delete", "suppliers")).toBe(true);
+    expect(orgCanInDomain(both, "delete", "registrations")).toBe(true);
+    expect(orgCanInDomain(both, "delete", "bulletins")).toBe(false);
     expect([...departmentsGranting(both, "delete")].sort()).toEqual(
       [CAMPS, SUPPLIERS].sort(),
     );
+  });
+
+  it("names a scoped grant as scoped, so the console can say so out loud", () => {
+    expect(isDepartmentScopedGrant(suppliersLead, "delete")).toBe(true);
+    expect(isDepartmentScopedGrant(orgWide, "delete")).toBe(false);
+    expect(isDepartmentScopedGrant(actor("god"), "delete")).toBe(false);
+    expect(departmentsGranting(suppliersLead, "delete")).toEqual([SUPPLIERS]);
+    expect(departmentsGranting(orgWide, "delete")).toEqual([]);
+  });
+
+  it("resolves by DEPARTMENT ID under the hood, so ownership can be re-assigned", () => {
+    // Move suppliers to Theme camps and the same roles resolve differently with
+    // no role edit at all — which is the point of ownership being data.
+    const moved = buildDomainOwnership([
+      { domain: "suppliers", departmentId: CAMPS, departmentName: "Theme camps" },
+    ]);
+    const lead = actor(
+      "org_staff",
+      [role("suppliers.lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS)],
+      moved,
+    );
+    expect(canReadPersonalInformationIn(lead, "suppliers")).toBe(false);
+    expect(orgCanIn(lead, "delete", SUPPLIERS)).toBe(true); // still by id
+    expect(orgCanInDomain(lead, "delete", "suppliers")).toBe(false); // …but not here
   });
 
   it("seeds a department's LEAD scoped to it and a MEMBER that cannot delete", () => {
@@ -405,53 +595,111 @@ describe("department scoping — the delete rule", () => {
       expect(row.departmentId).toBe(SUPPLIERS);
     }
     expect(rows[0]?.permissions.delete).toBe(true);
+    expect(rows[0]?.permissions.read_personal_information).toBe(true);
     expect(rows[1]?.permissions.delete).toBeUndefined();
+    expect(rows[1]?.permissions.read_personal_information).toBeUndefined();
   });
 });
 
 describe("personal information", () => {
   it("is a role grant now — the seeded Engineer does not hold it", () => {
-    expect(canReadPersonalInformation(actor("engineer", [seeded("engineer")]))).toBe(
-      false,
-    );
     expect(
-      canReadPersonalInformation(actor("org_staff", [seeded("org_staff")])),
+      canReadPersonalInformationAnywhere(actor("engineer", [seeded("engineer")])),
+    ).toBe(false);
+    expect(
+      canReadPersonalInformationAnywhere(
+        actor("org_staff", [seeded("org_staff")]),
+      ),
     ).toBe(true);
   });
 
-  it("CAN be granted to an engineer's role — that is the point of the change", () => {
-    // Stated as a test because it is a real consequence a reviewer should meet
-    // deliberately rather than discover. The rank no longer forbids it; a System
-    // manager decides, and the change is audited.
+  it("CANNOT be granted to an ENGINEER-RANKED account, and that is deliberate", () => {
+    // This test was the exact opposite before 27 Jul 2026, when the rank
+    // forbade nothing and only the seeded row withheld personal information.
+    // Ryan's tier correction made the engineer's REACH universal, and a
+    // universal reach with no ceiling is one role assignment away from every
+    // burner's details in every department at once. So the carve-out moved from
+    // "what the seeded row happens to say" to "what the rank refuses".
+    //
+    // The cost, stated: an engineer who genuinely needs people's details cannot
+    // be given them by editing a role. They need the org_staff door. That is the
+    // trade, and it is the safe direction of it.
     const widened = actor("engineer", [
-      role("engineer", { read: true, write: true, read_personal_information: true }),
-    ]);
-    expect(canReadPersonalInformation(widened)).toBe(true);
-    expect(
-      canViewMedicalNotes({
-        isSelf: false,
-        actorOrgRole: "engineer",
-        actorOrgPersonalInformation: canReadPersonalInformation(widened),
-        actorLeadCampIds: [],
-        subjectCampIds: [],
+      role("engineer", {
+        read: true,
+        write: true,
+        read_personal_information: true,
       }),
-    ).toBe(true);
-  });
-
-  it("keeps medical and the console matrix answering together", () => {
-    // Two modules, one answer. `medical-access` decides medical independently of
-    // this resolver, so this asserts they agree instead of assuming it.
-    const engineer = actor("engineer", [seeded("engineer")]);
-    expect(canReadPersonalInformation(engineer)).toBe(false);
+    ]);
+    expect(canReadPersonalInformationAnywhere(widened)).toBe(false);
+    for (const domain of ORG_DOMAINS) {
+      expect(canReadPersonalInformationIn(widened, domain)).toBe(false);
+    }
     expect(
       canViewMedicalNotes({
         isSelf: false,
         actorOrgRole: "engineer",
-        actorOrgPersonalInformation: canReadPersonalInformation(engineer),
+        actorOrgPersonalInformation: canReadPersonalInformationIn(
+          widened,
+          "registrations",
+        ),
         actorLeadCampIds: [],
         subjectCampIds: [],
       }),
     ).toBe(false);
+
+    // The same ROLE on an org_staff account does grant it — the ceiling is the
+    // rank, not the row, and the role editor is not lying to anyone.
+    const staff = actor("org_staff", [
+      role("engineer", {
+        read: true,
+        write: true,
+        read_personal_information: true,
+      }),
+    ]);
+    expect(canReadPersonalInformationAnywhere(staff)).toBe(true);
+  });
+
+  it("keeps medical and the console matrix answering together, PER DOMAIN", () => {
+    // Two modules, one answer. `medical-access` decides medical independently of
+    // this resolver, so this asserts they agree instead of assuming it — and
+    // agrees about the DOMAIN too: medical notes on a camp member are
+    // `registrations`, so a suppliers lead is refused them.
+    const engineer = actor("engineer", [seeded("engineer")]);
+    const suppliersLead = actor("org_staff", [
+      role("suppliers.lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS),
+    ]);
+    for (const a of [engineer, suppliersLead]) {
+      expect(
+        canViewMedicalNotes({
+          isSelf: false,
+          actorOrgRole: a.rank,
+          actorOrgPersonalInformation: canReadPersonalInformationIn(
+            a,
+            "registrations",
+          ),
+          actorLeadCampIds: [],
+          subjectCampIds: [],
+        }),
+      ).toBe(false);
+    }
+
+    // The camps lead, whose department owns registrations, does see them.
+    const campsLead = actor("org_staff", [
+      role("camps.lead", DEPARTMENT_LEAD_PERMISSIONS, CAMPS),
+    ]);
+    expect(
+      canViewMedicalNotes({
+        isSelf: false,
+        actorOrgRole: "org_staff",
+        actorOrgPersonalInformation: canReadPersonalInformationIn(
+          campsLead,
+          "registrations",
+        ),
+        actorLeadCampIds: [],
+        subjectCampIds: [],
+      }),
+    ).toBe(true);
   });
 
   it("LOCKOUT SCENARIO: the console DOOR alone never grants medical notes", () => {
@@ -538,11 +786,45 @@ describe("refusals", () => {
     expect(orgCapabilityRefusal(fresh, "read")).toMatch(/accounts screen/i);
   });
 
-  it("explain a department-scoped refusal as scope, not absence", () => {
+  it("explain a department-scoped refusal as scope, not absence — and TRUTHFULLY", () => {
+    // Three different refusals, because there are three different reasons and
+    // the old copy told the same (usually false) one for all of them.
     const scoped = actor("org_staff", [
-      role("suppliers.lead", { delete: true }, "dept-suppliers"),
+      role("suppliers.lead", { delete: true }, SUPPLIERS),
     ]);
-    expect(orgCapabilityRefusal(scoped, "delete")).toMatch(/own department/i);
+
+    // 1. Owned by someone else — name them, so they know who to ask.
+    const elsewhere = orgCapabilityRefusal(scoped, "delete", "registrations");
+    expect(elsewhere).toMatch(/own department/i);
+    expect(elsewhere).toMatch(/Theme camps/);
+
+    // 2. Owned by nobody — the honest reason, not "belongs to another".
+    const unowned = orgCapabilityRefusal(scoped, "delete", "bulletins");
+    expect(unowned).toMatch(/not owned by any department/i);
+    expect(unowned).not.toMatch(/belongs to (Suppliers|Theme camps)/);
+
+    // 3. The guard named no domain at all.
+    expect(orgCapabilityRefusal(scoped, "delete")).toMatch(
+      /did not say which part of the console/i,
+    );
+  });
+
+  it("tell an ENGINEER the truth: it is the rank, not a missing role", () => {
+    // Sending an engineer to ask for a role edit that cannot work would waste
+    // two people's afternoon, so the carve-out refusal says so outright.
+    const engineer = actor("engineer", [
+      role("everything", orgPermissionsFromKeys([...ORG_CAPABILITIES])),
+    ]);
+    const pi = orgCapabilityRefusal(
+      engineer,
+      "read_personal_information",
+      "registrations",
+    );
+    expect(pi).toMatch(/every department/i);
+    expect(pi).toMatch(/no role edit changes that/i);
+    expect(orgCapabilityRefusal(engineer, "delete", "suppliers")).toMatch(
+      /every department/i,
+    );
   });
 
   it("never say 'god' out loud — the console calls that rank System manager", () => {
@@ -551,10 +833,15 @@ describe("refusals", () => {
       actor("org_staff", [seeded("org_staff")]),
       actor("org_staff"),
       actor("god"),
+      actor("org_staff", [role("sup", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS)]),
     ];
     for (const a of actors) {
       for (const capability of ORG_CAPABILITIES) {
-        expect(orgCapabilityRefusal(a, capability)).not.toMatch(/\bgod\b/i);
+        for (const domain of [null, ...ORG_DOMAINS] as (OrgDomain | null)[]) {
+          expect(orgCapabilityRefusal(a, capability, domain)).not.toMatch(
+            /\bgod\b/i,
+          );
+        }
       }
     }
   });
@@ -587,16 +874,64 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
     const a = actor("org_staff", [role("wide", { read: true, delete: true })]);
     for (const grant of summarizeOrgActor(a)) {
       expect(grant.departmentIds).toBeNull();
+      expect(grant.domains).toBeNull();
     }
   });
 
   it("names the departments a scoped grant is confined to", () => {
     const a = actor("org_staff", [
-      role("sup-lead", { read: true, delete: true }, "dept-suppliers"),
-      role("safety-lead", { delete: true }, "dept-safety"),
+      role("sup-lead", { read: true, delete: true }, SUPPLIERS),
+      role("safety-lead", { delete: true }, SAFETY),
     ]);
     const del = summarizeOrgActor(a).find((g) => g.capability === "delete");
-    expect(del?.departmentIds?.sort()).toEqual(["dept-safety", "dept-suppliers"]);
+    expect(del?.departmentIds?.sort()).toEqual([SAFETY, SUPPLIERS].sort());
+    // …and WHAT THAT REACHES: the union of the domains those departments own.
+    // Safety owns nothing, so it contributes nothing rather than looking like
+    // extra access.
+    expect(del?.domains?.sort()).toEqual(
+      ["supplier_documents", "suppliers"].sort(),
+    );
+  });
+
+  it("reports an EMPTY reach for a scope whose departments own nothing", () => {
+    // The summary a reviewer must not misread as access. `[]` is not `null`:
+    // one means "reaches nothing", the other means "reaches everything".
+    const a = actor("org_staff", [
+      role("safety-lead", DEPARTMENT_LEAD_PERMISSIONS, SAFETY),
+    ]);
+    for (const capability of ["delete", "read_personal_information"] as const) {
+      const grant = summarizeOrgActor(a).find(
+        (g) => g.capability === capability,
+      );
+      expect(grant?.departmentIds).toEqual([SAFETY]);
+      expect(grant?.domains).toEqual([]);
+      expect(grantScopeClause(grant!, ["Safety"])).toMatch(/reaches nothing/i);
+    }
+  });
+
+  it("phrases a real scope as the domains it reaches", () => {
+    const a = actor("org_staff", [
+      role("sup-lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS),
+    ]);
+    const del = summarizeOrgActor(a).find((g) => g.capability === "delete");
+    const clause = grantScopeClause(del!, ["Suppliers"]);
+    expect(clause).toContain("Suppliers only");
+    expect(clause).toContain("suppliers");
+    expect(clause).toContain("supplier documents");
+  });
+
+  it("an ENGINEER's summary shows the carve-outs as absent, not as scoped", () => {
+    const engineer = actor("engineer", [
+      role("sup-lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS),
+    ]);
+    const summary = summarizeOrgActor(engineer);
+    expect(summary.map((g) => g.capability)).toEqual(["read", "write"]);
+    // …and nothing they DO hold is reported as confined, because their reach is
+    // every department.
+    for (const grant of summary) {
+      expect(grant.departmentIds).toBeNull();
+      expect(grant.domains).toBeNull();
+    }
   });
 
   it("reports a scope ONLY where one is enforced, never a smaller claim than the truth", () => {
@@ -607,7 +942,7 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
     // whether a grant is acceptable is misled just as badly by an understated
     // one as by an overstated one.
     const a = actor("org_staff", [
-      role("sup-member", { read: true, write: true }, "dept-suppliers"),
+      role("sup-member", { read: true, write: true }, SUPPLIERS),
     ]);
     for (const grant of summarizeOrgActor(a)) {
       expect(isDepartmentScopedCapability(grant.capability)).toBe(false);
@@ -624,7 +959,7 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
 
   it("reports org-wide when ANY role grants it org-wide, scoped or not", () => {
     const a = actor("org_staff", [
-      role("scoped", { delete: true }, "dept-suppliers"),
+      role("scoped", { delete: true }, SUPPLIERS),
       role("wide", { delete: true }),
     ]);
     const del = summarizeOrgActor(a).find((g) => g.capability === "delete");
@@ -634,7 +969,10 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
   it("gives a System manager everything, everywhere, with no roles at all", () => {
     const summary = summarizeOrgActor(actor("god"));
     expect(summary.map((g) => g.capability)).toEqual([...ORG_CAPABILITIES]);
-    for (const grant of summary) expect(grant.departmentIds).toBeNull();
+    for (const grant of summary) {
+      expect(grant.departmentIds).toBeNull();
+      expect(grant.domains).toBeNull();
+    }
   });
 
   it("never reports a capability the resolver would refuse", () => {
@@ -691,11 +1029,12 @@ describe("consequence copy — what an editor is actually deciding", () => {
     expect(ORG_CAPABILITY_DESCRIPTIONS.delete).toMatch(/no undo/i);
   });
 
-  it("says out loud that a department-scoped delete grants nothing yet", () => {
-    // The honest gap: no console entity carries a department, so `orgCanIn`
-    // resolves every target as unfiled. Discovering that by being refused in
-    // front of a colleague is not acceptable, so the copy states it.
-    expect(DEPARTMENT_SCOPE_TODAY).toMatch(/nothing/i);
-    expect(DEPARTMENT_SCOPE_TODAY).toMatch(/department/i);
+  it("states the scoping rule without claiming nothing is ever filed", () => {
+    // The copy this replaced said "nothing in the console is filed under a
+    // department yet" — true while no entity could declare one, a lie the
+    // moment departments could own domains.
+    expect(DEPARTMENT_SCOPE_NOTE).toMatch(/department/i);
+    expect(DEPARTMENT_SCOPE_NOTE).toMatch(/owns none/i);
+    expect(DEPARTMENT_SCOPE_NOTE).not.toMatch(/yet/i);
   });
 });

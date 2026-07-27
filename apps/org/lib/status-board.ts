@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, desc, eq, isNotNull, notInArray } from "drizzle-orm";
-import { canReadPersonalInformation, type OrgActor } from "@quagga/core";
+import { canReadPersonalInformationIn, type OrgActor } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
 import {
@@ -51,17 +51,19 @@ export interface ActivityRow {
  * tested place (lib/status-board-format.ts), never an ad-hoc filter here.
  *
  * WHO did each thing is a staff member's email, so it is selected only for a
- * caller with `read_personal_information`; everyone else reads the same feed
- * attributed to "Staff". (Medical reads are already excluded from this card for
- * a display reason, which happens to make the disclosure-census question moot
- * here — `getAuditTrail` is where it is answered on purpose.)
+ * caller who reads personal information in the `audit` domain — this feed is
+ * audit rows from across the whole console, so a grant scoped to one department
+ * is not a grant over it; everyone else reads the same feed attributed to
+ * "Staff". (Medical reads are already excluded from this card for a display
+ * reason, which happens to make the disclosure-census question moot here —
+ * `getAuditTrail` is where it is answered on purpose.)
  */
 export async function getRecentActivity(
   actor: OrgActor,
   limit = 6,
 ): Promise<ActivityRow[]> {
   const db = getDb();
-  const personal = canReadPersonalInformation(actor);
+  const personal = canReadPersonalInformationIn(actor, "audit");
   const rows = await db
     .select({
       id: schema.auditEvents.id,

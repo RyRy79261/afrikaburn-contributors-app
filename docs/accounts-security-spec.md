@@ -294,8 +294,12 @@ What exists now:
 - **`/audit` in the console** (`guardConsole` → any org rank) — the who/whose/when
   table and the full activity list. It shows **who looked at whose notes, never the
   notes**; reading the trail is not a disclosure, so it writes no audit row of its own.
-  **The medical panel needs `read_personal_information`**, so an `engineer` is refused it
-  (and `bio.medical.view` rows are filtered out of their general trail too). A row only
+  **The medical panel needs `read_personal_information` IN THE `audit` DOMAIN**
+  (27 Jul 2026), so an `engineer` is refused it by their rank's carve-out and a
+  department-scoped lead is refused it unless their department owns the audit log — the
+  log spans every camp, so a grant over one department is not a grant over a
+  console-wide census. Either way `bio.medical.view` rows are filtered out of their
+  general trail too. A row only
   exists when its subject HAS notes, which makes the list a census of who has disclosed a
   health condition — the same bulk exposure the member roster refuses to carry. There is
   no redacted version of that list which is not still that list, so it is withheld whole

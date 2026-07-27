@@ -1,10 +1,12 @@
 import { ShieldAlert } from "lucide-react";
 import {
-  DEPARTMENT_SCOPE_TODAY,
+  DEPARTMENT_SCOPE_NOTE,
   ORG_CAPABILITY_CONSEQUENCES,
+  grantScopeClause,
   orgPermissionsFromKeys,
   summarizeOrgActor,
   type OrgCapability,
+  type OrgDomain,
 } from "@quagga/core";
 import { cn } from "@quagga/ui/lib/utils";
 
@@ -20,18 +22,31 @@ import { cn } from "@quagga/ui/lib/utils";
 // A reviewer must be able to answer "what can this person delete?" from the row
 // in front of them without opening another page, and a capability that is simply
 // absent from a list is indistinguishable from one nobody thought about.
+//
+// A SCOPED GRANT NAMES THE DOMAINS, NOT JUST THE DEPARTMENT. "Can delete, in
+// Safety only" is not an answer if Safety owns nothing — it reads as access and
+// is none. Every scope clause therefore comes from `grantScopeClause`, which
+// says the parts of the console the grant reaches or says out loud that it
+// reaches nothing.
 
-/** A resolved capability and the departments it is confined to (null = everywhere). */
+/** A resolved capability, the departments it is confined to (null = everywhere),
+ * and the parts of the console those departments actually own. */
 export interface CapabilityGrantView {
   capability: OrgCapability;
   departments: string[] | null;
+  /** Null when org-wide; EMPTY when the departments own no part of the console. */
+  domains: OrgDomain[] | null;
 }
 
-/** A role as the previewing surfaces hold it: its scope and what it grants. */
+/** A role as the previewing surfaces hold it: its scope, what its department
+ * owns, and what it grants. */
 export interface PreviewRole {
   id: string;
   departmentId: string | null;
   departmentName: string | null;
+  /** The domains that role's DEPARTMENT owns — empty for an org-wide role, and
+   * empty (meaningfully) for a department that has been given nothing. */
+  departmentDomains?: readonly OrgDomain[];
   capabilities: readonly OrgCapability[];
 }
 
@@ -48,6 +63,12 @@ export interface PreviewRole {
  * The rank is the door and is irrelevant to resolution unless it is `god` — and
  * a god is never a target of these surfaces (the controls are not rendered and
  * both actions refuse a god target), so `org_staff` is the honest stand-in.
+ *
+ * NOTE ON THE RANK STAND-IN, since PII and delete are now rank-carved-out for
+ * engineers: this preview answers "what does this ROLE SET grant?", which is the
+ * question a role editor asks. The accounts table does NOT use it — it renders
+ * the server's `summarizeOrgActor` over the real actor, rank included — so an
+ * engineer is never shown a capability their rank refuses.
  */
 export function grantsForRoles(
   roles: readonly PreviewRole[],
@@ -57,8 +78,21 @@ export function grantsForRoles(
       .filter((r) => r.departmentId !== null && r.departmentName !== null)
       .map((r) => [r.departmentId as string, r.departmentName as string]),
   );
+  // The ownership map, rebuilt from what these roles' departments own, so the
+  // preview resolves scope exactly as the server does.
+  const domains: Record<string, { id: string; name: string }> = {};
+  for (const r of roles) {
+    if (!r.departmentId) continue;
+    for (const domain of r.departmentDomains ?? []) {
+      domains[domain] = {
+        id: r.departmentId,
+        name: r.departmentName ?? "a department",
+      };
+    }
+  }
   return summarizeOrgActor({
     rank: "org_staff",
+    domains,
     roles: roles.map((r) => ({
       id: r.id,
       key: r.id,
@@ -71,14 +105,12 @@ export function grantsForRoles(
     capability: grant.capability,
     departments:
       grant.departmentIds?.map((id) => names.get(id) ?? "a department") ?? null,
+    domains: grant.domains,
   }));
 }
 
-function scopeClause(departments: string[] | null): string {
-  if (departments === null) return "everywhere";
-  if (departments.length === 0) return "in no department";
-  if (departments.length === 1) return `in ${departments[0]} only`;
-  return `in ${departments.slice(0, -1).join(", ")} and ${departments[departments.length - 1]} only`;
+function scopeClause(grant: CapabilityGrantView): string {
+  return grantScopeClause(grant, grant.departments ?? []);
 }
 
 function sentenceCase(text: string): string {
@@ -97,6 +129,10 @@ export function CapabilitySummary({
 }) {
   const destructive = grants.find((g) => g.capability === "delete");
   const ordinary = grants.filter((g) => g.capability !== "delete");
+  // A grant confined to departments that own nothing is the trap this whole
+  // change exists to close: it looks granted and reaches nothing. Say so once,
+  // under the list, rather than repeating it on every line.
+  const reachesNothing = grants.some((g) => g.domains?.length === 0);
 
   return (
     <span className={cn("flex flex-col gap-1 text-xs", className)}>
@@ -111,7 +147,7 @@ export function CapabilitySummary({
                   const phrase = ORG_CAPABILITY_CONSEQUENCES[g.capability];
                   return g.departments === null
                     ? phrase
-                    : `${phrase} (${scopeClause(g.departments)})`;
+                    : `${phrase} (${scopeClause(g)})`;
                 })
                 .join(" · "),
             )}
@@ -124,19 +160,17 @@ export function CapabilitySummary({
           <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
             Can permanently remove suppliers and their documents,{" "}
-            {scopeClause(destructive.departments)}.
-            {destructive.departments !== null && (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                {DEPARTMENT_SCOPE_TODAY}
-              </span>
-            )}
+            {scopeClause(destructive)}.
           </span>
         </span>
       ) : (
         <span className="text-muted-foreground">
           Can delete nothing — no suppliers, no documents.
         </span>
+      )}
+
+      {reachesNothing && (
+        <span className="text-muted-foreground">{DEPARTMENT_SCOPE_NOTE}</span>
       )}
     </span>
   );

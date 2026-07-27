@@ -3,17 +3,21 @@ import "server-only";
 import { cache } from "react";
 import { and, asc, eq } from "drizzle-orm";
 import {
+  buildDomainOwnership,
   isDepartmentScopedCapability,
   isSanitized,
   isSystemManager,
   orgCan,
-  orgCanIn,
+  orgCanInDomain,
   orgCapabilityRefusal,
   orgRankFromRole,
   sanitizeOrgPermissions,
   ORG_RANK_LABELS,
+  NO_DOMAIN_OWNERSHIP,
+  type DomainOwnership,
   type OrgActor,
   type OrgCapability,
+  type OrgDomain,
   type OrgRank,
   type OrgRoleGrant,
 } from "@quagga/core";
@@ -54,10 +58,44 @@ export interface OrgSession {
   role: OrgRank;
   /** The org membership row's id — what role assignments hang off. */
   membershipId: string;
-  /** The actor every capability check runs against (rank + assigned roles). */
+  /**
+   * The actor every capability check runs against: rank + assigned roles + the
+   * deployment's domain-ownership map (which department owns which part of the
+   * console). The map is not personal to them — it rides on the actor because
+   * every scoped check needs it, and a separately-threaded context is one a
+   * caller eventually forgets.
+   */
   actor: OrgActor;
   /** The seeded org group's id. */
   orgGroupId: string;
+}
+
+/**
+ * WHICH DEPARTMENT OWNS WHICH PART OF THE CONSOLE, for this request.
+ *
+ * One small query (bounded by the number of domains, currently eight) resolved
+ * inside the cached session, because every department-scoped answer depends on
+ * it and re-asking per query would be the same rows a dozen times.
+ *
+ * Unknown domain keys are dropped by `buildDomainOwnership` — a row left behind
+ * by a console area that no longer exists owns nothing, rather than resolving to
+ * an ownership nobody can see or edit.
+ */
+async function loadDomainOwnership(
+  db: ReturnType<typeof getDb>,
+): Promise<DomainOwnership> {
+  const rows = await db
+    .select({
+      domain: schema.orgDepartmentDomains.domain,
+      departmentId: schema.orgDepartmentDomains.departmentId,
+      departmentName: schema.orgDepartments.name,
+    })
+    .from(schema.orgDepartmentDomains)
+    .innerJoin(
+      schema.orgDepartments,
+      eq(schema.orgDepartments.id, schema.orgDepartmentDomains.departmentId),
+    );
+  return buildDomainOwnership(rows);
 }
 
 /** All the ways the gate can resolve. Rendered by the console layout. */
@@ -218,13 +256,15 @@ export const resolveOrgSession = cache(
           permissions: sanitizeOrgPermissions(r.permissions),
         }));
 
+        const domains = await loadDomainOwnership(db);
+
         return {
           kind: "ok",
           user,
           dbUserId: dbUser.id,
           role: rank,
           membershipId: membership.id,
-          actor: { rank, roles },
+          actor: { rank, roles, domains },
           orgGroupId: orgGroup.id,
         };
       }
@@ -249,33 +289,40 @@ export const resolveOrgSession = cache(
 export async function requireOrgSession(options?: {
   capability?: OrgCapability;
   /**
-   * The department the thing being acted on belongs to, when it has one.
-   * Supplying it upgrades the check from `orgCan` ("may they, anywhere?") to
-   * `orgCanIn` ("may they, HERE?") — which is how a department-scoped role's
-   * `delete` stays inside its own department. Omit it for capabilities with no
-   * department dimension; pass `null` explicitly for an unfiled thing, which
-   * only an org-wide role may touch.
+   * WHICH PART OF THE CONSOLE this action is on — `suppliers`,
+   * `registrations`, `bulletins`… The guard resolves it to the department that
+   * owns it (@quagga/core `org-domains`) and asks `orgCanInDomain`, which is
+   * how a department-scoped role's `delete` and personal-information access
+   * stay inside their own department.
+   *
+   * A call site names the SCREEN it is on, never a department id: the id is
+   * data a System manager can change, and a guard that hardcoded one would
+   * silently stop matching the day the org reorganised.
+   *
+   * Omitting it for a scoped capability means "this belongs to no part of the
+   * console", which only an org-wide role may touch — fail-closed on purpose.
    */
-  departmentId?: string | null;
+  domain?: OrgDomain;
 }): Promise<OrgSession> {
   const state = await resolveOrgSession();
   if (state.kind !== "ok") {
     throw new Error("Not authorised for the organiser console.");
   }
   const capability = options?.capability;
+  const domain = options?.domain ?? null;
   if (capability) {
-    // A department-scoped capability (`delete`) is ALWAYS resolved through
-    // `orgCanIn`, whether or not the caller named a department. Omitting one
-    // then means "this thing belongs to no department", which only an org-wide
-    // role may touch — the fail-closed direction, and the one that stops a
-    // "Suppliers lead" deleting a theme camp because the guard forgot to ask.
-    // Everything else resolves "anywhere": a department member's ordinary work
-    // is not confined by a scope no console entity declares yet.
+    // A department-scoped capability (`delete`, `read_personal_information`) is
+    // ALWAYS resolved through `orgCanInDomain`, whether or not the caller named
+    // a domain. Omitting one then means "this belongs to no department", which
+    // only an org-wide role may touch — the fail-closed direction, and the one
+    // that stops a "Suppliers lead" deleting a theme camp because the guard
+    // forgot to ask. Everything else resolves "anywhere": a department member's
+    // ordinary read and write work is deliberately not confined.
     const permitted = isDepartmentScopedCapability(capability)
-      ? orgCanIn(state.actor, capability, options?.departmentId ?? null)
+      ? orgCanInDomain(state.actor, capability, domain)
       : orgCan(state.actor, capability);
     if (!permitted) {
-      throw new Error(orgCapabilityRefusal(state.actor, capability));
+      throw new Error(orgCapabilityRefusal(state.actor, capability, domain));
     }
   }
   return state;
@@ -311,5 +358,12 @@ export async function requireSystemManager(): Promise<OrgSession> {
  */
 export function canManageAccounts(role: MembershipRole): boolean {
   const rank = orgRankFromRole(role);
-  return rank ? orgCan({ rank, roles: [] }, "manage_accounts") : false;
+  return rank
+    ? orgCan(
+        // No roles and no ownership map: `manage_accounts` is decided by the
+        // anchor alone, so neither could change the answer.
+        { rank, roles: [], domains: NO_DOMAIN_OWNERSHIP },
+        "manage_accounts",
+      )
+    : false;
 }

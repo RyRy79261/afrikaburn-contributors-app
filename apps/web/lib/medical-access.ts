@@ -3,10 +3,12 @@ import "server-only";
 import { after } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import {
-  canReadPersonalInformation,
+  buildDomainOwnership,
+  canReadPersonalInformationIn,
   canViewMedicalNotes,
   isOrgStaffRole,
   medicalAccessBasis,
+  orgRankFromRole,
   sanitizeOrgPermissions,
   MEDICAL_VIEW_AUDIT_ACTION,
   type MedicalAccessContext,
@@ -145,39 +147,75 @@ async function buildMedicalAccessContext(
     }
   }
 
-  // THE ORG BRANCH IS A CAPABILITY NOW, NOT A RANK. Since org roles v1 an org
-  // membership is only the console door; whether its holder is part of the
-  // org's safety audience is decided by the org roles they hold resolving
+  // THE ORG BRANCH IS A SCOPED CAPABILITY NOW, NOT A RANK. Since org roles v1
+  // an org membership is only the console door; whether its holder is part of
+  // the org's safety audience is decided by the org roles they hold resolving
   // `read_personal_information` — the same resolver apps/org uses, so the two
   // apps cannot disagree about who may read a burner's medical notes.
+  //
+  // AND SINCE 27 JUL 2026 THAT RESOLUTION IS PER DOMAIN, which matters here more
+  // than anywhere: this used to flatten every role to `departmentId: null`,
+  // i.e. to treat every departmental grant as org-wide. Once departments became
+  // real that was a hole — a Suppliers lead opening any burner's profile in the
+  // PARTICIPANT app would have read medical notes the console would have
+  // refused them. A burner's bio belongs to the `registrations` domain (the same
+  // domain the console's member detail asks for), and the role's own department
+  // is now carried through rather than erased.
   //
   // (The `god` anchor is handled inside the predicate and needs no roles.)
   let actorOrgPersonalInformation = false;
   if (actorOrgMembershipIds.length > 0) {
-    const grants = await handle
-      .select({ permissions: schema.orgRoles.permissions })
-      .from(schema.orgRoleAssignments)
-      .innerJoin(
-        schema.orgRoles,
-        eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
-      )
-      .where(
-        inArray(schema.orgRoleAssignments.membershipId, actorOrgMembershipIds),
-      );
-    actorOrgPersonalInformation = canReadPersonalInformation({
-      // The door is irrelevant to this question — only the roles are — so the
-      // rank passed here is the non-anchor one. `god` is decided by
-      // `actorOrgRole` inside the predicate.
-      rank: "org_staff",
-      roles: grants.map((g) => ({
-        id: "",
-        key: "",
-        name: "",
-        kind: "custom" as const,
-        departmentId: null,
-        permissions: sanitizeOrgPermissions(g.permissions),
-      })),
-    });
+    const [grants, owners] = await Promise.all([
+      handle
+        .select({
+          departmentId: schema.orgRoles.departmentId,
+          permissions: schema.orgRoles.permissions,
+        })
+        .from(schema.orgRoleAssignments)
+        .innerJoin(
+          schema.orgRoles,
+          eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
+        )
+        .where(
+          inArray(
+            schema.orgRoleAssignments.membershipId,
+            actorOrgMembershipIds,
+          ),
+        ),
+      handle
+        .select({
+          domain: schema.orgDepartmentDomains.domain,
+          departmentId: schema.orgDepartmentDomains.departmentId,
+          departmentName: schema.orgDepartments.name,
+        })
+        .from(schema.orgDepartmentDomains)
+        .innerJoin(
+          schema.orgDepartments,
+          eq(schema.orgDepartments.id, schema.orgDepartmentDomains.departmentId),
+        ),
+    ]);
+    actorOrgPersonalInformation = canReadPersonalInformationIn(
+      {
+        // THE REAL RANK, not a stand-in. It used to be hardcoded `org_staff`
+        // on the grounds that only the roles mattered; that stopped being true
+        // when the engineer rank gained a carve-out. Passing org_staff for an
+        // engineer would let a role edit hand them medical notes in the
+        // participant app that the console refuses them — the two apps must
+        // resolve this identically. `god` is also decided by `actorOrgRole`
+        // inside the predicate, so agreeing with it here is harmless.
+        rank: orgRankFromRole(actorOrgRole) ?? "org_staff",
+        domains: buildDomainOwnership(owners),
+        roles: grants.map((g) => ({
+          id: "",
+          key: "",
+          name: "",
+          kind: "custom" as const,
+          departmentId: g.departmentId,
+          permissions: sanitizeOrgPermissions(g.permissions),
+        })),
+      },
+      "registrations",
+    );
   }
 
   return {
