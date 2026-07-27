@@ -114,16 +114,30 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
       },
     },
 
-    // Self-hosting unlocks server-side change-email (absent on managed Neon). The
-    // 48h revocation window + POPIA state machine stay in @quagga/core /
-    // email_change_requests; Better Auth owns only the identity-side token here.
+    // CHANGE-EMAIL IS OFF AT THE PROVIDER, deliberately.
+    //
+    // Self-hosting unlocks it, and the 48h revocation window + POPIA state
+    // machine for it already exist in @quagga/core / `email_change_requests`.
+    // But the flow was never finished: nothing in any app calls
+    // `auth.api.changeEmail`, and the account UI ships the control disabled
+    // with an honest "not finished yet" notice (AUTH_CAPABILITIES.emailChange
+    // is marked `pending`).
+    //
+    // `enabled: true` nonetheless MOUNTED /api/auth/change-email in all three
+    // apps. A disabled button does not close an HTTP endpoint. Better Auth's
+    // handler is session-protected (`sensitiveSessionMiddleware`), so this was
+    // never reachable while signed out — but it turned a STOLEN SESSION into a
+    // permanent account takeover: post a new address, receive the confirmation
+    // at that attacker-controlled address (Better Auth sends this hop to the
+    // NEW email), click it, and the account's identity has moved. The real
+    // owner is never emailed, and a password reset to the new address then
+    // locks them out for good.
+    //
+    // So: no endpoint until the flow that notifies the CURRENT address and
+    // honours the revocation window is actually wired. Turning this back on
+    // means implementing that first — see docs/accounts-security-spec.md.
     user: {
-      changeEmail: {
-        enabled: true,
-        sendChangeEmailConfirmation: async ({ newEmail, url }) => {
-          await sendAuthEmail(env, { to: newEmail, kind: "change-email", url });
-        },
-      },
+      changeEmail: { enabled: false },
     },
 
     // Database sessions (default) + a short-lived signed cookie cache: fast reads
@@ -159,8 +173,11 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
             // A password check on the way to REQUESTING deletion is not the
             // burner coming back. See ./reauth.
             if (isReauth()) return;
+            // `session.userId` is BETTER AUTH's text `user.id`, NOT our uuid
+            // `users.id` — passing it as `userId` made every lookup a uuid/text
+            // comparison that Postgres refused, silently.
             const { cancelled, email } = await cancelPendingDeletion({
-              userId: session.userId,
+              authUserId: session.userId,
               via: "sign_in",
             });
             if (cancelled && email) {

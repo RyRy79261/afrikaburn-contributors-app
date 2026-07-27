@@ -44,18 +44,51 @@ const NOT_CANCELLED: CancelDeletionResult = { cancelled: false, email: null };
  * @param via  Recorded in the audit row: how the cancellation was triggered.
  */
 export async function cancelPendingDeletion(input: {
-  userId: string;
+  /**
+   * OUR `users.id` (uuid). Mutually exclusive with `authUserId`.
+   */
+  userId?: string;
+  /**
+   * BETTER AUTH's `user.id` (text) — what a session carries.
+   *
+   * THIS DISTINCTION IS THE WHOLE POINT OF THE PARAMETER. There are two id
+   * spaces: Better Auth owns `user.id`, a TEXT primary key, and everything of
+   * ours hangs off `users.id`, a UUID, joined by `users.auth_user_id`. The
+   * session-create hook only ever has the former.
+   *
+   * The first version of this fix passed `session.userId` straight in as
+   * `userId`. Postgres refused to compare uuid to text, the catch below
+   * swallowed the error, and the function returned "nothing to cancel" on every
+   * single sign-in — so B1 looked fixed, shipped, and was not. The unit test
+   * missed it because it asserted only that the HOOK WAS WIRED, never that the
+   * wiring resolved a real row: a test that could not fail.
+   */
+  authUserId?: string;
   via: "sign_in" | "explicit";
   now?: Date;
   /** Request context for the security_events row, when the caller has it. */
   context?: { ip: string | null; userAgent: string | null };
 }): Promise<CancelDeletionResult> {
-  const { userId, via, context } = input;
+  const { via, context } = input;
   const now = input.now ?? new Date();
   if (!process.env.DATABASE_URL) return NOT_CANCELLED;
 
   try {
     const db = createHttpDb();
+
+    // Resolve the auth id into our own id space before touching anything keyed
+    // on `users.id`.
+    let userId = input.userId ?? null;
+    if (!userId) {
+      if (!input.authUserId) return NOT_CANCELLED;
+      const [row] = await db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.authUserId, input.authUserId))
+        .limit(1);
+      if (!row) return NOT_CANCELLED;
+      userId = row.id;
+    }
 
     const [request] = await db
       .select({

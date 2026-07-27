@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFile } from "node:fs/promises";
 import { buildAuthOptions } from "../config";
 import { isReauth, withReauth } from "../reauth";
 
@@ -69,5 +70,38 @@ describe("withReauth marks a password check so it is not read as a return", () =
       }),
     ).rejects.toThrow("bad password");
     expect(isReauth()).toBe(false);
+  });
+});
+
+// --- the id-space contract, which the wiring test above could not catch ----
+//
+// The first B1 fix passed Better Auth's `session.userId` — a TEXT `user.id` —
+// into a lookup keyed on our UUID `users.id`. Postgres refused the comparison,
+// the catch swallowed it, and every sign-in silently reported "nothing to
+// cancel". The test above passed the whole time, because it only asserted that
+// a hook FUNCTION EXISTED. Asserting the call shape is the cheapest thing that
+// would have failed.
+
+describe("the sign-in hook resolves the auth id space, not ours", () => {
+  it("passes authUserId — never userId — from a session", async () => {
+    const src = await readFile(
+      new URL("../config.ts", import.meta.url),
+      "utf8",
+    );
+    const hook = src.slice(src.indexOf("databaseHooks"));
+    const body = hook.slice(0, hook.indexOf("// Google social sign-in"));
+    expect(body).toContain("authUserId: session.userId");
+    // The regression, stated negatively: `userId:` here means the uuid column
+    // is being handed a Better Auth text id again.
+    expect(body).not.toMatch(/\buserId: session\.userId\b/);
+  });
+});
+
+describe("change-email is not mounted while the flow is unfinished", () => {
+  it("keeps the provider endpoint closed", () => {
+    // A disabled button does not close /api/auth/change-email. Leaving the
+    // endpoint up turned a stolen session into a permanent account takeover.
+    const options = buildAuthOptions({});
+    expect(options.user?.changeEmail?.enabled).toBe(false);
   });
 });
