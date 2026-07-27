@@ -1,5 +1,28 @@
 # Audit register — 27 July 2026
 
+> **STATUS, 27 Jul 2026 (post-triage).** Two corrections to what follows, then
+> the fix state.
+>
+> 1. **This deployment is LIVE.** Sections below (notably §2 and theme T1) were
+>    written believing there was no Neon database yet and that
+>    `ACCOUNT_SWEEP_SECRET` / `PGCRYPTO_KEY` were unset. All three are set and
+>    everything is deployed. That makes B1 a live production defect rather than
+>    a dormant one, and makes M3's "set the key first" advice moot.
+> 2. **B1's second claim was overstated.** The Cancel control is reachable — the
+>    Delete tab is in `account-shell.tsx:22`. The real defect was the missing
+>    sign-in hook, which is what has been fixed.
+>
+> **Fixed and on main:** B1, B2, B3, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10,
+> M11, M14, M15, M16, M18, M19, M20, M21 (harness + first tests), M22.
+>
+> **Still open, deliberately — these need a decision, not a patch:** M12
+> (a unique constraint on `questionnaire_responses` needs a migration and a
+> call on what re-sending should mean), M13 (notification links need an origin
+> column — a schema and fan-out change across three apps), M17 (supplier step
+> reconciliation on the org side). The 45 minors and 57 design-parity items are
+> untouched.
+
+
 Read-only audit of the Quagga Portal at HEAD (`5300038`). Nine parallel dimensions
 (design parity ×3 bands, authz, privacy, auth, data, deadcode, patterns, gaps) plus a
 completeness critic. Every finding below was **verified** — the verifier either

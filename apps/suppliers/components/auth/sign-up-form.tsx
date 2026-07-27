@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ExternalLink, Mail } from "lucide-react";
 import {
   PASSWORD_MIN_LENGTH,
+  SUPPLIER_SERVICE_CATEGORIES,
   assessPassword,
   enumerationSafeMessage,
 } from "@quagga/core";
@@ -43,22 +44,6 @@ import { registerSupplier } from "@/lib/actions/register";
 // (authClient.signUp.email → our own /api/auth/*). The supplier PROFILE is then
 // created by the existing `registerSupplier` server action, which is also what
 // issues the supplier's `SUP-2027-0416` reference code.
-
-/**
- * Service categories offered at sign-up. Values match the vocabulary the sheet
- * importer normalises to (`@quagga/core` `normalizeCategory`), so a
- * self-registered supplier and an imported one land in the same buckets.
- */
-const SERVICE_CATEGORIES = [
-  "Stretch Tents",
-  "Transport",
-  "Generators/Power Supply",
-  "Firewood Delivery",
-  "Sound & Lighting",
-  "Water Delivery",
-  "Ice Delivery",
-  "Other",
-] as const;
 
 /** The corpus page the acknowledgement points at (Quaggapedia Supplier Depot). */
 const SUPPLIER_BASICS_URL =
@@ -239,7 +224,7 @@ export function SupplierSignUpForm() {
             <SelectValue placeholder="Choose a category" />
           </SelectTrigger>
           <SelectContent>
-            {SERVICE_CATEGORIES.map((option) => (
+            {SUPPLIER_SERVICE_CATEGORIES.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>

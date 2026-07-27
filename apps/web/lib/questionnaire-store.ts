@@ -7,6 +7,7 @@ import {
   isParticipantFacingActivation,
   parseActivationActionKey,
   publicMemberName,
+  questionnaireReleasedNotification,
   resolveActivationDefinition,
   resolveAudience,
   tallyActivationCompletion,
@@ -25,6 +26,7 @@ import {
 import { db, schema, withTransaction } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
+import { insertNotifications } from "./notifications";
 
 // Persistence + activation service for the questionnaire builder
 // (questionnaire-spec §"Engine mechanics"). Project questionnaires are stored
@@ -164,6 +166,7 @@ export async function createAndActivateProjectQuestionnaire(
     activationId,
     title: input.title,
     blocking: input.blocking,
+    groupId: input.groupId,
   });
 
   return { activationId, sent: userIds.length, emailDelivered };
@@ -235,9 +238,42 @@ async function resolveProjectTargets(
  * fallback when Resend is unset). Returns whether delivery actually happened. */
 async function notifyTargets(
   userIds: readonly string[],
-  activation: { activationId: string; title: string; blocking: boolean },
+  activation: {
+    activationId: string;
+    title: string;
+    blocking: boolean;
+    groupId: string;
+  },
 ): Promise<boolean> {
   if (userIds.length === 0) return false;
+
+  // THE IN-APP ROW FIRST, and independent of email. Activation used to write
+  // `required_actions` plus an email and nothing else — so with no Resend key
+  // (the current state: nobody has registered a domain yet) a targeted member
+  // got no signal at all beyond a gate that silently appeared in front of them.
+  // The inbox row is the delivery that always works.
+  const [group] = await db()
+    .select({ name: schema.groups.name })
+    .from(schema.groups)
+    .where(eq(schema.groups.id, activation.groupId))
+    .limit(1);
+
+  const payload = questionnaireReleasedNotification({
+    title: activation.title,
+    blocking: activation.blocking,
+    activationId: activation.activationId,
+    from: group?.name,
+  });
+  try {
+    await insertNotifications(
+      db(),
+      userIds.map((userId) => ({ userId, ...payload })),
+    );
+  } catch (err) {
+    // Never fail an activation that already committed over its inbox rows.
+    console.error("[questionnaire] inbox notification write failed", err);
+  }
+
   const users = await db()
     .select({ id: schema.users.id, email: schema.users.email })
     .from(schema.users)

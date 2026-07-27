@@ -38,8 +38,8 @@ gate. Every key in it is currently `supported`.
 | Session list | `auth.api.listSessions` (database sessions) |
 | Session revoke (one / others / all) | `auth.api.revokeSession` / `revokeSessions` / `revokeOtherSessions` |
 | Linked sign-in methods | `auth.api.listUserAccounts` + `accountInfo` |
-| Unlink sign-in method | `auth.api.unlinkAccount` — our own guard still refuses unlinking the last method |
-| Email change | `auth.api.changeEmail`, with our 48h revocation window and POPIA state machine on top |
+| Unlink sign-in method | `auth.api.unlinkAccount` — our own guard still refuses unlinking the last method. **NOT WIRED YET (27 Jul 2026):** nothing in the app calls it, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.unlinkAccount.pending`). |
+| Email change | `auth.api.changeEmail`, with our 48h revocation window and POPIA state machine on top. **NOT WIRED YET (27 Jul 2026):** the three server actions have no caller and the confirm/revoke links have no route, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.emailChange.pending`). Organisers change an address from the console meanwhile. |
 | **2FA / TOTP** | the `twoFactor` plugin (migration 0015) — enable → scan → verify; plugin lockout at 10 fails / 15 min |
 | **Backup codes** | inside the `twoFactor` plugin, stored **encrypted**; ten single-use codes shown once, regenerable |
 | **Passkeys** | `@better-auth/passkey` (migration 0015), `rpID` scoped to the apex so one passkey works across all three apps |

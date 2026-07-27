@@ -43,10 +43,28 @@ export function GateScreen({
             <h1 className="text-2xl font-semibold tracking-tight">
               This side is for AfrikaBurn staff
             </h1>
-            <p className="text-sm text-muted-foreground">
-              If that&apos;s you, ask a god admin to elevate your account.
-              Otherwise, the participant app is where your camp lives.
-            </p>
+            {state.godEmailUnverified ? (
+              // The bootstrap dead end, stated. Without this the console simply
+              // refuses a System manager whose address IS configured, with no
+              // hint that the blocker is an unverified email rather than a
+              // missing role — and on a deployment with no email provider the
+              // verification message can never arrive, so the obvious remedy
+              // does not exist. Google sign-in DOES resolve it: account linking
+              // is enabled for Google as a trusted provider, so signing in that
+              // way on the same address verifies it and the bootstrap runs.
+              <p className="text-sm text-muted-foreground">
+                Your address is configured as a System manager, but the sign-in
+                provider hasn&apos;t verified it yet, so the console can&apos;t
+                elevate you. Sign in with{" "}
+                <span className="text-foreground">Google</span> on this same
+                address — that verifies it and grants access on the next load.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                If that&apos;s you, ask a god admin to elevate your account.
+                Otherwise, the participant app is where your camp lives.
+              </p>
+            )}
           </>
         ) : (
           <>

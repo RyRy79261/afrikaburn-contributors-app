@@ -36,6 +36,35 @@ export interface AuthCapability {
   reason: string;
   /** Honest, user-facing copy for a surface that cannot function. */
   userMessage?: string;
+  /**
+   * PROVIDER SUPPORT IS NOT THE SAME AS A FINISHED FEATURE.
+   *
+   * `support` answers "can Better Auth do this?". This answers "have WE wired a
+   * working end-to-end flow for it?". They came apart badly: change-email and
+   * unlink are both `supported`, and both ship as permanently disabled buttons
+   * whose tooltip read `cap.userMessage` — which is undefined on a supported
+   * capability, so the control offered NO explanation at all, and
+   * `CapabilityNotice` rendered null beside it. The spec meanwhile listed both
+   * as shipped.
+   *
+   * Absent means wired. Set it, with a `pendingMessage`, for anything the UI
+   * must still refuse.
+   */
+  pending?: true;
+  /** Shown wherever a `pending` capability's control is disabled. */
+  pendingMessage?: string;
+}
+
+/** The honest explanation for a control that is disabled because the flow is
+ * unfinished — provider support notwithstanding. Empty string when it is not
+ * pending, so a caller can drop it straight into a `title`. */
+export function capabilityPendingMessage(cap: AuthCapability): string {
+  return cap.pending ? (cap.pendingMessage ?? "Not available yet.") : "";
+}
+
+/** True when a capability should not be offered to a user yet, for any reason. */
+export function capabilityIsUsable(cap: AuthCapability): boolean {
+  return cap.support === "supported" && !cap.pending;
 }
 
 /**
@@ -85,7 +114,10 @@ export const AUTH_CAPABILITIES: Readonly<
     support: "supported",
     method: "auth.api.changeEmail",
     reason:
-      "Self-hosting unlocks server-side change-email (`user.changeEmail.enabled` is set in @quagga/auth, with `sendChangeEmailVerification` wired to Resend) — it was ABSENT from managed Neon's server allowlist. Better Auth owns the identity-side token; the 48h revocation window and POPIA state machine stay ours in @quagga/core + `email_change_requests`. Committing the new address still requires an email provider to deliver the confirmation, so the user-facing flow is gated on RESEND_API_KEY.",
+      "Self-hosting unlocks server-side change-email (`user.changeEmail.enabled` is set in @quagga/auth, with `sendChangeEmailVerification` wired to Resend) — it was ABSENT from managed Neon's server allowlist. Better Auth owns the identity-side token; the 48h revocation window and POPIA state machine stay ours in @quagga/core + `email_change_requests`. Committing the new address still requires an email provider to deliver the confirmation, so the user-facing flow is gated on RESEND_API_KEY. PENDING: the provider call is available but our flow is not finished — the three server actions have no caller and the confirm/revoke URLs have no route.",
+    pending: true,
+    pendingMessage:
+      "Changing your email address isn't finished yet. Ask an organiser to change it for you \u2014 they can do it from the console.",
   },
   accountDeletion: {
     key: "accountDeletion",
@@ -106,7 +138,10 @@ export const AUTH_CAPABILITIES: Readonly<
     support: "supported",
     method: "auth.api.unlinkAccount",
     reason:
-      "Self-hosting exposes `unlinkAccount` server-side (managed Neon omitted it). The last-sign-in-method guard is still enforced by us from `listUserAccounts` — a member can never unlink their only method.",
+      "Self-hosting exposes `unlinkAccount` server-side (managed Neon omitted it). The last-sign-in-method guard is still enforced by us from `listUserAccounts` — a member can never unlink their only method. PENDING: nothing in the app calls it yet, so the control is disabled rather than pretending.",
+    pending: true,
+    pendingMessage:
+      "Unlinking a sign-in method isn't available yet. If you need Google disconnected from this account \u2014 for example because that Google account is compromised \u2014 ask an organiser and they'll do it directly.",
   },
   twoFactor: {
     key: "twoFactor",

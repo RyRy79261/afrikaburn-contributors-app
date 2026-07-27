@@ -3,7 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { Fingerprint, KeyRound } from "lucide-react";
-import { AUTH_CAPABILITIES } from "@quagga/core";
+import {
+  AUTH_CAPABILITIES,
+  capabilityPendingMessage,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import { ChangePasswordForm } from "./change-password-form";
@@ -169,7 +172,7 @@ export function SignInMethods({
               variant="ghost"
               size="sm"
               disabled
-              title={unlinkCap.userMessage}
+              title={capabilityPendingMessage(unlinkCap)}
             >
               Unlink
             </Button>
@@ -197,7 +200,7 @@ export function SignInMethods({
         {isLastMethod
           ? "This is your only way to sign in — it can't be removed. Add another method first."
           : "At least one sign-in method must stay active on your account."}{" "}
-        {unlinkCap.userMessage}
+        {capabilityPendingMessage(unlinkCap) || unlinkCap.userMessage}
       </div>
     </div>
   );

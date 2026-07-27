@@ -113,6 +113,9 @@ export async function recentNotifications(
   }));
 }
 
+/** Rows per INSERT. Six parameters each, well inside Postgres' 65535 ceiling. */
+const NOTIFICATION_INSERT_CHUNK = 1000;
+
 /**
  * Insert notification rows (the event-hook + bulletin-fan-out writer). Accepts
  * an explicit db handle so hooks that already hold one reuse it. No-op on an
@@ -124,14 +127,22 @@ export async function insertNotifications(
   rows: readonly NotificationRow[],
 ): Promise<void> {
   if (rows.length === 0) return;
-  await handle.insert(schema.notifications).values(
-    rows.map((r) => ({
-      userId: r.userId,
-      kind: r.kind,
-      title: r.title,
-      body: r.body ?? null,
-      link: r.link ?? null,
-      bulletinId: r.bulletinId ?? null,
-    })),
-  );
+  // CHUNKED. Six bound parameters per row against Postgres' 65535-parameter
+  // ceiling means a single insert dies at 10923 rows with SQLSTATE 08P01 —
+  // and because a bulletin publish wraps this in a transaction, the whole
+  // broadcast rolled back. AfrikaBurn is comfortably bigger than 10922 people,
+  // so this was a live ceiling on the participant fan-out, not a theoretical one.
+  for (let i = 0; i < rows.length; i += NOTIFICATION_INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + NOTIFICATION_INSERT_CHUNK);
+    await handle.insert(schema.notifications).values(
+      chunk.map((r) => ({
+        userId: r.userId,
+        kind: r.kind,
+        title: r.title,
+        body: r.body ?? null,
+        link: r.link ?? null,
+        bulletinId: r.bulletinId ?? null,
+      })),
+    );
+  }
 }

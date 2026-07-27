@@ -68,17 +68,24 @@ export function registrationDecisionNotification(input: {
   }
 }
 
-/** 📋 An org questionnaire was released to this user. Blocking ones flag hard. */
+/** 📋 A questionnaire was released to this user. Blocking ones flag hard.
+ *
+ * `from` names the sender — "AfrikaBurn" for an org release, the camp's name for
+ * a camp release. It defaults to AfrikaBurn because that was the only caller
+ * until camp activations started writing inbox rows too (audit M7); attributing
+ * a camp's questionnaire to AfrikaBurn would be simply untrue. */
 export function questionnaireReleasedNotification(input: {
   title: string;
   blocking: boolean;
   activationId?: string | null;
+  from?: string;
 }): NotificationPayload {
+  const from = input.from?.trim() || "AfrikaBurn";
   return {
     kind: "questionnaire",
     title: input.blocking
-      ? `New questionnaire from AfrikaBurn: ${input.title} — REQUIRED, blocks registration`
-      : `New questionnaire from AfrikaBurn: ${input.title}`,
+      ? `New questionnaire from ${from}: ${input.title} — REQUIRED, blocks registration`
+      : `New questionnaire from ${from}: ${input.title}`,
     body: null,
     link: input.activationId ? `/questionnaires/${input.activationId}` : null,
   };

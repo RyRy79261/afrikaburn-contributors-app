@@ -13,7 +13,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@quagga/ui/components/select";
 import { toast } from "@quagga/ui/components/toast";
+import { SUPPLIER_SERVICE_CATEGORIES } from "@quagga/core";
 import { registerSupplier } from "@/lib/actions/register";
 
 /**
@@ -30,6 +38,7 @@ export function RegisterSupplierForm() {
     services: "",
     contact: "",
     website: "",
+    category: "",
   });
 
   function set(key: keyof typeof form, value: string) {
@@ -43,6 +52,7 @@ export function RegisterSupplierForm() {
         services: form.services || undefined,
         contact: form.contact || undefined,
         website: form.website || undefined,
+        category: form.category || undefined,
       });
       if (result.ok) {
         toast.success("You're registered — let's finish onboarding.");
@@ -72,6 +82,31 @@ export function RegisterSupplierForm() {
             onChange={(e) => set("name", e.target.value)}
             placeholder="e.g. Karoo Stretch Tents"
           />
+        </Field>
+        {/* THE CATEGORY BELONGS HERE TOO. This form is the recovery path for a
+            sign-up whose profile could not be created inline — which, with email
+            verification on, is EVERY production self-registration, because the
+            provider withholds the session until the address is confirmed. The
+            category the burner picked at sign-up is gone by the time they land
+            here, and until this field existed nothing could ever set it: the
+            supplier was permanently uncategorised and invisible to the org's
+            category filters. */}
+        <Field label="Service category">
+          <Select
+            value={form.category || undefined}
+            onValueChange={(v) => set("category", v)}
+          >
+            <SelectTrigger aria-label="Service category">
+              <SelectValue placeholder="Choose a category" />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPLIER_SERVICE_CATEGORIES.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Services you provide">
           <Textarea

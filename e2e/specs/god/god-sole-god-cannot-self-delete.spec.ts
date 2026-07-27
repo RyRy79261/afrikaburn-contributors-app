@@ -54,7 +54,16 @@ test.describe("sole god cannot self-delete", () => {
     // the correct password. Re-auth SUCCEEDS, so the refusal that follows can
     // only be the server re-running assessDeletionEligibility and throwing the
     // sole-god block — not the button, not a bad password.
-    await webGod.getByLabel(/confirm your password/i).fill(creds.password);
+    // The INPUT is disabled by the same `blocked` prop as the button, so the
+    // fill below used to hang until the test timed out — meaning this spec, the
+    // anti-lockout anchor, never reached its own assertion and could not have
+    // failed if the server guard had been removed. Defeat both attributes, not
+    // just the button's.
+    const password = webGod.getByLabel(/confirm your password/i);
+    await password.evaluate((el) => {
+      (el as unknown as { disabled: boolean }).disabled = false;
+    });
+    await password.fill(creds.password);
     await submit.evaluate((el) => {
       (el as unknown as { disabled: boolean }).disabled = false;
     });

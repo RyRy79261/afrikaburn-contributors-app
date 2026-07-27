@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { isSanitized } from "@quagga/core";
@@ -74,6 +74,37 @@ export async function registerSupplier(
           .limit(1);
         if (existing)
           throw new Error("You're already registered as a supplier.");
+
+        // AND GUARD AGAINST LAUNDERING A SUSPENSION. The check above is only
+        // "does THIS ACCOUNT own a listing" — so a supplier whose listing was
+        // suspended could sign up again with a fresh account, re-enter the same
+        // business name, and land a brand-new row with standing 'good',
+        // immediately eligible in the org's supplier picker. The suspension
+        // stayed on a row nobody was looking at any more.
+        //
+        // Any existing listing under the same name (case- and
+        // whitespace-insensitive, the same normalisation the seed dedupes on)
+        // stops self-registration and routes them to the org. That deliberately
+        // also catches the honest case — an imported listing they want to claim
+        // — because claiming is an org-mediated action, not a self-service one.
+        const [sameName] = await tx
+          .select({
+            id: schema.suppliers.id,
+            standing: schema.suppliers.standing,
+            claimed: sql<boolean>`${schema.suppliers.userId} IS NOT NULL`,
+          })
+          .from(schema.suppliers)
+          .where(
+            sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${input.name}))`,
+          )
+          .limit(1);
+        if (sameName) {
+          throw new Error(
+            sameName.claimed
+              ? "A supplier with that business name is already registered. If that's you, ask AfrikaBurn to link it to this account rather than creating a second listing."
+              : "AfrikaBurn already has a listing for that business name. Ask an administrator to link it to this account — that keeps your history and standing intact.",
+          );
+        }
 
         // The active (or most recent) edition to scope onboarding to.
         const [edition] =

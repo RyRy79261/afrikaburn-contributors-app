@@ -126,6 +126,29 @@ export function mapReturning(raw: string): SupplierReturning | null {
 }
 
 /**
+ * The service categories a supplier can pick when self-registering.
+ *
+ * Values are already in `normalizeCategory`'s output shape, so a self-registered
+ * supplier and a sheet-imported one land in the same bucket. Lives here rather
+ * than in a form component because BOTH supplier registration surfaces need it
+ * (the sign-up screen and the "we couldn't match you" recovery form), and a
+ * second hand-maintained copy would drift the moment one of them changed.
+ */
+export const SUPPLIER_SERVICE_CATEGORIES = [
+  "Stretch Tents",
+  "Transport",
+  "Generators/Power Supply",
+  "Firewood Delivery",
+  "Sound & Lighting",
+  "Water Delivery",
+  "Ice Delivery",
+  "Other",
+] as const;
+
+export type SupplierServiceCategory =
+  (typeof SUPPLIER_SERVICE_CATEGORIES)[number];
+
+/**
  * Normalise a raw Category cell: special-case Transportation→Transport and
  * FIREWOOD DELIVERY→Firewood Delivery, otherwise Title-Case each alphabetic
  * run (leaving separators like `/` and `&` intact). Blank → "".

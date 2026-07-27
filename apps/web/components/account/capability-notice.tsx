@@ -1,5 +1,9 @@
 import { Info } from "lucide-react";
-import { AUTH_CAPABILITIES, type AuthCapability } from "@quagga/core";
+import {
+  AUTH_CAPABILITIES,
+  capabilityPendingMessage,
+  type AuthCapability,
+} from "@quagga/core";
 import type { AuthCapabilityKey } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { cn } from "@quagga/ui/lib/utils";
@@ -36,9 +40,12 @@ export function CapabilityNotice({
   className?: string;
 }) {
   const cap = AUTH_CAPABILITIES[capability];
-  // A supported capability has nothing to explain — render nothing rather than
-  // an empty reassurance box.
-  if (cap.support === "supported") return null;
+
+  // A capability the PROVIDER supports but we have not finished wiring still
+  // owes the reader an explanation — this used to return null for it, leaving a
+  // disabled button sitting next to nothing at all.
+  const pending = capabilityPendingMessage(cap);
+  if (cap.support === "supported" && !pending) return null;
 
   return (
     <div
@@ -49,9 +56,15 @@ export function CapabilityNotice({
     >
       <div className="flex items-center gap-2">
         <Info className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <Badge variant="outline">{SUPPORT_LABEL[cap.support]}</Badge>
+        <Badge variant="outline">
+          {cap.support === "supported"
+            ? "Not finished yet"
+            : SUPPORT_LABEL[cap.support]}
+        </Badge>
       </div>
-      <p className="text-sm text-muted-foreground">{cap.userMessage}</p>
+      <p className="text-sm text-muted-foreground">
+        {pending || cap.userMessage}
+      </p>
     </div>
   );
 }

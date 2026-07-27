@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AUTH_CAPABILITIES, EMAIL_CHANGE_REVOCATION_HOURS } from "@quagga/core";
+import {
+  AUTH_CAPABILITIES,
+  EMAIL_CHANGE_REVOCATION_HOURS,
+  capabilityPendingMessage,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -147,7 +151,7 @@ export default async function AccountPage() {
                 variant="outline"
                 size="sm"
                 disabled
-                title={emailChangeCap.userMessage}
+                title={capabilityPendingMessage(emailChangeCap)}
               >
                 Change email
               </Button>

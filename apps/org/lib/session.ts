@@ -26,7 +26,7 @@ import type { MembershipRole } from "@quagga/types";
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getDb, schema } from "@/lib/db";
-import { canBootstrapGodEmail } from "@/lib/god";
+import { canBootstrapGodEmail, isGodEmail } from "@/lib/god";
 import { writeAuditEvent } from "@/lib/audit";
 
 /**
@@ -102,7 +102,18 @@ async function loadDomainOwnership(
 export type OrgSessionState =
   | { kind: "unauthenticated" }
   | { kind: "not_ready"; user: AuthenticatedUser }
-  | { kind: "forbidden"; user: AuthenticatedUser }
+  | {
+      kind: "forbidden";
+      user: AuthenticatedUser;
+      /**
+       * The GOD_EMAILS bootstrap dead end, made legible. The address IS listed,
+       * but the provider has not verified it — so `canBootstrapGodEmail`
+       * refuses and the console stays shut with no stated reason. That is the
+       * likely state for a password-first sign-up on a deployment with no email
+       * provider, where the verification mail can never be sent.
+       */
+      godEmailUnverified?: boolean;
+    }
   | ({ kind: "ok" } & OrgSession);
 
 /**
@@ -268,7 +279,14 @@ export const resolveOrgSession = cache(
           orgGroupId: orgGroup.id,
         };
       }
-      return { kind: "forbidden", user };
+      // Name the one refusal that is a CONFIGURATION dead end rather than a
+      // permissions decision: listed in GOD_EMAILS, but unverified.
+      return {
+        kind: "forbidden",
+        user,
+        godEmailUnverified:
+          !user.emailVerified && isGodEmail(user.primaryEmail),
+      };
     } catch {
       return { kind: "not_ready", user };
     }

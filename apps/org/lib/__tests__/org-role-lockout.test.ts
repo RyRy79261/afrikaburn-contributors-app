@@ -109,7 +109,11 @@ describe("LOCKOUT SCENARIO 1: the god bootstrap still works", () => {
     // org account) through a database with an empty `org_roles` table.
     const resolve = functionBody(session, "resolveOrgSession");
     expect(resolve).toContain("orgRankFromRole(membership?.role)");
-    expect(resolve).toContain('return { kind: "forbidden", user }');
+    // The refusal now carries a diagnostic field (`godEmailUnverified`), so
+    // match the KIND rather than the exact one-line object literal — the
+    // property under test is "a non-staff membership is refused", not the
+    // shape of the refusal.
+    expect(resolve).toContain('kind: "forbidden"');
   });
 
   it("the ownership map is resolved in the session, not per query", () => {
