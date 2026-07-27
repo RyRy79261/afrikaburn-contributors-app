@@ -262,6 +262,57 @@ describe("ack → step completion", () => {
     expect(result.steps.inventory_submitted).toBe("awaiting_confirmation");
   });
 
+  // --- audit M17: the org deletes/rebinds a document -------------------
+  //
+  // The reconcile set is derived from the CURRENT document list, so a step whose
+  // last bound document just vanished was not looked at and kept a stale
+  // `completed` — the console reporting a supplier as signed for a document that
+  // no longer exists. `alsoConsider` forces those steps back into the loop.
+
+  it("re-opens a step whose last bound document was deleted", () => {
+    const before: SupplierOnboardingSteps = { agreement_signed: "completed" };
+    // The org deleted every document bound to the step: empty list now.
+    const result = applyDocumentAcksToSteps(before, [], [], [
+      "agreement_signed",
+    ]);
+    expect(result.reverted).toEqual(["agreement_signed"]);
+    expect(result.steps.agreement_signed).toBe("pending");
+  });
+
+  it("WITHOUT alsoConsider the stale completed survives — the bug itself", () => {
+    // Pinning the old behaviour as the reason the parameter exists: same inputs,
+    // no alsoConsider, and the lie stands.
+    const before: SupplierOnboardingSteps = { agreement_signed: "completed" };
+    const result = applyDocumentAcksToSteps(before, [], []);
+    expect(result.reverted).toEqual([]);
+    expect(result.steps.agreement_signed).toBe("completed");
+  });
+
+  it("COMPLETES a step when deleting a document leaves the rest acknowledged", () => {
+    // The mirror image, and the reason the org sweep covers every supplier
+    // rather than only the deleted document's ack-holders: A and B are both
+    // bound and required, the supplier acked only B, so the step is pending.
+    // The org deletes A — B is now the sole required document and it IS acked,
+    // so the step must COMPLETE for a supplier who never touched A.
+    const before: SupplierOnboardingSteps = { agreement_signed: "pending" };
+    const remaining = [
+      doc({ id: "d2", stepKey: "agreement_signed", requiredAck: true }),
+    ];
+    const result = applyDocumentAcksToSteps(before, remaining, [ack("d2")], [
+      "agreement_signed",
+    ]);
+    expect(result.completed).toEqual(["agreement_signed"]);
+    expect(result.steps.agreement_signed).toBe("completed");
+  });
+
+  it("alsoConsider still cannot touch an org-confirmed step", () => {
+    // The escape hatch must not become a way to move money-confirming steps.
+    const before: SupplierOnboardingSteps = { deposit_paid: "completed" };
+    const result = applyDocumentAcksToSteps(before, [], [], ["deposit_paid"]);
+    expect(result.reverted).toEqual([]);
+    expect(result.steps.deposit_paid).toBe("completed");
+  });
+
   it("NEVER completes an org-confirmed step, even from a malformed binding", () => {
     // Defence in depth: `validateDocumentBinding` should have refused this
     // binding at write time, but if a bad row exists, applying it must not

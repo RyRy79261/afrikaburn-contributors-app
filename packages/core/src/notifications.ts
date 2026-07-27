@@ -158,6 +158,25 @@ export function supplierStepConfirmedNotification(input: {
   };
 }
 
+/**
+ * 📦 A document change re-opened a step the supplier had already signed off.
+ *
+ * The org edited the document list — added a required document, or withdrew the
+ * one this signature was against — so the checklist moved BACKWARDS through no
+ * fault of the supplier. Silently un-ticking it would be worse than leaving it
+ * wrong: they need to know there is something to re-sign.
+ */
+export function supplierStepReopenedNotification(input: {
+  stepLabel: string;
+}): NotificationPayload {
+  return {
+    kind: "supplier",
+    title: `${input.stepLabel} — needs signing again`,
+    body: "AfrikaBurn changed the documents for this step, so it has re-opened. Review and sign the current version.",
+    link: "/onboarding",
+  };
+}
+
 // (No per-view medical notification. Medical notes are disclosed to a stated
 // audience — the burner's camp leads and AfrikaBurn's safety staff — at the
 // point of entry, so a notification every time one of them opens the burner's

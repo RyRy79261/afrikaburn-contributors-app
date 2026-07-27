@@ -242,6 +242,20 @@ export function applyDocumentAcksToSteps(
   states: SupplierOnboardingSteps | null | undefined,
   documents: readonly SupplierDocument[],
   acks: readonly SupplierDocumentAck[],
+  /**
+   * Extra steps to re-evaluate even though no document is bound to them any
+   * more. Pass the step a document was bound to when the org DELETES or
+   * REBINDS it.
+   *
+   * Without this the reconcile set is derived purely from the CURRENT document
+   * list, so deleting the last required document bound to a step removed that
+   * step from consideration entirely and left a stale `completed` in place
+   * forever — the console reporting a supplier as signed for a document that no
+   * longer exists (audit M17). A step with no bound documents is by definition
+   * unsatisfied (`isStepSatisfiedByAcks` returns false on an empty binding), so
+   * forcing it into the loop reverts it, which is the honest state.
+   */
+  alsoConsider: readonly SupplierOnboardingStepKey[] = [],
 ): DocumentAckStepResult {
   let steps: SupplierOnboardingSteps = { ...(states ?? {}) };
   const completed: SupplierOnboardingStepKey[] = [];
@@ -249,7 +263,7 @@ export function applyDocumentAcksToSteps(
 
   // Only steps that actually have bound required documents are reconciled —
   // steps driven by other means keep whatever state they hold.
-  const boundSteps = new Set<SupplierOnboardingStepKey>();
+  const boundSteps = new Set<SupplierOnboardingStepKey>(alsoConsider);
   for (const doc of documents) {
     if (doc.stepKey != null && doc.requiredAck) boundSteps.add(doc.stepKey);
   }

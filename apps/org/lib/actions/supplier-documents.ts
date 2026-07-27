@@ -5,11 +5,21 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import { SupplierDocumentInput } from "@quagga/types";
-import { validateDocumentBinding } from "@quagga/core";
+import {
+  supplierOnboardingStep,
+  supplierStepReopenedNotification,
+  validateDocumentBinding,
+} from "@quagga/core";
+import type { SupplierOnboardingStepKey } from "@quagga/types";
 
 import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
+import {
+  reconcileEditionSupplierSteps,
+  type ReopenedStep,
+} from "@/lib/supplier-step-reconcile";
 import { runAction, type ActionResult } from "./result";
 
 // Org CRUD for the per-edition supplier document list
@@ -22,6 +32,32 @@ import { runAction, type ActionResult } from "./result";
 // step the supplier completes themselves. Binding to deposit / briefing /
 // registration fee is rejected — a supplier ticking a checkbox must never be
 // able to confirm that money arrived or that they attended a briefing.
+
+/**
+ * Tell each supplier whose checklist moved BACKWARDS. Silently un-ticking a step
+ * they had signed off would leave them staring at an unexplained regression;
+ * leaving it ticked would leave the console lying. So: revert, and say why.
+ *
+ * Best-effort and post-commit — the reconciliation has already happened and must
+ * not be rolled back over an inbox write. Unclaimed listings (no linked account)
+ * have nobody to notify.
+ */
+async function notifyReopened(reopened: readonly ReopenedStep[]): Promise<void> {
+  const rows = reopened
+    .filter((r): r is ReopenedStep & { userId: string } => r.userId !== null)
+    .map((r) => ({
+      userId: r.userId,
+      ...supplierStepReopenedNotification({
+        stepLabel: supplierOnboardingStep(r.stepKey)?.title ?? r.stepKey,
+      }),
+    }));
+  if (rows.length === 0) return;
+  try {
+    await insertNotifications(getDb(), rows);
+  } catch (err) {
+    console.error("[supplier-documents] reopened notification failed", err);
+  }
+}
 
 const CreateDocumentInput = SupplierDocumentInput.extend({
   editionId: z.string().uuid(),
@@ -38,7 +74,8 @@ export async function createSupplierDocument(
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
     if (!binding.ok) throw new Error(binding.reason);
 
-    // Sort computation, insert and audit are one atomic unit.
+    // Sort computation, insert, reconcile and audit are one atomic unit.
+    let reopened: ReopenedStep[] = [];
     await withTransaction(async (tx) => {
       // Default sort to the end of the edition's list when not supplied.
       let sort = input.sort;
@@ -78,9 +115,24 @@ export async function createSupplierDocument(
           stepKey: input.stepKey,
         },
       });
+
+      // A new REQUIRED document bound to a step re-opens that step for every
+      // supplier who had already signed off on the old set. Reconciling here,
+      // in the same transaction, is what stops the console reporting them as
+      // signed for a document they have never seen.
+      reopened = (
+        await reconcileEditionSupplierSteps(
+          tx,
+          editionId,
+          [],
+          session.dbUserId,
+        )
+      ).reopened;
     });
 
+    await notifyReopened(reopened);
     revalidatePath("/suppliers");
+    revalidatePath("/suppliers/signup-management");
   });
 }
 
@@ -93,10 +145,18 @@ const UpdateDocumentInput = SupplierDocumentInput.extend({
  *
  * Editing is consequential beyond this table: adding `requiredAck` to a document
  * bound to a step, or binding an existing unacknowledged document to a step,
- * legitimately RE-OPENS that step for suppliers who had it complete. That
- * reconciliation happens on the supplier's next ack (or page load) through
- * `applyDocumentAcksToSteps`, which recomputes from the current document list —
- * there is no stale "completed" to clean up here.
+ * legitimately RE-OPENS that step for suppliers who had it complete. REBINDING
+ * a document away from a step can also leave the OLD step with no evidence
+ * behind it.
+ *
+ * This docstring used to claim that reconciliation "happens on the supplier's
+ * next ack (or page load)" and that there was "no stale completed to clean up
+ * here". Both halves were false (audit M17): `applyDocumentAcksToSteps` had
+ * exactly one caller — the supplier's own ack action — so a supplier who never
+ * acked again was never reconciled, and a step whose documents had all moved
+ * away was not even in the reconcile set. It is reconciled HERE now, in the same
+ * transaction, for every supplier in the edition, considering both the step the
+ * document used to carry and the one it carries now.
  */
 export async function updateSupplierDocument(
   raw: z.input<typeof UpdateDocumentInput>,
@@ -108,12 +168,15 @@ export async function updateSupplierDocument(
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
     if (!binding.ok) throw new Error(binding.reason);
 
-    // Read, update and audit are one atomic unit.
+    // Read, update, reconcile and audit are one atomic unit.
+    let reopened: ReopenedStep[] = [];
     await withTransaction(async (tx) => {
       const [current] = await tx
         .select({
           id: schema.supplierDocuments.id,
           sort: schema.supplierDocuments.sort,
+          editionId: schema.supplierDocuments.editionId,
+          stepKey: schema.supplierDocuments.stepKey,
         })
         .from(schema.supplierDocuments)
         .where(eq(schema.supplierDocuments.id, documentId))
@@ -143,9 +206,27 @@ export async function updateSupplierDocument(
           stepKey: input.stepKey,
         },
       });
+
+      // BOTH steps: the one it now carries (covered automatically) and the one
+      // it used to carry. A rebind that empties the old step's binding must
+      // re-open it, and only `alsoConsider` puts a step with no documents left
+      // back into the reconcile set.
+      const touched = [current.stepKey, input.stepKey].filter(
+        (k): k is SupplierOnboardingStepKey => Boolean(k),
+      );
+      reopened = (
+        await reconcileEditionSupplierSteps(
+          tx,
+          current.editionId,
+          touched,
+          session.dbUserId,
+        )
+      ).reopened;
     });
 
+    await notifyReopened(reopened);
     revalidatePath("/suppliers");
+    revalidatePath("/suppliers/signup-management");
   });
 }
 
@@ -156,6 +237,13 @@ const DeleteDocumentInput = z.object({ documentId: z.string().uuid() });
  * correct: an acknowledgement of a document that no longer exists is not
  * evidence of anything. The ack count is captured for the audit trail first,
  * because that is the only place it survives.
+ *
+ * AND THE STEP IS RECONCILED. Cascading the acks away used to leave the step
+ * map untouched, so a step whose only required document had just been deleted
+ * stayed `completed` forever — the console reporting a supplier as signed for
+ * something that no longer existed (audit M17). The deleted document's step is
+ * passed as `alsoConsider` precisely because it may now have no documents bound
+ * to it at all, which is exactly the case the reconcile set used to skip.
  */
 export async function deleteSupplierDocument(
   raw: z.input<typeof DeleteDocumentInput>,
@@ -170,12 +258,14 @@ export async function deleteSupplierDocument(
     });
     const { documentId } = DeleteDocumentInput.parse(raw);
 
-    // Read, ack-count, delete and audit are one atomic unit.
+    // Read, ack-count, delete, reconcile and audit are one atomic unit.
+    let reopened: ReopenedStep[] = [];
     await withTransaction(async (tx) => {
       const [current] = await tx
         .select({
           title: schema.supplierDocuments.title,
           stepKey: schema.supplierDocuments.stepKey,
+          editionId: schema.supplierDocuments.editionId,
         })
         .from(schema.supplierDocuments)
         .where(eq(schema.supplierDocuments.id, documentId))
@@ -201,9 +291,20 @@ export async function deleteSupplierDocument(
           acknowledgementsDiscarded: Number(acks),
         },
       });
+
+      reopened = (
+        await reconcileEditionSupplierSteps(
+          tx,
+          current.editionId,
+          current.stepKey ? [current.stepKey as SupplierOnboardingStepKey] : [],
+          session.dbUserId,
+        )
+      ).reopened;
     });
 
+    await notifyReopened(reopened);
     revalidatePath("/suppliers");
+    revalidatePath("/suppliers/signup-management");
   });
 }
 
