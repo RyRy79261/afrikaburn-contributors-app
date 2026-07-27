@@ -9,13 +9,14 @@ engineering and this file wins for process.**
 
 The AfrikaBurn Contributors App ("Quagga Portal" — name still pending the working
 group): a three-app Turborepo serving burners, the AfrikaBurn org, and suppliers.
-Kickoff-driven, spec-first, public repo, MIT.
+Kickoff-driven, spec-first, public repo, **FSL-1.1-ALv2** (Functional Source License,
+converting to Apache 2.0 two years after each release — see `LICENSE`).
 
 ```
 apps/web        participant app   :3000  (teal accent)
 apps/org        organiser console :3001  (apricot — .org-accent)
 apps/suppliers  supplier portal   :3002  (sage — .supplier-accent)
-packages/       @quagga/{ui,db,core,types,eslint-config,typescript-config}
+packages/       @quagga/{auth,ui,db,core,types,eslint-config,typescript-config}
 design/         ab-initial-app.pen (pen.dev canvas) + brand/ + pen-lessons.md
 docs/           specs (law) + sources/ (mirrored corpora: quaggapedia, afrikaburn-org)
 ```

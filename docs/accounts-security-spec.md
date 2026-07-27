@@ -1,80 +1,66 @@
 # Account Management & Security — Feature Spec
 
-*Ryan, 24 Jul 2026. Full account-management suite across all three apps, plus the
-supplier portal's missing sign-up and org-managed supplier documents. Grounded in NIST
-SP 800-63B-4 (Jul 2025) and OWASP auth guidance; implementation rides Better Auth 1.4's
-native plugins (2FA/TOTP, passkeys, password reset, email verification, delete-account).*
+*Ryan, 24 Jul 2026; auth section rewritten 27 Jul 2026 to describe what we actually
+run. Full account-management suite across all three apps, plus the supplier portal's
+sign-up and org-managed supplier documents. Grounded in NIST SP 800-63B-4 (Jul 2025)
+and OWASP auth guidance.*
 
 ---
 
-## ⚠️ Provider capability probe — 25 Jul 2026 (READ FIRST)
+## What we run (READ FIRST)
 
-**This spec was written against stock Better Auth 1.4. We do not run stock Better
-Auth.** We run **managed Neon Auth** ("Managed Better Auth"), which happens to run
-better-auth 1.4.18 internally but where **Neon owns the server configuration and
-does not allow custom Better Auth plugins**. Every plugin-delivered capability in
-the spec above is therefore outside our reach until Neon ships it.
+**Self-hosted Better Auth, pinned to 1.6.25 exactly.** It is configured once in
+`packages/auth` and mounted in-process by each of the three apps at
+`/api/auth/[...all]`, against our own Postgres. The auth tables are ours, owned by
+`packages/db` (migration 0013 brought them in-house; 0015 added the two-factor and
+passkey tables).
+
+**Managed Neon Auth is gone.** Nothing imports `@neondatabase/auth` and no
+`NEON_AUTH_*` variable is read anywhere. Self-hosting is what removed the managed
+provider's fixed-subset limitation, and it is why every capability below is a real
+server call rather than a deferral. The migration and its reasoning are in
+[`auth-platform-spec.md`](auth-platform-spec.md); it has been executed.
+
+`better-auth` must **never** be auto-bumped — it has a track record of high-severity
+auth advisories and we now own the CVE-patch watch (AGENTS.md §3).
+
+### Capability matrix — every one of these is supported
 
 The machine-readable authority is `AUTH_CAPABILITIES` in
 `packages/core/src/auth-capabilities.ts`; `assertCapability()` is the fail-closed
-gate. **Nothing in the codebase may fake an unsupported capability** — a surface
-for an unavailable flow renders an honest "not available yet" state and its action
-refuses; it never silently no-ops and never emits a "your X changed" notification
-for a change that did not happen.
+gate. Every key in it is currently `supported`.
 
-| Capability | Verdict | Where it comes from |
-| --- | --- | --- |
-| Password change | ✅ **supported** | server `changePassword` |
-| Password reset (request + reset) | ✅ **supported** | server `requestPasswordReset`, `resetPassword` |
-| Email verification | ✅ **supported** | server `sendVerificationEmail`, `verifyEmail` |
-| Session list | ✅ **supported** | server `listSessions` |
-| Session revoke (one / others / all) | ✅ **supported** | server `revokeSession`, `revokeSessions`, `revokeOtherSessions` |
-| Linked sign-in methods (list) | ✅ **supported** | server `listAccounts`, `accountInfo` |
-| Account deletion (identity) | ✅ **supported** | server `deleteUser` |
-| **Email change** | ⚠️ **client-only / unverified** | `changeEmail` exists on the browser client, is ABSENT from the server endpoint allowlist, and Better Auth gates it behind a server option we cannot set. Also has no 48h revocation window. |
-| **Unlink sign-in method** | ⚠️ **client-only / unverified** | `unlinkAccount` on the client only; absent server-side |
-| **2FA / TOTP** | ❌ **UNAVAILABLE** | no plugin on a managed instance |
-| **Backup codes** | ❌ **UNAVAILABLE** | ships inside the 2FA plugin |
-| **Passkeys** | ❌ **UNAVAILABLE** | no plugin; not on Neon's roadmap |
+| Capability | Backed by |
+| --- | --- |
+| Password change | `auth.api.changePassword` |
+| Password reset (request + reset) | `auth.api.requestPasswordReset` / `resetPassword`; a reset ends every session |
+| Email verification | `auth.api.sendVerificationEmail` / `verifyEmail` |
+| Session list | `auth.api.listSessions` (database sessions) |
+| Session revoke (one / others / all) | `auth.api.revokeSession` / `revokeSessions` / `revokeOtherSessions` |
+| Linked sign-in methods | `auth.api.listUserAccounts` + `accountInfo` |
+| Unlink sign-in method | `auth.api.unlinkAccount` — our own guard still refuses unlinking the last method |
+| Email change | `auth.api.changeEmail`, with our 48h revocation window and POPIA state machine on top |
+| **2FA / TOTP** | the `twoFactor` plugin (migration 0015) — enable → scan → verify; plugin lockout at 10 fails / 15 min |
+| **Backup codes** | inside the `twoFactor` plugin, stored **encrypted**; ten single-use codes shown once, regenerable |
+| **Passkeys** | `@better-auth/passkey` (migration 0015), `rpID` scoped to the apex so one passkey works across all three apps |
+| Account deletion | ours: 14-day grace + sweeper, which sanitizes app rows **and** hard-deletes the Better Auth identity |
 
-**Evidence** (`@neondatabase/auth` 0.4.1-beta, installed):
+Two things that gate on **delivery**, not on capability: password-reset mail and the
+email-change confirmation both need `RESEND_API_KEY`. Without a mail provider,
+verification is derived OFF and those flows present as honestly unavailable — the
+capability is supported, the delivery is not configured. `/system` in the org console
+reports which of the two is the case.
 
-1. The SDK's `supportedBetterAuthClientPlugins` list is exactly: `anonymous-token`,
-   `better-auth-client`, `admin(-client)`, `organization`, `email-otp`,
-   `magic-link`, `jwt`. **No two-factor. No passkey.**
-2. `grep -ric 'twoFactor|totp|backupCode|passkey|webauthn'` over the SDK's three
-   type-declaration bundles returns **0 for every term**.
-3. The server helper's typed endpoint allowlist (`API_ENDPOINTS`, the source of
-   `NeonAuthServer = Pick<VanillaBetterAuthClient, ServerAuthMethods>`) contains
-   change-password, request/reset-password, send-verification-email, verify-email,
-   list-sessions, revoke-session(s), revoke-all-sessions, update-user, delete-user,
-   list-accounts, account-info — and **not** change-email, link-social, or
-   unlink-account.
-4. `neon.com/docs/auth/guides/plugins`: supported plugins are Admin, Email OTP,
-   JWT, Magic Link, Organization, Open API, Phone Number; "you **don't install or
-   configure Better Auth plugins directly**".
-5. `neon.com/docs/auth/roadmap`: **"MFA support — coming soon."**
-6. `docs/platform-architecture-spec.md` Part 2 already recorded the same boundary
-   from the IdP research.
+**The rule this preserves: nothing in the codebase may fake an unsupported
+capability.** A surface for an unavailable capability renders an honest "not available
+yet" state and its action fails closed — never a silent no-op that looks like success,
+and never a "your X changed" notification for a change that did not happen. Today
+nothing is unavailable, so `assertCapability` is a guard with no live refusals; keep
+it, because the next capability added starts life unsupported.
 
-### Consequences for this spec
-
-- **2FA/TOTP + backup codes are DEFERRED, blocked on the provider**, not on us.
-  The `/account/security` surface ships the seam and the honest unavailable state.
-  When Neon ships MFA: re-run the probe, flip `twoFactor`/`backupCodes` to
-  `supported` in `AUTH_CAPABILITIES`, and build the enrolment flow behind it.
-- **Passkeys** (already phase 2) are likewise provider-blocked.
-- **2FA-as-re-auth for deletion is not available**, so deletion re-auth is
-  password-only.
-- **Email change is OURS.** `email_change_requests` (migration 0011) records the
-  request, the confirmation, and the 48h revocation window — all of which the
-  provider would not give us anyway. The final commit at the identity provider is
-  gated by `assertCapability("emailChange")` and currently **refuses**: the burner
-  is told plainly that the switch isn't live, and no row is marked confirmed. When
-  a server-side `change-email` appears, that one guard flips and the commit lands.
-- **Deletion sanitization is ours regardless.** `deleteUser` removes the identity
-  at Neon; erasing our application rows is the POPIA-relevant step and belongs to
-  `@quagga/core` `buildSanitizationPlan` + `apps/web/lib/account-sanitize.ts`.
+**Passkeys and 2FA are additive, never the only way in.** Password and Google stay
+primary, so a lost authenticator or a lost passkey is never a dead end — recovery is a
+password or a 2FA backup code.
 
 ---
 
@@ -84,13 +70,16 @@ for a change that did not happen.
   rules, no forced rotation, no confirm-twice** — one password field with a
   show-password toggle and paste allowed; length-based strength feedback; breach
   blocklist check on set (haveibeenpwned k-anonymity or local list).
-- **Rate limiting & lockout**: throttle with backoff, lockout after ≤10 consecutive
-  failures; Better Auth's 2FA lockout (5 wrong codes) as shipped.
+- **Rate limiting & lockout**: DB-backed throttling in `@quagga/auth`, raisable for a
+  test deployment via `AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` (never
+  set these on a real deployment); the `twoFactor` plugin's own account lockout at 10
+  failed codes / 15 minutes guards the verify endpoints.
 - **No user enumeration**: sign-in, sign-up, and forgot-password all return generic
   messages ("If that account exists, we've emailed it").
 - **2FA**: TOTP via authenticator apps + one-time backup codes (regenerable, shown
-  once). SMS explicitly excluded (SIM-swap + cost). **Passkeys** are the phase-2
-  upgrade within this suite (plugin ready; synced passkeys = AAL2 per NIST).
+  once, stored encrypted). SMS explicitly excluded (SIM-swap + cost). **Passkeys
+  shipped** alongside it in migration 0015 (synced passkeys = AAL2 per NIST); both are
+  additive to password/Google, never the only way in.
 - **Recovery**: email reset links — single-use, short-lived, enumeration-safe; all
   sessions invalidated on reset; notification sent on completion.
 - **Email change**: confirm via the NEW address, notify the OLD address with a
@@ -107,11 +96,11 @@ for a change that did not happen.
   account with in-flight onboarding warns the org. Org god accounts cannot self-delete
   while they are the only god.
 
-## Surfaces (shared Account section, packaged once in @quagga/ui patterns, mounted in all three apps)
+## Surfaces (built in `apps/web`; the 2FA/passkey pieces are shared from `@quagga/ui`)
 
-- **/account — Manage My Account**: display name, email (change flow per above), linked
+- **/account — Manage My Account**: username, email (change flow per above), linked
   sign-in methods: password (set/change), Google (link/unlink — cannot unlink the last
-  method), passkeys list (phase 2).
+  method), passkeys list.
 - **/account/security — Security**: 2FA setup (QR enrol → verify → backup codes shown
   once → regenerate), active sessions with revoke, recent security events feed.
 - **/account/delete — Delete My Account**: consequences list (what is erased, what is
@@ -213,7 +202,11 @@ doing so, the consent basis is gone.
 **Who may see it** (pure predicate `canViewMedicalNotes` in `@quagga/core`
 `medical-access.ts`, fail-closed):
 - the owner (their own notes);
-- **org staff** (`org_staff` / `god`) — AfrikaBurn's safety/ops tier, any burner;
+- **org staff** (`org_staff` / `god`) — AfrikaBurn's safety/ops tier, any burner.
+  **The `engineer` rank is deliberately NOT in this set** and must never be added: it is
+  the console's IT rank, it holds no care duty that would need the notes, and the org
+  capability matrix (`@quagga/core` `org-permissions`) refuses it personal information
+  unconditionally;
 - a **camp lead/admin** — but only for a member of a camp *they* lead. A lead of
   camp A is refused for a member of camp B (the lead-camp id set must intersect the
   subject's camp ids). Custom project roles do NOT grant it — structural leads only.
@@ -298,9 +291,15 @@ What exists now:
 - **`apps/org/lib/medical-audit.ts`** — `getMedicalAccessLog` (30-day window, actor
   email + subject display name resolved, capped at 500 rows) and `getAuditTrail` (the
   whole trail). Plain, chronological, no derived judgement.
-- **`/audit` in the console** (`guardConsole` → god / org_staff) — the who/whose/when
+- **`/audit` in the console** (`guardConsole` → any org rank) — the who/whose/when
   table and the full activity list. It shows **who looked at whose notes, never the
   notes**; reading the trail is not a disclosure, so it writes no audit row of its own.
+  **The medical panel needs `read_personal_information`**, so an `engineer` is refused it
+  (and `bio.medical.view` rows are filtered out of their general trail too). A row only
+  exists when its subject HAS notes, which makes the list a census of who has disclosed a
+  health condition — the same bulk exposure the member roster refuses to carry. There is
+  no redacted version of that list which is not still that list, so it is withheld whole
+  and the page says so.
 - **Medical reads are excluded from the six-row glance feed** (`FEED_EXCLUDED_ACTIONS`
   in `apps/org/lib/status-board-format.ts`, applied in SQL) — one camp's worth of reads
   would otherwise evict every registration decision from that card. They are not hidden;
@@ -331,20 +330,20 @@ is personal data, so `security_events` is one of the sanitization **purged**
 tables (erased with the account, POPIA erasure). New-device sign-in alerts remain
 unwired (no device-fingerprint record); the active-session list is the check.
 
-## Rollout
+## Rollout — done
 
-1. Design pass (all frames, both accents + supplier sage): supplier sign-up + sign-in,
-   Account/Manage, Account/Security (2FA enrolment states), Account/Delete, forgot
-   password pair, org Supplier sign-up management, supplier Documents panel.
-2. Implementation after design review: Better Auth plugin wiring (2FA server+client,
-   requestPasswordReset, email verification, delete flow with grace job), shared
-   account components, supplier docs schema + UIs, notification emails, tests
-   (enumeration-safety, lockouts, sanitization integrity, sole-lead guard).
-3. Phase 2 (queued, not now): passkeys.
+1. ~~Design pass~~ — frames drawn and reviewed.
+2. ~~Implementation~~ — Better Auth plugin wiring, shared account components, supplier
+   docs schema + UIs, notification emails and the test suite all landed.
+3. ~~Phase 2: passkeys~~ — shipped with 2FA in migration 0015, not deferred.
 
-## Build status (task #8, 25 Jul 2026)
+## Build status (updated 27 Jul 2026)
 
 **Landed — schema + backend + core logic:**
+
+- Migration **0013**: the Better Auth tables, brought in-house off managed Neon Auth.
+- Migration **0015**: `two_factor` + `user.two_factor_enabled` + `passkey`. This is
+  what turned 2FA, backup codes and passkeys from deferred into shipped.
 
 - Migration **0011** (append-only): `supplier_documents`, `supplier_document_acks`,
   `account_deletion_requests`, `email_change_requests`, `suppliers.code`,
@@ -372,20 +371,26 @@ unwired (no device-fingerprint record); the active-session list is the check.
 - `apps/org`: supplier-document CRUD server actions (org-gated, audited) +
   `listSupplierDocuments` with ack counts.
 
-**Open seams (deliberate, documented):**
+**Closed since the 25 Jul snapshot:**
 
-- `/account`, `/account/security`, `/account/delete` **pages** and the shared
-  `@quagga/ui` account patterns await the design pass (rollout step 1). The backend
-  they call is complete; `accountCapabilities()` gives the security page its honest
-  unavailable states.
-- The **org "Supplier sign-up management" console page** likewise awaits design —
-  its CRUD actions are built and gated.
-- **Supplier portal sign-up screen** redesign (spec §"Supplier portal sign-up") is
-  not part of this task.
+- `/account`, `/account/security`, `/account/delete` all ship in `apps/web`
+  (`apps/web/components/account/*`), with the 2FA enrolment, passkey management and
+  2FA sign-in challenge components shared from `@quagga/ui`
+  (`account-two-factor.tsx`, `account-passkeys.tsx`, `account-two-factor-challenge.tsx`).
+- The org **`/suppliers/signup-management`** console page is live.
+- The supplier portal's **`/signup`** and redesigned **`/signin`** both exist.
+- **2FA / backup codes / passkeys** — shipped (migration 0015). No longer blocked on
+  anything.
+
+**Open seams (still true, deliberate):**
+
 - **New-device sign-in notification** builder exists but is not wired: it needs a
   per-account record of seen device fingerprints to avoid firing on every session,
   and that column does not exist yet. It fires on nothing rather than on everything.
-- **2FA / backup codes / passkeys**: provider-blocked, see the probe above.
-- **Mounting the account surfaces in `apps/org` and `apps/suppliers`**: `apps/web` is
-  the reference implementation; the other two mount the same components once the
-  shared UI patterns land.
+- **The account surfaces are only mounted in `apps/web`.** Neither `apps/org` nor
+  `apps/suppliers` has an `/account` route; both carry `/auth/*` only. Since SSO spans
+  the apex, a burner manages their account on the web app and it applies everywhere —
+  but an org-only or supplier-only user currently has no in-app way to change their
+  password or enrol 2FA.
+- **The ID-retention purge job** is unwired: only the pure rule and its tests exist
+  (see §ID document below).

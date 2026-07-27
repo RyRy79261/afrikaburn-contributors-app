@@ -133,7 +133,9 @@ function sectionStatus(reviews: CampSectionReview[]): {
   return {
     label: "Complete",
     variant: "success",
-    icon: <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden />,
+    icon: (
+      <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden />
+    ),
   };
 }
 
@@ -191,8 +193,7 @@ export function RegistrationSummary({
       "—"
     );
 
-  const suppliers =
-    supplierNames.length > 0 ? supplierNames.join(", ") : "—";
+  const suppliers = supplierNames.length > 0 ? supplierNames.join(", ") : "—";
 
   const fieldsBySection: Record<SectionKey, Field[]> = {
     identity: [
@@ -235,8 +236,14 @@ export function RegistrationSummary({
     sound_placement: [
       { label: "Amplified music", value: text(r.s5AmplifiedMusic) },
       { label: "Sound plan", value: text(r.s5SoundPlan), wide: true },
-      { label: "Placement — 1st choice", value: text(r.s5PlacementFirstChoice) },
-      { label: "Placement — 2nd choice", value: text(r.s5PlacementSecondChoice) },
+      {
+        label: "Placement — 1st choice",
+        value: text(r.s5PlacementFirstChoice),
+      },
+      {
+        label: "Placement — 2nd choice",
+        value: text(r.s5PlacementSecondChoice),
+      },
       { label: "Neighbour request", value: text(r.s5NeighbourRequest) },
       { label: "Family-friendly?", value: text(r.s5FamilyFriendly) },
     ],

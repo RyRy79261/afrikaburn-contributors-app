@@ -29,8 +29,8 @@
 //      predicate turns THAT test red. The cases and their guarding predicate test
 //      (all verified present, all in the `turbo run test` gate):
 //        - god is granted ONLY for a VERIFIED GOD_EMAILS address — the root of the
-//          escalation ceiling; setOrgStaffRole is then god-only at the action layer
-//          (requireOrgSession({god:true})).
+//          escalation ceiling; setOrgStaffRole is then System-manager-only at the
+//          action layer (requireOrgSession({ capability: "manage_accounts" })).
 //          ......... packages/core/src/__tests__/god-emails.test.ts
 //        - a camp cannot rename/recolour/delete an OFFICER role
 //          (canRenameRoleKind/canDeleteRoleKind("officer") === false).
@@ -49,6 +49,17 @@
 //     an ACCEPTED officer registration.
 //   - Structural roles (lead/admin) hold every project permission irrevocably.
 //   - God is granted ONLY via GOD_EMAILS + a VERIFIED email; never self-service.
+//   - ORG CONSOLE RANKS carry different capabilities (@quagga/core
+//     `org-permissions`, the single matrix the gate AND the UI read):
+//     engineer reads everywhere but receives NO personal information and cannot
+//     delete; org_staff is the operator tier; god — presented throughout as
+//     "System manager" — holds everything, including camp-category CRUD and
+//     access management. No rank below god can mint an org rank.
+//     THE RANKS ARE NOT A LADDER: `/system` (the deployment's configuration and
+//     health) is held by engineer and System manager and REFUSED to org_staff,
+//     while personal information and deletion go the other way. A spec that
+//     assumed org_staff outranks engineer in every direction would be asserting
+//     the wrong law.
 //   - Suppliers never see org-internal supplier notes.
 
 import type { AppName } from "../lib/env";
@@ -61,8 +72,9 @@ export type PersonaKind =
   | "camp_member" // burner who joined a camp via invite (no privileges granted)
   | "other_camp_lead" // lead of a DIFFERENT camp (cross-tenant isolation)
   | "supplier" // supplier-portal account
+  | "engineer" // org account at the ENGINEER rank (IT: reads all, no PII, no delete)
   | "org_staff" // org account WITHOUT god (elevated to org_staff, not god)
-  | "god"; // GOD_EMAILS + verified — full org console
+  | "god"; // GOD_EMAILS + verified — full org console (presented as "System manager")
 
 /** A capability the persona either HAS (allowed) or MUST BE REFUSED (forbidden). */
 export interface Capability {
@@ -144,8 +156,39 @@ const C = {
   reachGodOnlySurface: {
     id: "reach-god-only-surface",
     app: "org",
-    action: "reach a god-only surface (e.g. accounts role management)",
-    refusalHint: "requireOrgSession({ god: true }) throws for org_staff",
+    action: "reach a system-manager-only surface (e.g. accounts role management)",
+    refusalHint:
+      'requireOrgSession({ capability: "manage_accounts" }) throws for every rank below god',
+  },
+  manageCampCategories: {
+    id: "manage-camp-categories",
+    app: "org",
+    action: "create / rename / delete a camp category",
+    refusalHint:
+      'requireOrgSession({ capability: "manage_camp_categories" }) — System manager only (Ryan, 27 Jul 2026); the page renders the catalog read-only with the reason stated',
+  },
+  reachSystemPanel: {
+    id: "reach-system-panel",
+    app: "org",
+    action:
+      "open /system — the deployment's configuration, health and org-access roster",
+    refusalHint:
+      'the page resolves orgCan(actor, "read_system") BEFORE it queries and renders the refusal instead; org_staff is the ONLY rank refused, which is what proves the ranks are jobs rather than tiers',
+  },
+  readPersonalInformation: {
+    id: "read-personal-information",
+    app: "org",
+    action:
+      "receive a person's email / phone / emergency contact / ID / medical notes in a console payload",
+    refusalHint:
+      "the QUERY resolves canReadPersonalInformation BEFORE the select, so the column is never in the row — not merely unrendered",
+  },
+  deleteOrgRecord: {
+    id: "delete-org-record",
+    app: "org",
+    action: "delete a supplier / supplier document / camp category",
+    refusalHint:
+      'requireOrgSession({ capability: "delete" }) throws for an engineer, with an honest message',
   },
   createCamp: { id: "create-camp", app: "web", action: "create a camp" },
   registerOwnCamp: {
@@ -241,18 +284,46 @@ export const PERSONAS: Record<PersonaKind, PersonaSpec> = {
     allowed: [C.onboardSupplier],
     forbidden: [C.seeOrgSupplierNotes, C.reachOrgConsole, C.reviewRegistration],
   },
+  engineer: {
+    kind: "engineer",
+    summary:
+      "Org account at the ENGINEER rank — IT. Reads everywhere (Ryan: 'has " +
+      "access everywhere'), sees NO personal information, deletes nothing. " +
+      "Capability matrix: @quagga/core org-permissions.",
+    allowed: [C.reachOrgConsole, C.reviewRegistration, C.reachSystemPanel],
+    forbidden: [
+      C.readPersonalInformation,
+      C.deleteOrgRecord,
+      C.manageCampCategories,
+      C.reachGodOnlySurface,
+    ],
+  },
   org_staff: {
     kind: "org_staff",
     summary:
-      "Org account WITHOUT god. Can review; cannot reach god-only surfaces.",
-    allowed: [C.reachOrgConsole, C.reviewRegistration],
-    forbidden: [C.reachGodOnlySurface],
+      "Org account WITHOUT god. Reviews registrations, sees members' details, " +
+      "deletes stray catalogue rows; cannot manage access or the category taxonomy. " +
+      "Note it is NOT a superset of engineer: the System panel is IT's, not theirs.",
+    allowed: [C.reachOrgConsole, C.reviewRegistration, C.deleteOrgRecord],
+    forbidden: [
+      C.reachGodOnlySurface,
+      C.manageCampCategories,
+      C.reachSystemPanel,
+    ],
   },
   god: {
     kind: "god",
     summary:
-      "GOD_EMAILS + verified email. Full org console incl. role management.",
-    allowed: [C.reachOrgConsole, C.reviewRegistration, C.reachGodOnlySurface],
+      "GOD_EMAILS + verified email — the System manager. Nothing is off " +
+      "limits; the audit log is what keeps the rank honest.",
+    allowed: [
+      C.reachOrgConsole,
+      C.reviewRegistration,
+      C.reachGodOnlySurface,
+      C.deleteOrgRecord,
+      C.manageCampCategories,
+      C.reachSystemPanel,
+    ],
     forbidden: [],
   },
 };

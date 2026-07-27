@@ -10,11 +10,17 @@ import { PrivacyToggles } from "./privacy-toggles";
 interface PrivacyFormProps {
   fields: readonly BioPrivacyField[];
   initialFlags: Record<string, boolean>;
-  action: (flags: Record<string, boolean>) => Promise<{ ok: boolean; error?: string }>;
+  action: (
+    flags: Record<string, boolean>,
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 /** Editable privacy toggles with an explicit Save (build-spec §`/profile`). */
-export function PrivacyForm({ fields, initialFlags, action }: PrivacyFormProps) {
+export function PrivacyForm({
+  fields,
+  initialFlags,
+  action,
+}: PrivacyFormProps) {
   const router = useRouter();
   const [flags, setFlags] = React.useState(initialFlags);
   const [isPending, startTransition] = React.useTransition();

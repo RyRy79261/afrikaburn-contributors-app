@@ -27,8 +27,8 @@ export function LayoutUploads({
           Layout sketches / plans
         </p>
         <p className="text-xs text-muted-foreground">
-          Up to {MAX_LAYOUT_UPLOADS} images of your camp layout. Optional, but it
-          helps placement.
+          Up to {MAX_LAYOUT_UPLOADS} images of your camp layout. Optional, but
+          it helps placement.
         </p>
       </div>
 

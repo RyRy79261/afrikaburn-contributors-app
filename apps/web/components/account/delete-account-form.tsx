@@ -98,20 +98,35 @@ export function DeleteAccountForm({ blocked }: { blocked: boolean }) {
 /** Cancel a running grace period from the page (signing in also cancels it). */
 export function CancelDeletionButton() {
   const router = useRouter();
-  const [pending, startTransition] = React.useTransition();
+  const [cancelling, startCancel] = React.useTransition();
+  // A SECOND transition, for the refresh alone. `router.refresh()` returns void
+  // and only keeps a transition pending when it is called SYNCHRONOUSLY inside
+  // one — called after an `await`, the original transition has already exited,
+  // so the button went back to "Keep my account" and the toast appeared while
+  // the grace banner was still on screen. That reads as a failed cancel on the
+  // one screen where a person is already anxious about losing their account,
+  // and it is what makes the e2e spec race the server.
+  const [refreshing, startRefresh] = React.useTransition();
 
-  function cancel() {
-    startTransition(async () => {
-      const result = await cancelAccountDeletion();
-      if (result.ok) {
-        toast.success(result.message ?? "Cancelled — nothing was erased.");
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
+  async function cancel() {
+    const result = await new Promise<Awaited<
+      ReturnType<typeof cancelAccountDeletion>
+    >>((resolve) => {
+      startCancel(async () => resolve(await cancelAccountDeletion()));
     });
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(result.message ?? "Cancelled — nothing was erased.");
+    // Synchronous inside the transition: `pending` now stays true until the
+    // fresh server render has actually arrived, so the control is only ever
+    // idle when the screen matches the database.
+    startRefresh(() => router.refresh());
   }
 
+  const pending = cancelling || refreshing;
   return (
     <Button onClick={cancel} disabled={pending}>
       {pending ? "Cancelling…" : "Keep my account"}

@@ -8,6 +8,7 @@ import {
   buildBulletinNotifications,
   canActivateAudience,
   resolveBulletinAudience,
+  ORG_RANK_LABELS,
   type AuthzMembership,
 } from "@quagga/core";
 import { BulletinComposeInput } from "@quagga/types";
@@ -20,10 +21,15 @@ import { insertNotifications } from "@/lib/notifications";
 import { buildAudienceContext } from "@/lib/questionnaires/queries";
 import { runAction, type ActionResult } from "./result";
 
-// Bulletin CRUD — org staff only (requireOrgSession gates to god/org_staff; the
-// audience authz predicate double-checks server-side). Bulletins are broadcasts
-// to an org audience; project audiences are rejected (those are camp-scoped
-// questionnaires, not org bulletins). Informational only — no data collection.
+// Bulletin CRUD. Two server-side gates, both of which must pass: the console
+// capability (`write`) and the core audience predicate `canActivateAudience`,
+// which admits only org AUTHORS (god / org_staff). That second gate is what
+// keeps an ENGINEER out of broadcasting: an engineer holds `write` for console
+// operations, but announcing things to burners in AfrikaBurn's name is not IT
+// work and the authoring predicate never listed the rank. Bulletins are
+// broadcasts to an org audience; project audiences are rejected (those are
+// camp-scoped questionnaires, not org bulletins). Informational only — no data
+// collection.
 
 function authzMemberships(session: OrgSession): AuthzMembership[] {
   return [{ groupId: session.orgGroupId, role: session.role }];
@@ -35,10 +41,22 @@ function assertOrgAudience(session: OrgSession, input: BulletinComposeInput) {
     throw new Error("Bulletins broadcast to org audiences, not a single camp.");
   }
   if (
-    !canActivateAudience(authzMemberships(session), input.audience, session.orgGroupId)
+    !canActivateAudience(
+      authzMemberships(session),
+      input.audience,
+      session.orgGroupId,
+    )
   ) {
-    throw new Error("You are not allowed to broadcast to that audience.");
+    throw new Error(broadcastRefusal(session));
   }
+}
+
+/** The refusal an actor gets for a broadcast, named to their rank so it reads
+ * as a rule rather than a glitch. */
+function broadcastRefusal(session: OrgSession): string {
+  return session.role === "engineer"
+    ? `${ORG_RANK_LABELS.engineer} accounts don't broadcast to burners in AfrikaBurn's name — ask org staff to send it.`
+    : "You are not allowed to broadcast to that audience.";
 }
 
 const SaveInput = BulletinComposeInput.extend({
@@ -46,8 +64,7 @@ const SaveInput = BulletinComposeInput.extend({
 });
 
 export type SaveBulletinResult =
-  | { ok: true; id: string }
-  | { ok: false; error: string };
+  { ok: true; id: string } | { ok: false; error: string };
 
 /**
  * Create or update a bulletin. `publish: true` stamps `published_at` and fans
@@ -59,12 +76,13 @@ export async function saveBulletin(
   raw: z.input<typeof SaveInput>,
 ): Promise<SaveBulletinResult> {
   try {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = SaveInput.parse(raw);
     assertOrgAudience(session, input);
 
     const edition = await getActiveEdition();
-    if (!edition) throw new Error("No active edition to attach the bulletin to.");
+    if (!edition)
+      throw new Error("No active edition to attach the bulletin to.");
 
     const now = new Date();
 
@@ -99,7 +117,14 @@ export async function saveBulletin(
           .where(eq(schema.bulletins.id, input.id!));
 
         if (input.publish && !alreadyPublished) {
-          await fanOut(tx, input.id!, input.title, input.audience, edition.id, session);
+          await fanOut(
+            tx,
+            input.id!,
+            input.title,
+            input.audience,
+            edition.id,
+            session,
+          );
         }
 
         await writeAuditEvent(tx, {
@@ -134,7 +159,14 @@ export async function saveBulletin(
       if (!created) throw new Error("Could not create the bulletin.");
 
       if (input.publish) {
-        await fanOut(tx, created.id, input.title, input.audience, edition.id, session);
+        await fanOut(
+          tx,
+          created.id,
+          input.title,
+          input.audience,
+          edition.id,
+          session,
+        );
       }
 
       await writeAuditEvent(tx, {
@@ -151,7 +183,8 @@ export async function saveBulletin(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not save the bulletin.",
+      error:
+        err instanceof Error ? err.message : "Could not save the bulletin.",
     };
   }
 }
@@ -173,12 +206,12 @@ async function fanOut(
 
 const PublishInput = z.object({ id: z.string().uuid() });
 
-/** Publish an existing draft bulletin (fan-out). Org staff only. */
+/** Publish an existing draft bulletin (fan-out). Org authors only. */
 export async function publishBulletin(
   raw: z.input<typeof PublishInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = PublishInput.parse(raw);
 
     // Guard read, publish stamp, fan-out and audit are one atomic unit.
@@ -195,9 +228,13 @@ export async function publishBulletin(
       // Re-check the stored audience is one this actor may broadcast to.
       if (
         bulletin.audience.kind === "project" ||
-        !canActivateAudience(authzMemberships(session), bulletin.audience, session.orgGroupId)
+        !canActivateAudience(
+          authzMemberships(session),
+          bulletin.audience,
+          session.orgGroupId,
+        )
       ) {
-        throw new Error("You are not allowed to broadcast to that audience.");
+        throw new Error(broadcastRefusal(session));
       }
 
       const now = new Date();
@@ -206,7 +243,14 @@ export async function publishBulletin(
         .set({ publishedAt: now, updatedAt: now })
         .where(eq(schema.bulletins.id, input.id));
 
-      await fanOut(tx, bulletin.id, bulletin.title, bulletin.audience, bulletin.editionId, session);
+      await fanOut(
+        tx,
+        bulletin.id,
+        bulletin.title,
+        bulletin.audience,
+        bulletin.editionId,
+        session,
+      );
 
       await writeAuditEvent(tx, {
         actorId: session.dbUserId,
@@ -222,12 +266,12 @@ export async function publishBulletin(
 
 const SetPinnedInput = z.object({ id: z.string().uuid(), pinned: z.boolean() });
 
-/** Toggle a bulletin's pinned state. Org staff only. */
+/** Toggle a bulletin's pinned state. Needs `write`. */
 export async function setBulletinPinned(
   raw: z.input<typeof SetPinnedInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = SetPinnedInput.parse(raw);
     // Pin toggle + audit are one atomic unit.
     await withTransaction(async (tx) => {

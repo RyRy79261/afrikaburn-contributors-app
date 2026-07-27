@@ -288,7 +288,10 @@ function RegistrationStepForm({ profile }: { profile: SupplierProfile }) {
   return (
     <div className="flex flex-col gap-3">
       <FormField label="Business name" required>
-        <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
+        <Input
+          value={form.name}
+          onChange={(e) => set("name", e.target.value)}
+        />
       </FormField>
       <FormField label="Services">
         <Textarea
@@ -426,7 +429,11 @@ function InventoryStep({ step }: { step: StepData }) {
           size="sm"
           disabled={pending}
           onClick={() =>
-            run(step.key, "awaiting_confirmation", "Inventory submitted for review.")
+            run(
+              step.key,
+              "awaiting_confirmation",
+              "Inventory submitted for review.",
+            )
           }
         >
           {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -445,7 +452,9 @@ interface CrewRow {
 
 function CrewStep({ step }: { step: StepData }) {
   const { pending, run } = useStepTransition();
-  const [rows, setRows] = useState<CrewRow[]>([{ id: 1, name: "", idNumber: "" }]);
+  const [rows, setRows] = useState<CrewRow[]>([
+    { id: 1, name: "", idNumber: "" },
+  ]);
 
   if (step.model.status === "awaiting_confirmation") {
     return (
@@ -476,7 +485,10 @@ function CrewStep({ step }: { step: StepData }) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
   }
   function addRow() {
-    setRows((rs) => [...rs, { id: (rs.at(-1)?.id ?? 0) + 1, name: "", idNumber: "" }]);
+    setRows((rs) => [
+      ...rs,
+      { id: (rs.at(-1)?.id ?? 0) + 1, name: "", idNumber: "" },
+    ]);
   }
   function removeRow(id: number) {
     setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.id !== id) : rs));
@@ -527,7 +539,11 @@ function CrewStep({ step }: { step: StepData }) {
           size="sm"
           disabled={pending}
           onClick={() =>
-            run(step.key, "awaiting_confirmation", "Crew details submitted for review.")
+            run(
+              step.key,
+              "awaiting_confirmation",
+              "Crew details submitted for review.",
+            )
           }
         >
           {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}

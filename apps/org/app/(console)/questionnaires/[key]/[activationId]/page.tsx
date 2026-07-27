@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { aggregateResponses, canViewActivationResults } from "@quagga/core";
+import { ArrowLeft, Lock } from "lucide-react";
+import {
+  aggregateResponses,
+  canViewActivationResults,
+  orgCapabilityRefusal,
+} from "@quagga/core";
 import { flattenQuestions } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -16,6 +20,7 @@ import {
 } from "@/components/questionnaires/results-view";
 import { formatDate } from "@/lib/labels";
 import {
+  canReadActivationResults,
   getActivationResults,
   getOrgActivation,
 } from "@/lib/questionnaires/queries";
@@ -43,9 +48,40 @@ export default async function ActivationResultsPage({
   );
   if (!canView) notFound();
 
+  // Personal-information boundary, separate from the scope one above. Results
+  // are named people's answers — a respondent list is a list of email addresses,
+  // and free-text answers carry whatever the respondent wrote about themselves —
+  // so a rank that may not read personal information is REFUSED here, honestly,
+  // rather than 404'd or shown a table with the names filed off. The query
+  // itself never runs.
+  if (!canReadActivationResults(session.actor)) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <PageHeading
+          eyebrow="Questionnaires / Results"
+          title={activation.title}
+          description={activation.description ?? undefined}
+        />
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-6">
+            <p className="flex items-start gap-2 text-sm font-medium">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              {orgCapabilityRefusal(session.actor, "read_personal_information")}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Responses are people&apos;s answers under their own names, so the
+              whole results table sits behind that line — including the export.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const results = await getActivationResults(
     activation.id,
     activation.questionnaireKey,
+    session.actor,
   );
 
   const completed = results.filter((r) => r.status === "completed").length;

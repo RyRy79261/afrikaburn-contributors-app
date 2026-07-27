@@ -207,8 +207,7 @@ export async function getInvitePreview(
 }
 
 export type RedeemResult =
-  | { ok: true; slug: string }
-  | { ok: false; error: string };
+  { ok: true; slug: string } | { ok: false; error: string };
 
 /**
  * Redeem a one-time invite for a user. Single-use is enforced twice: the pure

@@ -50,7 +50,10 @@ export default async function SupplierSignupManagementPage() {
               <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 Edition
               </span>
-              <Badge variant="outline" className="gap-1.5 py-1 text-sm normal-case">
+              <Badge
+                variant="outline"
+                className="gap-1.5 py-1 text-sm normal-case"
+              >
                 <CalendarRange className="h-3.5 w-3.5" aria-hidden />
                 {edition.name}
               </Badge>

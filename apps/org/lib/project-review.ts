@@ -65,7 +65,10 @@ export function officersCopy(kind: string): OfficersCopy {
 /** The three DMV acknowledgements, short labels (full text lives on the web
  * form / DMV corpus; the console only needs a glanceable summary). */
 export const VEHICLE_ACK_LABELS: readonly { key: string; label: string }[] = [
-  { key: "speed_limit", label: "10 km/h speed limit & pedestrian right of way" },
+  {
+    key: "speed_limit",
+    label: "10 km/h speed limit & pedestrian right of way",
+  },
   {
     key: "testing_station",
     label: "On-site licensing at the DMV Testing Station",
@@ -106,7 +109,9 @@ export function answerStringArray(
   key: string,
 ): string[] {
   const v = answers?.[key];
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string")
+    : [];
 }
 
 // --- Section model -------------------------------------------------------

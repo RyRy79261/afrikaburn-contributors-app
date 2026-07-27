@@ -31,12 +31,12 @@ const SetStandingInput = z.object({
   standing: SupplierStanding,
 });
 
-/** Set a supplier's standing (good/watch/suspended). Any org role. Audited. */
+/** Set a supplier's standing (good/watch/suspended). Needs `write`. Audited. */
 export async function setSupplierStanding(
   raw: z.input<typeof SetStandingInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = SetStandingInput.parse(raw);
 
     const db = getDb();
@@ -99,13 +99,13 @@ const SetStepInput = z.object({
  * Org-side onboarding step move: confirm/revoke the org-confirmed steps
  * (deposit / briefing / fee) and review-mark the org-reviewed steps
  * (inventory / crew). Runs the @quagga/core transition rules with the org
- * actor, upserts the per-edition onboarding row, and audits. Any org role.
+ * actor, upserts the per-edition onboarding row, and audits. Needs `write`.
  */
 export async function setSupplierOnboardingStep(
   raw: z.input<typeof SetStepInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = SetStepInput.parse(raw);
 
     const db = getDb();
@@ -197,12 +197,12 @@ const AddNoteInput = z.object({
   body: z.string().trim().min(1, "A note body is required.").max(2000),
 });
 
-/** Add an org-internal note (infraction/blessing/note). Any org role. Audited. */
+/** Add an org-internal note (infraction/blessing/note). Needs `write`. Audited. */
 export async function addSupplierNote(
   raw: z.input<typeof AddNoteInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = AddNoteInput.parse(raw);
 
     // Existence check, note insert and audit are one atomic unit.
@@ -239,24 +239,25 @@ export async function addSupplierNote(
 const FetchNotesInput = z.object({ supplierId: z.string().uuid() });
 
 export type FetchNotesResult =
-  | { ok: true; notes: SupplierNoteRow[] }
-  | { ok: false; error: string };
+  { ok: true; notes: SupplierNoteRow[] } | { ok: false; error: string };
 
 /**
- * Load a supplier's notes timeline for the drawer. Data-returning action, so
- * it re-checks authz (org role) itself rather than relying on the page gate.
+ * Load a supplier's notes timeline for the drawer. Data-returning action, so it
+ * re-checks authz itself rather than relying on the page gate — and passes the
+ * resolved actor down, so the note AUTHORS' emails are omitted for a rank that
+ * may not read personal information. A client-supplied actor would be no gate
+ * at all; this one comes from the session.
  */
 export async function fetchSupplierNotes(
   raw: z.input<typeof FetchNotesInput>,
 ): Promise<FetchNotesResult> {
   try {
-    await requireOrgSession();
+    const session = await requireOrgSession({ capability: "read" });
     const input = FetchNotesInput.parse(raw);
-    const notes = await getSupplierNotes(input.supplierId);
+    const notes = await getSupplierNotes(input.supplierId, session.actor);
     return { ok: true, notes };
   } catch (err) {
-    const error =
-      err instanceof Error ? err.message : "Could not load notes.";
+    const error = err instanceof Error ? err.message : "Could not load notes.";
     return { ok: false, error };
   }
 }
@@ -268,12 +269,12 @@ const AddSupplierInput = z.object({
   website: z.string().trim().max(300).optional(),
 });
 
-/** Hand-add a supplier. Standing defaults to `good`. Any org role. Audited. */
+/** Hand-add a supplier. Standing defaults to `good`. Needs `write`. Audited. */
 export async function addSupplier(
   raw: z.input<typeof AddSupplierInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = AddSupplierInput.parse(raw);
 
     // Supplier insert and audit are one atomic unit.
@@ -321,12 +322,16 @@ const DeleteSupplierInput = z.object({ supplierId: z.string().uuid() });
  *
  * Anything else is an unclaimed, undeclared catalogue entry: safe to delete, and
  * its onboarding row goes with it. Audited either way.
+ *
+ * Needs the `delete` capability, so an engineer is refused here with an honest
+ * message rather than merely losing the button — this is the destructive kind of
+ * action their rank exists without.
  */
 export async function deleteSupplier(
   raw: z.input<typeof DeleteSupplierInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "delete" });
     const { supplierId } = DeleteSupplierInput.parse(raw);
     const db = getDb();
 
@@ -365,7 +370,9 @@ export async function deleteSupplier(
     // Delete and audit atomically. The audit row records the NAME, because after
     // this commit the id resolves to nothing and a bare id is unreadable later.
     await withTransaction(async (tx) => {
-      await tx.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
+      await tx
+        .delete(schema.suppliers)
+        .where(eq(schema.suppliers.id, supplierId));
       await writeAuditEvent(tx, {
         actorId: session.dbUserId,
         action: "supplier.delete",

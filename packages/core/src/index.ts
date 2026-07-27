@@ -24,6 +24,10 @@
 //     canBePublic, isHardLockedPrivate/isSafetyVisibleField (./privacy)
 //   - medical access: canViewMedicalNotes, medicalAccessBasis, isOrgStaffRole,
 //     MEDICAL_VIEW_AUDIT_ACTION (./medical-access)
+//   - ORG CONSOLE PERMISSION LEVELS — the one matrix the gate AND the UI read:
+//     ORG_RANKS (engineer/org_staff/god), ORG_RANK_LABELS (god renders as
+//     "System manager"), orgCan, canReadPersonalInformation,
+//     orgCapabilityRefusal, normalizeDepartment (./org-permissions)
 //   - medical audit READ side (the fail-open path's compensating control):
 //     summarizeMedicalAccess, detectMedicalEnumeration — distinct-subject
 //   - payment references: generatePaymentReference, deriveSubjectCode
@@ -125,6 +129,7 @@ export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
 export * from "./medical-access";
+export * from "./org-permissions";
 export * from "./payment-reference";
 export * from "./member-ref-code";
 export * from "./bio";

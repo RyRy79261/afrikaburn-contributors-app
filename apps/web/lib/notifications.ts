@@ -64,7 +64,8 @@ export async function listNotificationGroups(
 
   const conds = [eq(schema.notifications.userId, user.id)];
   if (filter === "unread") conds.push(isNull(schema.notifications.readAt));
-  if (filter === "bulletins") conds.push(eq(schema.notifications.kind, "bulletin"));
+  if (filter === "bulletins")
+    conds.push(eq(schema.notifications.kind, "bulletin"));
 
   const rows = await db()
     .select()

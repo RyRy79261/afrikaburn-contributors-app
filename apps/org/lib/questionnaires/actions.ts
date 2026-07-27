@@ -8,6 +8,7 @@ import {
   canActivateAudience,
   canAuthorAudience,
   completeRequiredAction as completeRequiredActionPatch,
+  ORG_RANK_LABELS,
   questionnaireReleasedNotification,
   resolveActivationDefinition,
   resolveAudience,
@@ -36,9 +37,25 @@ import { runAction, type ActionResult } from "@/lib/actions/result";
 import { inArray } from "drizzle-orm";
 
 /** The console actor's memberships for the core authz predicates: a single org
- * membership carrying their org role. Custom roles are never permissions. */
+ * membership carrying their org rank. Custom roles are never permissions. */
 function authzMemberships(session: OrgSession): AuthzMembership[] {
   return [{ groupId: session.orgGroupId, role: session.role }];
+}
+
+/**
+ * The refusal an actor gets from the AUTHORING gate, named to their rank.
+ *
+ * `canAuthorAudience` admits org authors only (god / org_staff), which is what
+ * keeps an ENGINEER out of questionnaires: the rank holds `write` for console
+ * operations, but authoring and sending questionnaires to burners in
+ * AfrikaBurn's name is not IT work, and their answers are personal information
+ * the rank may not read in the first place — sending a form whose replies you
+ * are not allowed to open is not a permission worth having.
+ */
+function authoringRefusal(session: OrgSession, verb: string): string {
+  return session.role === "engineer"
+    ? `${ORG_RANK_LABELS.engineer} accounts don't ${verb} questionnaires — their answers are personal information. Ask org staff.`
+    : `You are not allowed to ${verb} that questionnaire.`;
 }
 
 /** Slugify a title into a stable, org-namespaced definition key candidate. */
@@ -87,8 +104,7 @@ function normalizeDefinition(
 }
 
 export type SaveDefinitionResult =
-  | { ok: true; key: string }
-  | { ok: false; error: string };
+  { ok: true; key: string } | { ok: false; error: string };
 
 /**
  * Create or update an org questionnaire definition. Org authors only (server-
@@ -99,12 +115,18 @@ export async function saveQuestionnaireDefinition(
   raw: z.input<typeof QuestionnaireBuilderInput>,
 ): Promise<SaveDefinitionResult> {
   try {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = QuestionnaireBuilderInput.parse(raw);
 
     // Author gate: org_internal spec stands in for "org author" here.
-    if (!canAuthorAudience(authzMemberships(session), { kind: "org_internal" }, session.orgGroupId)) {
-      throw new Error("You are not allowed to author org questionnaires.");
+    if (
+      !canAuthorAudience(
+        authzMemberships(session),
+        { kind: "org_internal" },
+        session.orgGroupId,
+      )
+    ) {
+      throw new Error(authoringRefusal(session, "author"));
     }
 
     if (input.key) {
@@ -200,8 +222,7 @@ const PreviewInput = z.object({
 });
 
 export type PreviewResult =
-  | { ok: true; count: number }
-  | { ok: false; error: string };
+  { ok: true; count: number } | { ok: false; error: string };
 
 /**
  * LIVE resolved-audience count for the activation flow: authz-check the actor,
@@ -212,11 +233,13 @@ export async function previewAudienceCount(
   raw: z.input<typeof PreviewInput>,
 ): Promise<PreviewResult> {
   try {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = PreviewInput.parse(raw);
 
     if (input.audience.kind === "project") {
-      throw new Error("Project audiences are authored from the camp dashboard.");
+      throw new Error(
+        "Project audiences are authored from the camp dashboard.",
+      );
     }
     if (
       !canActivateAudience(
@@ -225,7 +248,7 @@ export async function previewAudienceCount(
         session.orgGroupId,
       )
     ) {
-      throw new Error("You are not allowed to target that audience.");
+      throw new Error(authoringRefusal(session, "send"));
     }
 
     const ctx = await buildAudienceContext(input.editionId, session.orgGroupId);
@@ -249,11 +272,13 @@ export async function activateQuestionnaire(
   raw: z.input<typeof QuestionnaireActivationInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = QuestionnaireActivationInput.parse(raw);
 
     if (input.audience.kind === "project") {
-      throw new Error("Project audiences are authored from the camp dashboard.");
+      throw new Error(
+        "Project audiences are authored from the camp dashboard.",
+      );
     }
     if (
       !canActivateAudience(
@@ -262,7 +287,7 @@ export async function activateQuestionnaire(
         session.orgGroupId,
       )
     ) {
-      throw new Error("You are not allowed to send to that audience.");
+      throw new Error(authoringRefusal(session, "send"));
     }
 
     const db = getDb();
@@ -386,7 +411,11 @@ export async function activateQuestionnaire(
           db,
           userIds.map((userId) => ({ ...payload, userId })),
         );
-        if (shouldSendImmediateEmail("questionnaire", { blocking: input.blocking })) {
+        if (
+          shouldSendImmediateEmail("questionnaire", {
+            blocking: input.blocking,
+          })
+        ) {
           const recipients = await db
             .select({ email: schema.users.email })
             .from(schema.users)
@@ -419,13 +448,15 @@ export async function closeActivation(
   raw: z.input<typeof CloseInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = CloseInput.parse(raw);
 
     // Scope check, close and audit are one atomic unit.
     await withTransaction(async (tx) => {
       const [a] = await tx
-        .select({ authoredScope: schema.questionnaireActivations.authoredScope })
+        .select({
+          authoredScope: schema.questionnaireActivations.authoredScope,
+        })
         .from(schema.questionnaireActivations)
         .where(eq(schema.questionnaireActivations.id, input.activationId))
         .limit(1);
@@ -460,6 +491,8 @@ export async function submitConsoleQuestionnaire(
   rawResponses: unknown,
 ): Promise<SaveResult> {
   try {
+    // Answering YOUR OWN blocking questionnaire is not an authoring act — every
+    // rank must be able to clear their own console gate.
     const session = await requireOrgSession();
     const parsedId = z.string().uuid().safeParse(activationId);
     if (!parsedId.success) {

@@ -107,7 +107,7 @@ export async function decideRegistration(
   raw: z.input<typeof DecideInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = DecideInput.parse(raw);
 
     const reason = input.reason?.trim() ?? "";
@@ -208,7 +208,7 @@ export async function addSectionReview(
   raw: z.input<typeof AddReviewInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const input = AddReviewInput.parse(raw);
 
     // Insert + audit are one atomic unit.
@@ -244,7 +244,7 @@ export async function setSectionReviewStatus(
   raw: z.input<typeof SetReviewStatusInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    await requireOrgSession();
+    await requireOrgSession({ capability: "write" });
     const input = SetReviewStatusInput.parse(raw);
 
     const db = getDb();

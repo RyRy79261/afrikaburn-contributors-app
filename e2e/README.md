@@ -1,13 +1,33 @@
 # @quagga/e2e — Playwright end-to-end harness
 
-The shared harness for the three Quagga Portal apps. **Every persona agent depends
-on this API.** Import from here; do not re-implement sign-up/onboarding/etc. Tests
-drive the **real UI** against a **deployed** app (preview / localhost / prod) — no
-database back doors for setup (roadmap M3-16). Nothing here has been run yet: there
-is no deployed DB (roadmap §0). It is written correct-by-construction against
-selectors verified in source on 2026-07-26.
+The shared harness for the three Quagga Portal apps: **153 tests across 56 spec files
+and 8 personas** (`anon`, `new-burner`, `camp-member`, `camp-lead`, `officer`,
+`org-staff`, `god`, `supplier`). **Every persona agent depends on this API.** Import
+from here; do not re-implement sign-up/onboarding/etc. Tests drive the **real UI**
+against a running deployment (local / preview / prod) — no database back doors for
+setup.
+
+**This suite has been run, and it finds things the unit gate cannot.** `turbo run
+lint typecheck test build` lints and typechecks this package but **executes no
+Playwright**, so nothing here proves anything until it is run deliberately. The
+sign-up dead-end — a live session sitting behind a "check your inbox" message that no
+deployment without a mail provider could ever satisfy — passed lint, typecheck, unit
+tests and build, and died on first contact with a browser.
 
 ## Running
+
+The normal way, from a cold machine — brings up Postgres and the two Neon proxies,
+migrates, seeds, boots all three apps, then runs the suite:
+
+```bash
+pnpm e2e:local                      # whole suite (desktop-chromium, 2 workers)
+pnpm e2e:local specs/new-burner     # one persona
+E2E_RESET_DB=1 pnpm e2e:local       # wipe the local DB first
+E2E_WORKERS=4 pnpm e2e:local        # if the machine can take it
+```
+
+Against an already-running deployment (a preview, or dev servers you started
+yourself):
 
 ```bash
 pnpm --filter @quagga/e2e install:browsers   # once, installs chromium
@@ -17,6 +37,21 @@ pnpm --filter @quagga/e2e e2e:smoke           # @smoke subset (PR gate)
 pnpm --filter @quagga/e2e e2e:ui              # interactive
 pnpm --filter @quagga/e2e e2e:report          # open last HTML report
 ```
+
+`pnpm e2e:local` runs **`desktop-chromium` only**; `mobile-360` runs only via the
+`--filter` commands above.
+
+Two things `e2e:local` does on purpose, both of which look wrong until you know why:
+it **kills and restarts `next dev`** (a long-lived dev server keeps a stale module
+graph after a file is deleted and serves 500s while `turbo build` stays green — that
+once produced 104 phantom failures that read exactly like product bugs), and it
+**raises the auth rate-limit ceiling** (every Playwright worker drives real sign-ups
+from 127.0.0.1, so the limiter correctly sees one client hammering `/sign-up/email`
+and starts returning 429, which looks exactly like broken auth). **Never set
+`AUTH_RATE_LIMIT_*` on a real deployment.**
+
+**Local Postgres is not Neon.** The proxies are faithful enough to catch logic, not
+pooling behaviour or cold starts. Green locally is strong evidence, never proof.
 
 Config is 100% env-driven (`e2e/lib/env.ts`). Base URLs default to local dev ports
 (web 3000 / org 3001 / suppliers 3002); CI overrides all three with the preview.
@@ -122,6 +157,22 @@ inbox) is present only when the account was created against real mail capture.
   capture on a `mailtm` deployment). Absent → `elevateToGod` throws and god specs
   `skipUnlessGod()`.
 
+  **Provisioning one for a local run.** `e2e:local` defaults `GOD_EMAILS` to
+  `e2e-god@quagga.local` and there is no mail provider, so nothing can verify that
+  address through the product. Sign the account up through the real endpoint, then
+  flip the flag directly in SQL — the one place the harness reaches past the UI, and
+  only to stand in for a mail round trip the environment cannot perform:
+
+  ```bash
+  docker exec quagga-pg psql -U postgres -d quagga \
+    -c "UPDATE \"user\" SET email_verified = true WHERE email = 'e2e-god@quagga.local';"
+  ```
+
+  Then set `E2E_GOD_EMAIL` / `E2E_GOD_PASSWORD` to that account. The bootstrap fires
+  on its next sign-in. Do **not** generalise this into a fixture that grants ranks
+  directly — every rank above god's bootstrap must still be granted through the real
+  Accounts UI, which is what the org-console specs are there to prove.
+
 ## Persona registry (`e2e/personas/registry.ts`)
 
 The **single** source of the authz matrix. `PERSONAS[kind]` gives `{ allowed,
@@ -136,11 +187,19 @@ pins the canonical list).
 
 Isolation within a run is by construction: unique-per-worker emails and
 per-spec-created data, no shared fixtures. Full teardown is **environmental**, not
-per-test: E2E runs against a **throwaway Neon branch** behind a preview, and CI
-**deletes the branch on completion** (auth-spec §5.2 / roadmap M3-31). Leaked rows
-on that ephemeral branch are therefore acceptable and cheaper than a UI-driven
-teardown that would itself need auth. There is no destructive DB helper here — the
-only writer is the app, exactly as a real user.
+per-test — there is no destructive DB helper here, and the only writer is the app,
+exactly as a real user.
+
+- **Locally**, rows accumulate: a full run leaves ~90 burner accounts, camps and
+  registrations in the compose database, and repeated runs make screens like the org
+  access roster unrepresentatively long. `E2E_RESET_DB=1 pnpm e2e:local` drops and
+  rebuilds it. That reset drops **both** the `public` **and** `drizzle` schemas —
+  dropping only `public` leaves the migration tracker behind, and the migrator then
+  reports "up to date" against an empty database, a silent no-op that looks like
+  success and fails much later.
+- **In CI**, the suite runs against a throwaway Neon branch behind a preview, deleted
+  on completion (auth-spec §5.2 / roadmap M3-31). Leaked rows on an ephemeral branch
+  are cheaper than a UI-driven teardown that would itself need auth.
 
 ## CI wiring (M3-31 — downstream of this harness)
 

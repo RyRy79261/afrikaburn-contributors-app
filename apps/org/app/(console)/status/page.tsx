@@ -30,9 +30,12 @@ export default async function StatusBoardPage() {
   if (!guard.ok) return guard.node;
 
   const edition = await getActiveEdition();
-  const board = await getStatusBoard(edition);
-  const series = await getSubmissionSeries(edition?.id ?? null);
-  const activity = await getRecentActivity(6);
+  // Three independent reads off the same edition — issued together.
+  const [board, series, activity] = await Promise.all([
+    getStatusBoard(edition),
+    getSubmissionSeries(edition?.id ?? null),
+    getRecentActivity(guard.session.actor, 6),
+  ]);
 
   const updatedAt = new Date().toLocaleTimeString("en-ZA", {
     hour: "2-digit",

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@quagga/ui/components/select";
-import type { CreateCampActionResult } from "@/app/camps/new/actions";
+import type { CreateCampActionResult } from "@/app/(app)/camps/new/actions";
 
 interface CreateCampFormProps {
   action: (raw: unknown) => Promise<CreateCampActionResult>;
@@ -86,7 +86,10 @@ export function CreateCampForm({ action }: CreateCampFormProps) {
         />
         {awaitingConfirm && (
           <p className="flex items-start gap-1.5 text-xs text-warning">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <TriangleAlert
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              aria-hidden
+            />
             <span>
               Similar to existing camp &ldquo;{warnings[0]}&rdquo; — is yours
               different? You can still use this name.

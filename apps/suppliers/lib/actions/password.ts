@@ -11,8 +11,7 @@ import { isAuthConfigured } from "@/lib/config";
 // posture as apps/web's account-actions.
 
 export type PasswordActionResult =
-  | { ok: true; message?: string }
-  | { ok: false; error: string };
+  { ok: true; message?: string } | { ok: false; error: string };
 
 const RequestInput = z.object({
   email: z.string().trim().email(),
@@ -52,7 +51,8 @@ export async function resetPassword(
   raw: z.input<typeof ResetInput>,
 ): Promise<PasswordActionResult> {
   const input = ResetInput.parse(raw);
-  if (!isAuthConfigured()) return { ok: false, error: "Sign-in isn't configured yet." };
+  if (!isAuthConfigured())
+    return { ok: false, error: "Sign-in isn't configured yet." };
 
   const assessment = assessPassword(input.newPassword);
   if (!assessment.ok) {
@@ -70,5 +70,8 @@ export async function resetPassword(
         "That reset link has expired or has already been used. Request a new one.",
     };
   }
-  return { ok: true, message: "Password reset. Sign in with your new password." };
+  return {
+    ok: true,
+    message: "Password reset. Sign in with your new password.",
+  };
 }

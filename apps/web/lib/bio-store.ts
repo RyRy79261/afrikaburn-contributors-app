@@ -195,8 +195,7 @@ async function resolveCampHistoryForWrite(
 }
 
 export type SaveBioResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> };
+  { ok: true } | { ok: false; errors: Record<string, string> };
 
 /** Said the same way by the pre-check and by the lost-race path, so a user can
  * never tell which one fired — and it names no holder. */
@@ -395,7 +394,8 @@ export async function ensureProfileKeypair(userId: string): Promise<void> {
   if (existing[0]) return;
 
   const pair = await generateProfileKeypair();
-  const encryptedPrivate = safeEncrypt(pair.privateKeyB64) ?? pair.privateKeyB64;
+  const encryptedPrivate =
+    safeEncrypt(pair.privateKeyB64) ?? pair.privateKeyB64;
   await db()
     .insert(schema.profileKeys)
     .values({
@@ -407,7 +407,9 @@ export async function ensureProfileKeypair(userId: string): Promise<void> {
 }
 
 /** The public-key fingerprint shown on the profile, or null if no keypair. */
-export async function getKeyFingerprint(userId: string): Promise<string | null> {
+export async function getKeyFingerprint(
+  userId: string,
+): Promise<string | null> {
   const rows = await db()
     .select({ publicKey: schema.profileKeys.publicKey })
     .from(schema.profileKeys)

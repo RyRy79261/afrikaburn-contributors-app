@@ -7,7 +7,7 @@ import { Button } from "@quagga/ui/components/button";
 import { Textarea } from "@quagga/ui/components/textarea";
 import { toast } from "@quagga/ui/components/toast";
 import type { CampReviewReply } from "@/lib/registration-store";
-import { replyToSectionReviewAction } from "@/app/camps/[slug]/registration/actions";
+import { replyToSectionReviewAction } from "@/app/(app)/camps/[slug]/registration/actions";
 
 // Camp-side reply thread under a section review (design frame P0Tcl `aYBCE`
 // "Reply Box"). The AB review comment is rendered by the parent; this component

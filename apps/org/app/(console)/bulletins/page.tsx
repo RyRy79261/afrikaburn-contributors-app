@@ -106,7 +106,11 @@ function BulletinRow({ bulletin }: { bulletin: BulletinSummary }) {
             ? undefined
             : { read: bulletin.readCount, of: bulletin.sentCount }
         }
-        className={isDraft ? "opacity-70 transition-opacity hover:opacity-100" : undefined}
+        className={
+          isDraft
+            ? "opacity-70 transition-opacity hover:opacity-100"
+            : undefined
+        }
       />
     </Link>
   );

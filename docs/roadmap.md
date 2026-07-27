@@ -18,8 +18,14 @@ by deadline pressure: registration season drives R1, the event itself drives R2.
 ## Committed track
 
 ### R0 — Kickoff MVP *(now; kickoff 28 July 2026; scope in [`mvp-proposal.md`](mvp-proposal.md))*
-Two apps: **`apps/web`** (participants) + **`apps/org`** (admin/review, separate
-deployment). Shared spine (email+Google auth, Resend, **Burner Bio onboarding via the
+
+> *Correction, 27 Jul 2026: R0 grew a **third** app —* `apps/suppliers` *(port 3002),
+> which absorbed the "supplier repository" work listed under R1 below. Auth is
+> self-hosted Better Auth, not Neon Auth, and 2FA/passkeys shipped inside R0 rather
+> than waiting for R1 hardening. The rest of this release sequence still stands.*
+
+Three apps: **`apps/web`** (participants) + **`apps/org`** (admin/review, separate
+deployment) + **`apps/suppliers`** (supplier portal). Shared spine (email+Google auth, Resend, **Burner Bio onboarding via the
 ported Camp 404 questionnaire engine** with per-field privacy, profile keypairs,
 self-registered camps with duplicate/similarity checks, directory + invites, editions
 as root namespace) + the registration wizard and org review flow end-to-end + supplier

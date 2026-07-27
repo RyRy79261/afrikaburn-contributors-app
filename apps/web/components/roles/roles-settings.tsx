@@ -66,7 +66,11 @@ function SectionHead({
 }
 
 /** Outstanding-required-officers badge — destructive until the count clears. */
-function OutstandingBadge({ outstanding }: { outstanding: OutstandingOfficers }) {
+function OutstandingBadge({
+  outstanding,
+}: {
+  outstanding: OutstandingOfficers;
+}) {
   if (!outstanding.applies) return null;
   if (outstanding.outstanding.length === 0) {
     return (
@@ -91,7 +95,8 @@ function OutstandingBadge({ outstanding }: { outstanding: OutstandingOfficers })
 export function RolesSettings(props: Props) {
   const officerRoles = props.roles.filter((r) => r.kind === "officer");
   const coreRoles = props.roles.filter(
-    (r) => r.kind === "captain" || r.kind === "baseline" || r.kind === "default",
+    (r) =>
+      r.kind === "captain" || r.kind === "baseline" || r.kind === "default",
   );
   const customRoles = props.roles.filter((r) => r.kind === "custom");
 

@@ -9,7 +9,10 @@ import {
   supplierOnboardingStep,
   isOrgConfirmedStep,
 } from "@quagga/core";
-import { SupplierOnboardingStepKey, SupplierOnboardingStepStatus } from "@quagga/types";
+import {
+  SupplierOnboardingStepKey,
+  SupplierOnboardingStepStatus,
+} from "@quagga/types";
 
 import { schema, withTransaction } from "@/lib/db";
 import { requireSupplierSession } from "@/lib/session";

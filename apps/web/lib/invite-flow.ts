@@ -1,7 +1,11 @@
 import "server-only";
 
 import { revalidatePath } from "next/cache";
-import { getInvitePreview, redeemInvite, type RedeemResult } from "./invites-store";
+import {
+  getInvitePreview,
+  redeemInvite,
+  type RedeemResult,
+} from "./invites-store";
 import { sendEmail } from "./email";
 import type { CampUser } from "./session";
 

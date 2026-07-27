@@ -26,10 +26,7 @@ import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
 import { QuestionField } from "./field";
 import { ContentBlockView } from "./content-block";
-import {
-  BurnsAndVolunteeringStep,
-  type BioExtrasState,
-} from "./burns-step";
+import { BurnsAndVolunteeringStep, type BioExtrasState } from "./burns-step";
 import type { CampSearchResult } from "@/lib/groups-store";
 import { navigateOnwards } from "@/lib/client-navigation";
 
@@ -90,9 +87,7 @@ interface RunnerProps {
 }
 
 type Step =
-  | { kind: "page"; pageId: string }
-  | { kind: "burns" }
-  | { kind: "privacy" };
+  { kind: "page"; pageId: string } | { kind: "burns" } | { kind: "privacy" };
 
 type SaveState = "idle" | "saving" | "saved" | "unsaved";
 
@@ -214,14 +209,22 @@ export function QuestionnaireRunner({
         : 100;
 
   const nextStep = React.useMemo(
-    () => resolveNextStep(questionnaire, responses, step, Boolean(burns), Boolean(privacy)),
+    () =>
+      resolveNextStep(
+        questionnaire,
+        responses,
+        step,
+        Boolean(burns),
+        Boolean(privacy),
+      ),
     [questionnaire, responses, step, burns, privacy],
   );
   const isLast = nextStep === null;
   const soloSubmit = fullWidthSubmit && isLast && trail.length === 1;
 
   const rail = React.useMemo(
-    () => buildRail(questionnaire, progress.path, Boolean(burns), Boolean(privacy)),
+    () =>
+      buildRail(questionnaire, progress.path, Boolean(burns), Boolean(privacy)),
     [questionnaire, progress.path, burns, privacy],
   );
   const railIndex =
@@ -328,7 +331,11 @@ export function QuestionnaireRunner({
             <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               {rail.map((entry, i) => {
                 const state =
-                  i < railIndex ? "done" : i === railIndex ? "current" : "upcoming";
+                  i < railIndex
+                    ? "done"
+                    : i === railIndex
+                      ? "current"
+                      : "upcoming";
                 return (
                   <li key={entry.key} className="flex items-center gap-1.5">
                     <span

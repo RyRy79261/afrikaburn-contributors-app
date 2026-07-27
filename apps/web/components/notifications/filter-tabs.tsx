@@ -23,7 +23,9 @@ const TAB_LABEL: Record<NotificationFilter, string> = {
 
 /** `/notifications` for the default tab, `?filter=x` otherwise. */
 export function notificationsHref(filter: NotificationFilter): string {
-  return filter === "all" ? "/notifications" : `/notifications?filter=${filter}`;
+  return filter === "all"
+    ? "/notifications"
+    : `/notifications?filter=${filter}`;
 }
 
 export function NotificationFilterTabs({

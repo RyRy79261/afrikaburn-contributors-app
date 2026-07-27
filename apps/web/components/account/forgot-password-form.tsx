@@ -35,7 +35,10 @@ export function ForgotPasswordForm() {
       });
       if (result.ok) {
         // The action returns the enumeration-safe message for BOTH outcomes.
-        setSent(result.message ?? "If that account exists, we've emailed it a reset link.");
+        setSent(
+          result.message ??
+            "If that account exists, we've emailed it a reset link.",
+        );
       } else {
         setError(result.error);
       }
@@ -53,8 +56,8 @@ export function ForgotPasswordForm() {
         </div>
         <p className="text-sm text-muted-foreground">{sent}</p>
         <p className="text-xs text-muted-foreground">
-          The link works once and expires shortly. If nothing arrives, check your
-          spam folder before requesting another.
+          The link works once and expires shortly. If nothing arrives, check
+          your spam folder before requesting another.
         </p>
         <Button variant="outline" asChild>
           <Link href="/auth/sign-in">Back to sign in</Link>

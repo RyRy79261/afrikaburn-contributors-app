@@ -37,6 +37,28 @@ export interface AuthEnv {
 /** The registrable apex every app is a subdomain of. */
 export const AUTH_APEX_DOMAIN = "quagga.ryanjnoble.dev";
 
+/**
+ * Session lifetime, in seconds. Database sessions (Better Auth's default) plus
+ * a short signed cookie cache: fast reads without giving up server-side
+ * revocation.
+ *
+ * It lives HERE, in the pure module, rather than as literals inside
+ * `buildAuthOptions`, because the org console's System panel reports the session
+ * lifetime to whoever is debugging a "why am I still signed in?" question. Two
+ * copies of a number like that drift, and the copy that drifts is always the one
+ * being read. config.ts consumes these, so the panel and the running auth stack
+ * cannot disagree.
+ *
+ * `cookieCacheMaxAgeSeconds` is the honest caveat the panel has to state: a
+ * revoked session can still be honoured for up to that long, because the check
+ * is a signature on a cookie rather than a database read.
+ */
+export const AUTH_SESSION = {
+  expiresInSeconds: 60 * 60 * 24 * 7, // 7 days
+  updateAgeSeconds: 60 * 60 * 24, // refreshed once a day
+  cookieCacheMaxAgeSeconds: 300, // 5 minutes
+} as const;
+
 /** Human-readable Relying Party / issuer name shown in authenticator + TOTP UIs. */
 export const AUTH_RP_NAME = "AfrikaBurn Contributors";
 

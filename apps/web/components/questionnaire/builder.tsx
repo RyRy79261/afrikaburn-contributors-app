@@ -27,14 +27,10 @@ import { Badge } from "@quagga/ui/components/badge";
 import { toast } from "@quagga/ui/components/toast";
 import { cn } from "@quagga/ui/lib/utils";
 import { BlockingBadge } from "./blocking-badge";
-import type { createQuestionnaireAction } from "@/app/camps/[slug]/questionnaires/actions";
+import type { createQuestionnaireAction } from "@/app/(app)/camps/[slug]/questionnaires/actions";
 
 type FieldKind =
-  | "short_text"
-  | "long_text"
-  | "single_select"
-  | "multi_select"
-  | "boolean";
+  "short_text" | "long_text" | "single_select" | "multi_select" | "boolean";
 
 const KIND_LABELS: { value: FieldKind; label: string }[] = [
   { value: "short_text", label: "Short text" },
@@ -188,7 +184,9 @@ export function QuestionnaireBuilder({
       if (result.ok) {
         toast.success(
           `Sent to ${result.sent} ${result.sent === 1 ? "member" : "members"}.` +
-            (result.emailDelivered ? "" : " (Email not configured — logged to console.)"),
+            (result.emailDelivered
+              ? ""
+              : " (Email not configured — logged to console.)"),
         );
         router.push(`/camps/${slug}/questionnaires`);
         router.refresh();
@@ -227,7 +225,8 @@ export function QuestionnaireBuilder({
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="q-desc" className="text-sm font-medium">
-              Description <span className="text-muted-foreground">(optional)</span>
+              Description{" "}
+              <span className="text-muted-foreground">(optional)</span>
             </label>
             <Textarea
               id="q-desc"
@@ -259,7 +258,10 @@ export function QuestionnaireBuilder({
           <Card key={q.localId}>
             <CardContent className="flex flex-col gap-3 pt-6">
               <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground" aria-hidden />
+                <GripVertical
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-hidden
+                />
                 <span className="text-xs font-medium text-muted-foreground">
                   Question {i + 1}
                 </span>
@@ -300,12 +302,16 @@ export function QuestionnaireBuilder({
 
               <Input
                 value={q.prompt}
-                onChange={(e) => patchQuestion(q.localId, { prompt: e.target.value })}
+                onChange={(e) =>
+                  patchQuestion(q.localId, { prompt: e.target.value })
+                }
                 placeholder="Question prompt"
               />
               <Input
                 value={q.helper}
-                onChange={(e) => patchQuestion(q.localId, { helper: e.target.value })}
+                onChange={(e) =>
+                  patchQuestion(q.localId, { helper: e.target.value })
+                }
                 placeholder="Helper text (optional)"
                 className="text-sm"
               />
@@ -322,7 +328,9 @@ export function QuestionnaireBuilder({
                         onChange={(e) =>
                           patchQuestion(q.localId, {
                             options: q.options.map((x) =>
-                              x.id === o.id ? { ...x, label: e.target.value } : x,
+                              x.id === o.id
+                                ? { ...x, label: e.target.value }
+                                : x,
                             ),
                           })
                         }

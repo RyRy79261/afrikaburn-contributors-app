@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Flame } from "lucide-react";
+import { ORG_RANK_LABELS, orgCan, type OrgCapability } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import type { OrgSession } from "@/lib/session";
 import { getUnreadNotificationCount } from "@/lib/notifications";
@@ -7,7 +8,21 @@ import { ConsoleNav, type NavItem } from "@/components/console-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import { HeaderNotificationBell } from "@/components/header-notification-bell";
 
-const NAV_ITEMS: NavItem[] = [
+/**
+ * A nav entry, optionally gated on a capability from the ONE matrix.
+ *
+ * Hiding is never the security boundary — `/system` re-checks `read_system`
+ * server-side and refuses out loud — but an entry that leads somewhere the
+ * viewer will be refused is its own defect, and both read the same predicate so
+ * the two cannot drift.
+ *
+ * Almost nothing here is gated on purpose: every rank reads the whole console,
+ * and pages where a rank loses only the CONTROLS (categories, accounts) stay in
+ * the nav because they still have something to say to that rank.
+ */
+type ConsoleNavItem = NavItem & { capability?: OrgCapability };
+
+const NAV_ITEMS: ConsoleNavItem[] = [
   { href: "/", label: "Overview" },
   { href: "/status", label: "Status board" },
   { href: "/registrations", label: "Registrations" },
@@ -23,6 +38,11 @@ const NAV_ITEMS: NavItem[] = [
   // control is decorative — which is exactly what supplier sign-up management
   // shipped as until someone noticed.
   { href: "/audit", label: "Audit" },
+  // IT's surface: how the deployment is configured and whether it is answering.
+  // Engineer and System manager only — org staff hold every other capability on
+  // this bar and not this one, which is the clearest illustration that the ranks
+  // are different jobs rather than tiers.
+  { href: "/system", label: "System", capability: "read_system" },
 ];
 
 /**
@@ -30,9 +50,14 @@ const NAV_ITEMS: NavItem[] = [
  * Console" wordmark keep it unmistakably separate from the participant app.
  */
 export async function ConsoleHeader({ session }: { session: OrgSession }) {
-  // Signed-in only: the bell lives in the header. Real per-user unread count,
-  // scoped to the gated staff member (see lib/notifications.ts).
+  // Real per-user unread count, scoped to the gated staff member.
   const unread = await getUnreadNotificationCount(session.dbUserId);
+
+  // Resolved server-side against the same matrix the pages guard on. The client
+  // nav never learns a capability exists — it receives the list it may show.
+  const navItems: NavItem[] = NAV_ITEMS.filter(
+    (item) => !item.capability || orgCan(session.actor, item.capability),
+  ).map(({ href, label }) => ({ href, label }));
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -57,19 +82,34 @@ export async function ConsoleHeader({ session }: { session: OrgSession }) {
               <p className="max-w-[16rem] truncate text-sm text-foreground">
                 {session.user.primaryEmail ?? "Signed in"}
               </p>
+              {/* The rank badge reads from the shared label map, so what a
+                  staff member is CALLED here always matches what the matrix
+                  actually grants them (@quagga/core `org-permissions`). */}
               <Badge
                 variant={session.role === "god" ? "default" : "secondary"}
                 className="mt-0.5"
               >
-                {session.role === "god" ? "Owner" : "Org staff"}
+                {ORG_RANK_LABELS[session.role]}
               </Badge>
+              {session.actor.department && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {session.actor.department}
+                  {session.actor.isDepartmentLead ? " · team lead" : ""}
+                </p>
+              )}
             </div>
+            {/* Awaited, not streamed. A resolved `<Suspense>` boundary is
+                delivered as a hidden div plus an inline `$RC(…)` script, so with
+                JavaScript off the visitor keeps the fallback forever — a bell
+                that permanently claims "none unread". The count is one indexed
+                query and the layout is not re-rendered on client-side
+                navigation, so awaiting it costs a full page load, once. */}
             <HeaderNotificationBell count={unread} />
             <SignOutButton />
           </div>
         </div>
 
-        <ConsoleNav items={NAV_ITEMS} />
+        <ConsoleNav items={navItems} />
       </div>
     </header>
   );

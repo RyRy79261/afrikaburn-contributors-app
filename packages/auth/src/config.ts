@@ -18,6 +18,7 @@ import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@quagga/core";
 import { sendAuthEmail } from "./email";
 import {
   AUTH_RP_NAME,
+  AUTH_SESSION,
   authConfigWarnings,
   isGoogleConfigured,
   resolveBaseURL,
@@ -125,11 +126,16 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     },
 
     // Database sessions (default) + a short-lived signed cookie cache: fast reads
-    // without giving up server-side revocation.
+    // without giving up server-side revocation. The numbers live in env.ts's
+    // AUTH_SESSION so the console's System panel reports the REAL lifetime
+    // rather than a second copy of it.
     session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // refresh once a day
-      cookieCache: { enabled: true, maxAge: 300 }, // 5 minutes
+      expiresIn: AUTH_SESSION.expiresInSeconds,
+      updateAge: AUTH_SESSION.updateAgeSeconds,
+      cookieCache: {
+        enabled: true,
+        maxAge: AUTH_SESSION.cookieCacheMaxAgeSeconds,
+      },
     },
 
     account: {

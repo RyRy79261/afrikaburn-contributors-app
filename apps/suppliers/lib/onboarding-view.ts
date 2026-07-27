@@ -164,7 +164,10 @@ export function buildStepCardModel(
       tone,
       statusLabel,
       supplierActionable: true,
-      primaryAction: { label: "Submit for review", to: "awaiting_confirmation" },
+      primaryAction: {
+        label: "Submit for review",
+        to: "awaiting_confirmation",
+      },
     };
   }
 

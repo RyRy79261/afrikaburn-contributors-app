@@ -16,11 +16,13 @@ import { cn } from "@quagga/ui/lib/utils";
 // Deliberately not styled as an error: nothing is broken, and nothing the burner
 // did caused it.
 
-const SUPPORT_LABEL: Record<Exclude<AuthCapability["support"], "supported">, string> =
-  {
-    unavailable: "Not available yet",
-    client_only: "Not available yet",
-  };
+const SUPPORT_LABEL: Record<
+  Exclude<AuthCapability["support"], "supported">,
+  string
+> = {
+  unavailable: "Not available yet",
+  client_only: "Not available yet",
+};
 
 export function capabilityFor(key: AuthCapabilityKey): AuthCapability {
   return AUTH_CAPABILITIES[key];

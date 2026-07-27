@@ -3,18 +3,34 @@ import { z } from "zod";
 /**
  * Membership role ladder, recorded on `memberships.role` (one row per
  * user × group). Roles are scoped to a group — a burner can hold `member` on
- * one camp and `lead` on another, and `god` / `org_staff` on the single
- * seeded AfrikaBurn org group.
+ * one camp and `lead` on another, and an org rank on the single seeded
+ * AfrikaBurn org group.
  *
- * - `god`       — system-wide admin; ONLY valid on the org group. Bootstrapped
- *                 from the `GOD_EMAILS` env list on first login.
+ * - `god`       — the highest org rank, PRESENTED EVERYWHERE AS "System
+ *                 manager" (see below); ONLY valid on the org group.
+ *                 Bootstrapped from the `GOD_EMAILS` env list on first login.
  * - `org_staff` — AfrikaBurn reviewers/coordinators (org group only).
+ * - `engineer`  — IT/engineering rank (org group only): reads everywhere, sees
+ *                 NO personal information, and cannot delete anything. The
+ *                 capability matrix lives in @quagga/core `org-permissions`.
  * - `lead`      — a project's leader; can manage invites + registration.
  * - `admin`     — a project co-organiser below the lead.
  * - `member`    — a plain member of a group.
  *
+ * **`god` IS "System manager" — do not "fix" this.** The rank Ryan calls the
+ * System manager is STORED as `god` on purpose. Renaming the enum value would
+ * mean migrating every live row, re-cutting the GOD_EMAILS bootstrap (which
+ * writes the literal `god`), and touching every god-persona e2e spec — all for
+ * a label. So the storage keeps `god` and the UI reads
+ * `ORG_RANK_LABELS` (@quagga/core `org-permissions`), which maps
+ * `god → "System manager"`. If you came here to make the names agree: the
+ * inconsistency is deliberate, and the label layer is the place to change.
+ *
  * Keep this tuple in sync with `membershipRoleEnum` in @quagga/db schema.ts —
  * the database is the storage authority; this is the validation authority.
+ * Both are APPEND-ONLY (a Postgres enum value cannot be reordered or removed
+ * without rewriting the type), which is why `engineer` sits at the end rather
+ * than in rank order.
  */
 export const MembershipRole = z.enum([
   "god",
@@ -22,11 +38,22 @@ export const MembershipRole = z.enum([
   "lead",
   "admin",
   "member",
+  "engineer",
 ]);
 export type MembershipRole = z.infer<typeof MembershipRole>;
 
-/** Roles that may enter the org/admin app (`apps/org`). */
-export const ORG_APP_ROLES: readonly MembershipRole[] = ["god", "org_staff"];
+/**
+ * Roles that may enter the org/admin app (`apps/org`). Clearing this gate only
+ * gets you THROUGH the door — what you may then read and write is decided by
+ * the capability matrix in @quagga/core `org-permissions`, which both the gate
+ * and the console UI read so a hidden button and a refused action can never
+ * disagree.
+ */
+export const ORG_APP_ROLES: readonly MembershipRole[] = [
+  "god",
+  "org_staff",
+  "engineer",
+];
 
 /** Roles that may administer a project group (invites, registration, members). */
 export const PROJECT_ADMIN_ROLES: readonly MembershipRole[] = ["lead", "admin"];

@@ -60,8 +60,7 @@ import { hashToken, newToken } from "@/lib/account-tokens";
 // Every action re-resolves the session server-side; nothing trusts a client id.
 
 export type AccountActionResult =
-  | { ok: true; message?: string }
-  | { ok: false; error: string };
+  { ok: true; message?: string } | { ok: false; error: string };
 
 /** Postgres unique-violation SQLSTATE, surfaced by the Neon driver as `.code`. */
 function isUniqueViolation(err: unknown): boolean {
@@ -104,7 +103,9 @@ async function recordSecurityEvent(
     const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim();
     const ip = forwarded || h.get("x-real-ip") || null;
     const userAgent = h.get("user-agent") || null;
-    await db().insert(schema.securityEvents).values({ userId, kind, ip, userAgent });
+    await db()
+      .insert(schema.securityEvents)
+      .values({ userId, kind, ip, userAgent });
   } catch {
     // The change already happened; the log is a record, never a gate.
   }
@@ -156,11 +157,14 @@ export async function changePassword(
     const input = ChangePasswordInput.parse(raw);
 
     if (!isAuthConfigured()) {
-      throw new Error("Sign-in isn't configured yet, so passwords can't change.");
+      throw new Error(
+        "Sign-in isn't configured yet, so passwords can't change.",
+      );
     }
 
     const assessment = assessPassword(input.newPassword);
-    if (!assessment.ok) throw new Error(assessment.error ?? "That password won't do.");
+    if (!assessment.ok)
+      throw new Error(assessment.error ?? "That password won't do.");
 
     // Fail CLOSED: if the server API throws, nothing changed, so nothing is
     // announced. The message stays generic — a precise upstream error is a
@@ -260,7 +264,8 @@ export async function resetPassword(
     }
 
     const assessment = assessPassword(input.newPassword);
-    if (!assessment.ok) throw new Error(assessment.error ?? "That password won't do.");
+    if (!assessment.ok)
+      throw new Error(assessment.error ?? "That password won't do.");
 
     try {
       await auth.api.resetPassword({
@@ -377,7 +382,8 @@ export async function requestEmailChange(
   return run(async () => {
     const user = await requireCampUser();
     const input = RequestEmailChangeInput.parse(raw);
-    if (!isDatabaseConfigured()) throw new Error("The database isn't configured yet.");
+    if (!isDatabaseConfigured())
+      throw new Error("The database isn't configured yet.");
 
     const currentEmail = user.email;
     if (!currentEmail) {
@@ -476,7 +482,8 @@ export async function confirmEmailChange(
   return run(async () => {
     const user = await requireCampUser();
     const input = TokenInput.parse(raw);
-    if (!isDatabaseConfigured()) throw new Error("The database isn't configured yet.");
+    if (!isDatabaseConfigured())
+      throw new Error("The database isn't configured yet.");
 
     const now = new Date();
     const [request] = await db()
@@ -494,7 +501,10 @@ export async function confirmEmailChange(
       .where(
         and(
           eq(schema.emailChangeRequests.userId, user.id),
-          eq(schema.emailChangeRequests.confirmTokenHash, hashToken(input.token)),
+          eq(
+            schema.emailChangeRequests.confirmTokenHash,
+            hashToken(input.token),
+          ),
         ),
       )
       .limit(1);
@@ -572,7 +582,8 @@ export async function revokeEmailChange(
 ): Promise<AccountActionResult> {
   return run(async () => {
     const input = TokenInput.parse(raw);
-    if (!isDatabaseConfigured()) throw new Error("The database isn't configured yet.");
+    if (!isDatabaseConfigured())
+      throw new Error("The database isn't configured yet.");
 
     const now = new Date();
     const handle = db();
@@ -589,7 +600,9 @@ export async function revokeEmailChange(
         providerCommittedAt: schema.emailChangeRequests.providerCommittedAt,
       })
       .from(schema.emailChangeRequests)
-      .where(eq(schema.emailChangeRequests.revokeTokenHash, hashToken(input.token)))
+      .where(
+        eq(schema.emailChangeRequests.revokeTokenHash, hashToken(input.token)),
+      )
       .orderBy(desc(schema.emailChangeRequests.createdAt))
       .limit(1);
 
@@ -648,7 +661,8 @@ export async function requestAccountDeletion(
   return run(async () => {
     const user = await requireCampUser();
     const input = RequestDeletionInput.parse(raw);
-    if (!isDatabaseConfigured()) throw new Error("The database isn't configured yet.");
+    if (!isDatabaseConfigured())
+      throw new Error("The database isn't configured yet.");
     if (!isAuthConfigured()) throw new Error("Sign-in isn't configured yet.");
     if (!user.email) throw new Error("This account has no email on record.");
 
@@ -720,7 +734,9 @@ export async function requestAccountDeletion(
     await notifySecurity(
       user.id,
       user.email,
-      deletionRequestedNotification({ daysRemaining: DELETION_GRACE_PERIOD_DAYS }),
+      deletionRequestedNotification({
+        daysRemaining: DELETION_GRACE_PERIOD_DAYS,
+      }),
       deletionRequestedEmail({
         daysRemaining: DELETION_GRACE_PERIOD_DAYS,
         graceEndsAt,
@@ -743,7 +759,8 @@ export async function cancelAccountDeletion(): Promise<AccountActionResult> {
   return run(async () => {
     const user = await requireCampUser();
     const cancelled = await cancelDeletionOnSignInFor(user.id, user.email);
-    if (!cancelled) throw new Error("There's no deletion scheduled on this account.");
+    if (!cancelled)
+      throw new Error("There's no deletion scheduled on this account.");
     revalidatePath("/account/delete");
     return { message: "Cancelled — nothing was erased." };
   });

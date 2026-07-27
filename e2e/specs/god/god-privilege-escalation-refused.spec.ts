@@ -11,9 +11,10 @@
 //   4. A god cannot manage the god membership from the panel — their own row is
 //      inert ("You"), so god cannot self-demote or reassign god here either.
 //
-// On the org_staff→god path specifically: the sole god-only server boundary is
-// setOrgStaffRole (`requireOrgSession({ god: true })`). There is no org_staff-
-// reachable trigger for it — which is the correct posture, not a gap — so the
+// On the org_staff→god path specifically: the sole System-manager-only server
+// boundary is setOrgStaffRole, which requires the `manage_accounts` capability.
+// There is no org_staff-reachable trigger for it — the correct posture, not a
+// gap — so the
 // server refusal of a non-god CALLER is covered by the action-level tests
 // (roadmap M3-02/M3-03), while this file proves, end-to-end, that no UI path
 // exposes escalation to an org_staff and that the action's OUTCOME can never be

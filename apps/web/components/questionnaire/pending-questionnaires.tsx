@@ -57,7 +57,9 @@ export function PendingQuestionnaires({
                 className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
               >
                 <div className="flex min-w-0 flex-col gap-1.5">
-                  <span className="truncate text-sm font-medium">{q.title}</span>
+                  <span className="truncate text-sm font-medium">
+                    {q.title}
+                  </span>
                   <div className="flex flex-wrap items-center gap-2">
                     <BlockingBadge blocking={q.blocking} />
                     {due && (
@@ -67,7 +69,11 @@ export function PendingQuestionnaires({
                     )}
                   </div>
                 </div>
-                <Button asChild size="sm" variant={q.blocking ? "default" : "secondary"}>
+                <Button
+                  asChild
+                  size="sm"
+                  variant={q.blocking ? "default" : "secondary"}
+                >
                   <Link href={`/questionnaires/${q.activationId}`}>
                     {q.blocking ? "Complete now" : "Answer"}
                   </Link>

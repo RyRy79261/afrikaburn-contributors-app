@@ -70,7 +70,12 @@ describe("buildProjectSections — mutant vehicle", () => {
     soundRaw: "level_2",
   };
 
-  const sections = buildProjectSections("mutant_vehicle", "Dragon", view, answers);
+  const sections = buildProjectSections(
+    "mutant_vehicle",
+    "Dragon",
+    view,
+    answers,
+  );
 
   it("uses distinct section keys (no thread collision)", () => {
     const keys = sections.map((s) => s.key);
@@ -93,7 +98,9 @@ describe("buildProjectSections — mutant vehicle", () => {
 
     const ops = sections.find((s) => s.key === "participation")!;
     expect(
-      ops.fields.some((f) => f.value.type === "yesno" && f.value.value === true),
+      ops.fields.some(
+        (f) => f.value.type === "yesno" && f.value.value === true,
+      ),
     ).toBe(true);
     expect(
       ops.fields.some(
@@ -148,8 +155,7 @@ describe("buildProjectSections — artwork", () => {
     expect(
       footprint.fields.some(
         (f) =>
-          f.value.type === "text" &&
-          f.value.value === "4 m W × 4 m D × 12 m H",
+          f.value.type === "text" && f.value.value === "4 m W × 4 m D × 12 m H",
       ),
     ).toBe(true);
 

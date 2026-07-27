@@ -52,7 +52,10 @@ export function ResponseViewer({
     [definition],
   );
 
-  function label(value: QuestionnaireResponseValue | undefined, qId: string): string {
+  function label(
+    value: QuestionnaireResponseValue | undefined,
+    qId: string,
+  ): string {
     if (value === undefined || value === null || value === "") return "—";
     const q = questions.find((x) => x.id === qId);
     if (q && (q.kind === "single_select" || q.kind === "multi_select")) {
@@ -137,7 +140,10 @@ export function ResponseViewer({
         </TableBody>
       </Table>
 
-      <Dialog open={viewing !== null} onOpenChange={(v) => !v && setViewing(null)}>
+      <Dialog
+        open={viewing !== null}
+        onOpenChange={(v) => !v && setViewing(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{viewing?.displayName}&apos;s response</DialogTitle>

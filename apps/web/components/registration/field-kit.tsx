@@ -32,12 +32,13 @@ export function Labeled({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="text-sm font-medium text-foreground"
-      >
+      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
         {label}
-        {required && <span className="ml-1 text-accent" aria-hidden>*</span>}
+        {required && (
+          <span className="ml-1 text-accent" aria-hidden>
+            *
+          </span>
+        )}
       </label>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {children}
@@ -184,7 +185,11 @@ export function WordLimitedTextArea({
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium text-foreground">
         {label}
-        {required && <span className="ml-1 text-accent" aria-hidden>*</span>}
+        {required && (
+          <span className="ml-1 text-accent" aria-hidden>
+            *
+          </span>
+        )}
       </label>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       <Textarea
@@ -194,7 +199,9 @@ export function WordLimitedTextArea({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onCommit}
         aria-describedby={`${id}-count`}
-        className={over ? "border-destructive focus-visible:ring-destructive" : ""}
+        className={
+          over ? "border-destructive focus-visible:ring-destructive" : ""
+        }
       />
       <p
         id={`${id}-count`}
@@ -348,7 +355,9 @@ export function RadioChoiceGroup({
                   {opt.label}
                 </span>
                 {opt.blurb && (
-                  <span className="text-xs text-muted-foreground">{opt.blurb}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {opt.blurb}
+                  </span>
                 )}
               </span>
             </button>

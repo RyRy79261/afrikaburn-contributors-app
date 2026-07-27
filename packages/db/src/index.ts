@@ -8,6 +8,15 @@ import { configureLocalProxy } from "./local-proxy";
 
 export * as schema from "./schema";
 export { configureLocalProxy } from "./local-proxy";
+// What the deploy-time migration runner WOULD do, resolved from env alone. The
+// org console's System panel renders this verdict so an engineer can see whether
+// the deployment is set up to migrate safely without reading a build log.
+export {
+  connectionHost,
+  isPoolerConnection,
+  planMigration,
+  type MigrationPlan,
+} from "./migration-plan";
 
 export type Database = NeonHttpDatabase<typeof schema>;
 export type PooledDatabase = { db: NeonDatabase<typeof schema>; pool: Pool };

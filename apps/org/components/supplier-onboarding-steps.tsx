@@ -178,7 +178,9 @@ function StepActions({
             variant="ghost"
             size="sm"
             disabled={pending}
-            onClick={() => onMove(step.key, "pending", "Sent back to supplier.")}
+            onClick={() =>
+              onMove(step.key, "pending", "Sent back to supplier.")
+            }
           >
             <Undo2 aria-hidden />
             Send back

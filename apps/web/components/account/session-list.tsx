@@ -65,7 +65,9 @@ export function SessionList({ sessions }: { sessions: SessionView[] }) {
     startTransition(async () => {
       const result = await revokeOtherSessions();
       if (result.ok) {
-        toast.success(result.message ?? "Every other device has been signed out.");
+        toast.success(
+          result.message ?? "Every other device has been signed out.",
+        );
         router.refresh();
       } else {
         toast.error(result.error);
@@ -132,7 +134,9 @@ export function SessionList({ sessions }: { sessions: SessionView[] }) {
                   onClick={() => revokeOne(session.token)}
                   disabled={pending}
                 >
-                  {busyToken === session.token && pending ? "Ending…" : "Revoke"}
+                  {busyToken === session.token && pending
+                    ? "Ending…"
+                    : "Revoke"}
                 </Button>
               )}
             </li>

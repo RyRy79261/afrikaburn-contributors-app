@@ -63,7 +63,9 @@ export default async function RegistrationsPage({
       status: r.status,
       soundShort: SOUND_LEVEL_SHORT[classifySoundLevel(r.soundRaw)],
       cohort: r.cohort,
-      submittedLabel: r.submittedAt ? formatDate(r.submittedAt) : "Not submitted",
+      submittedLabel: r.submittedAt
+        ? formatDate(r.submittedAt)
+        : "Not submitted",
     }));
 
   return (

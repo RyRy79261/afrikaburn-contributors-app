@@ -2,14 +2,8 @@
 
 import * as React from "react";
 import { Check, Plus, X } from "lucide-react";
-import {
-  ABOUT_SOFT_WORD_CAP,
-  countWords,
-} from "@quagga/core";
-import {
-  VOLUNTEER_PORTFOLIOS,
-  type CampHistoryEntry,
-} from "@quagga/types";
+import { ABOUT_SOFT_WORD_CAP, countWords } from "@quagga/core";
+import { VOLUNTEER_PORTFOLIOS, type CampHistoryEntry } from "@quagga/types";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
 import {
@@ -76,8 +70,8 @@ export function BurnsAndVolunteeringStep({
       <div>
         <h2 className="text-lg font-semibold">Your burns &amp; volunteering</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tell other burners who you are in the dust. All of this is optional and
-          shows publicly unless you turn it off on the next step.
+          Tell other burners who you are in the dust. All of this is optional
+          and shows publicly unless you turn it off on the next step.
         </p>
       </div>
 
@@ -139,7 +133,10 @@ export function BurnsAndVolunteeringStep({
           ))}
         </ToggleGroup>
         <div className="mt-1 flex flex-col gap-1.5">
-          <label htmlFor="v3-vol-other" className="text-xs text-muted-foreground">
+          <label
+            htmlFor="v3-vol-other"
+            className="text-xs text-muted-foreground"
+          >
             Something else?
           </label>
           <Input

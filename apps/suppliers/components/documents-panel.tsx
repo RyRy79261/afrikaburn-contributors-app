@@ -115,7 +115,9 @@ export function DocumentsPanel({
             key={doc.id}
             className={cn(
               "flex items-start gap-3 rounded-lg border p-3",
-              doc.outstanding ? "border-warning/40 bg-warning/5" : "border-border",
+              doc.outstanding
+                ? "border-warning/40 bg-warning/5"
+                : "border-border",
             )}
           >
             {doc.requiredAck ? (
@@ -136,11 +138,7 @@ export function DocumentsPanel({
                 htmlFor={doc.requiredAck ? `doc-${doc.id}` : undefined}
                 className="block text-sm font-medium"
               >
-                {doc.requiredAck ? (
-                  <>I&apos;ve read {doc.title}</>
-                ) : (
-                  doc.title
-                )}
+                {doc.requiredAck ? <>I&apos;ve read {doc.title}</> : doc.title}
               </label>
               <p
                 id={`doc-${doc.id}-meta`}
@@ -155,9 +153,7 @@ export function DocumentsPanel({
             </div>
 
             <a
-              href={
-                doc.sourceType === "file" ? downloadHref(doc.url) : doc.url
-              }
+              href={doc.sourceType === "file" ? downloadHref(doc.url) : doc.url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-muted"

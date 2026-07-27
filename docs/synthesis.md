@@ -130,7 +130,7 @@ is the real R1 deadline, roughly six weeks after kickoff.
 ### Decisions locked 23 Jul 2026 (Ryan)
 
 - **Kickoff: 28 July 2026** — working group + possibly 1–2 AB org people. Product name stays neutral; MVP live at a URL beforehand.
-- **Repo is public, MIT licensed**; history rewritten clean (originals preserved on a local archive branch only).
+- **Repo is public**, licensed ~~MIT~~ **FSL-1.1-ALv2** *(changed 27 Jul 2026 — Functional Source License, converting to Apache 2.0 two years after each release; see `LICENSE`)*; history rewritten clean (originals preserved on a local archive branch only).
 - **Containers are a separate app** — only the biggest camps use them; the standard app shows a hint tile. Finlay's container scope = that app's spec. Water likewise separate. Driver manifest: disabled, pending need.
 - **The org/admin side is its own app** (`apps/org`, separate deployment) — account elevation, review dashboards, allocations, wrangler roles. No org business inside the participant app; no seeded staff — god (Ryan) elevates accounts live.
 - **Attestations: low priority.** MVP only generates a reproducible keypair stored on the user profile (never user-managed); QR flows arrive with the logistics apps.

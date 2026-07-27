@@ -104,8 +104,13 @@ describe("REGRESSION: something actually READS the medical audit rows", () => {
     );
     const panel = source("components/audit/medical-access-panel.tsx");
     expect(stripComments(panel)).not.toMatch(/alert/i);
-    for (const p of ["app/(console)/page.tsx", "app/(console)/status/page.tsx"]) {
-      expect(source(p)).not.toMatch(/MedicalAccessStrip|getMedicalAccessGlance/);
+    for (const p of [
+      "app/(console)/page.tsx",
+      "app/(console)/status/page.tsx",
+    ]) {
+      expect(source(p)).not.toMatch(
+        /MedicalAccessStrip|getMedicalAccessGlance/,
+      );
     }
   });
 

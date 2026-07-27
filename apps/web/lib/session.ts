@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import {
@@ -63,7 +64,11 @@ async function bootstrapGod(
   emailVerified: boolean,
 ): Promise<void> {
   if (
-    !canBootstrapGod(user.email, emailVerified, parseGodEmails(process.env.GOD_EMAILS))
+    !canBootstrapGod(
+      user.email,
+      emailVerified,
+      parseGodEmails(process.env.GOD_EMAILS),
+    )
   ) {
     return;
   }
@@ -102,8 +107,16 @@ async function bootstrapGod(
  * Upsert the camp-side `users` row for an authenticated Neon Auth user, run the
  * GOD_EMAILS bootstrap, and ensure the blocking Burner Bio required action
  * exists. Returns the camp user, or null when the DB isn't configured.
+ *
+ * `cache()`d on the auth user id, per request. This is not just a read: it is an
+ * upsert plus two guard queries plus the required-action check, and a single
+ * page render used to run the whole thing two or three times over (the shell's
+ * unread count, the page's own guard, the gate). Every step is idempotent, so
+ * collapsing them to one changes nothing except the number of round trips. The
+ * cache lives and dies with the request, so it can never hand one account's row
+ * to another.
  */
-export async function ensureCampUser(
+export const ensureCampUser = cache(async function ensureCampUser(
   authUser: AuthenticatedUser,
 ): Promise<CampUser | null> {
   if (!isDatabaseConfigured()) return null;
@@ -155,10 +168,10 @@ export async function ensureCampUser(
   });
 
   return campUser;
-}
+});
 
 /** The current camp user (upserted + bootstrapped), or null when signed out /
- * unconfigured. Never throws. */
+ * unconfigured. Never throws. Request-scoped via `ensureCampUser`. */
 export async function getCurrentCampUser(): Promise<CampUser | null> {
   const authUser = await getAuthenticatedUser();
   if (!authUser) return null;

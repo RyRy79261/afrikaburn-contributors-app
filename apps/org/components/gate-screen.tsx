@@ -17,7 +17,11 @@ import { SignOutButton } from "@/components/sign-out-button";
  * GateScreen primitive here would double that shared band — the blocking
  * console-gate depends on it too — so the per-app gate keeps its own shell).
  */
-export function GateScreen({ state }: { state: Exclude<OrgSessionState, { kind: "ok" }> }) {
+export function GateScreen({
+  state,
+}: {
+  state: Exclude<OrgSessionState, { kind: "ok" }>;
+}) {
   const missing = missingConfig();
 
   return (

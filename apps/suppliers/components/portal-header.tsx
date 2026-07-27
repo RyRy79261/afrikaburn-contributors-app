@@ -58,6 +58,12 @@ export async function PortalHeader({ session }: { session: SupplierSession }) {
                 </Badge>
               </div>
             </div>
+            {/* Awaited, not streamed. A resolved `<Suspense>` boundary is
+                delivered as a hidden div plus an inline `$RC(…)` script, so with
+                JavaScript off the visitor keeps the fallback forever — a bell
+                that permanently claims "none unread". The count is one indexed
+                query and the layout is not re-rendered on client-side
+                navigation, so awaiting it costs a full page load, once. */}
             <HeaderNotificationBell count={unread} />
             <SignOutButton />
           </div>

@@ -21,9 +21,12 @@ const KIND_LABEL: Record<GroupKind, string> = {
   mutant_vehicle: "Mutant vehicle",
 };
 
+// `god` renders as "System manager": the stored enum value stays `god` on
+// purpose (@quagga/types roles.ts), and this is the label layer.
 const ROLE_LABEL: Record<MembershipRole, string> = {
-  god: "God",
+  god: "System manager",
   org_staff: "Org staff",
+  engineer: "Engineer",
   lead: "Lead",
   admin: "Co-lead",
   member: "Member",
@@ -37,11 +40,7 @@ export function ProfileCamps({
   campHistory: CampHistoryDisplay[];
 }) {
   if (camps.length === 0 && campHistory.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No camps to show.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">No camps to show.</p>;
   }
 
   return (

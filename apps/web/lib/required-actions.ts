@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { and, asc, eq } from "drizzle-orm";
 import type { RequiredActionLike } from "@quagga/core";
 import {
@@ -74,8 +75,13 @@ export async function completeRequiredAction(
  * for an org_staff/god who is also a camp user (spec §"Authoring levels").
  * Rows with no activation (the Burner Bio) are kept via the LEFT JOIN + null
  * audience.
+ *
+ * Request-scoped (`cache`): the hard gate consults this on essentially every
+ * gated surface, and several pages ask twice (once through `enforceGate`, once
+ * to render the pending-questionnaire card). Same user, same request, same
+ * answer — one query.
  */
-export async function listRequiredActions(
+export const listRequiredActions = cache(async function listRequiredActions(
   userId: string,
 ): Promise<RequiredActionLike[]> {
   const rows = await db()
@@ -102,4 +108,4 @@ export async function listRequiredActions(
       blocking,
       status,
     }));
-}
+});

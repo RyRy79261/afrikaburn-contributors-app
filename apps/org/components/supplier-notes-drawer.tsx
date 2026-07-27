@@ -19,11 +19,11 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { toast } from "@quagga/ui/components/toast";
-import { SupplierNoteKind, type SupplierNoteKind as NoteKind } from "@quagga/types";
 import {
-  addSupplierNote,
-  fetchSupplierNotes,
-} from "@/lib/actions/suppliers";
+  SupplierNoteKind,
+  type SupplierNoteKind as NoteKind,
+} from "@quagga/types";
+import { addSupplierNote, fetchSupplierNotes } from "@/lib/actions/suppliers";
 import type { SupplierNoteRow } from "@/lib/queries";
 
 const KIND_META: Record<NoteKind, { dot: string; label: string }> = {

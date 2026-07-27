@@ -51,7 +51,9 @@ export async function setDocumentAcknowledgement(
     // Edition-authz read against committed state — the document catalog isn't
     // touched by this action, so this can run before the transaction (and fail
     // fast, without opening a pool).
-    if (!(await documentBelongsToEdition(input.documentId, session.edition.id))) {
+    if (
+      !(await documentBelongsToEdition(input.documentId, session.edition.id))
+    ) {
       throw new Error("That document isn't part of this edition.");
     }
 

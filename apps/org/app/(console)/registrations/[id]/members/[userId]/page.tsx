@@ -64,7 +64,7 @@ export default async function RegistrationMemberPage({
   if (!parsed.success) notFound();
   const { id, userId } = parsed.data;
 
-  const detail = await getRegistrationDetail(id);
+  const detail = await getRegistrationDetail(id, guard.session.actor);
   if (!detail) notFound();
 
   // Re-check the medical predicate server-side even though only god/org_staff

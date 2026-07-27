@@ -24,7 +24,7 @@ import {
   RadioChoiceGroup,
   YesNoField,
 } from "@/components/registration/field-kit";
-import type { VehicleRegistrationActionResult } from "@/app/vehicles/new/shared";
+import type { VehicleRegistrationActionResult } from "@/app/(app)/vehicles/new/shared";
 import {
   EBIKE_NOTE,
   FLAME_EFFECTS_NOTE,
@@ -32,7 +32,7 @@ import {
   SOOP_FOOTNOTE,
   VEHICLE_ACKS,
   type VehicleAckKey,
-} from "@/app/vehicles/new/copy";
+} from "@/app/(app)/vehicles/new/copy";
 
 // Mutant Vehicle registration form (canvas S8ZcWf desktop / Qq5u0 mobile 360).
 // One responsive page — the mobile pair is the same route at a narrower width:
@@ -362,7 +362,10 @@ export function VehicleRegistrationForm({
         </Field>
         {awaitingConfirm && (
           <p className="-mt-2 flex items-start gap-1.5 text-xs text-warning">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <TriangleAlert
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              aria-hidden
+            />
             <span>
               Similar to the existing mutant &ldquo;{warnings[0]}&rdquo; — is
               yours different? Submit again to keep this name.

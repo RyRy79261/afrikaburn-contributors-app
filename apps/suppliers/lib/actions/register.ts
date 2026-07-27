@@ -54,11 +54,15 @@ export async function registerSupplier(
           .values({ authUserId: user.id, email: user.primaryEmail })
           .onConflictDoNothing({ target: schema.users.authUserId });
         const [dbUser] = await tx
-          .select({ id: schema.users.id, sanitizedAt: schema.users.sanitizedAt })
+          .select({
+            id: schema.users.id,
+            sanitizedAt: schema.users.sanitizedAt,
+          })
           .from(schema.users)
           .where(eq(schema.users.authUserId, user.id))
           .limit(1);
-        if (!dbUser) throw new Error("Your account isn't ready yet. Try again.");
+        if (!dbUser)
+          throw new Error("Your account isn't ready yet. Try again.");
         // A deleted-and-sanitized account cannot register as a supplier.
         if (isSanitized(dbUser)) throw new Error("Sign in first.");
 
@@ -68,7 +72,8 @@ export async function registerSupplier(
           .from(schema.suppliers)
           .where(eq(schema.suppliers.userId, dbUser.id))
           .limit(1);
-        if (existing) throw new Error("You're already registered as a supplier.");
+        if (existing)
+          throw new Error("You're already registered as a supplier.");
 
         // The active (or most recent) edition to scope onboarding to.
         const [edition] =
@@ -76,8 +81,7 @@ export async function registerSupplier(
             .select({ id: schema.editions.id, year: schema.editions.year })
             .from(schema.editions)
             .where(eq(schema.editions.isActive, true))
-            .limit(1)) ??
-          [];
+            .limit(1)) ?? [];
         const editionRow =
           edition ??
           (
@@ -102,7 +106,8 @@ export async function registerSupplier(
             userId: dbUser.id,
           })
           .returning({ id: schema.suppliers.id });
-        if (!created) throw new Error("Could not create your supplier profile.");
+        if (!created)
+          throw new Error("Could not create your supplier profile.");
 
         // Seed onboarding with the registration form already done.
         await tx

@@ -9,7 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@quagga/ui/components/popover";
-import { fetchRecentNotifications } from "@/app/notifications/actions";
+import { fetchRecentNotifications } from "@/app/(app)/notifications/actions";
 import type { NotificationRowItem } from "./format";
 import { NotificationRow } from "./notification-row";
 import { MarkAllReadButton } from "./mark-all-read-button";

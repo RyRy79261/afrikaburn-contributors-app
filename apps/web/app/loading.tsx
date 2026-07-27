@@ -1,7 +1,10 @@
 import { PageSkeleton } from "@/components/boundary/page-skeleton";
 
-// Root loading boundary: shown while any route segment without its own
-// `loading.tsx` resolves its data. A branded skeleton, not a blank frame.
+// Root loading boundary — now only for the routes that draw their own chrome:
+// the landing page, `/auth/*` and `/join/*`. Everything in the `(app)` group has
+// a boundary inside the persistent shell (`app/(app)/loading.tsx` and its
+// per-route siblings), so a navigation between signed-in pages never blanks the
+// header again.
 export default function RootLoading() {
-  return <PageSkeleton />;
+  return <PageSkeleton rows={2} cards={3} />;
 }

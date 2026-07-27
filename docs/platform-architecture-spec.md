@@ -1,5 +1,28 @@
 # Platform & Database Architecture — shared DB + accounts for all apps
 
+> # ⛔ SUPERSEDED — DO NOT BUILD FROM THIS DOCUMENT
+>
+> *Marked 27 Jul 2026.* This is a **historical research trail**, kept because the
+> IdP comparison and the Neon constraints in it are still worth reading. Its
+> conclusions are not.
+>
+> **What is false here now:**
+>
+> - Everything about **managed Neon Auth**. We do not run it. Auth is self-hosted
+>   Better Auth 1.6.25 in `packages/auth`, mounted per app at `/api/auth/[...all]`,
+>   with the auth tables owned by `packages/db` (migration 0013). Nothing imports
+>   `@neondatabase/auth`; no `NEON_AUTH_*` variable is read anywhere.
+> - **"Option A — recommended"** was abandoned. `docs/auth-platform-spec.md`
+>   superseded it, and that plan has been **executed**.
+> - The **"no custom plugins" constraint** and everything downstream of it. 2FA/TOTP,
+>   encrypted backup codes and passkeys all shipped in migration 0015.
+> - **"No deployed DB yet"** — there is one.
+>
+> **Where the answer actually landed:** `docs/build-spec.md`
+> §"Platform/database separation — RESOLVED". `packages/db` owns schema and
+> migrations; `packages/auth` owns the account pool; no separate platform deployable
+> was needed.
+
 *Ryan, 25 Jul 2026. Goal: the database is "its own thing" — one shared database +
 one account pool for apps/web, apps/org, apps/suppliers and (later) Camp 404, with
 migrations running in exactly one place. Research grounded in Neon + Better Auth

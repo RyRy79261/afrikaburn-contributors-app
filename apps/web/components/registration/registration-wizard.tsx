@@ -11,11 +11,7 @@ import {
   MessageSquareWarning,
   Send,
 } from "lucide-react";
-import {
-  SECTION_KEYS,
-  SECTION_LABELS,
-  type SectionKey,
-} from "@quagga/types";
+import { SECTION_KEYS, SECTION_LABELS, type SectionKey } from "@quagga/types";
 import {
   completedSectionsFor,
   getPlacementZones,
@@ -76,7 +72,10 @@ interface WizardProps {
   /** The viewer's db user id — labels their own replies "You" in the thread. */
   viewerUserId: string | null;
   blobConfigured: boolean;
-  saveAction: (slug: string, values: RegistrationValues) => Promise<SaveDraftResult>;
+  saveAction: (
+    slug: string,
+    values: RegistrationValues,
+  ) => Promise<SaveDraftResult>;
   submitAction: (slug: string) => Promise<TransitionResult>;
   withdrawAction: (slug: string) => Promise<TransitionResult>;
 }
@@ -110,7 +109,10 @@ function toSectionData(
   };
 }
 
-function parseFamily(value: string | null): { choice: string | null; detail: string } {
+function parseFamily(value: string | null): {
+  choice: string | null;
+  detail: string;
+} {
   if (!value) return { choice: null, detail: "" };
   const [choice, ...rest] = value.split(" — ");
   return { choice: choice ?? null, detail: rest.join(" — ") };
@@ -260,7 +262,10 @@ export function RegistrationWizard(props: WizardProps) {
     <div className="flex flex-col gap-6">
       {props.status === "changes_requested" && (
         <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+          <AlertTriangle
+            className="mt-0.5 h-5 w-5 shrink-0 text-warning"
+            aria-hidden
+          />
           <div>
             <p className="text-sm font-medium text-foreground">
               AfrikaBurn asked for changes
@@ -394,353 +399,358 @@ export function RegistrationWizard(props: WizardProps) {
             </p>
 
             {active === "identity" && (
-          <>
-            <div className="rounded-lg border border-dashed border-border p-3 text-sm">
-              <span className="text-muted-foreground">Camp name: </span>
-              <span className="font-medium text-foreground">{props.campName}</span>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Your camp name is set on the camp page and can&apos;t change here.
-              </p>
-            </div>
-            <WordLimitedTextArea
-              id="s1-description"
-              label="Camp description"
-              required
-              hint="What is your camp, in a nutshell? Public in the directory once approved."
-              value={values.campDescription}
-              onChange={(v) => update({ campDescription: v })}
-              onCommit={commit}
-            />
-            <TextField
-              id="s1-contact-email"
-              label="Contact email"
-              required
-              type="email"
-              hint="The camp lead's email — AfrikaBurn's main point of contact."
-              value={values.s1ContactEmail}
-              onChange={(v) => update({ s1ContactEmail: v })}
-              onCommit={commit}
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField
-                id="s1-alt-name"
-                label="Alternative contact (name)"
-                value={values.s1AltContactName}
-                onChange={(v) => update({ s1AltContactName: v })}
-                onCommit={commit}
-              />
-              <TextField
-                id="s1-alt-phone"
-                label="Alternative contact (phone)"
-                value={values.s1AltContactPhone}
-                onChange={(v) => update({ s1AltContactPhone: v })}
-                onCommit={commit}
-              />
-            </div>
-            <TextField
-              id="s1-alt-email"
-              label="Alternative contact (email)"
-              type="email"
-              value={values.s1AltContactEmail}
-              onChange={(v) => update({ s1AltContactEmail: v })}
-              onCommit={commit}
-            />
-          </>
-        )}
+              <>
+                <div className="rounded-lg border border-dashed border-border p-3 text-sm">
+                  <span className="text-muted-foreground">Camp name: </span>
+                  <span className="font-medium text-foreground">
+                    {props.campName}
+                  </span>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Your camp name is set on the camp page and can&apos;t change
+                    here.
+                  </p>
+                </div>
+                <WordLimitedTextArea
+                  id="s1-description"
+                  label="Camp description"
+                  required
+                  hint="What is your camp, in a nutshell? Public in the directory once approved."
+                  value={values.campDescription}
+                  onChange={(v) => update({ campDescription: v })}
+                  onCommit={commit}
+                />
+                <TextField
+                  id="s1-contact-email"
+                  label="Contact email"
+                  required
+                  type="email"
+                  hint="The camp lead's email — AfrikaBurn's main point of contact."
+                  value={values.s1ContactEmail}
+                  onChange={(v) => update({ s1ContactEmail: v })}
+                  onCommit={commit}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField
+                    id="s1-alt-name"
+                    label="Alternative contact (name)"
+                    value={values.s1AltContactName}
+                    onChange={(v) => update({ s1AltContactName: v })}
+                    onCommit={commit}
+                  />
+                  <TextField
+                    id="s1-alt-phone"
+                    label="Alternative contact (phone)"
+                    value={values.s1AltContactPhone}
+                    onChange={(v) => update({ s1AltContactPhone: v })}
+                    onCommit={commit}
+                  />
+                </div>
+                <TextField
+                  id="s1-alt-email"
+                  label="Alternative contact (email)"
+                  type="email"
+                  value={values.s1AltContactEmail}
+                  onChange={(v) => update({ s1AltContactEmail: v })}
+                  onCommit={commit}
+                />
+              </>
+            )}
 
-        {active === "lnt" && (
-          <>
-            <TextAreaField
-              id="s2-plan"
-              label="Leave No Trace plan"
-              required
-              rows={5}
-              hint="Your MOOP plan, grey-water handling, and waste streams."
-              value={values.s2LntPlan}
-              onChange={(v) => update({ s2LntPlan: v })}
-              onCommit={commit}
-            />
-            <div className="grid gap-4 sm:grid-cols-3">
-              <TextField
-                id="s2-lead-name"
-                label="LNT lead name"
-                required
-                hint="A separate person from the camp lead."
-                value={values.s2LntLeadName}
-                onChange={(v) => update({ s2LntLeadName: v })}
-                onCommit={commit}
-              />
-              <TextField
-                id="s2-lead-phone"
-                label="LNT lead phone"
-                required
-                value={values.s2LntLeadPhone}
-                onChange={(v) => update({ s2LntLeadPhone: v })}
-                onCommit={commit}
-              />
-              <TextField
-                id="s2-lead-email"
-                label="LNT lead email"
-                required
-                type="email"
-                value={values.s2LntLeadEmail}
-                onChange={(v) => update({ s2LntLeadEmail: v })}
-                onCommit={commit}
-              />
-            </div>
-          </>
-        )}
+            {active === "lnt" && (
+              <>
+                <TextAreaField
+                  id="s2-plan"
+                  label="Leave No Trace plan"
+                  required
+                  rows={5}
+                  hint="Your MOOP plan, grey-water handling, and waste streams."
+                  value={values.s2LntPlan}
+                  onChange={(v) => update({ s2LntPlan: v })}
+                  onCommit={commit}
+                />
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <TextField
+                    id="s2-lead-name"
+                    label="LNT lead name"
+                    required
+                    hint="A separate person from the camp lead."
+                    value={values.s2LntLeadName}
+                    onChange={(v) => update({ s2LntLeadName: v })}
+                    onCommit={commit}
+                  />
+                  <TextField
+                    id="s2-lead-phone"
+                    label="LNT lead phone"
+                    required
+                    value={values.s2LntLeadPhone}
+                    onChange={(v) => update({ s2LntLeadPhone: v })}
+                    onCommit={commit}
+                  />
+                  <TextField
+                    id="s2-lead-email"
+                    label="LNT lead email"
+                    required
+                    type="email"
+                    value={values.s2LntLeadEmail}
+                    onChange={(v) => update({ s2LntLeadEmail: v })}
+                    onCommit={commit}
+                  />
+                </div>
+              </>
+            )}
 
-        {active === "participation" && (
-          <>
-            <TextAreaField
-              id="s3-plan"
-              label="Participation plan"
-              required
-              rows={6}
-              hint="What will your camp offer and gift? Take all the space you need."
-              value={values.s3ParticipationPlan}
-              onChange={(v) => update({ s3ParticipationPlan: v })}
-              onCommit={commit}
-            />
-            <CheckGroup
-              label="Operating hours"
-              required
-              options={OPERATING_HOURS}
-              value={values.s3OperatingHours}
-              onChange={(v) => {
-                update({ s3OperatingHours: v });
-                setTimeout(commit, 0);
-              }}
-            />
-            <YesNoField
-              label="Gifting food?"
-              required
-              hint="Food or drink gifts qualify for the morning quiet-hours exception."
-              value={values.s3GiftingFood}
-              onChange={(v) => {
-                update({ s3GiftingFood: v });
-                setTimeout(commit, 0);
-              }}
-            />
-            <TextAreaField
-              id="s3-schedule"
-              label="Schedule detail (optional)"
-              rows={3}
-              value={values.s3ScheduleDetail}
-              onChange={(v) => update({ s3ScheduleDetail: v })}
-              onCommit={commit}
-            />
-          </>
-        )}
+            {active === "participation" && (
+              <>
+                <TextAreaField
+                  id="s3-plan"
+                  label="Participation plan"
+                  required
+                  rows={6}
+                  hint="What will your camp offer and gift? Take all the space you need."
+                  value={values.s3ParticipationPlan}
+                  onChange={(v) => update({ s3ParticipationPlan: v })}
+                  onCommit={commit}
+                />
+                <CheckGroup
+                  label="Operating hours"
+                  required
+                  options={OPERATING_HOURS}
+                  value={values.s3OperatingHours}
+                  onChange={(v) => {
+                    update({ s3OperatingHours: v });
+                    setTimeout(commit, 0);
+                  }}
+                />
+                <YesNoField
+                  label="Gifting food?"
+                  required
+                  hint="Food or drink gifts qualify for the morning quiet-hours exception."
+                  value={values.s3GiftingFood}
+                  onChange={(v) => {
+                    update({ s3GiftingFood: v });
+                    setTimeout(commit, 0);
+                  }}
+                />
+                <TextAreaField
+                  id="s3-schedule"
+                  label="Schedule detail (optional)"
+                  rows={3}
+                  value={values.s3ScheduleDetail}
+                  onChange={(v) => update({ s3ScheduleDetail: v })}
+                  onCommit={commit}
+                />
+              </>
+            )}
 
-        {active === "size_logistics" && (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <NumberField
-                id="s4-population"
-                label="Expected population"
-                required
-                hint="Roughly how many campers, e.g. 45."
-                value={values.s4ExpectedPopulation}
-                onChange={(v) => update({ s4ExpectedPopulation: v })}
-                onCommit={commit}
-              />
-              <TextField
-                id="s4-arrival"
-                label="First arrival date"
-                required
-                type="date"
-                hint="When your first member arrives on site."
-                value={values.s4FirstArrivalDate}
-                onChange={(v) => update({ s4FirstArrivalDate: v })}
-                onCommit={commit}
-              />
-              <NumberField
-                id="s4-waps"
-                label="Work Access Passes (optional)"
-                hint="Requested WAPs for early access — allocated separately."
-                value={values.s4WorkAccessPasses}
-                onChange={(v) => update({ s4WorkAccessPasses: v })}
-                onCommit={commit}
-              />
-              <TextField
-                id="s4-dimensions"
-                label="Camp area dimensions"
-                required
-                placeholder="e.g. 20m x 15m"
-                hint="Width x depth in metres."
-                value={values.s4AreaDimensions}
-                onChange={(v) => update({ s4AreaDimensions: v })}
-                onCommit={commit}
-              />
-            </div>
-            <LayoutUploads
-              urls={values.s4LayoutUploadUrls}
-              blobConfigured={props.blobConfigured}
-              onChange={(urls) => update({ s4LayoutUploadUrls: urls })}
-              onCommit={commit}
-            />
-          </>
-        )}
+            {active === "size_logistics" && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <NumberField
+                    id="s4-population"
+                    label="Expected population"
+                    required
+                    hint="Roughly how many campers, e.g. 45."
+                    value={values.s4ExpectedPopulation}
+                    onChange={(v) => update({ s4ExpectedPopulation: v })}
+                    onCommit={commit}
+                  />
+                  <TextField
+                    id="s4-arrival"
+                    label="First arrival date"
+                    required
+                    type="date"
+                    hint="When your first member arrives on site."
+                    value={values.s4FirstArrivalDate}
+                    onChange={(v) => update({ s4FirstArrivalDate: v })}
+                    onCommit={commit}
+                  />
+                  <NumberField
+                    id="s4-waps"
+                    label="Work Access Passes (optional)"
+                    hint="Requested WAPs for early access — allocated separately."
+                    value={values.s4WorkAccessPasses}
+                    onChange={(v) => update({ s4WorkAccessPasses: v })}
+                    onCommit={commit}
+                  />
+                  <TextField
+                    id="s4-dimensions"
+                    label="Camp area dimensions"
+                    required
+                    placeholder="e.g. 20m x 15m"
+                    hint="Width x depth in metres."
+                    value={values.s4AreaDimensions}
+                    onChange={(v) => update({ s4AreaDimensions: v })}
+                    onCommit={commit}
+                  />
+                </div>
+                <LayoutUploads
+                  urls={values.s4LayoutUploadUrls}
+                  blobConfigured={props.blobConfigured}
+                  onChange={(urls) => update({ s4LayoutUploadUrls: urls })}
+                  onCommit={commit}
+                />
+              </>
+            )}
 
-        {active === "sound_placement" && (
-          <>
-            <RadioChoiceGroup
-              label="Sound level (SOOP)"
-              required
-              hint="Pick the loudest you'll get. This decides which zone you're placed in."
-              footnote="SOOP = Sound Out Of Place — how loud you are, relative to your camp neighbours."
-              options={SOUND_SCALE.map((s) => ({
-                value: s.value,
-                label: s.label,
-                blurb: s.blurb,
-              }))}
-              value={values.s5AmplifiedMusic}
-              onChange={(v) => {
-                update({ s5AmplifiedMusic: v });
-                setTimeout(commit, 0);
-              }}
-            />
-            <TextAreaField
-              id="s5-sound-plan"
-              label="Sound plan"
-              rows={4}
-              hint="Equipment, playing times, and how you'll keep within quiet hours. Required if you're bringing amplification."
-              value={values.s5SoundPlan}
-              onChange={(v) => update({ s5SoundPlan: v })}
-              onCommit={commit}
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <PlacementSelect
-                label="Placement — first choice"
-                required
-                options={zones.map((z) => ({
-                  value: z.value,
-                  label: z.label,
-                  blurb: z.blurb,
-                }))}
-                value={values.s5PlacementFirstChoice}
-                onChange={(v) => {
-                  update({ s5PlacementFirstChoice: v });
-                  setTimeout(commit, 0);
-                }}
-                flagNote={
-                  activeReviews.some((r) => r.status === "open")
-                    ? "The placement team asked you to reconsider this."
-                    : undefined
-                }
-              />
-              <PlacementSelect
-                label="Placement — second choice"
-                options={zones.map((z) => ({
-                  value: z.value,
-                  label: z.label,
-                  blurb: z.blurb,
-                }))}
-                value={values.s5PlacementSecondChoice}
-                onChange={(v) => {
-                  update({ s5PlacementSecondChoice: v });
-                  setTimeout(commit, 0);
-                }}
-              />
-            </div>
-            <TextField
-              id="s5-neighbour"
-              label="Neighbour request (optional)"
-              hint="Name other camps you'd like to be placed near."
-              value={values.s5NeighbourRequest}
-              onChange={(v) => update({ s5NeighbourRequest: v })}
-              onCommit={commit}
-            />
-            <div className="flex flex-col gap-2">
-              <ChoiceGroup
-                label="Family-friendly?"
-                required
-                options={FAMILY_CHOICES}
-                value={family.choice}
-                onChange={(choice) => {
-                  const composed = family.detail
-                    ? `${choice} — ${family.detail}`
-                    : choice;
-                  update({ s5FamilyFriendly: composed });
-                  setTimeout(commit, 0);
-                }}
-              />
-              <TextField
-                id="s5-family-detail"
-                label="Family-friendly detail (optional)"
-                value={family.detail || null}
-                onChange={(detail) => {
-                  const choice = family.choice ?? "Maybe";
-                  const composed = detail ? `${choice} — ${detail}` : choice;
-                  update({ s5FamilyFriendly: composed });
-                }}
-                onCommit={commit}
-              />
-            </div>
-          </>
-        )}
+            {active === "sound_placement" && (
+              <>
+                <RadioChoiceGroup
+                  label="Sound level (SOOP)"
+                  required
+                  hint="Pick the loudest you'll get. This decides which zone you're placed in."
+                  footnote="SOOP = Sound Out Of Place — how loud you are, relative to your camp neighbours."
+                  options={SOUND_SCALE.map((s) => ({
+                    value: s.value,
+                    label: s.label,
+                    blurb: s.blurb,
+                  }))}
+                  value={values.s5AmplifiedMusic}
+                  onChange={(v) => {
+                    update({ s5AmplifiedMusic: v });
+                    setTimeout(commit, 0);
+                  }}
+                />
+                <TextAreaField
+                  id="s5-sound-plan"
+                  label="Sound plan"
+                  rows={4}
+                  hint="Equipment, playing times, and how you'll keep within quiet hours. Required if you're bringing amplification."
+                  value={values.s5SoundPlan}
+                  onChange={(v) => update({ s5SoundPlan: v })}
+                  onCommit={commit}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PlacementSelect
+                    label="Placement — first choice"
+                    required
+                    options={zones.map((z) => ({
+                      value: z.value,
+                      label: z.label,
+                      blurb: z.blurb,
+                    }))}
+                    value={values.s5PlacementFirstChoice}
+                    onChange={(v) => {
+                      update({ s5PlacementFirstChoice: v });
+                      setTimeout(commit, 0);
+                    }}
+                    flagNote={
+                      activeReviews.some((r) => r.status === "open")
+                        ? "The placement team asked you to reconsider this."
+                        : undefined
+                    }
+                  />
+                  <PlacementSelect
+                    label="Placement — second choice"
+                    options={zones.map((z) => ({
+                      value: z.value,
+                      label: z.label,
+                      blurb: z.blurb,
+                    }))}
+                    value={values.s5PlacementSecondChoice}
+                    onChange={(v) => {
+                      update({ s5PlacementSecondChoice: v });
+                      setTimeout(commit, 0);
+                    }}
+                  />
+                </div>
+                <TextField
+                  id="s5-neighbour"
+                  label="Neighbour request (optional)"
+                  hint="Name other camps you'd like to be placed near."
+                  value={values.s5NeighbourRequest}
+                  onChange={(v) => update({ s5NeighbourRequest: v })}
+                  onCommit={commit}
+                />
+                <div className="flex flex-col gap-2">
+                  <ChoiceGroup
+                    label="Family-friendly?"
+                    required
+                    options={FAMILY_CHOICES}
+                    value={family.choice}
+                    onChange={(choice) => {
+                      const composed = family.detail
+                        ? `${choice} — ${family.detail}`
+                        : choice;
+                      update({ s5FamilyFriendly: composed });
+                      setTimeout(commit, 0);
+                    }}
+                  />
+                  <TextField
+                    id="s5-family-detail"
+                    label="Family-friendly detail (optional)"
+                    value={family.detail || null}
+                    onChange={(detail) => {
+                      const choice = family.choice ?? "Maybe";
+                      const composed = detail
+                        ? `${choice} — ${detail}`
+                        : choice;
+                      update({ s5FamilyFriendly: composed });
+                    }}
+                    onCommit={commit}
+                  />
+                </div>
+              </>
+            )}
 
-        {active === "suppliers_commerce" && (
-          <>
-            <SupplierPicker
-              suppliers={props.suppliers}
-              selectedIds={values.supplierIds}
-              onChangeSelected={(ids) => update({ supplierIds: ids })}
-              onCommitSelected={commit}
-              note={values.s6SuppliersNote}
-              onChangeNote={(v) => update({ s6SuppliersNote: v })}
-              onCommitNote={commit}
-            />
-            <YesNoField
-              label="Paid performers?"
-              required
-              value={values.s6PaidPerformers}
-              onChange={(v) => {
-                update({ s6PaidPerformers: v });
-                setTimeout(commit, 0);
-              }}
-            />
-            <TextAreaField
-              id="s6-fee"
-              label="Camp fee structure"
-              required
-              rows={4}
-              hint="How does the camp fund itself?"
-              value={values.s6FeeStructure}
-              onChange={(v) => update({ s6FeeStructure: v })}
-              onCommit={commit}
-            />
-            <NumberField
-              id="s6-budget"
-              label="Expected budget in ZAR (optional)"
-              value={values.s6ExpectedBudgetZar}
-              onChange={(v) => update({ s6ExpectedBudgetZar: v })}
-              onCommit={commit}
-            />
-            <AckRow
-              checked={values.s6PlugAndPlayAck === true}
-              onChange={(e) => {
-                update({ s6PlugAndPlayAck: e.currentTarget.checked });
-                setTimeout(commit, 0);
-              }}
-            >
-              <span className="font-medium text-foreground">
-                Plug &amp; Play acknowledgement{" "}
-                <span className="text-accent" aria-hidden>
-                  *
-                </span>
-              </span>
-              <span className="mt-0.5 block text-muted-foreground">
-                We understand AfrikaBurn is a decommodified event: our camp is
-                participant-run, not a paid turnkey (&ldquo;plug &amp; play&rdquo;)
-                operation, and we commit to gifting and communal effort over
-                commerce.
-              </span>
-            </AckRow>
-          </>
-        )}
+            {active === "suppliers_commerce" && (
+              <>
+                <SupplierPicker
+                  suppliers={props.suppliers}
+                  selectedIds={values.supplierIds}
+                  onChangeSelected={(ids) => update({ supplierIds: ids })}
+                  onCommitSelected={commit}
+                  note={values.s6SuppliersNote}
+                  onChangeNote={(v) => update({ s6SuppliersNote: v })}
+                  onCommitNote={commit}
+                />
+                <YesNoField
+                  label="Paid performers?"
+                  required
+                  value={values.s6PaidPerformers}
+                  onChange={(v) => {
+                    update({ s6PaidPerformers: v });
+                    setTimeout(commit, 0);
+                  }}
+                />
+                <TextAreaField
+                  id="s6-fee"
+                  label="Camp fee structure"
+                  required
+                  rows={4}
+                  hint="How does the camp fund itself?"
+                  value={values.s6FeeStructure}
+                  onChange={(v) => update({ s6FeeStructure: v })}
+                  onCommit={commit}
+                />
+                <NumberField
+                  id="s6-budget"
+                  label="Expected budget in ZAR (optional)"
+                  value={values.s6ExpectedBudgetZar}
+                  onChange={(v) => update({ s6ExpectedBudgetZar: v })}
+                  onCommit={commit}
+                />
+                <AckRow
+                  checked={values.s6PlugAndPlayAck === true}
+                  onChange={(e) => {
+                    update({ s6PlugAndPlayAck: e.currentTarget.checked });
+                    setTimeout(commit, 0);
+                  }}
+                >
+                  <span className="font-medium text-foreground">
+                    Plug &amp; Play acknowledgement{" "}
+                    <span className="text-accent" aria-hidden>
+                      *
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block text-muted-foreground">
+                    We understand AfrikaBurn is a decommodified event: our camp
+                    is participant-run, not a paid turnkey (&ldquo;plug &amp;
+                    play&rdquo;) operation, and we commit to gifting and
+                    communal effort over commerce.
+                  </span>
+                </AckRow>
+              </>
+            )}
           </section>
         </div>
       </div>

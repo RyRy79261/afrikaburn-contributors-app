@@ -1,19 +1,22 @@
-// Persona: ORG STAFF — the one thing they CANNOT do: elevate accounts.
+// Persona: ORG STAFF — the one thing they CANNOT do: change anyone's access.
 //
-// Elevation is god-only. In `apps/org/lib/actions/accounts.ts`, `setOrgStaffRole`
-// is guarded by `requireOrgSession({ god: true })`; the Accounts PAGE renders for
-// org_staff but strictly read-only (isGod === false → no action controls).
+// Access management belongs to the System manager alone. In
+// `apps/org/lib/actions/accounts.ts`, `setOrgStaffRole` and `setOrgDepartment`
+// both require the `manage_accounts` capability (@quagga/core
+// `org-permissions`); the Accounts PAGE renders for org_staff but strictly
+// read-only (`orgCan(actor, "manage_accounts") === false` → no action controls).
 //
 // HONEST SCOPE NOTE (per the task's "say so explicitly" rule): a test that goes
-// red specifically when `requireOrgSession({ god: true })` is deleted CANNOT be
-// written through the real UI for this guard, because the elevate/demote controls
-// have no client entry point for a non-god — they are server-omitted, and the
-// server action carries no other reachable trigger. That guard-deletion proof
-// therefore lives at the action-test layer (roadmap M3-02, which explicitly owns
-// "requireOrgSession({god:true}) throws for org_staff"). What IS faithfully
-// assertable end-to-end is the observable contract below: org_staff reaches the
-// Accounts page, sees the read-only copy, and is offered NO elevation affordance
-// anywhere — the account-management surface is closed to them.
+// red specifically when that capability check is deleted CANNOT be written
+// through the real UI, because the access controls have no client entry point
+// for a non-manager — they are server-omitted, and the server action carries no
+// other reachable trigger. That guard-deletion proof therefore lives in the unit
+// gate: `apps/org/lib/__tests__/org-rank-enforcement.test.ts` asserts each
+// action names its capability, and
+// `packages/core/src/__tests__/org-permissions.test.ts` asserts org_staff is
+// refused `manage_accounts`. What IS faithfully assertable end-to-end is the
+// observable contract below: org_staff reaches the Accounts page, sees the
+// read-only copy, and is offered NO elevation affordance anywhere.
 
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import { provisionOrgStaff } from "./_helpers";

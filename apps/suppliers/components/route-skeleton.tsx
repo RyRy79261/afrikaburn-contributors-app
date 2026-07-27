@@ -1,61 +1,48 @@
-import { cn } from "@quagga/ui/lib/utils";
+import {
+  Skeleton,
+  SkeletonRegion,
+  SkeletonCard,
+} from "@quagga/ui/components/skeleton";
 
-// Lightweight loading placeholders for the portal's app-router `loading.tsx`
-// boundaries. There is no shared Skeleton in @quagga/ui yet, so these are local
-// pulse blocks styled with the same `bg-muted` surface the design system already
-// uses (progress track, avatars). Purely presentational — no data, no state.
-
-function Bar({ className }: { className?: string }) {
-  return (
-    <div className={cn("animate-pulse rounded-md bg-muted", className)} aria-hidden />
-  );
-}
-
-/** A card-shaped skeleton — matches the bordered cards the portal pages render. */
-function CardSkeleton({ lines = 3 }: { lines?: number }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/40 p-5">
-      <Bar className="h-4 w-1/3" />
-      <div className="mt-4 flex flex-col gap-2.5">
-        {Array.from({ length: lines }).map((_, i) => (
-          <Bar
-            key={i}
-            className={cn("h-3", i === lines - 1 ? "w-2/3" : "w-full")}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
+// Portal-shaped loading placeholders, composed from the shared skeleton kit in
+// @quagga/ui (which is where the pulse block, card and row primitives now live —
+// this file used to carry its own copies).
+//
+// The heading placeholder copies `PageHeading`'s container classes verbatim
+// (`mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between`), so
+// the real heading lands in exactly the box the skeleton held.
 
 /** The page-heading block skeleton (eyebrow + title + description). */
-function HeadingSkeleton() {
+export function HeadingSkeleton({ action = false }: { action?: boolean }) {
   return (
-    <div className="mb-8 flex flex-col gap-3">
-      <Bar className="h-3 w-40" />
-      <Bar className="h-7 w-64" />
-      <Bar className="h-3.5 w-full max-w-xl" />
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-1">
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-8 w-64 max-w-full" />
+        <Skeleton className="h-4 w-full max-w-2xl" />
+      </div>
+      {action && <Skeleton className="h-9 w-32 shrink-0 rounded-lg" />}
     </div>
   );
 }
 
 /**
  * A full portal-page skeleton: heading plus a configurable number of card
- * blocks. Reused by the route-group loading boundary so any gated page shows a
- * consistent, on-brand loading state while its data streams in.
+ * blocks. Used by the route-group boundary for any gated page that has not
+ * written a closer one. It renders inside `(portal)/layout.tsx`, so the sage
+ * header and nav stay mounted — only the body is standing in.
  */
 export function PortalPageSkeleton({ cards = 2 }: { cards?: number }) {
   return (
-    <div aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading…</span>
+    <SkeletonRegion>
       <HeadingSkeleton />
       <div className="flex flex-col gap-4">
         {Array.from({ length: cards }).map((_, i) => (
-          <CardSkeleton key={i} lines={i === 0 ? 2 : 3} />
+          <SkeletonCard key={i} lines={i === 0 ? 2 : 3} />
         ))}
       </div>
-    </div>
+    </SkeletonRegion>
   );
 }
 
-export { Bar as SkeletonBar, CardSkeleton };
+export { Skeleton as SkeletonBar, SkeletonCard as CardSkeleton };

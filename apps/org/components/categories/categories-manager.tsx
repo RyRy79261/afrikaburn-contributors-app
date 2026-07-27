@@ -34,9 +34,16 @@ import {
 // The org CRUD surface for the per-edition camp-category taxonomy (build-spec
 // §"Camp categories", canvas frame g4CzsM / X8RHa). The table shows emoji,
 // label, real usage counts (from `getCampCategories`) and the sort position;
-// create/edit/delete and reordering all go through the org-gated, audited
-// server actions in lib/actions/categories.ts — validation (shape + per-edition
-// dedupe) is enforced there via @quagga/core, never here.
+// create/edit/delete and reordering all go through the audited server actions in
+// lib/actions/categories.ts — validation (shape + per-edition dedupe) is
+// enforced there via @quagga/core, never here.
+//
+// `canManage` comes from the ONE capability matrix on the server
+// (`manage_camp_categories`, System manager only — Ryan, 27 Jul 2026), which is
+// the same check `createCategory`/`updateCategory`/`deleteCategory` re-run. So
+// when it is false every control is gone AND every action would refuse: the
+// read-only table is a truthful picture of the permission, not a decoration over
+// buttons that would have worked.
 
 interface FormState {
   label: string;
@@ -63,9 +70,12 @@ function sortValue(raw: string): number | undefined {
 export function CategoriesManager({
   editionId,
   categories,
+  canManage,
 }: {
   editionId: string;
   categories: CampCategoryRow[];
+  /** From `orgCan(actor, "manage_camp_categories")` — System manager only. */
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -219,7 +229,9 @@ export function CategoriesManager({
                 </TableCell>
                 <TableCell>
                   <span className="flex items-center justify-end gap-1">
-                    <Button
+                    {canManage && (
+                      <>
+                        <Button
                       variant="ghost"
                       size="icon"
                       disabled={pending || index === 0}
@@ -254,7 +266,9 @@ export function CategoriesManager({
                       aria-label={`Delete ${row.label}`}
                     >
                       <Trash2 className="h-4 w-4" aria-hidden />
-                    </Button>
+                        </Button>
+                      </>
+                    )}
                   </span>
                 </TableCell>
               </TableRow>
@@ -265,7 +279,10 @@ export function CategoriesManager({
         </CardContent>
       </Card>
 
-      {/* Add category — a collapsed row that opens into the form. */}
+      {/* Add category — a collapsed row that opens into the form. Absent for a
+          rank that cannot manage the taxonomy; the same rank's write would be
+          refused server-side, so this is agreement, not concealment. */}
+      {canManage && (
       <div className="rounded-xl border border-dashed border-border p-4">
         {adding ? (
           <div className="flex flex-col gap-3">
@@ -331,6 +348,7 @@ export function CategoriesManager({
           </button>
         )}
       </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Camps choose up to {CATEGORY_SUGGESTED_MAX} categories on their profile;

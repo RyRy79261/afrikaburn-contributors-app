@@ -32,7 +32,7 @@ export async function createSupplierDocument(
   raw: z.input<typeof CreateDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const { editionId, ...input } = CreateDocumentInput.parse(raw);
 
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
@@ -102,7 +102,7 @@ export async function updateSupplierDocument(
   raw: z.input<typeof UpdateDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "write" });
     const { documentId, ...input } = UpdateDocumentInput.parse(raw);
 
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
@@ -161,7 +161,7 @@ export async function deleteSupplierDocument(
   raw: z.input<typeof DeleteDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession();
+    const session = await requireOrgSession({ capability: "delete" });
     const { documentId } = DeleteDocumentInput.parse(raw);
 
     // Read, ack-count, delete and audit are one atomic unit.
@@ -220,7 +220,8 @@ export interface OrgSupplierDocumentRow {
 export async function listSupplierDocuments(
   editionId: string,
 ): Promise<OrgSupplierDocumentRow[]> {
-  await requireOrgSession();
+  // A read: every rank sees the document list (it is org content, not a person).
+  await requireOrgSession({ capability: "read" });
   const db = getDb();
   const rows = await db
     .select({
@@ -238,6 +239,9 @@ export async function listSupplierDocuments(
     })
     .from(schema.supplierDocuments)
     .where(eq(schema.supplierDocuments.editionId, editionId))
-    .orderBy(asc(schema.supplierDocuments.sort), asc(schema.supplierDocuments.title));
+    .orderBy(
+      asc(schema.supplierDocuments.sort),
+      asc(schema.supplierDocuments.title),
+    );
   return rows.map((r) => ({ ...r, ackCount: Number(r.ackCount) }));
 }

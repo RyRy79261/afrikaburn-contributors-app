@@ -4,10 +4,12 @@ import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   activationRequiredActionKey,
+  canReadPersonalInformation,
   resolveActivationDefinition,
   tallyActivationCompletion,
   type ActivationCompletion,
   type AudienceContext,
+  type OrgActor,
 } from "@quagga/core";
 import {
   ORG_OUTBOUND_SELECTOR_LABELS,
@@ -129,7 +131,11 @@ export async function listOrgQuestionnaires(): Promise<
       dueAt: a.dueAt,
       audienceLabel: audienceLabel(spec),
       audienceKind: spec?.kind ?? null,
-      completion: completions.get(a.id) ?? { sent: 0, completed: 0, pending: 0 },
+      completion: completions.get(a.id) ?? {
+        sent: 0,
+        completed: 0,
+        pending: 0,
+      },
       openedAt: a.openedAt,
       createdAt: a.createdAt,
     };
@@ -300,14 +306,36 @@ export interface ResultRow {
 }
 
 /**
+ * May this actor read a questionnaire's RESULTS?
+ *
+ * Results are named people's answers — the respondent list is a list of email
+ * addresses, and free-text answers routinely carry whatever the respondent chose
+ * to write about themselves. There is no useful redaction of that (a "who
+ * answered what" table with the who removed is not the same screen), so the
+ * whole surface needs `read_personal_information` and an engineer is told so
+ * plainly instead of being 404'd.
+ *
+ * The completion COUNT is not personal information and stays on the
+ * questionnaires list for every rank.
+ */
+export function canReadActivationResults(actor: OrgActor): boolean {
+  return canReadPersonalInformation(actor);
+}
+
+/**
  * Per-user completion table for one activation: every targeted user (a
  * required_action row) with their status and — for completed ones — the response
- * map. Scope is already enforced by the caller (org activation only).
+ * map. Scope is already enforced by the caller (org activation only); the
+ * personal-information gate is asserted here rather than trusted.
  */
 export async function getActivationResults(
   activationId: string,
   definitionKey: string,
+  actor: OrgActor,
 ): Promise<ResultRow[]> {
+  if (!canReadActivationResults(actor)) {
+    throw new Error("Not authorised to read questionnaire responses.");
+  }
   const db = getDb();
   const actionKey = activationRequiredActionKey(activationId);
 
@@ -376,56 +404,56 @@ export async function buildAudienceContext(
     projectRoles,
     suppliers,
   ] = await Promise.all([
-      db
-        .select({
-          membershipId: schema.memberships.id,
-          userId: schema.memberships.userId,
-          groupId: schema.memberships.groupId,
-          role: schema.memberships.role,
-        })
-        .from(schema.memberships),
-      db
-        .select({ id: schema.groups.id, kind: schema.groups.kind })
-        .from(schema.groups),
-      db
-        .select({
-          groupId: schema.registrations.groupId,
-          editionId: schema.registrations.editionId,
-          status: schema.registrations.status,
-          grantsInterest: schema.registrations.grantsInterest,
-        })
-        .from(schema.registrations)
-        .where(eq(schema.registrations.editionId, editionId)),
-      db
-        .select({
-          userId: schema.burnerBios.userId,
-          editionId: schema.burnerBios.editionId,
-        })
-        .from(schema.burnerBios)
-        .where(eq(schema.burnerBios.editionId, editionId)),
-      db
-        .select({
-          membershipId: schema.memberRoleAssignments.membershipId,
-          projectRoleId: schema.memberRoleAssignments.projectRoleId,
-          consent: schema.memberRoleAssignments.consentStatus,
-        })
-        .from(schema.memberRoleAssignments),
-      db
-        .select({
-          id: schema.projectRoles.id,
-          groupId: schema.projectRoles.groupId,
-          kind: schema.projectRoles.kind,
-          officerKey: schema.projectRoles.officerKey,
-        })
-        .from(schema.projectRoles),
-      // Suppliers with a claimed portal account — the `org_suppliers` audience.
-      // Accountless catalog rows (`user_id` null) have nobody to notify, so the
-      // NOT NULL filter is the whole audience definition.
-      db
-        .select({ userId: schema.suppliers.userId })
-        .from(schema.suppliers)
-        .where(isNotNull(schema.suppliers.userId)),
-    ]);
+    db
+      .select({
+        membershipId: schema.memberships.id,
+        userId: schema.memberships.userId,
+        groupId: schema.memberships.groupId,
+        role: schema.memberships.role,
+      })
+      .from(schema.memberships),
+    db
+      .select({ id: schema.groups.id, kind: schema.groups.kind })
+      .from(schema.groups),
+    db
+      .select({
+        groupId: schema.registrations.groupId,
+        editionId: schema.registrations.editionId,
+        status: schema.registrations.status,
+        grantsInterest: schema.registrations.grantsInterest,
+      })
+      .from(schema.registrations)
+      .where(eq(schema.registrations.editionId, editionId)),
+    db
+      .select({
+        userId: schema.burnerBios.userId,
+        editionId: schema.burnerBios.editionId,
+      })
+      .from(schema.burnerBios)
+      .where(eq(schema.burnerBios.editionId, editionId)),
+    db
+      .select({
+        membershipId: schema.memberRoleAssignments.membershipId,
+        projectRoleId: schema.memberRoleAssignments.projectRoleId,
+        consent: schema.memberRoleAssignments.consentStatus,
+      })
+      .from(schema.memberRoleAssignments),
+    db
+      .select({
+        id: schema.projectRoles.id,
+        groupId: schema.projectRoles.groupId,
+        kind: schema.projectRoles.kind,
+        officerKey: schema.projectRoles.officerKey,
+      })
+      .from(schema.projectRoles),
+    // Suppliers with a claimed portal account — the `org_suppliers` audience.
+    // Accountless catalog rows (`user_id` null) have nobody to notify, so the
+    // NOT NULL filter is the whole audience definition.
+    db
+      .select({ userId: schema.suppliers.userId })
+      .from(schema.suppliers)
+      .where(isNotNull(schema.suppliers.userId)),
+  ]);
 
   return {
     editionId,
@@ -521,10 +549,7 @@ export async function getConsoleBlockingQuestionnaire(
     .where(
       and(
         eq(schema.questionnaireResponses.userId, dbUserId),
-        eq(
-          schema.questionnaireResponses.definitionKey,
-          gate.questionnaireKey,
-        ),
+        eq(schema.questionnaireResponses.definitionKey, gate.questionnaireKey),
       ),
     )
     .limit(1);

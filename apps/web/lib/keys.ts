@@ -40,7 +40,9 @@ export async function generateProfileKeypair(): Promise<GeneratedKeypair> {
  * (e.g. `a1:b2:c3:d4:e5:f6:07:18`). Deterministic, so the same key always shows
  * the same fingerprint on the profile.
  */
-export async function fingerprintPublicKey(publicKeyB64: string): Promise<string> {
+export async function fingerprintPublicKey(
+  publicKeyB64: string,
+): Promise<string> {
   const raw = Buffer.from(publicKeyB64, "base64");
   const digest = await crypto.subtle.digest("SHA-256", raw);
   const hex = Buffer.from(new Uint8Array(digest)).toString("hex");

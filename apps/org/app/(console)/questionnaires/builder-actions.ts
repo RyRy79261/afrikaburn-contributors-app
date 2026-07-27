@@ -51,7 +51,7 @@ export async function saveDefinitionV2(
 ): Promise<SaveDefinitionV2Result> {
   let input: z.infer<typeof SaveInput>;
   try {
-    await requireOrgSession();
+    await requireOrgSession({ capability: "write" });
     input = SaveInput.parse(raw);
   } catch (err) {
     return {

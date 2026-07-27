@@ -55,7 +55,10 @@ export async function listEditionDocuments(
       })
       .from(schema.supplierDocuments)
       .where(eq(schema.supplierDocuments.editionId, editionId))
-      .orderBy(asc(schema.supplierDocuments.sort), asc(schema.supplierDocuments.title));
+      .orderBy(
+        asc(schema.supplierDocuments.sort),
+        asc(schema.supplierDocuments.title),
+      );
     return rows.map((r) => ({
       ...r,
       stepKey: (r.stepKey as SupplierOnboardingStepKey | null) ?? null,

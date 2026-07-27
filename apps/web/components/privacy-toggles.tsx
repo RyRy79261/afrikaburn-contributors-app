@@ -14,7 +14,11 @@ interface PrivacyTogglesProps {
 /** Per-field privacy control (build-spec §`/onboarding`, §`/profile`). Locked
  * fields render as a disabled, always-private row with an explanation — the UI
  * mirror of the core hard-lock. */
-export function PrivacyToggles({ fields, flags, onChange }: PrivacyTogglesProps) {
+export function PrivacyToggles({
+  fields,
+  flags,
+  onChange,
+}: PrivacyTogglesProps) {
   return (
     <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
       {fields.map((field) => {
@@ -27,7 +31,10 @@ export function PrivacyToggles({ fields, flags, onChange }: PrivacyTogglesProps)
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-sm font-medium">
                 {field.locked && (
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <Lock
+                    className="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden
+                  />
                 )}
                 {field.label}
               </p>

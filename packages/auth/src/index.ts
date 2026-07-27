@@ -27,10 +27,16 @@
 
 export { auth, createAuth, buildAuthOptions, type Auth } from "./config";
 export { sendAuthEmail, type AuthEmailInput, type AuthEmailKind } from "./email";
+// The pure env module is ALSO published as `@quagga/auth/env`. Importing it
+// there gets the resolvers without evaluating this file's `auth` singleton (a
+// betterAuth() construction with a drizzle adapter bound to it), which is what
+// the org console's System panel and its unit tests want: they read how auth is
+// configured, they do not need an auth instance to do it.
 export {
   AUTH_APEX_DOMAIN,
   AUTH_COOKIE_DOMAIN,
   AUTH_RP_NAME,
+  AUTH_SESSION,
   PRODUCTION_ORIGINS,
   authConfigWarnings,
   isAuthConfigured,
@@ -42,7 +48,9 @@ export {
   resolveCookieDomain,
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
+  resolveRateLimit,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
+  resolveUseSecureCookies,
   type AuthEnv,
 } from "./env";

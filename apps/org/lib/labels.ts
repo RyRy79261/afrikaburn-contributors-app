@@ -41,7 +41,9 @@ export function formatDate(value: Date | string | null | undefined): string {
 
 /** Date + time to the minute (e.g. "26 Apr 2027, 14:03") — the audit trail
  * needs the clock, not just the day: a burst is only visible with minutes. */
-export function formatDateTime(value: Date | string | null | undefined): string {
+export function formatDateTime(
+  value: Date | string | null | undefined,
+): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";

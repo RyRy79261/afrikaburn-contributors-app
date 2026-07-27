@@ -20,6 +20,14 @@ export interface ErrorRecoveryProps {
   title?: string;
   /** Optional supporting sentence. */
   description?: string;
+  /**
+   * `"standalone"` (default) draws its own full-height, quilt-banded frame — for
+   * a boundary at the ROOT, where nothing else is on screen. `"inline"` is for a
+   * boundary INSIDE `app/(app)/layout.tsx`: the header, nav and edition banner
+   * are already rendered, so a second full-screen frame would stack one chrome
+   * on top of another.
+   */
+  frame?: "standalone" | "inline";
 }
 
 export function ErrorRecovery({
@@ -27,6 +35,7 @@ export function ErrorRecovery({
   reset,
   title = "Something went wrong",
   description = "This one's on us, not you. Give it another try — if it keeps happening, an organiser can help.",
+  frame = "standalone",
 }: ErrorRecoveryProps) {
   React.useEffect(() => {
     // Surface the failure for logs/telemetry without ever showing a stack to the
@@ -34,30 +43,38 @@ export function ErrorRecovery({
     console.error("[error-boundary]", error);
   }, [error]);
 
+  const panel = (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-8 text-center">
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h1>
+      <p className="text-sm text-muted-foreground">{description}</p>
+      {error.digest && (
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
+          Ref {error.digest}
+        </p>
+      )}
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:justify-center">
+        <Button onClick={reset}>
+          <RotateCcw className="h-4 w-4" aria-hidden />
+          Try again
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/">Back to start</Link>
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (frame === "inline") {
+    return <div className="mx-auto w-full max-w-md py-6">{panel}</div>;
+  }
+
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <QuiltBand />
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-6 py-12">
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-8 text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            {title}
-          </h1>
-          <p className="text-sm text-muted-foreground">{description}</p>
-          {error.digest && (
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
-              Ref {error.digest}
-            </p>
-          )}
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Button onClick={reset}>
-              <RotateCcw className="h-4 w-4" aria-hidden />
-              Try again
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/">Back to start</Link>
-            </Button>
-          </div>
-        </div>
+        {panel}
       </main>
     </div>
   );

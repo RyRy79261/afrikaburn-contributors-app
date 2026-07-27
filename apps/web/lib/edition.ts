@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "./db";
 import { isDatabaseConfigured } from "./config";
@@ -15,21 +16,28 @@ export interface Edition {
 
 /** The active edition (AfrikaBurn 2027, per seed). Falls back to the most
  * recent edition if none is flagged active; null when the table is empty or the
- * DB is unreachable. */
-export async function getActiveEdition(): Promise<Edition | null> {
-  const rows = await db()
-    .select()
-    .from(schema.editions)
-    .where(eq(schema.editions.isActive, true))
-    .limit(1);
-  if (rows[0]) return rows[0];
-  const latest = await db()
-    .select()
-    .from(schema.editions)
-    .orderBy(desc(schema.editions.year))
-    .limit(1);
-  return latest[0] ?? null;
-}
+ * DB is unreachable.
+ *
+ * Request-scoped: the shell's edition banner and the page's own query both want
+ * it, and it is the same row for everyone. Nothing about it is per-user, so the
+ * dedupe carries no privacy weight — it just stops the same SELECT going out
+ * two or three times per render. */
+export const getActiveEdition = cache(
+  async function getActiveEdition(): Promise<Edition | null> {
+    const rows = await db()
+      .select()
+      .from(schema.editions)
+      .where(eq(schema.editions.isActive, true))
+      .limit(1);
+    if (rows[0]) return rows[0];
+    const latest = await db()
+      .select()
+      .from(schema.editions)
+      .orderBy(desc(schema.editions.year))
+      .limit(1);
+    return latest[0] ?? null;
+  },
+);
 
 /** Static fallback so banners read correctly before the edition is seeded or
  * env-less (matches the seeded AfrikaBurn 2027 dates + the design canvas copy). */

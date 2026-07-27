@@ -21,7 +21,7 @@ export default async function ResetPasswordPage({
 }) {
   const { token, error } = await searchParams;
   const editionLabel = await getEditionLabel();
-  const usableToken = error ? null : (token?.trim() || null);
+  const usableToken = error ? null : token?.trim() || null;
 
   return (
     <div className="flex min-h-svh flex-col">

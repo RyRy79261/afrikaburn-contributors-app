@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, desc, eq, isNotNull, notInArray } from "drizzle-orm";
+import { canReadPersonalInformation, type OrgActor } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
 import {
@@ -48,22 +49,37 @@ export interface ActivityRow {
  * get `/audit`, which shows them WITH the enumeration alerts a six-row card
  * could never carry. The exclusion is a display decision made in one pure,
  * tested place (lib/status-board-format.ts), never an ad-hoc filter here.
+ *
+ * WHO did each thing is a staff member's email, so it is selected only for a
+ * caller with `read_personal_information`; everyone else reads the same feed
+ * attributed to "Staff". (Medical reads are already excluded from this card for
+ * a display reason, which happens to make the disclosure-census question moot
+ * here — `getAuditTrail` is where it is answered on purpose.)
  */
-export async function getRecentActivity(limit = 6): Promise<ActivityRow[]> {
+export async function getRecentActivity(
+  actor: OrgActor,
+  limit = 6,
+): Promise<ActivityRow[]> {
   const db = getDb();
-  return db
+  const personal = canReadPersonalInformation(actor);
+  const rows = await db
     .select({
       id: schema.auditEvents.id,
       action: schema.auditEvents.action,
-      actorEmail: schema.users.email,
       meta: schema.auditEvents.meta,
       createdAt: schema.auditEvents.createdAt,
+      ...(personal ? { actorEmail: schema.users.email } : {}),
     })
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
     .where(notInArray(schema.auditEvents.action, [...FEED_EXCLUDED_ACTIONS]))
     .orderBy(desc(schema.auditEvents.createdAt))
     .limit(limit);
+  return rows.map((r) => ({
+    ...r,
+    actorEmail:
+      "actorEmail" in r ? ((r.actorEmail as string | null) ?? null) : null,
+  }));
 }
 
 // --- Registrations over time ----------------------------------------------

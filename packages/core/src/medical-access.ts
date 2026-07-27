@@ -31,7 +31,17 @@
 
 import type { MembershipRole } from "@quagga/types";
 
-/** The org-group roles that may see any burner's medical notes. */
+/**
+ * The org-group roles that may see any burner's medical notes.
+ *
+ * `engineer` IS DELIBERATELY ABSENT and must stay absent. An engineer holds the
+ * org console's widest READ — they run the thing — but medical notes are the
+ * sharpest personal information in the system and the engineering rank exists
+ * without any care duty that would need them (@quagga/core `org-permissions`:
+ * `read_personal_information` is refused to engineers, always). Adding it here
+ * would silently re-open the notes to a rank the matrix says can never see them,
+ * from a module the matrix does not import. Don't.
+ */
 const ORG_STAFF_ROLES: ReadonlySet<MembershipRole> = new Set([
   "god",
   "org_staff",

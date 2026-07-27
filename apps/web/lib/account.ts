@@ -159,7 +159,9 @@ export function deviceLabel(userAgent: string | null): string {
  * first successful TOTP verify). Returns false — never throws — when the DB is
  * unconfigured or the row is missing, so the security page still renders.
  */
-export async function getTwoFactorEnabled(authUserId: string): Promise<boolean> {
+export async function getTwoFactorEnabled(
+  authUserId: string,
+): Promise<boolean> {
   if (!isDatabaseConfigured()) return false;
   try {
     const [row] = await db()
@@ -256,7 +258,9 @@ const SIGN_IN_METHOD_LABELS: Record<string, string> = {
  * ("Not available") rather than a wrong literal. Single source of truth for the
  * /profile Account card and any other surface that names the sign-in method.
  */
-export function describeSignInMethods(accounts: LinkedAccount[]): string | null {
+export function describeSignInMethods(
+  accounts: LinkedAccount[],
+): string | null {
   const labels: string[] = [];
   for (const a of accounts) {
     const known = SIGN_IN_METHOD_LABELS[a.providerId];

@@ -1,15 +1,27 @@
-# Build Spec — MVP R0 (frozen for the build agents)
+# Build Spec — the engineering contract
 
 Engineering addendum to [`mvp-proposal.md`](mvp-proposal.md). Where they conflict, this
-file wins. Reference implementation: the Camp 404 clone at
-`/tmp/claude-1000/-home-ryan-repos-Personal-afrikaburn-contributors-app/69acba7e-19a2-4025-b746-e3bedea626b5/scratchpad/camp-404`
-— mirror its conventions (workspace layout, drizzle patterns, auth wiring, Zod-at-boundaries).
+file wins; where this file and `AGENTS.md` conflict, this one wins for engineering and
+`AGENTS.md` wins for process. Camp 404 (github.com/ryry79261/camp-404) is the
+conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries.
 
 ## Hard constraints
 
-1. **No migration step in the build.** `vercel-build` (if defined) is plain `next build`. There is no deployed DB yet — nothing to migrate from. Provide `db:generate` (offline, drizzle-kit generate) and `db:migrate` scripts; migrations are committed but only ever applied manually once `DATABASE_URL` exists.
+1. **Migrations are generated offline, committed append-only, and applied by the
+   build at deploy time.** *(Corrected 27 Jul 2026. This constraint used to read "no
+   migration step in the build", which was true only while no database existed. Now
+   that one does, deploy-time migration is the law — see AGENTS.md §1, the fuller
+   statement.)* `db:generate` produces the file offline from `schema.ts`; every app's
+   `build` then runs `db:migrate:deploy` before `next build`. That runner takes a
+   Postgres session advisory lock on the **unpooled** connection (`DATABASE_URL_UNPOOLED`)
+   so three concurrent Vercel builds serialise, and it **aborts rather than falling
+   back to a pooled URL** — session advisory locks do not hold on PgBouncer. It also
+   **bootstraps reference data when `editions` is empty**, so a fresh database comes up
+   usable; it is a bootstrap, not a sync, and never re-asserts rows over an organiser's
+   edits. A migration is never hand-edited, never regenerated, and never applied by a
+   person against production.
 2. Package namespace **`@quagga/`**. Node ≥ 22, pnpm 10, Turborepo.
-3. Stack: Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui, Drizzle + Neon (HTTP driver in handlers, pooled for scripts), Neon Auth (Better Auth) exactly as Camp 404 wires it, Resend for email, Vercel Blob for uploads.
+3. Stack: Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui, Drizzle + Neon (HTTP driver in handlers, pooled for scripts), **self-hosted Better Auth 1.6.25** mounted per app from `@quagga/auth` at `/api/auth/[...all]` (managed Neon Auth was removed — migration 0013), Resend for email, Vercel Blob for uploads.
 4. Apps must **boot without env/DB** to a landing page (graceful "not configured" state); DB-backed routes may error clearly but must not crash the build.
 5. Schema below is **frozen** — feature agents do not add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
 6. TypeScript strict; Zod validation at every boundary; no `any` in committed code. Vitest for core logic. CI gate: `pnpm turbo run lint typecheck test build`.
@@ -28,45 +40,81 @@ file wins. Reference implementation: the Camp 404 clone at
 
 ```
 apps/
-  web/    participant app (port 3000)
-  org/    org/admin app (port 3001) — separate deployment, own auth gate
+  web/        participant app   (port 3000, teal)
+  org/        org/admin console (port 3001, apricot) — separate deployment, own auth gate
+  suppliers/  supplier portal   (port 3002, sage)   — separate deployment
 packages/
+  auth/   self-hosted Better Auth config, mounted by all three apps (@quagga/auth)
   ui/     shared shadcn components + tailwind tokens (@quagga/ui)
-  db/     drizzle schema + migrations (@quagga/db)
-  core/   shared domain logic: entitlements, name-dedupe, statuses (@quagga/core)
+  db/     drizzle schema + append-only migrations + the deploy migrator (@quagga/db)
+  core/   shared domain logic + every authz predicate (@quagga/core)
   types/  zod schemas + shared types (@quagga/types)
   eslint-config/  typescript-config/
+e2e/      Playwright persona suite (@quagga/e2e) — run by `pnpm e2e:local`, never by the unit gate
 ```
+
+**Local stack.** `docker-compose.local.yml` runs Postgres 16 plus *two* Neon proxies
+(SQL-over-HTTP and WebSocket) because `@neondatabase/serverless` uses both protocols
+and no single proxy implements them. `NEON_LOCAL_PROXY=1` points both drivers at it.
+`pnpm e2e:local` brings that up from cold, migrates, seeds, boots all three apps and
+runs the persona suite.
 
 ## Environment variables (`.env.example` at root; all optional for boot)
 
 `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET` (self-hosted Better
 Auth — identical on all three apps), `BETTER_AUTH_URL` (per app),
-`BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override), `GOOGLE_CLIENT_ID`,
+`BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override),
+`AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` (optional — RAISE the limiter's
+ceiling for a test deployment; leave unset in production), `GOOGLE_CLIENT_ID`,
 `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `GOD_EMAILS` (comma list — grants god on
 first login to a VERIFIED address), `BLOB_READ_WRITE_TOKEN`, `PGCRYPTO_KEY`. Update
-turbo.json `globalEnv` in the same change (Camp 404 rule).
+turbo.json `globalEnv` in the same change (Camp 404 rule). **The org console's `/system`
+page reports the resolved state of every one of these** — set or unset, and what follows —
+without ever printing a value.
 
 ## Schema (frozen)
 
-- `users` — auth join (`auth_user_id`), email, created_at. Minimal; no role columns.
+- `users` — auth join (`auth_user_id`), email, created_at, `sanitized_at` tombstone,
+  and **`username`** (migration 0016). Minimal; no role columns.
+  **The username is the burner's one public handle** — account-level, **optional**,
+  3–20 chars, unique on `lower(username)`. It deliberately does NOT live on
+  `burner_bios.display_name`: bios are per-edition, so a handle there would let one
+  person hold a different name every year and "unique" would mean nothing. It is an
+  **alias, not an identity anchor** (Ryan, 27 Jul 2026: *"the playa name is kinda
+  cringe… its optional and should be treated like an alias, not a root identity"*).
+  All rules live once in `@quagga/core` `username.ts` — charset, the reserved list
+  (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the neutral
+  `UNNAMED_BURNER` fallback, which is **never** a legal name and **never** an email
+  (both are private by default; either as a fallback would be a privacy incident).
+  Consequently **`isBioComplete` keys on `burner_bios.completed_at`** — the burner
+  reached the end of the flow and saved — not on any name. Completion is an act, not
+  a filled field; nothing inside the bio is mandatory. *(Marked PROVISIONAL at its
+  definition: the alternative, if a real anchor is ever wanted, is the legal name,
+  since the ID/passport exist to match a person to their ticket. Do not invent a
+  third field.)*
 - `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are *hard-locked* with no access path; **medical is *safety-visible*** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
 - `profile_keys` — user_id, public_key, encrypted_private_key, created_at. Generated server-side at onboarding; used for nothing yet except future QR attestations.
 - `groups` — kind enum (`org|theme_camp|artwork|mutant_vehicle`), name, `name_normalized` (unique per kind, case/space/punct-insensitive), description (60-word limit for camps), joinability enum (`open|invite_only`), `visibility` reserved column (default `default`), created_by. Exactly one seeded `org` row ("AfrikaBurn").
-- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member`), unique(user, group). god only valid on the org group.
+- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group), plus a nullable `department` label and a `department_lead` flag (migration 0017). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group. **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label). Departments are a free-text label + lead flag ONLY: no catalog, no CRUD screen, and no privileges attached, until the org can say what a department decides (Ryan, 27 Jul 2026).
 - `invites` — group_id, token, kind (`member|lead_transfer`), created_by, expires_at, used_by, used_at. One-time.
 - `editions` — name, year, start_date, end_date, is_active. Seed: **AfrikaBurn 2027, 2027-04-26 → 2027-05-02, active**.
 - `registrations` — group × edition, status enum (`draft|submitted|under_review|changes_requested|approved|rejected|withdrawn`), plus typed columns for the six sections per Finlay's field list in `docs/sources/scope-theme-camp-registration.txt` (identity/contact, LNT incl. lead contact, participation & gifting, size & logistics incl. layout upload URLs (max 4), sound & placement prefs, suppliers & commerce), `submitted_at`, `decided_at`. **A camp is "registered" for an edition iff an approved registration row exists** — that predicate lives in `@quagga/core` (`isRegistered`), and entitlements derive from it.
 - `section_reviews` — registration_id, section key enum (six values), status (`open|resolved`), comment, reviewer_id.
 - `questionnaire_definitions`, `questionnaire_responses`, `questionnaire_activations`, `required_actions` — ported 1:1 from Camp 404's pattern (keys map to code-side registry; Burner Bio dispatches through this).
-- `suppliers` — name, services text, contact, website, vetting_status enum (`listed|registered|flagged`), source (`ab_sheet|manual`), imported_at.
+- `suppliers` — name, `code` (`SUP-2027-0416`, stored not derived), services, contact,
+  website, category, `returning`, `standing` enum (`good|watch|suspended`), optional
+  `user_id` account link, imported_at. *(`vetting_status` and `source` were killed per
+  `docs/supplier-spec.md` and no longer exist — do not reintroduce them.)*
 - `supplier_declarations` — registration_id × supplier_id, note.
 - `payments` — subject_type + subject_id (polymorphic by string key), amount_cents nullable, currency default ZAR, reference (human-readable, e.g. `QP-2027-MAH-001`), status enum (`pending|reconciled|waived`), details jsonb, recorded_by. **No processing, ever.**
 - `audit_events` — actor_id, action, subject, meta jsonb. Written on: elevation, approval/rejection, payment reconciliation.
 
 ## apps/web routes
 
-`/` landing (works env-less) · `/auth/*` (Neon Auth UI) · `/onboarding` Burner Bio
+`/` landing (works env-less) · `/auth/*` (our own branded Better Auth screens —
+sign-in/up, forgot + reset password, verify) · `/account`, `/account/security`
+(2FA enrolment, passkeys, sessions, security events), `/account/delete` ·
+`/onboarding` Burner Bio
 (questionnaire runner; gates the rest via `required_actions`) · `/directory` (registered
 camps public; joinability badge; search) · `/camps/new` (create → instant free camp;
 name dedupe: reject exact-normalized match, warn on trigram similarity ≥ 0.55) ·
@@ -81,14 +129,88 @@ key fingerprint display).
 
 ## apps/org routes
 
-Auth gate: only god or org_staff memberships may enter; everyone else sees a polite
-wall. `/` overview · `/accounts` (search users; god elevates/demotes org_staff; audit
-logged) · `/registrations` (table: status/sound/new-vs-returning filters) ·
+Auth gate: only an ORG RANK (god / org_staff / engineer) may enter; everyone else sees a
+polite wall. What each rank may then do is the ONE capability matrix in `@quagga/core`
+`org-permissions`, which both the gate and the UI read so a hidden control and a refused
+action can never disagree (Ryan, 27 Jul 2026 — "different team memberships give different
+CRUD operations in the Org portal"):
+
+| capability | engineer | org_staff | System manager (`god`) |
+| --- | --- | --- | --- |
+| `read` — the whole console | ✅ | ✅ | ✅ |
+| `read_personal_information` | ❌ | ✅ | ✅ |
+| `write` — reviews, standings, bulletins, sends | ✅ | ✅ | ✅ |
+| `delete` — destructive removals | ❌ | ✅ | ✅ |
+| `manage_camp_categories` | ❌ | ❌ | ✅ |
+| `manage_accounts` — grant/remove a rank | ❌ | ❌ | ✅ |
+| `read_system` — the System panel (`/system`) | ✅ | ❌ | ✅ |
+
+**The ranks are NOT a ladder.** `read_system` is held by engineer and System manager and
+refused to org_staff, while `read_personal_information` and `delete` go the other way.
+These are different JOBS, not seniority tiers, so any check shaped like `rank >= org_staff`
+is wrong in both directions — ask `orgCan`.
+
+**Engineer + personal information is enforced at the QUERY, never in the JSX.** Every org
+query that returns a person resolves the predicate BEFORE its select (the
+`canViewMedicalNotes` pattern), so an engineer's payload never contains medical notes,
+phone numbers, emergency contacts, ID/passport, legal names or email addresses — not even
+as an unrendered field. Two consequences worth stating: the accounts search matches on
+username only for that rank (an email match would be a lookup oracle), and the
+medical-access audit panel is withheld whole, because a `bio.medical.view` row only exists
+when its subject HAS notes, making the list a census of who has disclosed. Questionnaire
+RESULTS are refused for the same reason. Ranks are never self-service: `engineer` and
+`org_staff` are granted by a System manager; `god` comes solely from a verified
+`GOD_EMAILS` address.
+
+`/` overview · `/accounts` (search users; the System manager grants/removes ranks and
+records departments; audit logged) · `/registrations` (table: status/sound/new-vs-returning
+filters) ·
 `/registrations/[id]` (full submission read; per-section comment + open/resolve;
 actions: approve / request changes / reject — approve flips the entitlement predicate) ·
-`/suppliers` (imported list, vetting status editing, manual add). There is NO
+`/suppliers` (imported list, vetting status editing, manual add) · `/categories` (the
+per-edition camp-category taxonomy — readable by every rank, CRUD by the System manager
+alone) · `/system` (below). There is NO
 /payments section (Ryan, 24 Jul: "we don't do payments") — the payments table and
 PaymentDetailsBlock survive only for future logistics apps.
+
+## The System panel — `/system` (Ryan, 27 Jul 2026)
+
+> "There should probably be a System management panel for IT staff and System manager
+> teams to manage certain IT specific settings, security controls, and god level account
+> management."
+
+Gated on `read_system`: **engineer and System manager only**. It **surfaces existing
+machinery — it invents none.** Every state it shows already existed and already degraded
+honestly; each was honest in its own corner, so the person debugging had to know which
+file to read. Four sections:
+
+- **System health** — probed while the page renders, not read back off config ("the
+  variable is set" and "the service answers" are different claims): a real timed database
+  round trip; the migration verdict from `planMigration`, *the same function the build
+  calls*, including the exact sentence a deploy would fail with; whether reference data has
+  ever been seeded; auth secret, Resend, blob and `PGCRYPTO_KEY` presence.
+- **Security controls** — what the auth stack is *actually* enforcing, derived from
+  @quagga/auth's own resolvers so the page can never report a rule the stack is not
+  applying: email verification and **why** (derived from `RESEND_API_KEY`, never a switch
+  someone forgot), the `AUTH_RATE_LIMIT_*` ceiling, 2FA/passkey availability and passkey
+  scope, session lifetime *including the cookie-cache caveat on revocation*, SSO cookie
+  scoping, the Secure-cookie flag, Google, and the password policy.
+- **Org access** — who holds console access, at what rank, in whose department, with the
+  existing elevate/demote confirmation flow for a System manager, and a warning when only
+  one System manager exists (core already refuses to let the last one self-delete; said
+  here, it is something the org can act on *before* it matters).
+- **A link to `/audit`**, the existing trail.
+
+**It never prints a secret** — only whether one is set, and what follows. The single
+deliberate exception is a database *hostname*, parsed out so a password in the connection
+string cannot come with it. `GOD_EMAILS` is reported as a **count**: those are people's
+email addresses and an engineer never receives one. A unit test seeds every credential env
+var with a marker and asserts no marker survives into any rendered string.
+
+**No pen.dev frame yet — a recorded exception to design-before-build, not an oversight.**
+The page is assembled entirely from the existing console vocabulary (PageHeading, Card, the
+ResponsiveDataTable accounts table), so the frame, when drawn, documents what shipped
+rather than redesigning it.
 
 ## Seeds (`packages/db/src/seed.ts`, runnable script, idempotent)
 
@@ -123,11 +245,14 @@ An empty directory, registrations queue and status board on a fresh database are
 enforcement · registration + review state machines (legal transitions only) · payment
 reference generator · supplier CSV→JSON import parser.
 
-## Explicitly NOT in this build
+## Explicitly NOT built
 
 Containers (hint tile only) · attestation QR flows (only `profile_keys` generation) ·
 payment processing/checkout · water/ice/gas · placement maps · PWA/offline · Inngest ·
-Storybook/pencil · carry-forward between editions (single seeded edition).
+Storybook · carry-forward between editions (single seeded edition).
+
+*(pen.dev **is** used — `design/ab-initial-app.pen` is the design source of truth. It
+was on this list when the list meant "no design tooling"; that changed.)*
 
 ## Burner Bio v3 additions (Ryan, 24 Jul 2026 — corpus-grounded)
 
@@ -183,14 +308,19 @@ headline numbers.
 - Law: bulletins are informational only (no data collection — fewer-forms);
   notifications never leak hard-locked fields; no payment notifications exist.
 
-## Platform/database separation (Ryan, 25 Jul 2026 — decision pending research)
+## Platform/database separation — RESOLVED (27 Jul 2026)
 
-Direction: the database + migrations move to a single owning "platform" unit so
-apps/web, apps/org, apps/suppliers and (later) Camp 404 share one Neon database and
-one account system; migrations run in exactly one place. Architecture options,
-Neon-Auth/Better-Auth constraints, and the chosen shape live in
-docs/platform-architecture-spec.md. Until that lands, NO new per-app migration
-tooling; packages/db remains the interim single owner of schema + migrations.
+The question was whether the database and accounts should move to a separate owning
+"platform" unit. **They did not need to.** `packages/db` is the single owner of schema
+and migrations for all three apps, and `packages/auth` is the single owner of the
+account system — one self-hosted Better Auth instance, one shared account pool, SSO
+across the apex. That is the shape the separation was after, reached without a
+separate deployable.
+
+Still binding: **no per-app migration tooling.** `packages/db` migrates, everything
+else imports the client and types. The research trail is in
+`docs/platform-architecture-spec.md` (superseded) and the executed plan in
+`docs/auth-platform-spec.md`.
 
 ## Status board KPI row (Ryan, 25 Jul 2026)
 

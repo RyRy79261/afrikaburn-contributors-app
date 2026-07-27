@@ -33,8 +33,7 @@ const SIGN_IN_FAILED =
 // Shown for BOTH a fresh sign-up and an already-registered address.
 const SIGN_UP_GENERIC =
   "Check your inbox — if that address is new, we've sent a link to confirm your account.";
-const GENERIC_PROBLEM =
-  "Something went wrong. Please try again in a moment.";
+const GENERIC_PROBLEM = "Something went wrong. Please try again in a moment.";
 
 export function AuthForm({
   mode,
@@ -218,7 +217,8 @@ export function AuthForm({
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">Welcome, burner</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in or create your account — your Burner Bio takes about 3 minutes.
+          Sign in or create your account — your Burner Bio takes about 3
+          minutes.
         </p>
       </div>
 

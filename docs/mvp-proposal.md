@@ -1,5 +1,13 @@
 # MVP Proposal — Kickoff Demo Build
 
+> **📄 Planning artifact — historical (23 Jul 2026).** This is the proposal the build
+> was scoped from, kept for its reasoning and its demo narrative. It is **not** a
+> description of what exists. Three known drifts: it was written for **two** apps
+> (`apps/suppliers` is a third), its stack table says **Neon Auth** (auth is
+> self-hosted Better Auth 1.6.25 in `packages/auth`), and it predates the username,
+> the org rank matrix and the medical consent model. For current truth read
+> `README.md` and `docs/build-spec.md`.
+
 *Goal: a working, clickable raw MVP for the kickoff meeting, so the group tinkers with
 something real instead of debating hypotheticals. Companions:
 [`synthesis.md`](synthesis.md) (correlated requirements, incl. the two-vision
@@ -86,7 +94,7 @@ doesn't apply, plus the attestation toolkit.
 | Monorepo | Turborepo + pnpm workspaces, Node ≥ 22; **`apps/web` (participants) + `apps/org` (admin/org — separate deployment)**; future separate apps: containers, water, suppliers portal | Extends Camp 404's layout; package namespace `@quagga/` |
 | Web | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui | Same |
 | DB | Neon Postgres + Drizzle ORM | Same patterns: schema.ts source of truth, append-only generated migrations, HTTP driver for handlers / pooled for jobs |
-| Auth | Neon Auth (Better Auth) — email + Google OAuth | Same; plus magic-link/PIN token identities for handover roles; MFA for privileged roles later (R1) |
+| Auth | ~~Neon Auth (Better Auth)~~ → **self-hosted Better Auth 1.6.25** (`packages/auth`) — email + Google OAuth, 2FA, passkeys | *Changed 26 Jul 2026: managed Neon Auth removed, see `docs/auth-platform-spec.md`.* MFA is shipped, not deferred |
 | Offline crypto | WebCrypto (ECDSA P-256), qrcode render, BarcodeDetector/jsQR scan | New — no external service; all client-side by design |
 | Async tasks | Plain route handlers in MVP; **Inngest optional, added when a real async need lands (~R1: reminders, webhook processing, notification fan-out)** | Nice-to-have, not a spine dependency; would dodge the Vercel daily-cron cap |
 | Payments | **Payment details + reference + status block** wherever money applies — no checkout, no gateway, no mock | **Never holds funds; "we track, AB collects."** If a gateway ever happens: SA-based, international Visa/Mastercard (Paystack / Peach / PayFast) |

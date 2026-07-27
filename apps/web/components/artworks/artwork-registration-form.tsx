@@ -21,7 +21,7 @@ import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
 import { CheckGroup, YesNoField } from "@/components/registration/field-kit";
-import type { ArtworkRegistrationActionResult } from "@/app/artworks/new/shared";
+import type { ArtworkRegistrationActionResult } from "@/app/(app)/artworks/new/shared";
 import {
   ART_GRANT_NOTE,
   ARTWORK_POWER_OPTIONS,
@@ -29,7 +29,7 @@ import {
   INFRASTRUCTURE_NOTE,
   PHYSICAL_NOTE,
   type ArtworkPowerKey,
-} from "@/app/artworks/new/copy";
+} from "@/app/(app)/artworks/new/copy";
 
 // Art Project registration form (canvas d3pOJI desktop / H2DP4 mobile 360).
 // One responsive page — the mobile pair is the same route at a narrower width:
@@ -408,7 +408,10 @@ export function ArtworkRegistrationForm({
         </Field>
         {awaitingConfirm && (
           <p className="-mt-2 flex items-start gap-1.5 text-xs text-warning">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <TriangleAlert
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              aria-hidden
+            />
             <span>
               Similar to the existing project &ldquo;{warnings[0]}&rdquo; — is
               yours different? Submit again to keep this name.

@@ -121,9 +121,10 @@ export default async function LandingPage() {
 
       <footer className="mt-auto border-t border-border pt-4">
         <p className="text-xs text-muted-foreground">
-          Questions? The Supplier Team is at suppliers@afrikaburn.com. AfrikaBurn
-          never processes or holds payments through this portal — deposits and
-          fees are tracked here and settled with the Supplier Team directly.
+          Questions? The Supplier Team is at suppliers@afrikaburn.com.
+          AfrikaBurn never processes or holds payments through this portal —
+          deposits and fees are tracked here and settled with the Supplier Team
+          directly.
         </p>
       </footer>
     </main>

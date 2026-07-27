@@ -166,7 +166,10 @@ export default async function StandingPage() {
       {/* Private-notes callout — makes the #56 law visible: the org keeps an
           internal notes trail, and it is never shown to the supplier. */}
       <div className="mt-6 flex items-start gap-3 rounded-lg border border-border bg-secondary/30 p-4">
-        <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+        <Lock
+          className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
         <div className="flex flex-col gap-0.5">
           <p className="text-sm font-medium text-foreground">
             Private notes stay private

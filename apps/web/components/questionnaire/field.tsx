@@ -112,7 +112,9 @@ function Control({
           id={question.id}
           type={inputTypeFor(question)}
           value={typeof value === "string" ? value : ""}
-          placeholder={"placeholder" in question ? question.placeholder : undefined}
+          placeholder={
+            "placeholder" in question ? question.placeholder : undefined
+          }
           aria-describedby={describedBy}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -428,7 +430,10 @@ function Control({
               )}
             >
               {opt.imageUrl && (
-                <OptionThumb url={opt.imageUrl} alt={opt.imageAlt ?? opt.label} />
+                <OptionThumb
+                  url={opt.imageUrl}
+                  alt={opt.imageAlt ?? opt.label}
+                />
               )}
               <span className="min-w-0 flex-1">{opt.label}</span>
               <span
@@ -478,7 +483,10 @@ function Control({
       const clearOther = () =>
         onChange(selected.filter((s) => !isOtherAnswer(s)));
 
-      const limits = selectionHint(question.minSelections, question.maxSelections);
+      const limits = selectionHint(
+        question.minSelections,
+        question.maxSelections,
+      );
 
       if (question.display === "image_grid") {
         return (
@@ -585,9 +593,7 @@ function Control({
               key={year}
               value={String(year)}
               disabled={disabled}
-              aria-label={
-                disabled ? `${year} — no burn was held` : `${year}`
-              }
+              aria-label={disabled ? `${year} — no burn was held` : `${year}`}
               title={disabled ? "No burn was held this year" : undefined}
               className="h-auto flex-col gap-0 py-1.5"
             >
@@ -826,9 +832,7 @@ function OtherChoiceRow({
         {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
         {label}
       </button>
-      {selected && (
-        <OtherInput id={inputId} value={text} onChange={onText} />
-      )}
+      {selected && <OtherInput id={inputId} value={text} onChange={onText} />}
     </div>
   );
 }

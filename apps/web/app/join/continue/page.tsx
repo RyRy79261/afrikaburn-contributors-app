@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { authPathForInvite } from "@quagga/core";
-import { Button } from "@quagga/ui/components/button";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
@@ -8,6 +7,7 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { getInvitePreview } from "@/lib/invites-store";
 import { readPendingInvite } from "@/lib/pending-invite";
 import { AppShell } from "@/components/app-shell";
+import { JoinButton } from "@/components/join-button";
 import { confirmInviteJoinAction } from "./actions";
 
 // THE far side of the invite's authentication round trip.
@@ -102,10 +102,13 @@ export default async function JoinContinuePage() {
               invite can only be used once, by this account.
             </p>
 
+            {/* JoinButton, not a bare submit: accepting an invite writes a
+                membership and then redirects, so the click is followed by real
+                server work. Without a pending label the button just sits there
+                looking unpressed, which is how a person ends up clicking it
+                twice. */}
             <form action={confirmInviteJoinAction}>
-              <Button type="submit" size="lg" className="w-full">
-                Join {preview.groupName}
-              </Button>
+              <JoinButton label={`Join ${preview.groupName}`} />
             </form>
 
             <p className="text-center text-xs text-muted-foreground">

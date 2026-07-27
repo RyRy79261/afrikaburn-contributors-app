@@ -179,7 +179,11 @@ export async function getSectionReviews(
     .orderBy(asc(schema.sectionReviewReplies.createdAt));
 
   const authorIds = [
-    ...new Set(replyRows.map((r) => r.authorUserId).filter((id): id is string => Boolean(id))),
+    ...new Set(
+      replyRows
+        .map((r) => r.authorUserId)
+        .filter((id): id is string => Boolean(id)),
+    ),
   ];
   const { names, orgStaff } = await resolveReplyAuthors(authorIds);
 
@@ -188,7 +192,8 @@ export async function getSectionReviews(
     const isOrg = r.authorUserId ? orgStaff.has(r.authorUserId) : false;
     const authorName = isOrg
       ? "AfrikaBurn"
-      : (r.authorUserId ? names.get(r.authorUserId) : null) ?? "A camp member";
+      : ((r.authorUserId ? names.get(r.authorUserId) : null) ??
+        "A camp member");
     const list = repliesByReview.get(r.reviewId) ?? [];
     list.push({
       id: r.id,

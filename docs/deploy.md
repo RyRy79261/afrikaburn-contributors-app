@@ -3,15 +3,28 @@
 The codebase is deliberately deploy-ready-but-unconfigured: all three apps build and
 boot with zero env vars. **Migrations apply automatically on deploy** — every app's
 `build` runs `db:migrate:deploy` before `next build`, so as soon as the DB env is set
-the committed migrations (`packages/db/migrations/0000_*` … `0012_*`) are applied by
+the committed migrations (`packages/db/migrations/0000_*` … `0017_*`) are applied by
 the build. With no DB env (a fork, a preview without env, CI) the migrator prints a
 skip line and exits 0, so the build still succeeds. This is the order of operations
 for the first real deployment.
 
-**The only remaining manual data step is the one-time reference seed** (§2 below).
-On the **first** deploy the migrator applies 0000–0012 in a single run — **watch the
-Vercel build log** for the `[migrate]` lines to confirm which connection it used and
-that every migration applied.
+**There is no manual data step any more.** The same deploy runner also **bootstraps
+the reference data** — it seeds only when it finds `editions` empty *(Ryan, 27 Jul
+2026: the first real deployment came up with a perfect schema, working Google sign-in
+and no active edition, so every DB-backed page fell through to "Preview mode" — which
+reads as a configuration problem when the configuration was correct. Seeding was a
+manual step nothing told you about, and the person who needed to run it could not:
+the connection string is a secret they cannot copy out of Vercel.)*
+
+**It is a bootstrap, not a sync.** A database that already has an edition is left
+alone. Camp categories and supplier records are editable in the org console, and
+re-asserting canonical rows on every deploy would quietly revert an organiser's edits
+or resurrect something they deleted.
+
+On the **first** deploy the migrator applies 0000–0017 and seeds, all in a single
+advisory-locked run — **watch the Vercel build log** for the `[migrate]` lines to
+confirm which connection it used, that every migration applied, and whether it printed
+`no edition found — seeding reference data` or `reference data present — not re-seeding`.
 
 ## 1. Neon
 
@@ -19,21 +32,23 @@ that every migration applied.
 2. Auth is now **self-hosted Better Auth** (`@quagga/auth`, mounted per app at `/api/auth/[...all]`) against this same Neon DB — managed Neon Auth is not used. Generate one shared `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) and set the **identical** value on all three projects (a session signed by one app must verify in another). Set `BETTER_AUTH_URL` per app to its own apex origin in production (previews derive it from `VERCEL_URL`).
 3. Add Google as an OAuth provider (Google Cloud Console OAuth client) and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; the callback is `<BETTER_AUTH_URL>/api/auth/callback/google`. Email+password works without this. Email verification and password-reset delivery switch on automatically once `RESEND_API_KEY` is set (until then verification is not required and reset presents as honestly unavailable).
 
-## 2. Seed the reference data (one-time)
+## 2. Reference data — automatic, nothing to do
 
-Migrations are **not** run here any more — the deploy build applies them (see the
-top of this doc). The one remaining manual step is the reference seed, which runs
-once from your machine (or any box with the env) against the live DB:
+Neither migrations nor the seed are run by hand here any more: the deploy build
+applies the migrations and bootstraps the reference data on an empty database (see
+the top of this doc). **You should not need this section for a normal deployment.**
+
+For a **local** database, run both explicitly:
 
 ```bash
-cp .env.example .env       # fill DATABASE_URL (+ PGCRYPTO_KEY: openssl rand -hex 32)
-pnpm --filter @quagga/db db:seed      # reference data only — see below
+docker compose -f docker-compose.local.yml up -d
+pnpm --filter @quagga/db db:migrate:deploy
+pnpm --filter @quagga/db db:seed          # reference data only — see below
 ```
 
-Run this **after the first deploy has applied the migrations** (so the tables
-exist). Seeding is idempotent — safe to re-run. If you want to apply migrations
-by hand for a local DB, `pnpm --filter @quagga/db db:migrate` (drizzle-kit) still
-exists for that; it is never run against production by a person.
+Seeding is idempotent, so it is safe to re-run. `pnpm --filter @quagga/db db:migrate`
+(drizzle-kit) also still exists for a local DB; it is **never** run against production
+by a person.
 
 ### What the seed does and does not contain
 
@@ -88,6 +103,10 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
   `BETTER_AUTH_SECRET` (identical across all three), `BETTER_AUTH_URL` (per app),
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
   `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
+- **Never set `AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` on a real
+  deployment.** They exist to *raise* the auth limiter's ceiling for a test
+  environment where every Playwright worker hammers sign-up from one address. Setting
+  them in production disables the protection that is doing its job.
 
 **Preview deployments.** Neon preview branching is enabled, so each preview/PR gets
 its own Neon branch with its own `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The deploy
@@ -117,7 +136,13 @@ the data it verifies, which is also exactly the kickoff demo script.
    sections → submit.
 2. **Org**: sign in with the `GOD_EMAILS` account (verified email self-elevates to
    god on first sign-in) → the org console lets you in.
-3. **Org → Accounts**: elevate a second account to `org_staff`.
+3. **Org → Accounts**: elevate a second account to `org_staff`, and a third to
+   `engineer`. Confirm the engineer sees no email addresses in the accounts table,
+   gets no destructive controls, is refused the medical-access audit panel — and
+   *does* reach `/system`, which `org_staff` does not. The ranks are jobs, not a
+   ladder; this is the step that proves it.
+3b. **Org → /system**: confirm every env check reads as expected and that the
+   database probe reports a live round trip. It never prints a secret.
 4. **Org → Registrations**: Camp 404 is in the queue on `submitted`. Walk the real
    review loop — request changes on a section, watch the notification land on the
    camp side, resolve it, approve.

@@ -104,7 +104,9 @@ export function SupplierPicker({
                   >
                     <span
                       className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                        on ? "border-accent bg-accent text-accent-foreground" : "border-input"
+                        on
+                          ? "border-accent bg-accent text-accent-foreground"
+                          : "border-input"
                       }`}
                     >
                       {on && <Check className="h-3 w-3" aria-hidden />}
@@ -114,9 +116,7 @@ export function SupplierPicker({
                         <span className="text-sm font-medium text-foreground">
                           {s.name}
                         </span>
-                        {s.caution && (
-                          <Badge variant="warning">Watch</Badge>
-                        )}
+                        {s.caution && <Badge variant="warning">Watch</Badge>}
                         {!s.onboardingComplete && (
                           <Badge variant="outline">Onboarding incomplete</Badge>
                         )}

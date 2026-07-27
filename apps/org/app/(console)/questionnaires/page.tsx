@@ -1,13 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  Building2,
-  FileText,
-  Pencil,
-  Plus,
-  Send,
-  Users,
-} from "lucide-react";
+import { Building2, FileText, Pencil, Plus, Send, Users } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { Badge } from "@quagga/ui/components/badge";
 import { Card, CardContent } from "@quagga/ui/components/card";
@@ -167,7 +160,11 @@ function ListSection({
       ) : (
         <div className="flex flex-col gap-4">
           {questionnaires.map((q) => (
-            <QuestionnaireCard key={q.key} questionnaire={q} section={section} />
+            <QuestionnaireCard
+              key={q.key}
+              questionnaire={q}
+              section={section}
+            />
           ))}
         </div>
       )}

@@ -75,8 +75,10 @@ export async function POST(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
-        // Throws if the caller is not an authorised org-console user.
-        const session = await requireOrgSession();
+        // Throws if the caller is not an authorised org-console user. An upload
+        // is a console write, so it names that capability rather than settling
+        // for "has a session".
+        const session = await requireOrgSession({ capability: "write" });
         const policy = resolvePolicy(clientPayload);
         return {
           allowedContentTypes: policy.allowedContentTypes,

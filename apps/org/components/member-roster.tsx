@@ -5,9 +5,12 @@ import type { MembershipRole } from "@quagga/types";
 
 import type { RosterMemberRow } from "@/lib/queries";
 
+// `god` renders as "System manager" — the stored value stays `god` on purpose
+// (@quagga/types roles.ts); this is the label layer.
 const ROLE_LABEL: Record<MembershipRole, string> = {
-  god: "God",
+  god: "System manager",
   org_staff: "Org staff",
+  engineer: "Engineer",
   lead: "Lead",
   admin: "Co-lead",
   member: "Member",

@@ -6,7 +6,7 @@ import type {
   SaveResult,
 } from "@quagga/types";
 import { QuestionnaireRunner } from "./runner";
-import { submitQuestionnaireAction } from "@/app/questionnaires/[activationId]/actions";
+import { submitQuestionnaireAction } from "@/app/(app)/questionnaires/[activationId]/actions";
 
 /**
  * Member-facing fill wrapper: binds the activation id to the shared
@@ -38,9 +38,8 @@ export function QuestionnaireFill({
    *  uploader instead of only the URL-paste field. */
   blobConfigured?: boolean;
 }) {
-  const action = (
-    responses: QuestionnaireResponses,
-  ): Promise<SaveResult> => submitQuestionnaireAction(activationId, responses);
+  const action = (responses: QuestionnaireResponses): Promise<SaveResult> =>
+    submitQuestionnaireAction(activationId, responses);
 
   const seed = respondentSeed
     ? `${activationId}:${respondentSeed}`

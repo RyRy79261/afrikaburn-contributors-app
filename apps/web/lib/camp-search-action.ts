@@ -3,10 +3,7 @@
 import { z } from "zod";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
-import {
-  searchCampDirectory,
-  type CampSearchResult,
-} from "@/lib/groups-store";
+import { searchCampDirectory, type CampSearchResult } from "@/lib/groups-store";
 
 const QuerySchema = z.string().max(120);
 

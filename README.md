@@ -1,460 +1,276 @@
 # AfrikaBurn Contributors App
 
-_Working name candidate: **Quagga Portal**_
+_Working name: **Quagga Portal**_
 
-A unified platform for AfrikaBurn theme camps — annual registration, container
-transport, and on-site services (water / ice / gas) — serving camps, AfrikaBurn staff,
-and contractors. It replaces a patchwork of Google Forms, Quicket payments, WhatsApp
-threads, and last year's standalone container app.
+A platform for AfrikaBurn theme camps and the people who run the burn. It replaces a
+patchwork of Google Forms, WhatsApp threads and spreadsheets with one place where a
+burner has an account, a camp has a profile, a camp registers for an edition, and
+AfrikaBurn staff review what comes in.
 
-**Status:** MVP built and CI-green — `apps/web` (participant app: Burner Bio onboarding,
-camp directory/creation/invites, six-section registration wizard) and `apps/org`
-(organiser console: review workflow, account elevation, suppliers, payment
-reconciliation) — awaiting first deployment (see [`docs/deploy.md`](docs/deploy.md)).
-Kickoff demo: 28 July 2026.
+**Licence: [FSL-1.1-ALv2](LICENSE)** — Functional Source License, converting to
+Apache 2.0 two years after each release. Use it, read it, build on it; don't ship a
+competing product from it in the meantime.
 
-## Development
-
-```bash
-pnpm install
-pnpm turbo run lint typecheck test build   # the full CI gate
-pnpm --filter @quagga/web dev              # participant app :3000
-pnpm --filter @quagga/org dev              # organiser console :3001
-```
-
-Both apps boot without any environment variables (graceful "not configured" state).
-`cp .env.example .env` and fill in what you have. Database changes: edit
-`packages/db/src/schema.ts` → `pnpm --filter @quagga/db db:generate` (never hand-edit
-migrations; never wire migrations into a build script — they are applied manually via
-`db:migrate` once a database exists).
-
-**Core product principle — fewer forms, not more.** The problem being solved is that
-people don't fill out forms. Every feature must reduce net administrative burden:
-derive over ask, carry forward by default, aggregates over rosters, progressive
-disclosure. A feature that adds mandatory admin has the burden of proof against it.
-
-**Core technical constraint — zero on-site connectivity.** There is no signal at the
-AfrikaBurn site. Anything that happens on site works from pre-synced local data, and
-proof-of-interaction uses an offline two-party QR signature handshake ("attestations")
-with lazy sync afterwards.
-
-**Money stance — the platform never holds funds.** No camp fees, no camp treasuries.
-The only money in scope is AfrikaBurn-side logistics fees, tracked as payment _status_
-first; integrated checkout happens only if AB wants it, via an SA-based gateway that
-accepts international Visa/Mastercard.
-
-## Documents
-
-| Doc                                                              | What it holds                                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/synthesis.md`](docs/synthesis.md)                         | Correlated requirements from all sources: buildable scope vs ideation topics, users, domain model, tensions, open questions                                                                                            |
-| [`docs/mvp-proposal.md`](docs/mvp-proposal.md)                   | Kickoff MVP: demo script, scope, offline/attestation architecture, stack, data model, build plan                                                                                                                       |
-| [`docs/roadmap.md`](docs/roadmap.md)                             | Committed releases R0–R3 + candidate topic track                                                                                                                                                                       |
-| [`docs/sources/`](docs/sources/)                                 | Extracted text of every source document (originals at repo root)                                                                                                                                                       |
-| [`docs/sources/quaggapedia/`](docs/sources/quaggapedia/INDEX.md) | Full mirror of Quaggapedia (AB's official event wiki): 68 pages + 21 files — supplier depot rules, SOOP sound levels, WAP/ticket rules, DMV process, LNT/fire/generator rules, event & sound maps, STAR onboarding PDF |
-
-Sources: Finlay Kettlewell's Master Brief + five scope docs + discovery agenda (the
-**concrete scope**), and Graham's Quagga Portal platform doc (**ideation topics only**).
+> **Read [`AGENTS.md`](AGENTS.md) before changing anything.** It is the binding
+> operating guide — hard engineering rules, product laws, and process. This README is
+> orientation; AGENTS.md is law. Feature contracts live in [`docs/`](docs/).
 
 ---
 
-## Module map
+## What's built
 
-Committed modules come from Finlay's scoped documents; the topic track holds Graham's
-ideation themes, which only graduate with validated demand and a pass on the
-fewer-forms test.
+Three apps in one Turborepo, each its own Vercel project against one shared database
+(see [`docs/deploy.md`](docs/deploy.md)):
 
-```mermaid
-flowchart TB
-    subgraph SPINE["Shared spine (R0)"]
-        AUTH["Auth: email + Google OAuth<br/>magic-link tokens for handover roles"]
-        BIO["Participant onboarding<br/>Burner Bio (per-edition, privacy-flagged)"]
-        QUEST["Questionnaire engine<br/>(ported from Camp 404)"]
-        PROJ["Groups (org · camps · art · MV) + Editions<br/>many-to-many memberships; self-registered;<br/>approval = attribute"]
-        ATT["Attestation primitive<br/>(offline QR sign-off)"]
-        NOTIF["Notifications<br/>(dev inbox → email at R1)"]
-    end
+| App              | Port | Accent  | Who it's for                                                            |
+| ---------------- | ---- | ------- | ----------------------------------------------------------------------- |
+| `apps/web`       | 3000 | teal    | Burners — bio onboarding, camp directory, camps, invites, registration  |
+| `apps/org`       | 3001 | apricot | AfrikaBurn staff — review queue, accounts, suppliers, audit, `/system`  |
+| `apps/suppliers` | 3002 | sage    | Camp suppliers — self-registration, onboarding steps, documents, standing |
 
-    subgraph V1["V1 — committed, detailed scope (R0–R1)"]
-        REG["Theme Camp Registration<br/>6-section wizard + AB review"]
-        CON["Container Transport — SEPARATE APP<br/>(large camps only; Finlay's scope = its spec)<br/>hint tile in the standard app"]
-        SUPP["Supplier repository (R1)<br/>register · vet · declare · feedback<br/>(deep portal = separate sub-project)"]
-    end
+Shared packages under the `@quagga/` namespace:
 
-    subgraph V2["V2 — committed, needs AB input (R3)"]
-        WATER["Water delivery"]
-        ICE["Ice allocations"]
-        GAS["Gas orders"]
-    end
-
-    subgraph TOPICS["Topic track — ideation only, not committed"]
-        SHIFTS["Shifts"]
-        BUDGET["Working budget"]
-        PEOPLE["Camper tools"]
-        LAYOUT["Layout designer"]
-        VILLAGE["Villages"]
-        COMPLY["Compliance review"]
-        CREATIVE["Creative projects (artworks / MVs)"]
-    end
-
-    SPINE --> V1
-    V1 --> V2
-    V2 -.->|"only via demand + fewer-forms test"| TOPICS
-
-    style TOPICS stroke-dasharray: 5 5
+```
+packages/auth    self-hosted Better Auth 1.6.25 config, mounted by all three apps
+packages/core    pure domain logic + every authz predicate (the security boundary)
+packages/db      Drizzle schema + append-only migrations + the deploy migrator
+packages/types   Zod schemas and shared types
+packages/ui      shadcn components and the Tailwind v4 token layer
+packages/{eslint-config,typescript-config}
 ```
 
-**Registration is upstream of everything** — it creates the camp profile (ERF, contacts,
-size) that containers, water, ice, and gas all read from. A camp cannot book transport
-until registered.
+Working today: sign-up/sign-in (email+password, Google, 2FA, passkeys), the Burner
+Bio onboarding flow, self-created camps with invites and roles, the six-section
+registration wizard and the org review loop, camp/org questionnaires, bulletins and
+notifications, the supplier repository and portal, camp-category taxonomy, the audit
+trail, and the org System panel.
 
-### Burners, groups & entitlements
+Not built: container transport, water/ice/gas logistics, offline QR attestations,
+placement maps, payment processing. See [`docs/roadmap.md`](docs/roadmap.md).
 
-| Term           | Meaning                                                                                                                                                                                                                                            |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Burner**     | Any user — every account onboards a Burner Bio                                                                                                                                                                                                     |
-| **Camper**     | A burner who is a member of a camp                                                                                                                                                                                                                 |
-| **Group**      | Anything joinable: the org, theme camps, art projects, mutant vehicle teams. Multi-membership allowed (camp + art project + MV team)                                                                                                               |
-| **Project**    | Any non-org group — the kind that registers and earns entitlements                                                                                                                                                                                 |
-| **Org**        | The AfrikaBurn organisation as a group; staff roles are org memberships                                                                                                                                                                            |
-| **God admin**  | System-wide maximum privileges; the first user bootstraps into it                                                                                                                                                                                  |
-| **Supplier**   | Camp-hired service provider (tent builds, electricity). Registers via a dedicated URL/procedure — not burner sign-up — optionally linked to a burner account by email. Camps declare suppliers from the repository; org vets and collects feedback |
-| **Contractor** | Works for AB fulfilling logistics (truck/water drivers) — token access, not accounts                                                                                                                                                               |
+## Getting it running
 
-```mermaid
-flowchart TD
-    GOD["God admin — system-wide<br/>(bootstrap: first user via GOD_EMAILS)"] --> ORG["Org roles (AfrikaBurn staff)<br/>coordinator · reviewer · wrangler"]
-    ORG --> LEADR["Group roles<br/>lead · admin"]
-    LEADR --> MEM["Member<br/>(camper, when the group is a camp)"]
-    MEM --> BURNER["Burner — base user, Burner Bio"]
+Requires Node ≥ 22, pnpm 10, and Docker (for the local database).
+
+```bash
+pnpm install
+
+# 1. Local database: Postgres 16 + the two Neon proxies the app drivers need
+docker compose -f docker-compose.local.yml up -d
+
+# 2. Migrate and seed reference data
+pnpm --filter @quagga/db db:migrate:deploy
+pnpm --filter @quagga/db db:seed
+
+# 3. Run everything (or one app with --filter @quagga/web | org | suppliers)
+pnpm dev
 ```
 
-Camps are **self-registered by burners** — never pre-created by AB — and work
-immediately as free camps. Completing the annual registration flips a per-edition
-**approval attribute** that unlocks entitlements; it never guarantees allocation.
+Set env from `.env.example`. The apps talk to Neon through
+`@neondatabase/serverless`, which uses **two** protocols — SQL-over-HTTP for the
+stateless driver and WebSockets for the pooled one — which is why the compose file
+runs a proxy for each in front of a plain Postgres. Point both at it with:
 
-Registered groups (all kinds) are **public and indexable** in a group directory, badged
-_accepting new members_ or _invite-only_ (one-time invite links, Camp 404 pattern);
-unregistered groups may stay private. Finer privacy settings are schema-reserved but
-deliberately unbuilt until needed. **Wranglers** (org role) are assigned per edition to
-registered camps and get a board tracking each camp's progress.
-
-```mermaid
-flowchart LR
-    P["Participant<br/>(Burner Bio)"] -->|free camps| FC["Free camp<br/>self-created · members · internal features<br/>no entitlements"]
-    P -->|"joins / creates"| FC
-    FC -->|"annual registration approved<br/>(per edition)"| RC["Registered theme camp"]
-    RC --> E1["Apply for placement<br/>(AB allocates — no guarantee)"]
-    RC --> E2["Apply for art grants"]
-    RC --> E3["Book container transport"]
-    RC --> E4["Order water / ice / gas (R3)"]
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/quagga
+DATABASE_URL_UNPOOLED=postgres://postgres:postgres@localhost:5432/quagga
+NEON_LOCAL_PROXY=1
 ```
 
-## System architecture (backend)
+**All three apps boot with no env at all**, to a graceful "not configured" state.
+That is a hard rule ([`AGENTS.md`](AGENTS.md) §4), not a convenience.
 
-```mermaid
-flowchart LR
-    subgraph CLIENT["Clients"]
-        WEB["Web app<br/>(desktop + mobile browser)"]
-        PWA["On-site PWA (R2)<br/>IndexedDB · device keys · sync queue"]
-    end
+There are **no seeded accounts, in any environment.** The seed carries only
+org-owned reference data — the edition, the org group, camp categories, the
+scrubbed supplier catalog, one questionnaire template. An empty directory on a
+fresh database is the correct first-boot state. Sign up through the app like a real
+person; put yourself on `GOD_EMAILS` to reach the org console.
 
-    subgraph VERCEL["Vercel"]
-        NEXT["Next.js 16 App Router<br/>React 19 · Tailwind v4 · shadcn/ui"]
-        ING["Inngest functions — optional, from R1<br/>(reminders, webhooks, fan-out)"]
-    end
+**Reaching the org console locally takes one extra step**, and it will stop you dead
+otherwise: `god` is granted only to a `GOD_EMAILS` address that is **verified**, and
+with no mail provider locally nothing can verify one. Sign up normally, then flip the
+flag by hand — the recipe is in [`e2e/README.md`](e2e/README.md) §"Google & god
+access". Every rank above that is granted through the real Accounts UI.
 
-    subgraph DATA["Neon"]
-        PG[("Postgres + Drizzle ORM<br/>HTTP driver: handlers<br/>WS pool: jobs/transactions")]
-        NAUTH["Neon Auth<br/>(Better Auth)"]
-    end
+## The two gates
 
-    BLOB[("Vercel Blob<br/>container photos, layout uploads")]
-    GW["Payment gateway — TBD, optional<br/>(SA base, intl Visa/MC; mock in MVP)"]
-    RESEND["Resend email<br/>(R1; dev inbox in MVP)"]
-
-    WEB --> NEXT
-    PWA -->|"lazy sync when connected"| NEXT
-    NEXT --> PG
-    NEXT --> NAUTH
-    NEXT --> BLOB
-    NEXT -.->|events| ING
-    ING -.-> PG
-    ING -.-> RESEND
-    NEXT -.-> GW
+```bash
+pnpm turbo run lint typecheck test build --concurrency=1   # THE gate
+pnpm e2e:local                                             # the OTHER gate
+pnpm e2e:local specs/new-burner                            # ...or one persona
 ```
 
-Monorepo: Turborepo + pnpm — **`apps/web`** (participants) + **`apps/org`** (admin/org,
-separate deployment; account elevation, review, allocations), with future separate apps
-for containers and water; `packages/{ui,db,types,...}` under the `@quagga/` namespace —
-patterned on
-[Camp 404](https://github.com/ryry79261/camp-404). CI gate:
-`turbo run lint typecheck test build`.
+**The unit gate never runs a browser.** It lints and typechecks `@quagga/e2e` but
+executes no Playwright, so the persona suite — 153 tests across 56 spec files and 8
+personas (`anon`, `new-burner`, `camp-member`, `camp-lead`, `officer`, `org-staff`,
+`god`, `supplier`) — proves nothing until `pnpm e2e:local` runs it. That script
+brings the stack up from cold: Docker, migrate, seed, all three dev servers, then the
+suite. Run it for anything touching auth, sessions, privacy projection or invites; a
+whole class of defect is invisible to static analysis.
 
-## Data model
+Read [`e2e/README.md`](e2e/README.md) before writing or editing a spec — it documents
+the selector traps that each cost a real debugging session.
 
-```mermaid
-erDiagram
-    USER ||--o{ BURNER_BIO : "per edition, carried forward"
-    USER ||--o{ MEMBERSHIP : ""
-    USER ||--o{ DEVICE_KEY : enrols
-    GROUP ||--o{ REGISTRATION : "per edition — approval attribute (project kinds only)"
-    GROUP ||--o{ CONTAINER : "owns (project kinds only)"
-    GROUP ||--o{ MEMBERSHIP : "role: god / org staff / lead / admin / member"
-    GROUP ||--o{ WRANGLER_ASSIGNMENT : "per edition (registered camps)"
-    USER ||--o{ WRANGLER_ASSIGNMENT : "org wrangler"
-    SUPPLIER ||--o{ SUPPLIER_DECLARATION : "declared by camps"
-    REGISTRATION ||--o{ SUPPLIER_DECLARATION : "replaces free-text list"
-    SUPPLIER ||--o{ SUPPLIER_FEEDBACK : "org-visible"
-    USER |o--o| SUPPLIER : "optional link by email"
-    EDITION ||--o{ BURNER_BIO : namespaces
-    EDITION ||--o{ REGISTRATION : namespaces
-    EDITION ||--o{ DELIVERY_SLOT : configures
-    EDITION ||--o{ ROUTE_PRICE : configures
-    EDITION ||--o{ PLACEMENT_ZONE : configures
-    REGISTRATION ||--o{ SECTION_REVIEW : "AB feedback"
-    CONTAINER ||--o{ TRANSPORT_BOOKING : "per edition"
-    TRANSPORT_BOOKING }o--|| DELIVERY_SLOT : books
-    TRANSPORT_BOOKING }o--o| CONVOY : "assigned by AB"
-    TRANSPORT_BOOKING ||--o| PAYMENT : "bundled fee (status)"
-    TRANSPORT_BOOKING ||--o| COLLECTION_TOKEN : "magic link"
-    TRANSPORT_BOOKING ||--o{ ATTESTATION : "sign-offs"
-    ATTESTATION }o--|| DEVICE_KEY : signer
-    ATTESTATION }o--o| DEVICE_KEY : countersigner
-    STORAGE_LOCATION ||--o{ CONTAINER : "lives at"
+## Database changes
+
+Edit `packages/db/src/schema.ts`, then:
+
+```bash
+pnpm --filter @quagga/db db:generate    # appends a new migration file
 ```
 
-Decisions encoded: **editions (years) are the root namespace** — Burner Bios,
-registrations, and bookings hang off the active edition, carried forward by
-confirm-and-copy; **participants are the base user** (per-edition Burner Bio with
-privacy-flagged fields; camp affiliation is just a membership); **approval is an
-attribute, not existence** (self-registered projects work as free camps; the
-registration record derives entitlements); the **Camp 404 questionnaire spine** runs
-the Burner Bio and future gated flows; the joinable table is `groups`
-(kind: org | theme_camp | artwork | mutant_vehicle) with many-to-many memberships, so
-artworks/MVs and multi-membership come free; roles derive from memberships (god → org
-staff → lead/admin → member), never from stored flags; sensitive columns
-pgcrypto-encrypted (POPIA); attestations are append-only evidence from which status is
-derived.
+**Migrations are append-only.** Never hand-edit or regenerate a committed one. The
+latest is `0017` (org departments). They are applied **at deploy** — every app's
+`build` runs `db:migrate:deploy` first, taking a Postgres advisory lock on the
+**unpooled** connection so three concurrent Vercel builds serialise safely. That same
+runner **bootstraps the reference data** when it finds an empty `editions` table, so a
+brand-new database comes up usable rather than showing "preview mode" on every page.
+It is a bootstrap, not a sync: a database that already has an edition is left alone.
 
-## State machines
+## Auth
 
-### Registration (7 states)
+**Self-hosted Better Auth 1.6.25**, configured once in `packages/auth` and mounted by
+each app at `/api/auth/[...all]` against our own Postgres. Managed Neon Auth was
+removed (migration 0013 brought the auth tables in-house).
 
-```mermaid
-stateDiagram-v2
-    [*] --> Draft : camp starts / copies last year
-    Draft --> Submitted : submit
-    Submitted --> UnderReview : AB opens
-    UnderReview --> Approved : all sections pass
-    UnderReview --> ChangesRequested : section feedback
-    ChangesRequested --> Submitted : camp resubmits
-    UnderReview --> Rejected : with reason
-    Draft --> Withdrawn
-    Submitted --> Withdrawn
-    ChangesRequested --> Withdrawn
-    Approved --> [*] : feeds camp profile -> unlocks logistics
-```
+Shipped: email+password, Google OAuth, email verification (derived from whether a
+mail provider is configured), password reset, **TOTP 2FA with encrypted backup
+codes**, **passkeys** (both migration 0015), session listing and revocation, DB-backed
+rate limiting, and cross-subdomain SSO so one sign-in carries across app/org/suppliers
+on the apex.
 
-### Container delivery lifecycle (12 states)
+`better-auth` is pinned to **1.6.25 exactly** and must never be auto-bumped — see
+AGENTS.md §3 for why. `AUTH_CAPABILITIES` in `packages/core` is the machine-readable
+record of what the provider supports; nothing may fake an unsupported capability.
 
-```mermaid
-stateDiagram-v2
-    [*] --> NotUsedThisYear : edition rolls over
-    NotUsedThisYear --> BookedUnpaid : camp books slot
-    BookedUnpaid --> BookedPaid : bundled fee paid (EFT ref or checkout)
-    BookedPaid --> ReadyOffsite : off-site storage only
-    ReadyOffsite --> InTransitToQuagga : driver pickup
-    InTransitToQuagga --> ReadyQuagga : staged
-    BookedPaid --> ReadyQuagga : Quagga-stored (good standing)
-    ReadyQuagga --> InTransitToSite : convoy departs
-    InTransitToSite --> ReadyDropoff : driver at ERF
-    ReadyDropoff --> Delivered : QR attestation sign-off
-    Delivered --> ScheduledCollection : post-event
-    ScheduledCollection --> InTransitPostEvent : driver pickup
-    InTransitPostEvent --> ReturnedToStorage : QR attestation sign-off
-    ReturnedToStorage --> [*] : year rolls over
-```
+## Identity, privacy and money — the parts most often got wrong
 
-## Offline attestations (the no-signal answer)
+**Username.** `users.username` (migration 0016) is the burner's one public handle:
+account-level, unique case-insensitively, 3–20 chars, **optional**. It is an alias,
+not an identity anchor — rules live in `packages/core/src/username.ts`. Onboarding
+completion keys on `burner_bios.completed_at` (the burner reached the end and saved),
+never on a name. Where someone has no handle, the fallback is a neutral placeholder —
+never their legal name, never their email.
 
-```mermaid
-sequenceDiagram
-    participant D as Driver phone (offline)
-    participant C as Collection person phone (offline)
-    participant S as Server
+**Two privacy classes**, both enforced in `packages/core` and never in the UI:
 
-    Note over D,C: On site — zero connectivity
-    D->>D: Compose payload {type, booking, edition, nonce, keyId} + sign (device key)
-    D->>C: Display QR
-    C->>C: Scan; verify signature against pre-synced public key
-    C->>C: Countersign; store locally (append-only)
-    C-->>D: Optional receipt QR — both parties hold proof
+- **Hard-locked** — phone, both emergency contacts, SA ID, passport. No reveal path
+  of any kind. The single exception is an accepted officer registration, which shares
+  a phone with the org through an explicit consent flow.
+- **Safety-visible — medical notes only.** Never public. Visible to the audience the
+  burner disclosed them to: the leads of their **own** camp, and org staff. **The
+  consent is the field's own label**, which names that audience at the point of
+  entry — exactly how the paper form already works. There is no reveal ceremony,
+  because friction in an emergency protects nobody. Notes are encrypted at rest,
+  appear only on a member **detail** view (never a list, roster, card or export), and
+  every disclosing read writes an audit row.
 
-    Note over C,S: Later — any connectivity (wifi box or back in town)
-    C->>S: Lazy-sync queued attestations
-    S->>S: Verify both signatures; idempotent, order-tolerant
-    S->>S: Derive state: booking → Delivered
-```
+  **An enumeration detector was built and deliberately removed** (26 Jul 2026), and
+  should not be rebuilt: it flagged any account reading 8+ burners' notes in an hour,
+  but that is precisely what a safety lead preparing for site does. It reported
+  ordinary care as an incident and taught the people we most need reading this
+  information that the tool watches them. The trail is a **record**, not monitoring.
 
-Device keypairs are generated on-device at login (WebCrypto ECDSA P-256,
-non-extractable); public keys distribute in the pre-event "pack for site" sync bundle.
-Offline timestamps are claims, not proofs — the signatures prove the interaction, nonces
-prevent replay. The same primitive later covers ice redemption and gas handover.
+**The platform never holds or processes money.** Registration is free — AfrikaBurn
+does not charge theme camps. The `payments` table exists only as reference/status
+tracking for future logistics apps, and there is no payment UI in any registration
+context.
 
-## Payments
+**Fewer forms, not more.** The problem being solved is that people don't fill out
+forms. Derive over ask, carry forward by default, progressive disclosure. A feature
+that adds mandatory admin carries the burden of proof against itself.
 
-### Money flows — what's in scope
+## Org console ranks
 
-```mermaid
-flowchart LR
-    LEAD["Camp lead"]
+Three ranks, all granted (never self-service), all resolved through the single
+capability matrix in `packages/core/src/org-permissions.ts` — the gate, every server
+action and every piece of UI read the same table, so a hidden button and a refused
+action cannot disagree.
 
-    subgraph INSCOPE["Camp → AfrikaBurn fees (in scope — status tracked; checkout optional)"]
-        BUNDLE["Container transport bundle<br/>to-event + from-event + storage<br/>one reference"]
-        W2["Water (R3)"]
-        I2["Ice (R3)"]
-        G2["Gas (R3)"]
-    end
+| capability                    | engineer | org_staff | System manager (`god`) |
+| ----------------------------- | -------- | --------- | ---------------------- |
+| `read` — the whole console    | ✅       | ✅        | ✅                     |
+| `read_personal_information`   | ❌       | ✅        | ✅                     |
+| `write` — reviews, standings  | ✅       | ✅        | ✅                     |
+| `delete` — destructive removals | ❌     | ✅        | ✅                     |
+| `manage_camp_categories`      | ❌       | ❌        | ✅                     |
+| `manage_accounts`             | ❌       | ❌        | ✅                     |
+| `read_system` — `/system`     | ✅       | ❌        | ✅                     |
 
-    subgraph OUTSCOPE["Camper → camp treasury (permanently out of scope)"]
-        DUES["Camp / village dues,<br/>instalments, refunds"]
-    end
+**These are jobs, not a ladder.** `read_system` goes to engineer and not org_staff;
+`read_personal_information` and `delete` go the other way. Any check shaped like
+`rank >= org_staff` is wrong in both directions — ask `orgCan`.
 
-    GW["Gateway TBD with AB<br/>requirement: SA base +<br/>international Visa/Mastercard<br/>candidates: Paystack · Peach · PayFast"]
+`god` is the **stored** value and renders everywhere as **"System manager"**; the
+inconsistency is deliberate (renaming it would migrate live rows and re-cut the
+`GOD_EMAILS` bootstrap for a label). `god` comes only from a verified address on
+`GOD_EMAILS`; `engineer` and `org_staff` are granted by a System manager.
 
-    LEAD -->|"pay via EFT reference<br/>or hosted checkout"| BUNDLE
-    BUNDLE -.->|"if AB wants checkout"| GW
-    GW -.->|"settles directly to<br/>AB's account — we never hold funds"| ABBANK["AfrikaBurn bank account"]
-    LEAD -.-> W2
-    LEAD -.-> I2
-    LEAD -.-> G2
-    CAMPER["Campers"] -.->|"stays off-platform entirely"| DUES
+`/system` in the org console reports the resolved state of every environment
+variable — set or unset, and what follows — plus a live database probe, the migration
+verdict from the same function the build calls, what the auth stack is actually
+enforcing, and who holds console access. **It never prints a secret.**
 
-    style OUTSCOPE stroke-dasharray: 5 5
-    style GW stroke-dasharray: 5 5
-```
+## Design
 
-The platform **never holds funds**. Camp dues/treasuries are permanently out of scope
-(no reason to be a payment intermediary for ~120 camp treasuries). Even AB-side fees
-start as _status tracking_ — a booking gets a payment reference, AB reconciles, the
-coordinator (or a webhook, if a gateway is ever integrated) marks it paid. Whether AB
-wants in-app checkout at all is a discovery question; Finlay's docs assume Yoco, which
-is domestically focused — the standing requirement if we integrate is an SA-based
-provider accepting international Visa/Mastercard (whoever operates this will be in SA;
-payers may not be).
+`design/ab-initial-app.pen` is the design source of truth, edited **only** through the
+pencil MCP tools. Design comes before build: new features get frames, Ryan reviews,
+then code starts.
 
-### Payment gate — booking flow
+- [`design/pen-lessons.md`](design/pen-lessons.md) — read before touching the canvas.
+  Accumulated law: the dialect, the bridge quirks, the verification protocol, and the
+  mobile-360 pairing convention.
+- [`design/qa/REVIEW.md`](design/qa/REVIEW.md) — the binding review process. Never
+  judge a frame by a full-frame screenshot; tall frames render as unreadable
+  thumbnails and visual QA has provably missed severe defects that way.
+- `design/brand/` — the approved AfrikaBurn wordmark and San-hand emblem.
 
-```mermaid
-sequenceDiagram
-    participant L as Camp lead
-    participant APP as Next.js app
-    participant PP as PaymentProvider seam
-    participant DB as Neon Postgres
-    participant AB as AB coordinator
+Visual system: "Tankwa Night" — dark-first, AfrikaBurn's real brand colours, Montserrat,
+and the `QuiltBand` motif across each app header. Full token tables in
+[`docs/build-spec.md`](docs/build-spec.md) §7.
 
-    L->>APP: Confirm booking (bundled price breakdown)
-    APP->>DB: Create booking + payment (pending, with reference)
-    alt EFT / existing AB channels (default)
-        L->>AB: Pays via EFT / Quicket with reference
-        AB->>APP: Mark reconciled → paid
-    else Hosted checkout (only if AB opts in, R1+)
-        APP->>PP: Create checkout session
-        PP-->>L: Hosted checkout (gateway TBD; mock in MVP)
-        PP->>APP: Webhook — payment completed
-    end
-    APP->>DB: BookedUnpaid → BookedPaid
-    APP->>L: Confirmation (dev inbox in MVP, Resend at R1)
-```
+## Documents
 
-The `PaymentProvider` interface is the seam: the MVP ships a mock + the EFT-reference
-flow; a real gateway adapter drops in later without touching the booking flow — and in
-every variant, funds settle to AfrikaBurn's account, never ours.
+`docs/build-spec.md` wins for engineering; `AGENTS.md` wins for process.
 
-## Integrations at a glance
+| Doc                                                                | What it holds                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [`docs/build-spec.md`](docs/build-spec.md)                         | The engineering contract: schema, routes, org ranks, the System panel, seed law     |
+| [`docs/deploy.md`](docs/deploy.md)                                 | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test          |
+| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md) | Auth, account management, the medical-notes consent model, ID retention             |
+| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)         | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI     |
+| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)         | The questionnaire engine — definitions, activations, audiences, blocking flows      |
+| [`docs/notifications-spec.md`](docs/notifications-spec.md)         | Notifications and bulletins                                                          |
+| [`docs/supplier-spec.md`](docs/supplier-spec.md)                   | Supplier repository, vetting, onboarding                                             |
+| [`docs/design-brief.md`](docs/design-brief.md) · [`component-spec.md`](docs/component-spec.md) · [`page-build-plan.md`](docs/page-build-plan.md) | The design system and page inventory |
+| [`docs/synthesis.md`](docs/synthesis.md) · [`mvp-proposal.md`](docs/mvp-proposal.md) · [`roadmap.md`](docs/roadmap.md) · [`execution-roadmap.md`](docs/execution-roadmap.md) | Planning artifacts — see the historical-record banners at the top of each |
+| [`docs/platform-architecture-spec.md`](docs/platform-architecture-spec.md) | **Superseded** — kept for the research trail only                            |
+| [`docs/sources/`](docs/sources/)                                   | **Verbatim primary sources — never edit.** See below                                |
 
-```mermaid
-flowchart TB
-    APP["AfrikaBurn Contributors App"]
+### `docs/sources/` — primary source material
 
-    APP --> N1["Neon Postgres — live from R0"]
-    APP --> N2["Neon Auth (email + Google) — live from R0"]
-    APP --> N4["Vercel Blob — live from R0"]
-    APP -.-> N3["Inngest — optional, from R1 if async workload justifies it"]
-    APP -.-> M1["Payment gateway — TBD with AB, optional<br/>(SA base + intl Visa/MC: Paystack / Peach / PayFast)"]
-    APP -.-> M2["Resend email — dev inbox in MVP, real at R1"]
-    APP -.-> F1["AB site-map / erf data — if AB provides"]
-    APP -.-> F2["Quicket / ticketing — only if an API ever exists"]
-    APP -.-> F3["WhatsApp / SMS — deferred, consent + cost"]
-```
+Scraped and extracted ground truth, kept **verbatim**: AfrikaBurn's own published
+pages and the source scope documents. Cite it rather than guessing event facts.
+Nothing in it is edited to match the product — where it says "burner name" or
+describes an older process, that is the source speaking, and it stays.
 
-## Roadmap at a glance
-
-```mermaid
-flowchart LR
-    R0["R0 — Kickoff MVP (28 Jul)<br/>web + org apps, Burner Bio,<br/>camps + registration + review"]
-    R1["R1 — Registration season<br/>hardening, carry-forward,<br/>wrangler board, supplier vetting"]
-    CAPP["Container app — separate<br/>(Finlay's scope; before build week)"]
-    R2["R2 — On-site readiness<br/>offline + attestations<br/>(low priority until container app)"]
-    R3["R3 — Logistics<br/>water / ice / gas — separate apps<br/>(after AB discovery)"]
-    T["Topic track<br/>shifts · budget · layout ·<br/>villages · compliance · creative"]
-
-    R0 --> R1 --> R3
-    R1 --> CAPP --> R2
-    R3 -.->|"demand-validated only"| T
-
-    style T stroke-dasharray: 5 5
-```
-
-Deadlines drive the order: 2027 registration opening → R1; build week 2027 → R2.
-Full detail in [`docs/roadmap.md`](docs/roadmap.md).
-
-## Stack summary
-
-| Layer          | Choice                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------- |
-| Monorepo       | Turborepo + pnpm, Node ≥ 22                                                                                   |
-| Web            | Next.js 16 (App Router), React 19, Tailwind v4, shadcn/ui                                                     |
-| DB             | Neon Postgres + Drizzle ORM                                                                                   |
-| Auth           | Neon Auth (Better Auth): email + Google OAuth; magic-link/PIN tokens for handover roles                       |
-| Async          | Route handlers in MVP; Inngest optional later if the workload justifies it                                    |
-| Payments       | Payment details + reference + status blocks only — no processing, never holds funds ("we track, AB collects") |
-| Offline crypto | WebCrypto ECDSA P-256 + QR (BarcodeDetector / jsQR) — client-side only                                        |
-| Storage        | Vercel Blob                                                                                                   |
-| Email          | Resend from day one (auth, magic links, notifications)                                                        |
-| Hosting        | Vercel                                                                                                        |
-
-## The Quaggapedia mirror — how it was built
-
-`docs/sources/quaggapedia/` is a full snapshot (22 July 2026) of
-[Quaggapedia](https://quaggapedia.afrikaburn.com), AfrikaBurn's official event wiki,
-captured so this project's requirements rest on AB's own published ground truth. It is
-a point-in-time mirror — the wiki will drift; re-run the process below to refresh.
-
-**Method** (fully automated, reproducible):
-
-1. **Enumeration** — the wiki's open MediaWiki API (`/api.php`, `list=allpages`) was queried across _every_ namespace, proving completeness rather than assuming it: 123 main-namespace pages (no continuation, zero redirects), ~1,500 Translate-extension fragments, 221 files, 10 trivial talk stubs. The site blocks default HTTP clients (403) — a browser User-Agent is required.
-2. **Filtering** — language-variant duplicates (`/en-gb`, `/ru`, `/af`) and junk pages were excluded, leaving 68 canonical content pages.
-3. **Fan-out capture** — a Claude Code agent workflow fetched raw wikitext for all 68 pages in parallel (9 Claude Sonnet agents, ~8 pages each), converted each to clean markdown with provenance frontmatter, and wrote them to the repo.
-4. **Asset harvest** — the 21 informative binaries (event maps 2022–2026, sound maps, supplier rules, the STAR theme-camp onboarding PDF, WTF guide) were pulled via the API's `imageinfo` URLs; ~200 event photos were left behind.
-5. **Mining** — a Claude Opus agent read the whole corpus against the project's open-question list and produced sourced, quoted answers (folded into [`docs/synthesis.md`](docs/synthesis.md)).
-
-**Run metrics:**
-
-| Metric                             | Value                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| Pages mirrored / total on wiki     | 68 / 123 (55 translation variants + junk excluded) |
-| Binary assets captured             | 21                                                 |
-| Agents                             | 10 (9× Sonnet fetch, 1× Opus mining)               |
-| Tool calls                         | 199                                                |
-| Subagent tokens                    | 585,452                                            |
-| Wall-clock time                    | 7 min 37 s                                         |
-| Agent failures                     | 0                                                  |
-| Open questions answered / narrowed | 7 fully, 3 partially (of 10)                       |
+- [`docs/sources/quaggapedia/`](docs/sources/quaggapedia/INDEX.md) — a full
+  point-in-time mirror (22 July 2026) of AfrikaBurn's official event wiki: 68 canonical
+  pages and 21 binaries (supplier depot rules, SOOP sound levels, WAP/ticket rules, the
+  DMV process, LNT/fire/generator rules, event and sound maps, the STAR onboarding PDF).
+  Captured via the wiki's open MediaWiki API — 123 main-namespace pages enumerated,
+  language variants and junk filtered out, then fetched in parallel and converted to
+  markdown with provenance frontmatter. The wiki will drift; re-run the process to refresh.
+- [`docs/sources/afrikaburn-org/`](docs/sources/afrikaburn-org/) — the public site mirror.
+- Text extractions of Finlay Kettlewell's Master Brief and five scope documents (the
+  **concrete scope**) plus Graham's Quagga Portal platform doc (**ideation topics only**),
+  with one example contact redacted.
 
 ## Repo notes
 
-- The canonical source-document content lives as text extractions in [`docs/sources/`](docs/sources/) (with one example contact redacted). The original PDFs are preserved verbatim on the **`archive/source-documents`** branch and are not tracked on `main`; the discovery-agenda docx remains at the root. `AfrikaBurn App/` is an untracked byte-identical duplicate folder.
-- Before this repository is made public: delete or relocate the `archive/source-documents` branch and rewrite `main` history once (the pre-redaction extraction and the original PDFs exist in earlier commits).
-- The collaborators' sign-on HTML prototype is referenced but **not yet in the repo**.
+- The repo is **public**: no real personal contact data (supplier contacts are scrubbed
+  on import), and no naming real businesses in negative demo states.
+- History was rewritten once (24 Jul 2026) to purge unredacted originals. The
+  `archive/source-documents` branch exists only locally on Ryan's machine — never
+  recreate or push it.
+- `AfrikaBurn App/` at the repo root is an untracked duplicate of the source folder.

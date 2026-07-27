@@ -462,7 +462,8 @@ export async function getActivationResults(
           );
   const responseByUser = new Map<string, QuestionnaireResponses>();
   for (const r of responseRows) {
-    if (r.activationId === activationId) responseByUser.set(r.userId, r.responses);
+    if (r.activationId === activationId)
+      responseByUser.set(r.userId, r.responses);
   }
 
   const respondents: ActivationRespondent[] = actionRows
@@ -610,13 +611,19 @@ export async function submitResponse(input: {
 }): Promise<SaveResult> {
   const activation = await getActivation(input.activationId);
   if (!activation) {
-    return { ok: false, errors: { _form: "This questionnaire no longer exists." } };
+    return {
+      ok: false,
+      errors: { _form: "This questionnaire no longer exists." },
+    };
   }
   // Org-internal questionnaires are submitted through the console gate, never
   // the participant flow — reject them here defensively (the fill page for them
   // is already withheld by getFillView).
   if (!isParticipantFacingActivation(activation.audience)) {
-    return { ok: false, errors: { _form: "This questionnaire isn't available here." } };
+    return {
+      ok: false,
+      errors: { _form: "This questionnaire isn't available here." },
+    };
   }
 
   const actionKey = activationRequiredActionKey(input.activationId);
@@ -631,14 +638,20 @@ export async function submitResponse(input: {
     )
     .limit(1);
   if (!actionRows[0]) {
-    return { ok: false, errors: { _form: "This questionnaire wasn't sent to you." } };
+    return {
+      ok: false,
+      errors: { _form: "This questionnaire wasn't sent to you." },
+    };
   }
 
   // Branch-aware server-side validation (Runner v2): `validateSubmission`
   // re-derives the respondent's own path, so a required question inside a
   // section they branched PAST can neither block their submission nor have a
   // smuggled answer stored. Same `validateOne` rules per question as before.
-  const validated = validateSubmission(activation.definition, input.rawResponses);
+  const validated = validateSubmission(
+    activation.definition,
+    input.rawResponses,
+  );
   if (!validated.ok) return { ok: false, errors: validated.errors };
 
   const now = new Date();

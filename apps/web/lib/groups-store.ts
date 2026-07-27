@@ -82,9 +82,7 @@ export function slugify(name: string): string {
   );
 }
 
-async function memberCounts(
-  groupIds: string[],
-): Promise<Map<string, number>> {
+async function memberCounts(groupIds: string[]): Promise<Map<string, number>> {
   if (groupIds.length === 0) return new Map();
   const rows = await db()
     .select({
@@ -168,7 +166,10 @@ export async function listDirectory(input: {
           eq(schema.campCategories.editionId, input.editionId),
         ),
       )
-      .orderBy(asc(schema.campCategories.sort), asc(schema.campCategories.label));
+      .orderBy(
+        asc(schema.campCategories.sort),
+        asc(schema.campCategories.label),
+      );
     for (const r of catRows) {
       const list = categoriesByGroup.get(r.groupId) ?? [];
       list.push({ id: r.id, label: r.label, emoji: r.emoji });
@@ -367,17 +368,20 @@ export async function getCampBySlug(
     displayName: publicMemberName(m.username, { sanitizedAt: m.sanitizedAt }),
     isViewer: m.userId === viewerId,
   }));
+  // Display order for a camp's roster. Org ranks sort first only because an org
+  // account appearing in a camp is exceptional enough to want at the top; within
+  // the org, seniority (System manager → org staff → engineer).
   const roleRank: Record<MembershipRole, number> = {
     god: 0,
     org_staff: 1,
-    lead: 2,
-    admin: 3,
-    member: 4,
+    engineer: 2,
+    lead: 3,
+    admin: 4,
+    member: 5,
   };
   members.sort((a, b) => roleRank[a.role] - roleRank[b.role]);
 
-  const viewerRole =
-    members.find((m) => m.userId === viewerId)?.role ?? null;
+  const viewerRole = members.find((m) => m.userId === viewerId)?.role ?? null;
 
   return {
     id: group.id,
@@ -673,10 +677,7 @@ export async function getPublicBurnerProfile(
     .from(schema.memberships)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
     .where(
-      and(
-        eq(schema.memberships.userId, userId),
-        ne(schema.groups.kind, "org"),
-      ),
+      and(eq(schema.memberships.userId, userId), ne(schema.groups.kind, "org")),
     );
 
   const groupIds = membershipRows.map((r) => r.groupId);
@@ -736,14 +737,16 @@ export async function checkCampName(
   if (exact) return { ok: false, reason: "exact", warnings: [] };
   const warnings = existing
     .filter((e) => isSimilarName(e.name, name))
-    .sort((a, b) => trigramSimilarity(b.name, name) - trigramSimilarity(a.name, name))
+    .sort(
+      (a, b) =>
+        trigramSimilarity(b.name, name) - trigramSimilarity(a.name, name),
+    )
     .map((e) => e.name);
   return { ok: true, reason: null, warnings };
 }
 
 export type CreateCampResult =
-  | { ok: true; slug: string }
-  | { ok: false; error: string };
+  { ok: true; slug: string } | { ok: false; error: string };
 
 /** Postgres unique-violation SQLSTATE. The Neon driver surfaces it as `.code`. */
 const UNIQUE_VIOLATION = "23505";
@@ -964,7 +967,9 @@ export async function leaveCamp(
 /** Groups the user is a member of (for the nav / home). */
 export async function listMyCamps(
   userId: string,
-): Promise<{ name: string; slug: string; role: MembershipRole; kind: GroupKind }[]> {
+): Promise<
+  { name: string; slug: string; role: MembershipRole; kind: GroupKind }[]
+> {
   const rows = await db()
     .select({
       name: schema.groups.name,

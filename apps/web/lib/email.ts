@@ -6,7 +6,8 @@ import "server-only";
 // development and the app boots and runs env-lessly.
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const DEFAULT_FROM = "AfrikaBurn Contributors <no-reply@contributors.afrikaburn.com>";
+const DEFAULT_FROM =
+  "AfrikaBurn Contributors <no-reply@contributors.afrikaburn.com>";
 
 export interface SendEmailInput {
   to: string | string[];
@@ -75,8 +76,5 @@ export async function sendEmail(
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

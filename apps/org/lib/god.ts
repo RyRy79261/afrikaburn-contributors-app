@@ -25,5 +25,9 @@ export function canBootstrapGodEmail(
   email: string | null | undefined,
   emailVerified: boolean,
 ): boolean {
-  return canBootstrapGod(email, emailVerified, parseGodEmails(process.env.GOD_EMAILS));
+  return canBootstrapGod(
+    email,
+    emailVerified,
+    parseGodEmails(process.env.GOD_EMAILS),
+  );
 }

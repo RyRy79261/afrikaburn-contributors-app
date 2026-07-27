@@ -63,12 +63,17 @@ export const groupVisibilityEnum = pgEnum("group_visibility", [
   "private",
 ]);
 
+// APPEND-ONLY, like every Postgres enum: `ALTER TYPE … ADD VALUE` can only add,
+// never reorder or remove, so new ranks go at the END regardless of seniority.
+// `god` is the rank the console PRESENTS as "System manager" — the stored value
+// stays `god` deliberately (see @quagga/types roles.ts for why; don't rename it).
 export const membershipRoleEnum = pgEnum("membership_role", [
   "god",
   "org_staff",
   "lead",
   "admin",
   "member",
+  "engineer",
 ]);
 
 export const inviteKindEnum = pgEnum("invite_kind", [
@@ -697,6 +702,20 @@ export const memberships = pgTable(
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
     role: membershipRoleEnum("role").notNull().default("member"),
+    // --- Org departments (migration 0017) --------------------------------
+    // Deliberately MINIMAL. AfrikaBurn has departments (suppliers, theme camps,
+    // …) with a team lead each, but nobody can yet say how many there are or
+    // what protocols they carry (Ryan, 27 Jul 2026: "we dont know how many
+    // departements there are, or what protocols they have so lets not over
+    // complicate it"). So this is a free-text LABEL and a lead flag — no
+    // `departments` table, no catalog, no enum, no CRUD screen — and the
+    // capability matrix (@quagga/core `org-permissions`) grants them NOTHING
+    // today. They record who answers for what; wire privileges to them when the
+    // org tells us what a department actually decides.
+    //
+    // Only meaningful on the ORG group membership; null everywhere else.
+    department: text("department"),
+    departmentLead: boolean("department_lead").notNull().default(false),
     // Camp-scoped member reference code, e.g. `MAH-M017` — a stable identifier a
     // camp quotes for its OWN off-platform EFT reconciliation (camper → camp's
     // bank account). NOT an AfrikaBurn payment; the platform never moves money.

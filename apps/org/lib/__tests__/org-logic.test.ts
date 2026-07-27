@@ -52,16 +52,18 @@ describe("resolveReviewAction — legal transitions only", () => {
   });
 
   it("rejects illegal actions on terminal / pre-submission states", () => {
-    const illegal: [RegistrationStatus, Parameters<typeof resolveReviewAction>[1]][] =
-      [
-        ["draft", "approve"],
-        ["draft", "start_review"],
-        ["approved", "approve"],
-        ["approved", "reject"],
-        ["rejected", "approve"],
-        ["withdrawn", "start_review"],
-        ["changes_requested", "approve"],
-      ];
+    const illegal: [
+      RegistrationStatus,
+      Parameters<typeof resolveReviewAction>[1],
+    ][] = [
+      ["draft", "approve"],
+      ["draft", "start_review"],
+      ["approved", "approve"],
+      ["approved", "reject"],
+      ["rejected", "approve"],
+      ["withdrawn", "start_review"],
+      ["changes_requested", "approve"],
+    ];
     for (const [from, action] of illegal) {
       expect(() => resolveReviewAction(from, action)).toThrow();
       expect(isReviewActionAvailable(from, action)).toBe(false);

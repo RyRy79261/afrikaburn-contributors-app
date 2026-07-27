@@ -14,8 +14,8 @@ import type {
   setRolePermissionsAction,
   assignOfficerAction,
   unassignOfficerAction,
-} from "@/app/camps/[slug]/actions";
-import type { createRoleWithSetupAction } from "@/app/camps/[slug]/settings/roles/actions";
+} from "@/app/(app)/camps/[slug]/actions";
+import type { createRoleWithSetupAction } from "@/app/(app)/camps/[slug]/settings/roles/actions";
 
 // View models + action types shared by the Roles & Officers settings screen
 // (canvas ZyKzw desktop / TIrbC mobile). Kept in one module so the row

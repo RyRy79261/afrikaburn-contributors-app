@@ -108,7 +108,9 @@ export function RegistrationReview({
       {/* Header — LEFT-aligned (status pill inline with the title). */}
       <header className="mb-8">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{group.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {group.name}
+          </h1>
           <StatusBadge status={registration.status} />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -213,10 +215,7 @@ export function RegistrationReview({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <MemberRoster
-                registrationId={registration.id}
-                members={roster}
-              />
+              <MemberRoster registrationId={registration.id} members={roster} />
             </CardContent>
           </Card>
         </div>

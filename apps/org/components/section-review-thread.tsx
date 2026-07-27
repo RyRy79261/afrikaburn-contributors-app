@@ -112,9 +112,7 @@ export function SectionReviewThread({
                   {c.reviewerEmail ?? "Reviewer"} · {formatDate(c.createdAt)}
                 </span>
                 <div className="flex items-center gap-2">
-                  <Badge
-                    variant={c.status === "open" ? "warning" : "success"}
-                  >
+                  <Badge variant={c.status === "open" ? "warning" : "success"}>
                     {c.status === "open" ? "Open" : "Resolved"}
                   </Badge>
                   <Button

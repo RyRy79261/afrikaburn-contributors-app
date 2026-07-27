@@ -127,7 +127,10 @@ export function PrivilegeToggles({
     const next = current.includes(roleId)
       ? current.filter((id) => id !== roleId)
       : [...current, roleId];
-    onChange({ ...value, manage_questionnaires: { ...mq, audienceRoles: next } });
+    onChange({
+      ...value,
+      manage_questionnaires: { ...mq, audienceRoles: next },
+    });
   }
 
   const chip =
@@ -254,7 +257,9 @@ export function PrivilegeEditor({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
-  const [perms, setPerms] = React.useState<ProjectPermissions>(role.permissions);
+  const [perms, setPerms] = React.useState<ProjectPermissions>(
+    role.permissions,
+  );
   // Captain privileges are locked to all — the kind predicate decides, never a
   // hardcoded role name (questionnaire-spec §"Role kinds").
   const locked = isPermissionsLockedKind(role.kind);

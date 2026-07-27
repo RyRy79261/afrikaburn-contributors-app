@@ -1,10 +1,12 @@
 import "server-only";
 
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import {
+  canReadPersonalInformation,
   MEDICAL_VIEW_AUDIT_ACTION,
   publicMemberName,
   type MedicalAccessBasis,
+  type OrgActor,
 } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
@@ -54,7 +56,9 @@ export interface MedicalAccessLog {
   lookbackDays: number;
 }
 
-function parseBasis(meta: Record<string, unknown> | null): MedicalAccessBasis | null {
+function parseBasis(
+  meta: Record<string, unknown> | null,
+): MedicalAccessBasis | null {
   const value = meta?.basis;
   return value === "self" || value === "org_staff" || value === "camp_lead"
     ? value
@@ -66,8 +70,25 @@ function lookbackStart(days: number): Date {
 }
 
 /**
+ * Whether this actor may read the medical-access log AT ALL.
+ *
+ * A `bio.medical.view` row is only ever written when the subject HAS notes
+ * (`apps/org/app/(console)/registrations/[id]/members/[userId]/page.tsx` writes
+ * it inside `if (medicalNotes …)`), so a named list of these rows is a census of
+ * which burners have disclosed a health condition — the exact bulk exposure the
+ * member roster refuses to carry, arriving by the back door. It is therefore
+ * personal information in its own right, and a rank that may not read personal
+ * information may not read this panel. Redacting the actor column would not
+ * help: the leak is the SUBJECT list.
+ */
+export function canReadMedicalAccessLog(actor: OrgActor): boolean {
+  return canReadPersonalInformation(actor);
+}
+
+/**
  * Every `bio.medical.view` row in the lookback window, newest first, with the
- * actor's email and the subject's display name resolved.
+ * actor's email and the subject's display name resolved. Callers MUST check
+ * `canReadMedicalAccessLog` first — this asserts it rather than trusting it.
  *
  * A PLAIN CHRONOLOGICAL RECORD, deliberately. It carries no per-actor
  * aggregation, no volume threshold and no alerting, because reading many
@@ -82,10 +103,19 @@ function lookbackStart(days: number): Date {
  * row error the whole page, and this page must always render.
  */
 export async function getMedicalAccessLog(
+  actor: OrgActor,
   options: { lookbackDays?: number; limit?: number } = {},
 ): Promise<MedicalAccessLog> {
+  if (!canReadMedicalAccessLog(actor)) {
+    // Fail closed rather than return a redacted list: there is no version of
+    // these rows that is not still a disclosure census.
+    throw new Error("Not authorised to read the medical access log.");
+  }
   const lookbackDays = options.lookbackDays ?? MEDICAL_AUDIT_LOOKBACK_DAYS;
-  const limit = Math.min(options.limit ?? MEDICAL_AUDIT_ROW_CAP, MEDICAL_AUDIT_ROW_CAP);
+  const limit = Math.min(
+    options.limit ?? MEDICAL_AUDIT_ROW_CAP,
+    MEDICAL_AUDIT_ROW_CAP,
+  );
   const db = getDb();
 
   const rows = await db
@@ -110,7 +140,9 @@ export async function getMedicalAccessLog(
 
   const subjectIds = [
     ...new Set(
-      rows.flatMap((r) => (r.subjectId && UUID_RE.test(r.subjectId) ? [r.subjectId] : [])),
+      rows.flatMap((r) =>
+        r.subjectId && UUID_RE.test(r.subjectId) ? [r.subjectId] : [],
+      ),
     ),
   ];
 
@@ -157,18 +189,44 @@ export interface AuditTrailRow {
   createdAt: Date;
 }
 
-export async function getAuditTrail(limit = 100): Promise<AuditTrailRow[]> {
+/**
+ * The general audit trail — who did what, newest first.
+ *
+ * Two things are withheld from a caller without `read_personal_information`:
+ * the actor's email (a staff member's address), and the `bio.medical.view` rows
+ * themselves. The latter matters more than it looks: those rows carry a subject
+ * id, every console rank can open `/registrations/[id]/members/[userId]`, and
+ * the row only exists when the subject HAS notes — so leaving them in would let
+ * an engineer walk the trail and resolve a list of burners who have disclosed a
+ * health condition. Everything else in the trail is org activity and reads
+ * normally.
+ */
+export async function getAuditTrail(
+  actor: OrgActor,
+  limit = 100,
+): Promise<AuditTrailRow[]> {
   const db = getDb();
-  return db
+  const personal = canReadPersonalInformation(actor);
+  const rows = await db
     .select({
       id: schema.auditEvents.id,
       action: schema.auditEvents.action,
-      actorEmail: schema.users.email,
       subject: schema.auditEvents.subject,
       createdAt: schema.auditEvents.createdAt,
+      ...(personal ? { actorEmail: schema.users.email } : {}),
     })
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
+    .where(
+      personal
+        ? undefined
+        : ne(schema.auditEvents.action, MEDICAL_VIEW_AUDIT_ACTION),
+    )
     .orderBy(desc(schema.auditEvents.createdAt))
     .limit(limit);
+  return rows.map((r) => ({
+    ...r,
+    actorEmail:
+      "actorEmail" in r ? ((r.actorEmail as string | null) ?? null) : null,
+  }));
 }

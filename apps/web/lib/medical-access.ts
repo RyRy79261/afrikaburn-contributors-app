@@ -117,9 +117,7 @@ async function buildMedicalAccessContext(
       role: schema.memberships.role,
     })
     .from(schema.memberships)
-    .where(
-      inArray(schema.memberships.userId, [viewerUserId, subjectUserId]),
-    );
+    .where(inArray(schema.memberships.userId, [viewerUserId, subjectUserId]));
 
   const actorLeadCampIds: string[] = [];
   const subjectCampIds: string[] = [];

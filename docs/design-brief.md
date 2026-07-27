@@ -180,7 +180,7 @@ error page patterns · Landing page (the only "marketing" surface).
 | Route | Purpose | Key content & components | States to design |
 |---|---|---|---|
 | `/` | Landing + gateway | Edition banner, value prop ("Your camp, one place"), sign-in/up CTAs, QuiltBand; signed-in: redirect-style dashboard of "your camps" + directory link | signed-out · signed-in-no-bio (push to onboarding) · signed-in · not-configured |
-| `/auth/*` | Sign in/up | Neon Auth screens themed to system | default · error |
+| `/auth/*` | Sign in/up | Our own branded Better Auth screens (sign in/up, forgot + reset password, verify, 2FA challenge) | default · error |
 | `/onboarding` | Burner Bio | QuestionnaireRunner: intro step ("takes 3 minutes, yours to control"), fields, privacy step with hard-locked rows, done step | fresh · partially-saved · complete |
 | `/profile` | Own profile | Bio view/edit, privacy toggles, key fingerprint (small, technical, explained), sign-out | view · edit · saving |
 | `/directory` | Public camp directory | Search, camp cards (name, 60-word blurb, joinability badge, registered mark), member-only free camps section | results · empty search · no camps yet |

@@ -13,10 +13,7 @@ import {
   OnboardingChecklist,
   type StepData,
 } from "@/components/onboarding-checklist";
-import {
-  DocumentsPanel,
-  type DocumentRow,
-} from "@/components/documents-panel";
+import { DocumentsPanel, type DocumentRow } from "@/components/documents-panel";
 import {
   buildStepCardModel,
   stepEyebrow,

@@ -7,7 +7,7 @@ import { Button } from "@quagga/ui/components/button";
 import { Badge } from "@quagga/ui/components/badge";
 import { toast } from "@quagga/ui/components/toast";
 import type { InviteRow } from "@/lib/invites-store";
-import type { CreateInviteResult } from "@/app/camps/[slug]/actions";
+import type { CreateInviteResult } from "@/app/(app)/camps/[slug]/actions";
 
 interface CampInvitesProps {
   slug: string;
@@ -40,7 +40,9 @@ export function CampInvites({
       if (result.ok) {
         setInvites((prev) => [result.invite, ...prev]);
         toast.success(
-          kind === "member" ? "Invite link created" : "Lead-transfer link created",
+          kind === "member"
+            ? "Invite link created"
+            : "Lead-transfer link created",
         );
       } else {
         toast.error(result.error);
@@ -74,12 +76,22 @@ export function CampInvites({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => create("member")} disabled={isPending}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => create("member")}
+          disabled={isPending}
+        >
           <UserPlus className="h-4 w-4" aria-hidden />
           New member invite
         </Button>
         {canLeadTransfer && (
-          <Button size="sm" variant="outline" onClick={() => create("lead_transfer")} disabled={isPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => create("lead_transfer")}
+            disabled={isPending}
+          >
             <Crown className="h-4 w-4" aria-hidden />
             Lead-transfer link
           </Button>
@@ -97,7 +109,11 @@ export function CampInvites({
               key={invite.id}
               className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2"
             >
-              <Badge variant={invite.kind === "lead_transfer" ? "warning" : "secondary"}>
+              <Badge
+                variant={
+                  invite.kind === "lead_transfer" ? "warning" : "secondary"
+                }
+              >
                 {invite.kind === "lead_transfer" ? "Lead transfer" : "Member"}
               </Badge>
               <code className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">

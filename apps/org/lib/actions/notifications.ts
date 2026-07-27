@@ -48,6 +48,7 @@ export async function markNotificationRead(
   raw: z.input<typeof MarkReadInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
+    // Own inbox only — every rank manages their own notifications.
     const session = await requireOrgSession();
     const input = MarkReadInput.parse(raw);
     await getDb()
@@ -68,6 +69,7 @@ export async function markNotificationRead(
 /** Mark every unread notification read (own inbox only). */
 export async function markAllNotificationsRead(): Promise<ActionResult> {
   return runAction(async () => {
+    // Own inbox only — every rank manages their own notifications.
     const session = await requireOrgSession();
     await getDb()
       .update(schema.notifications)

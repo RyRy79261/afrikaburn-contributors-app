@@ -18,7 +18,11 @@ import {
   SOUND_LEVEL_LABELS,
   SOUND_LEVEL_SHORT,
 } from "@/lib/org-logic";
-import { GROUP_KIND_LABELS, JOINABILITY_LABELS, formatDate } from "@/lib/labels";
+import {
+  GROUP_KIND_LABELS,
+  JOINABILITY_LABELS,
+  formatDate,
+} from "@/lib/labels";
 import {
   asProjectKind,
   getProjectRegistrationAnswers,
@@ -58,12 +62,16 @@ export default async function RegistrationDetailPage({
   if (!guard.ok) return guard.node;
 
   const { id } = await params;
-  const detail = await getRegistrationDetail(id);
+  // The actor decides what the QUERIES select, not what the JSX renders: an
+  // engineer's payload never contains the camp's contact people, the officers'
+  // numbers or the reviewers' identities (lib/queries.ts).
+  const { actor } = guard.session;
+  const detail = await getRegistrationDetail(id, actor);
   if (!detail) notFound();
 
   const [decisionLog, officers, roster] = await Promise.all([
-    getRegistrationDecisionLog(id),
-    getRegistrationOfficers(detail.group.id, detail.edition.id),
+    getRegistrationDecisionLog(id, actor),
+    getRegistrationOfficers(detail.group.id, detail.edition.id, actor),
     getRegistrationRoster(detail.group.id),
   ]);
 
@@ -164,9 +172,17 @@ function renderProjectField(field: ProjectField): FieldSpec {
   const { value } = field;
   switch (value.type) {
     case "text":
-      return { label: field.label, value: value.value ?? "—", wide: field.wide };
+      return {
+        label: field.label,
+        value: value.value ?? "—",
+        wide: field.wide,
+      };
     case "yesno":
-      return { label: field.label, value: yesNo(value.value), wide: field.wide };
+      return {
+        label: field.label,
+        value: yesNo(value.value),
+        wide: field.wide,
+      };
     case "uploads":
       return {
         label: field.label,
@@ -213,9 +229,7 @@ function renderProjectField(field: ProjectField): FieldSpec {
                       aria-hidden
                     />
                   )}
-                  <span
-                    className={ok ? undefined : "text-muted-foreground"}
-                  >
+                  <span className={ok ? undefined : "text-muted-foreground"}>
                     {ack.label}
                   </span>
                 </span>
@@ -354,7 +368,10 @@ function buildSectionFields(
             : "—",
       },
       { label: "Fee structure", value: r.s6FeeStructure, wide: true },
-      { label: "Plug & Play acknowledgement", value: yesNo(r.s6PlugAndPlayAck) },
+      {
+        label: "Plug & Play acknowledgement",
+        value: yesNo(r.s6PlugAndPlayAck),
+      },
     ],
   };
 }

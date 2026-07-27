@@ -49,11 +49,17 @@ export async function elevateAccountToOrgStaff(
 ): Promise<void> {
   await godOrg.goto(`/accounts?q=${encodeURIComponent(email)}`);
   // The searched account is present before we touch anything (server-rendered).
-  await expect(godOrg.getByText(email, { exact: false })).toBeVisible();
+  // Scoped to the visible layout: ResponsiveDataTable renders the desktop table
+  // AND the mobile cards into the DOM together, so an unscoped text locator
+  // matches twice and trips strict mode.
+  await expect(
+    godOrg.getByText(email, { exact: false }).filter({ visible: true }).first(),
+  ).toBeVisible();
 
   // Row-level control (the only "Elevate to org staff" on the page pre-dialog).
   await godOrg
     .getByRole("button", { name: "Elevate to org staff", exact: true })
+    .filter({ visible: true })
     .click();
   // Confirm inside the overlay (a second button of the same name now exists).
   await godOrg
@@ -62,6 +68,73 @@ export async function elevateAccountToOrgStaff(
     .click();
 
   await expect(godOrg.getByText(/elevated to org staff/i)).toBeVisible();
+}
+
+/**
+ * Grant the account identified by `email` the ENGINEER rank, driving the god's
+ * Accounts panel exactly as an admin would. Same shape as
+ * `elevateAccountToOrgStaff` — filter to the exact email so the row control is
+ * unambiguous in both the desktop table and the mobile stacked cards.
+ */
+export async function makeAccountEngineer(
+  godOrg: Page,
+  email: string,
+): Promise<void> {
+  await godOrg.goto(`/accounts?q=${encodeURIComponent(email)}`);
+  // ResponsiveDataTable renders BOTH layouts into the DOM at once (the desktop
+  // <table> and the mobile stacked cards), so every row-level locator here is
+  // scoped to the VISIBLE instance — an unscoped one matches twice and trips
+  // Playwright strict mode. Same convention as specs/god/support.ts.
+  await expect(
+    godOrg.getByText(email, { exact: false }).filter({ visible: true }).first(),
+  ).toBeVisible();
+
+  await godOrg
+    .getByRole("button", { name: "Make engineer", exact: true })
+    .filter({ visible: true })
+    .click();
+  await godOrg
+    .getByRole("dialog")
+    .getByRole("button", { name: "Elevate to engineer", exact: true })
+    .click();
+
+  await expect(godOrg.getByText(/elevated to engineer/i)).toBeVisible();
+}
+
+/**
+ * Create a fresh account and grant it the ENGINEER rank.
+ *
+ * Same provisioning sequence as `provisionOrgStaff` — sign up for real, hit the
+ * forbidden wall, get granted by a god — because an engineer is no more
+ * self-service than org staff is.
+ */
+export async function provisionEngineer(
+  makeAppPage: MakeAppPage,
+): Promise<OrgStaff> {
+  const web = await makeAppPage("web");
+  const account = await signUpBurner(web);
+
+  const org = await makeAppPage("org");
+  await signInAs(org, account, "org");
+  await expect(
+    org.getByText(/this side is for afrikaburn staff/i),
+  ).toBeVisible();
+
+  const godOrg = await makeAppPage("org");
+  await elevateToGod(godOrg);
+  await makeAccountEngineer(godOrg, account.email);
+
+  // "Access everywhere" is the engineer's defining grant, so the proof that the
+  // rank resolved is the SAME console page org staff reach, not a lesser one.
+  await org.goto("/registrations");
+  await expect(
+    org.getByRole("heading", { name: /registration pipeline/i }),
+  ).toBeVisible();
+  await expect(
+    org.getByText(/this side is for afrikaburn staff/i),
+  ).toHaveCount(0);
+
+  return { account, org };
 }
 
 /**

@@ -11,7 +11,8 @@ import { requireCampUser } from "./session";
 // may only ever mark THEIR OWN rows read — the WHERE always pins user_id to the
 // authenticated user, so a forged notification id from another account no-ops.
 
-export type NotificationActionResult = { ok: true } | { ok: false; error: string };
+export type NotificationActionResult =
+  { ok: true } | { ok: false; error: string };
 
 const MarkReadInput = z.object({ notificationId: z.string().uuid() });
 
@@ -38,7 +39,10 @@ export async function markNotificationRead(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not update that notification.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Could not update that notification.",
     };
   }
 }
@@ -62,7 +66,10 @@ export async function markAllNotificationsRead(): Promise<NotificationActionResu
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not update your notifications.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Could not update your notifications.",
     };
   }
 }

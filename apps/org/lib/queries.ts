@@ -6,6 +6,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   ilike,
   inArray,
   lt,
@@ -22,7 +23,10 @@ import type {
   SupplierStanding,
 } from "@quagga/types";
 import {
+  canReadPersonalInformation,
   countCategoryUsage,
+  ORG_RANKS,
+  orgRankFromRole,
   deriveOfficerCoverage,
   deriveQuestionnaireCompletion,
   deriveRegistrationFunnel,
@@ -33,6 +37,8 @@ import {
   soundLevelFromValue,
   type OfficerCoverage,
   type ProjectStatInput,
+  type OrgActor,
+  type OrgRank,
   type QuestionnaireCompletionRollup,
   type RegistrationFunnel,
   type StatusBoardKpis,
@@ -46,6 +52,25 @@ import { deriveCohort, type Cohort } from "@/lib/org-logic";
 // Data access for the console. Every function is read-only and self-contained;
 // mutations live in lib/actions/*. All assume the caller already cleared the
 // gate (resolveOrgSession) — these do not re-check auth.
+//
+// EXCEPT for one thing, which they DO decide here: PERSONAL INFORMATION.
+//
+// Every query that returns a person takes the caller's `OrgActor` and runs
+// `canReadPersonalInformation` BEFORE the select — the `canViewMedicalNotes`
+// pattern (see `getRosterMemberDetail`), applied to the rest of it. An engineer
+// does not merely fail to see a contact number: the column is never selected, so
+// it is never in the row, never in the returned object, and never in the RSC
+// payload a component would have shipped it in regardless of what it rendered.
+//
+// Deciding after the fetch is the shape this deliberately avoids. A value that
+// reached render scope is one careless `<pre>{JSON.stringify(detail)}</pre>`, one
+// `console.log`, one new prop away from shipping — and none of those look like a
+// privacy bug in review.
+
+/** Whether the caller receives personal information at all (see above). */
+function seesPersonalInformation(actor: OrgActor): boolean {
+  return canReadPersonalInformation(actor);
+}
 
 export interface ActiveEdition {
   id: string;
@@ -96,7 +121,9 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
   const db = getDb();
   const edition = await getActiveEdition();
 
-  const byStatus: Record<RegistrationStatus, number> = { ...EMPTY_STATUS_COUNTS };
+  const byStatus: Record<RegistrationStatus, number> = {
+    ...EMPTY_STATUS_COUNTS,
+  };
   let registrationsTotal = 0;
 
   if (edition) {
@@ -130,36 +157,48 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
 
 export interface AccountRow {
   userId: string;
+  /** The account's email — null for a caller who may not read personal info. */
   email: string | null;
-  /** Latest Burner Bio display name, when the account has one. */
+  /** The account-level handle (public by design; not personal information). */
   username: string | null;
-  role: "god" | "org_staff" | null;
+  /** Their org rank, or null when they hold none. */
+  role: OrgRank | null;
+  /** Free-text org department label, or null. */
+  department: string | null;
+  isDepartmentLead: boolean;
   createdAt: Date;
 }
 
 /**
  * Search users by email OR username (case-insensitive substring), annotated with
- * their org role. Empty query returns the most recent accounts. One row per user.
+ * their org rank. Empty query returns the most recent accounts. One row per user.
  *
- * The name is now a single column on `users` rather than a per-edition bio
- * lookup, so the EXISTS sub-query and the "newest bio wins" pass both went away:
- * one account has one handle, full stop.
+ * WITHOUT `read_personal_information` the email column is neither SELECTED nor
+ * MATCHED. Dropping it from the select alone would leave the search itself as an
+ * oracle: type a whole address, get a row back, and you have confirmed that
+ * address has an account here — a lookup service for exactly the data the rank
+ * is not allowed to hold. So an engineer's search runs against the username
+ * only, and the page says so rather than silently returning nothing.
  */
 export async function searchAccounts(
   orgGroupId: string,
   query: string,
+  actor: OrgActor,
 ): Promise<AccountRow[]> {
   const db = getDb();
+  const personal = seesPersonalInformation(actor);
   const q = query.trim();
   const like = `%${q}%`;
 
   const rows = await db
     .select({
       userId: schema.users.id,
-      email: schema.users.email,
       username: schema.users.username,
       role: schema.memberships.role,
+      department: schema.memberships.department,
+      departmentLead: schema.memberships.departmentLead,
       createdAt: schema.users.createdAt,
+      ...(personal ? { email: schema.users.email } : {}),
     })
     .from(schema.users)
     .leftJoin(
@@ -171,10 +210,12 @@ export async function searchAccounts(
     )
     .where(
       q
-        ? or(
-            ilike(schema.users.email, like),
-            ilike(schema.users.username, like),
-          )
+        ? personal
+          ? or(
+              ilike(schema.users.email, like),
+              ilike(schema.users.username, like),
+            )
+          : ilike(schema.users.username, like)
         : undefined,
     )
     .orderBy(desc(schema.users.createdAt))
@@ -182,11 +223,80 @@ export async function searchAccounts(
 
   return rows.map((r) => ({
     userId: r.userId,
-    email: r.email,
+    email: "email" in r ? ((r.email as string | null) ?? null) : null,
     username: r.username,
-    role: r.role === "god" || r.role === "org_staff" ? r.role : null,
+    role: orgRankFromRole(r.role),
+    department: r.department,
+    isDepartmentLead: r.departmentLead ?? false,
     createdAt: r.createdAt,
   }));
+}
+
+export interface OrgAccessRoster {
+  members: AccountRow[];
+  /** How many hold the System manager rank. Drives the sole-manager warning. */
+  systemManagerCount: number;
+}
+
+/**
+ * Everyone who currently HOLDS org access, newest grant last — the standing
+ * question the System panel exists to answer ("who can get into this console,
+ * at what rank, in whose department?").
+ *
+ * Deliberately not `searchAccounts` with a filter. That query answers a
+ * different question — "find me a burner so I can grant them something" — and
+ * walks the whole `users` table to do it. This one is driven from `memberships`,
+ * so it is bounded by the number of staff rather than by the number of burners,
+ * and it cannot accidentally list a person who holds nothing.
+ *
+ * Same personal-information rule as everywhere else: the email column is
+ * resolved BEFORE the select, so an engineer's rows never contain one. The
+ * counts are not personal information — how many people hold a rank is a fact
+ * about the deployment, not about a person — which is what lets an engineer see
+ * that there is exactly one System manager without being told who.
+ */
+export async function getOrgAccessRoster(
+  orgGroupId: string,
+  actor: OrgActor,
+): Promise<OrgAccessRoster> {
+  const db = getDb();
+  const personal = seesPersonalInformation(actor);
+
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      username: schema.users.username,
+      role: schema.memberships.role,
+      department: schema.memberships.department,
+      departmentLead: schema.memberships.departmentLead,
+      createdAt: schema.users.createdAt,
+      ...(personal ? { email: schema.users.email } : {}),
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .where(
+      and(
+        eq(schema.memberships.groupId, orgGroupId),
+        inArray(schema.memberships.role, [...ORG_RANKS]),
+      ),
+    )
+    .orderBy(asc(schema.users.createdAt))
+    .limit(200);
+
+  const members = rows.map((r) => ({
+    userId: r.userId,
+    email: "email" in r ? ((r.email as string | null) ?? null) : null,
+    username: r.username,
+    role: orgRankFromRole(r.role),
+    department: r.department,
+    isDepartmentLead: r.departmentLead ?? false,
+    createdAt: r.createdAt,
+  }));
+
+  return {
+    members,
+    systemManagerCount: members.filter((m) => m.role === "god").length,
+  };
 }
 
 export interface RegistrationRow {
@@ -310,17 +420,82 @@ export interface RegistrationDetail {
   cohort: Cohort;
 }
 
-/** Full read model for one registration detail page. Null if not found. */
-export async function getRegistrationDetail(
-  id: string,
-): Promise<RegistrationDetail | null> {
-  const db = getDb();
+// The `registrations` columns that are a HUMAN BEING'S contact details rather
+// than facts about a camp: the camp's contact address, the alternate contact
+// (name + phone + email) and the LNT lead (name + phone + email). Everything
+// else on the row — sound plan, population, placement wishes, budget — is the
+// camp's answer, not a person's, and every rank reads it.
+const REGISTRATION_CONTACT_KEYS = [
+  "s1ContactEmail",
+  "s1AltContactName",
+  "s1AltContactPhone",
+  "s1AltContactEmail",
+  "s2LntLeadName",
+  "s2LntLeadPhone",
+  "s2LntLeadEmail",
+] as const;
 
-  const [registration] = await db
-    .select()
+/** The same keys, nulled — spread back so the row keeps its full shape. */
+const REGISTRATION_CONTACT_NULLS = Object.fromEntries(
+  REGISTRATION_CONTACT_KEYS.map((key) => [key, null]),
+) as Record<(typeof REGISTRATION_CONTACT_KEYS)[number], null>;
+
+/**
+ * Load one registration row, selecting the contact columns ONLY for a caller
+ * allowed to read them. The refused branch selects every OTHER column by name
+ * (via drizzle's `getTableColumns`, so a column added to the schema later is
+ * included automatically rather than silently vanishing) and spreads nulls into
+ * the contact keys, keeping the row's type identical for both callers.
+ */
+async function loadRegistrationRow(
+  id: string,
+  personal: boolean,
+): Promise<typeof schema.registrations.$inferSelect | undefined> {
+  const db = getDb();
+  if (personal) {
+    const [row] = await db
+      .select()
+      .from(schema.registrations)
+      .where(eq(schema.registrations.id, id))
+      .limit(1);
+    return row;
+  }
+
+  const {
+    s1ContactEmail: _contactEmail,
+    s1AltContactName: _altName,
+    s1AltContactPhone: _altPhone,
+    s1AltContactEmail: _altEmail,
+    s2LntLeadName: _lntName,
+    s2LntLeadPhone: _lntPhone,
+    s2LntLeadEmail: _lntEmail,
+    ...withoutContact
+  } = getTableColumns(schema.registrations);
+
+  const [row] = await db
+    .select(withoutContact)
     .from(schema.registrations)
     .where(eq(schema.registrations.id, id))
     .limit(1);
+  return row ? { ...row, ...REGISTRATION_CONTACT_NULLS } : undefined;
+}
+
+/**
+ * Full read model for one registration detail page. Null if not found.
+ *
+ * For a caller without `read_personal_information` the camp's contact people
+ * (alt contact, LNT lead) and the reviewer/decider identities are never
+ * selected: the review itself — plans, sound, placement, suppliers — is entirely
+ * readable, which is the point of the engineer rank having access everywhere.
+ */
+export async function getRegistrationDetail(
+  id: string,
+  actor: OrgActor,
+): Promise<RegistrationDetail | null> {
+  const db = getDb();
+  const personal = seesPersonalInformation(actor);
+
+  const registration = await loadRegistrationRow(id, personal);
   if (!registration) return null;
 
   const [group] = await db
@@ -347,19 +522,26 @@ export async function getRegistrationDetail(
     .limit(1);
 
   const reviewer = schema.users;
-  const reviews = await db
+  const reviewRows = await db
     .select({
       id: schema.sectionReviews.id,
       sectionKey: schema.sectionReviews.sectionKey,
       status: schema.sectionReviews.status,
       comment: schema.sectionReviews.comment,
-      reviewerEmail: reviewer.email,
       createdAt: schema.sectionReviews.createdAt,
+      ...(personal ? { reviewerEmail: reviewer.email } : {}),
     })
     .from(schema.sectionReviews)
     .leftJoin(reviewer, eq(reviewer.id, schema.sectionReviews.reviewerId))
     .where(eq(schema.sectionReviews.registrationId, id))
     .orderBy(asc(schema.sectionReviews.createdAt));
+  const reviews = reviewRows.map((r) => ({
+    ...r,
+    reviewerEmail:
+      "reviewerEmail" in r
+        ? ((r.reviewerEmail as string | null) ?? null)
+        : null,
+  }));
 
   const repliesByReview = await getSectionReviewReplies(
     reviews.map((r) => r.id),
@@ -382,7 +564,7 @@ export async function getRegistrationDetail(
     .orderBy(asc(schema.suppliers.name));
 
   let decidedByEmail: string | null = null;
-  if (registration.decidedByUserId) {
+  if (personal && registration.decidedByUserId) {
     const [decider] = await db
       .select({ email: schema.users.email })
       .from(schema.users)
@@ -500,7 +682,8 @@ async function getSectionReviewReplies(
     const isOrg = r.authorUserId ? orgStaff.has(r.authorUserId) : false;
     const authorName = isOrg
       ? "AfrikaBurn"
-      : (r.authorUserId ? names.get(r.authorUserId) : null) ?? "A camp member";
+      : ((r.authorUserId ? names.get(r.authorUserId) : null) ??
+        "A camp member");
     const list = byReview.get(r.reviewId) ?? [];
     list.push({
       id: r.id,
@@ -532,12 +715,19 @@ export interface OfficerContactRow {
  * officer's name/email/phone with AfrikaBurn — so this query filters to
  * `consent = accepted`. Pending/declined officers never surface contact here,
  * and the bio phone hard-lock is untouched for everyone else.
+ *
+ * The consent an officer gave was to AfrikaBurn's SAFETY AND OPS people holding
+ * their number, which is not everyone who can open the console: a caller without
+ * `read_personal_information` gets the officer roster (who holds which post —
+ * that IS the coverage answer) with neither email nor phone selected.
  */
 export async function getRegistrationOfficers(
   groupId: string,
   editionId: string,
+  actor: OrgActor,
 ): Promise<OfficerContactRow[]> {
   const db = getDb();
+  const personal = seesPersonalInformation(actor);
   const rows = await db
     .select({
       officerKey: schema.projectRoles.officerKey,
@@ -546,9 +736,13 @@ export async function getRegistrationOfficers(
       consent: schema.memberRoleAssignments.consentStatus,
       username: schema.users.username,
       sanitizedAt: schema.users.sanitizedAt,
-      bioEmail: schema.burnerBios.contactEmail,
-      phone: schema.burnerBios.phone,
-      userEmail: schema.users.email,
+      ...(personal
+        ? {
+            bioEmail: schema.burnerBios.contactEmail,
+            phone: schema.burnerBios.phone,
+            userEmail: schema.users.email,
+          }
+        : {}),
     })
     .from(schema.memberRoleAssignments)
     .innerJoin(
@@ -582,8 +776,13 @@ export async function getRegistrationOfficers(
     officerName: r.officerName,
     emoji: r.emoji,
     displayName: publicMemberName(r.username, { sanitizedAt: r.sanitizedAt }),
-    email: r.bioEmail ?? r.userEmail ?? null,
-    phone: r.phone,
+    email:
+      "bioEmail" in r
+        ? ((r.bioEmail as string | null) ??
+          (r.userEmail as string | null) ??
+          null)
+        : null,
+    phone: "phone" in r ? ((r.phone as string | null) ?? null) : null,
     consent: r.consent,
   }));
 }
@@ -714,31 +913,41 @@ export interface DecisionLogRow {
   createdAt: Date;
 }
 
-/** Decision history for a registration (audit_events on this subject). */
+/**
+ * Decision history for a registration (audit_events on this subject). WHAT was
+ * decided and when is org record; WHO decided it is a staff member's email, so
+ * it is only selected for a caller who may read personal information — the
+ * history still reads, attributed to "Staff".
+ */
 export async function getRegistrationDecisionLog(
   registrationId: string,
+  actor: OrgActor,
 ): Promise<DecisionLogRow[]> {
   const db = getDb();
+  const personal = seesPersonalInformation(actor);
   const rows = await db
     .select({
       id: schema.auditEvents.id,
       action: schema.auditEvents.action,
-      actorEmail: schema.users.email,
       meta: schema.auditEvents.meta,
       createdAt: schema.auditEvents.createdAt,
+      ...(personal ? { actorEmail: schema.users.email } : {}),
     })
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
     .where(eq(schema.auditEvents.subject, registrationId))
     .orderBy(desc(schema.auditEvents.createdAt));
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    actorEmail:
+      "actorEmail" in r ? ((r.actorEmail as string | null) ?? null) : null,
+  }));
 }
 
 export interface SupplierOverviewRow {
   id: string;
   name: string;
   services: string | null;
-  contact: string | null;
   website: string | null;
   /** Normalised category chip (from the imported sheet), null when unset. */
   category: string | null;
@@ -755,18 +964,28 @@ export interface SupplierOverviewRow {
  * step-state map for `editionId` (empty when there's no onboarding row yet),
  * and a notes count. Progress (n/7) is derived in-component via @quagga/core.
  * Caller must have cleared the gate.
+ *
+ * `contact` is a named human at that business with their phone or address, so it
+ * needs `read_personal_information`. Worth noticing: nothing on this screen
+ * RENDERS it — it was being selected and shipped in the payload for a column
+ * that does not exist. Exactly the leak the header warns about, and the reason
+ * the rule is enforced at the select rather than in the JSX.
  */
 export async function getSuppliersOverview(
   editionId: string | null,
 ): Promise<SupplierOverviewRow[]> {
   const db = getDb();
+  // NOTE: `suppliers.contact` is deliberately NOT selected for ANY rank, which
+  // is why this query takes no rank decision at all. The table renders no
+  // contact column, so withholding it from engineers alone still shipped a
+  // supplier's contact details in the RSC payload of every staff and god page
+  // load, for nothing. A field nobody renders should not be fetched.
 
   const rows = await db
     .select({
       id: schema.suppliers.id,
       name: schema.suppliers.name,
       services: schema.suppliers.services,
-      contact: schema.suppliers.contact,
       website: schema.suppliers.website,
       category: schema.suppliers.category,
       returning: schema.suppliers.returning,
@@ -800,7 +1019,7 @@ export async function getSuppliersOverview(
     id: r.id,
     name: r.name,
     services: r.services,
-    contact: r.contact,
+    contact: "contact" in r ? ((r.contact as string | null) ?? null) : null,
     website: r.website,
     category: r.category,
     returning: r.returning,
@@ -818,23 +1037,32 @@ export interface SupplierNoteRow {
   createdAt: Date;
 }
 
-/** Org-internal notes timeline for a supplier, newest first. */
+/** Org-internal notes timeline for a supplier, newest first. The note bodies are
+ * org record about a BUSINESS and every rank reads them; the author's email is a
+ * staff member's, so it needs `read_personal_information`. */
 export async function getSupplierNotes(
   supplierId: string,
+  actor: OrgActor,
 ): Promise<SupplierNoteRow[]> {
   const db = getDb();
-  return db
+  const personal = seesPersonalInformation(actor);
+  const rows = await db
     .select({
       id: schema.supplierNotes.id,
       kind: schema.supplierNotes.kind,
       body: schema.supplierNotes.body,
-      authorEmail: schema.users.email,
       createdAt: schema.supplierNotes.createdAt,
+      ...(personal ? { authorEmail: schema.users.email } : {}),
     })
     .from(schema.supplierNotes)
     .leftJoin(schema.users, eq(schema.users.id, schema.supplierNotes.authorId))
     .where(eq(schema.supplierNotes.supplierId, supplierId))
     .orderBy(desc(schema.supplierNotes.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    authorEmail:
+      "authorEmail" in r ? ((r.authorEmail as string | null) ?? null) : null,
+  }));
 }
 
 // --- Camp categories ------------------------------------------------------
@@ -1097,4 +1325,3 @@ export async function getStatusBoard(
     questionnaires: deriveQuestionnaireCompletion(sends),
   };
 }
-

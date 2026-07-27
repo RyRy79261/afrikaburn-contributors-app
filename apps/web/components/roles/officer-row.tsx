@@ -92,7 +92,9 @@ export function OfficerRow({
         membershipId: pick,
       });
       if (res.ok) {
-        toast.success("Asked them to accept — nothing is shared until they do.");
+        toast.success(
+          "Asked them to accept — nothing is shared until they do.",
+        );
         setPick("");
         router.refresh();
       } else toast.error(res.error);

@@ -40,7 +40,9 @@ export default async function AuthPage({
   // token itself rides in an httpOnly cookie, so there is nothing here to leak
   // and nothing to abuse as an open redirect — the only value that resolves to
   // anything is the one fixed internal path below.
-  const resumeInvite = wantsInviteResume((await searchParams)?.[INVITE_AUTH_PARAM]);
+  const resumeInvite = wantsInviteResume(
+    (await searchParams)?.[INVITE_AUTH_PARAM],
+  );
   const redirectTo = resumeInvite ? INVITE_RESUME_PATH : "/";
 
   const editionLabel = await getEditionLabel();

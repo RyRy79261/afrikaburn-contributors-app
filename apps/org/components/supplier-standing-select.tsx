@@ -41,7 +41,9 @@ export function SupplierStandingSelect({
         standing: parsed,
       });
       if (result.ok) {
-        toast.success(`Standing set to ${standingLabel(parsed).toLowerCase()}.`);
+        toast.success(
+          `Standing set to ${standingLabel(parsed).toLowerCase()}.`,
+        );
         router.refresh();
       } else {
         toast.error("Could not update standing", {

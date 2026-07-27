@@ -6,7 +6,37 @@
 
 ---
 
-## 0. Reality check (read this first)
+## 0. Reality check
+
+> ### ⚠️ THIS SECTION IS A DATED SNAPSHOT — corrected 27 Jul 2026
+>
+> Everything below the correction was written on **26 July 2026** and is preserved
+> because the reasoning it drove is still legible. **Its central claims are no longer
+> true**, and the milestone tables further down still carry `done`/`partial`/`absent`
+> labels frozen at that date. Treat this whole document as a **planning artifact and
+> historical record**, not as a status board. For what is actually true now, read
+> `README.md`, `docs/build-spec.md` and `docs/deploy.md`.
+>
+> **Corrections, as of 27 Jul 2026:**
+>
+> | The snapshot said | What is true now |
+> | --- | --- |
+> | 13 migrations, 0000–0012 | **18 migrations, 0000–0017.** They apply automatically at deploy via the advisory-locked runner, which also bootstraps reference data into an empty database. |
+> | No Neon database; migrations never applied; `seed.ts` never executed | A database exists and has been migrated and seeded. There is also a **full local stack** (`docker-compose.local.yml`) that anyone can run off a laptop. |
+> | *No page has ever been rendered against real data* | Pages have been driven in a real browser against a real database, repeatedly. |
+> | Correctness rests on the unit gate alone | There is a **second gate**: `pnpm e2e:local` — 137 Playwright tests over 8 personas against the real stack. It is not run by `turbo run test`, so it must be run deliberately. |
+> | Zero `error.tsx` / `loading.tsx` / `not-found.tsx` boundaries | 34 `loading.tsx`, 7 `error.tsx`, 4 `not-found.tsx` across the three apps (counted 27 Jul 2026). |
+> | Zero database transactions in any server action | Transactions landed across all three apps. |
+> | Managed Neon Auth blocks 2FA / passkeys / backup codes / email-change / unlink | **All of them shipped.** Auth is self-hosted Better Auth 1.6.25 (`packages/auth`); the plugin tables are migration 0015. M2 was executed. |
+> | `apps/suppliers` has no Vercel deployment | Still true at the time of writing — confirm before relying on it. |
+>
+> The **seeding principle** below is unchanged and still binding. So is the reasoning
+> about why the first real DB boot was the largest de-risking act — it was, and it
+> surfaced exactly the class of defect predicted.
+
+---
+
+*Everything from here is the 26 Jul 2026 snapshot, as written.*
 
 **What is built.** The product is genuinely code-complete across a large surface: three Next.js 16 apps (web / org / suppliers), Neon Postgres + Drizzle with 13 append-only migrations (0000–0012), `@quagga/core` with ~540 real behavioural unit tests over the pure decision logic (state machines, audience/officer resolvers, privacy hard-locks, questionnaire engine/results, account security, supplier standing). The server actions are **not** UI-only — they carry real DB write paths, Zod boundaries, authz gates and audit-event emission. The design-gap repair commit genuinely landed: the four org tables use a shared `ResponsiveDataTable`, the privilege-change confirm dialog exists, MV/art forms are carded, result bars are responsive. (Spot-verified in code, 26 Jul 2026.)
 

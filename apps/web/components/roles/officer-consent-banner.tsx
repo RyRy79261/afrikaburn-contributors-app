@@ -6,7 +6,7 @@ import { ShieldQuestion } from "lucide-react";
 import { officerConsentCopy } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { toast } from "@quagga/ui/components/toast";
-import type { respondToOfficerAction } from "@/app/camps/[slug]/actions";
+import type { respondToOfficerAction } from "@/app/(app)/camps/[slug]/actions";
 
 interface Invitation {
   roleId: string;

@@ -1,13 +1,24 @@
 # Page Build Plan — one task per page, components first
 
-*Ryan, 25 Jul 2026. Every canvas page frame → an implementation task. Prereqs:
-docs/component-spec.md (Tier 1-3 components) and the platform/database decision
-(docs/platform-architecture-spec.md) land FIRST. Specs referenced are the law for
-each page; the canvas frame (desktop + mobile 360 pair) is the visual contract;
-`design/qa/audit.py --sections <frameId>` lists a frame's exact composition.*
+> **✅ WORKED THROUGH — the status column is frozen at 25 Jul 2026.** Every page
+> below has since been built, including all the 🆕 rows. The **frame ids remain
+> useful** — this is still the fastest way to find the canvas frame for a given page,
+> and `design/qa/audit.py --sections <frameId>` still emits its component manifest.
+> **Do not read the Status column as current**, and ignore the sequencing section: its
+> step 1 (the platform/database restructure) was resolved without a restructure — see
+> `docs/build-spec.md` §"Platform/database separation — RESOLVED".
+>
+> One page shipped **without** a frame and is therefore absent from these tables: the
+> org console's `/system`. That is a recorded exception to design-before-build, noted
+> in `docs/build-spec.md` §"The System panel"; when its frame is drawn it documents
+> what shipped rather than redesigning it.
 
-Status key: ✅ implemented (pre-design-pass code exists, needs reconcile vs canvas) ·
-🆕 not implemented.
+*Ryan, 25 Jul 2026. Every canvas page frame → an implementation task. Specs referenced
+are the law for each page; the canvas frame (desktop + mobile 360 pair) is the visual
+contract.*
+
+Status key (as of 25 Jul 2026): ✅ implemented (pre-design-pass code exists, needs
+reconcile vs canvas) · 🆕 not implemented.
 
 ## apps/web (participant)
 

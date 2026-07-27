@@ -17,7 +17,7 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ token?: string; error?: string }>;
 }) {
   const { token, error } = await searchParams;
-  const usableToken = error ? null : (token?.trim() || null);
+  const usableToken = error ? null : token?.trim() || null;
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center gap-4 px-6 py-12">

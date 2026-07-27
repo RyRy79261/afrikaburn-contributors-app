@@ -41,7 +41,12 @@ export function LeaveCampButton({ slug, action }: LeaveCampButtonProps) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">Sure?</span>
-      <Button variant="destructive" size="sm" onClick={leave} disabled={isPending}>
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={leave}
+        disabled={isPending}
+      >
         {isPending ? "Leaving…" : "Leave"}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>

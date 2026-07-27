@@ -258,7 +258,8 @@ export function BioFlow({
         ? "Continue to your camp"
         : "Go to the directory";
     }
-    if (isLastInput) return mode === "edit" ? "Save changes" : "Complete my bio";
+    if (isLastInput)
+      return mode === "edit" ? "Save changes" : "Complete my bio";
     return "Save & continue";
   })();
 
@@ -294,8 +295,8 @@ export function BioFlow({
           <div>
             <h2 className="text-lg font-semibold">Privacy</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              A final look at what shows on your public profile. Sensitive fields
-              are locked private and can never be made public.
+              A final look at what shows on your public profile. Sensitive
+              fields are locked private and can never be made public.
             </p>
           </div>
           <PrivacyToggles
@@ -552,7 +553,11 @@ function DetailsStep({
     );
   };
   const lockedSwitch = (label: string) => (
-    <Switch variant="privacy" hardLocked aria-label={`${label} — always private`} />
+    <Switch
+      variant="privacy"
+      hardLocked
+      aria-label={`${label} — always private`}
+    />
   );
 
   return (
@@ -640,7 +645,9 @@ function DetailsStep({
                   key={year}
                   value={String(year)}
                   disabled={disabled}
-                  aria-label={disabled ? `${year} — no burn was held` : `${year}`}
+                  aria-label={
+                    disabled ? `${year} — no burn was held` : `${year}`
+                  }
                   title={disabled ? "No burn was held this year" : undefined}
                   className="h-auto flex-col gap-0 py-1.5"
                 >

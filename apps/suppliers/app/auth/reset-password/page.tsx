@@ -15,7 +15,7 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ token?: string; error?: string }>;
 }) {
   const { token, error } = await searchParams;
-  const usableToken = error ? null : (token?.trim() || null);
+  const usableToken = error ? null : token?.trim() || null;
   const editionLabel = await getEditionLabel();
 
   return (

@@ -30,9 +30,15 @@ export default function GlobalError({
           <h1 style={{ fontSize: "1.25rem", margin: "0 0 0.75rem" }}>
             Something went wrong
           </h1>
-          <p style={{ fontSize: "0.875rem", opacity: 0.75, margin: "0 0 1.5rem" }}>
-            The app hit an unexpected error. Try again — if it keeps happening, an
-            organiser can help.
+          <p
+            style={{
+              fontSize: "0.875rem",
+              opacity: 0.75,
+              margin: "0 0 1.5rem",
+            }}
+          >
+            The app hit an unexpected error. Try again — if it keeps happening,
+            an organiser can help.
           </p>
           {error.digest && (
             <p

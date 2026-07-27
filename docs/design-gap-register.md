@@ -1,5 +1,32 @@
 # Design-gap register
 
+> ## ⚠️ THE 16 MAJORS ARE FIXED — this is an audit snapshot, not an open backlog
+>
+> *Checked against code 27 Jul 2026.* The repair pass landed and **every M1–M16 below
+> still reads "TRACKED (new)" only because the register was never updated.* Do not
+> pick work off it without re-checking; do not re-fix something already fixed.
+>
+> Spot-verified in code:
+>
+> | Major | Now |
+> | --- | --- |
+> | M1 profile sign-in literal | fixed — `describeSignInMethods(linkedAccounts)`, real provider data |
+> | M3 no reply channel on section feedback | fixed — `section_review_replies` (migration 0014), wired both sides |
+> | M4 · M5 MV/art forms lose carding | fixed — both forms carry the Card treatment |
+> | M7 · M9 · M10 · M11 tables forced onto mobile | fixed — all four org tables use the shared `ResponsiveDataTable` |
+> | M8 privilege change has no confirm step | fixed — `Dialog` confirmation in `account-actions.tsx` |
+> | M12 missing grid question types | fixed — grids in `packages/types/src/questionnaire.ts` |
+> | M13 no author preview | fixed — `components/questionnaires/questionnaire-preview.tsx` |
+> | M14 bulletins can't reach suppliers | fixed — the `org_suppliers` audience in `@quagga/core` `audience.ts` |
+> | M15 supplier code never shown in portal | fixed — rendered on supplier onboarding |
+> | M16 results bars collapse on mobile | fixed — responsive results view |
+> | M6 supplier sign-up mgmt unreachable | addressed differently: reachable from a console-landing tile, **deliberately not in the header nav** (the reason is commented at `apps/org/app/(console)/page.tsx:41`) |
+> | M2 placement tile drawn available, built disabled | **the code is right, the frame is wrong.** Placement is permanently out of scope (AGENTS.md); the canvas should change, not the app |
+>
+> **What this file is still good for:** the method (it is the reference for how a
+> design-vs-implementation audit is run), the frame node ids, and the MINORS backlog
+> below, which has **not** been re-audited. Anything new belongs in a fresh audit.
+
 The standing record of where the implementation diverges from the pen.dev design
 canvas (`design/ab-initial-app.pen`). One row per real divergence, each carrying its
 **frame node id** and/or **`file:line`** so any claim here can be checked against both

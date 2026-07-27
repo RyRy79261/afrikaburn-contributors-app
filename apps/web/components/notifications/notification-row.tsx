@@ -52,7 +52,8 @@ export function NotificationRow({
         setOpened(true);
         onOpen?.();
         startTransition(async () => {
-          if (!item.read) await markNotificationRead({ notificationId: item.id });
+          if (!item.read)
+            await markNotificationRead({ notificationId: item.id });
           if (item.link) router.push(item.link);
           else router.refresh();
         });

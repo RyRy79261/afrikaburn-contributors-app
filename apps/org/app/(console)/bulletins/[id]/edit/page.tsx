@@ -35,7 +35,11 @@ export default async function EditBulletinPage({
   return (
     <div>
       <PageHeading
-        eyebrow={published ? "Console / Bulletins / Sent" : "Console / Bulletins / Draft"}
+        eyebrow={
+          published
+            ? "Console / Bulletins / Sent"
+            : "Console / Bulletins / Draft"
+        }
         title={published ? "Edit bulletin" : "Edit draft"}
         description={
           published

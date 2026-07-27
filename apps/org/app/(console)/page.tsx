@@ -92,9 +92,12 @@ export default async function OverviewPage() {
   if (!guard.ok) return guard.node;
 
   const edition = await getActiveEdition();
-  const board = await getStatusBoard(edition);
-  const activity = await getRecentActivity(6);
-  // Standing visibility for the one action nothing prevents (see the strip).
+  // The board and the activity feed are independent reads off the same edition;
+  // running them in series only added a round trip to every console landing.
+  const [board, activity] = await Promise.all([
+    getStatusBoard(edition),
+    getRecentActivity(guard.session.actor, 6),
+  ]);
 
   const updatedAt = new Date().toLocaleTimeString("en-ZA", {
     hour: "2-digit",
@@ -105,9 +108,7 @@ export default async function OverviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeading
-        eyebrow={
-          edition ? `${edition.name} · Console` : "Organiser console"
-        }
+        eyebrow={edition ? `${edition.name} · Console` : "Organiser console"}
         title="Overview"
         description={
           edition
@@ -117,10 +118,7 @@ export default async function OverviewPage() {
         actions={
           <div className="flex flex-col items-end gap-1.5">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span
-                className="h-2 w-2 rounded-full bg-ab-sage"
-                aria-hidden
-              />
+              <span className="h-2 w-2 rounded-full bg-ab-sage" aria-hidden />
               Live · updated {updatedAt}
             </span>
             <Link

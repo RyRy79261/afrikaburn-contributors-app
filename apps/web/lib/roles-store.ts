@@ -198,22 +198,29 @@ export async function createRole(
       error: `A camp can have at most ${PROJECT_ROLE_CAP} roles. Remove one before adding another.`,
     };
   }
-  if (roleNameConflicts(existing.map((r) => r.name), name)) {
+  if (
+    roleNameConflicts(
+      existing.map((r) => r.name),
+      name,
+    )
+  ) {
     return { ok: false, error: "A role with that name already exists." };
   }
   const nextSort = existing.reduce((max, r) => Math.max(max, r.sort), -1) + 1;
   try {
-    await db().insert(schema.projectRoles).values({
-      groupId,
-      name,
-      nameNormalized: normalizeRoleName(name),
-      isDefault: false,
-      sort: nextSort,
-      kind: "custom",
-      color: opts?.color ?? "neutral",
-      emoji: opts?.emoji ?? null,
-      permissions: {},
-    });
+    await db()
+      .insert(schema.projectRoles)
+      .values({
+        groupId,
+        name,
+        nameNormalized: normalizeRoleName(name),
+        isDefault: false,
+        sort: nextSort,
+        kind: "custom",
+        color: opts?.color ?? "neutral",
+        emoji: opts?.emoji ?? null,
+        permissions: {},
+      });
   } catch {
     return { ok: false, error: "A role with that name already exists." };
   }
@@ -276,7 +283,10 @@ export async function setRoleAppearance(
   if (!target) return { ok: false, error: "That role no longer exists." };
   // Officers are org-uniform: their display is fixed by the catalog.
   if (target.kind === "officer") {
-    return { ok: false, error: "Officer roles use the AfrikaBurn catalog styling." };
+    return {
+      ok: false,
+      error: "Officer roles use the AfrikaBurn catalog styling.",
+    };
   }
   await db()
     .update(schema.projectRoles)
@@ -468,7 +478,8 @@ export async function assignOfficer(
       ),
     )
     .limit(1);
-  if (!membership[0]) return { ok: false, error: "That member isn't in this camp." };
+  if (!membership[0])
+    return { ok: false, error: "That member isn't in this camp." };
 
   await db()
     .insert(schema.memberRoleAssignments)
@@ -627,7 +638,11 @@ export async function respondToOfficer(
 
   await db()
     .update(schema.memberRoleAssignments)
-    .set({ consentStatus: "accepted", acceptedAt: new Date(), orgVisible: true })
+    .set({
+      consentStatus: "accepted",
+      acceptedAt: new Date(),
+      orgVisible: true,
+    })
     .where(
       and(
         eq(schema.memberRoleAssignments.membershipId, membershipId),
@@ -718,7 +733,9 @@ export async function getMemberPermissions(
 }
 
 /** The baseline role id for a group (the "everyone" audience), or null. */
-export async function getBaselineRoleId(groupId: string): Promise<string | null> {
+export async function getBaselineRoleId(
+  groupId: string,
+): Promise<string | null> {
   const roles = await listRoles(groupId);
   return roles.find((r) => r.kind === "baseline")?.id ?? null;
 }

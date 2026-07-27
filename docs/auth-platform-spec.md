@@ -1,5 +1,24 @@
 # Auth Platform Spec — Self-Hosted Better Auth (Plan of Record)
 
+> ## ✅ EXECUTED — read as the *reasoning*, not as a to-do list
+>
+> *Status added 27 Jul 2026.* The migration this document plans **has happened**.
+> `@quagga/auth` runs Better Auth **1.6.25** (not the 1.5.x this text anticipates),
+> mounted in all three apps at `/api/auth/[...all]`; the auth tables landed as
+> migration 0013 and the two-factor + passkey tables as 0015. Managed Neon Auth is
+> gone.
+>
+> So when you read a future tense here — "we will move off", "this unblocks 2FA",
+> "P0-6 delete managed Neon Auth" — read it as the argument for a decision already
+> taken. The threat model, the POPIA analysis, the observability plan and the
+> [VERIFIED]/[INFERRED] discipline are all still live and still worth citing.
+>
+> **Not yet done from this plan:** the OAuth-provider / IdP track (§ on becoming an
+> IdP for Camp 404) is still parked, and the observability wiring is partial.
+> The current shipped-capability list is `AUTH_CAPABILITIES` in `@quagga/core` and
+> `docs/accounts-security-spec.md` §"What we run" — those are the authorities on what
+> exists today; this file is the authority on why.
+
 *Synthesised from the COMPLETE seven-domain research set (better-auth-core, passkeys,
 ci-regression, security-hardening, observability, compliance-reporting, threat-model —
 82 findings). Ryan, rewritten 2026-07-26 from the full corpus. This is the plan of record

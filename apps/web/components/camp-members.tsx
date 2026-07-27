@@ -21,7 +21,7 @@ import {
 import { RoleBadge } from "@quagga/ui/components/role-badge";
 import { toast } from "@quagga/ui/components/toast";
 import { MemberRefCode } from "./member-ref-code";
-import type { setMemberRolesAction } from "@/app/camps/[slug]/actions";
+import type { setMemberRolesAction } from "@/app/(app)/camps/[slug]/actions";
 
 type SetMemberRolesAction = typeof setMemberRolesAction;
 
@@ -56,9 +56,12 @@ interface CampMembersProps {
   setMemberRolesAction: SetMemberRolesAction;
 }
 
+// `god` renders as "System manager": the stored enum value stays `god` on
+// purpose (@quagga/types roles.ts), and this is the label layer.
 const ROLE_LABEL: Record<MembershipRole, string> = {
-  god: "God",
+  god: "System manager",
   org_staff: "Org staff",
+  engineer: "Engineer",
   lead: "Lead",
   admin: "Co-lead",
   member: "Member",
@@ -146,7 +149,9 @@ export function CampMembers(props: CampMembersProps) {
                     />
                   ))
               ) : (
-                <span className="text-xs text-muted-foreground">No roles yet</span>
+                <span className="text-xs text-muted-foreground">
+                  No roles yet
+                </span>
               )}
               {props.canAssignRoles && (
                 <button
@@ -206,7 +211,10 @@ function AssignRolesDialog({
   setMemberRolesAction: SetMemberRolesAction;
 }) {
   // Only assignable role ids are editable here (baseline + officers excluded).
-  const assignableIds = React.useMemo(() => new Set(roles.map((r) => r.id)), [roles]);
+  const assignableIds = React.useMemo(
+    () => new Set(roles.map((r) => r.id)),
+    [roles],
+  );
   const [selected, setSelected] = React.useState<string[]>(
     member.roleIds.filter((id) => assignableIds.has(id)),
   );
@@ -235,8 +243,8 @@ function AssignRolesDialog({
         <DialogHeader>
           <DialogTitle>Roles for {member.displayName}</DialogTitle>
           <DialogDescription>
-            A member can hold several roles. Officer registrations are managed on
-            the Roles &amp; Officers page.
+            A member can hold several roles. Officer registrations are managed
+            on the Roles &amp; Officers page.
           </DialogDescription>
         </DialogHeader>
 

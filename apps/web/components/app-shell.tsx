@@ -1,15 +1,36 @@
 import Link from "next/link";
-import { Flame, Compass, TentTree, UserRound, Settings } from "lucide-react";
+import { Flame } from "lucide-react";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getEditionLabel } from "@/lib/edition";
 import { getUnreadNotificationCount } from "@/lib/notifications";
 import { SignOutButton } from "./sign-out-button";
 import { HeaderNotificationBell } from "./header-notification-bell";
+import { NavLink } from "./nav-link";
 
 /**
  * App chrome: brand nav, the edition banner, and the page body. Server
  * component — reads the session cheaply and degrades gracefully env-less.
+ *
+ * Rendered from `app/(app)/layout.tsx`, not from each page. That is the whole
+ * point: React keeps a layout MOUNTED across client-side navigations inside its
+ * group, so the header, nav and edition banner survive a route change and only
+ * the page body swaps. Rendered per-page (as it was), every click re-ran these
+ * three reads, re-sent the entire header down the wire, and let the root
+ * `loading.tsx` replace the whole screen — the header visibly blinked on every
+ * navigation.
+ *
+ * The three reads below are AWAITED, not streamed behind `<Suspense>`, and that
+ * is deliberate. React delivers a resolved Suspense boundary as a hidden `<div>`
+ * plus an inline `$RC(…)` script that moves it into place — so with JavaScript
+ * off the boundary never resolves and the visitor is left looking at the
+ * fallback. Streaming this nav was tried and reverted after reading the actual
+ * response: with `<script>` tags stripped, the "Directory" and "Sign in" links
+ * sat inside `<div hidden id="S:0">` and the header showed placeholder bars.
+ * Nothing a reader needs in order to navigate may wait on JavaScript. Awaiting
+ * costs little and costs it once per FULL page load: these reads are
+ * request-`cache()`d (shared with the page's own session read), and a
+ * client-side navigation does not re-render this layout at all.
  *
  * `minimalNav` is for the signed-out-friendly surfaces the design draws with
  * nothing but the brand and "Sign in" (the invite landing page, frames qhcHh +
@@ -26,10 +47,12 @@ export async function AppShell({
 }) {
   const user = await getAuthenticatedUser();
   const showBrowseLinks = !minimalNav || Boolean(user);
-  const editionLabel = await getEditionLabel();
-  // Signed-in only: the bell renders in the header; count is a placeholder
-  // seam until the notifications backend lands (see lib/notifications.ts).
-  const unread = user ? await getUnreadNotificationCount() : 0;
+  // Both are request-scoped: the edition row is the same for everyone and the
+  // camp-user upsert behind the unread count is shared with the page.
+  const [editionLabel, unread] = await Promise.all([
+    getEditionLabel(),
+    user ? getUnreadNotificationCount() : 0,
+  ]);
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -43,38 +66,18 @@ export async function AppShell({
           <div className="flex items-center gap-5 text-sm">
             {showBrowseLinks && (
               <>
-                <Link
-                  href="/directory"
-                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Compass className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">Directory</span>
-                </Link>
-                <Link
+                <NavLink href="/directory" icon="directory" label="Directory" />
+                <NavLink
                   href="/camps/new"
-                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <TentTree className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">Create camp</span>
-                </Link>
+                  icon="create-camp"
+                  label="Create camp"
+                />
               </>
             )}
             {user ? (
               <>
-                <Link
-                  href="/profile"
-                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <UserRound className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">Profile</span>
-                </Link>
-                <Link
-                  href="/account"
-                  className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Settings className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">Account</span>
-                </Link>
+                <NavLink href="/profile" icon="profile" label="Profile" />
+                <NavLink href="/account" icon="account" label="Account" />
                 <HeaderNotificationBell count={unread} />
                 <SignOutButton />
               </>
@@ -95,7 +98,9 @@ export async function AppShell({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</div>
+      <div className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
+        {children}
+      </div>
 
       <footer className="border-t border-border">
         <p className="mx-auto w-full max-w-5xl px-6 py-4 text-xs text-muted-foreground">

@@ -42,11 +42,7 @@ describe("bucketSubmissionsByMonth — real submissions only", () => {
       new Date("2026-11-15T10:00:00Z"),
       new Date("2027-01-10T10:00:00Z"),
     ]);
-    expect(points.map((p) => p.key)).toEqual([
-      "2026-11",
-      "2026-12",
-      "2027-01",
-    ]);
+    expect(points.map((p) => p.key)).toEqual(["2026-11", "2026-12", "2027-01"]);
     expect(points.map((p) => p.count)).toEqual([1, 0, 1]);
   });
 
@@ -77,17 +73,23 @@ describe("relativeTime", () => {
   const now = new Date("2027-02-01T12:00:00Z");
 
   it("reads in the units a console operator thinks in", () => {
-    expect(relativeTime(new Date("2027-02-01T11:59:40Z"), now)).toBe("just now");
+    expect(relativeTime(new Date("2027-02-01T11:59:40Z"), now)).toBe(
+      "just now",
+    );
     expect(relativeTime(new Date("2027-02-01T11:48:00Z"), now)).toBe(
       "12 min ago",
     );
     expect(relativeTime(new Date("2027-02-01T09:00:00Z"), now)).toBe("3 h ago");
     expect(relativeTime(new Date("2027-01-30T12:00:00Z"), now)).toBe("2 d ago");
-    expect(relativeTime(new Date("2026-12-01T12:00:00Z"), now)).toBe("2 mo ago");
+    expect(relativeTime(new Date("2026-12-01T12:00:00Z"), now)).toBe(
+      "2 mo ago",
+    );
   });
 
   it("never renders a negative age for a clock-skewed future event", () => {
-    expect(relativeTime(new Date("2027-02-01T12:05:00Z"), now)).toBe("just now");
+    expect(relativeTime(new Date("2027-02-01T12:05:00Z"), now)).toBe(
+      "just now",
+    );
   });
 });
 

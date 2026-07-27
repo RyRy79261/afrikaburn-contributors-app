@@ -101,8 +101,7 @@ export interface ProjectRegistrationInput {
 }
 
 export type ProjectRegistrationResult =
-  | { ok: true; slug: string }
-  | { ok: false; error: string };
+  { ok: true; slug: string } | { ok: false; error: string };
 
 /**
  * Create the project group, its edition registration row, and its answer
@@ -152,7 +151,10 @@ export async function createProjectRegistration(
           submittedAt: input.submit ? now : null,
         })
         .onConflictDoNothing({
-          target: [schema.registrations.groupId, schema.registrations.editionId],
+          target: [
+            schema.registrations.groupId,
+            schema.registrations.editionId,
+          ],
         });
 
       await tx
@@ -314,7 +316,10 @@ export async function updateProjectRegistration(
       slug: schema.groups.slug,
     })
     .from(schema.registrations)
-    .innerJoin(schema.groups, eq(schema.groups.id, schema.registrations.groupId))
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
     .where(
       and(
         eq(schema.registrations.groupId, input.groupId),
