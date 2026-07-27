@@ -26,7 +26,7 @@ reconcile vs canvas) · 🆕 not implemented.
 |---|---|---|---|
 | Landing | L82AQr / R8zPnr | build-spec routes | ✅ reconcile (copy fix: no payment refs) |
 | Auth (sign up/in) | u87N7 / HCt1i | build-spec + accounts-security | ✅ reconcile |
-| Onboarding (Burner Bio) | h3ak0 / Z2300W | build-spec §6b Bio v3 | ✅ reconcile (years chips, phone, emergency contacts, hard-locks) |
+| Onboarding (Burner Bio) | iCQgd / srY69 | build-spec §6b Bio v3 | ✅ reconcile (years chips, phone, emergency contacts, hard-locks) |
 | Profile | C313E / SdcDN | build-spec Bio | ✅ reconcile |
 | Burner Profile (3rd-party) | mm31G / lYUEe | synthesis (public fields only) | 🆕 |
 | Directory | u7RSIJ / D0LTCb | build-spec + camp categories | ✅ reconcile (category chips) |

@@ -290,7 +290,7 @@ Grouped by kind. Compact — the audit JSON carries the full prose for each.
 | # | Frame | Where | Gap |
 | --- | --- | --- | --- |
 | m1 | `L82AQr` Landing | `apps/web/app/page.tsx:69,90-92` | Wordmark + hero rendered sentence-case; frame is ALL-CAPS ("QUAGGA PORTAL" / "YOUR CAMP, ONE PLACE."). Kickers do carry uppercase. |
-| m3 | `h3ak0` Onboarding | `bio-flow.tsx:437-441` | Frame headline "Tell us who you are"; code "Your details" with different subtext. |
+| m3 | `iCQgd` Onboarding (was `h3ak0`) | `bio-flow.tsx:437-441` | Frame headline "Tell us who you are"; code "Your details" with different subtext. |
 | m4 | `C313E` Profile | `profile/page.tsx:194-198` | Whole surface renamed "Your profile"; frame is "Your Burner Bio" throughout. |
 | m7 | `mm31G` Burner Profile (public) | `profile-camps.tsx:114` | Badge reads "Self-reported"; frame labels it "FREE TEXT". |
 | m8 | `mm31G` Burner Profile (public) | `profile-public/privacy-note.tsx:10-17` | Privacy note reworded (more verbose); same meaning. |

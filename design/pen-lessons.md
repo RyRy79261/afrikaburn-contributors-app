@@ -1002,3 +1002,28 @@ real: check whether siblings + frame height are consistent with the node in its
 correct slot — if yes, it's cache, not layout. Property nudges (gap +1/-1) do NOT
 clear it. Re-audit later; renders of fresh instances also lag (blank), so neither
 screenshots nor immediate snapshots can convict a freshly built node.
+
+## Username / identity-document reconcile (27 Jul 2026)
+
+### Frame ids changed by the Copy trick
+- Onboarding desktop `h3ak0` → **`iCQgd`** (x=4040, y=5260)
+- Onboarding mobile  `Z2300W` → **`srY69`** (x=5440, y=5260)
+
+Both needed the swap: appending the new "Identity document" field to the step-2
+card re-triggered the documented non-settling +50px y bias (11 phantom
+V-OVERFLOW/OVERLAP defects that two consecutive audit runs reproduced
+identically). Copy-to-scratch audited 0 findings immediately; original deleted,
+copy moved back to the original x/y and renamed. Callers updated:
+`apps/web/components/onboarding/bio-flow.tsx`, `docs/page-build-plan.md`,
+`docs/design-gap-register.md` (m3).
+
+### What did NOT trigger the bias
+Pure `Update` of text/name, and `Copy` of an existing in-frame subtree (the new
+Engineer row cloned from the Org-staff row in `CJs0P` / `y1idvL`) both audited
+clean with no swap needed. The bias so far only shows up for *freshly Inserted*
+subtrees.
+
+### Stale-id note
+`Z5frU`/`k4gUF` (Org Member Detail) and `JIznY`/`YXdDv` (Join Confirm) no longer
+exist — they are now `P6mXrX`/`lYlbW` and `l9JKDo`/`UIzmF`, already rebuilt by an
+earlier session. Check `batch_get` before trusting a frame id quoted in a task.

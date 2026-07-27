@@ -46,7 +46,7 @@ import {
 import type { CampSearchResult } from "@/lib/groups-store";
 import { navigateOnwards } from "@/lib/client-navigation";
 
-// The 5-step Burner Bio flow (design canvas `h3ak0` / `Z2300W`): Welcome ·
+// The 5-step Burner Bio flow (design canvas `iCQgd` / `srY69`): Welcome ·
 // Your details · Burns & volunteering · Privacy · Done. Per-field privacy is set
 // inline on the details step via the @quagga/ui privacy Switch (hard-locked
 // fields render "ALWAYS PRIVATE" and never toggle); the Privacy step is the
