@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { QuestionnaireResponses } from "@quagga/types";
 
 import { getDb, schema } from "@/lib/db";
@@ -52,17 +52,24 @@ function projectRegistrationAnswerKey(
 export async function getProjectRegistrationAnswers(
   groupId: string,
   kind: ProjectRegistrationKind,
+  editionId: string,
 ): Promise<QuestionnaireResponses | null> {
   const db = getDb();
   const [row] = await db
     .select({ responses: schema.questionnaireResponses.responses })
     .from(schema.questionnaireResponses)
     .where(
-      eq(
-        schema.questionnaireResponses.definitionKey,
-        projectRegistrationAnswerKey(groupId, kind),
+      and(
+        eq(
+          schema.questionnaireResponses.definitionKey,
+          projectRegistrationAnswerKey(groupId, kind),
+        ),
+        // Per edition (migration 0020): the key is deterministic per project,
+        // so an unscoped read would mix years once one exists.
+        eq(schema.questionnaireResponses.editionId, editionId),
       ),
     )
+    .orderBy(asc(schema.questionnaireResponses.id))
     .limit(1);
   return row?.responses ?? null;
 }

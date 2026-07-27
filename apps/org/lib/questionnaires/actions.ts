@@ -28,6 +28,7 @@ import {
 import { z } from "zod";
 
 import { getDb, schema, withTransaction } from "@/lib/db";
+import { getActiveEdition } from "@/lib/queries";
 import { requireOrgSession, type OrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { insertNotifications } from "@/lib/notifications";
@@ -507,6 +508,7 @@ export async function submitConsoleQuestionnaire(
         version: schema.questionnaireActivations.version,
         audience: schema.questionnaireActivations.audience,
         definition: schema.questionnaireActivations.definition,
+        editionId: schema.questionnaireActivations.editionId,
       })
       .from(schema.questionnaireActivations)
       .where(eq(schema.questionnaireActivations.id, parsedId.data))
@@ -540,6 +542,17 @@ export async function submitConsoleQuestionnaire(
     const validated = validateResponses(definition, rawResponses);
     if (!validated.ok) return { ok: false, errors: validated.errors };
 
+    // Answers are scoped to the activation's edition (migration 0020). A
+    // pre-feature activation has no edition, so fall back to the active one.
+    const editionId =
+      activation.editionId ?? (await getActiveEdition())?.id ?? null;
+    if (!editionId) {
+      return {
+        ok: false,
+        errors: { _form: "No AfrikaBurn edition is set up yet." },
+      };
+    }
+
     const now = new Date();
     // The response upsert and the required-action completion are one atomic
     // unit: a saved response that failed to flip the gate would lock the staff
@@ -551,6 +564,7 @@ export async function submitConsoleQuestionnaire(
         .values({
           userId: session.dbUserId,
           definitionKey: activation.key,
+          editionId,
           definitionVersion: activation.version,
           responses: validated.responses,
           activationId: activation.id,
@@ -560,6 +574,7 @@ export async function submitConsoleQuestionnaire(
           target: [
             schema.questionnaireResponses.userId,
             schema.questionnaireResponses.definitionKey,
+            schema.questionnaireResponses.editionId,
           ],
           set: {
             responses: validated.responses,

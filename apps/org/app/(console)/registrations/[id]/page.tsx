@@ -84,7 +84,11 @@ export default async function RegistrationDetailPage({
     // everything else comes from the authored answer payload.
     const { registration } = detail;
     const answers: QuestionnaireResponses | null =
-      await getProjectRegistrationAnswers(detail.group.id, projectKind);
+      await getProjectRegistrationAnswers(
+        detail.group.id,
+        projectKind,
+        detail.edition.id,
+      );
 
     const view: ProjectRegistrationView = {
       contactEmail: registration.s1ContactEmail,

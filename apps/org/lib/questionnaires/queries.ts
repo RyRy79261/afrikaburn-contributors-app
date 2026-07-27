@@ -341,6 +341,16 @@ export async function getActivationResults(
   const db = getDb();
   const actionKey = activationRequiredActionKey(activationId);
 
+  // The activation's own edition scopes the answers. Read it here rather than
+  // taking it from the caller: a console page showing a PAST edition's
+  // activation must not be handed today's edition and blank every answer.
+  const [activationRow] = await db
+    .select({ editionId: schema.questionnaireActivations.editionId })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  const editionId = activationRow?.editionId ?? null;
+
   const actions = await db
     .select({
       userId: schema.requiredActions.userId,
@@ -367,14 +377,22 @@ export async function getActivationResults(
         and(
           eq(schema.questionnaireResponses.definitionKey, definitionKey),
           inArray(schema.questionnaireResponses.userId, userIds),
+          ...(editionId
+            ? [eq(schema.questionnaireResponses.editionId, editionId)]
+            : []),
         ),
       );
+    // NO activation-id filter any more. It was justified as a privacy boundary
+    // — "never bleed another activation's answers into these results" — but the
+    // rows it excluded were the SAME PEOPLE'S answers to the SAME questionnaire
+    // in the same year, and excluding them is what made a re-send blank the
+    // earlier send's results: the answer row repoints to whichever send was
+    // answered last, so the older activation's table rendered "completed" with
+    // no answers. The real boundary is (person, questionnaire, edition), and the
+    // respondent set is still drawn from THIS activation's required_actions —
+    // nobody who was not targeted by this send appears here.
     for (const r of responses) {
-      // Only surface the response tied to THIS activation (privacy: never bleed
-      // another activation's answers into these results).
-      if (r.activationId === activationId) {
-        responsesByUser.set(r.userId, r.responses);
-      }
+      responsesByUser.set(r.userId, r.responses);
     }
   }
 
@@ -510,6 +528,7 @@ export async function getConsoleBlockingQuestionnaire(
       authoredScope: schema.questionnaireActivations.authoredScope,
       audience: schema.questionnaireActivations.audience,
       snapshotDefinition: schema.questionnaireActivations.definition,
+      editionId: schema.questionnaireActivations.editionId,
     })
     .from(schema.requiredActions)
     .innerJoin(
@@ -545,6 +564,8 @@ export async function getConsoleBlockingQuestionnaire(
     .limit(1);
   if (!def) return null;
 
+  // Prefill from THIS edition's answer only. Unscoped, a new year's gate would
+  // hand the staff member last year's answers as if they had already filled it.
   const [existing] = await db
     .select({ responses: schema.questionnaireResponses.responses })
     .from(schema.questionnaireResponses)
@@ -552,6 +573,9 @@ export async function getConsoleBlockingQuestionnaire(
       and(
         eq(schema.questionnaireResponses.userId, dbUserId),
         eq(schema.questionnaireResponses.definitionKey, gate.questionnaireKey),
+        ...(gate.editionId
+          ? [eq(schema.questionnaireResponses.editionId, gate.editionId)]
+          : []),
       ),
     )
     .limit(1);

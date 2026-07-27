@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { resolveCampAction } from "@quagga/core";
 import type {
   MembershipRole,
@@ -162,6 +162,7 @@ export async function createProjectRegistration(
         .values({
           userId: input.creatorId,
           definitionKey: projectRegistrationAnswerKey(groupId, input.kind),
+          editionId: input.editionId,
           definitionVersion: PROJECT_REGISTRATION_VERSION,
           responses: input.answers,
           completedAt: input.submit ? now : null,
@@ -170,6 +171,7 @@ export async function createProjectRegistration(
           target: [
             schema.questionnaireResponses.userId,
             schema.questionnaireResponses.definitionKey,
+            schema.questionnaireResponses.editionId,
           ],
           set: {
             responses: input.answers,
@@ -266,7 +268,11 @@ export async function getProjectRegistrationForEdit(
     .limit(1);
   const status: RegistrationStatus = registration?.status ?? "draft";
 
-  const answers = await getProjectRegistrationAnswers(group.id, kind);
+  const answers = await getProjectRegistrationAnswers(
+    group.id,
+    kind,
+    editionId,
+  );
 
   return {
     group: {
@@ -374,10 +380,22 @@ export async function updateProjectRegistration(
         ),
       );
 
+    // Scoped to the EDITION being edited. The probe used to match on
+    // `definition_key` alone — and a project's answer key is deterministic
+    // (`proj:<groupId>:mv-registration`), so once the same vehicle registers for
+    // a second year this would have found and overwritten the PREVIOUS year's
+    // answers. Ordered so the row picked is deterministic rather than whatever
+    // the planner returned first.
     const [existingAnswers] = await tx
       .select({ id: schema.questionnaireResponses.id })
       .from(schema.questionnaireResponses)
-      .where(eq(schema.questionnaireResponses.definitionKey, answerKey))
+      .where(
+        and(
+          eq(schema.questionnaireResponses.definitionKey, answerKey),
+          eq(schema.questionnaireResponses.editionId, input.editionId),
+        ),
+      )
+      .orderBy(asc(schema.questionnaireResponses.id))
       .limit(1);
     if (existingAnswers) {
       await tx
@@ -392,6 +410,7 @@ export async function updateProjectRegistration(
       await tx.insert(schema.questionnaireResponses).values({
         userId: input.editorUserId,
         definitionKey: answerKey,
+        editionId: input.editionId,
         definitionVersion: PROJECT_REGISTRATION_VERSION,
         responses: input.answers,
         completedAt: input.submit ? now : null,
@@ -409,16 +428,23 @@ export async function updateProjectRegistration(
 export async function getProjectRegistrationAnswers(
   groupId: string,
   kind: ProjectRegistrationKind,
+  editionId: string,
 ): Promise<QuestionnaireResponses | null> {
   const [row] = await db()
     .select({ responses: schema.questionnaireResponses.responses })
     .from(schema.questionnaireResponses)
     .where(
-      eq(
-        schema.questionnaireResponses.definitionKey,
-        projectRegistrationAnswerKey(groupId, kind),
+      and(
+        eq(
+          schema.questionnaireResponses.definitionKey,
+          projectRegistrationAnswerKey(groupId, kind),
+        ),
+        // A project's answer key is deterministic, so without the edition this
+        // would read whichever year's answers the planner happened to return.
+        eq(schema.questionnaireResponses.editionId, editionId),
       ),
     )
+    .orderBy(asc(schema.questionnaireResponses.id))
     .limit(1);
   return row?.responses ?? null;
 }

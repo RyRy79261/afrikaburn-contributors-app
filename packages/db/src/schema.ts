@@ -1209,6 +1209,22 @@ export const questionnaireResponses = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     definitionKey: text("definition_key").notNull(),
+    /**
+     * THE YEAR NAMESPACE (migration 0020).
+     *
+     * Answers belong to an AfrikaBurn edition. Re-sending a questionnaire
+     * WITHIN one edition keeps updating the same row, which is the intended
+     * behaviour — the person is revising a living answer and the runner shows
+     * them what they said last time. A NEW edition is a clean namespace.
+     *
+     * Without this column the identity was (user, definition_key) forever, and
+     * org questionnaire keys are stable across years (`org-<title-slug>`), so
+     * answering "Volunteer availability" in 2028 silently overwrote the same
+     * person's 2027 answer and there was no way to compare the two.
+     */
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
     definitionVersion: text("definition_version").notNull(),
     responses: jsonb("responses")
       .$type<QuestionnaireResponses>()
@@ -1222,9 +1238,12 @@ export const questionnaireResponses = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (r) => ({
+    // Identity is (user, questionnaire, EDITION). Re-sending inside one edition
+    // updates this row; a new edition gets its own.
     userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx").on(
       r.userId,
       r.definitionKey,
+      r.editionId,
     ),
     defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
   }),

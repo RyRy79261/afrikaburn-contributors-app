@@ -26,6 +26,7 @@ import {
 import { db, schema, withTransaction } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
+import { getActiveEdition } from "./edition";
 import { insertNotifications } from "./notifications";
 
 // Persistence + activation service for the questionnaire builder
@@ -494,12 +495,27 @@ export async function getActivationResults(
                 activation.questionnaireKey,
               ),
               inArray(schema.questionnaireResponses.userId, userIds),
+              // The ACTIVATION'S OWN edition, not the caller's active one —
+              // otherwise viewing a past edition's activation from a page that
+              // passes the current edition would blank every answer.
+              ...(activation.editionId
+                ? [
+                    eq(
+                      schema.questionnaireResponses.editionId,
+                      activation.editionId,
+                    ),
+                  ]
+                : []),
             ),
           );
+  // NO activation-id filter. Within one edition a re-send is the same living
+  // answer, and the row points at whichever send was answered LAST — so
+  // filtering on it made the earlier send's results render blank the moment
+  // anyone answered the later one. Answers belong to (person, questionnaire,
+  // edition); the edition predicate above is what keeps years apart.
   const responseByUser = new Map<string, QuestionnaireResponses>();
   for (const r of responseRows) {
-    if (r.activationId === activationId)
-      responseByUser.set(r.userId, r.responses);
+    responseByUser.set(r.userId, r.responses);
   }
 
   const respondents: ActivationRespondent[] = actionRows
@@ -557,19 +573,31 @@ export async function getFillView(
   const actionStatus = actionRows[0]?.status ?? null;
   if (!actionStatus) return null;
 
-  const responseRows = await db()
-    .select({ responses: schema.questionnaireResponses.responses })
-    .from(schema.questionnaireResponses)
-    .where(
-      and(
-        eq(schema.questionnaireResponses.userId, userId),
-        eq(
-          schema.questionnaireResponses.definitionKey,
-          activation.questionnaireKey,
-        ),
-      ),
-    )
-    .limit(1);
+  // PREFILL, scoped to the activation's edition.
+  //
+  // Deliberately NOT filtered by activation id: within one edition a re-send is
+  // the same living answer, so the person sees what they said last time rather
+  // than a blank form. Across editions the answer is a different row entirely,
+  // which is what the edition filter enforces — without it, a 2028 send would
+  // prefill with the 2027 answer.
+  const prefillEditionId =
+    activation.editionId ?? (await getActiveEdition())?.id ?? null;
+  const responseRows = prefillEditionId
+    ? await db()
+        .select({ responses: schema.questionnaireResponses.responses })
+        .from(schema.questionnaireResponses)
+        .where(
+          and(
+            eq(schema.questionnaireResponses.userId, userId),
+            eq(
+              schema.questionnaireResponses.definitionKey,
+              activation.questionnaireKey,
+            ),
+            eq(schema.questionnaireResponses.editionId, prefillEditionId),
+          ),
+        )
+        .limit(1)
+    : [];
 
   return {
     activation,
@@ -690,12 +718,26 @@ export async function submitResponse(input: {
   );
   if (!validated.ok) return { ok: false, errors: validated.errors };
 
+  // The answer belongs to the activation's EDITION. Re-sending inside one
+  // edition keeps updating this row (the person is revising a living answer);
+  // a new edition writes its own. Pre-feature activations have a null
+  // edition_id, so fall back to the active edition rather than refusing.
+  const editionId =
+    activation.editionId ?? (await getActiveEdition())?.id ?? null;
+  if (!editionId) {
+    return {
+      ok: false,
+      errors: { _form: "No AfrikaBurn edition is set up yet." },
+    };
+  }
+
   const now = new Date();
   await db()
     .insert(schema.questionnaireResponses)
     .values({
       userId: input.userId,
       definitionKey: activation.questionnaireKey,
+      editionId,
       definitionVersion: DEFINITION_VERSION,
       responses: validated.responses,
       activationId: input.activationId,
@@ -705,6 +747,7 @@ export async function submitResponse(input: {
       target: [
         schema.questionnaireResponses.userId,
         schema.questionnaireResponses.definitionKey,
+        schema.questionnaireResponses.editionId,
       ],
       set: {
         responses: validated.responses,
