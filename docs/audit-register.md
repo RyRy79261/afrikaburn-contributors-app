@@ -12,15 +12,24 @@
 >    Delete tab is in `account-shell.tsx:22`. The real defect was the missing
 >    sign-in hook, which is what has been fixed.
 >
-> **Fixed and on main:** B1, B2, B3, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10,
-> M11, M14, M15, M16, M18, M19, M20, M21 (harness + first tests), M22.
+> **Fixed and on main: every blocker and all 22 majors.** B1–B3 and M1–M22.
 >
-> **Still open, deliberately — these need a decision, not a patch:** M12
-> (a unique constraint on `questionnaire_responses` needs a migration and a
-> call on what re-sending should mean), M13 (notification links need an origin
-> column — a schema and fan-out change across three apps), M17 (supplier step
-> reconciliation on the org side). The 45 minors and 57 design-parity items are
-> untouched.
+> M12, M13 and M17 were triaged with Ryan on 27 Jul and built after:
+>
+> - **M12** — answers are now scoped per edition (migration 0020). Re-sending
+>   inside one edition keeps the living answer; a new year is a fresh namespace.
+>   The same-edition half was the live bug: a re-send blanked the earlier send's
+>   results outright, because the answer row repoints to whichever send was
+>   answered last and both readers post-filtered on activation id.
+> - **M13** — `origin` (who sent it) and `link_app` (where the link resolves)
+>   are separate columns, both nullable (migration 0021). A foreign link renders
+>   unlinked rather than 404ing.
+> - **M17** — org document create/update/delete reconcile every supplier's steps
+>   in the same transaction, in BOTH directions, and re-opened steps notify the
+>   supplier.
+>
+> **Untouched:** the 45 minors and 57 design-parity items. Parity is mostly
+> canvas-behind-code (theme T7), not defects.
 
 
 Read-only audit of the Quagga Portal at HEAD (`5300038`). Nine parallel dimensions
