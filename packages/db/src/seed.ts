@@ -19,6 +19,10 @@
  *   - edition AfrikaBurn 2027 (2027-04-26 → 2027-05-02, active)
  *   - the org group "AfrikaBurn" itself (no memberships — staff elevate live via
  *     GOD_EMAILS, the mvp-proposal's own demo beat)
+ *   - the two seeded ORG ROLES (Org staff, Engineer) carrying the rights those
+ *     ranks held before they became data. Insert-if-missing, so a System
+ *     manager's own edits to them survive every later deploy. No departments and
+ *     no role ASSIGNMENTS are seeded — those are live acts.
  *   - the 8 canonical camp categories for the edition (org taxonomy; the org may
  *     edit freely afterwards)
  *   - the supplier repository imported from data/suppliers.json (the scrubbed AB
@@ -44,11 +48,13 @@
  * Run via `pnpm --filter @quagga/db db:seed` once `DATABASE_URL` is set. This
  * script is NEVER part of any build step and must not run at import time.
  */
+import { pathToFileURL } from "node:url";
 import { eq, and, sql } from "drizzle-orm";
 import {
   normalizeName,
   CANONICAL_CAMP_CATEGORIES,
   normalizeCategoryLabel,
+  seededOrgRoleRows,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
 import type { Questionnaire, SupplierOnboardingSteps } from "@quagga/types";
@@ -101,6 +107,33 @@ type GroupRow = typeof schema.groups.$inferSelect;
  * Every write goes through an idempotent `ensure*` helper, so calling it twice is
  * safe; the caller owns the connection.
  */
+/**
+ * Ensure the two seeded ORG ROLES exist (migration 0018), returning how many
+ * were actually inserted.
+ *
+ * INSERT-IF-MISSING on the stable `key`, NEVER an update. The org console's
+ * permissions live in these rows now, and a System manager may have re-righted
+ * either of them — "idempotent" must mean "safe to run twice", not "reverts the
+ * org's own edits on every deploy".
+ *
+ * Exported separately from `seedReferenceData` because the deploy calls it on
+ * ALREADY-SEEDED databases too: one that predates org roles v1 has the new
+ * tables and no rows, which would leave every org account able to sign in and do
+ * nothing (see migrate.ts).
+ */
+export async function ensureSeededOrgRoles(db: Db): Promise<number> {
+  let inserted = 0;
+  for (const row of seededOrgRoleRows()) {
+    const written = await db
+      .insert(schema.orgRoles)
+      .values(row)
+      .onConflictDoNothing({ target: schema.orgRoles.key })
+      .returning({ id: schema.orgRoles.id });
+    inserted += written.length;
+  }
+  return inserted;
+}
+
 export async function seedReferenceData(db: Db): Promise<void> {
   {
     // --- Edition -------------------------------------------------------------
@@ -134,6 +167,20 @@ export async function seedReferenceData(db: Db): Promise<void> {
       joinability: "invite_only",
     });
     console.log(`[seed] org group: ${orgGroup.name} (${orgGroup.id})`);
+
+    // --- Org roles (org-owned access reference data) ---------------------------
+    // The two SEEDED SYSTEM ROLES, carrying exactly the rights `org_staff` and
+    // `engineer` held when those were hardcoded ranks. They are reference data
+    // in the same sense the camp-category taxonomy is: org-owned structure the
+    // org edits afterwards, never user content.
+    //
+    // INSERT-IF-MISSING, never update. A System manager who has re-righted the
+    // Engineer role must not have that undone by the next deploy's seed —
+    // "seeds are idempotent" means running twice is safe, not that the org's own
+    // edits get reverted. Departments are NOT seeded at all: nobody can say how
+    // many there are, so the console creates them (docs: Ryan, 27 Jul 2026).
+    const orgRolesSeeded = await ensureSeededOrgRoles(db);
+    console.log(`[seed] org roles ensured (${orgRolesSeeded} inserted)`);
 
     // --- Camp categories (org-defined per-edition taxonomy) ---------------------
     // The canonical catalog for 2027. Org may edit freely afterwards. Camps pick
@@ -451,7 +498,27 @@ async function ensureQuestionnaireDefinition(
   );
 }
 
-main().catch((err) => {
-  console.error("[seed] Failed:", err);
-  process.exitCode = 1;
-});
+// ONLY when invoked directly (`tsx src/seed.ts`), never on import.
+//
+// This file exports `seedReferenceData` and `ensureSeededOrgRoles`, and the
+// DEPLOY MIGRATOR imports them. A bare top-level `main()` meant that merely
+// importing this module ran the ENTIRE reference seed — so once migrate.ts
+// imported it on the already-seeded path too, every deploy re-seeded a live
+// database: organiser edits reverted, deleted suppliers and categories came
+// back, a supplier suspended by the org silently returned to good standing,
+// all while the migrator logged "reference data present — not re-seeding".
+//
+// That is the 40-suppliers incident (commit 5300038) re-opened through a
+// different door, and it is worse — that one duplicated rows on a database
+// nobody was using yet; this one overwrites decisions on a live one. Guarded
+// exactly as migrate.ts guards itself, for exactly the same reason.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("[seed] Failed:", err);
+    process.exitCode = 1;
+  });
+}

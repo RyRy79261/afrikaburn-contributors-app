@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { ChevronRight, Lock, Stethoscope } from "lucide-react";
 import {
+  canReadPersonalInformation,
   canViewMedicalNotes,
   medicalAccessBasis,
   MEDICAL_VIEW_AUDIT_ACTION,
@@ -77,6 +78,14 @@ export default async function RegistrationMemberPage({
   const ctx: MedicalAccessContext = {
     isSelf: guard.session.dbUserId === userId,
     actorOrgRole: guard.session.role,
+    // Since org roles v1 the org branch of the medical predicate is the
+    // console's RESOLVED `read_personal_information` — the union of this
+    // actor's org roles — rather than their membership rank. One definition of
+    // who the org's safety tier is, so a role that gains or loses personal
+    // information gains or loses medical with it.
+    actorOrgPersonalInformation: canReadPersonalInformation(
+      guard.session.actor,
+    ),
     actorLeadCampIds: [],
     subjectCampIds: [],
   };

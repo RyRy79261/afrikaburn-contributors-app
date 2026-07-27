@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, Lock, ScrollText, ShieldAlert, TriangleAlert } from "lucide-react";
+import {
+  ArrowRight,
+  IdCard,
+  Lock,
+  ScrollText,
+  ShieldAlert,
+  TriangleAlert,
+} from "lucide-react";
 import {
   ORG_RANK_LABELS,
   orgCan,
@@ -15,7 +22,13 @@ import {
 } from "@quagga/ui/components/card";
 
 import { guardConsole } from "@/lib/gate";
-import { getOrgAccessRoster, type OrgAccessRoster } from "@/lib/queries";
+import {
+  getOrgAccessRoster,
+  getOrgRolesOverview,
+  listAssignableOrgRoles,
+  type OrgAccessRoster,
+  type OrgRolesOverview,
+} from "@/lib/queries";
 import { getSystemStatus } from "@/lib/system-probe";
 import { PageHeading } from "@/components/page-heading";
 import { CheckListCard } from "@/components/system/check-list";
@@ -52,11 +65,15 @@ import {
 // answer. `GOD_EMAILS` is reported as a COUNT, never as addresses: they are
 // people's email addresses and an engineer never receives one of those.
 //
-// NO PEN.DEV FRAME. AGENTS.md requires design-before-build and this page does
-// not have one. That is a recorded exception, not an oversight — see the note in
-// docs/build-spec.md. It is built entirely from the existing console vocabulary
-// (PageHeading, Card, the ResponsiveDataTable accounts table) so the frame, when
-// drawn, is documenting what shipped rather than redesigning it.
+// THE FRAME EXISTS NOW: `bNbLs` (desktop) + `qhCyJ` (mobile 360) in
+// design/ab-initial-app.pen. This page shipped ahead of its frame — a recorded
+// exception to AGENTS.md's design-before-build rule — and the frame was drawn
+// afterwards to document what shipped rather than to redesign it, from the same
+// console vocabulary this page uses (PageHeading, Card, the ResponsiveDataTable
+// accounts table). The frame deliberately draws the DEGRADED states, because
+// those are the ones someone opens this page to see: no Resend key, no blob
+// token, a migration that would refuse to run. The exception is paid off; do not
+// reopen it for the next surface.
 
 export const dynamic = "force-dynamic";
 
@@ -108,10 +125,19 @@ export default async function SystemPage() {
   // less than nothing. (The console gate itself is database-backed, so a total
   // outage lands on the gate screen before it ever reaches here — this covers
   // the partial failures, which are the common ones.)
-  const [status, roster] = await Promise.all([
+  const [status, roster, assignableRoles, roles] = await Promise.all([
     getSystemStatus(),
     getOrgAccessRoster(session.orgGroupId, session.actor).catch(
       (): OrgAccessRoster | null => null,
+    ),
+    // Same table, same controls, same reason it degrades rather than throws.
+    canManage
+      ? listAssignableOrgRoles().catch(() => [])
+      : Promise.resolve([]),
+    // Counts only — the roles surface itself lives one click away. Degrades for
+    // the same reason as everything else on this page.
+    getOrgRolesOverview(session.orgGroupId).catch(
+      (): OrgRolesOverview | null => null,
     ),
   ]);
 
@@ -121,11 +147,36 @@ export default async function SystemPage() {
       email: m.email,
       username: m.username,
       role: m.role,
-      department: m.department,
-      isDepartmentLead: m.isDepartmentLead,
+      roles: m.roles.map((r) => ({
+        id: r.id,
+        name: r.name,
+        color: r.color,
+        departmentId: r.departmentId,
+        departmentName: r.departmentName,
+      })),
+      capabilities: m.capabilities.map((c) => ({
+        capability: c.capability,
+        departments: c.departments,
+      })),
     })) ?? [];
 
   const headlineTone = status.headline.tone;
+
+  // Real numbers or none: a placeholder count on the page people open when
+  // things are already wrong would be worse than the missing card.
+  const roleCounts = roles
+    ? {
+        departments: roles.departments.length,
+        roles:
+          roles.orgWideRoles.length +
+          roles.departments.reduce((n, d) => n + d.roles.length, 0),
+      }
+    : null;
+  // Accounts that cleared the door and hold nothing — a half-finished grant,
+  // visible here because nobody would otherwise go looking for it.
+  const withoutRoles =
+    roster?.members.filter((m) => m.role !== "god" && m.roles.length === 0)
+      .length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,8 +226,8 @@ export default async function SystemPage() {
           <CardTitle className="text-base">Org access</CardTitle>
           <CardDescription>
             {canManage
-              ? "Everyone who can get into this console, at what rank, in whose department. Granting and removing access is audited."
-              : `Everyone who can get into this console, at what rank. ${orgCapabilityRefusal(session.actor, "manage_accounts")}`}
+              ? "Everyone who can get into this console, and the org roles that decide what they may do once inside. Granting and removing access is audited."
+              : `Everyone who can get into this console, and the org roles they hold. ${orgCapabilityRefusal(session.actor, "manage_accounts")}`}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -218,6 +269,14 @@ export default async function SystemPage() {
                   canManage={canManage}
                   showEmail={seesEmail}
                   selfUserId={session.dbUserId}
+                  assignableRoles={assignableRoles.map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    color: r.color,
+                    departmentId: r.departmentId,
+                    departmentName: r.departmentName,
+                    capabilities: r.capabilities,
+                  }))}
                   caption="Org access"
                 />
               </div>
@@ -233,6 +292,59 @@ export default async function SystemPage() {
             </Link>{" "}
             searches every burner, which is where a new grant starts.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* THE PERMISSION MODEL ITSELF, one click away. The roster above says who
+          holds what; this is where what they hold is DEFINED. Reading it is part
+          of this panel (`read_system`); changing it needs the System manager
+          anchor, which is stated here rather than discovered on arrival. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <IdCard className="h-4 w-4 text-muted-foreground" aria-hidden />
+            Roles and departments
+          </CardTitle>
+          <CardDescription>
+            {canManage
+              ? "Console permissions are data, not code: departments you create, roles that carry capabilities, and the assignments that decide who resolves what. Every change is audited."
+              : `Console permissions are data, not code — departments, roles and what each role may do. You can read the model. ${orgCapabilityRefusal(session.actor, "manage_accounts")}`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {roleCounts === null ? (
+            <p className="text-sm text-muted-foreground">
+              The roles model could not be read — see the database check above.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {roleCounts.departments === 0
+                ? "No departments yet, so every role is org-wide."
+                : `${roleCounts.departments} department${roleCounts.departments === 1 ? "" : "s"}, each with a permanent lead and member role.`}{" "}
+              {roleCounts.roles} role{roleCounts.roles === 1 ? "" : "s"} in
+              total.
+              {withoutRoles > 0 && (
+                <>
+                  {" "}
+                  <span className="text-foreground">
+                    {withoutRoles === 1
+                      ? "One account holds console access and no role at all"
+                      : `${withoutRoles} accounts hold console access and no role at all`}
+                    , so the console opens empty for{" "}
+                    {withoutRoles === 1 ? "them" : "each of them"}.
+                  </span>
+                </>
+              )}
+            </p>
+          )}
+          <div>
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/system/roles">
+                {canManage ? "Manage roles and departments" : "Read the roles model"}
+                <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

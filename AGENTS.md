@@ -152,12 +152,26 @@ Two traps that already cost real time:
     enforce this).
 - **Structural roles (`lead`/`admin`) hold every project permission irrevocably** — the
   no-lockout backstop. Custom-role privileges are grants on top.
+- **On the org side the same job is done by `memberships.role = 'god'`** (org roles v1,
+  migration 0018): console permissions are now DATA — departments, roles and assignments a
+  System manager creates — and a god resolves every capability whatever those rows say.
+  `manage_accounts` is refused to every role by the resolver itself, and departments/roles/
+  assignments are guarded on that anchor rather than on a capability, because the right to
+  edit rights must not be grantable. Named lockout tests:
+  `apps/org/lib/__tests__/org-role-lockout.test.ts`. The surface is **`/system/roles`,
+  inside the System panel** (editing the permission model is "god level account
+  management"): `read_system` to READ it, the anchor to CHANGE anything, and the
+  people-affected data is not even queried for a reader. Anything that describes what an
+  account may do — the accounts table, the assignment dialog, the role editor — renders
+  `summarizeOrgActor` from @quagga/core, so the console can never advertise an access it
+  would refuse, or understate one it would allow.
 - **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's),
   placement maps, camp treasuries/dues.
 - Blocking questionnaires are labeled explicitly everywhere and gate hard (fill page +
   sign-out only); org-internal questionnaires never leak into the participant app.
 - **Seeds contain ONLY org-owned reference/catalog data** (edition, org group, camp
-  categories, the scrubbed supplier catalog, org questionnaire templates). Every burner,
+  categories, the two seeded org ROLES, the scrubbed supplier catalog, org questionnaire
+  templates). Every burner,
   camp, membership, registration and questionnaire response — in **every** environment,
   including the kickoff demo — is created live through the app. No seeded accounts, ever.
   An empty directory / registrations queue on a fresh DB is the *correct* first-boot

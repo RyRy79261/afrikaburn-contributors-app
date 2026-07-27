@@ -16,6 +16,9 @@ import {
 import type {
   MembershipRole,
   OfficerKey,
+  OrgPermissions,
+  OrgRoleKind,
+  RoleColor,
   RegistrationStatus,
   SupplierNoteKind,
   SupplierOnboardingSteps,
@@ -25,6 +28,11 @@ import type {
 import {
   canReadPersonalInformation,
   countCategoryUsage,
+  grantedOrgCapabilities,
+  isSystemManager,
+  orgCapabilityRefusal,
+  sanitizeOrgPermissions,
+  summarizeOrgActor,
   ORG_RANKS,
   orgRankFromRole,
   deriveOfficerCoverage,
@@ -38,6 +46,7 @@ import {
   type OfficerCoverage,
   type ProjectStatInput,
   type OrgActor,
+  type OrgCapability,
   type OrgRank,
   type QuestionnaireCompletionRollup,
   type RegistrationFunnel,
@@ -48,6 +57,10 @@ import { decryptOrNull } from "@quagga/db/crypto";
 
 import { getDb, schema } from "@/lib/db";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
+import {
+  computeOrgRoleImpacts,
+  type DeletionImpact,
+} from "@/lib/org-role-impact";
 
 // Data access for the console. Every function is read-only and self-contained;
 // mutations live in lib/actions/*. All assume the caller already cleared the
@@ -155,18 +168,174 @@ export async function getOverviewCounts(): Promise<OverviewCounts> {
   };
 }
 
+/** One org role an account holds, shaped for a badge. */
+export interface AssignedOrgRole {
+  id: string;
+  name: string;
+  kind: OrgRoleKind;
+  color: RoleColor;
+  /** The department the role is scoped to, or null for an org-wide role. */
+  departmentId: string | null;
+  /** That department's label, or null for an org-wide role. */
+  departmentName: string | null;
+}
+
+/**
+ * ONE CAPABILITY THE ACCOUNT ACTUALLY RESOLVES, with its scope named.
+ *
+ * `departments === null` is org-wide. A non-empty array means the grant is
+ * confined to those departments — the shape the accounts screen needs to answer
+ * "what can this person delete?" without opening the roles screen and adding up
+ * chips.
+ */
+export interface AccountCapability {
+  capability: OrgCapability;
+  departments: string[] | null;
+}
+
 export interface AccountRow {
   userId: string;
   /** The account's email — null for a caller who may not read personal info. */
   email: string | null;
   /** The account-level handle (public by design; not personal information). */
   username: string | null;
-  /** Their org rank, or null when they hold none. */
+  /** Whether they hold the console DOOR, and which one — never their rights. */
   role: OrgRank | null;
-  /** Free-text org department label, or null. */
-  department: string | null;
-  isDepartmentLead: boolean;
+  /** The org roles they hold. THE rights; the union is what `orgCan` resolves. */
+  roles: AssignedOrgRole[];
+  /**
+   * The RESOLVED union of those roles — what this account can actually do,
+   * computed by the same `@quagga/core` resolver the server actions refuse with
+   * (`summarizeOrgActor` → `orgCan`/`orgCanIn`). Listing roles alone would make
+   * every reviewer re-derive this by hand, and a reviewer deciding whether
+   * someone should keep a grant is exactly who must not have to.
+   */
+  capabilities: AccountCapability[];
   createdAt: Date;
+}
+
+/** An assigned role plus what resolution needs — internal to this module. */
+type LoadedRole = AssignedOrgRole & {
+  key: string;
+  permissions: OrgPermissions;
+};
+
+/**
+ * The org roles held by a set of accounts, as one query rather than N.
+ *
+ * Roles are NOT personal information — they are the org's own structure, and an
+ * engineer who can see that an account exists can see what it is for. The email
+ * beside it is the personal part, and that stays behind the predicate.
+ */
+async function loadAssignedRoles(
+  orgGroupId: string,
+  userIds: readonly string[],
+): Promise<Map<string, LoadedRole[]>> {
+  const byUser = new Map<string, LoadedRole[]>();
+  if (userIds.length === 0) return byUser;
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.memberships.userId,
+      id: schema.orgRoles.id,
+      key: schema.orgRoles.key,
+      name: schema.orgRoles.name,
+      kind: schema.orgRoles.kind,
+      color: schema.orgRoles.color,
+      departmentId: schema.orgRoles.departmentId,
+      departmentName: schema.orgDepartments.name,
+      permissions: schema.orgRoles.permissions,
+      sort: schema.orgRoles.sort,
+    })
+    .from(schema.orgRoleAssignments)
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.orgRoleAssignments.membershipId),
+    )
+    .innerJoin(
+      schema.orgRoles,
+      eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
+    )
+    .leftJoin(
+      schema.orgDepartments,
+      eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
+    )
+    .where(
+      and(
+        eq(schema.memberships.groupId, orgGroupId),
+        inArray(schema.memberships.userId, [...userIds]),
+      ),
+    )
+    .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name));
+
+  for (const r of rows) {
+    const list = byUser.get(r.userId) ?? [];
+    list.push({
+      id: r.id,
+      key: r.key,
+      name: r.name,
+      kind: r.kind,
+      color: r.color,
+      departmentId: r.departmentId,
+      departmentName: r.departmentName,
+      // Re-sanitized on the way out as well as on the way in (lib/session.ts):
+      // a row written by anything other than the role editor still cannot
+      // present a capability no role may hold.
+      permissions: sanitizeOrgPermissions(r.permissions),
+    });
+    byUser.set(r.userId, list);
+  }
+  return byUser;
+}
+
+/** The chip-shaped subset of a loaded role (what a table renders). */
+function roleChip(r: LoadedRole): AssignedOrgRole {
+  return {
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    color: r.color,
+    departmentId: r.departmentId,
+    departmentName: r.departmentName,
+  };
+}
+
+/**
+ * Resolve one account's union: rank + assigned roles → the capabilities it
+ * actually holds, with scoped grants carrying their department NAMES (the ids
+ * mean nothing to a reader).
+ *
+ * The rank is the door, and `god` is the anchor — a System manager resolves
+ * everything with no roles at all, which is what `summarizeOrgActor` returns and
+ * what the table must therefore be able to render.
+ */
+function resolveAccountCapabilities(
+  rank: OrgRank | null,
+  roles: readonly LoadedRole[],
+): AccountCapability[] {
+  if (!rank) return [];
+  const actor: OrgActor = {
+    rank,
+    roles: roles.map((r) => ({
+      id: r.id,
+      key: r.key,
+      name: r.name,
+      kind: r.kind,
+      departmentId: r.departmentId,
+      permissions: r.permissions,
+    })),
+  };
+  const names = new Map(
+    roles
+      .filter((r) => r.departmentId !== null && r.departmentName !== null)
+      .map((r) => [r.departmentId as string, r.departmentName as string]),
+  );
+  return summarizeOrgActor(actor).map((grant) => ({
+    capability: grant.capability,
+    departments:
+      grant.departmentIds?.map((id) => names.get(id) ?? "another department") ??
+      null,
+  }));
 }
 
 /**
@@ -195,8 +364,6 @@ export async function searchAccounts(
       userId: schema.users.id,
       username: schema.users.username,
       role: schema.memberships.role,
-      department: schema.memberships.department,
-      departmentLead: schema.memberships.departmentLead,
       createdAt: schema.users.createdAt,
       ...(personal ? { email: schema.users.email } : {}),
     })
@@ -221,15 +388,241 @@ export async function searchAccounts(
     .orderBy(desc(schema.users.createdAt))
     .limit(50);
 
-  return rows.map((r) => ({
-    userId: r.userId,
-    email: "email" in r ? ((r.email as string | null) ?? null) : null,
-    username: r.username,
-    role: orgRankFromRole(r.role),
-    department: r.department,
-    isDepartmentLead: r.departmentLead ?? false,
-    createdAt: r.createdAt,
+  const roles = await loadAssignedRoles(
+    orgGroupId,
+    rows.map((r) => r.userId),
+  );
+
+  return rows.map((r) => {
+    const held = roles.get(r.userId) ?? [];
+    const rank = orgRankFromRole(r.role);
+    return {
+      userId: r.userId,
+      email: "email" in r ? ((r.email as string | null) ?? null) : null,
+      username: r.username,
+      role: rank,
+      roles: held.map(roleChip),
+      capabilities: resolveAccountCapabilities(rank, held),
+      createdAt: r.createdAt,
+    };
+  });
+}
+
+/** A department, with the roles it seeded. */
+export interface OrgDepartmentView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  roles: OrgRoleView[];
+}
+
+/** One org role, with everything the editor needs to render and save it. */
+export interface OrgRoleView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  kind: OrgRoleKind;
+  color: RoleColor;
+  departmentId: string | null;
+  departmentName: string | null;
+  capabilities: OrgCapability[];
+  /** How many console accounts currently hold it. */
+  holders: number;
+}
+
+export interface OrgRolesOverview {
+  departments: OrgDepartmentView[];
+  /** Roles belonging to no department — org-wide. */
+  orgWideRoles: OrgRoleView[];
+}
+
+/**
+ * Everything the roles-management screen renders: departments, the roles each
+ * one seeded, the org-wide roles, and how many people hold each.
+ *
+ * The holder count is what makes "delete this role" an informed decision rather
+ * than a surprise — deleting cascades the assignments away.
+ */
+export async function getOrgRolesOverview(
+  orgGroupId: string,
+): Promise<OrgRolesOverview> {
+  const db = getDb();
+
+  const [departments, roles, holderCounts] = await Promise.all([
+    db
+      .select({
+        id: schema.orgDepartments.id,
+        key: schema.orgDepartments.key,
+        name: schema.orgDepartments.name,
+        description: schema.orgDepartments.description,
+      })
+      .from(schema.orgDepartments)
+      .orderBy(asc(schema.orgDepartments.sort), asc(schema.orgDepartments.name)),
+    db
+      .select({
+        id: schema.orgRoles.id,
+        key: schema.orgRoles.key,
+        name: schema.orgRoles.name,
+        description: schema.orgRoles.description,
+        kind: schema.orgRoles.kind,
+        color: schema.orgRoles.color,
+        departmentId: schema.orgRoles.departmentId,
+        departmentName: schema.orgDepartments.name,
+        permissions: schema.orgRoles.permissions,
+      })
+      .from(schema.orgRoles)
+      .leftJoin(
+        schema.orgDepartments,
+        eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
+      )
+      .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name)),
+    db
+      .select({
+        orgRoleId: schema.orgRoleAssignments.orgRoleId,
+        holders: count(),
+      })
+      .from(schema.orgRoleAssignments)
+      .innerJoin(
+        schema.memberships,
+        eq(schema.memberships.id, schema.orgRoleAssignments.membershipId),
+      )
+      .where(eq(schema.memberships.groupId, orgGroupId))
+      .groupBy(schema.orgRoleAssignments.orgRoleId),
+  ]);
+
+  const holders = new Map(holderCounts.map((h) => [h.orgRoleId, h.holders]));
+  const views: OrgRoleView[] = roles.map((r) => ({
+    id: r.id,
+    key: r.key,
+    name: r.name,
+    description: r.description,
+    kind: r.kind,
+    color: r.color,
+    departmentId: r.departmentId,
+    departmentName: r.departmentName,
+    capabilities: grantedOrgCapabilities(r.permissions),
+    holders: holders.get(r.id) ?? 0,
   }));
+
+  return {
+    departments: departments.map((d) => ({
+      ...d,
+      roles: views.filter((r) => r.departmentId === d.id),
+    })),
+    orgWideRoles: views.filter((r) => r.departmentId === null),
+  };
+}
+
+/**
+ * The roles a System manager may assign, flat and ordered, for the picker.
+ *
+ * Carries `departmentId` as well as the label because the assignment dialog
+ * PREVIEWS the union of the draft selection with the same resolver the server
+ * will use, and a department-scoped grant cannot be resolved without the id.
+ */
+export async function listAssignableOrgRoles(): Promise<
+  Pick<
+    OrgRoleView,
+    | "id"
+    | "key"
+    | "name"
+    | "kind"
+    | "color"
+    | "departmentId"
+    | "departmentName"
+    | "capabilities"
+  >[]
+> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.orgRoles.id,
+      key: schema.orgRoles.key,
+      name: schema.orgRoles.name,
+      kind: schema.orgRoles.kind,
+      color: schema.orgRoles.color,
+      departmentId: schema.orgRoles.departmentId,
+      departmentName: schema.orgDepartments.name,
+      permissions: schema.orgRoles.permissions,
+    })
+    .from(schema.orgRoles)
+    .leftJoin(
+      schema.orgDepartments,
+      eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
+    )
+    .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name));
+  return rows.map((r) => ({
+    id: r.id,
+    key: r.key,
+    name: r.name,
+    kind: r.kind,
+    color: r.color,
+    departmentId: r.departmentId,
+    departmentName: r.departmentName,
+    capabilities: grantedOrgCapabilities(r.permissions),
+  }));
+}
+
+/**
+ * WHAT DELETING WOULD COST, per role and per department — the numbers the
+ * confirm dialogs state before anything is destroyed.
+ *
+ * SYSTEM MANAGER ONLY, and not because of the counts: it carries the LABELS of
+ * the people affected (their email addresses when there is one). The page gates
+ * the call so a reader's payload never contains this object at all — and the
+ * PREDICATE RUNS HERE TOO, before the select, exactly as the module header
+ * requires of every personal-information read. A page that forgot gets a refusal
+ * rather than a leak.
+ *
+ * Bounded by staff × roles, driven from `org_role_assignments`, so it cannot
+ * walk the burner table.
+ */
+export async function getOrgRoleImpacts(
+  orgGroupId: string,
+  actor: OrgActor,
+): Promise<{
+  byRole: Record<string, DeletionImpact>;
+  byDepartment: Record<string, DeletionImpact>;
+}> {
+  if (!isSystemManager(actor)) {
+    throw new Error(orgCapabilityRefusal(actor, "manage_accounts"));
+  }
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.memberships.userId,
+      email: schema.users.email,
+      username: schema.users.username,
+      roleId: schema.orgRoles.id,
+      departmentId: schema.orgRoles.departmentId,
+    })
+    .from(schema.orgRoleAssignments)
+    .innerJoin(
+      schema.memberships,
+      eq(schema.memberships.id, schema.orgRoleAssignments.membershipId),
+    )
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .innerJoin(
+      schema.orgRoles,
+      eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
+    )
+    .where(eq(schema.memberships.groupId, orgGroupId));
+
+  const { byRole, byDepartment } = computeOrgRoleImpacts(
+    rows.map((r) => ({
+      userId: r.userId,
+      label: r.email ?? r.username ?? "an account with no address",
+      roleId: r.roleId,
+      departmentId: r.departmentId,
+    })),
+  );
+
+  return {
+    byRole: Object.fromEntries(byRole),
+    byDepartment: Object.fromEntries(byDepartment),
+  };
 }
 
 export interface OrgAccessRoster {
@@ -267,8 +660,6 @@ export async function getOrgAccessRoster(
       userId: schema.users.id,
       username: schema.users.username,
       role: schema.memberships.role,
-      department: schema.memberships.department,
-      departmentLead: schema.memberships.departmentLead,
       createdAt: schema.users.createdAt,
       ...(personal ? { email: schema.users.email } : {}),
     })
@@ -283,15 +674,24 @@ export async function getOrgAccessRoster(
     .orderBy(asc(schema.users.createdAt))
     .limit(200);
 
-  const members = rows.map((r) => ({
-    userId: r.userId,
-    email: "email" in r ? ((r.email as string | null) ?? null) : null,
-    username: r.username,
-    role: orgRankFromRole(r.role),
-    department: r.department,
-    isDepartmentLead: r.departmentLead ?? false,
-    createdAt: r.createdAt,
-  }));
+  const roles = await loadAssignedRoles(
+    orgGroupId,
+    rows.map((r) => r.userId),
+  );
+
+  const members = rows.map((r) => {
+    const held = roles.get(r.userId) ?? [];
+    const rank = orgRankFromRole(r.role);
+    return {
+      userId: r.userId,
+      email: "email" in r ? ((r.email as string | null) ?? null) : null,
+      username: r.username,
+      role: rank,
+      roles: held.map(roleChip),
+      capabilities: resolveAccountCapabilities(rank, held),
+      createdAt: r.createdAt,
+    };
+  });
 
   return {
     members,

@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { orgCan, ORG_RANK_LABELS } from "@quagga/core";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { Input } from "@quagga/ui/components/input";
 import { Button } from "@quagga/ui/components/button";
 import { guardConsole } from "@/lib/gate";
-import { searchAccounts } from "@/lib/queries";
+import { listAssignableOrgRoles, searchAccounts } from "@/lib/queries";
 import { PageHeading } from "@/components/page-heading";
 import {
   AccountsTable,
@@ -33,11 +34,12 @@ export default async function AccountsPage({
   // and a control that is missing is an action that would have been refused.
   const canManage = orgCan(session.actor, "manage_accounts");
   const seesEmail = orgCan(session.actor, "read_personal_information");
-  const accounts = await searchAccounts(
-    session.orgGroupId,
-    query,
-    session.actor,
-  );
+  const [accounts, assignableRoles] = await Promise.all([
+    searchAccounts(session.orgGroupId, query, session.actor),
+    // Only a System manager may assign, so only they need the list. Fetching it
+    // for everyone would be a payload nobody else can act on.
+    canManage ? listAssignableOrgRoles() : Promise.resolve([]),
+  ]);
   // The table renders its columns as functions, so it is a client component;
   // the server hands it plain serializable rows (no Date, no query internals).
   const rows: AccountTableRow[] = accounts.map((a) => ({
@@ -45,8 +47,18 @@ export default async function AccountsPage({
     email: a.email,
     username: a.username,
     role: a.role,
-    department: a.department,
-    isDepartmentLead: a.isDepartmentLead,
+    roles: a.roles.map((r) => ({
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      departmentId: r.departmentId,
+      departmentName: r.departmentName,
+    })),
+    // Resolved server-side by the same predicate the actions refuse with.
+    capabilities: a.capabilities.map((c) => ({
+      capability: c.capability,
+      departments: c.departments,
+    })),
   }));
 
   return (
@@ -55,12 +67,23 @@ export default async function AccountsPage({
         title="Accounts"
         description={
           canManage
-            ? "Find a burner, see their rank, and elevate trusted people to org staff or engineer."
+            ? "Who can open the console, and which org roles they hold. Access is the door; roles are what they may do once inside."
             : seesEmail
-              ? "Find a burner and see their org rank. Only the system owner can change access."
-              : `Find a burner by username and see their org rank. ${ORG_RANK_LABELS.engineer} accounts don't see email addresses, and only the system owner can change access.`
+              ? "Find a burner and see the org access they hold. Only the system owner can change access."
+              : `Find a burner by username and see the org access they hold. ${ORG_RANK_LABELS.engineer} accounts don't see email addresses, and only the system owner can change access.`
         }
       />
+
+      {canManage && (
+        <p className="mb-5 text-sm text-muted-foreground">
+          Roles, departments and what each role may do are managed in the{" "}
+          <Link href="/system/roles" className="underline underline-offset-4">
+            system panel
+          </Link>
+          . Here you decide who holds them — and the table says what that
+          resolves to.
+        </p>
+      )}
 
       <form method="get" className="mb-5 flex max-w-md gap-2">
         <div className="relative flex-1">
@@ -101,7 +124,7 @@ export default async function AccountsPage({
         </Card>
       ) : (
         /* Card chrome only at md+: below md the responsive table renders its own
-           stacked cards (frame y1idvL, whose header row is disabled), so an
+           stacked cards (frame Ctdgd, whose header row is disabled), so an
            outer bordered box would double-nest. */
         <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
           <AccountsTable
@@ -109,6 +132,14 @@ export default async function AccountsPage({
             canManage={canManage}
             showEmail={seesEmail}
             selfUserId={session.dbUserId}
+            assignableRoles={assignableRoles.map((r) => ({
+              id: r.id,
+              name: r.name,
+              color: r.color,
+              departmentId: r.departmentId,
+              departmentName: r.departmentName,
+              capabilities: r.capabilities,
+            }))}
           />
         </div>
       )}

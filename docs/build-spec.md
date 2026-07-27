@@ -95,7 +95,10 @@ without ever printing a value.
 - `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are *hard-locked* with no access path; **medical is *safety-visible*** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
 - `profile_keys` — user_id, public_key, encrypted_private_key, created_at. Generated server-side at onboarding; used for nothing yet except future QR attestations.
 - `groups` — kind enum (`org|theme_camp|artwork|mutant_vehicle`), name, `name_normalized` (unique per kind, case/space/punct-insensitive), description (60-word limit for camps), joinability enum (`open|invite_only`), `visibility` reserved column (default `default`), created_by. Exactly one seeded `org` row ("AfrikaBurn").
-- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group), plus a nullable `department` label and a `department_lead` flag (migration 0017). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group. **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label). Departments are a free-text label + lead flag ONLY: no catalog, no CRUD screen, and no privileges attached, until the org can say what a department decides (Ryan, 27 Jul 2026).
+- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group, and on it the enum is **the console DOOR, not the rights** (see apps/org routes). **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label) — and is the anti-lockout ANCHOR. *(Migration 0017's free-text `department` label + `department_lead` flag were DROPPED by 0018: departments are rows now, and two department vocabularies would be the parallel source of truth org roles v1 exists to remove.)*
+- `org_departments` — org departments as DATA (0018): `key` (stable slug), name, normalized name, description, sort. Created by a System manager; creating one seeds its permanent LEAD + MEMBER roles, deleting one cascades them away.
+- `org_roles` — the org mirror of `project_roles` (0018): `key`, nullable `department_id` (cascade), name + normalized name, `kind` (`system` = seeded/undeletable/rights-editable, `custom` = fully the System manager's), curated `color`, `permissions` jsonb over the org capability vocabulary, sort. Unique on `key` and on normalized name.
+- `org_role_assignments` — membership × role, composite PK (0018), mirroring `member_role_assignments`. Cascades off the membership, so removing console access releases every role with it.
 - `invites` — group_id, token, kind (`member|lead_transfer`), created_by, expires_at, used_by, used_at. One-time.
 - `editions` — name, year, start_date, end_date, is_active. Seed: **AfrikaBurn 2027, 2027-04-26 → 2027-05-02, active**.
 - `registrations` — group × edition, status enum (`draft|submitted|under_review|changes_requested|approved|rejected|withdrawn`), plus typed columns for the six sections per Finlay's field list in `docs/sources/scope-theme-camp-registration.txt` (identity/contact, LNT incl. lead contact, participation & gifting, size & logistics incl. layout upload URLs (max 4), sound & placement prefs, suppliers & commerce), `submitted_at`, `decided_at`. **A camp is "registered" for an edition iff an approved registration row exists** — that predicate lives in `@quagga/core` (`isRegistered`), and entitlements derive from it.
@@ -130,40 +133,92 @@ key fingerprint display).
 ## apps/org routes
 
 Auth gate: only an ORG RANK (god / org_staff / engineer) may enter; everyone else sees a
-polite wall. What each rank may then do is the ONE capability matrix in `@quagga/core`
-`org-permissions`, which both the gate and the UI read so a hidden control and a refused
-action can never disagree (Ryan, 27 Jul 2026 — "different team memberships give different
-CRUD operations in the Org portal"):
+polite wall. **Clearing that gate is the DOOR, not the rights** (org roles v1, migration
+0018 — Ryan, 27 Jul 2026: *"system admins can simply have a roles management section and
+create n sign these things instead of needing to hardcode them? With some set permanent
+ones, like team leads and team members for each department domain, these cant be removed
+but they can have the rights edited"*).
 
-| capability | engineer | org_staff | System manager (`god`) |
+What an account may do is the union of the ORG ROLES assigned to it, resolved by the ONE
+resolver in `@quagga/core` `org-permissions` (`orgCan` / `orgCanIn`), which both the gate
+and the UI read so a hidden control and a refused action can never disagree. The model
+deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental model:
+
+- **`org_departments`** — created by a System manager, never hardcoded (the org still
+  cannot say how many there are). Creating one SEEDS its permanent LEAD and MEMBER roles;
+  deleting it cascades them away.
+- **`org_roles`** — `key`, label, `kind`, colour, a `permissions` JSONB object over the
+  capability vocabulary, and an optional `department_id`. `kind = system` is seeded,
+  UNDELETABLE and RIGHTS-EDITABLE (Ryan's "set permanent ones"); `kind = custom` is a
+  System manager's own, fully editable and deletable. Only `custom` deletes — exactly
+  `UNDELETABLE_ROLE_KINDS` on the camp side.
+- **`org_role_assignments`** — membership × role; a person holds zero or more.
+
+The two seeded system roles carry EXACTLY the rights the hardcoded ranks carried, so the
+change of mechanism was not also a change of access — but they are now DEFAULTS OF A ROW,
+not law:
+
+| capability | Engineer (seeded) | Org staff (seeded) | System manager (`god`) |
 | --- | --- | --- | --- |
 | `read` — the whole console | ✅ | ✅ | ✅ |
 | `read_personal_information` | ❌ | ✅ | ✅ |
 | `write` — reviews, standings, bulletins, sends | ✅ | ✅ | ✅ |
 | `delete` — destructive removals | ❌ | ✅ | ✅ |
 | `manage_camp_categories` | ❌ | ❌ | ✅ |
-| `manage_accounts` — grant/remove a rank | ❌ | ❌ | ✅ |
+| `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅ |
 | `read_system` — the System panel (`/system`) | ✅ | ❌ | ✅ |
 
-**The ranks are NOT a ladder.** `read_system` is held by engineer and System manager and
-refused to org_staff, while `read_personal_information` and `delete` go the other way.
-These are different JOBS, not seniority tiers, so any check shaped like `rank >= org_staff`
-is wrong in both directions — ask `orgCan`.
+**A System manager may now edit any of those ticks** — including granting an Engineer role
+`read_personal_information`. That is a real consequence of making rights data, and it is
+audited (`org.role.update` records before/after).
 
-**Engineer + personal information is enforced at the QUERY, never in the JSX.** Every org
+**Four rails keep editable rights survivable** (each has a named lockout test in
+`apps/org/lib/__tests__/org-role-lockout.test.ts`):
+
+1. **`memberships.role = 'god'` is the anchor.** A System manager resolves every
+   capability whatever the role rows say — with zero roles, or holding a role that grants
+   nothing. No table edit can define them out of existence, and the GOD_EMAILS bootstrap
+   still works against an empty `org_roles`.
+2. **The sole System manager cannot be removed or demoted.** A `god` membership is
+   untouchable from the accounts panel in either direction, and `god` is not in the
+   grantable set.
+3. **Only a System manager manages departments, roles or assignments** — guarded on the
+   anchor (`requireSystemManager`), never on a capability, because this is the surface that
+   edits capabilities. `manage_accounts` is refused to EVERY role by the resolver itself,
+   so even a hand-written row cannot escalate.
+4. **Fail closed.** An account with the door and no roles clears the gate and resolves
+   nothing — the correct state, said out loud in the UI rather than left to be discovered.
+
+**Department scoping replaces the hardcoded domain→department map.** A role scoped to a
+department grants its capabilities only for that department's things: `orgCan` asks "may
+they, anywhere?" (the right question for a nav entry), `orgCanIn(actor, cap, departmentId)`
+asks "may they, HERE?" (the right question for the action). A null-department role is
+org-wide; a thing with no department is reachable only by an org-wide role. This is how
+"org staff may only delete in their related department" is now expressed.
+
+**The roles are NOT a ladder**, and now cannot become one: they are sets of grants that
+need not nest. Any check shaped like `rank >= org_staff` is wrong in both directions — ask
+`orgCan`.
+
+**Personal information is enforced at the QUERY, never in the JSX.** Every org
 query that returns a person resolves the predicate BEFORE its select (the
-`canViewMedicalNotes` pattern), so an engineer's payload never contains medical notes,
+`canViewMedicalNotes` pattern), so a refused caller's payload never contains medical notes,
 phone numbers, emergency contacts, ID/passport, legal names or email addresses — not even
 as an unrendered field. Two consequences worth stating: the accounts search matches on
-username only for that rank (an email match would be a lookup oracle), and the
+username only for such a caller (an email match would be a lookup oracle), and the
 medical-access audit panel is withheld whole, because a `bio.medical.view` row only exists
 when its subject HAS notes, making the list a census of who has disclosed. Questionnaire
-RESULTS are refused for the same reason. Ranks are never self-service: `engineer` and
-`org_staff` are granted by a System manager; `god` comes solely from a verified
-`GOD_EMAILS` address.
+RESULTS are refused for the same reason. **The medical predicate reads the same resolved
+capability** (`MedicalAccessContext.actorOrgPersonalInformation`) in both apps, so who the
+org's safety tier is has one definition — a console door with no roles is not it. Access is
+never self-service: the door (`engineer`/`org_staff`) and every role are granted by a
+System manager; `god` comes solely from a verified `GOD_EMAILS` address.
 
-`/` overview · `/accounts` (search users; the System manager grants/removes ranks and
-records departments; audit logged) · `/registrations` (table: status/sound/new-vs-returning
+`/` overview · `/accounts` (search users; the System manager grants/removes console access
+and assigns org roles; each row shows the RESOLVED union of those roles — including what
+the person can delete and where — so a reviewer never adds up chips by hand; audit
+logged) · `/system/roles` (inside the System panel; see below) ·
+`/registrations` (table: status/sound/new-vs-returning
 filters) ·
 `/registrations/[id]` (full submission read; per-section comment + open/resolve;
 actions: approve / request changes / reject — approve flips the entitlement predicate) ·
@@ -199,7 +254,43 @@ file to read. Four sections:
   existing elevate/demote confirmation flow for a System manager, and a warning when only
   one System manager exists (core already refuses to let the last one self-delete; said
   here, it is something the org can act on *before* it matters).
+- **Roles and departments** — a count, and the way in to `/system/roles`.
 - **A link to `/audit`**, the existing trail.
+
+### `/system/roles` — the permission model itself
+
+Editing what a role may do *is* "god level account management", so it lives in this panel
+rather than on the nav bar. **Two gates, deliberately different**: READING it needs
+`read_system` (an engineer may look — the permission model is this deployment's
+configuration, the same class of fact as the auth settings beside it), while CHANGING
+anything needs the **`god` anchor**, never a capability, because this is the surface that
+edits capabilities. Every action re-checks `requireSystemManager()` server-side; the
+missing buttons are a courtesy. The one thing a reader does not merely have hidden is the
+deletion-impact data — it carries the affected people's email addresses, so it is **not
+queried at all** unless the viewer is a System manager.
+
+Three screens, and each is built around stating a consequence rather than a permission
+key — someone here is deciding what a colleague can destroy:
+
+- **Departments** — create, rename, delete. Deleting names *every* role that dies with it
+  (the seeded lead/member pair AND any custom role scoped to it), names *every person* who
+  loses one, and counts the ones who would be left holding nothing at all ("they will keep
+  console access and find it empty"). Nobody is stripped silently.
+- **Roles** — org-wide first, then grouped by department. A permanent role renders with no
+  delete control anywhere and the reason in words ("Suppliers needs a lead and a member, so
+  this role exists as long as the department does"), never a disabled button. The rights
+  editor is a checklist of consequences — "permanently removes a supplier and everything
+  hanging off them… there is no undo", not `delete: true` — and it resolves the draft back
+  before saving ("someone whose only role is this can…"). Deleting a custom role is its own
+  confirm with its own holder count.
+- **Assignment** — on `/accounts`, where it belongs, with the same resolved-union renderer
+  as the table and a live preview of the draft selection.
+
+The union arithmetic is `summarizeOrgActor` in @quagga/core: **one pure function** behind
+the table cell, the dialog preview and the editor preview, so the console cannot describe
+an access it would refuse. `DEPARTMENT_SCOPE_TODAY` states the honest gap wherever a
+department-scoped `delete` appears — no console entity carries a department column yet, so
+such a grant permits nothing until one does.
 
 **It never prints a secret** — only whether one is set, and what follows. The single
 deliberate exception is a database *hostname*, parsed out so a password in the connection
@@ -207,10 +298,22 @@ string cannot come with it. `GOD_EMAILS` is reported as a **count**: those are p
 email addresses and an engineer never receives one. A unit test seeds every credential env
 var with a marker and asserts no marker survives into any rendered string.
 
-**No pen.dev frame yet — a recorded exception to design-before-build, not an oversight.**
-The page is assembled entirely from the existing console vocabulary (PageHeading, Card, the
-ResponsiveDataTable accounts table), so the frame, when drawn, documents what shipped
-rather than redesigning it.
+**The frame exception is PAID OFF (27 Jul 2026).** This page shipped ahead of its frame —
+a recorded exception to design-before-build — and the frames were drawn afterwards to
+document what shipped rather than to redesign it:
+
+| Screen | Desktop frame | Mobile 360 frame |
+|---|---|---|
+| `/system` | `bNbLs` | `qhCyJ` |
+| `/system/roles` | `IXwNt` | `gsiE0` |
+
+Both are assembled from the existing console vocabulary (PageHeading, Card, the
+ResponsiveDataTable accounts table, the accounts panel's confirm-overlay dialog). `bNbLs`
+deliberately draws the DEGRADED states — no Resend key, no blob token, a migration that
+would refuse to run — because those are the states someone opens this page to read.
+`IXwNt` draws the permanence reason where a permanent role's delete control would be, the
+rights checklist as consequences, and the department-deletion dialog naming who it strips.
+Do not reopen this exception for the next surface.
 
 ## Seeds (`packages/db/src/seed.ts`, runnable script, idempotent)
 
@@ -223,7 +326,9 @@ carried placeholder `authUserId = seed:<email>` strings and could never sign in,
 every "sign in as the seeded owner" path was a dead end.
 
 **Seeded:** org group "AfrikaBurn" (no memberships — staff elevate live via
-`GOD_EMAILS`) · edition AfrikaBurn 2027 · the 8 canonical camp categories for that
+`GOD_EMAILS`) · the two seeded ORG ROLES (Org staff, Engineer), insert-if-missing so a
+System manager's own edits to their rights survive every later deploy — no departments and
+no role ASSIGNMENTS, which are live acts · edition AfrikaBurn 2027 · the 8 canonical camp categories for that
 edition · suppliers imported from the AB public sheet (CSV export of Google Sheet
 `1XU2gAt5E9GczVHZWpcD0_CsEeE--iX9aWmnWd19bgMI`; committed as JSON snapshot so seeding
 works offline) with their per-edition onboarding step maps and `user_id` **null**, so a

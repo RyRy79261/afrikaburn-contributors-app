@@ -36,7 +36,7 @@ export interface OrgStaff {
 /**
  * Elevate the account identified by `email` to `org_staff`, driving the god's
  * Accounts panel exactly as an admin would. Filtering the table by the exact
- * email guarantees a single matching row, so the "Elevate to org staff" control
+ * email guarantees a single matching row, so the "Give org staff access" control
  * is unambiguous in BOTH the desktop table and the mobile stacked-card layout —
  * no row-scoping that would only work on one of them.
  *
@@ -56,18 +56,18 @@ export async function elevateAccountToOrgStaff(
     godOrg.getByText(email, { exact: false }).filter({ visible: true }).first(),
   ).toBeVisible();
 
-  // Row-level control (the only "Elevate to org staff" on the page pre-dialog).
+  // Row-level control (the only "Give org staff access" on the page pre-dialog).
   await godOrg
-    .getByRole("button", { name: "Elevate to org staff", exact: true })
+    .getByRole("button", { name: "Give org staff access", exact: true })
     .filter({ visible: true })
     .click();
   // Confirm inside the overlay (a second button of the same name now exists).
   await godOrg
     .getByRole("dialog")
-    .getByRole("button", { name: "Elevate to org staff", exact: true })
+    .getByRole("button", { name: "Give org staff access", exact: true })
     .click();
 
-  await expect(godOrg.getByText(/elevated to org staff/i)).toBeVisible();
+  await expect(godOrg.getByText(/granted org staff access/i)).toBeVisible();
 }
 
 /**
@@ -90,15 +90,15 @@ export async function makeAccountEngineer(
   ).toBeVisible();
 
   await godOrg
-    .getByRole("button", { name: "Make engineer", exact: true })
+    .getByRole("button", { name: "Give engineer access", exact: true })
     .filter({ visible: true })
     .click();
   await godOrg
     .getByRole("dialog")
-    .getByRole("button", { name: "Elevate to engineer", exact: true })
+    .getByRole("button", { name: "Give engineer access", exact: true })
     .click();
 
-  await expect(godOrg.getByText(/elevated to engineer/i)).toBeVisible();
+  await expect(godOrg.getByText(/granted engineer access/i)).toBeVisible();
 }
 
 /**

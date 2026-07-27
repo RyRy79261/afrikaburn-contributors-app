@@ -189,6 +189,24 @@ async function main(): Promise<void> {
       console.log("[migrate] reference data seeded.");
     } else {
       console.log("[migrate] reference data present — not re-seeding.");
+      // ONE EXCEPTION, and it is not a sync either: the two seeded ORG ROLES
+      // (migration 0018). An ALREADY-SEEDED database skips the bootstrap above,
+      // so a deployment that predates org roles v1 would come up with the new
+      // tables EMPTY — and since org permissions now come from role rows, every
+      // org_staff and engineer account would clear the console gate and resolve
+      // nothing. That is a fail-closed lockout of the whole org team on the
+      // deploy that introduces the feature.
+      //
+      // INSERT-IF-MISSING on the stable `key`, never an update: a System manager
+      // who has re-righted the Engineer role keeps their edit, and a role they
+      // deliberately emptied is not re-filled. This restores absence only.
+      const { ensureSeededOrgRoles } = await import("./seed");
+      const restored = await ensureSeededOrgRoles(drizzle(client, { schema }));
+      console.log(
+        restored === 0
+          ? "[migrate] org roles present."
+          : `[migrate] seeded ${restored} missing org role(s).`,
+      );
     }
   } finally {
     // Explicit release even though session locks free on disconnect anyway.

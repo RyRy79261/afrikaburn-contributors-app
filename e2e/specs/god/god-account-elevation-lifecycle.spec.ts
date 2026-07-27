@@ -68,7 +68,7 @@ test.describe("god elevate/demote lifecycle", () => {
     await gotoAccount(orgPage, burner.email);
     await demoteVisibleRow(orgPage);
 
-    // Durable state flips back to "Elevate to org staff".
+    // Durable state flips back to "Give org staff access".
     await gotoAccount(orgPage, burner.email);
     await expect(rowElevateButton(orgPage)).toBeVisible();
 

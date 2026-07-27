@@ -3,9 +3,11 @@ import "server-only";
 import { after } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import {
+  canReadPersonalInformation,
   canViewMedicalNotes,
   isOrgStaffRole,
   medicalAccessBasis,
+  sanitizeOrgPermissions,
   MEDICAL_VIEW_AUDIT_ACTION,
   type MedicalAccessContext,
 } from "@quagga/core";
@@ -112,6 +114,7 @@ async function buildMedicalAccessContext(
 
   const rows = await handle
     .select({
+      id: schema.memberships.id,
       userId: schema.memberships.userId,
       groupId: schema.memberships.groupId,
       role: schema.memberships.role,
@@ -121,6 +124,7 @@ async function buildMedicalAccessContext(
 
   const actorLeadCampIds: string[] = [];
   const subjectCampIds: string[] = [];
+  const actorOrgMembershipIds: string[] = [];
   let actorOrgRole: MedicalAccessContext["actorOrgRole"] = null;
 
   for (const row of rows) {
@@ -131,6 +135,7 @@ async function buildMedicalAccessContext(
       // non-qualifying one, so the outcome does not depend on row order.
       if (isOrgGroup) {
         if (!isOrgStaffRole(actorOrgRole)) actorOrgRole = row.role;
+        actorOrgMembershipIds.push(row.id);
       } else if (row.role === "lead" || row.role === "admin") {
         actorLeadCampIds.push(row.groupId);
       }
@@ -140,9 +145,45 @@ async function buildMedicalAccessContext(
     }
   }
 
+  // THE ORG BRANCH IS A CAPABILITY NOW, NOT A RANK. Since org roles v1 an org
+  // membership is only the console door; whether its holder is part of the
+  // org's safety audience is decided by the org roles they hold resolving
+  // `read_personal_information` — the same resolver apps/org uses, so the two
+  // apps cannot disagree about who may read a burner's medical notes.
+  //
+  // (The `god` anchor is handled inside the predicate and needs no roles.)
+  let actorOrgPersonalInformation = false;
+  if (actorOrgMembershipIds.length > 0) {
+    const grants = await handle
+      .select({ permissions: schema.orgRoles.permissions })
+      .from(schema.orgRoleAssignments)
+      .innerJoin(
+        schema.orgRoles,
+        eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
+      )
+      .where(
+        inArray(schema.orgRoleAssignments.membershipId, actorOrgMembershipIds),
+      );
+    actorOrgPersonalInformation = canReadPersonalInformation({
+      // The door is irrelevant to this question — only the roles are — so the
+      // rank passed here is the non-anchor one. `god` is decided by
+      // `actorOrgRole` inside the predicate.
+      rank: "org_staff",
+      roles: grants.map((g) => ({
+        id: "",
+        key: "",
+        name: "",
+        kind: "custom" as const,
+        departmentId: null,
+        permissions: sanitizeOrgPermissions(g.permissions),
+      })),
+    });
+  }
+
   return {
     isSelf: viewerUserId === subjectUserId,
     actorOrgRole,
+    actorOrgPersonalInformation,
     actorLeadCampIds,
     subjectCampIds,
   };

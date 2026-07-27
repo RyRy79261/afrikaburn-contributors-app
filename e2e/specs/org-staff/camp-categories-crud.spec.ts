@@ -37,7 +37,7 @@ test.describe("org staff · camp categories are read-only", () => {
 
     // …and the screen SAYS why it is read-only rather than just lacking buttons.
     await expect(
-      staff.org.getByText(/managed by a system manager/i),
+      staff.org.getByText(/none of your org roles manage camp categories/i),
     ).toBeVisible();
 
     // No create affordance, and no per-row edit/delete controls anywhere.

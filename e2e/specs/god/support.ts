@@ -48,15 +48,16 @@ export async function expectConsoleForbidden(page: Page): Promise<void> {
 /**
  * Assert the current session holds GOD specifically, not merely some org role.
  * Both god and org_staff clear the console gate, so "reached the console" alone
- * does not distinguish them. The accounts panel's heading copy DOES: only a god
- * is invited to "elevate trusted people to org staff" (org_staff is told only
- * the owner can change access). That copy is always rendered (viewport-robust),
- * unlike the header "Owner" badge which is hidden below the `sm` breakpoint.
+ * does not distinguish them. The accounts panel's copy DOES: only a System
+ * manager (`manage_accounts`, which no role may hold since org roles v1) is
+ * pointed at the roles surface in the system panel. That line is always
+ * rendered (viewport-robust), unlike the header "Owner" badge which is hidden
+ * below the `sm` breakpoint.
  */
 export async function expectGodPrivileges(page: Page): Promise<void> {
   await page.goto("/accounts");
   await expect(
-    page.getByText(/elevate trusted people to org staff/i),
+    page.getByText(/roles, departments and what each role may do/i),
   ).toBeVisible();
 }
 
@@ -70,7 +71,7 @@ export async function gotoAccount(page: Page, email: string): Promise<void> {
 
 export function rowElevateButton(page: Page): Locator {
   return page
-    .getByRole("button", { name: "Elevate to org staff", exact: true })
+    .getByRole("button", { name: "Give org staff access", exact: true })
     .filter({ visible: true });
 }
 
@@ -93,7 +94,7 @@ export async function openElevateDialog(page: Page): Promise<Locator> {
   await rowElevateButton(page).click();
   const dialog = confirmDialog(page);
   await expect(
-    dialog.getByRole("heading", { name: /elevate to org staff\?/i }),
+    dialog.getByRole("heading", { name: /give org staff access\?/i }),
   ).toBeVisible();
   return dialog;
 }
@@ -119,7 +120,7 @@ export async function openDemoteDialog(page: Page): Promise<Locator> {
 export async function elevateVisibleRow(page: Page): Promise<void> {
   const dialog = await openElevateDialog(page);
   await dialog
-    .getByRole("button", { name: "Elevate to org staff", exact: true })
+    .getByRole("button", { name: "Give org staff access", exact: true })
     .click();
   await expect(dialog).toBeHidden();
 }

@@ -16,7 +16,9 @@
 // the burner consented to?
 //
 //   - the subject themselves (their own data) → always;
-//   - org staff (god / org_staff) → yes (AfrikaBurn's safety/ops tier);
+//   - the org's safety tier → yes: the System manager, plus any org account
+//     whose ORG ROLES resolve `read_personal_information` (org roles v1 — the
+//     console's one permission resolver decides this, not a rank rule here);
 //   - a camp lead/admin of a camp the SUBJECT is a member of → yes, but only for
 //     THEIR OWN camp's members. A lead of camp A is refused for a member of
 //     camp B (the camp-id sets must intersect).
@@ -32,22 +34,28 @@
 import type { MembershipRole } from "@quagga/types";
 
 /**
- * The org-group roles that may see any burner's medical notes.
+ * The org-group membership roles that historically meant "operator tier".
  *
- * `engineer` IS DELIBERATELY ABSENT and must stay absent. An engineer holds the
- * org console's widest READ — they run the thing — but medical notes are the
- * sharpest personal information in the system and the engineering rank exists
- * without any care duty that would need them (@quagga/core `org-permissions`:
- * `read_personal_information` is refused to engineers, always). Adding it here
- * would silently re-open the notes to a rank the matrix says can never see them,
- * from a module the matrix does not import. Don't.
+ * SINCE ORG ROLES v1 THIS IS NOT THE MEDICAL DECISION. `memberships.role` on the
+ * org group is now only the console DOOR (except `god`, the System manager
+ * anchor); what an org account may see comes from the org roles it holds and is
+ * resolved by @quagga/core `org-permissions` → `read_personal_information`. This
+ * predicate survives for the one job it still does honestly: preferring the
+ * strongest of several org membership rows when a deployment has more than one
+ * org group.
+ *
+ * `engineer` IS DELIBERATELY ABSENT here, and the Engineer ROLE ships without
+ * `read_personal_information` for the same reason — medical notes are the
+ * sharpest personal information in the system and running the servers is not a
+ * care duty. That is now a default a System manager may change, deliberately and
+ * with an audit row, rather than a rule hidden in a module.
  */
 const ORG_STAFF_ROLES: ReadonlySet<MembershipRole> = new Set([
   "god",
   "org_staff",
 ]);
 
-/** True when a role is org staff (god or org_staff) — the operator tier. */
+/** True when a role is org staff (god or org_staff) — the console door. */
 export function isOrgStaffRole(
   role: MembershipRole | null | undefined,
 ): boolean {
@@ -57,7 +65,13 @@ export function isOrgStaffRole(
 /**
  * The facts an access decision needs. The caller resolves each server-side:
  *  - `isSelf`: the actor is the subject (reading their own notes).
- *  - `actorOrgRole`: the actor's role on the seeded org group, or null.
+ *  - `actorOrgRole`: the actor's role on the seeded org group, or null. Only
+ *    `god` decides anything on its own (the System manager anchor).
+ *  - `actorOrgPersonalInformation`: the ORG CONSOLE'S RESOLVED
+ *    `read_personal_information` for this actor — i.e. `orgCan(actor,
+ *    "read_personal_information")` over the union of their org roles. This is
+ *    the org branch of the decision, so there is ONE definition of who the org's
+ *    safety tier is instead of a rank rule here and a permission there.
  *  - `actorLeadCampIds`: the camp (group) ids where the actor holds a STRUCTURAL
  *    lead/admin role (the permission backstop). Custom project roles do NOT
  *    grant access — this is deliberately a structural-lead capability.
@@ -66,8 +80,20 @@ export function isOrgStaffRole(
 export interface MedicalAccessContext {
   isSelf: boolean;
   actorOrgRole: MembershipRole | null;
+  actorOrgPersonalInformation?: boolean;
   actorLeadCampIds: readonly string[];
   subjectCampIds: readonly string[];
+}
+
+/**
+ * Is the actor part of AfrikaBurn's org-side safety audience? The System manager
+ * always; otherwise exactly the actors whose org roles resolve
+ * `read_personal_information`. An org account with no roles is NOT — the door is
+ * not the tier.
+ */
+function isOrgSafetyTier(ctx: MedicalAccessContext): boolean {
+  if (ctx.actorOrgRole === "god") return true;
+  return ctx.actorOrgPersonalInformation === true;
 }
 
 /**
@@ -77,7 +103,7 @@ export interface MedicalAccessContext {
  */
 export function canViewMedicalNotes(ctx: MedicalAccessContext): boolean {
   if (ctx.isSelf) return true;
-  if (isOrgStaffRole(ctx.actorOrgRole)) return true;
+  if (isOrgSafetyTier(ctx)) return true;
   if (ctx.actorLeadCampIds.length === 0 || ctx.subjectCampIds.length === 0) {
     return false;
   }
@@ -93,7 +119,7 @@ export function medicalAccessBasis(
   ctx: MedicalAccessContext,
 ): MedicalAccessBasis | null {
   if (ctx.isSelf) return "self";
-  if (isOrgStaffRole(ctx.actorOrgRole)) return "org_staff";
+  if (isOrgSafetyTier(ctx)) return "org_staff";
   if (canViewMedicalNotes(ctx)) return "camp_lead";
   return null;
 }

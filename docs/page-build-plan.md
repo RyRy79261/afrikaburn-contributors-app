@@ -8,10 +8,10 @@
 > step 1 (the platform/database restructure) was resolved without a restructure — see
 > `docs/build-spec.md` §"Platform/database separation — RESOLVED".
 >
-> One page shipped **without** a frame and is therefore absent from these tables: the
-> org console's `/system`. That is a recorded exception to design-before-build, noted
-> in `docs/build-spec.md` §"The System panel"; when its frame is drawn it documents
-> what shipped rather than redesigning it.
+> `/system` and `/system/roles` shipped **without** frames — a recorded exception to
+> design-before-build, noted in `docs/build-spec.md` §"The System panel". That exception
+> is now PAID OFF: the frames were drawn on 27 Jul 2026 and document what shipped
+> (`bNbLs`/`qhCyJ` and `IXwNt`/`gsiE0`); both appear in the apps/org table below.
 
 *Ryan, 25 Jul 2026. Every canvas page frame → an implementation task. Specs referenced
 are the law for each page; the canvas frame (desktop + mobile 360 pair) is the visual
@@ -55,7 +55,7 @@ reconcile vs canvas) · 🆕 not implemented.
 | Status Board | RTfFF / w6X0wA | org stats spec (new 4-card KPIs) | 🆕 |
 | Registrations queue | StJXH / NkPRL | build-spec review flow | ✅ reconcile |
 | Review (registration) | PRDdG / t4Ji4 | build-spec + wrangler assign | ✅ reconcile |
-| Accounts (god elevate) | CJs0P / y1idvL | build-spec god admin | ✅ reconcile |
+| Accounts (god elevate + org roles) | uj1wp / Ctdgd | build-spec god admin | ✅ reconcile |
 | Suppliers | iQEpd / hSNjO | supplier-spec (standing, n/7, notes) | ✅ reconcile |
 | Supplier Sign-up Mgmt | U7929T / D6IGel | accounts-security supplier docs | 🆕 |
 | Camp Categories | g4CzsM / X8RHa | build-spec categories | 🆕 |
@@ -64,6 +64,8 @@ reconcile vs canvas) · 🆕 not implemented.
 | Results v2 | Mjiqz / nRtO7 | questionnaire-spec | 🆕 |
 | Bulletins list + Compose | QqnNq·U8CqE / laWqH·zW1uE | notifications-spec | 🆕 |
 | Org Notifications | xRjgy / Cb5MV | notifications-spec | 🆕 |
+| System management | bNbLs / qhCyJ | build-spec §"The System panel" | ✅ frame drawn after build (exception paid off) |
+| Roles & departments | IXwNt / gsiE0 | org-permissions + org-roles (migration 0018) | ✅ frame drawn after build (exception paid off) |
 
 ## apps/suppliers
 

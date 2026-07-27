@@ -1027,3 +1027,66 @@ subtrees.
 `Z5frU`/`k4gUF` (Org Member Detail) and `JIznY`/`YXdDv` (Join Confirm) no longer
 exist — they are now `P6mXrX`/`lYlbW` and `l9JKDo`/`UIzmF`, already rebuilt by an
 earlier session. Check `batch_get` before trusting a frame id quoted in a task.
+
+## System panel + roles/departments frames (27 Jul 2026) — the design-before-build exception, paid off
+
+### Frames created
+- Org System Panel — /system · Org Dark = **bNbLs** (x=36360, y=8660)
+- Org System Panel — mobile 360 · Dark = **qhCyJ** (x=37760, y=8660)
+- Org Roles & Departments — /system/roles · Org Dark = **IXwNt** (x=38380, y=8660)
+- Org Roles & Departments — mobile 360 · Dark = **gsiE0** (x=39780, y=8660)
+
+### Frame ids that CHANGED (Copy trick, after restructuring the Accounts table)
+- `CJs0P` → **`uj1wp`** (Accounts desktop, x=8080, y=8660)
+- `y1idvL` → **`Ctdgd`** (Accounts mobile, x=9480, y=8660)
+- Node ids inside them moved too: Confirm Overlay `mfJhv` → `UPol9`; its "Who"
+  text `xPit0` → `T6n33z`. Callers updated: `apps/org/components/accounts-table.tsx`,
+  `apps/org/components/account-actions.tsx`, `apps/org/app/(console)/accounts/page.tsx`,
+  `packages/ui/src/components/responsive-data-table.tsx`, `docs/page-build-plan.md`,
+  `docs/design-gap-register.md`, `docs/build-spec.md`.
+
+### New variables
+`ab-rust` #C24438 and `ab-neutral` #ADB6B3 — the two curated role-palette keys that had
+no token. Solid role swatches must use `$ab-*`; the audit flags raw 6-digit hex. Chip
+tints stay 8-digit alpha (`#7D995322` fill / `#7D995399` stroke) which the audit accepts.
+
+### AppShell nav: a descendant REPLACEMENT adds nav items honestly
+`jgbtP` only has four nav slots (p9ddJ Overview / yxXDq Registrations / VuubM Suppliers /
+VU2a3 Accounts) but the shipped console bar has ten. Rather than renaming Suppliers into
+"System" (a lie), replace the last slot with a frame of its own texts — a full inline
+subtree with `type` present works inside an instance:
+`descendants:{"<inst>/VU2a3":{type:"frame",layout:"horizontal",gap:22,alignItems:"center",children:[Accounts, Audit, System(active $accent/700)]}}`.
+Verified rendering. `Copy("NxjX7", page, {descendants:{…}})` (P6mXrX's Header) is the
+desktop org header; `Copy("R2JA4", page)` (lYlbW's Header) is the slim mobile one.
+
+### Mobile-360 recipe reconfirmed, with one new trap
+Copy the desktop Content and pass a programmatically-built `descendants` map keyed by the
+DESKTOP ids (Copy remaps them). Overrides used: check rows → `layout:"vertical"`; table
+header row → `enabled:false`; each table row → vertical + cells `fill_container`; dialog
+columns → vertical; dialog footers with three buttons → vertical.
+- **A four-item horizontal Name Row cannot be fixed by an override.** `[swatch, name,
+  Permanent badge, "N people hold it"]` overflows at 360 whichever way you stack it, and
+  `layout:"vertical"` puts the swatch on its own line. Fix at SOURCE: group it as
+  `[Title Row(swatch+name)] [Meta Row(badge+holders)]`, then the mobile override
+  `Name Row → vertical` yields two clean lines. Restructured with Insert-new +
+  Delete-old-LEAF (the sanctioned pattern) — no container deletes, no Move.
+- Auto-width text beside a fit-content sibling still overruns silently; `textGrowth:
+  "fixed-width"` + `width:"fill_container"` on the trailing text is the cure (dept chips,
+  "· permanent, dies with the department", the trailing half of a link sentence).
+- `TOUCH-TARGET` warnings: plain ghost-button frames need `padding:[15,13]` at 360 to
+  clear 44px; `[12,11]` only reaches 39px. Component-ref buttons were not flagged.
+
+### Gotchas
+- A `batch_design` error does **not** always roll back. The batch that failed on
+  `Update("rmPage", …)` (string literal instead of the variable) left its created frame
+  behind as orphan debris at the scratch position — found later by `snapshot_layout
+  maxDepth:0` as `nb3iV` and deleted. Always re-snapshot the root after a failed batch.
+- The Copy trick worked every time and audited truthfully on the first run; the scratch
+  build position used was x=0, y=21000.
+- Ctdgd grew to 4457px and its bottom (13117) crossed into the SUPPLIER band, so per the
+  recorded rule the lower bands were shifted, not the frame: **SUPPLIER PORTAL y 12300 →
+  13560** (title j6pIPH → 13440) and **CONCEPTS/ARCHIVE y 16800 → 18000** (title Xe1pm →
+  17880). Verified zero overlaps.
+- `audit.py --all`: 108 frames, 0 defects. The 28 remaining `[STYLE]` findings are
+  pre-existing on other agents' supplier/notification frames (raw `#17191B` on sage tags,
+  one 9px label) — none on these six.

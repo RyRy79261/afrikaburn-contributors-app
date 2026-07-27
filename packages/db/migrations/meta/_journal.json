@@ -127,6 +127,13 @@
       "when": 1785110301619,
       "tag": "0017_nice_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785140339591,
+      "tag": "0018_tidy_mastermind",
+      "breakpoints": true
     }
   ]
 }

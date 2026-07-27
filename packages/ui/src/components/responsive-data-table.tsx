@@ -15,7 +15,7 @@ import {
 // ResponsiveDataTable — one column declaration, two layouts.
 //
 // The design system draws every org data list two ways: a real <table> at md+
-// and, below md, the SAME rows redrawn as stacked cards (frames NkPRL / y1idvL /
+// and, below md, the SAME rows redrawn as stacked cards (frames NkPRL / Ctdgd /
 // hSNjO / D6IGel). Four org tables plus the questionnaire results rows each
 // hand-rolled the desktop <Table> and got only horizontal scroll on phones — the
 // designed mobile card was missing everywhere. This primitive is the single

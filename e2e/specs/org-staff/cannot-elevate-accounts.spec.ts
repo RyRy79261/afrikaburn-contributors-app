@@ -1,10 +1,13 @@
 // Persona: ORG STAFF — the one thing they CANNOT do: change anyone's access.
 //
 // Access management belongs to the System manager alone. In
-// `apps/org/lib/actions/accounts.ts`, `setOrgStaffRole` and `setOrgDepartment`
-// both require the `manage_accounts` capability (@quagga/core
-// `org-permissions`); the Accounts PAGE renders for org_staff but strictly
-// read-only (`orgCan(actor, "manage_accounts") === false` → no action controls).
+// `apps/org/lib/actions/accounts.ts`, `setOrgStaffRole` requires the
+// `manage_accounts` capability — which since org roles v1 NO ROLE MAY HOLD, so
+// it resolves for the System manager and nobody else (@quagga/core
+// `org-permissions`). Role assignment (`setAccountOrgRoles`) and the whole
+// departments/roles surface require the `god` anchor directly. The Accounts
+// PAGE renders for org_staff but strictly read-only
+// (`orgCan(actor, "manage_accounts") === false` → no action controls).
 //
 // HONEST SCOPE NOTE (per the task's "say so explicitly" rule): a test that goes
 // red specifically when that capability check is deleted CANNOT be written
@@ -42,7 +45,7 @@ test.describe("org staff · account management is god-only", () => {
     // real rows, then assert no elevate/demote control exists on any of them).
     await staff.org.goto("/accounts?q=@");
     await expect(
-      staff.org.getByRole("button", { name: /elevate to org staff/i }),
+      staff.org.getByRole("button", { name: /give org staff access/i }),
     ).toHaveCount(0);
     await expect(
       staff.org.getByRole("button", { name: /remove staff access/i }),

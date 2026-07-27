@@ -1,15 +1,21 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
+  isDepartmentScopedCapability,
   isSanitized,
+  isSystemManager,
   orgCan,
+  orgCanIn,
   orgCapabilityRefusal,
   orgRankFromRole,
+  sanitizeOrgPermissions,
+  ORG_RANK_LABELS,
   type OrgActor,
   type OrgCapability,
   type OrgRank,
+  type OrgRoleGrant,
 } from "@quagga/core";
 import type { MembershipRole } from "@quagga/types";
 
@@ -22,9 +28,16 @@ import { writeAuditEvent } from "@/lib/audit";
 /**
  * A staff member who has cleared the gate.
  *
- * Clearing it is only the door. WHAT they may read and do comes from
- * `session.actor` + `orgCan` (@quagga/core `org-permissions`) — the same matrix
- * the UI reads, so a hidden control and a refused action can never disagree.
+ * Clearing it is ONLY THE DOOR — and since org roles v1 that is meant literally:
+ * `memberships.role` says this account may load the console and nothing else.
+ * WHAT they may read and do comes from `session.actor.roles` resolved through
+ * `orgCan` (@quagga/core `org-permissions`) — the same resolver the UI reads, so
+ * a hidden control and a refused action can never disagree. An account with no
+ * roles clears the gate and can do nothing, which is the correct fail-closed
+ * state rather than a bug.
+ *
+ * The one exception, and the anti-lockout anchor: `god`. A System manager
+ * resolves every capability whatever the role rows say.
  */
 export interface OrgSession {
   /** Neon Auth user. */
@@ -32,13 +45,16 @@ export interface OrgSession {
   /** Our `users.id` (the join row), used as the audit actor. */
   dbUserId: string;
   /**
-   * Org rank — `engineer`, `org_staff` or `god` (presented as "System
-   * manager"). Same value as `actor.rank`; kept as `role` because the core
-   * membership predicates (`canActivateAudience`, …) take a `MembershipRole`
-   * and an OrgRank is one.
+   * The membership role on the org group — the DOOR (`engineer`, `org_staff`)
+   * or the System manager anchor (`god`). Same value as `actor.rank`; kept as
+   * `role` because the core membership predicates (`canActivateAudience`, …)
+   * take a `MembershipRole` and an OrgRank is one. NEVER use it to decide what
+   * someone may do — ask `orgCan`.
    */
   role: OrgRank;
-  /** The actor every capability check runs against. */
+  /** The org membership row's id — what role assignments hang off. */
+  membershipId: string;
+  /** The actor every capability check runs against (rank + assigned roles). */
   actor: OrgActor;
   /** The seeded org group's id. */
   orgGroupId: string;
@@ -154,9 +170,8 @@ export const resolveOrgSession = cache(
 
       const [membership] = await db
         .select({
+          id: schema.memberships.id,
           role: schema.memberships.role,
-          department: schema.memberships.department,
-          departmentLead: schema.memberships.departmentLead,
         })
         .from(schema.memberships)
         .where(
@@ -171,17 +186,45 @@ export const resolveOrgSession = cache(
       // (lead/admin/member on the org group) resolves to null and is forbidden,
       // so a new membership role can never accidentally open the console.
       const rank = orgRankFromRole(membership?.role);
-      if (rank) {
+      if (rank && membership) {
+        // THE ONE RESOLUTION PATH. Every capability this session resolves comes
+        // from these rows (or from `rank === "god"`, the anchor). Permissions
+        // are re-sanitized on the way IN as well as on the way out: a row
+        // written by anything other than the role editor still cannot carry a
+        // capability no role may hold.
+        const assigned = await db
+          .select({
+            id: schema.orgRoles.id,
+            key: schema.orgRoles.key,
+            name: schema.orgRoles.name,
+            kind: schema.orgRoles.kind,
+            departmentId: schema.orgRoles.departmentId,
+            permissions: schema.orgRoles.permissions,
+          })
+          .from(schema.orgRoleAssignments)
+          .innerJoin(
+            schema.orgRoles,
+            eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
+          )
+          .where(eq(schema.orgRoleAssignments.membershipId, membership.id))
+          .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name));
+
+        const roles: OrgRoleGrant[] = assigned.map((r) => ({
+          id: r.id,
+          key: r.key,
+          name: r.name,
+          kind: r.kind,
+          departmentId: r.departmentId,
+          permissions: sanitizeOrgPermissions(r.permissions),
+        }));
+
         return {
           kind: "ok",
           user,
           dbUserId: dbUser.id,
           role: rank,
-          actor: {
-            rank,
-            department: membership?.department ?? null,
-            isDepartmentLead: membership?.departmentLead ?? false,
-          },
+          membershipId: membership.id,
+          actor: { rank, roles },
           orgGroupId: orgGroup.id,
         };
       }
@@ -205,28 +248,68 @@ export const resolveOrgSession = cache(
  */
 export async function requireOrgSession(options?: {
   capability?: OrgCapability;
+  /**
+   * The department the thing being acted on belongs to, when it has one.
+   * Supplying it upgrades the check from `orgCan` ("may they, anywhere?") to
+   * `orgCanIn` ("may they, HERE?") — which is how a department-scoped role's
+   * `delete` stays inside its own department. Omit it for capabilities with no
+   * department dimension; pass `null` explicitly for an unfiled thing, which
+   * only an org-wide role may touch.
+   */
+  departmentId?: string | null;
 }): Promise<OrgSession> {
   const state = await resolveOrgSession();
   if (state.kind !== "ok") {
     throw new Error("Not authorised for the organiser console.");
   }
   const capability = options?.capability;
-  if (capability && !orgCan(state.actor, capability)) {
-    throw new Error(orgCapabilityRefusal(state.actor, capability));
+  if (capability) {
+    // A department-scoped capability (`delete`) is ALWAYS resolved through
+    // `orgCanIn`, whether or not the caller named a department. Omitting one
+    // then means "this thing belongs to no department", which only an org-wide
+    // role may touch — the fail-closed direction, and the one that stops a
+    // "Suppliers lead" deleting a theme camp because the guard forgot to ask.
+    // Everything else resolves "anywhere": a department member's ordinary work
+    // is not confined by a scope no console entity declares yet.
+    const permitted = isDepartmentScopedCapability(capability)
+      ? orgCanIn(state.actor, capability, options?.departmentId ?? null)
+      : orgCan(state.actor, capability);
+    if (!permitted) {
+      throw new Error(orgCapabilityRefusal(state.actor, capability));
+    }
   }
   return state;
 }
 
 /**
- * Whether a role may elevate/demote org staff. Thin wrapper over the matrix,
- * kept because callers hold a bare `MembershipRole` rather than an actor.
+ * For the surfaces that manage DEPARTMENTS, ROLES and ASSIGNMENTS: require the
+ * System manager, resolved from `memberships.role = 'god'` and from nothing
+ * else.
+ *
+ * This is a rail, not a convenience. Editable permissions are only safe because
+ * the ability to edit them cannot itself be granted away — so this guard asks
+ * the anchor directly rather than a capability a role might one day carry.
+ */
+export async function requireSystemManager(): Promise<OrgSession> {
+  const state = await resolveOrgSession();
+  if (state.kind !== "ok") {
+    throw new Error("Not authorised for the organiser console.");
+  }
+  if (!isSystemManager(state.actor)) {
+    throw new Error(
+      `Only a ${ORG_RANK_LABELS.god.toLowerCase()} can manage departments, roles or who holds them.`,
+    );
+  }
+  return state;
+}
+
+/**
+ * Whether a membership role may manage accounts. Thin wrapper over the resolver,
+ * kept because callers hold a bare `MembershipRole` rather than an actor —
+ * `manage_accounts` is System-manager-only and not grantable, so the rank alone
+ * is a complete answer here (it is the only capability of which that is true).
  */
 export function canManageAccounts(role: MembershipRole): boolean {
   const rank = orgRankFromRole(role);
-  return rank
-    ? orgCan(
-        { rank, department: null, isDepartmentLead: false },
-        "manage_accounts",
-      )
-    : false;
+  return rank ? orgCan({ rank, roles: [] }, "manage_accounts") : false;
 }

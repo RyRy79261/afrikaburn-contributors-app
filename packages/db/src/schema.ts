@@ -18,6 +18,7 @@ import type {
   Questionnaire,
   QuestionnaireResponses,
   AudienceSpec,
+  OrgPermissions,
   ProjectPermissions,
   CampHistoryEntry,
   SupplierOnboardingSteps,
@@ -90,6 +91,11 @@ export const projectRoleKindEnum = pgEnum("project_role_kind", [
   "custom",
   "officer",
 ]);
+
+// Org roles v1 (migration 0018). `system` rows are seeded and undeletable with
+// EDITABLE rights; `custom` rows a System manager creates and deletes freely.
+// The same permanence idea as `project_role_kind` above — one mental model.
+export const orgRoleKindEnum = pgEnum("org_role_kind", ["system", "custom"]);
 
 export const roleColorEnum = pgEnum("role_color", [
   "teal",
@@ -702,20 +708,13 @@ export const memberships = pgTable(
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
     role: membershipRoleEnum("role").notNull().default("member"),
-    // --- Org departments (migration 0017) --------------------------------
-    // Deliberately MINIMAL. AfrikaBurn has departments (suppliers, theme camps,
-    // …) with a team lead each, but nobody can yet say how many there are or
-    // what protocols they carry (Ryan, 27 Jul 2026: "we dont know how many
-    // departements there are, or what protocols they have so lets not over
-    // complicate it"). So this is a free-text LABEL and a lead flag — no
-    // `departments` table, no catalog, no enum, no CRUD screen — and the
-    // capability matrix (@quagga/core `org-permissions`) grants them NOTHING
-    // today. They record who answers for what; wire privileges to them when the
-    // org tells us what a department actually decides.
-    //
-    // Only meaningful on the ORG group membership; null everywhere else.
-    department: text("department"),
-    departmentLead: boolean("department_lead").notNull().default(false),
+    // --- Org departments: NOT HERE ANY MORE (migration 0018) --------------
+    // 0017 carried a free-text `department` label + a `department_lead` flag on
+    // this row. 0018 DROPS both: departments are now rows in `org_departments`
+    // and a person's department comes from the ORG ROLES they hold, each of
+    // which may be department-scoped. Two department vocabularies — a label here
+    // and a table there — would be exactly the parallel source of truth this
+    // change exists to remove, and the label granted nothing anyway.
     // Camp-scoped member reference code, e.g. `MAH-M017` — a stable identifier a
     // camp quotes for its OWN off-platform EFT reconciliation (camper → camp's
     // bank account). NOT an AfrikaBurn payment; the platform never moves money.
@@ -733,6 +732,110 @@ export const memberships = pgTable(
       m.groupId,
       m.refCode,
     ),
+  }),
+);
+
+// --- Org departments -----------------------------------------------------
+// DATA, NOT CODE (migration 0018). AfrikaBurn's departments — suppliers, theme
+// camps, safety, … — are rows a System manager creates, because the org has said
+// three times that it cannot yet say how many there are or what protocols they
+// carry. Hardcoding a list would be us inventing the org's shape for it; a table
+// lets the org tell us, and lets a department-scoped role mean something real.
+//
+// Creating one SEEDS its LEAD and MEMBER roles (@quagga/core `org-roles`); the
+// FK cascade below is why those two live and die with the department.
+
+export const orgDepartments = pgTable(
+  "org_departments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Stable slug, derived from the name at creation and never rewritten — it
+     * is what the seeded role keys are built from (`suppliers.lead`). */
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    /** Case/space/punct-insensitive uniqueness key (@quagga/core normalizer). */
+    nameNormalized: text("name_normalized").notNull(),
+    /** One honest line about what this department answers for. Optional. */
+    description: text("description"),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    keyUniq: uniqueIndex("org_departments_key_idx").on(d.key),
+    nameUniq: uniqueIndex("org_departments_name_normalized_idx").on(
+      d.nameNormalized,
+    ),
+  }),
+);
+
+// --- Org roles -----------------------------------------------------------
+// The org's answer to `project_roles`, and deliberately the same shape: key,
+// label, KIND (permanence), a `permissions` JSONB object, a curated colour.
+//
+//   kind = 'system' → seeded, UNDELETABLE, rights EDITABLE.
+//   kind = 'custom' → a System manager's own; fully editable and deletable.
+//
+// `department_id` is what makes "org staff may only delete in their own
+// department" expressible without a hardcoded domain→department map: a role
+// scoped to a department grants its capabilities ONLY for that department's
+// things (`orgCanIn`), while a null department is org-wide.
+//
+// What is NOT here: `god`. The System manager is anchored on
+// `memberships.role = 'god'` and resolves every capability whatever these rows
+// say, so no permission edit can define them out of existence.
+
+export const orgRoles = pgTable(
+  "org_roles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Stable anchor (`org_staff`, `engineer`, `suppliers.lead`, `custom.<slug>`).
+     * Renaming a role changes its label, never this. */
+    key: text("key").notNull(),
+    departmentId: uuid("department_id").references(() => orgDepartments.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    nameNormalized: text("name_normalized").notNull(),
+    description: text("description"),
+    kind: orgRoleKindEnum("kind").notNull().default("custom"),
+    color: roleColorEnum("color").notNull().default("neutral"),
+    permissions: jsonb("permissions")
+      .$type<OrgPermissions>()
+      .notNull()
+      .default({}),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    keyUniq: uniqueIndex("org_roles_key_idx").on(r.key),
+    nameUniq: uniqueIndex("org_roles_name_normalized_idx").on(r.nameNormalized),
+    departmentIdx: index("org_roles_department_idx").on(r.departmentId),
+  }),
+);
+
+// --- Org role assignments ------------------------------------------------
+// A person holds ZERO OR MORE org roles; `orgCan` resolves the UNION. Composite
+// PK makes each assignment unique, exactly like `member_role_assignments`.
+// Keyed on the MEMBERSHIP, so removing someone's org access takes their roles
+// with it (cascade) rather than leaving orphaned grants to be re-attached by a
+// later membership row.
+
+export const orgRoleAssignments = pgTable(
+  "org_role_assignments",
+  {
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "cascade" }),
+    orgRoleId: uuid("org_role_id")
+      .notNull()
+      .references(() => orgRoles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.membershipId, a.orgRoleId] }),
+    roleIdx: index("org_role_assignments_role_idx").on(a.orgRoleId),
   }),
 );
 

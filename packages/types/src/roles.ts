@@ -9,13 +9,22 @@ import { z } from "zod";
  * - `god`       — the highest org rank, PRESENTED EVERYWHERE AS "System
  *                 manager" (see below); ONLY valid on the org group.
  *                 Bootstrapped from the `GOD_EMAILS` env list on first login.
- * - `org_staff` — AfrikaBurn reviewers/coordinators (org group only).
- * - `engineer`  — IT/engineering rank (org group only): reads everywhere, sees
- *                 NO personal information, and cannot delete anything. The
- *                 capability matrix lives in @quagga/core `org-permissions`.
+ * - `org_staff` — an AfrikaBurn org account (org group only).
+ * - `engineer`  — an AfrikaBurn org account created through the IT path (org
+ *                 group only).
  * - `lead`      — a project's leader; can manage invites + registration.
  * - `admin`     — a project co-organiser below the lead.
  * - `member`    — a plain member of a group.
+ *
+ * **ON THE ORG GROUP, THIS ENUM IS THE DOOR — NOT THE RIGHTS.** Since org roles
+ * v1 (migration 0018) `org_staff` and `engineer` mean exactly one thing: *this
+ * account may load the console*. WHAT they may then read and do comes from the
+ * ORG ROLES they hold (`org_roles` + `org_role_assignments`), which a System
+ * manager creates, edits and assigns — see @quagga/core `org-permissions`
+ * (`orgCan`) and `org-roles`. `god` is the one exception and the anti-lockout
+ * anchor: a god IS the System manager and resolves every capability whatever any
+ * role row says, so no edit to a table can define the System manager out of
+ * existence.
  *
  * **`god` IS "System manager" — do not "fix" this.** The rank Ryan calls the
  * System manager is STORED as `god` on purpose. Renaming the enum value would
@@ -57,6 +66,83 @@ export const ORG_APP_ROLES: readonly MembershipRole[] = [
 
 /** Roles that may administer a project group (invites, registration, members). */
 export const PROJECT_ADMIN_ROLES: readonly MembershipRole[] = ["lead", "admin"];
+
+// --- Org roles v1 (migration 0018) ----------------------------------------
+// The org side of the SAME idea the camp side already solved in Roles v2 below:
+// a role row carries a key, a label, a KIND that encodes permanence, and a
+// `permissions` JSONB object. One vocabulary, two scopes — read `ProjectRoleKind`
+// / `UNDELETABLE_ROLE_KINDS` further down and the shapes will look familiar,
+// because they are deliberately the same shapes.
+//
+// Ryan, 27 Jul 2026: "system admins can simply have a roles management section
+// and create n sign these things instead of needing to hardcode them? With some
+// set permanent ones, like team leads and team members for each department
+// domain, these cant be removed but they can have the rights edited."
+
+/**
+ * An org role's kind — permanence, exactly as `ProjectRoleKind` does it:
+ *
+ * - `system` — SEEDED and UNDELETABLE, rights EDITABLE. Ryan's "set permanent
+ *   ones": the two migrated ranks (Org staff, Engineer) and the LEAD + MEMBER
+ *   pair every department gets when a System manager creates it. A department's
+ *   two roles live and die with the department (FK cascade).
+ * - `custom` — a System manager creates, renames, re-scopes, re-rights and
+ *   deletes these freely.
+ *
+ * Only `custom` may be deleted. BOTH may be renamed and BOTH may have their
+ * permissions edited — "cannot be removed" is not "cannot be changed", and the
+ * editable rights are the whole point of the change.
+ */
+export const OrgRoleKind = z.enum(["system", "custom"]);
+export type OrgRoleKind = z.infer<typeof OrgRoleKind>;
+
+/** Org role kinds that may NOT be deleted. Only `custom` deletes. */
+export const UNDELETABLE_ORG_ROLE_KINDS: readonly OrgRoleKind[] = ["system"];
+
+/** Org role kinds that may be renamed — both; the `key` is the stable anchor. */
+export const RENAMEABLE_ORG_ROLE_KINDS: readonly OrgRoleKind[] = [
+  "system",
+  "custom",
+];
+
+/**
+ * The console capability vocabulary — the STORAGE + VALIDATION authority for the
+ * keys inside `org_roles.permissions`. @quagga/core `org-permissions` re-exports
+ * this tuple as `ORG_CAPABILITIES` and is where each key's meaning is written
+ * down; this package holds it only because `@quagga/db`'s schema needs the type
+ * and core must never be imported by the schema.
+ *
+ * APPEND-ONLY in spirit: a stored permissions object may name any of these keys,
+ * so removing one strands data. Add to the end.
+ */
+export const OrgCapabilityKey = z.enum([
+  "read",
+  "read_personal_information",
+  "write",
+  "delete",
+  "manage_camp_categories",
+  "manage_accounts",
+  "read_system",
+]);
+export type OrgCapabilityKey = z.infer<typeof OrgCapabilityKey>;
+
+export const ORG_CAPABILITY_KEYS = OrgCapabilityKey.options;
+
+/**
+ * The permissions OBJECT stored on `org_roles.permissions` (jsonb) — the same
+ * present-and-true shape as `ProjectPermissions`. An absent key is NOT a grant:
+ * resolution is fail-closed, so `{}` is a role that can do nothing.
+ */
+export const OrgPermissions = z.object({
+  read: z.boolean().optional(),
+  read_personal_information: z.boolean().optional(),
+  write: z.boolean().optional(),
+  delete: z.boolean().optional(),
+  manage_camp_categories: z.boolean().optional(),
+  manage_accounts: z.boolean().optional(),
+  read_system: z.boolean().optional(),
+});
+export type OrgPermissions = z.infer<typeof OrgPermissions>;
 
 // --- Roles v2: kinds, colors, permissions (questionnaire-spec §"Roles v2") ---
 // Custom project roles carry a KIND (permanence + assignment semantics), a

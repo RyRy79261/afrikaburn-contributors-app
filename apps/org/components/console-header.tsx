@@ -20,7 +20,9 @@ import { HeaderNotificationBell } from "@/components/header-notification-bell";
  * and pages where a rank loses only the CONTROLS (categories, accounts) stay in
  * the nav because they still have something to say to that rank.
  */
-type ConsoleNavItem = NavItem & { capability?: OrgCapability };
+type ConsoleNavItem = NavItem & {
+  capability?: OrgCapability;
+};
 
 const NAV_ITEMS: ConsoleNavItem[] = [
   { href: "/", label: "Overview" },
@@ -31,6 +33,10 @@ const NAV_ITEMS: ConsoleNavItem[] = [
   { href: "/suppliers", label: "Suppliers" },
   { href: "/categories", label: "Categories" },
   { href: "/accounts", label: "Accounts" },
+  // Departments, roles and what each may do live INSIDE the System panel
+  // (`/system/roles`) rather than on this bar: editing the permission model is
+  // the same job as the auth configuration and the org-access roster beside it,
+  // and `/system`'s own entry already carries the whole panel here.
   // The audit trail is not a nice-to-have here: it is the ONLY compensating
   // control over medical-note enumeration. The read path deliberately fails
   // open (an emergency read must never wait on a log write), so detection
@@ -82,19 +88,21 @@ export async function ConsoleHeader({ session }: { session: OrgSession }) {
               <p className="max-w-[16rem] truncate text-sm text-foreground">
                 {session.user.primaryEmail ?? "Signed in"}
               </p>
-              {/* The rank badge reads from the shared label map, so what a
-                  staff member is CALLED here always matches what the matrix
-                  actually grants them (@quagga/core `org-permissions`). */}
+              {/* The badge names the DOOR this account came in through. What it
+                  may actually do is the line under it: the org roles it holds,
+                  which is what `orgCan` resolves. A System manager holds none
+                  and needs none — the anchor covers everything. */}
               <Badge
                 variant={session.role === "god" ? "default" : "secondary"}
                 className="mt-0.5"
               >
                 {ORG_RANK_LABELS[session.role]}
               </Badge>
-              {session.actor.department && (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {session.actor.department}
-                  {session.actor.isDepartmentLead ? " · team lead" : ""}
+              {session.role !== "god" && (
+                <p className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground">
+                  {session.actor.roles.length === 0
+                    ? "No org roles yet"
+                    : session.actor.roles.map((r) => r.name).join(" · ")}
                 </p>
               )}
             </div>

@@ -187,7 +187,7 @@ records; it changes no code.
   cluster (M7/M9/M10/M11/M16 + minor m37), one root cause.
 
 ### M8 · Privilege change has no confirm step
-- **Frame:** `CJs0P + y1idvL` (Accounts) — node `mfJhv`: a Confirm Overlay titled
+- **Frame:** `uj1wp + Ctdgd` (Accounts) — node `UPol9`: a Confirm Overlay titled
   "Elevate to org staff" with a "Who" subtitle, body copy, and Cancel / Confirm.
 - **Route:** `apps/org/app/(console)/accounts/page.tsx` →
   `apps/org/components/account-actions.tsx:52-72`
@@ -199,7 +199,7 @@ records; it changes no code.
   prioritising even though authz still enforces server-side.
 
 ### M9 · Accounts: desktop table forced onto mobile
-- **Frame:** `CJs0P + y1idvL` (Accounts) — mobile frame `y1idvL` disables the header row
+- **Frame:** `uj1wp + Ctdgd` (Accounts) — mobile frame `Ctdgd` disables the header row
   and stacks each account into a card (Email / Name / Role / Action stacked).
 - **Route:** `apps/org/app/(console)/accounts/page.tsx:78-127`
 - **Code:** same 4-column shadcn `<Table>` on all viewports; with an action column it only
@@ -301,7 +301,7 @@ Grouped by kind. Compact — the audit JSON carries the full prose for each.
 | m29 | `R6l2G` Bulletin view | `bulletins/[id]/page.tsx:112` | Kicker rendered `text-accent`; frame is `$primary`/teal. |
 | m30 | `T7siQ9` Org gate | `gate-screen.tsx:36-58` | Heading/body hierarchy inverted vs frame (all copy present). |
 | m32 | `PRDdG` Review | `decision-panel.tsx:105-146` | Reject reason captured in a modal; frame is an always-visible inline cluster. Different placeholder text. |
-| m33 | `CJs0P` Accounts | `account-actions.tsx:59-66` | Remove action is a ghost Button; frame is a text Link with icon. |
+| m33 | `uj1wp` Accounts | `account-actions.tsx:59-66` | Remove action is a ghost Button; frame is a text Link with icon. |
 | m38 | `JY7dF` Org Questionnaires | `questionnaires/page.tsx:287-289` | Shows "{completed}/{sent}" only; frame also shows a percent number. |
 | m43 | `Mjiqz` Results v2 | `[activationId]/page.tsx:113-116` | Emphasised figure is the percent; frame emphasises the raw count. |
 | m44 | `U8CqE` Bulletin Compose | `packages/types/src/audience.ts:58` | Audience labels differ ("Theme camp leads" vs "All camp leads", etc.). Same intent. |

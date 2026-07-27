@@ -31,6 +31,14 @@ const CONSOLE_SURFACES: Array<{ path: string; label: string }> = [
   { path: "/suppliers", label: "Suppliers" },
   { path: "/categories", label: "Categories" },
   { path: "/accounts", label: "Accounts" },
+  { path: "/audit", label: "Audit" },
+  // The IT panel, and the roles surface INSIDE it (org roles v1). `/system` is
+  // `read_system` (engineer + System manager); `/system/roles` renders its
+  // controls only for the anchor. Both are listed with the "System" nav label
+  // because the nav marks a parent entry active for its children — so this also
+  // proves the sub-route did not fall out of the bar.
+  { path: "/system", label: "System" },
+  { path: "/system/roles", label: "System" },
 ];
 
 test.describe("god bootstrap + console reach", () => {
@@ -49,8 +57,8 @@ test.describe("god bootstrap + console reach", () => {
     expect(email).toContain("@");
     await expectConsoleReached(orgPage);
 
-    // …and to GOD specifically (not merely org_staff): the accounts panel offers
-    // the god-only "elevate trusted people to org staff" affordance. This is
+    // …and to GOD specifically (not merely org_staff): the accounts panel shows
+    // the System-manager-only pointer at the Roles screen. This is
     // viewport-robust, unlike the header Owner badge (hidden below `sm`).
     await expectGodPrivileges(orgPage);
   });

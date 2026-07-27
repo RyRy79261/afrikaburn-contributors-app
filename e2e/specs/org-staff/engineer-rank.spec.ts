@@ -94,7 +94,7 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     // Categories: readable, with the reason stated, and no way to change them.
     await engineer.org.goto("/categories");
     await expect(
-      engineer.org.getByText(/managed by a system manager/i),
+      engineer.org.getByText(/none of your org roles manage camp categories/i),
     ).toBeVisible();
     await expect(
       engineer.org.getByRole("button", { name: /^add category$/i }),
@@ -106,7 +106,7 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     // Accounts: no access management at all (that is `manage_accounts`).
     await engineer.org.goto("/accounts?q=");
     await expect(
-      engineer.org.getByRole("button", { name: /elevate to org staff/i }),
+      engineer.org.getByRole("button", { name: /give org staff access/i }),
     ).toHaveCount(0);
     await expect(
       engineer.org.getByRole("button", { name: /remove staff access/i }),
@@ -127,7 +127,7 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
       engineer.org.getByRole("heading", { name: /audit log/i }),
     ).toBeVisible();
     await expect(
-      engineer.org.getByText(/don't see personal information/i),
+      engineer.org.getByText(/none of your org roles see personal information/i),
     ).toBeVisible();
   });
 });

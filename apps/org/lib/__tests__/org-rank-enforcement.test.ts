@@ -351,11 +351,10 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
       action: "setOrgStaffRole",
       capability: "manage_accounts",
     },
-    {
-      file: "lib/actions/accounts.ts",
-      action: "setOrgDepartment",
-      capability: "manage_accounts",
-    },
+    // (Departments moved out of this file entirely in org roles v1: they are
+    // rows a System manager creates, and every action that touches them requires
+    // the System manager ANCHOR rather than a capability — proved in
+    // `org-role-lockout.test.ts`, which is the stronger guarantee.)
     // Ordinary console work — every rank, but still declared.
     {
       file: "lib/actions/registrations.ts",
@@ -396,6 +395,7 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
       "lib/actions/categories.ts",
       "lib/actions/registrations.ts",
       "lib/actions/notifications.ts",
+      "lib/actions/org-roles.ts",
       "lib/actions/supplier-documents.ts",
       "lib/actions/suppliers.ts",
       "lib/questionnaires/actions.ts",

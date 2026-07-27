@@ -41,6 +41,17 @@ export NEXT_PUBLIC_PARTICIPANT_APP_URL="http://localhost:3000"
 export AUTH_RATE_LIMIT_WINDOW_SECONDS="${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}"
 export AUTH_RATE_LIMIT_MAX="${AUTH_RATE_LIMIT_MAX:-10000}"
 
+# GOD CREDENTIALS, or the god and org-staff suites SILENTLY SKIP and the script
+# still exits 0 — a green run that proves nothing, on exactly the two personas
+# every permission change touches. Measured: without these,
+# `E2E_RESET_DB=1 ./scripts/e2e-local.sh specs/god specs/org-staff` reports
+# "37 skipped, 2 passed" and succeeds. A gate that cannot fail is not a gate.
+#
+# GOD_EMAILS above must contain this address: the bootstrap only elevates an
+# account whose email is on that list AND is verified.
+export E2E_GOD_EMAIL="${E2E_GOD_EMAIL:-e2e-god@quagga.local}"
+export E2E_GOD_PASSWORD="${E2E_GOD_PASSWORD:-correct-horse-battery-staple-e2e}"
+
 export E2E_MAIL_MODE="${E2E_MAIL_MODE:-off}"
 export E2E_REQUIRE_EMAIL_VERIFICATION="${E2E_REQUIRE_EMAIL_VERIFICATION:-false}"
 

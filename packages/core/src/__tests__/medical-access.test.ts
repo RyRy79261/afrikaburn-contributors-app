@@ -56,12 +56,32 @@ describe("canViewMedicalNotes — who is in the consented audience", () => {
     expect(medicalAccessBasis(c)).toBe(null);
   });
 
-  it("lets org staff (god / org_staff) see them for anyone", () => {
-    for (const role of ["god", "org_staff"] as const) {
-      const c = ctx({ actorOrgRole: role });
-      expect(canViewMedicalNotes(c)).toBe(true);
-      expect(medicalAccessBasis(c)).toBe("org_staff");
-    }
+  it("lets the org's safety tier see them for anyone", () => {
+    // Since org roles v1 the org branch is the console's RESOLVED
+    // `read_personal_information` (plus the System manager anchor), not a rank
+    // rule duplicated here. An org account whose roles grant it is in; the same
+    // account with no roles is not (see the next test).
+    const manager = ctx({ actorOrgRole: "god" });
+    expect(canViewMedicalNotes(manager)).toBe(true);
+    expect(medicalAccessBasis(manager)).toBe("org_staff");
+
+    const staff = ctx({
+      actorOrgRole: "org_staff",
+      actorOrgPersonalInformation: true,
+    });
+    expect(canViewMedicalNotes(staff)).toBe(true);
+    expect(medicalAccessBasis(staff)).toBe("org_staff");
+  });
+
+  it("REFUSES an org account whose roles do not grant personal information", () => {
+    // The console DOOR is not the safety tier. An `org_staff` membership with no
+    // roles — or with roles that omit `read_personal_information` — sees nothing.
+    const c = ctx({
+      actorOrgRole: "org_staff",
+      actorOrgPersonalInformation: false,
+    });
+    expect(canViewMedicalNotes(c)).toBe(false);
+    expect(medicalAccessBasis(c)).toBe(null);
   });
 
   it("REFUSES a plain member (no org role, leads no camp the subject is in)", () => {

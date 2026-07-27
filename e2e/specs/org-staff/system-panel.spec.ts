@@ -80,6 +80,43 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     await expect(
       engineer.org.getByRole("link", { name: /open the audit log/i }),
     ).toBeVisible();
+
+    // The permission model lives in this panel too, and an engineer may READ
+    // it: it is this deployment's configuration, the same class of fact as the
+    // auth settings beside it.
+    await expect(
+      engineer.org.getByRole("link", { name: /read the roles model/i }),
+    ).toBeVisible();
+  });
+
+  test("an engineer reads the roles model and is offered nothing to change", async ({
+    makeAppPage,
+  }) => {
+    skipUnlessGod();
+    const engineer = await provisionEngineer(makeAppPage);
+
+    await engineer.org.goto("/system/roles");
+    await expect(
+      engineer.org.getByRole("heading", { name: /roles and departments/i }),
+    ).toBeVisible();
+    // The seeded org-wide roles are readable…
+    await expect(engineer.org.getByText("Org staff").first()).toBeVisible();
+    // …and every control that would CHANGE the model is absent, because those
+    // ask for the `god` anchor, which no role can carry.
+    for (const control of [
+      /add department/i,
+      /new role/i,
+      /edit rights/i, // named "Edit rights for <role>" when it renders at all
+      /^rename/i,
+    ]) {
+      await expect(
+        engineer.org.getByRole("button", { name: control }),
+      ).toHaveCount(0);
+    }
+    // And they are told why, rather than left to notice the absence.
+    await expect(
+      engineer.org.getByText(/changing it belongs to a system manager/i),
+    ).toBeVisible();
   });
 
   test("org staff are refused it, and told which rank holds it", async ({
@@ -101,7 +138,12 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     await expect(
       staff.org.getByRole("heading", { name: /system management/i }),
     ).toBeVisible();
-    await expect(staff.org.getByText(/system panel belongs to/i)).toBeVisible();
+    // The refusal is the ONE the resolver produces (@quagga/core
+    // `orgCapabilityRefusal`), so the page cannot drift from what the guard
+    // would say.
+    await expect(
+      staff.org.getByText(/none of your org roles open the system panel/i),
+    ).toBeVisible();
 
     // Refused, not 404'd, and the reason names both the rank that holds it and
     // the rank that does not.
@@ -110,6 +152,17 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     // None of the panel's content leaked past the refusal.
     await expect(staff.org.getByText(/system health/i)).toHaveCount(0);
     await expect(staff.org.getByText(/security controls/i)).toHaveCount(0);
+
+    // The roles surface lives inside this panel and is refused on the same
+    // capability — hiding the link is never the boundary.
+    await staff.org.goto("/system/roles");
+    await expect(
+      staff.org.getByRole("heading", { name: /roles and departments/i }),
+    ).toBeVisible();
+    await expect(staff.org.getByText(/not your screen/i)).toBeVisible();
+    await expect(
+      staff.org.getByRole("button", { name: /edit rights/i }),
+    ).toHaveCount(0);
   });
 
   test("the engineer's org-access roster carries no email addresses", async ({
@@ -136,7 +189,7 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     // And no access controls: `read_system` is a READ. Holding the page must
     // never imply holding `manage_accounts`.
     await expect(
-      engineer.org.getByRole("button", { name: /elevate to org staff/i }),
+      engineer.org.getByRole("button", { name: /give org staff access/i }),
     ).toHaveCount(0);
     await expect(
       engineer.org.getByRole("button", { name: /remove staff access/i }),
