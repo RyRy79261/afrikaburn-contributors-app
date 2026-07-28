@@ -49,9 +49,16 @@ jobs:
   # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
   # CI runs and the thing a developer runs cannot drift apart.
   e2e:
-    name: e2e · persona suite
+    name: e2e · persona suite (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      # Don't cancel the other shards when one fails — a partial picture of what
+      # broke is far less useful than the whole one, and this suite is the only
+      # thing that exercises the product end to end.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -80,6 +87,21 @@ jobs:
         env:
           E2E_RESET_DB: "1"
           E2E_WORKERS: "4"
+          # 4 shards x 4 workers = 16 concurrent journeys, each shard on its own
+          # runner with its own database stack, so they cannot contend.
+          E2E_SHARD: ${{ matrix.shard }}/4
+          # Production build, not `next dev`. Next compiles a route on FIRST
+          # REQUEST, and there are 65 pages across the three apps — so a dev-mode
+          # run pays a multi-second compile the first time any spec visits any
+          # page, several workers block on the same cold compile, and a compile
+          # that overruns the 20s navigation cap looks exactly like a product
+          # bug. This is most of why the first run crawled.
+          E2E_SERVE: build
+          # ONE retry, not two. A genuinely broken test costs 90s x attempts, and
+          # at 2 retries the eight known failures alone burn ~36 minutes of
+          # runner time re-proving what we already know. One retry still absorbs
+          # a cold-start flake.
+          E2E_RETRIES: "1"
           # DESKTOP GATES. `mobile-360` runs in the separate informational job
           # below rather than here, deliberately: it has never executed once, so
           # every spec in it is of unknown status. Making an unknown-status
@@ -95,7 +117,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # Per shard, or four uploads collide on one name.
+          name: playwright-report-shard-${{ matrix.shard }}
           path: |
             e2e/playwright-report
             e2e/test-results
@@ -143,6 +166,10 @@ jobs:
           E2E_RESET_DB: "1"
           E2E_WORKERS: "4"
           E2E_PROJECTS: mobile-360
+          E2E_SERVE: build
+          # No retries here: this job's whole purpose is the list of what breaks
+          # at 360px, and re-running a layout failure twice tells us nothing.
+          E2E_RETRIES: "0"
         run: ./scripts/e2e-local.sh
 
       - name: Upload the report

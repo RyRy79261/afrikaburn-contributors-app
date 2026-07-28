@@ -28,9 +28,15 @@ export default defineConfig({
   // A stray `test.only` must fail CI, never silently narrow the run.
   forbidOnly: IS_CI,
   // Retries ONLY in CI (flaky third-party mail/preview cold starts), never local.
-  retries: IS_CI ? 2 : 0,
+  //
+  // ONE by default rather than two: a genuinely broken test costs
+  // `timeout x attempts`, so at two retries a handful of real failures burns
+  // most of a runner's budget re-proving what the first attempt already showed.
+  // One still absorbs a cold-start flake. Raise with E2E_RETRIES when chasing
+  // something intermittent.
+  retries: IS_CI ? Number(process.env.E2E_RETRIES ?? 1) : 0,
   // Bounded workers in CI to protect the Neon branch's compute; unbounded locally.
-  workers: IS_CI ? 4 : undefined,
+  workers: IS_CI ? Number(process.env.E2E_WORKERS ?? 4) : undefined,
   timeout: TIMEOUTS.test,
   expect: { timeout: TIMEOUTS.expect },
   reporter: IS_CI

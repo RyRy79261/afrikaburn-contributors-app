@@ -83,16 +83,58 @@ echo "==> god account"
 # @quagga/auth and @quagga/db, which the bootstrap needs.
 pnpm --filter @quagga/auth exec tsx scripts/e2e-god-bootstrap.mts
 
-echo "==> apps (web:3000 org:3001 suppliers:3002)"
-# ALWAYS a fresh dev server. A long-lived one keeps a stale module graph after a
-# file is deleted and then serves 500s while `turbo build` still passes, which
-# once produced 104 phantom E2E failures that looked like product bugs.
+# HOW THE APPS ARE SERVED — and why CI does it differently.
+#
+#   dev   (default locally) — `next dev`, so a code change is picked up without
+#         a rebuild. The right choice while you are iterating on a spec.
+#   build (default in CI)   — `next build` once, then `next start`.
+#
+# THE COST OF `dev` IS NOT SMALL. Next compiles each route ON FIRST REQUEST, and
+# there are 65 pages across the three apps. Every spec that visits a page nobody
+# has visited yet pays a multi-second compile, several parallel workers can block
+# on the SAME cold compile at once, and a compile that overruns the 20s
+# navigation cap surfaces as a timeout that looks exactly like a product bug.
+# That is most of why the first CI run crawled.
+#
+# `build` also tests what actually ships: the production bundle, with the same
+# route handlers Vercel serves.
+E2E_SERVE="${E2E_SERVE:-$([ "${CI:-}" = "true" ] && echo build || echo dev)}"
+echo "==> apps (web:3000 org:3001 suppliers:3002) — serve mode: $E2E_SERVE"
+
+# ALWAYS fresh. A long-lived dev server keeps a stale module graph after a file
+# is deleted and then serves 500s while `turbo build` still passes, which once
+# produced 104 phantom E2E failures that looked like product bugs.
 pkill -f "next dev" >/dev/null 2>&1 || true
+pkill -f "next start" >/dev/null 2>&1 || true
 sleep 2
-rm -rf apps/*/.next/cache
-pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
-DEV_PID=$!
-trap 'kill $DEV_PID 2>/dev/null || true; pkill -f "next dev" >/dev/null 2>&1 || true' EXIT
+
+if [ "$E2E_SERVE" = "build" ]; then
+  # Each app's `build` also runs `db:migrate:deploy` first. That is three extra
+  # migrate passes, but they are idempotent and serialised by the advisory lock,
+  # and matching what Vercel actually runs is worth more than shaving them.
+  echo "==> building (this replaces 65 on-demand route compiles)"
+  # ONE AT A TIME (`--concurrency=1`). Three simultaneous `next build`s each
+  # spawn a worker per core and hold a multi-GB heap; together they will thrash
+  # or OOM a 4-core CI runner, and they took down a 32GB dev machine outright
+  # while this script was being written. Serialising costs a couple of minutes
+  # and removes a whole class of "CI died for no visible reason".
+  pnpm exec turbo run build --concurrency=1 \
+    --filter=@quagga/web --filter=@quagga/org --filter=@quagga/suppliers \
+    > "$LOG_DIR/build.log" 2>&1 || {
+      echo "!! build failed:"; tail -30 "$LOG_DIR/build.log"; exit 1; }
+  # `start` is not a turbo task — run each app's own script directly. One log,
+  # so a failure in any of the three is visible in the same place as before.
+  ( pnpm --filter @quagga/web start & \
+    pnpm --filter @quagga/org start & \
+    pnpm --filter @quagga/suppliers start & \
+    wait ) > "$LOG_DIR/dev.log" 2>&1 &
+  DEV_PID=$!
+else
+  rm -rf apps/*/.next/cache
+  pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
+  DEV_PID=$!
+fi
+trap 'kill $DEV_PID 2>/dev/null || true; pkill -f "next dev" >/dev/null 2>&1 || true; pkill -f "next start" >/dev/null 2>&1 || true' EXIT
 
 for port in 3000 3001 3002; do
   echo -n "    waiting for :$port"
@@ -125,5 +167,13 @@ for project in ${E2E_PROJECTS:-desktop-chromium mobile-360}; do
   PROJECT_ARGS+=("--project=$project")
 done
 
-exec pnpm exec playwright test "${PROJECT_ARGS[@]}" \
+# SHARDING. CI splits the suite across several machines (E2E_SHARD=2/4), each
+# with its own database stack, so there is no contention between them — the run
+# is as long as its slowest shard rather than the whole suite.
+SHARD_ARGS=()
+if [ -n "${E2E_SHARD:-}" ]; then
+  SHARD_ARGS+=("--shard=$E2E_SHARD")
+fi
+
+exec pnpm exec playwright test "${PROJECT_ARGS[@]}" "${SHARD_ARGS[@]}" \
   --workers="${E2E_WORKERS:-2}" "$@"
