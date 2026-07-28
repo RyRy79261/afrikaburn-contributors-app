@@ -233,7 +233,7 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
     // Reading the model is the system panel's own capability; CHANGING it is
     // the anchor, and `canManage` is the only thing the client component is
     // told. A capability here would be grantable, which is the whole hazard.
-    expect(page).toContain('orgCan(session.actor, "read_system")');
+    expect(page).toContain('runsDeployment(session.actor)');
     expect(page).toContain("const canManage = isSystemManager(session.actor)");
     expect(page).toContain("canManage={canManage}");
     // A refusal, not a notFound(): hiding teaches nobody the rule. (The words
@@ -259,7 +259,10 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
     expect(q.indexOf("getOrgRoleImpacts")).toBeLessThan(guard);
   });
 
-  it("`manage_accounts` is refused to every role, however the row was written", () => {
+  it("a retired key in a hand-written row grants nothing", () => {
+    // `manage_accounts` used to be a capability kept unreachable by a deny-set.
+    // It is now the System manager RANK and not in the vocabulary at all, so a
+    // row still naming it is simply an unknown key — ignored, not honoured.
     const crafted: OrgActor = {
       rank: "org_staff",
       domains: OWNERSHIP,
@@ -270,15 +273,18 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
           name: "Sneaky",
           kind: "custom",
           departmentId: null,
-          permissions: { manage_accounts: true, read: true },
+          permissions: {
+            manage_accounts: true,
+            read: true,
+          } as unknown as OrgActor["roles"][number]["permissions"],
         },
       ],
     };
-    expect(orgCan(crafted, "manage_accounts")).toBe(false);
-    expect(orgCanIn(crafted, "manage_accounts", null)).toBe(false);
-    // The rest of the role still works — this is a targeted refusal, not a
+    expect(isSystemManager(crafted)).toBe(false);
+    // The rest of the role still works — an unknown key is ignored, not a
     // poison pill that voids the whole row.
     expect(orgCan(crafted, "read")).toBe(true);
+    expect(orgCan(crafted, "delete")).toBe(false);
   });
 
   it("a permanent role cannot be deleted, and the guard is server-side", () => {
@@ -343,14 +349,17 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
 
   it("LOCKOUT SCENARIO: a scoped delete never leaks out of its department", () => {
     // The rail that makes "org staff may only delete in their related
-    // department" real rather than aspirational: `delete` is ALWAYS resolved
-    // through `orgCanIn`, so a guard that forgets to name a department refuses a
-    // department-scoped role instead of silently granting it everywhere.
+    // department" real rather than aspirational. It used to be a BRANCH — the
+    // scoped capabilities went through `orgCanInDomain` and the rest through
+    // `orgCan` — and that branch is where "delete is scoped but write is not"
+    // lived. Now every capability takes the scoped path, so there is one route
+    // and no way to forget which side a verb is on.
     const guard = functionBody(session, "requireOrgSession");
-    expect(guard).toContain("isDepartmentScopedCapability(capability)");
     expect(guard).toContain(
-      "orgCanInDomain(state.actor, capability, domain)",
+      "orgCanInDomain(state.actor, options.capability, options.domain)",
     );
+    // …and the domain is MANDATORY in the type, so a guard cannot omit it.
+    expect(session).toMatch(/capability: OrgCapability;[\s\S]{0,1200}domain: OrgDomain;/);
 
     const suppliersLead: OrgActor = {
       rank: "org_staff",
@@ -364,9 +373,9 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
           departmentId: SUPPLIERS,
           permissions: {
             read: true,
-            write: true,
+            create: true, update: true,
             delete: true,
-            read_personal_information: true,
+            personal_information: true,
           },
         },
       ],
@@ -382,7 +391,7 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
     expect(orgCanInDomain(suppliersLead, "delete", null)).toBe(false);
     expect(orgCanIn(suppliersLead, "delete", CAMPS)).toBe(false);
     // …while their ordinary work is not confined: read and write are not scoped.
-    expect(orgCan(suppliersLead, "write")).toBe(true);
+    expect(orgCan(suppliersLead, "update")).toBe(true);
   });
 
   it("LOCKOUT SCENARIO: a scoped PERSONAL-INFORMATION grant stays in its department", () => {
@@ -400,18 +409,18 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
           name: "Suppliers lead",
           kind: "system",
           departmentId: SUPPLIERS,
-          permissions: { read: true, read_personal_information: true },
+          permissions: { read: true, personal_information: true },
         },
       ],
     };
     expect(
-      orgCanInDomain(suppliersLead, "read_personal_information", "suppliers"),
+      orgCanInDomain(suppliersLead, "personal_information", "suppliers"),
     ).toBe(true);
     for (const domain of ORG_DOMAINS.filter(
       (d) => d !== "suppliers" && d !== "supplier_documents",
     )) {
       expect(
-        orgCanInDomain(suppliersLead, "read_personal_information", domain),
+        orgCanInDomain(suppliersLead, "personal_information", domain),
       ).toBe(false);
     }
   });

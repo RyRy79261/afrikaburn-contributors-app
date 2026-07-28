@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { ORG_RANK_LABELS, defaultRoleKeyForRank } from "@quagga/core";
 
 import { schema, withTransaction } from "@/lib/db";
-import { requireOrgSession } from "@/lib/session";
+import { requireSystemManager } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
 
@@ -60,7 +60,7 @@ export async function setOrgStaffRole(
   raw: z.input<typeof SetOrgStaffInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "manage_accounts" });
+    const session = await requireSystemManager();
     const input = SetOrgStaffInput.parse(raw);
     const rank = input.rank ?? "org_staff";
 

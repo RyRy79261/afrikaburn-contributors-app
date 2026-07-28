@@ -1,35 +1,36 @@
 import { describe, it, expect } from "vitest";
 import {
-  ORG_RANKS,
-  ORG_CAPABILITIES,
-  ORG_RANK_LABELS,
-  GRANTABLE_ORG_CAPABILITIES,
-  SYSTEM_MANAGER_ONLY_CAPABILITIES,
   DEPARTMENT_SCOPED_CAPABILITIES,
-  isDepartmentScopedCapability,
-  orgCan,
-  orgCanIn,
-  summarizeOrgActor,
+  DEPARTMENT_SCOPE_NOTE,
+  ENGINEER_RANK_CARVE_OUTS,
+  GRANTABLE_ORG_CAPABILITIES,
+  ORG_CAPABILITIES,
   ORG_CAPABILITY_CONSEQUENCES,
   ORG_CAPABILITY_DESCRIPTIONS,
   ORG_CAPABILITY_LABELS,
-  DEPARTMENT_SCOPE_NOTE,
-  orgCapabilitiesFor,
-  orgCapabilityRefusal,
-  orgRankFromRole,
-  isSystemManager,
-  isDepartmentScopedGrant,
-  departmentsGranting,
-  grantScopeClause,
+  ORG_RANKS,
+  ORG_RANK_LABELS,
+  SYSTEM_MANAGER_ONLY_CAPABILITIES,
   canReadPersonalInformationAnywhere,
   canReadPersonalInformationIn,
-  orgCanInDomain,
-  reachesEveryDepartment,
-  isRankCarveOut,
-  ENGINEER_RANK_CARVE_OUTS,
-  sanitizeOrgPermissions,
-  orgPermissionsFromKeys,
+  departmentsGranting,
+  grantScopeClause,
   grantedOrgCapabilities,
+  isDepartmentScopedCapability,
+  isDepartmentScopedGrant,
+  isRankCarveOut,
+  isSystemManager,
+  orgCan,
+  orgCanIn,
+  orgCanInDomain,
+  orgCapabilitiesFor,
+  orgCapabilityRefusal,
+  orgPermissionsFromKeys,
+  orgRankFromRole,
+  reachesEveryDepartment,
+  sanitizeOrgPermissions,
+  summarizeOrgActor,
+  systemManagerRefusal,
   type OrgActor,
   type OrgCapability,
   type OrgRank,
@@ -168,52 +169,43 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     Record<OrgCapability, boolean>
   > = {
     god: {
+      create: true,
       read: true,
-      read_personal_information: true,
-      write: true,
+      update: true,
       delete: true,
-      manage_camp_categories: true,
-      manage_accounts: true,
-      read_system: true,
+      personal_information: true,
     },
     seeded_org_staff: {
+      create: true,
       read: true,
-      read_personal_information: true,
-      write: true,
+      update: true,
       delete: true,
-      manage_camp_categories: false,
-      manage_accounts: false,
-      read_system: false,
+      personal_information: true,
     },
     seeded_engineer: {
+      create: true,
       read: true,
-      read_personal_information: false,
-      write: true,
+      update: true,
+      // THE CEILING, and the reason this row is not just "everything": an
+      // engineer reaches every department and never these two.
       delete: false,
-      manage_camp_categories: false,
-      manage_accounts: false,
-      read_system: true,
+      personal_information: false,
     },
-    // THE CEILING, stated as a row rather than a footnote: an engineer holding
-    // a role that grants EVERYTHING grantable still resolves neither personal
-    // information nor deletion. Reach widened; depth did not.
+    // The ceiling stated again as data: an engineer holding a role that grants
+    // EVERYTHING grantable still resolves neither. Reach widened; depth did not.
     widened_engineer: {
+      create: true,
       read: true,
-      read_personal_information: false,
-      write: true,
+      update: true,
       delete: false,
-      manage_camp_categories: true,
-      manage_accounts: false,
-      read_system: true,
+      personal_information: false,
     },
     no_roles: {
+      create: false,
       read: false,
-      read_personal_information: false,
-      write: false,
+      update: false,
       delete: false,
-      manage_camp_categories: false,
-      manage_accounts: false,
-      read_system: false,
+      personal_information: false,
     },
   };
 
@@ -241,14 +233,14 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     // ever needs editing, the change of mechanism has also changed access.
     const engineer = ACTORS.seeded_engineer;
     expect(orgCan(engineer, "read")).toBe(true);
-    expect(orgCan(engineer, "write")).toBe(true);
-    expect(orgCan(engineer, "read_personal_information")).toBe(false);
+    expect(orgCan(engineer, "update")).toBe(true);
+    expect(orgCan(engineer, "personal_information")).toBe(false);
     expect(orgCan(engineer, "delete")).toBe(false);
 
     const staff = ACTORS.seeded_org_staff;
     expect(orgCan(staff, "read")).toBe(true);
-    expect(orgCan(staff, "read_personal_information")).toBe(true);
-    expect(orgCan(staff, "write")).toBe(true);
+    expect(orgCan(staff, "personal_information")).toBe(true);
+    expect(orgCan(staff, "update")).toBe(true);
     expect(orgCan(staff, "delete")).toBe(true);
   });
 
@@ -260,7 +252,7 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     ]);
     expect(orgCan(a, "read")).toBe(true);
     expect(orgCan(a, "delete")).toBe(true);
-    expect(orgCan(a, "write")).toBe(false);
+    expect(orgCan(a, "update")).toBe(false);
     expect([...orgCapabilitiesFor(a)].sort()).toEqual(["delete", "read"]);
   });
 
@@ -303,8 +295,12 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     const staffOnly = ORG_CAPABILITIES.filter(
       (c) => orgCan(staff, c) && !orgCan(engineer, c),
     );
-    expect(engineerOnly).toEqual(["read_system"]);
-    expect(staffOnly).toEqual(["read_personal_information", "delete"]);
+    // Since the vocabulary became CRUD, the engineer holds NO capability the
+    // org staff lacks: their step up is REACH (every department) and the system
+    // panel, and both are rank questions rather than grants. `read_system` used
+    // to sit here and was the last thing making this look like a ladder.
+    expect(engineerOnly).toEqual([]);
+    expect(staffOnly).toEqual(["delete", "personal_information"]);
   });
 
   it("THE ENGINEER TIER: broader in reach, narrower in depth, not a superset", () => {
@@ -313,7 +309,7 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     // this test exists so that deleting the carve-out fails loudly instead of
     // quietly handing every engineer every burner's contact details.
     expect([...ENGINEER_RANK_CARVE_OUTS].sort()).toEqual(
-      ["delete", "read_personal_information"].sort(),
+      ["delete", "personal_information"].sort(),
     );
 
     const engineer = actor("engineer", [
@@ -328,22 +324,22 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
     const staffOnly = ORG_CAPABILITIES.filter(
       (c) => orgCan(staff, c) && !orgCan(engineer, c),
     );
-    expect(staffOnly).toEqual(["read_personal_information", "delete"]);
+    expect(staffOnly).toEqual(["delete", "personal_information"]);
 
     // REACH: the engineer is in every department for everything else, so a
     // department-scoped role does not confine them…
     const scopedEngineer = actor("engineer", [
-      role("camps.member", { read: true, write: true }, CAMPS),
+      role("camps.member", { read: true, create: true, update: true }, CAMPS),
     ]);
-    expect(reachesEveryDepartment(scopedEngineer, "write")).toBe(true);
-    expect(orgCanIn(scopedEngineer, "write", SUPPLIERS)).toBe(true);
-    expect(orgCanIn(scopedEngineer, "write", null)).toBe(true);
+    expect(reachesEveryDepartment(scopedEngineer, "update")).toBe(true);
+    expect(orgCanIn(scopedEngineer, "update", SUPPLIERS)).toBe(true);
+    expect(orgCanIn(scopedEngineer, "update", null)).toBe(true);
     // …and the console never tells them a grant of theirs is confined.
-    expect(isDepartmentScopedGrant(scopedEngineer, "write")).toBe(false);
+    expect(isDepartmentScopedGrant(scopedEngineer, "update")).toBe(false);
 
     // DEPTH: the reach never extends to the carve-outs, in any department.
     expect(reachesEveryDepartment(engineer, "delete")).toBe(false);
-    expect(reachesEveryDepartment(engineer, "read_personal_information")).toBe(
+    expect(reachesEveryDepartment(engineer, "personal_information")).toBe(
       false,
     );
     for (const capability of ENGINEER_RANK_CARVE_OUTS) {
@@ -406,31 +402,47 @@ describe("the System manager anchor", () => {
     }
   });
 
-  it("LOCKOUT SCENARIO: `manage_accounts` cannot be granted to any role, ever", () => {
-    // The door to editing rights. If a role could carry it, a System manager
-    // could grant the ability to grant abilities and the "only a System manager
-    // manages roles" rail would last exactly one edit.
-    expect(SYSTEM_MANAGER_ONLY_CAPABILITIES).toContain("manage_accounts");
-    expect(GRANTABLE_ORG_CAPABILITIES).not.toContain("manage_accounts");
+  it("LOCKOUT SCENARIO: administering rights is not a capability at all", () => {
+    // The door to editing rights. It used to be the `manage_accounts`
+    // capability, kept unreachable by SYSTEM_MANAGER_ONLY_CAPABILITIES — if a
+    // role could carry it, a System manager could grant the ability to grant
+    // abilities and the "only a System manager manages roles" rail would last
+    // exactly one edit.
+    //
+    // The rail is now STRONGER, not weaker: administering is the System manager
+    // RANK, and a rank cannot be written into a permissions row at all. There is
+    // no key to strip because there is no key.
+    expect(ORG_CAPABILITIES).not.toContain("manage_accounts");
+    expect(ORG_CAPABILITIES).not.toContain("read_system");
 
-    // Even a hand-written database row does not work: the resolver refuses it
-    // independently of the write path that would have stripped it.
+    // A hand-written row naming the retired key grants nothing: unknown keys are
+    // ignored by the reader and stripped by the writer.
     const crafted = actor("org_staff", [
-      role("crafted", { manage_accounts: true } as OrgPermissions),
+      role("crafted", { manage_accounts: true } as unknown as OrgPermissions),
     ]);
-    expect(orgCan(crafted, "manage_accounts")).toBe(false);
-    expect(orgCanIn(crafted, "manage_accounts", "dept")).toBe(false);
-
-    // …and the write path strips it too, so it never gets stored.
+    for (const capability of ORG_CAPABILITIES) {
+      expect(orgCan(crafted, capability)).toBe(false);
+    }
     expect(
-      sanitizeOrgPermissions({ manage_accounts: true, read: true }),
+      sanitizeOrgPermissions({
+        manage_accounts: true,
+        read: true,
+      } as unknown as OrgPermissions),
     ).toEqual({ read: true });
-    expect(orgPermissionsFromKeys(["manage_accounts", "write"])).toEqual({
-      write: true,
-    });
 
-    // Only the anchor holds it.
-    expect(orgCan(actor("god"), "manage_accounts")).toBe(true);
+    // And the anchor still answers yes to the question itself.
+    expect(isSystemManager(actor("god"))).toBe(true);
+    expect(isSystemManager(actor("org_staff"))).toBe(false);
+
+    // THE DENY-SET IS EMPTY, and that is a stronger statement than it looks:
+    // every capability in the vocabulary is grantable, because the two that
+    // were not (`manage_accounts`, `read_system`) stopped being capabilities.
+    // The mechanism stays wired for the next capability that must never be
+    // granted — an empty set here is a deliberate state, not a deleted guard.
+    expect(SYSTEM_MANAGER_ONLY_CAPABILITIES).toEqual([]);
+    expect([...GRANTABLE_ORG_CAPABILITIES].sort()).toEqual(
+      [...ORG_CAPABILITIES].sort(),
+    );
   });
 });
 
@@ -443,20 +455,23 @@ describe("department scoping — what a department OWNS is what it reaches", () 
   ]);
   const orgWide = actor("org_staff", [seeded("org_staff")]);
 
-  it("names BOTH sharp capabilities as department-scoped, and nothing else", () => {
-    // `read_personal_information` joined `delete` on 27 Jul 2026: a suppliers
-    // lead reads supply-related details and not a theme camp's members.
-    // `read`/`write` are deliberately absent — a department member whose
-    // ordinary work resolved to nothing would be a role that looks granted and
-    // does nothing.
-    expect([...DEPARTMENT_SCOPED_CAPABILITIES].sort()).toEqual([
-      "delete",
-      "read_personal_information",
-    ]);
+  it("scopes EVERY capability to the department, with no exceptions", () => {
+    // Ryan, 28 Jul 2026: "There should just be CRUD operations per department".
+    //
+    // Only `delete` and personal information used to be scoped, and `read` /
+    // `write` were deliberately org-wide so a department member's ordinary work
+    // was not confined. That exception is what let a department's rights screen
+    // describe powers that were really org-wide — and it is why every
+    // department's delete row talked about suppliers, since `delete` was scoped
+    // but wired only to supplier actions.
+    //
+    // Now the whole vocabulary is scoped, so a checkbox on a department means
+    // exactly one thing: this verb, in the domains this department owns.
+    expect([...DEPARTMENT_SCOPED_CAPABILITIES].sort()).toEqual(
+      [...ORG_CAPABILITIES].sort(),
+    );
     for (const capability of ORG_CAPABILITIES) {
-      expect(isDepartmentScopedCapability(capability)).toBe(
-        capability === "delete" || capability === "read_personal_information",
-      );
+      expect(isDepartmentScopedCapability(capability)).toBe(true);
     }
   });
 
@@ -503,14 +518,14 @@ describe("department scoping — what a department OWNS is what it reaches", () 
     }
     // …while their ordinary work is untouched: read and write are not scoped.
     expect(orgCan(safetyLead, "read")).toBe(true);
-    expect(orgCan(safetyLead, "write")).toBe(true);
+    expect(orgCan(safetyLead, "update")).toBe(true);
   });
 
   it("a guard that names NO domain resolves as unfiled — only org-wide passes", () => {
     // The fail-closed default that stops a forgetful call site handing a
     // departmental role the whole console.
     expect(orgCanInDomain(suppliersLead, "delete", null)).toBe(false);
-    expect(orgCanInDomain(suppliersLead, "read_personal_information", null)).toBe(
+    expect(orgCanInDomain(suppliersLead, "personal_information", null)).toBe(
       false,
     );
     expect(orgCanInDomain(orgWide, "delete", null)).toBe(true);
@@ -540,7 +555,7 @@ describe("department scoping — what a department OWNS is what it reaches", () 
     ]);
     expect(orgCanInDomain(member, "delete", "suppliers")).toBe(false);
     expect(canReadPersonalInformationIn(member, "suppliers")).toBe(false);
-    expect(orgCan(member, "write")).toBe(true);
+    expect(orgCan(member, "update")).toBe(true);
   });
 
   it("unions scopes across roles — two departments, both reachable", () => {
@@ -595,9 +610,9 @@ describe("department scoping — what a department OWNS is what it reaches", () 
       expect(row.departmentId).toBe(SUPPLIERS);
     }
     expect(rows[0]?.permissions.delete).toBe(true);
-    expect(rows[0]?.permissions.read_personal_information).toBe(true);
+    expect(rows[0]?.permissions.personal_information).toBe(true);
     expect(rows[1]?.permissions.delete).toBeUndefined();
-    expect(rows[1]?.permissions.read_personal_information).toBeUndefined();
+    expect(rows[1]?.permissions.personal_information).toBeUndefined();
   });
 });
 
@@ -627,8 +642,8 @@ describe("personal information", () => {
     const widened = actor("engineer", [
       role("engineer", {
         read: true,
-        write: true,
-        read_personal_information: true,
+        create: true, update: true,
+        personal_information: true,
       }),
     ]);
     expect(canReadPersonalInformationAnywhere(widened)).toBe(false);
@@ -653,8 +668,8 @@ describe("personal information", () => {
     const staff = actor("org_staff", [
       role("engineer", {
         read: true,
-        write: true,
-        read_personal_information: true,
+        create: true, update: true,
+        personal_information: true,
       }),
     ]);
     expect(canReadPersonalInformationAnywhere(staff)).toBe(true);
@@ -744,8 +759,8 @@ describe("personal information", () => {
 
 describe("permissions objects", () => {
   it("round-trip through keys, dropping the ungrantable", () => {
-    const perms = orgPermissionsFromKeys(["read", "write", "delete"]);
-    expect(grantedOrgCapabilities(perms)).toEqual(["read", "write", "delete"]);
+    const perms = orgPermissionsFromKeys(["read", "update", "delete"]);
+    expect(grantedOrgCapabilities(perms)).toEqual(["read", "update", "delete"]);
     expect(grantedOrgCapabilities(null)).toEqual([]);
     expect(grantedOrgCapabilities({})).toEqual([]);
   });
@@ -767,15 +782,16 @@ describe("refusals", () => {
 
   it("say what is missing and who can add it", () => {
     expect(orgCapabilityRefusal(engineer, "delete")).toMatch(/system manager/i);
-    expect(orgCapabilityRefusal(engineer, "read_personal_information")).toMatch(
+    expect(orgCapabilityRefusal(engineer, "personal_information")).toMatch(
       /personal information/i,
     );
-    expect(orgCapabilityRefusal(engineer, "manage_camp_categories")).toMatch(
+    expect(orgCapabilityRefusal(engineer, "update")).toMatch(
       /system manager/i,
     );
-    expect(orgCapabilityRefusal(engineer, "manage_accounts")).toMatch(
-      /not grantable/i,
-    );
+    // Administering rights is the RANK, so it has its own refusal rather than
+    // an arm in the capability one.
+    expect(systemManagerRefusal("edit roles")).toMatch(/not be granted/i);
+    expect(systemManagerRefusal("edit roles")).toMatch(/system manager/i);
   });
 
   it("tell an account with NO roles the honest thing", () => {
@@ -817,7 +833,7 @@ describe("refusals", () => {
     ]);
     const pi = orgCapabilityRefusal(
       engineer,
-      "read_personal_information",
+      "personal_information",
       "registrations",
     );
     expect(pi).toMatch(/every department/i);
@@ -847,7 +863,7 @@ describe("refusals", () => {
   });
 
   it("refuse a missing actor without leaking which capability was asked for", () => {
-    expect(orgCapabilityRefusal(null, "read_personal_information")).toBe(
+    expect(orgCapabilityRefusal(null, "personal_information")).toBe(
       "Not authorised for the organiser console.",
     );
   });
@@ -862,11 +878,12 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
   it("resolves the UNION of several roles, not a list per role", () => {
     const a = actor("org_staff", [
       role("reader", { read: true }),
-      role("writer", { write: true }),
+      role("writer", { create: true, update: true }),
     ]);
     expect(summarizeOrgActor(a).map((g) => g.capability)).toEqual([
+      "create",
       "read",
-      "write",
+      "update",
     ]);
   });
 
@@ -899,7 +916,7 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
     const a = actor("org_staff", [
       role("safety-lead", DEPARTMENT_LEAD_PERMISSIONS, SAFETY),
     ]);
-    for (const capability of ["delete", "read_personal_information"] as const) {
+    for (const capability of ["delete", "personal_information"] as const) {
       const grant = summarizeOrgActor(a).find(
         (g) => g.capability === capability,
       );
@@ -925,7 +942,11 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
       role("sup-lead", DEPARTMENT_LEAD_PERMISSIONS, SUPPLIERS),
     ]);
     const summary = summarizeOrgActor(engineer);
-    expect(summary.map((g) => g.capability)).toEqual(["read", "write"]);
+    expect(summary.map((g) => g.capability)).toEqual([
+      "create",
+      "read",
+      "update",
+    ]);
     // …and nothing they DO hold is reported as confined, because their reach is
     // every department.
     for (const grant of summary) {
@@ -934,23 +955,27 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
     }
   });
 
-  it("reports a scope ONLY where one is enforced, never a smaller claim than the truth", () => {
-    // `read` came from a department-scoped role, but `read` is not in
-    // DEPARTMENT_SCOPED_CAPABILITIES — so `requireOrgSession` resolves it
-    // through `orgCan`, which ignores the department entirely. This actor DOES
-    // read the whole console, and the summary must say so: a person deciding
-    // whether a grant is acceptable is misled just as badly by an understated
-    // one as by an overstated one.
+  it("reports EVERY grant from a departmental role as scoped to it", () => {
+    // THIS TEST'S PREMISE INVERTED, deliberately (28 Jul 2026). It used to
+    // assert that `read`/`write` from a department-scoped role were reported as
+    // UNSCOPED, because only `delete` and personal information were confined —
+    // so a "Suppliers member" really did read the whole console and the summary
+    // had to say so rather than understate it.
+    //
+    // Now every capability is department-scoped, so the honest summary is the
+    // opposite: a departmental role's grants all name their department. The old
+    // behaviour was the bug Ryan reported from the other end — a department's
+    // rights screen describing powers that were not really departmental.
     const a = actor("org_staff", [
-      role("sup-member", { read: true, write: true }, SUPPLIERS),
+      role("sup-member", { read: true, create: true, update: true }, SUPPLIERS),
     ]);
     for (const grant of summarizeOrgActor(a)) {
-      expect(isDepartmentScopedCapability(grant.capability)).toBe(false);
-      expect(grant.departmentIds).toBeNull();
-      // …and the summary agrees with THE GUARD THAT ACTUALLY RUNS: an unscoped
-      // capability is resolved by `orgCan` (lib/session.ts `requireOrgSession`
-      // routes only the scoped ones through `orgCanIn`), and `orgCan` says yes.
-      expect(orgCan(a, grant.capability)).toBe(true);
+      expect(isDepartmentScopedCapability(grant.capability)).toBe(true);
+      expect(grant.departmentIds).toEqual([SUPPLIERS]);
+      // The guard that actually runs agrees: inside the department, yes…
+      expect(orgCanIn(a, grant.capability, SUPPLIERS)).toBe(true);
+      // …and outside it, no.
+      expect(orgCanIn(a, grant.capability, CAMPS)).toBe(false);
     }
     // `orgCanIn` WOULD narrow this — which is exactly why the summary keys off
     // `isDepartmentScopedCapability` rather than off the role's department.
@@ -979,7 +1004,10 @@ describe("the resolved summary — 'what can this person actually do?'", () => {
     // A hand-written row carrying the ungrantable capability: the summary must
     // agree with `orgCan`, or the console would advertise an access it refuses.
     const crafted = actor("org_staff", [
-      role("sneaky", { manage_accounts: true, read: true }),
+      role("sneaky", {
+        manage_accounts: true,
+        read: true,
+      } as unknown as OrgPermissions),
     ]);
     const summary = summarizeOrgActor(crafted);
     expect(summary.map((g) => g.capability)).toEqual(["read"]);
@@ -1018,14 +1046,21 @@ describe("consequence copy — what an editor is actually deciding", () => {
         ORG_CAPABILITY_DESCRIPTIONS[capability],
       ]) {
         expect(copy).not.toMatch(/\b(true|false)\b/);
-        expect(copy).not.toMatch(/read_personal_information|manage_camp_categories|read_system/);
+        expect(copy).not.toMatch(
+          /read_personal_information|manage_camp_categories|read_system|manage_accounts/,
+        );
       }
     }
   });
 
-  it("names what `delete` destroys, because that is the whole point", () => {
+  it("names what `delete` destroys WITHOUT naming one department's things", () => {
+    // The copy used to say "permanently remove suppliers and their documents",
+    // because those were the only two actions wired to `delete`. That is
+    // precisely what Ryan hit: "Why do department rights all mention supplier
+    // deletion rights?" — a Theme Camps lead read a supplier sentence. The copy
+    // now describes the verb, and the DOMAIN LIST beside it says where it lands.
     expect(ORG_CAPABILITY_CONSEQUENCES.delete).toMatch(/permanently/i);
-    expect(ORG_CAPABILITY_CONSEQUENCES.delete).toMatch(/supplier/i);
+    expect(ORG_CAPABILITY_CONSEQUENCES.delete).not.toMatch(/supplier/i);
     expect(ORG_CAPABILITY_DESCRIPTIONS.delete).toMatch(/no undo/i);
   });
 

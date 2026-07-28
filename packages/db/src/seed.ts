@@ -51,9 +51,11 @@
 import { pathToFileURL } from "node:url";
 import { eq, and, sql } from "drizzle-orm";
 import {
-  normalizeName,
   CANONICAL_CAMP_CATEGORIES,
+  SEEDED_ORG_DEPARTMENTS,
+  departmentRoleRows,
   normalizeCategoryLabel,
+  normalizeName,
   seededOrgRoleRows,
 } from "@quagga/core";
 import { SupplierImportRow } from "@quagga/types";
@@ -134,6 +136,63 @@ export async function ensureSeededOrgRoles(db: Db): Promise<number> {
   return inserted;
 }
 
+/**
+ * The two departments that back a deployed portal, plus their domains and their
+ * lead/member role pair. Insert-if-missing on the stable key, so a deployment
+ * that already has them (from migration 0022, or hand-created before it) keeps
+ * its rows, its assignments and any edits made to them.
+ */
+export async function ensureSeededOrgDepartments(db: Db): Promise<number> {
+  let inserted = 0;
+  for (const dept of SEEDED_ORG_DEPARTMENTS) {
+    const [row] = await db
+      .insert(schema.orgDepartments)
+      .values({
+        key: dept.key,
+        name: dept.name,
+        nameNormalized: normalizeName(dept.name),
+        description: dept.description,
+        kind: "system",
+        sort: dept.sort,
+      })
+      .onConflictDoNothing({ target: schema.orgDepartments.key })
+      .returning({ id: schema.orgDepartments.id });
+    inserted += row ? 1 : 0;
+
+    const [existing] = row
+      ? [row]
+      : await db
+          .select({ id: schema.orgDepartments.id })
+          .from(schema.orgDepartments)
+          .where(eq(schema.orgDepartments.key, dept.key))
+          .limit(1);
+    if (!existing) continue;
+
+    // Domains: only if nothing owns them yet. A deployment that filed a domain
+    // under a different department made that choice deliberately.
+    for (const domain of dept.domains) {
+      await db
+        .insert(schema.orgDepartmentDomains)
+        .values({ domain, departmentId: existing.id })
+        .onConflictDoNothing({ target: schema.orgDepartmentDomains.domain });
+    }
+
+    // The permanent lead/member pair, exactly as a System manager creating a
+    // department gets.
+    for (const roleRow of departmentRoleRows({
+      id: existing.id,
+      key: dept.key,
+      name: dept.name,
+    })) {
+      await db
+        .insert(schema.orgRoles)
+        .values(roleRow)
+        .onConflictDoNothing({ target: schema.orgRoles.key });
+    }
+  }
+  return inserted;
+}
+
 export async function seedReferenceData(db: Db): Promise<void> {
   {
     // --- Edition -------------------------------------------------------------
@@ -181,6 +240,9 @@ export async function seedReferenceData(db: Db): Promise<void> {
     // many there are, so the console creates them (docs: Ryan, 27 Jul 2026).
     const orgRolesSeeded = await ensureSeededOrgRoles(db);
     console.log(`[seed] org roles ensured (${orgRolesSeeded} inserted)`);
+
+    const deptsSeeded = await ensureSeededOrgDepartments(db);
+    console.log(`[seed] org departments ensured (${deptsSeeded} inserted)`);
 
     // --- Camp categories (org-defined per-edition taxonomy) ---------------------
     // The canonical catalog for 2027. Org may edit freely afterwards. Camps pick

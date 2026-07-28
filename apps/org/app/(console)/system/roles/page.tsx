@@ -3,8 +3,8 @@ import { ArrowLeft, Lock } from "lucide-react";
 import {
   ORG_RANK_LABELS,
   isSystemManager,
-  orgCan,
-  orgCapabilityRefusal,
+  runsDeployment,
+  runsDeploymentRefusal,
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -69,7 +69,7 @@ export default async function RolesPage() {
   if (!guard.ok) return guard.node;
   const { session } = guard;
 
-  if (!orgCan(session.actor, "read_system")) {
+  if (!runsDeployment(session.actor)) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeading
@@ -84,7 +84,7 @@ export default async function RolesPage() {
               Not your screen
             </CardTitle>
             <CardDescription>
-              {orgCapabilityRefusal(session.actor, "read_system")}
+              {runsDeploymentRefusal()}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
@@ -101,6 +101,10 @@ export default async function RolesPage() {
 
   // The anchor decides whether anything on this page can be CHANGED, and
   // therefore whether the people-affected data is read at all.
+  // MANAGING is the System manager ANCHOR, not panel access. An engineer runs
+  // the deployment and READS this panel; editing who has access and what roles
+  // may do stays with the System manager, or the rail that keeps every other
+  // permission safe to edit would last exactly one edit.
   const canManage = isSystemManager(session.actor);
   const [overview, impacts] = await Promise.all([
     getOrgRolesOverview(session.orgGroupId),

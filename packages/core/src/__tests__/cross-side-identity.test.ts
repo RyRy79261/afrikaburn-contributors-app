@@ -6,6 +6,7 @@ import {
   orgCan,
   orgCanInDomain,
   orgRankFromRole,
+  runsDeployment,
   type OrgActor,
 } from "../org-permissions";
 import { buildDomainOwnership, ORG_DOMAINS } from "../org-domains";
@@ -61,7 +62,7 @@ const engineerHat: OrgActor = {
       name: "Engineer",
       kind: "system",
       departmentId: null,
-      permissions: { read: true, write: true, read_system: true },
+      permissions: { read: true, create: true, update: true },
     },
   ],
   domains: OWNERSHIP,
@@ -200,13 +201,16 @@ describe("ALL THREE HATS AT ONCE — camp lead + officer + system engineer", () 
 
   it("their CONSOLE access is the engineer's, unchanged by the camp hats", () => {
     expect(orgCan(engineerHat, "read")).toBe(true);
-    expect(orgCan(engineerHat, "write")).toBe(true);
-    expect(orgCan(engineerHat, "read_system")).toBe(true);
+    expect(orgCan(engineerHat, "update")).toBe(true);
+    // Running the deployment is a RANK now, not a grant — and the engineer
+    // still has it while holding no role that mentions it.
+    expect(runsDeployment(engineerHat)).toBe(true);
     // The carve-outs hold even for someone who is, on the other side, a lead
     // with every project permission and an accepted officer consent.
-    expect(orgCan(engineerHat, "read_personal_information")).toBe(false);
+    expect(orgCan(engineerHat, "personal_information")).toBe(false);
     expect(orgCan(engineerHat, "delete")).toBe(false);
-    expect(orgCan(engineerHat, "manage_accounts")).toBe(false);
+    // …and administering rights is the System manager anchor, which they are not.
+    expect(isSystemManager(engineerHat)).toBe(false);
   });
 
   it("their OFFICER consent shares a phone with the ORG, not a console right", () => {
@@ -235,8 +239,8 @@ describe("ALL THREE HATS AT ONCE — camp lead + officer + system engineer", () 
           departmentId: CAMPS_DEPT,
           permissions: {
             read: true,
-            write: true,
-            read_personal_information: true,
+            create: true, update: true,
+            personal_information: true,
             delete: true,
           },
         },

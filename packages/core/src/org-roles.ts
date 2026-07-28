@@ -40,7 +40,12 @@
 //      other half, and a department that owns nothing makes every role scoped to
 //      it grant nothing at all. The console says so; do not treat it as a bug.
 
-import type { OrgPermissions, OrgRoleKind, RoleColor } from "@quagga/types";
+import type {
+  OrgDepartmentKind,
+  OrgPermissions,
+  OrgRoleKind,
+  RoleColor,
+} from "@quagga/types";
 import { normalizeName } from "./name-dedupe";
 
 /** Max length of a department label. */
@@ -167,6 +172,19 @@ export function canDeleteOrgRoleKind(kind: OrgRoleKind): boolean {
   return kind === "custom";
 }
 
+/**
+ * True when a DEPARTMENT may be deleted — `custom` only, exactly as roles work.
+ *
+ * Theme camps and Suppliers are seeded `system` (migration 0022) because each
+ * backs a deployed portal: a console that can delete "Suppliers" is a console
+ * that can orphan apps/suppliers, its documents, its onboarding and its whole
+ * audience. Their NAME, DESCRIPTION, RIGHTS and DOMAINS all stay editable —
+ * "cannot be removed" is not "cannot be changed".
+ */
+export function canDeleteOrgDepartmentKind(kind: OrgDepartmentKind): boolean {
+  return kind === "custom";
+}
+
 /** True when a role kind may be renamed — both; the key is the stable anchor. */
 export function canRenameOrgRoleKind(_kind: OrgRoleKind): boolean {
   return true;
@@ -228,6 +246,39 @@ export interface SeededOrgRole {
  * stay unassigned here — the first is grantable if the org wants it, the second
  * is not grantable at all (@quagga/core `org-permissions`).
  */
+/**
+ * THE DEPARTMENTS THAT CANNOT BE MISSING, and the domains each answers for.
+ *
+ * Each backs a deployed portal — apps/web's registration pipeline and
+ * apps/suppliers — so a console where they can go missing is a console that can
+ * orphan an application. Seeded `system` (migration 0022), undeletable, and
+ * everything else about them stays editable.
+ *
+ * Deliberately only TWO. Ryan, 27 Jul 2026: "there is a team lead for each
+ * department, we dont know how many departements there are, or what protocols
+ * they have so lets not over complicate it" — so Safety, Rangers, MOOP and the
+ * rest stay `custom` departments a System manager creates, and the vocabulary
+ * does not pretend to know them.
+ */
+export const SEEDED_ORG_DEPARTMENTS = [
+  {
+    key: "theme_camps",
+    name: "Theme camps",
+    description:
+      "Camp, artwork and vehicle registrations — the review pipeline behind the participant app.",
+    domains: ["registrations", "camp_categories"],
+    sort: 0,
+  },
+  {
+    key: "suppliers",
+    name: "Suppliers",
+    description:
+      "The supplier repository and the documents suppliers acknowledge — the org side of the supplier portal.",
+    domains: ["suppliers", "supplier_documents"],
+    sort: 1,
+  },
+] as const;
+
 export const SEEDED_ORG_ROLES: readonly SeededOrgRole[] = [
   {
     key: "org_staff",
@@ -237,10 +288,11 @@ export const SEEDED_ORG_ROLES: readonly SeededOrgRole[] = [
     color: "apricot",
     sort: 0,
     permissions: {
+      create: true,
       read: true,
-      read_personal_information: true,
-      write: true,
+      update: true,
       delete: true,
+      personal_information: true,
     },
   },
   {
@@ -250,7 +302,11 @@ export const SEEDED_ORG_ROLES: readonly SeededOrgRole[] = [
       "Runs the system: full read access and the system panel, no personal information, nothing destructive.",
     color: "teal",
     sort: 1,
-    permissions: { read: true, write: true, read_system: true },
+    // No `personal_information`, no `delete` — the two rank carve-outs, stated
+    // here as defaults too so the row a System manager reads matches the rank
+    // ceiling that enforces it. `read_system` is gone: opening the system panel
+    // is the System manager rank, not a grant.
+    permissions: { create: true, read: true, update: true },
   },
 ];
 
@@ -291,15 +347,17 @@ export function seededOrgRoleRows(): OrgRoleInsert[] {
  * Both are defaults on a row a System manager may edit — which is the point.
  */
 export const DEPARTMENT_LEAD_PERMISSIONS: OrgPermissions = {
+  create: true,
   read: true,
-  read_personal_information: true,
-  write: true,
+  update: true,
   delete: true,
+  personal_information: true,
 };
 
 export const DEPARTMENT_MEMBER_PERMISSIONS: OrgPermissions = {
+  create: true,
   read: true,
-  write: true,
+  update: true,
 };
 
 /** The display label for a department's seeded role. */

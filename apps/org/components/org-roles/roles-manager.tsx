@@ -1129,11 +1129,13 @@ function RoleEditor({
                   <span className="text-xs text-muted-foreground">
                     {ORG_CAPABILITY_DESCRIPTIONS[c]}
                   </span>
-                  {/* The two department-scoped capabilities say where they
-                      land. The others are org-wide however the role is scoped,
-                      and claiming otherwise would understate the grant. */}
-                  {(c === "delete" || c === "read_personal_information") &&
-                    draft.departmentId !== null && (
+                  {/* EVERY capability is department-scoped now, so every one
+                      of them says where it lands. Under the old vocabulary only
+                      `delete` and personal information were scoped, which is why
+                      a department's rights screen could describe powers that
+                      were really org-wide — and why every department's delete
+                      row talked about suppliers. */}
+                  {draft.departmentId !== null && (
                       <span className="text-xs text-muted-foreground">
                         Scoped to {departmentName ?? "this department"}:{" "}
                         {departmentDomains.length === 0

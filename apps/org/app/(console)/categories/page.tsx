@@ -23,7 +23,7 @@ export default async function CategoriesPage() {
   const guard = await guardConsole();
   if (!guard.ok) return guard.node;
 
-  const canManage = orgCan(guard.session.actor, "manage_camp_categories");
+  const canManage = orgCan(guard.session.actor, "update");
   const edition = await getActiveEdition();
   const categories = edition ? await getCampCategories(edition.id) : [];
 
@@ -53,7 +53,7 @@ export default async function CategoriesPage() {
               <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {orgCapabilityRefusal(
                 guard.session.actor,
-                "manage_camp_categories",
+                "update",
               )}
             </p>
           )}

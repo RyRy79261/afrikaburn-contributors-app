@@ -26,36 +26,36 @@ import type {
   SupplierStanding,
 } from "@quagga/types";
 import {
+  ORG_RANKS,
   buildDomainOwnership,
   canReadPersonalInformationIn,
   countCategoryUsage,
-  domainsOwnedBy,
-  unownedDomains,
-  grantedOrgCapabilities,
-  isSystemManager,
-  orgCapabilityRefusal,
-  sanitizeOrgPermissions,
-  summarizeOrgActor,
-  ORG_RANKS,
-  orgRankFromRole,
   deriveOfficerCoverage,
   deriveQuestionnaireCompletion,
   deriveRegistrationFunnel,
   deriveStatusBoardKpis,
   deriveSupplierOnboardingRollup,
   deriveSupplierStandingRollup,
+  domainsOwnedBy,
+  grantedOrgCapabilities,
+  isSystemManager,
+  orgRankFromRole,
   publicMemberName,
+  sanitizeOrgPermissions,
   soundLevelFromValue,
+  summarizeOrgActor,
+  systemManagerRefusal,
   type OfficerCoverage,
-  type ProjectStatInput,
   type OrgActor,
   type OrgCapability,
   type OrgDomain,
   type OrgRank,
+  type ProjectStatInput,
   type QuestionnaireCompletionRollup,
   type RegistrationFunnel,
   type StatusBoardKpis,
   type SupplierOnboardingRollup,
+  unownedDomains,
 } from "@quagga/core";
 import { decryptField } from "@quagga/db/crypto";
 
@@ -666,7 +666,7 @@ export async function getOrgRoleImpacts(
   byDepartment: Record<string, DeletionImpact>;
 }> {
   if (!isSystemManager(actor)) {
-    throw new Error(orgCapabilityRefusal(actor, "manage_accounts"));
+    throw new Error(systemManagerRefusal("see who would lose access"));
   }
   const db = getDb();
   const rows = await db

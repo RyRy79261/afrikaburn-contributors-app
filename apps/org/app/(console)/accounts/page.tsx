@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import {
   canReadPersonalInformationIn,
-  orgCan,
+  isSystemManager,
   orgCapabilityRefusal,
 } from "@quagga/core";
 import { Card, CardContent } from "@quagga/ui/components/card";
@@ -36,7 +36,7 @@ export default async function AccountsPage({
   // Both flags come from the ONE matrix in @quagga/core, which is also what the
   // server actions re-check — so a control that renders is a control that works,
   // and a control that is missing is an action that would have been refused.
-  const canManage = orgCan(session.actor, "manage_accounts");
+  const canManage = isSystemManager(session.actor);
   // Scoped to the `accounts` domain: a suppliers lead reads supply-related
   // details and not the org’s address book, unless their department owns it.
   const seesEmail = canReadPersonalInformationIn(session.actor, "accounts");
@@ -83,7 +83,7 @@ export default async function AccountsPage({
                 // LEAD (whose department does not own the accounts screen).
                 // Telling a suppliers lead they are an engineer is the kind of
                 // small lie that teaches people to stop reading the console.
-                `Find a burner by username and see the org access they hold. ${orgCapabilityRefusal(session.actor, "read_personal_information", "accounts")}`
+                `Find a burner by username and see the org access they hold. ${orgCapabilityRefusal(session.actor, "personal_information", "accounts")}`
         }
       />
 

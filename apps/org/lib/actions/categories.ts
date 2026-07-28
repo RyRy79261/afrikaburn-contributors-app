@@ -52,7 +52,8 @@ export async function createCategory(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireOrgSession({
-      capability: "manage_camp_categories",
+      capability: "create",
+      domain: "camp_categories",
     });
     const { editionId, ...rest } = CreateCategoryInput.parse(raw);
 
@@ -107,7 +108,8 @@ export async function updateCategory(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireOrgSession({
-      capability: "manage_camp_categories",
+      capability: "update",
+      domain: "camp_categories",
     });
     const { categoryId, ...rest } = UpdateCategoryInput.parse(raw);
 
@@ -159,7 +161,8 @@ export async function deleteCategory(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireOrgSession({
-      capability: "manage_camp_categories",
+      capability: "update",
+      domain: "camp_categories",
     });
     const { categoryId } = DeleteCategoryInput.parse(raw);
 
@@ -218,7 +221,8 @@ export async function setGroupCategory(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const session = await requireOrgSession({
-      capability: "manage_camp_categories",
+      capability: "update",
+      domain: "camp_categories",
     });
     const input = AssignCategoryInput.parse(raw);
 

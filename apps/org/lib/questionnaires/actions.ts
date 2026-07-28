@@ -116,7 +116,10 @@ export async function saveQuestionnaireDefinition(
   raw: z.input<typeof QuestionnaireBuilderInput>,
 ): Promise<SaveDefinitionResult> {
   try {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "questionnaires",
+    });
     const input = QuestionnaireBuilderInput.parse(raw);
 
     // Author gate: org_internal spec stands in for "org author" here.
@@ -234,7 +237,10 @@ export async function previewAudienceCount(
   raw: z.input<typeof PreviewInput>,
 ): Promise<PreviewResult> {
   try {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "read",
+      domain: "questionnaires",
+    });
     const input = PreviewInput.parse(raw);
 
     if (input.audience.kind === "project") {
@@ -273,7 +279,10 @@ export async function activateQuestionnaire(
   raw: z.input<typeof QuestionnaireActivationInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "create",
+      domain: "questionnaires",
+    });
     const input = QuestionnaireActivationInput.parse(raw);
 
     if (input.audience.kind === "project") {
@@ -455,7 +464,10 @@ export async function closeActivation(
   raw: z.input<typeof CloseInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "questionnaires",
+    });
     const input = CloseInput.parse(raw);
 
     // Scope check, close and audit are one atomic unit.

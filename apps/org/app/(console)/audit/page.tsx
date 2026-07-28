@@ -79,7 +79,7 @@ export default async function AuditLogPage() {
                 Medical-notes reads
               </CardTitle>
               <CardDescription>
-                {orgCapabilityRefusal(actor, "read_personal_information", "audit")}
+                {orgCapabilityRefusal(actor, "personal_information", "audit")}
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">

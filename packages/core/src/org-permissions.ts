@@ -213,25 +213,26 @@ export const ORG_CAPABILITIES = ORG_CAPABILITY_KEYS;
 export type OrgCapability = OrgCapabilityKey;
 
 /**
- * Capabilities NO ROLE MAY EVER CARRY — the System manager's alone, enforced in
- * `orgCan` itself rather than only at the write path.
+ * Capabilities NO ROLE MAY EVER CARRY — now EMPTY, deliberately.
  *
- * `manage_accounts` is the door to editing rights: granting console access and
- * assigning roles. If a role could carry it, a System manager could hand out the
- * ability to hand out abilities, and the "only a system manager may manage
- * departments, roles or assignments" rail would hold only until the first
- * well-meaning edit. Fail-closed here means a hand-written row in the database
- * still cannot escalate.
+ * This used to hold `manage_accounts`: the right to grant rights, which no role
+ * could carry because a System manager could otherwise hand out the ability to
+ * hand out abilities. That reasoning was right and the mechanism is still in
+ * force — it just is not a *capability* any more. Administering the deployment
+ * (console access, roles, departments, the system panel) is the System manager
+ * RANK, asked as `isSystemManager`, and a rank cannot be written into a
+ * permissions row at all.
+ *
+ * Kept as an empty set rather than deleted because it is the enforcement point:
+ * if a future capability must never be grantable, it goes here and `orgCan`
+ * refuses it however the row was written.
  */
-export const SYSTEM_MANAGER_ONLY_CAPABILITIES: readonly OrgCapability[] = [
-  "manage_accounts",
-];
+export const SYSTEM_MANAGER_ONLY_CAPABILITIES: readonly OrgCapability[] = [];
 
 const SYSTEM_MANAGER_ONLY_SET: ReadonlySet<OrgCapability> = new Set(
   SYSTEM_MANAGER_ONLY_CAPABILITIES,
 );
 
-/** The capabilities the role editor may actually offer as toggles. */
 export const GRANTABLE_ORG_CAPABILITIES: readonly OrgCapability[] =
   ORG_CAPABILITIES.filter((c) => !SYSTEM_MANAGER_ONLY_SET.has(c));
 
@@ -259,10 +260,8 @@ export const GRANTABLE_ORG_CAPABILITIES: readonly OrgCapability[] =
  * both are irreversible in their own way, and both are what a department
  * boundary exists to draw.
  */
-export const DEPARTMENT_SCOPED_CAPABILITIES: readonly OrgCapability[] = [
-  "read_personal_information",
-  "delete",
-];
+export const DEPARTMENT_SCOPED_CAPABILITIES: readonly OrgCapability[] =
+  ORG_CAPABILITIES;
 
 const DEPARTMENT_SCOPED_SET: ReadonlySet<OrgCapability> = new Set(
   DEPARTMENT_SCOPED_CAPABILITIES,
@@ -299,7 +298,7 @@ export function isDepartmentScopedCapability(
  * claim — the console never advertises an access it would refuse.
  */
 export const ENGINEER_RANK_CARVE_OUTS: readonly OrgCapability[] = [
-  "read_personal_information",
+  "personal_information",
   "delete",
 ];
 
@@ -349,43 +348,34 @@ export function reachesEveryDepartment(
  * it — a promise the console cannot keep is worse than no promise.
  */
 export const ORG_CAPABILITY_LABELS: Record<OrgCapability, string> = {
-  read: "Read the console",
-  read_personal_information: "See personal information",
-  write: "Make ordinary changes",
-  delete: "Permanently delete",
-  manage_camp_categories: "Manage camp categories",
-  manage_accounts: "Manage accounts and roles",
-  read_system: "Open the system panel",
+  create: "Create",
+  read: "Read",
+  update: "Update",
+  delete: "Delete",
+  personal_information: "See personal information",
 };
 
 /** A verb phrase completing "This account can …". Lowercase, no full stop. */
 export const ORG_CAPABILITY_CONSEQUENCES: Record<OrgCapability, string> = {
-  read: "read the console — registrations, camps, suppliers, bulletins and questionnaires",
-  read_personal_information:
-    "read people's names, email addresses, phone numbers, ID numbers, emergency contacts and medical notes",
-  write:
-    "approve, reject or send back registrations, change supplier standing and publish bulletins",
-  delete: "permanently remove suppliers and their documents",
-  manage_camp_categories: "add, rename and remove camp categories",
-  manage_accounts: "grant console access and edit everyone's roles",
-  read_system: "open the system panel and read how this deployment is configured",
+  create: "add new records in this department's part of the console",
+  read: "open and read this department's part of the console",
+  update: "change existing records in this department's part of the console",
+  delete: "permanently destroy records in this department's part of the console",
+  personal_information:
+    "read people's names, email addresses, phone numbers, ID numbers, emergency contacts and medical notes in this department's part of the console",
 };
 
 /** The sentence under the checkbox in the role editor. */
 export const ORG_CAPABILITY_DESCRIPTIONS: Record<OrgCapability, string> = {
-  read: "Opens the console and reads what is in it: registrations, camps, suppliers, bulletins, questionnaires, the status board. Without this, the console opens empty.",
-  read_personal_information:
-    "Reads burners' legal names, email addresses, phone numbers, SA ID and passport numbers, emergency contacts and medical notes. On a department-scoped role this reaches only the parts of the console that department owns — a suppliers lead reads supply-related details and not a theme camp's members. Give it to the people whose job needs it and to nobody else.",
-  write:
-    "Approves, rejects and sends back camp registrations, opens and resolves review threads, changes a supplier's standing and onboarding, and publishes bulletins every camp lead sees. Everyday work, and all of it reversible.",
+  create:
+    "Adds new records — a supplier, a document, a bulletin, a questionnaire, a review thread — in the domains this department owns.",
+  read: "Opens and reads the domains this department owns. Without this, those screens are empty rather than hidden: the console never pretends a thing does not exist.",
+  update:
+    "Changes records that already exist: approving or sending back a registration, moving a supplier's standing or onboarding step, publishing a bulletin, closing an activation. Everyday work, and reversible.",
   delete:
-    "Permanently removes a supplier and everything hanging off them, and removes supplier documents. Destroyed, not archived: there is no undo. On a department-scoped role it reaches only that department's part of the console. (Rejecting a registration is NOT this — nothing is destroyed and the decision can be changed.)",
-  manage_camp_categories:
-    "Adds, renames and removes the camp categories every registration is filed under, and re-files camps between them.",
-  manage_accounts:
-    "Grants console access, assigns roles, creates departments. The System manager holds this and no role can be given it — the one thing that cannot be edited away.",
-  read_system:
-    "Opens the system panel: how this deployment is configured and whether its services are answering. Reads only — no personal information, nothing destructive.",
+    "Permanently destroys records in the domains this department owns. Destroyed, not archived — there is no undo. (Rejecting a registration is NOT this: nothing is destroyed and the decision can be changed.)",
+  personal_information:
+    "Reads burners' legal names, email addresses, phone numbers, SA ID and passport numbers, emergency contacts and medical notes — in the domains this department owns and nowhere else. A supplier lead reads supply-related details, never a theme camp's members. Give it to the people whose job needs it and to nobody else; org-level reads of personal information are recorded.",
 };
 
 /**
@@ -617,6 +607,12 @@ function scopeReason(
  * silently-hidden control teaches them less. Never leaks the blocked data, and
  * never says "god" out loud: the console calls that rank System manager.
  *
+ * NO PER-CAPABILITY SWITCH. This used to be one `case` per capability, which is
+ * the same shape that let `manage_camp_categories` exist: a vocabulary where
+ * adding a feature meant adding an arm. The refusal is now composed from the
+ * capability's own label plus WHY it failed, so a new domain needs no new copy
+ * and a new capability needs one row in `ORG_CAPABILITY_CONSEQUENCES`.
+ *
  * `domain` is the part of the console the refused action was on. Pass it
  * wherever it is known: it is the difference between "your role does not reach
  * here" and a sentence naming which department does.
@@ -627,42 +623,70 @@ export function orgCapabilityRefusal(
   domain: OrgDomain | null = null,
 ): string {
   if (!actor) return "Not authorised for the organiser console.";
-  const manager = ORG_RANK_LABELS.god;
-  const ask = `Ask a ${manager.toLowerCase()} to add it to one of your roles.`;
+  const manager = ORG_RANK_LABELS.god.toLowerCase();
+  const ask = `Ask a ${manager} to add it to one of your roles.`;
+  const doing = ORG_CAPABILITY_CONSEQUENCES[capability];
 
   // The rank ceiling comes FIRST, because for an engineer it is the whole
   // answer and "none of your roles grant it" would send them to ask for a role
   // edit that cannot work.
   if (isRankCarveOut(actor, capability)) {
     return capability === "delete"
-      ? `${ORG_RANK_LABELS.engineer} accounts reach every department, and deliberately cannot delete anything in any of them. Destroying org data is org work — ask someone with the org staff door to do it, or ask a ${manager.toLowerCase()} to change your access.`
-      : `${ORG_RANK_LABELS.engineer} accounts reach every department, and deliberately never see personal information — names, contact details, ID numbers or medical notes — in any of them. Everything else on this screen is yours. No role edit changes that; the ${manager.toLowerCase()} would have to change your access itself.`;
+      ? `${ORG_RANK_LABELS.engineer} accounts reach every department, and deliberately cannot delete anything in any of them. Destroying org data is org work — ask someone with the org staff door to do it, or ask a ${manager} to change your access.`
+      : `${ORG_RANK_LABELS.engineer} accounts reach every department, and deliberately never see personal information — names, contact details, ID numbers or medical notes — in any of them. Everything else on this screen is yours. No role edit changes that; the ${manager} would have to change your access itself.`;
   }
 
-  const noRoles = actor.roles.length === 0;
-  if (noRoles && capability !== "manage_accounts") {
-    return `Your account can open the console but holds no org roles yet, so there is nothing it can do here. A ${manager.toLowerCase()} assigns roles from the Accounts screen.`;
+  if (SYSTEM_MANAGER_ONLY_SET.has(capability)) {
+    return `Only a ${manager} can do that. It is deliberately not grantable to a role — it is what keeps every other permission safe to edit.`;
   }
-  switch (capability) {
-    case "read":
-      return `None of your org roles grant reading this. ${ask}`;
-    case "read_personal_information":
-      return isDepartmentScopedGrant(actor, "read_personal_information")
-        ? `You see people's details in your own department only. ${scopeReason(actor, domain, "access to personal information")}`
-        : `None of your org roles see personal information — names, contact details, ID numbers or medical notes. Everything else on this screen is yours. ${ask}`;
-    case "write":
-      return `None of your org roles can make that change. ${ask}`;
-    case "delete":
-      return isDepartmentScopedGrant(actor, "delete")
-        ? `You can delete things in your own department only. ${scopeReason(actor, domain, "delete")}`
-        : `None of your org roles can delete things. ${ask}`;
-    case "manage_camp_categories":
-      return `None of your org roles manage camp categories, so you can read the taxonomy but not change it. ${ask}`;
-    case "manage_accounts":
-      return `Only a ${manager.toLowerCase()} can change someone's org access or edit roles. That one is deliberately not grantable — it is what keeps every other permission safe to edit.`;
-    case "read_system":
-      return `None of your org roles open the system panel. It shows how this deployment is configured and whether its services are healthy — IT work rather than org work. ${ask}`;
+
+  if (actor.roles.length === 0) {
+    return `Your account can open the console but holds no org roles yet, so there is nothing it can do here. A ${manager} assigns roles from the Accounts screen.`;
   }
+
+  // Held SOMEWHERE but not here: the department boundary is the reason, and
+  // naming which department owns this screen is the useful half.
+  if (isDepartmentScopedGrant(actor, capability)) {
+    return `You can ${doing} in your own department only. ${scopeReason(actor, domain, ORG_CAPABILITY_LABELS[capability].toLowerCase())}`;
+  }
+
+  return `None of your org roles ${doing}. ${ask}`;
+}
+
+/**
+ * DOES THIS ACTOR RUN THE DEPLOYMENT? — the system panel's question.
+ *
+ * Engineers AND System managers, and it is a RANK question rather than a
+ * capability: "who runs this deployment" is the engineer's whole job
+ * description, not something a department grants.
+ *
+ * This replaced the `read_system` capability. Collapsing that into
+ * `isSystemManager` would have been the tidy-looking mistake — it would have
+ * locked engineers out of the panel that exists for them, which the console
+ * header has always said is theirs ("Engineer and System manager only"). The
+ * capability was never departmental, so it had no business in a department's
+ * CRUD vocabulary; it belongs here, next to the ranks.
+ */
+export function runsDeployment(actor: OrgActor | null | undefined): boolean {
+  return actor?.rank === "engineer" || actor?.rank === "god";
+}
+
+/** The refusal for a deployment-running surface. */
+export function runsDeploymentRefusal(): string {
+  return `The system panel shows how this deployment is configured and whether its services are healthy — IT work rather than org work, so it is open to ${ORG_RANK_LABELS.engineer.toLowerCase()} and ${ORG_RANK_LABELS.god.toLowerCase()} accounts only. Nothing on it is personal or destructible; you are not missing org work.`;
+}
+
+/**
+ * THE ADMIN REFUSAL — administering the deployment is the System manager RANK,
+ * not a capability, so it needs its own sentence rather than an arm in the
+ * capability refusal.
+ *
+ * `what` names the thing that was refused, lowercase, no full stop: "change
+ * someone's org access", "open the system panel", "manage departments".
+ */
+export function systemManagerRefusal(what: string): string {
+  const manager = ORG_RANK_LABELS.god.toLowerCase();
+  return `Only a ${manager} can ${what}. That is the rank rather than a permission, so it cannot be granted to a role — which is what keeps every other permission safe to edit.`;
 }
 
 /**
@@ -678,7 +702,7 @@ export function canReadPersonalInformationIn(
   actor: OrgActor | null | undefined,
   domain: OrgDomain,
 ): boolean {
-  return orgCanInDomain(actor, "read_personal_information", domain);
+  return orgCanInDomain(actor, "personal_information", domain);
 }
 
 /**
@@ -695,7 +719,7 @@ export function canReadPersonalInformationIn(
 export function canReadPersonalInformationAnywhere(
   actor: OrgActor | null | undefined,
 ): boolean {
-  return orgCan(actor, "read_personal_information");
+  return orgCan(actor, "personal_information");
 }
 
 /**

@@ -96,6 +96,12 @@ export const projectRoleKindEnum = pgEnum("project_role_kind", [
 // EDITABLE rights; `custom` rows a System manager creates and deletes freely.
 // The same permanence idea as `project_role_kind` above — one mental model.
 export const orgRoleKindEnum = pgEnum("org_role_kind", ["system", "custom"]);
+/** Migration 0022. `system` departments are seeded and undeletable; see
+ * @quagga/types `OrgDepartmentKind` for why the load-bearing ones must exist. */
+export const orgDepartmentKindEnum = pgEnum("org_department_kind", [
+  "system",
+  "custom",
+]);
 
 export const roleColorEnum = pgEnum("role_color", [
   "teal",
@@ -757,6 +763,13 @@ export const orgDepartments = pgTable(
     nameNormalized: text("name_normalized").notNull(),
     /** One honest line about what this department answers for. Optional. */
     description: text("description"),
+    /**
+     * PERMANENCE (migration 0022). `system` departments are seeded and cannot
+     * be deleted — Theme camps and Suppliers each back a deployed portal, so a
+     * console where they can go missing is a console that can orphan an entire
+     * application. Their rights and domains stay editable.
+     */
+    kind: orgDepartmentKindEnum("kind").notNull().default("custom"),
     sort: integer("sort").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
