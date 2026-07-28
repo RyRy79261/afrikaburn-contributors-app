@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# One run per branch. Pushing again cancels the superseded run instead of
+# leaving two full e2e fleets racing each other for runners — which is what
+# happened while this file was being iterated on.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: lint · typecheck · test · build
@@ -49,16 +56,50 @@ jobs:
   # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
   # CI runs and the thing a developer runs cannot drift apart.
   e2e:
-    name: e2e · persona suite (${{ matrix.shard }}/8)
+    name: e2e · ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      # Don't cancel the other shards when one fails — a partial picture of what
-      # broke is far less useful than the whole one, and this suite is the only
-      # thing that exercises the product end to end.
+      # Don't cancel the others when one fails — a partial picture of what broke
+      # is far less useful than the whole one, and this suite is the only thing
+      # that exercises the product end to end.
       fail-fast: false
+      # SPLIT BY PERSONA, NOT BY `--shard=n/8`. A mechanical slice cannot be
+      # named: "shard 2 of 8 failed" tells you nothing about what broke, and you
+      # have to open the log to learn even which app was involved. The persona
+      # directories already ARE the split, they are well balanced (6-27 tests),
+      # and the job name then says what the failure means.
+      #
+      # `side` marks which app each persona exercises. org-staff and god are the
+      # console — the surface where a mistake exposes personal information,
+      # destroys a supplier or approves the wrong thing — so they are the two
+      # worth reading first when the board goes red.
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        include:
+          - persona: anon
+            label: "anon · signed-out surfaces + privacy"
+            side: web
+          - persona: new-burner
+            label: "new burner · sign-up, bio, the blocking gate"
+            side: web
+          - persona: camp-member
+            label: "camp member · a member of someone else's camp"
+            side: web
+          - persona: camp-lead
+            label: "camp lead · camp lifecycle, invites, registration"
+            side: web
+          - persona: officer
+            label: "officer · assignment consent + phone disclosure"
+            side: web
+          - persona: org-staff
+            label: "ORG staff · review queue, department scoping"
+            side: org
+          - persona: god
+            label: "ORG system manager · anti-lockout, escalation refusals"
+            side: org
+          - persona: supplier
+            label: "supplier · onboarding, documents, standing"
+            side: suppliers
     steps:
       - uses: actions/checkout@v4
 
@@ -98,7 +139,6 @@ jobs:
           # Parallelism comes from SHARDS instead — 8 runners x 2 workers = 16
           # concurrent, same throughput, no contention.
           E2E_WORKERS: "2"
-          E2E_SHARD: ${{ matrix.shard }}/8
           # Production build, not `next dev`. Next compiles a route on FIRST
           # REQUEST, and there are 65 pages across the three apps — so a dev-mode
           # run pays a multi-second compile the first time any spec visits any
@@ -120,14 +160,14 @@ jobs:
           E2E_PROJECTS: desktop-chromium
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
-        run: ./scripts/e2e-local.sh
+        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
 
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          # Per shard, or four uploads collide on one name.
-          name: playwright-report-shard-${{ matrix.shard }}
+          # Per persona, or eight uploads collide on one name.
+          name: playwright-report-${{ matrix.persona }}
           path: |
             e2e/playwright-report
             e2e/test-results
