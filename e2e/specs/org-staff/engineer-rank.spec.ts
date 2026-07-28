@@ -103,7 +103,7 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     // Categories: readable, with the reason stated, and no way to change them.
     await engineer.org.goto("/categories");
     await expect(
-      engineer.org.getByText(/none of your org roles manage camp categories/i),
+      engineer.org.getByText(/only a system manager can change the camp categories/i),
     ).toBeVisible();
     await expect(
       engineer.org.getByRole("button", { name: /^add category$/i }),

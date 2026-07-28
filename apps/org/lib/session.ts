@@ -11,6 +11,7 @@ import {
   orgRankFromRole,
   sanitizeOrgPermissions,
   ORG_RANK_LABELS,
+  systemManagerRefusal,
   type DomainOwnership,
   type OrgActor,
   type OrgCapability,
@@ -353,16 +354,23 @@ export async function requireOrgSession(options?: {
  * This is a rail, not a convenience. Editable permissions are only safe because
  * the ability to edit them cannot itself be granted away — so this guard asks
  * the anchor directly rather than a capability a role might one day carry.
+ *
+ * `what` names the refused thing, lowercase and without a full stop, for the
+ * screen that has to explain itself: "change the camp categories". It exists
+ * because the rank guards more than roles now — Ryan reserved the camp-category
+ * taxonomy to the System manager as well (27 Jul 2026), and a screen that says
+ * "manage departments, roles or who holds them" while refusing a category edit
+ * is telling the reader about a different rule than the one that stopped them.
  */
-export async function requireSystemManager(): Promise<OrgSession> {
+export async function requireSystemManager(
+  what = "manage departments, roles or who holds them",
+): Promise<OrgSession> {
   const state = await resolveOrgSession();
   if (state.kind !== "ok") {
     throw new Error("Not authorised for the organiser console.");
   }
   if (!isSystemManager(state.actor)) {
-    throw new Error(
-      `Only a ${ORG_RANK_LABELS.god.toLowerCase()} can manage departments, roles or who holds them.`,
-    );
+    throw new Error(systemManagerRefusal(what));
   }
   return state;
 }

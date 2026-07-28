@@ -139,10 +139,13 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
       staff.org.getByRole("heading", { name: /system management/i }),
     ).toBeVisible();
     // The refusal is the ONE the resolver produces (@quagga/core
-    // `orgCapabilityRefusal`), so the page cannot drift from what the guard
-    // would say.
+    // `runsDeploymentRefusal`), so the page cannot drift from what the guard
+    // would say. It is a RANK sentence, not a capability one: "read_system" was
+    // dropped in the CRUD rework — running the deployment is the engineer's job
+    // description, not something a department grants — so the old
+    // "none of your org roles open the system panel" no longer exists anywhere.
     await expect(
-      staff.org.getByText(/none of your org roles open the system panel/i),
+      staff.org.getByText(/IT work rather than org work/i),
     ).toBeVisible();
 
     // Refused, not 404'd, and the reason names both the rank that holds it and
