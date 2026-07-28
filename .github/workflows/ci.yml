@@ -146,8 +146,14 @@ jobs:
           # still measure ~2m on a green run — this cap is ~1.5x the slowest
           # real test, not spare room. It survived the proxy fix because these
           # journeys are interaction-bound, not render-bound: making pages 28x
-          # faster barely moved them. The real fix is a factory that seeds a
-          # registration instead of clicking through one.
+          # faster barely moved them.
+          #
+          # This once said "the real fix is a factory that seeds a registration
+          # instead of clicking through one". That is not a fix available here:
+          # @quagga/e2e is defined as "drives the REAL UI — no DB back doors"
+          # (its package.json), and it is meant to be runnable against a deployed
+          # preview, where there is no database to seed. The cost is the price of
+          # the guarantee. 180s is the honest cap for it.
           E2E_TEST_TIMEOUT: "180000"
           # Production build, not `next dev`. Next compiles a route on FIRST
           # REQUEST, and there are 65 pages across the three apps — so a dev-mode
@@ -206,16 +212,95 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # MOBILE 360 IS OFF.
+  # MOBILE 360 — INFORMATIONAL, PER PERSONA, NON-BLOCKING.
   #
-  # It ran the WHOLE 144-test suite on ONE runner while the desktop jobs were
-  # split per persona, so it took an hour every single time and told us nothing
-  # we acted on — the specs were written against desktop layouts, so it fails by
-  # construction. An informational job that burns an hour per push is not
-  # informational, it is noise with a bill.
+  # It was off. It had run the WHOLE suite on ONE runner while desktop was split
+  # per persona, so it cost an hour on every push and told us nothing we acted
+  # on. An informational job that burns an hour is not informational, it is
+  # noise with a bill.
   #
-  # THE PRECONDITION IS NOW MET: desktop went green on 28 Jul. Turning it back
-  # on is a deliberate next step, not an oversight — give it the same
-  # per-persona matrix as the gating job above so it costs minutes rather than
-  # an hour, and expect it red at first: the specs were written against desktop
-  # layouts, so triage is the work, not the switch.
+  # It is back on the same per-persona matrix as the gate above, so it costs
+  # minutes, and `continue-on-error` so it CANNOT redden the board. That
+  # combination is the point: the project has never been executed, every spec in
+  # it is of unknown status, and making an unknown-status project blocking on
+  # the day you switch it on produces a red gate nobody trusts. This produces
+  # the triage list instead — per persona, so a failure is named — and the
+  # reports are uploaded under `mobile-*` for exactly that.
+  #
+  # Expect it red at first: these specs were written against desktop layouts.
+  # Triage is the work; the switch was never the work. Promote a persona into
+  # `E2E_PROJECTS` on the gating job once its mobile failures reach zero.
+  e2e-mobile:
+    name: mobile · ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - persona: anon
+            label: "anon · signed-out surfaces + privacy"
+          - persona: new-burner
+            label: "new burner · sign-up, bio, the blocking gate"
+          - persona: camp-member
+            label: "camp member · a member of someone else's camp"
+          - persona: camp-lead
+            label: "camp lead · camp lifecycle, invites, registration"
+          - persona: officer
+            label: "officer · assignment consent + phone disclosure"
+          - persona: org-staff
+            label: "ORG staff · review queue, department scoping"
+          - persona: god
+            label: "ORG system manager · anti-lockout, escalation refusals"
+          - persona: supplier
+            label: "supplier · onboarding, documents, standing"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
+
+      - name: Run the persona suite on mobile-360
+        env:
+          E2E_RESET_DB: "1"
+          E2E_WORKERS: "2"
+          E2E_TEST_TIMEOUT: "180000"
+          E2E_SERVE: build
+          # NO RETRY. This job exists to produce a triage list, and a retry
+          # only re-pays for a failure already recorded.
+          E2E_RETRIES: "0"
+          E2E_PROJECTS: mobile-360
+          BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
+          PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
+        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+
+      - name: Collect the app server log
+        if: always()
+        run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-report-${{ matrix.persona }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            server.log
+          retention-days: 14
+          if-no-files-found: ignore

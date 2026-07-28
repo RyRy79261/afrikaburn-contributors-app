@@ -162,19 +162,25 @@ export async function setHardLockedBioData(
  * COULDN'T FIND THAT CAMP" — and no camp data appears. So the refusal is real;
  * only the status line disagrees with it.
  *
- * It is NOT the loading boundaries, which was the obvious theory. Removing
- * every `loading.tsx` in the app (root, the `(app)` group, and all three camp
- * segments) and rebuilding changed nothing; so did removing the segment's own
- * `not-found.tsx`. A `notFound()` thrown inside a `force-dynamic` page is
- * simply answered on a response Next has already committed, while an unmatched
- * route is answered before there is one.
+ * THREE FIXES WERE TRIED AND MEASURED. None moved the status:
+ *   1. Removing every `loading.tsx` in the app — root, the `(app)` group, and
+ *      all three camp segments. No change.
+ *   2. Removing the segment's own `not-found.tsx`. No change.
+ *   3. Hoisting the existence check into a `camps/[slug]/layout.tsx`, so it
+ *      resolves before the page. No change: still 200.
  *
- * That is worth fixing in the product — a nonexistent camp answering 200 is
- * wrong for crawlers and for any uptime check — but it is a status-code bug, not
- * an authorisation one, and pinning six specs to a status the framework does not
- * emit here only re-reports the same finding six times. So this asserts the
- * property that actually protects a member of another camp: the refusal
- * renders, and `forbidden` content does not.
+ * The cause is above all three. `(app)/layout.tsx` declares
+ * `dynamic = "force-dynamic"` for the whole group, so the response is committed
+ * before any descendant — layout or page — decides anything, while an unmatched
+ * route is answered before there is a response at all. The two remaining routes
+ * are dropping `force-dynamic` (which that layout's comment explains would let a
+ * signed-out shell be prerendered and then served to everyone — a real bug, in
+ * exchange for a status line) or DB-aware middleware on every camp URL. Both
+ * cost more than they buy.
+ *
+ * So this asserts the property that actually protects a member of another camp:
+ * the refusal renders, and forbidden content does not. If the status ever
+ * matters enough to pay for, the note above is what has already been ruled out.
  *
  * Pass `absent` (the camp name, a member's name, anything the viewer must not
  * see) and it is asserted missing from the page.
