@@ -14,6 +14,7 @@
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import {
   signUpBurner,
+  signInAs,
   createCamp,
   submitRegistration,
 } from "../../personas/factories";
@@ -174,12 +175,14 @@ test.describe("org staff · registration review loop", () => {
     const detailUrl = await openDetailFromQueue(staff.org, camp.campName);
     const reviewerB = await makeAppPage("org");
     // A second concurrent session for the same org_staff principal.
-    await reviewerB.goto("/auth/sign-in");
-    await reviewerB.getByLabel("Email", { exact: true }).fill(staff.account.email);
-    await reviewerB
-      .getByLabel("Password", { exact: true })
-      .fill(staff.account.password);
-    await reviewerB.getByRole("button", { name: /^sign in$/i }).click();
+    //
+    // THE FACTORY, not a hand-rolled form fill. `signInAs` waits for the sign-in
+    // to LAND — the URL leaving /auth/sign-in, which only happens once the POST
+    // resolved — so the next navigation actually carries a session. Navigating
+    // straight off the click tore the document down mid-POST, and this page
+    // arrived at the console SIGNED OUT: the staff wall, which has no Approve
+    // button. The missing button read as a permission bug and was a race.
+    await signInAs(reviewerB, staff.account, "org");
     await reviewerB.goto(detailUrl);
     await expect(
       reviewerB.getByRole("button", { name: /^approve$/i }),

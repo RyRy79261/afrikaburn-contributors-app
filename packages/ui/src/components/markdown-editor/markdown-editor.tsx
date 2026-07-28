@@ -146,7 +146,22 @@ export function MarkdownEditor({
     content: value,
     immediatelyRender: false,
     editorProps: {
-      attributes: { class: PROSE_CLASS, "aria-label": ariaLabel },
+      // `role="textbox"` + `aria-multiline` because a bare
+      // `contenteditable` div announces as a generic group: assistive
+      // technology is told there is something here, but not that it can be
+      // typed into. This is the markup the ARIA authoring practices specify for
+      // a rich-text region, and it is the difference between "Bulletin body,
+      // group" and "Bulletin body, multi-line edit text" in a screen reader.
+      //
+      // Found because the e2e spec asked for it by role and could not find it —
+      // an accessibility gap surfacing as a test failure, which is the honest
+      // version of what that assertion was for.
+      attributes: {
+        class: PROSE_CLASS,
+        "aria-label": ariaLabel,
+        role: "textbox",
+        "aria-multiline": "true",
+      },
     },
     onUpdate: ({ editor: e }) => {
       onChange?.(

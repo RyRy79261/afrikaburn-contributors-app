@@ -114,8 +114,14 @@ test.describe("org staff · questionnaires", () => {
 
     // Send lands back on the list; the outbound activation row carries the id.
     await org.waitForURL(/\/questionnaires$/);
+    // EXCLUDE the card's own Edit and Send links. Three href shapes share the
+    // `/questionnaires/<key>/` prefix on this page — `…/edit`, `…/activate`
+    // and the activation row `…/<uuid>` — so `.first()` picked whichever the
+    // card rendered first and the id regex then found nothing in "/edit".
     const outboundRow = org
-      .locator(`a[href^="/questionnaires/${key}/"]`)
+      .locator(
+        `a[href^="/questionnaires/${key}/"]:not([href$="/edit"]):not([href$="/activate"])`,
+      )
       .first();
     await expect(outboundRow).toBeVisible();
     const activationId = activationIdFrom(await outboundRow.getAttribute("href"));
