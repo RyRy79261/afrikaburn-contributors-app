@@ -10,7 +10,6 @@ import {
   orgCapabilityRefusal,
   orgRankFromRole,
   sanitizeOrgPermissions,
-  ORG_RANK_LABELS,
   systemManagerRefusal,
   type DomainOwnership,
   type OrgActor,
