@@ -534,6 +534,37 @@ export async function unassignOfficer(
   membershipId: string,
   roleId: string,
 ): Promise<RoleMutationResult> {
+  // SCOPED TO THE CAMP, exactly as `assignOfficer` above is.
+  //
+  // This took `groupId` and never used it, deleting on (membershipId, roleId)
+  // alone. Both of those arrive FROM THE CLIENT
+  // (apps/web/app/(app)/camps/[slug]/actions.ts:302), while the permission check
+  // upstream authorises the caller only for the camp named by `slug`. So a lead
+  // of camp A could post camp B's membership and role ids, clear the permission
+  // gate on their own camp, and strip an officer from a camp they have nothing to
+  // do with — a cross-camp write, in the officer model that decides who
+  // AfrikaBurn may contact about safety.
+  //
+  // The role lookup is per-group and the membership must belong to the same
+  // group, so a foreign id now fails the same way an unknown one does.
+  const roles = await listRoles(groupId);
+  const role = roles.find((r) => r.id === roleId && r.officerKey !== null);
+  if (!role) return { ok: false, error: "That officer role doesn't exist." };
+
+  const [membership] = await db()
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.id, membershipId),
+        eq(schema.memberships.groupId, groupId),
+      ),
+    )
+    .limit(1);
+  if (!membership) {
+    return { ok: false, error: "That member isn't in this camp." };
+  }
+
   await db()
     .delete(schema.memberRoleAssignments)
     .where(

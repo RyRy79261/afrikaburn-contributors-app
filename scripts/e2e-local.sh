@@ -105,5 +105,15 @@ cd e2e
 # six-section registration, the two-user invite round trips) start timing out at
 # four — a resource problem that reads exactly like a broken product. Override
 # with E2E_WORKERS if the machine can take it.
-exec pnpm exec playwright test --project=desktop-chromium \
+# PROJECTS. This pinned `--project=desktop-chromium` unconditionally, so the
+# `mobile-360` project defined in playwright.config.ts had never executed once —
+# every mobile finding in every audit so far has been a code read, not a run.
+# Default to BOTH; narrow with E2E_PROJECTS when iterating locally, e.g.
+#   E2E_PROJECTS=desktop-chromium ./scripts/e2e-local.sh specs/god
+PROJECT_ARGS=()
+for project in ${E2E_PROJECTS:-desktop-chromium mobile-360}; do
+  PROJECT_ARGS+=("--project=$project")
+done
+
+exec pnpm exec playwright test "${PROJECT_ARGS[@]}" \
   --workers="${E2E_WORKERS:-2}" "$@"

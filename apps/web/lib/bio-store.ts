@@ -25,7 +25,12 @@ import {
   type QuestionnaireResponses,
 } from "@quagga/types";
 import { db, schema } from "./db";
-import { safeEncrypt, decryptOrNull, isCryptoConfigured } from "./crypto-guard";
+import {
+  safeEncrypt,
+  decryptOrNull,
+  decryptField,
+  isCryptoConfigured,
+} from "./crypto-guard";
 import { generateProfileKeypair, fingerprintPublicKey } from "./keys";
 import { completeRequiredAction } from "./required-actions";
 
@@ -299,11 +304,64 @@ export async function saveBio(input: {
     );
   }
 
+  // NEVER DESTROY CIPHERTEXT WE MERELY COULD NOT READ.
+  //
+  // `getBio` populates this form through `decryptOrNull`, which yields null both
+  // when a field is genuinely empty AND when the stored ciphertext cannot be
+  // decrypted (wrong or rotated PGCRYPTO_KEY, or a pre-encryption row). So a
+  // burner whose medical notes were written under a different key opens their
+  // profile, sees an empty medical box, changes their home city, saves — and the
+  // save wrote null over ciphertext nobody could read but which was still the
+  // only copy. Irreversible loss of the exact field a medic needs.
+  //
+  // The distinction that makes this safe: an empty incoming value is a
+  // DELIBERATE CLEAR only when the form actually showed the old value. If the
+  // stored value was unreadable, the form showed nothing, so "empty" carries no
+  // intent and the ciphertext is preserved untouched. A readable value cleared
+  // to empty still clears, as it must.
+  const [priorRow] = await db()
+    .select({
+      medicalNotes: schema.burnerBios.medicalNotes,
+      saIdEncrypted: schema.burnerBios.saIdEncrypted,
+      passportEncrypted: schema.burnerBios.passportEncrypted,
+    })
+    .from(schema.burnerBios)
+    .where(
+      and(
+        eq(schema.burnerBios.userId, input.userId),
+        eq(schema.burnerBios.editionId, input.editionId),
+      ),
+    )
+    .limit(1);
+
+  /** Encrypt the incoming value, or keep unreadable stored ciphertext intact. */
+  function encryptOrPreserve(
+    incoming: string | null,
+    stored: string | null | undefined,
+  ): string | null {
+    const next = safeEncrypt(incoming);
+    if (next !== null) return next;
+    return decryptField(stored).state === "unreadable" ? (stored ?? null) : null;
+  }
+
   const saIdEncrypted =
-    fields.idType === "sa_id" ? safeEncrypt(fields.idNumber) : null;
+    fields.idType === "sa_id"
+      ? encryptOrPreserve(fields.idNumber, priorRow?.saIdEncrypted)
+      : // Switching document type must not silently strip the other one's
+        // unreadable ciphertext either.
+        decryptField(priorRow?.saIdEncrypted).state === "unreadable"
+        ? (priorRow?.saIdEncrypted ?? null)
+        : null;
   const passportEncrypted =
-    fields.idType === "passport" ? safeEncrypt(fields.idNumber) : null;
-  const medicalNotesEncrypted = safeEncrypt(fields.medicalNotes);
+    fields.idType === "passport"
+      ? encryptOrPreserve(fields.idNumber, priorRow?.passportEncrypted)
+      : decryptField(priorRow?.passportEncrypted).state === "unreadable"
+        ? (priorRow?.passportEncrypted ?? null)
+        : null;
+  const medicalNotesEncrypted = encryptOrPreserve(
+    fields.medicalNotes,
+    priorRow?.medicalNotes,
+  );
 
   const now = new Date();
   const completedAt = input.final ? now : null;

@@ -32,3 +32,126 @@ jobs:
 
       - name: CI gate
         run: pnpm turbo run lint typecheck test build
+
+  # THE E2E SUITE, WHICH USED TO GATE NOTHING.
+  #
+  # 55 spec files and 144 tests existed, and CI ran `lint typecheck test build`
+  # — none of which starts a browser. So every persona journey, every refusal
+  # that protects the permission model, and the whole invite round trip could
+  # break on main and CI would stay green. The suite was only ever run by hand,
+  # on one laptop, against one Playwright project.
+  #
+  # A separate job so the fast gate above stays fast: this one has to stand up
+  # Postgres plus the two Neon proxies (the serverless driver speaks
+  # SQL-over-HTTP and WebSocket, and no single proxy does both — see
+  # docker-compose.local.yml), migrate, seed, and boot three apps.
+  #
+  # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
+  # CI runs and the thing a developer runs cannot drift apart.
+  e2e:
+    name: e2e · persona suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
+
+      - name: Run the persona suite
+        # E2E_RESET_DB=1 so the run starts from a known-empty database. The
+        # 27 Jul audit found the local suite running against 179 users of
+        # accumulated state, which made four failures look like product bugs
+        # when they were pagination timeouts against junk data.
+        env:
+          E2E_RESET_DB: "1"
+          E2E_WORKERS: "4"
+          # DESKTOP GATES. `mobile-360` runs in the separate informational job
+          # below rather than here, deliberately: it has never executed once, so
+          # every spec in it is of unknown status. Making an unknown-status
+          # project blocking on the day you switch it on produces a red gate
+          # nobody trusts, which is worse than no gate. Promote it here once its
+          # failures are triaged to zero.
+          E2E_PROJECTS: desktop-chromium
+          BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
+          PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
+        run: ./scripts/e2e-local.sh
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # MOBILE, INFORMATIONAL FOR NOW.
+  #
+  # playwright.config.ts has defined a `mobile-360` project all along and the
+  # runner pinned `--project=desktop-chromium`, so it has never executed — which
+  # means every "mobile" finding in every audit to date is a code read, not a
+  # run, despite the design having mobile frames for every page.
+  #
+  # `continue-on-error` because the honest expectation is that it fails: the
+  # specs were written against desktop layouts. The value is the REPORT — a real
+  # list of what breaks at 360px. Delete this job and add the project to the
+  # gating one above once that list is empty.
+  e2e-mobile:
+    name: e2e · mobile 360 (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
+
+      - name: Run the persona suite at 360px
+        env:
+          E2E_RESET_DB: "1"
+          E2E_WORKERS: "4"
+          E2E_PROJECTS: mobile-360
+        run: ./scripts/e2e-local.sh
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-mobile
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 14
+          if-no-files-found: ignore
