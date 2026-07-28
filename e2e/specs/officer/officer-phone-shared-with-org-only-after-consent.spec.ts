@@ -61,8 +61,11 @@ test.describe("officer phone → org, only after consent", () => {
 
     // AFTER: re-fetch the same review; the officer's name and phone now appear.
     await orgPage.goto(detailUrl);
+    // `.first()` — the accepted officer's username lands in the review twice
+    // (the officers block and the member roster), and the assertion here is
+    // "it is now visible at all", not "exactly once".
     await expect(
-      orgPage.getByText(new RegExp(camp.officer.username)),
+      orgPage.getByText(new RegExp(camp.officer.username)).first(),
     ).toBeVisible();
     await expect(
       orgPage.getByText(new RegExp(marker)).first(),

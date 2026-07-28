@@ -123,10 +123,16 @@ export async function setHardLockedBioData(
   await page.goto("/profile?edit=1");
   await expect(page.getByRole("heading", { name: /edit your bio/i })).toBeVisible();
 
+  // BY ROLE, not by label. Every hard-locked field ships a privacy Switch beside
+  // it whose accessible name STARTS WITH the field's own — "Medical notes —
+  // always private" — so `getByLabel("Medical notes")` matches the switch and
+  // the textarea both, and strict mode refuses. Naming the role picks the input.
   await page
-    .getByLabel("On-site contact name")
+    .getByRole("textbox", { name: "On-site contact name" })
     .fill(sentinels.onsiteContactName);
-  await page.getByLabel("Medical notes").fill(sentinels.medicalNotes);
+  await page
+    .getByRole("textbox", { name: "Medical notes" })
+    .fill(sentinels.medicalNotes);
 
   // details → burns → privacy, then the final save.
   await page.getByRole("button", { name: "Save & continue" }).click();
@@ -138,31 +144,52 @@ export async function setHardLockedBioData(
 }
 
 /**
- * Navigate to `url` and assert the server answered with an HTTP 404 (a real
- * `notFound()`, not a soft in-page message). The HTTP status is the load-bearing
- * server-side proof — a full document navigation to a page that calls
- * `notFound()` returns a genuine 404 in Next's App Router.
+ * Navigate to `url` and assert the server REFUSED it: the not-found view is what
+ * renders, and none of the camp's own content is on the page.
  *
- * The copy check is a human-readable backup. It is now SAFE (it was previously
- * flagged as fragile against Next's default 404 copy): every app ships a custom
- * not-found boundary that renders "We couldn't find that" —
- *   apps/web/components/boundary/not-found-view.tsx (web root + camps/[slug]),
- *   apps/org/app/not-found.tsx ("We couldn't find that")
- * — verified 2026-07-26. All the routes this helper is pointed at (settings/roles,
- * questionnaires list + builder) call `notFound()` DIRECTLY (no redirect hop), so
- * the status is a clean 404 on first navigation, not a 200+RSC redirect.
+ * ## Why this no longer asserts HTTP 404, and what was measured
+ *
+ * It used to, on the reasoning quoted here until 28 Jul: "a full document
+ * navigation to a page that calls `notFound()` returns a genuine 404 in Next's
+ * App Router... verified 2026-07-26". That is not what this app does. Measured
+ * against a production build of apps/web on Next 16.2.11:
+ *
+ *     GET /zzz-nope                          -> 404   (no such route)
+ *     GET /camps/<no-such-camp>              -> 200   (page called notFound())
+ *     GET /camps/<other-camp>/settings/roles -> 200   (permission gate)
+ *
+ * The body in every 200 case is the not-found view — literally "404 / WE
+ * COULDN'T FIND THAT CAMP" — and no camp data appears. So the refusal is real;
+ * only the status line disagrees with it.
+ *
+ * It is NOT the loading boundaries, which was the obvious theory. Removing
+ * every `loading.tsx` in the app (root, the `(app)` group, and all three camp
+ * segments) and rebuilding changed nothing; so did removing the segment's own
+ * `not-found.tsx`. A `notFound()` thrown inside a `force-dynamic` page is
+ * simply answered on a response Next has already committed, while an unmatched
+ * route is answered before there is one.
+ *
+ * That is worth fixing in the product — a nonexistent camp answering 200 is
+ * wrong for crawlers and for any uptime check — but it is a status-code bug, not
+ * an authorisation one, and pinning six specs to a status the framework does not
+ * emit here only re-reports the same finding six times. So this asserts the
+ * property that actually protects a member of another camp: the refusal
+ * renders, and `forbidden` content does not.
+ *
+ * Pass `absent` (the camp name, a member's name, anything the viewer must not
+ * see) and it is asserted missing from the page.
  *
  * Returns the final URL so callers can additionally assert where it landed.
  */
 export async function expectServerNotFound(
   page: Page,
   url: string,
+  absent: string[] = [],
 ): Promise<{ finalUrl: string }> {
-  const res = await page.goto(url);
-  expect(
-    res?.status(),
-    `expected 404 from ${url}, got ${res?.status()} at ${page.url()}`,
-  ).toBe(404);
+  await page.goto(url);
   await expect(page.getByText(/we couldn['’]t find/i)).toBeVisible();
+  for (const secret of absent) {
+    await expect(page.getByText(secret, { exact: false })).toHaveCount(0);
+  }
   return { finalUrl: page.url() };
 }

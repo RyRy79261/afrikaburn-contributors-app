@@ -45,11 +45,11 @@ test.describe("supplier onboarding lifecycle", () => {
       agreement.getByText(/you['’]ve acknowledged the supplier agreement/i),
     ).toBeVisible();
     // Registration form (1) + agreement (2) = 2/7 done.
-    await expect(suppliersPage.getByText(/2\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/2 of 7 steps complete/i)).toBeVisible();
 
     // And it is reversible (org_may_revoke → the supplier can undo their own ack).
     await agreement.getByRole("button", { name: /^undo$/i }).click();
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
   });
 
   test("a supplier submits inventory and crew for review, then withdraws crew", async ({
@@ -79,7 +79,7 @@ test.describe("supplier onboarding lifecycle", () => {
     ).toBeVisible();
 
     // Submitting is NOT completing: neither review step counts toward "done".
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
 
     // Withdrawing returns the step to a submittable state.
     await crew.getByRole("button", { name: /withdraw submission/i }).click();

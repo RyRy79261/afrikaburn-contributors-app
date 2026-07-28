@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { viewerIsGated } from "@/lib/session";
 
 /**
  * Load-bearing, not boilerplate. Every helper in this app degrades env-lessly —
@@ -32,10 +33,16 @@ export const dynamic = "force-dynamic";
  * `AppShell minimalNav` — a stranger on a one-purpose page is offered that one
  * purpose, not the whole app's navigation.
  */
-export default function AppGroupLayout({
+export default async function AppGroupLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  // A viewer held by the hard gate gets brand + sign-out and nothing else. The
+  // gate page cannot do this for itself now that the shell is a layout above
+  // it — it drew its own stripped header and got the full nav on top. Both
+  // reads behind this are request-cache()d and shared with the page's own
+  // `enforceGate`, so it is free on the surfaces that matter.
+  const gatedNav = await viewerIsGated();
+  return <AppShell gatedNav={gatedNav}>{children}</AppShell>;
 }

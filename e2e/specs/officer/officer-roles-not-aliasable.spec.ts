@@ -58,7 +58,10 @@ test.describe("officer roles cannot be aliased by the camp", () => {
     // the absence above is deliberate officer immutability, not a global lack.
     const customName = uniqueName("Bar crew");
     await webPage.getByRole("button", { name: /^new role$/i }).click();
-    await webPage.getByLabel("Name").fill(customName);
+    // BY ROLE. `getByLabel("Name")` substring-matches, and every officer row
+    // carries a lock icon labelled "Set by AfrikaBurn — officers can't be
+    // renamed" — which contains "name". Seven matches, one of them the input.
+    await webPage.getByRole("textbox", { name: "Name" }).fill(customName);
     await webPage.getByRole("button", { name: /^create role$/i }).click();
 
     await expandRow(webPage, new RegExp(escapeRe(customName)));

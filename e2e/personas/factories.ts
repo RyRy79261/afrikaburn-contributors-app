@@ -191,8 +191,13 @@ export async function signInAs(
 ): Promise<void> {
   await page.goto(signInPath(app));
   await assertConfigured(page);
-  await page.getByLabel("Email", { exact: true }).fill(account.email);
-  await page.getByLabel("Password", { exact: true }).fill(account.password);
+  // ANCHORED REGEX, NOT `{ exact: true }` — this helper serves all three apps,
+  // and the suppliers sign-in marks both fields `required`, which @quagga/ui's
+  // Field renders as a trailing "*". An exact match then waits 20s for "Email"
+  // while "Email *" is on screen; that is why every supplier spin-up through
+  // this helper timed out on a form it had already loaded.
+  await page.getByLabel(/^Email/).fill(account.email);
+  await page.getByLabel(/^Password/).fill(account.password);
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).not.toHaveURL(
     new RegExp(`${signInPath(app).replace(/\//g, "\\/")}`),
@@ -715,7 +720,21 @@ export async function registerSupplier(
   // Only when verification is OFF. With it ON, Better Auth deliberately returns
   // no session until the emailed link is followed, so waiting here would be
   // waiting for something that must not exist yet.
-  if (!needsVerification) await waitForSessionCookie(page, "sign-up");
+  if (!needsVerification) {
+    await waitForSessionCookie(page, "sign-up");
+
+    // AND WAIT FOR THE SUPPLIER ROW, which the sign-up POST does not create.
+    // sign-up-form.tsx does three things in order: `authClient.signUp.email`,
+    // then the `registerSupplier` SERVER ACTION that writes the supplier and
+    // seeds its onboarding steps, then `router.push("/onboarding")`. Waiting on
+    // the POST alone returns while step two is still in flight, so a caller that
+    // navigates immediately gets "You're signed in as …, but we couldn't match
+    // you to a supplier" — the portal is right, the row genuinely is not there
+    // yet. standing.spec.ts hit exactly that and read as a product bug; the row
+    // was in the database, linked to this very account, seconds later. Landing
+    // on /onboarding is the observable proof the action finished.
+    await page.waitForURL(/\/onboarding\/?$/, { timeout: 20_000 });
+  }
 
   if (needsVerification && mailbox) {
     const link = await mailbox.waitForLink(/verify|verification|token/i);

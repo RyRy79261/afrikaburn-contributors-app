@@ -31,7 +31,7 @@ test.describe("supplier self-registration", () => {
     ).toBeVisible();
 
     // Registration form is step 1 and is auto-completed by registering: 1/7.
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
     const regCard = suppliersPage
       .getByRole("listitem")
       .filter({ hasText: "Registration form" });
@@ -110,6 +110,6 @@ test.describe("supplier self-registration", () => {
     await expect(
       suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
     ).toBeVisible();
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
   });
 });

@@ -1,5 +1,5 @@
 import { Info, Lock } from "lucide-react";
-import { orgCan, orgCapabilityRefusal } from "@quagga/core";
+import { orgCanInDomain, orgCapabilityRefusal } from "@quagga/core";
 import { EmptyState } from "@quagga/ui/components/empty-state";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getCampCategories } from "@/lib/queries";
@@ -8,12 +8,14 @@ import { CategoriesManager } from "@/components/categories/categories-manager";
 
 // Org camp-category management (build-spec §"Camp categories", canvas frame
 // g4CzsM / X8RHa). Org-gated at the page (guardConsole) AND at every write
-// (`manage_camp_categories` inside lib/actions/categories.ts) — the UI is never
-// the security boundary. Usage counts are real join-row tallies from the query.
+// (`update` in the `camp_categories` domain, inside lib/actions/categories.ts)
+// — the UI is never the security boundary. Usage counts are real join-row
+// tallies from the query.
 //
-// READ FOR EVERY RANK, WRITTEN BY ONE. The taxonomy is edition-wide reference
-// data every camp's registration renders against, so Ryan put CRUD in the System
-// manager's hands alone (27 Jul 2026). Everyone else gets the same table without
+// READ FOR EVERY RANK, WRITTEN BY THE DEPARTMENT THAT OWNS IT. The taxonomy is
+// edition-wide reference data every camp's registration renders against, so
+// write access follows the `camp_categories` domain rather than being open to
+// anyone holding `update` somewhere. Everyone else gets the same table without
 // the controls and a line saying why — a screen that explains its own limits
 // beats one that silently lacks buttons.
 
@@ -23,7 +25,17 @@ export default async function CategoriesPage() {
   const guard = await guardConsole();
   if (!guard.ok) return guard.node;
 
-  const canManage = orgCan(guard.session.actor, "update");
+  // SCOPED TO THIS DOMAIN, matching the server. The write actions all guard
+  // `requireOrgSession({ capability: "update", domain: "camp_categories" })`;
+  // this used the unscoped `orgCan`, so anyone holding update in ANY department
+  // — suppliers, say — was shown the edit controls here and then refused by the
+  // action. The UI is not the boundary, but it should not lie about where the
+  // boundary is.
+  const canManage = orgCanInDomain(
+    guard.session.actor,
+    "update",
+    "camp_categories",
+  );
   const edition = await getActiveEdition();
   const categories = edition ? await getCampCategories(edition.id) : [];
 
@@ -54,6 +66,7 @@ export default async function CategoriesPage() {
               {orgCapabilityRefusal(
                 guard.session.actor,
                 "update",
+                "camp_categories",
               )}
             </p>
           )}
