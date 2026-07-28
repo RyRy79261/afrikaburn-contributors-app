@@ -388,27 +388,13 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
       action: "deleteSupplierDocument",
       capability: "delete",
     },
-    // The camp-category taxonomy — System manager only (Ryan named this one).
-    {
-      file: "lib/actions/categories.ts",
-      action: "createCategory",
-      capability: "create",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "updateCategory",
-      capability: "update",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "deleteCategory",
-      capability: "update",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "setGroupCategory",
-      capability: "update",
-    },
+    // (The camp-category taxonomy left this table. It is System-manager-only —
+    // Ryan named that one on 27 Jul 2026 — so its guard is the ANCHOR, not a
+    // capability, and it is asserted as such below. It was briefly listed here
+    // during the CRUD rework, which is exactly how the rule got relaxed: the
+    // seeded `org_staff` and `engineer` roles carry no department, and a
+    // department-less grant reaches every domain, so "requires update" meant
+    // "every org account".)
     // (Access management left this table: `manage_accounts` stopped being a
     // capability when the vocabulary became CRUD. `setOrgStaffRole` now calls
     // `requireSystemManager()` — the ANCHOR — which is a stronger guarantee than
@@ -443,6 +429,23 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
           `requireOrgSession\\(\\{\\s*\\n?\\s*capability: "${capability}"`,
         ),
       );
+    });
+  }
+
+  // THE ANCHOR, not a capability. A permission that can be granted can be
+  // granted to the wrong person; the camp-category taxonomy is edition-wide
+  // reference data every registration renders against, so it is reserved to the
+  // rank. `requireSystemManager` resolves `memberships.role = 'god'` directly.
+  for (const action of [
+    "createCategory",
+    "updateCategory",
+    "deleteCategory",
+    "setGroupCategory",
+  ]) {
+    it(`${action} requires the System manager anchor`, () => {
+      const body = functionBody(source("lib/actions/categories.ts"), action);
+      expect(body).toMatch(/requireSystemManager\(/);
+      expect(body).not.toMatch(/requireOrgSession\(/);
     });
   }
 
