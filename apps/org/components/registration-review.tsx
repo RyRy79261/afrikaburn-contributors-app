@@ -159,10 +159,20 @@ export function RegistrationReview({
             );
           })}
 
-          {/* Officers — accepted officer registrations share contact with org. */}
-          <Card>
+          {/* Officers — accepted officer registrations share contact with org.
+
+              A NAMED LANDMARK. This is the one block on the review whose
+              contents depend on consent, and the member roster below it prints
+              every member's display name unconditionally (correctly — camp
+              membership is not the secret). Without a name on the region there
+              is no way, for a reader OR for a test, to ask "is this person here
+              because they accepted?" rather than "is this person on the page?".
+              The POPIA spec was asserting the latter and proving nothing. */}
+          <Card role="region" aria-labelledby="officers-heading">
             <CardHeader>
-              <CardTitle className="text-base">{officersCopy.title}</CardTitle>
+              <CardTitle id="officers-heading" className="text-base">
+                {officersCopy.title}
+              </CardTitle>
               <CardDescription>{officersCopy.description}</CardDescription>
             </CardHeader>
             <CardContent>

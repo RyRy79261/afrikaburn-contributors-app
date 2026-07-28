@@ -75,24 +75,26 @@ export interface ProjectRole {
  * ## Why this is `cache()`d, and why the insert is one statement
  *
  * This runs on a READ path — `listRoles` calls it first — and the camp
- * dashboard reaches `listRoles` FOUR times in one render (directly, and inside
- * `getMemberPermissions`, `getOfficerStatus` and `getBaselineRoleId`). Those
- * four run concurrently in the page's `Promise.all`, so on a camp whose roles
- * do not exist yet all four saw an empty table, all four decided to seed, and
- * each then issued NINE separate inserts one after another — 36 sequential
- * HTTP round trips to seed nine rows, plus four redundant existence probes.
+ * dashboard reaches `listRoles` THREE times in one render (directly, and
+ * inside `getMemberPermissions` and `getOfficerStatus`). All three run
+ * concurrently in the page's `Promise.all`, so on a camp whose roles do not
+ * exist yet all three saw an empty table, all three decided to seed, and each
+ * then issued EIGHT separate inserts one after another (3 default roles + 5
+ * officer roles) — 24 sequential round trips to write eight rows, plus three
+ * redundant existence probes.
  *
  * Measured against the local stack on 28 Jul: a single camp-member spec issued
- * 72 `insert into project_roles` statements. On a laptop that is invisible; on
- * a 4-core CI runner also hosting three Next servers, Postgres and two Neon
- * proxies, it is most of why `/camps/[slug]` was the ONLY page in the entire
- * e2e fleet that timed out — every one of the 30 navigation timeouts in that
- * run was this route or its `settings/roles` child, and nothing else.
+ * 72 `insert into project_roles` statements across its camps. On a laptop that
+ * is invisible; through the dev SQL proxy at 152 ms a statement it was not.
+ * It was NOT the main cause of the `/camps/[slug]` timeouts — the proxy itself
+ * was, and that is documented where it belongs (packages/db/src/index.ts).
+ * This is a real cost on its own terms, in production too, which is why it is
+ * fixed here rather than left to the transport.
  *
- * `cache()` collapses the four calls to one per request, exactly as
+ * `cache()` collapses the three calls to one per request, exactly as
  * `ensureCampUser` does for the same reason (see lib/session.ts — also a write
- * on a read path). One multi-row insert collapses the nine round trips to one.
- * Together: 36+4 statements down to 2. The conflict target is unchanged, so
+ * on a read path). One multi-row insert collapses the eight round trips to one.
+ * Together: 27 statements down to 2. The conflict target is unchanged, so
  * two concurrent REQUESTS still race harmlessly.
  */
 export const ensureDefaultRoles = cache(async function ensureDefaultRoles(

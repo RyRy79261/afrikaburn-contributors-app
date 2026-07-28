@@ -22,7 +22,7 @@
 // HONEST SCOPE NOTE (registry §"TWO TIERS OF PROOF"). What is asserted here is
 // the observable contract: which surfaces render, and what is absent from them.
 // The server-side refusals — `requireOrgSession({ capability: "delete" })`,
-// `{ capability: "manage_camp_categories" }`, and the queries that never SELECT
+// `requireSystemManager("change the camp categories")`, and the queries that never SELECT
 // a personal column — have no client entry point for an engineer, so their
 // guard-deletion proof lives in the unit gate:
 //   · packages/core/src/__tests__/org-permissions.test.ts   (the matrix itself)
@@ -112,7 +112,7 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
       engineer.org.getByRole("button", { name: /^delete / }),
     ).toHaveCount(0);
 
-    // Accounts: no access management at all (that is `manage_accounts`).
+    // Accounts: no access management at all (that is the System manager rank).
     await engineer.org.goto("/accounts?q=");
     await expect(
       engineer.org.getByRole("button", { name: /give org staff access/i }),

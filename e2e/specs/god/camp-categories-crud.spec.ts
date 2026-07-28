@@ -7,7 +7,7 @@
 //
 // Every mutation is gated at the page AND re-checked in the server action
 // (createCategory / updateCategory / deleteCategory, all requiring
-// `manage_camp_categories`), and every write is audited. This drives the whole
+// `requireSystemManager`), and every write is audited. This drives the whole
 // create → edit → reorder → delete lifecycle through the real manager UI on a
 // category the test owns, so seeded categories are never touched. Desktop
 // project only — the manager is a wide data table.

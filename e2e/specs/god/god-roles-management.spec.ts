@@ -217,7 +217,8 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     await elevateVisibleRow(orgPage);
 
     // The elevated account reaches the console — and is refused the surface that
-    // decides what it may do. `manage_accounts` is not grantable to any role, so
+    // decides what it may do. Account management is the RANK, not a grantable
+    // capability, so
     // this refusal cannot be edited away by anyone but a System manager.
     const staffOrg = await makeAppPage("org");
     await signInAs(staffOrg, burner, "org");

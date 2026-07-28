@@ -39,7 +39,7 @@ import {
 // enforced there via @quagga/core, never here.
 //
 // `canManage` comes from the ONE capability matrix on the server
-// (`manage_camp_categories`, System manager only — Ryan, 27 Jul 2026), which is
+// (`requireSystemManager`, System manager only — Ryan, 27 Jul 2026), which is
 // the same check `createCategory`/`updateCategory`/`deleteCategory` re-run. So
 // when it is false every control is gone AND every action would refuse: the
 // read-only table is a truthful picture of the permission, not a decoration over
@@ -74,7 +74,7 @@ export function CategoriesManager({
 }: {
   editionId: string;
   categories: CampCategoryRow[];
-  /** From `orgCan(actor, "manage_camp_categories")` — System manager only. */
+  /** From `isSystemManager(actor)` — the RANK, not a grantable capability. */
   canManage: boolean;
 }) {
   const router = useRouter();

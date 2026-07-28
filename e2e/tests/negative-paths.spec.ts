@@ -100,7 +100,7 @@ test.describe("authz negative paths", () => {
 
   test.fixme("org_staff cannot reach god-only surfaces [reach-god-only-surface]", async () => {
     // Setup: an org_staff account (god elevates them via the accounts panel)
-    // opens a god-only surface. Guard: the `manage_accounts` capability, which
+    // opens a god-only surface. Guard: the System manager rank, which
     // org_staff does not hold.
     expect(
       PERSONAS.org_staff.forbidden.some(

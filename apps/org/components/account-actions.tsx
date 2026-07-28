@@ -48,7 +48,7 @@ export interface AssignableRole {
 
 /**
  * Access controls for one account. Only rendered for the System manager — but
- * rendering is never the boundary: `setOrgStaffRole` re-checks `manage_accounts`
+ * rendering is never the boundary: `setOrgStaffRole` re-checks the System manager rank
  * (which no role may hold) and `setAccountOrgRoles` re-checks the System manager
  * anchor itself, both refuse god targets, and both audit every change.
  *

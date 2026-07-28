@@ -30,7 +30,7 @@
 //      (all verified present, all in the `turbo run test` gate):
 //        - god is granted ONLY for a VERIFIED GOD_EMAILS address — the root of the
 //          escalation ceiling; setOrgStaffRole is then System-manager-only at the
-//          action layer (requireOrgSession({ capability: "manage_accounts" })).
+//          action layer (requireSystemManager()).
 //          ......... packages/core/src/__tests__/god-emails.test.ts
 //        - a camp cannot rename/recolour/delete an OFFICER role
 //          (canRenameRoleKind/canDeleteRoleKind("officer") === false).
@@ -158,14 +158,14 @@ const C = {
     app: "org",
     action: "reach a system-manager-only surface (e.g. accounts role management)",
     refusalHint:
-      'requireOrgSession({ capability: "manage_accounts" }) throws for every rank below god',
+      'requireSystemManager() throws for every rank below god',
   },
   manageCampCategories: {
     id: "manage-camp-categories",
     app: "org",
     action: "create / rename / delete a camp category",
     refusalHint:
-      'requireOrgSession({ capability: "manage_camp_categories" }) — System manager only (Ryan, 27 Jul 2026); the page renders the catalog read-only with the reason stated',
+      'requireSystemManager("change the camp categories") — System manager only (Ryan, 27 Jul 2026); the page renders the catalog read-only with the reason stated',
   },
   reachSystemPanel: {
     id: "reach-system-panel",
@@ -173,7 +173,7 @@ const C = {
     action:
       "open /system — the deployment's configuration, health and org-access roster",
     refusalHint:
-      'the page resolves orgCan(actor, "read_system") BEFORE it queries and renders the refusal instead; org_staff is the ONLY rank refused, which is what proves the ranks are jobs rather than tiers',
+      'the page resolves runsDeployment(actor) BEFORE it queries and renders the refusal instead; org_staff is the ONLY rank refused, which is what proves the ranks are jobs rather than tiers',
   },
   readPersonalInformation: {
     id: "read-personal-information",

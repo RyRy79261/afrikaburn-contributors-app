@@ -278,27 +278,11 @@ export function QuestionnaireRunner({
           return;
         }
         if (final) clearDraft();
-        // NAVIGATE OUTSIDE THE TRANSITION.
-        //
-        // `onOk` is `navigateOnwards`, which pushes and then refreshes. Called
-        // from in here — inside an async `startTransition` — the transition is
-        // left awaiting a navigation that the same-tick `refresh()` supersedes,
-        // so it never settles: `isPending` stays true forever. What the
-        // respondent sees is a Submit button stuck on "Saving…" on a
-        // questionnaire that HAS been saved (the row and the completed
-        // required_action are both in the database), and no redirect. On a
-        // BLOCKING gate that is worse than cosmetic — they are held on a gate
-        // they have already cleared, with no way forward.
-        //
-        // Deferring to a macrotask lets the transition resolve first, so the
-        // pending state clears and the push/refresh pair runs on its own,
-        // outside any transition. Proved by bisection on 28 Jul: dropping the
-        // `refresh()` alone also fixed it, but the refresh is what re-renders
-        // the app shell above the pushed route — which is exactly how the nav
-        // comes back after a gate clears (see AppShell `gatedNav`) — so keeping
-        // it and moving the call is the fix that does not trade one bug for
-        // another.
-        setTimeout(onOk, 0);
+        // `navigateOnwards` defers its own push/refresh a macrotask so this
+        // transition can settle first — see lib/client-navigation.ts. Called
+        // synchronously from in here it never settled, and the Submit button
+        // stuck on "Saving…" on a questionnaire that HAD been saved.
+        onOk();
       } catch {
         setErrors((prev) => ({ ...prev, [FORM_ERROR_KEY]: SAVE_FAILED }));
       }

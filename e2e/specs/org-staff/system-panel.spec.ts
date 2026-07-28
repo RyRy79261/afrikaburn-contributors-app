@@ -25,7 +25,7 @@
 //
 // HONEST SCOPE NOTE (registry §"TWO TIERS OF PROOF"). This is tier (A): the
 // surface is reachable by URL, so the wrong persona gets an OBSERVABLE server
-// refusal and deleting the page's `read_system` check makes this file go red.
+// refusal and deleting the page's `runsDeployment` check makes this file go red.
 // What it does NOT prove is the CONTENT of the checks — whether "email
 // verification: off" is derived correctly from the environment. That is a pure
 // function of an env bag and a probe, and it is proved exhaustively (including
@@ -140,7 +140,7 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     ).toBeVisible();
     // The refusal is the ONE the resolver produces (@quagga/core
     // `runsDeploymentRefusal`), so the page cannot drift from what the guard
-    // would say. It is a RANK sentence, not a capability one: "read_system" was
+    // would say. It is a RANK sentence, not a capability one: the old capability was
     // dropped in the CRUD rework — running the deployment is the engineer's job
     // description, not something a department grants — so the old
     // "none of your org roles open the system panel" no longer exists anywhere.
@@ -189,8 +189,8 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     // Their own row is certainly in this table — they hold org access.
     await expect(roster).not.toContainText(engineer.account.email);
 
-    // And no access controls: `read_system` is a READ. Holding the page must
-    // never imply holding `manage_accounts`.
+    // And no access controls: the system panel is a READ. Reaching it must
+    // never imply the System manager rank.
     await expect(
       engineer.org.getByRole("button", { name: /give org staff access/i }),
     ).toHaveCount(0);

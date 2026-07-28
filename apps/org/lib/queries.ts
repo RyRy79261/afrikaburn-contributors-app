@@ -734,7 +734,7 @@ export async function getOrgAccessRoster(
   const db = getDb();
   // The org-access roster lives on the System panel, but the rows it carries are
   // accounts and their email addresses — so it asks the `accounts` domain, not
-  // `read_system`. Page access must never imply the personal columns.
+  // `runsDeployment`. Page access must never imply the personal columns.
   const personal = seesPersonalInformation(actor, "accounts");
 
   const rows = await db

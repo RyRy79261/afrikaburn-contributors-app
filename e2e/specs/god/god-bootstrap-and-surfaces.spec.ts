@@ -33,7 +33,7 @@ const CONSOLE_SURFACES: Array<{ path: string; label: string }> = [
   { path: "/accounts", label: "Accounts" },
   { path: "/audit", label: "Audit" },
   // The IT panel, and the roles surface INSIDE it (org roles v1). `/system` is
-  // `read_system` (engineer + System manager); `/system/roles` renders its
+  // `runsDeployment` (engineer + System manager); `/system/roles` renders its
   // controls only for the anchor. Both are listed with the "System" nav label
   // because the nav marks a parent entry active for its children — so this also
   // proves the sub-route did not fall out of the bar.

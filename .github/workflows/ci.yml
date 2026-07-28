@@ -42,7 +42,7 @@ jobs:
 
   # THE E2E SUITE, WHICH USED TO GATE NOTHING.
   #
-  # 55 spec files and 144 tests existed, and CI ran `lint typecheck test build`
+  # 58 spec files and 232 tests existed, and CI ran `lint typecheck test build`
   # — none of which starts a browser. So every persona journey, every refusal
   # that protects the permission model, and the whole invite round trip could
   # break on main and CI would stay green. The suite was only ever run by hand,
@@ -127,44 +127,55 @@ jobs:
         # when they were pagination timeouts against junk data.
         env:
           E2E_RESET_DB: "1"
-          # TWO workers, not four. scripts/e2e-local.sh has said this all along:
-          # "the longest ones (full six-section registration, the two-user invite
-          # round trips) start timing out at four — a resource problem that reads
-          # exactly like a broken product." A runner has 4 cores and is ALSO
-          # hosting three Next servers, Postgres and two proxies, so four browser
-          # workers starve everything. The previous run proved it: every failure
-          # was locator.click / page.goto / locator.fill timing out, while the
-          # tests that did pass ran in 2-6s.
+          # TWO workers. A runner has 4 cores and is ALSO hosting three Next
+          # servers, Postgres and two proxies, so this is a judgement about a
+          # real ceiling — but it is only a judgement. It has NOT been re-tested
+          # since the actual cause of the timeouts was found and fixed, and the
+          # claim that once stood here ("four workers starve everything, the
+          # previous run proved it") was never true: every timed-out URL in that
+          # fleet was `/camps/[slug]` or its `settings/roles` child and nothing
+          # else, which is not what a starved runner looks like. It was the dev
+          # SQL proxy — see packages/db/src/index.ts. If you want more
+          # throughput, four is worth measuring now; measure it, do not assume.
           #
-          # Parallelism comes from SHARDS instead — 8 runners x 2 workers = 16
-          # concurrent, same throughput, no contention.
+          # Parallelism already comes from the eight per-persona jobs above:
+          # 8 jobs x 2 workers = 16 concurrent.
           E2E_WORKERS: "2"
-          # 180s, not the 90s default. The officer journeys are two-user and
-          # drive a full six-section registration through the UI; they measured
-          # 54s-1.2m against a 90s cap, so they failed on whichever assertion
-          # they happened to reach and looked like six different product bugs.
-          # The real fix is a factory that seeds a registration instead of
-          # clicking through one — until then, do not fail a test for being
-          # honestly long.
+          # 180s, not the 90s default. The two-user journeys drive a full
+          # six-section registration through the UI, and the slowest of them
+          # still measure ~2m on a green run — this cap is ~1.5x the slowest
+          # real test, not spare room. It survived the proxy fix because these
+          # journeys are interaction-bound, not render-bound: making pages 28x
+          # faster barely moved them. The real fix is a factory that seeds a
+          # registration instead of clicking through one.
           E2E_TEST_TIMEOUT: "180000"
           # Production build, not `next dev`. Next compiles a route on FIRST
           # REQUEST, and there are 65 pages across the three apps — so a dev-mode
           # run pays a multi-second compile the first time any spec visits any
           # page, several workers block on the same cold compile, and a compile
           # that overruns the 20s navigation cap looks exactly like a product
-          # bug. This is most of why the first run crawled.
+          # bug. It also tests what actually ships.
+          #
+          # This was ONCE blamed for the slow runs ("most of why the first run
+          # crawled"). It was not: the runs kept crawling on a production build
+          # for hours afterwards. See packages/db/src/index.ts for what it was.
           E2E_SERVE: build
-          # ONE retry, not two. A genuinely broken test costs 90s x attempts, and
-          # at 2 retries the eight known failures alone burn ~36 minutes of
-          # runner time re-proving what we already know. One retry still absorbs
-          # a cold-start flake.
+          # ONE retry. A genuinely broken test costs `E2E_TEST_TIMEOUT x
+          # attempts` per failure, so a second retry triples the cost of a red
+          # board to re-prove what the first two attempts already showed. One
+          # still absorbs a cold-start flake, and Playwright reports
+          # retry-then-pass as flaky, so nothing is hidden by it.
+          #
+          # This pins the playwright.config.ts default rather than changing it —
+          # stated here so a change there is a deliberate choice in both places.
           E2E_RETRIES: "1"
-          # DESKTOP GATES. `mobile-360` runs in the separate informational job
-          # below rather than here, deliberately: it has never executed once, so
-          # every spec in it is of unknown status. Making an unknown-status
-          # project blocking on the day you switch it on produces a red gate
-          # nobody trusts, which is worse than no gate. Promote it here once its
-          # failures are triaged to zero.
+          # DESKTOP GATES. `mobile-360` does not run in CI at all — see the
+          # MOBILE 360 note at the end of this file. It still runs locally,
+          # where `scripts/e2e-local.sh` defaults to both projects. Promote it
+          # into this list only once it has been run per-persona and its
+          # failures triaged; every spec in it is of unknown status, and making
+          # an unknown-status project blocking produces a red gate nobody
+          # trusts, which is worse than no gate.
           E2E_PROJECTS: desktop-chromium
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
@@ -203,5 +214,8 @@ jobs:
   # construction. An informational job that burns an hour per push is not
   # informational, it is noise with a bill.
   #
-  # Turn it back on ONLY after desktop is green, and when you do, give it the
-  # same per-persona matrix as the gating job above so it costs minutes.
+  # THE PRECONDITION IS NOW MET: desktop went green on 28 Jul. Turning it back
+  # on is a deliberate next step, not an oversight — give it the same
+  # per-persona matrix as the gating job above so it costs minutes rather than
+  # an hour, and expect it red at first: the specs were written against desktop
+  # layouts, so triage is the work, not the switch.

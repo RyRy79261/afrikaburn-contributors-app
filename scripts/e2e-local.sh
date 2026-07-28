@@ -6,7 +6,7 @@
 #
 # Why this exists: `turbo run lint typecheck test build` never executed a single
 # Playwright spec — it only linted and typechecked the @quagga/e2e package — so
-# 141 specs across 8 personas were, in practice, documentation. Wiring `e2e` into
+# 58 spec files across 8 personas were, in practice, documentation. Wiring `e2e` into
 # the default gate is wrong (it needs a database and three running apps), so it
 # is a deliberate, separate command. Run it before anything that touches auth,
 # sessions, privacy projection or the invite round trip.
@@ -136,12 +136,25 @@ else
 fi
 trap 'kill $DEV_PID 2>/dev/null || true; pkill -f "next dev" >/dev/null 2>&1 || true; pkill -f "next start" >/dev/null 2>&1 || true' EXIT
 
+# FAIL IF AN APP NEVER COMES UP. This loop used to fall through silently after
+# 120s, and the suite then ran against a dead port: every spec failed on a
+# navigation timeout, which is indistinguishable from the product being broken.
+# That is exactly the confusion this script exists to prevent, so the readiness
+# check now has to actually pass.
 for port in 3000 3001 3002; do
   echo -n "    waiting for :$port"
+  ready=0
   for _ in $(seq 1 60); do
-    if curl -sf -o /dev/null "http://localhost:$port/"; then echo " ok"; break; fi
+    if curl -sf -o /dev/null "http://localhost:$port/"; then echo " ok"; ready=1; break; fi
     echo -n "."; sleep 2
   done
+  if [ "$ready" -ne 1 ]; then
+    echo " FAILED"
+    echo "!! :$port never answered in 120s — the suite would report every spec as a"
+    echo "   product failure. Last 30 lines of the server log:"
+    tail -30 "$LOG_DIR/dev.log"
+    exit 1
+  fi
 done
 
 if grep -qi "module not found" "$LOG_DIR/dev.log"; then
@@ -152,11 +165,15 @@ fi
 
 echo "==> playwright"
 cd e2e
-# TWO workers by default. The suite is parallel-safe, but these journeys drive a
-# real browser through a real database on one laptop, and the longest ones (full
-# six-section registration, the two-user invite round trips) start timing out at
-# four — a resource problem that reads exactly like a broken product. Override
-# with E2E_WORKERS if the machine can take it.
+# TWO workers by default. The suite is parallel-safe; this is a hedge against a
+# laptop also running three Next servers, Postgres and two proxies. Override with
+# E2E_WORKERS if the machine can take it.
+#
+# It once said four workers made the long journeys "start timing out — a resource
+# problem that reads exactly like a broken product", and CI quoted that as proof.
+# It was never proven, and it was wrong: the timeouts were 152ms-per-statement
+# through the dev SQL proxy (packages/db/src/index.ts), which is why they hit one
+# page and spared the other sixty. Four has not been re-measured since.
 # PROJECTS. This pinned `--project=desktop-chromium` unconditionally, so the
 # `mobile-360` project defined in playwright.config.ts had never executed once —
 # every mobile finding in every audit so far has been a code read, not a run.
@@ -167,9 +184,9 @@ for project in ${E2E_PROJECTS:-desktop-chromium mobile-360}; do
   PROJECT_ARGS+=("--project=$project")
 done
 
-# SHARDING. CI splits the suite across several machines (E2E_SHARD=2/4), each
-# with its own database stack, so there is no contention between them — the run
-# is as long as its slowest shard rather than the whole suite.
+# SHARDING. Kept for hand-splitting a long local run across terminals
+# (E2E_SHARD=2/4). CI does NOT use it — it splits by persona instead, one job per
+# spec directory, which names what broke (.github/workflows/ci.yml).
 SHARD_ARGS=()
 if [ -n "${E2E_SHARD:-}" ]; then
   SHARD_ARGS+=("--shard=$E2E_SHARD")

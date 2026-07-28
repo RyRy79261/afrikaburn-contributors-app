@@ -2,7 +2,7 @@
 //
 // Persona: CAMP MEMBER — the NEGATIVE space. For each thing a member CANNOT do,
 // the assertion is that the SERVER refuses (a redirect away from the workspace,
-// an HTTP 404, or the org staff wall), never merely that a button is hidden
+// the not-found view, or the org staff wall), never merely that a hidden button
 // (AGENTS.md rule 7; roadmap M3-30). Each test names the server guard it pins, so
 // the adversarial pass can delete that guard and watch exactly this test go red.
 //
@@ -61,17 +61,17 @@ test.describe("camp member — server-side refusals (own camp)", () => {
     ).toHaveCount(0);
   });
 
-  test("cannot reach the Roles & Officers settings — 404 [manage_roles/assign_roles gate in settings/roles/page.tsx]", async ({
+  test("cannot reach the Roles & Officers settings — refused [manage_roles/assign_roles gate in settings/roles/page.tsx]", async ({
     makeAppPage,
   }) => {
     const { memberPage, slug } = await memberOfFreshCamp(makeAppPage);
     // Guard: `if (!canManageRoles && !canAssignRoles) notFound()`. A plain member
-    // holds only baseline permissions, so this is a hard 404 — settings are not
+    // holds only baseline permissions, so the server refuses — settings are not
     // rendered and the role-mutation actions are never reachable through the UI.
     await expectServerNotFound(memberPage, `/camps/${slug}/settings/roles`);
   });
 
-  test("cannot manage camp questionnaires — 404 on the list and the builder [manage_questionnaires / PROJECT_ADMIN gate]", async ({
+  test("cannot manage camp questionnaires — refused on the list and the builder [manage_questionnaires / PROJECT_ADMIN gate]", async ({
     makeAppPage,
   }) => {
     const { memberPage, slug } = await memberOfFreshCamp(makeAppPage);

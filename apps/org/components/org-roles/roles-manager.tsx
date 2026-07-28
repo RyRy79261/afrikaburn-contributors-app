@@ -80,7 +80,7 @@ import {
 // Client-side only for the forms and dialogs. Every mutation is a server action
 // that re-checks the `god` anchor (`requireSystemManager`), so `canManage` here
 // decides what is OFFERED and never what is permitted — an engineer reading this
-// page with `read_system` sees the model and no controls, and would still be
+// page via `runsDeployment` sees the model and no controls, and would still be
 // refused server-side if they forged the call.
 //
 // THREE RULES THIS SCREEN IS BUILT AROUND:
@@ -92,8 +92,12 @@ import {
 //  2. Permanence is EXPLAINED, never a greyed-out button. A control that is
 //     simply missing teaches nobody why.
 //  3. Rights are described by CONSEQUENCE. Someone here is deciding what a
-//     colleague can destroy, so the checklist says "permanently removes
-//     suppliers and their documents", not "delete".
+//     colleague can destroy, so the checklist says "permanently destroys
+//     records in the domains this department owns", not "delete". It used to
+//     name ONE department's things — "suppliers and their documents" — on
+//     EVERY department's rights screen, which is the defect that prompted the
+//     CRUD rework: the verb belongs to the capability, the nouns belong to the
+//     domain list beside it.
 //  4. A DEPARTMENT THAT OWNS NOTHING SAYS SO. Scoping is now two decisions —
 //     which department a role belongs to, and what that department owns — and
 //     the first is worthless without the second. Every place a scoped role

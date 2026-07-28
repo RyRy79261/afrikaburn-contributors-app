@@ -20,7 +20,7 @@ import { describe, it, expect } from "vitest";
 //     suppliers lead a theme camp's members. The domain each query names is
 //     asserted here, because getting it wrong is silent and invisible in review.
 //  2. EVERY MUTATION NAMES THE CAPABILITY IT NEEDS. A destructive action asks
-//     for `delete`, the camp-category taxonomy asks for `manage_camp_categories`,
+//     for `delete`, the camp-category taxonomy asks for the System manager RANK,
 //     account access asks for `manage_accounts`. An engineer is then refused
 //     server-side with an honest message rather than merely losing a button.
 //
@@ -108,7 +108,7 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
     // The System panel's org-access roster. An engineer may open that page —
     // it is THEIR page — so the roster on it is the one people-returning query
     // most likely to be written as "they can see this page, so let them see the
-    // rows", which is exactly the mistake. It asks `accounts`, NOT `read_system`
+    // rows", which is exactly the mistake. It asks `accounts`, NOT `runsDeployment`
     // and not the system panel's own domain: page access never implies rows.
     getOrgAccessRoster: { domain: "accounts", columns: ["schema.users.email"] },
     getRegistrationOfficers: {
@@ -253,7 +253,7 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
   const systemPage = source("app/(console)/system/page.tsx");
 
   it("checks the deployment-running RANK before it queries anything", () => {
-    // `read_system` stopped being a capability: opening the system panel is
+    // `runsDeployment` replaced the old `read_system` capability: opening the system panel is
     // "do you run this deployment", which is the engineer/System manager RANK.
     // Collapsing it into `isSystemManager` would have locked engineers out of
     // the panel that exists for them — see `runsDeployment` in @quagga/core.

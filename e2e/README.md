@@ -38,8 +38,9 @@ pnpm --filter @quagga/e2e e2e:ui              # interactive
 pnpm --filter @quagga/e2e e2e:report          # open last HTML report
 ```
 
-`pnpm e2e:local` runs **`desktop-chromium` only**; `mobile-360` runs only via the
-`--filter` commands above.
+`pnpm e2e:local` runs **both projects** (`desktop-chromium` and `mobile-360`) —
+narrow it with `E2E_PROJECTS=desktop-chromium`. CI runs `desktop-chromium` only;
+`mobile-360` has never been triaged, so it is expected red.
 
 Two things `e2e:local` does on purpose, both of which look wrong until you know why:
 it **kills and restarts `next dev`** (a long-lived dev server keeps a stale module
