@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { and, eq } from "drizzle-orm";
+// TYPE-ONLY: these are erased at compile time, so importing them here does not
+// evaluate the modules — which matters, because the value imports below must
+// happen AFTER PGCRYPTO_KEY is set in beforeAll.
+import type * as DbModule from "../db";
+import type * as BioStore from "../bio-store";
 
 // THE BLOCKER THIS PINS (audit, 28 Jul 2026).
 //
@@ -28,10 +33,10 @@ const describeDb = HAS_DB ? describe : describe.skip;
 const UNREADABLE = "this-is-not-valid-base64-aes-gcm-ciphertext";
 
 describeDb("saveBio never destroys ciphertext it could not read", () => {
-  let db: typeof import("../db")["db"];
-  let schema: typeof import("../db")["schema"];
-  let saveBio: typeof import("../bio-store")["saveBio"];
-  let getBio: typeof import("../bio-store")["getBio"];
+  let db: typeof DbModule.db;
+  let schema: typeof DbModule.schema;
+  let saveBio: typeof BioStore.saveBio;
+  let getBio: typeof BioStore.getBio;
   let userId: string;
   let editionId: string;
 

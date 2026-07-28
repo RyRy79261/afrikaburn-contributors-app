@@ -73,6 +73,16 @@ echo "==> migrations + seed"
 pnpm --filter @quagga/db db:migrate:deploy
 pnpm --filter @quagga/db db:seed
 
+# THE GOD ACCOUNT. `elevateToGod` signs in with E2E_GOD_EMAIL and expects the
+# account to exist; nothing ever created it, so the 28 spec files behind
+# `skipUnlessGod()` only ran on a database where somebody had made it by hand.
+# On a fresh database — every CI run — they failed on sign-in instead, which is
+# most of the cross-app surface.
+echo "==> god account"
+# Run from @quagga/auth: it is the only package that resolves BOTH
+# @quagga/auth and @quagga/db, which the bootstrap needs.
+pnpm --filter @quagga/auth exec tsx scripts/e2e-god-bootstrap.mts
+
 echo "==> apps (web:3000 org:3001 suppliers:3002)"
 # ALWAYS a fresh dev server. A long-lived one keeps a stale module graph after a
 # file is deleted and then serves 500s while `turbo build` still passes, which
