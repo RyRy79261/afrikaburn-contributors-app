@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # For the mobile job below, which is deliberately NOT on the PR path.
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
 
 # One run per branch. Pushing again cancels the superseded run instead of
 # leaving two full e2e fleets racing each other for runners — which is what
@@ -219,22 +223,27 @@ jobs:
   # on. An informational job that burns an hour is not informational, it is
   # noise with a bill.
   #
-  # It is back on the same per-persona matrix as the gate above, so it costs
-  # minutes, and `continue-on-error` so it CANNOT redden the board. That
-  # combination is the point: the project has never been executed, every spec in
-  # it is of unknown status, and making an unknown-status project blocking on
-  # the day you switch it on produces a red gate nobody trusts. This produces
-  # the triage list instead — per persona, so a failure is named — and the
-  # reports are uploaded under `mobile-*` for exactly that.
+  # NIGHTLY AND ON DEMAND, NEVER ON A PULL REQUEST. It runs the same per-persona
+  # matrix as the gate, so it costs minutes rather than the hour it used to.
   #
-  # Expect it red at first: these specs were written against desktop layouts.
-  # Triage is the work; the switch was never the work. Promote a persona into
-  # `E2E_PROJECTS` on the gating job once its mobile failures reach zero.
+  # Why not on PRs. `continue-on-error` does keep the RUN green — measured, the
+  # run concluded success with all eight mobile jobs red — but the pull request
+  # then reports MERGEABLE/UNSTABLE and shows eight failed checks. Every spec in
+  # this project is of unknown status and was written against desktop layouts,
+  # so that is not a transient red: it is eight red crosses on every PR for as
+  # long as triage takes. A check that is always red teaches people to ignore
+  # checks, which costs more than the coverage is worth right now.
+  #
+  # So: nightly, plus `workflow_dispatch` when you actually want it. The reports
+  # upload under `mobile-*`, named per persona, which is the triage list.
+  # Promote a persona into `E2E_PROJECTS` on the gating job — where it WILL
+  # block — once its mobile failures reach zero. That is the direction of
+  # travel; this job exists to make it possible, not to nag.
   e2e-mobile:
     name: mobile · ${{ matrix.label }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
