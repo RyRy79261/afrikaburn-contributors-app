@@ -86,7 +86,11 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     // The checklist speaks in consequences, not in permission keys — this is the
     // screen where someone decides what a colleague can destroy.
     await expect(
-      editor.getByText(/permanently removes a supplier/i),
+      // The delete copy no longer names one department's things: it used to say
+      // "permanently remove suppliers and their documents" on EVERY department's
+      // rights screen, which is the defect that prompted the CRUD rework. It now
+      // describes the verb, and the domain list beside it says where it lands.
+      editor.getByText(/permanently destroys records/i),
     ).toBeVisible();
     // …and the draft is resolved back to them before they save it.
     await expect(

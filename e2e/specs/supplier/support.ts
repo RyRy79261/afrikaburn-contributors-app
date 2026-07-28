@@ -120,6 +120,12 @@ export async function orgCreateDocument(
 ): Promise<string> {
   await orgPage.goto("/suppliers/signup-management");
   await orgPage.locator("#doc-title").fill(opts.title);
+  // THE FORM DEFAULTS TO "Hosted file" (document-form.tsx: sourceType "file"),
+  // and `#doc-url` only exists in the "External link" branch — so filling it
+  // without switching first waits 20s for an input that is not on the page and
+  // fails every supplier spec at the first shared helper. Radix ToggleGroup
+  // with type="single" renders its items as role="radio", not button.
+  await orgPage.getByRole("radio", { name: /external link/i }).click();
   await orgPage.locator("#doc-url").fill(opts.url);
   if (opts.bindStepLabel) {
     await orgPage
