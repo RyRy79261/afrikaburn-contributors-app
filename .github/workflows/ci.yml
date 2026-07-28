@@ -170,6 +170,18 @@ jobs:
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
         run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
 
+      # THE SERVER'S OWN ACCOUNT OF THE FAILURE.
+      #
+      # Without this, a red board gives you the browser's side only: "page.goto
+      # timed out". Whether the server threw, or answered slowly, or never
+      # answered, is invisible — so a page that takes 20s to render and a page
+      # that 500s look identical from here. Diagnosing the 28 Jul timeouts meant
+      # rebuilding the whole stack locally to read a log CI already had and threw
+      # away. It costs one step and a few hundred KB.
+      - name: Collect the app server log
+        if: always()
+        run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
+
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,6 +191,7 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
+            server.log
           retention-days: 14
           if-no-files-found: ignore
 

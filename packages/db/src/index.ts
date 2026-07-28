@@ -57,7 +57,26 @@ function requireDatabaseUrl(): string {
 export function createHttpDb(): Database {
   configureLocalProxy();
   const sql = neon(requireDatabaseUrl());
-  return drizzleHttp(sql, { schema });
+  return drizzleHttp(sql, { schema, logger: sqlLogger() });
+}
+
+/**
+ * Opt-in per-statement logging, off unless `QUAGGA_SQL_LOG=1`.
+ *
+ * Kept because "which page is slow" and "why is that page slow" are different
+ * questions, and only this answers the second. The 28 Jul CI investigation
+ * burned a whole cycle on the first: every e2e timeout in the fleet was one
+ * page, and reading the code around it produced three plausible theories and no
+ * evidence. Counting the statements one render actually issues settled it in a
+ * single run. Prefix is greppable on purpose (`grep -c '\[sql\]'`).
+ */
+function sqlLogger(): { logQuery(query: string, params: unknown[]): void } | undefined {
+  if (process.env.QUAGGA_SQL_LOG !== "1") return undefined;
+  return {
+    logQuery(query: string) {
+      console.log(`[sql] ${query.replace(/\s+/g, " ").slice(0, 160)}`);
+    },
+  };
 }
 
 /**

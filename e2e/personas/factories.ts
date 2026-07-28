@@ -682,8 +682,15 @@ export async function registerSupplier(
   await page
     .getByLabel(/contact person/i)
     .fill(opts.contactPerson ?? "Sam Supplier");
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
+  // ANCHORED REGEX, NOT `{ exact: true }`. Every field on the suppliers sign-up
+  // form is `required`, and @quagga/ui's Field appends a "*" to the label for
+  // that — so the label text is "Email *" and an exact match waits 20s for an
+  // element that is right there. `^` still excludes "Confirm password" and the
+  // like. (The web app's sign-in fields are not required, which is why the
+  // identical calls above have survived; mark one required and they break the
+  // same way, so prefer this form.)
+  await page.getByLabel(/^Email/).fill(email);
+  await page.getByLabel(/^Password/).fill(password);
   await page.getByLabel(/service category/i).click();
   await page
     .getByRole("option", { name: opts.category ?? "Transport" })
