@@ -49,7 +49,7 @@ jobs:
   # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
   # CI runs and the thing a developer runs cannot drift apart.
   e2e:
-    name: e2e · persona suite (${{ matrix.shard }}/4)
+    name: e2e · persona suite (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -58,7 +58,7 @@ jobs:
       # thing that exercises the product end to end.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
 
@@ -86,10 +86,19 @@ jobs:
         # when they were pagination timeouts against junk data.
         env:
           E2E_RESET_DB: "1"
-          E2E_WORKERS: "4"
-          # 4 shards x 4 workers = 16 concurrent journeys, each shard on its own
-          # runner with its own database stack, so they cannot contend.
-          E2E_SHARD: ${{ matrix.shard }}/4
+          # TWO workers, not four. scripts/e2e-local.sh has said this all along:
+          # "the longest ones (full six-section registration, the two-user invite
+          # round trips) start timing out at four — a resource problem that reads
+          # exactly like a broken product." A runner has 4 cores and is ALSO
+          # hosting three Next servers, Postgres and two proxies, so four browser
+          # workers starve everything. The previous run proved it: every failure
+          # was locator.click / page.goto / locator.fill timing out, while the
+          # tests that did pass ran in 2-6s.
+          #
+          # Parallelism comes from SHARDS instead — 8 runners x 2 workers = 16
+          # concurrent, same throughput, no contention.
+          E2E_WORKERS: "2"
+          E2E_SHARD: ${{ matrix.shard }}/8
           # Production build, not `next dev`. Next compiles a route on FIRST
           # REQUEST, and there are 65 pages across the three apps — so a dev-mode
           # run pays a multi-second compile the first time any spec visits any
@@ -164,7 +173,8 @@ jobs:
       - name: Run the persona suite at 360px
         env:
           E2E_RESET_DB: "1"
-          E2E_WORKERS: "4"
+          # Two, for the same reason as the gating job above.
+          E2E_WORKERS: "2"
           E2E_PROJECTS: mobile-360
           E2E_SERVE: build
           # No retries here: this job's whole purpose is the list of what breaks
