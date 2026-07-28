@@ -1,5 +1,5 @@
 import { Info, Lock } from "lucide-react";
-import { orgCan, orgCapabilityRefusal } from "@quagga/core";
+import { isSystemManager, systemManagerRefusal } from "@quagga/core";
 import { EmptyState } from "@quagga/ui/components/empty-state";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getCampCategories } from "@/lib/queries";
@@ -8,14 +8,14 @@ import { CategoriesManager } from "@/components/categories/categories-manager";
 
 // Org camp-category management (build-spec §"Camp categories", canvas frame
 // g4CzsM / X8RHa). Org-gated at the page (guardConsole) AND at every write
-// (`manage_camp_categories` inside lib/actions/categories.ts) — the UI is never
+// (`requireSystemManager` inside lib/actions/categories.ts) — the UI is never
 // the security boundary. Usage counts are real join-row tallies from the query.
 //
 // READ FOR EVERY RANK, WRITTEN BY ONE. The taxonomy is edition-wide reference
-// data every camp's registration renders against, so Ryan put CRUD in the System
-// manager's hands alone (27 Jul 2026). Everyone else gets the same table without
-// the controls and a line saying why — a screen that explains its own limits
-// beats one that silently lacks buttons.
+// data every camp's registration renders against, so Ryan put CRUD in the
+// System manager's hands alone (27 Jul 2026). Everyone else gets the same table
+// without the controls and a line saying why — a screen that explains its own
+// limits beats one that silently lacks buttons.
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,17 @@ export default async function CategoriesPage() {
   const guard = await guardConsole();
   if (!guard.ok) return guard.node;
 
-  const canManage = orgCan(guard.session.actor, "manage_camp_categories");
+  // THE RANK, asked directly — matching the write actions, which all guard
+  // `requireSystemManager("change the camp categories")`.
+  //
+  // This screen briefly asked a department capability instead, and that quietly
+  // handed the taxonomy to anyone holding `update`: the seeded `org_staff` and
+  // `engineer` roles carry no department, and a department-less grant reaches
+  // every domain. Ryan reserved category CRUD to the System manager on 27 Jul
+  // 2026 — "The categories for example, These should only have CRUD operations
+  // by a system manager" — and the CRUD rework must not relax a rule it was
+  // never asked to touch. The e2e specs for both ranks caught it.
+  const canManage = isSystemManager(guard.session.actor);
   const edition = await getActiveEdition();
   const categories = edition ? await getCampCategories(edition.id) : [];
 
@@ -51,10 +61,7 @@ export default async function CategoriesPage() {
           {!canManage && (
             <p className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground">
               <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {orgCapabilityRefusal(
-                guard.session.actor,
-                "manage_camp_categories",
-              )}
+              {systemManagerRefusal("change the camp categories")}
             </p>
           )}
 

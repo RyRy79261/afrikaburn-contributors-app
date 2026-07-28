@@ -106,41 +106,92 @@ export const RENAMEABLE_ORG_ROLE_KINDS: readonly OrgRoleKind[] = [
 ];
 
 /**
+ * A DEPARTMENT'S KIND — the same permanence model roles already use.
+ *
+ * `system` departments are seeded, cannot be deleted, and can have their rights
+ * and domains edited. `custom` ones are created by a System manager and behave
+ * exactly as they do today.
+ *
+ * WHY (Ryan, 28 Jul 2026): "There are distinct, should never be missing or
+ * deletable departments, which is why we have entire portals — why am I adding
+ * ones for departments that should not be able to be missing". Theme camps and
+ * suppliers are not organisational preferences; each is a deployed application
+ * with its own portal, its own tables and its own audience. `org_departments`
+ * was free-form with nothing seeded and no delete protection, so the two
+ * load-bearing ones had to be hand-created and could be hand-deleted — while
+ * ROLES, the less structural concept, already had exactly this protection.
+ */
+export const OrgDepartmentKind = z.enum(["system", "custom"]);
+export type OrgDepartmentKind = z.infer<typeof OrgDepartmentKind>;
+
+/** Department kinds that may NOT be deleted. Only `custom` deletes. */
+export const UNDELETABLE_ORG_DEPARTMENT_KINDS: readonly OrgDepartmentKind[] = [
+  "system",
+];
+
+/**
  * The console capability vocabulary — the STORAGE + VALIDATION authority for the
  * keys inside `org_roles.permissions`. @quagga/core `org-permissions` re-exports
  * this tuple as `ORG_CAPABILITIES` and is where each key's meaning is written
  * down; this package holds it only because `@quagga/db`'s schema needs the type
  * and core must never be imported by the schema.
  *
- * APPEND-ONLY in spirit: a stored permissions object may name any of these keys,
- * so removing one strands data. Add to the end.
+ * See `OrgPermissions` below for what these five are and what they replaced.
  */
 export const OrgCapabilityKey = z.enum([
+  "create",
   "read",
-  "read_personal_information",
-  "write",
+  "update",
   "delete",
-  "manage_camp_categories",
-  "manage_accounts",
-  "read_system",
+  "personal_information",
 ]);
 export type OrgCapabilityKey = z.infer<typeof OrgCapabilityKey>;
 
 export const ORG_CAPABILITY_KEYS = OrgCapabilityKey.options;
 
 /**
- * The permissions OBJECT stored on `org_roles.permissions` (jsonb) — the same
- * present-and-true shape as `ProjectPermissions`. An absent key is NOT a grant:
- * resolution is fail-closed, so `{}` is a role that can do nothing.
+ * CRUD PLUS PERSONAL INFORMATION. Five keys, and a feature asks for one of them
+ * in one domain — or asks whether the actor is a System manager. There is
+ * deliberately no sixth.
+ *
+ * WHAT THIS REPLACED, and why (Ryan, 28 Jul 2026: "There should just be CRUD
+ * operations per department, not scope to individual actions"). The vocabulary
+ * was `read · read_personal_information · write · delete ·
+ * manage_camp_categories · manage_accounts · read_system`, and it had drifted
+ * into per-feature rights:
+ *
+ *   · `manage_camp_categories` existed for ONE screen. A right invented because
+ *     a feature needed one is a right every future feature will invent again;
+ *     it is now ordinary CRUD on the `camp_categories` domain.
+ *   · `manage_accounts` and `read_system` were never departmental at all — they
+ *     are "do you run this deployment", which is the System manager rank. They
+ *     are gone as grants; `isSystemManager` is the check.
+ *   · `write` conflated CREATE and UPDATE across 19 actions, so a role that
+ *     could amend a supplier's standing could also add suppliers. Split.
+ *   · `delete` was department-scoped but wired to exactly TWO actions, both
+ *     supplier ones — so every department's rights screen described deleting
+ *     suppliers, whatever the department was. Now it means delete IN THE
+ *     DOMAIN the department owns, which is the thing the checkbox always
+ *     claimed to say.
+ *
+ * `personal_information` stays its own key rather than folding into `read`
+ * (Ryan, 28 Jul 2026: "PII should be a specific permission scoped to the
+ * relevant department or context"). Reading a supplier's onboarding state and
+ * reading a burner's medical notes are different acts, and POPIA treats them
+ * differently; one checkbox for both would make every reader of a list a reader
+ * of health data.
+ *
+ * NOT APPEND-ONLY ANY MORE — migration 0022 rewrites every stored row into this
+ * vocabulary, so no `org_roles.permissions` object names a retired key. The
+ * reader still ignores unknown keys, which is what makes that migration safe to
+ * run while the old build is still serving.
  */
 export const OrgPermissions = z.object({
+  create: z.boolean().optional(),
   read: z.boolean().optional(),
-  read_personal_information: z.boolean().optional(),
-  write: z.boolean().optional(),
+  update: z.boolean().optional(),
   delete: z.boolean().optional(),
-  manage_camp_categories: z.boolean().optional(),
-  manage_accounts: z.boolean().optional(),
-  read_system: z.boolean().optional(),
+  personal_information: z.boolean().optional(),
 });
 export type OrgPermissions = z.infer<typeof OrgPermissions>;
 

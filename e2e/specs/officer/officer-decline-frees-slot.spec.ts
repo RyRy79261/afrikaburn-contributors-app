@@ -41,12 +41,23 @@ test.describe("officer decline", () => {
     await expect(
       leadPage.getByText(/not yet assigned — that['’]s a normal state/i),
     ).toBeVisible();
-    // And no lingering "awaiting acceptance" / "shared" language for this officer.
+    // And no lingering "awaiting acceptance" / "shared" language for this
+    // officer.
+    //
+    // THE PER-ROW PHRASING, not the page-wide one. The Officers section carries
+    // a permanent legend — "…only then are their contact details shared with
+    // AfrikaBurn" (roles-settings.tsx) — which explains the rule to the lead and
+    // is on screen whether or not anyone holds a slot. A bare
+    // `/shared with afrikaburn/` therefore can never reach zero, and the spec
+    // was failing on the explanation of the law rather than on any breach of it.
+    // The row's own summary reads "<who> · contact shared with AfrikaBurn"
+    // (officer-row.tsx), which is what must be gone once the officer declines.
+    await expect(leadPage.getByText(/awaiting acceptance/i)).toHaveCount(0);
     await expect(
-      leadPage.getByText(/awaiting acceptance/i),
+      leadPage.getByText(/· contact shared with afrikaburn/i),
     ).toHaveCount(0);
     await expect(
-      leadPage.getByText(/shared with afrikaburn/i),
+      leadPage.getByText(/phone shared with afrikaburn for this role/i),
     ).toHaveCount(0);
   });
 

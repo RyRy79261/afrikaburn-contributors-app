@@ -36,7 +36,10 @@ export async function setSupplierStanding(
   raw: z.input<typeof SetStandingInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "suppliers",
+    });
     const input = SetStandingInput.parse(raw);
 
     const db = getDb();
@@ -109,7 +112,10 @@ export async function setSupplierOnboardingStep(
   raw: z.input<typeof SetStepInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "suppliers",
+    });
     const input = SetStepInput.parse(raw);
 
     const db = getDb();
@@ -208,7 +214,10 @@ export async function addSupplierNote(
   raw: z.input<typeof AddNoteInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "create",
+      domain: "suppliers",
+    });
     const input = AddNoteInput.parse(raw);
 
     // Existence check, note insert and audit are one atomic unit.
@@ -258,7 +267,10 @@ export async function fetchSupplierNotes(
   raw: z.input<typeof FetchNotesInput>,
 ): Promise<FetchNotesResult> {
   try {
-    const session = await requireOrgSession({ capability: "read" });
+    const session = await requireOrgSession({
+      capability: "read",
+      domain: "suppliers",
+    });
     const input = FetchNotesInput.parse(raw);
     const notes = await getSupplierNotes(input.supplierId, session.actor);
     return { ok: true, notes };
@@ -280,7 +292,10 @@ export async function addSupplier(
   raw: z.input<typeof AddSupplierInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "create",
+      domain: "suppliers",
+    });
     const input = AddSupplierInput.parse(raw);
 
     // Supplier insert and audit are one atomic unit.

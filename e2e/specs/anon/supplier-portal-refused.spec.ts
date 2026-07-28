@@ -50,7 +50,7 @@ test.describe("anonymous visitor — supplier portal refuses", () => {
     // reach the sign-in and sign-up screens to become a supplier.
     await suppliersPage.goto("/signin");
     await expect(
-      suppliersPage.getByLabel("Email", { exact: true }),
+      suppliersPage.getByLabel(/^Email/),
     ).toBeVisible();
 
     await suppliersPage.goto("/signup");

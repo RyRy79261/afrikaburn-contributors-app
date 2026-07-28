@@ -6,6 +6,7 @@ import {
   countUnread,
   groupNotificationsByDay,
   notificationLinkIsLocal,
+  resolveNotificationLinkApp,
   notificationMentionsAny,
   officerAcceptedNotification,
   officerAssignmentRequestNotification,
@@ -276,5 +277,36 @@ describe("notificationLinkIsLocal", () => {
     expect(notificationLinkIsLocal("web", "suppliers")).toBe(false);
     expect(notificationLinkIsLocal("suppliers", "org")).toBe(false);
     expect(notificationLinkIsLocal("org", "web")).toBe(false);
+  });
+});
+
+describe("resolveNotificationLinkApp", () => {
+  // The bug: a burner received an AfrikaBurn bulletin and could not open it.
+  // Each app wrote its own `r.linkApp ?? "<app>"`, and `null ?? "org"` is
+  // "org" — so the bulletin fan-out's DELIBERATE null was rewritten to the org
+  // app, `notificationLinkIsLocal("org", "web")` returned false on the
+  // participant inbox, the link was dropped, and the row rendered inert.
+  it("keeps an explicit null — 'belongs to no single app'", () => {
+    expect(resolveNotificationLinkApp(null, "org")).toBeNull();
+    expect(resolveNotificationLinkApp(null, "web")).toBeNull();
+    expect(resolveNotificationLinkApp(null, "suppliers")).toBeNull();
+  });
+
+  it("defaults to the writing app when the caller did not say", () => {
+    expect(resolveNotificationLinkApp(undefined, "org")).toBe("org");
+    expect(resolveNotificationLinkApp(undefined, "web")).toBe("web");
+  });
+
+  it("honours an explicit foreign app", () => {
+    expect(resolveNotificationLinkApp("suppliers", "org")).toBe("suppliers");
+  });
+
+  it("a bulletin's null survives all the way to the reader's inbox", () => {
+    // End to end through both halves of the rule: null in, null stored, and
+    // every app then treats it as local — which is the whole point.
+    const stored = resolveNotificationLinkApp(null, "org");
+    expect(notificationLinkIsLocal(stored, "web")).toBe(true);
+    expect(notificationLinkIsLocal(stored, "suppliers")).toBe(true);
+    expect(notificationLinkIsLocal(stored, "org")).toBe(true);
   });
 });

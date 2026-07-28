@@ -10,8 +10,10 @@ import {
 import {
   ORG_RANK_LABELS,
   canReadPersonalInformationIn,
-  orgCan,
-  orgCapabilityRefusal,
+  isSystemManager,
+  runsDeployment,
+  runsDeploymentRefusal,
+  systemManagerRefusal,
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -87,7 +89,7 @@ export default async function SystemPage() {
   // refusal rather than a notFound(): a console that hides things without
   // explaining teaches nobody the rule, and "this page does not exist" is a lie
   // that costs someone an afternoon.
-  if (!orgCan(session.actor, "read_system")) {
+  if (!runsDeployment(session.actor)) {
     return (
       <div>
         <PageHeading
@@ -102,7 +104,7 @@ export default async function SystemPage() {
               Not your console
             </CardTitle>
             <CardDescription>
-              {orgCapabilityRefusal(session.actor, "read_system")}
+              {runsDeploymentRefusal()}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
@@ -117,7 +119,11 @@ export default async function SystemPage() {
     );
   }
 
-  const canManage = orgCan(session.actor, "manage_accounts");
+  // MANAGING is the System manager ANCHOR, not panel access. An engineer runs
+  // the deployment and READS this panel; editing who has access and what roles
+  // may do stays with the System manager, or the rail that keeps every other
+  // permission safe to edit would last exactly one edit.
+  const canManage = isSystemManager(session.actor);
   // The roster is accounts data, so it asks the `accounts` domain — holding
   // `read_system` opens this page and decides nothing about whose email is on
   // it, and a grant scoped to a department that does not own accounts is not a
@@ -233,7 +239,7 @@ export default async function SystemPage() {
           <CardDescription>
             {canManage
               ? "Everyone who can get into this console, and the org roles that decide what they may do once inside. Granting and removing access is audited."
-              : `Everyone who can get into this console, and the org roles they hold. ${orgCapabilityRefusal(session.actor, "manage_accounts")}`}
+              : `Everyone who can get into this console, and the org roles they hold. ${systemManagerRefusal("change who has access or edit roles")}`}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -315,7 +321,7 @@ export default async function SystemPage() {
           <CardDescription>
             {canManage
               ? "Console permissions are data, not code: departments you create, roles that carry capabilities, and the assignments that decide who resolves what. Every change is audited."
-              : `Console permissions are data, not code — departments, roles and what each role may do. You can read the model. ${orgCapabilityRefusal(session.actor, "manage_accounts")}`}
+              : `Console permissions are data, not code — departments, roles and what each role may do. You can read the model. ${systemManagerRefusal("change who has access or edit roles")}`}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

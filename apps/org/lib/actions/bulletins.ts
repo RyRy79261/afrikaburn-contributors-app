@@ -76,7 +76,10 @@ export async function saveBulletin(
   raw: z.input<typeof SaveInput>,
 ): Promise<SaveBulletinResult> {
   try {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "bulletins",
+    });
     const input = SaveInput.parse(raw);
     assertOrgAudience(session, input);
 
@@ -220,7 +223,10 @@ export async function publishBulletin(
   raw: z.input<typeof PublishInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "bulletins",
+    });
     const input = PublishInput.parse(raw);
 
     // Guard read, publish stamp, fan-out and audit are one atomic unit.
@@ -280,7 +286,10 @@ export async function setBulletinPinned(
   raw: z.input<typeof SetPinnedInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "bulletins",
+    });
     const input = SetPinnedInput.parse(raw);
     // Pin toggle + audit are one atomic unit.
     await withTransaction(async (tx) => {

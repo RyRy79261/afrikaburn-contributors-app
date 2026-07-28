@@ -43,8 +43,8 @@ async function signUpSupplierAndVerify(
   await page.goto("/signup");
   await page.getByLabel(/business name/i).fill(typedBusinessName);
   await page.getByLabel(/contact person/i).fill("Sam Supplier");
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+  await page.getByLabel(/^Email/).fill(email);
+  await page.getByLabel(/^Password/).fill(TEST_PASSWORD);
   await page.getByLabel(/service category/i).click();
   await page.getByRole("option", { name: "Transport" }).click();
   await page

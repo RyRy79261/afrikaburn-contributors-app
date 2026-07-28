@@ -173,7 +173,7 @@ test.describe("system manager · what a department owns is what its roles reach"
     // is not an engineer, and being told they are is the kind of small lie that
     // teaches people to stop reading the console.
     await expect(
-      leadOrg.getByText(/you see people's details in your own department only/i),
+      leadOrg.getByText(/in your own department only/i),
     ).toBeVisible();
     // No address in the TABLE. Scoped to the table on purpose: the console
     // header names the signed-in account, which is their own address shown back
@@ -195,7 +195,7 @@ test.describe("system manager · what a department owns is what its roles reach"
       leadOrg.getByRole("heading", { name: /audit log/i }),
     ).toBeVisible();
     await expect(
-      leadOrg.getByText(/you see people's details in your own department only/i),
+      leadOrg.getByText(/in your own department only/i),
     ).toBeVisible();
 
     // Clean up the department (its roles and this person's hold on them go too).

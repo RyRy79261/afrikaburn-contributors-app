@@ -252,8 +252,12 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
 describe("REGRESSION: the System panel is gated, and gates its own controls", () => {
   const systemPage = source("app/(console)/system/page.tsx");
 
-  it("checks `read_system` before it queries anything", () => {
-    const checkAt = systemPage.indexOf('orgCan(session.actor, "read_system")');
+  it("checks the deployment-running RANK before it queries anything", () => {
+    // `read_system` stopped being a capability: opening the system panel is
+    // "do you run this deployment", which is the engineer/System manager RANK.
+    // Collapsing it into `isSystemManager` would have locked engineers out of
+    // the panel that exists for them — see `runsDeployment` in @quagga/core.
+    const checkAt = systemPage.indexOf("runsDeployment(session.actor)");
     const probeAt = systemPage.indexOf("getSystemStatus()");
     const rosterAt = systemPage.indexOf("getOrgAccessRoster(");
     expect(checkAt, "the page never asks").toBeGreaterThan(-1);
@@ -264,16 +268,14 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
   });
 
   it("refuses honestly rather than 404-ing", () => {
-    expect(systemPage).toContain(
-      'orgCapabilityRefusal(session.actor, "read_system")',
-    );
+    expect(systemPage).toContain("runsDeploymentRefusal()");
   });
 
   it("does not let page ACCESS imply account management", () => {
-    // An engineer holds `read_system` and not `manage_accounts`. The roster's
-    // controls must resolve the second capability, not inherit the first — the
-    // whole reason `read_system` is documented as a READ.
-    expect(systemPage).toContain('orgCan(session.actor, "manage_accounts")');
+    // An engineer runs the deployment and is NOT a System manager. The roster's
+    // controls must ask the anchor, not inherit panel access — the whole reason
+    // the panel is documented as a READ.
+    expect(systemPage).toContain("isSystemManager(session.actor)");
     // …and the email column resolves the `accounts` DOMAIN, so a department
     // lead who can open the system panel still does not read the org's address
     // book unless their department owns accounts.
@@ -282,12 +284,12 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
     );
   });
 
-  it("hides its nav entry behind the same capability the page enforces", () => {
+  it("hides its nav entry behind the same rank the page enforces", () => {
     // Hiding is never the boundary — but an entry that leads somewhere the
     // viewer is refused is its own defect, and both must read one predicate.
     const header = source("components/console-header.tsx");
-    expect(header).toMatch(/href: "\/system"[\s\S]{0,80}capability: "read_system"/);
-    expect(header).toContain("orgCan(session.actor, item.capability)");
+    expect(header).toMatch(/href: "\/system"[\s\S]{0,80}runsDeployment: true/);
+    expect(header).toContain("runsDeployment(session.actor)");
   });
 
   it("never prints a secret — the derivation is proved separately", () => {
@@ -386,33 +388,17 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
       action: "deleteSupplierDocument",
       capability: "delete",
     },
-    // The camp-category taxonomy — System manager only (Ryan named this one).
-    {
-      file: "lib/actions/categories.ts",
-      action: "createCategory",
-      capability: "manage_camp_categories",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "updateCategory",
-      capability: "manage_camp_categories",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "deleteCategory",
-      capability: "manage_camp_categories",
-    },
-    {
-      file: "lib/actions/categories.ts",
-      action: "setGroupCategory",
-      capability: "manage_camp_categories",
-    },
-    // Access management — System manager only.
-    {
-      file: "lib/actions/accounts.ts",
-      action: "setOrgStaffRole",
-      capability: "manage_accounts",
-    },
+    // (The camp-category taxonomy left this table. It is System-manager-only —
+    // Ryan named that one on 27 Jul 2026 — so its guard is the ANCHOR, not a
+    // capability, and it is asserted as such below. It was briefly listed here
+    // during the CRUD rework, which is exactly how the rule got relaxed: the
+    // seeded `org_staff` and `engineer` roles carry no department, and a
+    // department-less grant reaches every domain, so "requires update" meant
+    // "every org account".)
+    // (Access management left this table: `manage_accounts` stopped being a
+    // capability when the vocabulary became CRUD. `setOrgStaffRole` now calls
+    // `requireSystemManager()` — the ANCHOR — which is a stronger guarantee than
+    // a grant, and is proved in `org-role-lockout.test.ts`.)
     // (Departments moved out of this file entirely in org roles v1: they are
     // rows a System manager creates, and every action that touches them requires
     // the System manager ANCHOR rather than a capability — proved in
@@ -421,17 +407,17 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
     {
       file: "lib/actions/registrations.ts",
       action: "decideRegistration",
-      capability: "write",
+      capability: "update",
     },
     {
       file: "lib/actions/suppliers.ts",
       action: "setSupplierStanding",
-      capability: "write",
+      capability: "update",
     },
     {
       file: "lib/actions/suppliers.ts",
       action: "addSupplier",
-      capability: "write",
+      capability: "create",
     },
   ];
 
@@ -443,6 +429,23 @@ describe("REGRESSION: every mutation names the capability it needs", () => {
           `requireOrgSession\\(\\{\\s*\\n?\\s*capability: "${capability}"`,
         ),
       );
+    });
+  }
+
+  // THE ANCHOR, not a capability. A permission that can be granted can be
+  // granted to the wrong person; the camp-category taxonomy is edition-wide
+  // reference data every registration renders against, so it is reserved to the
+  // rank. `requireSystemManager` resolves `memberships.role = 'god'` directly.
+  for (const action of [
+    "createCategory",
+    "updateCategory",
+    "deleteCategory",
+    "setGroupCategory",
+  ]) {
+    it(`${action} requires the System manager anchor`, () => {
+      const body = functionBody(source("lib/actions/categories.ts"), action);
+      expect(body).toMatch(/requireSystemManager\(/);
+      expect(body).not.toMatch(/requireOrgSession\(/);
     });
   }
 

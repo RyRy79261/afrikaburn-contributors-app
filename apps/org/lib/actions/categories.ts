@@ -8,7 +8,7 @@ import { CampCategoryInput } from "@quagga/types";
 import { validateCampCategory } from "@quagga/core";
 
 import { schema, withTransaction, type DbHandle } from "@/lib/db";
-import { requireOrgSession } from "@/lib/session";
+import { requireSystemManager } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
 
@@ -51,9 +51,7 @@ export async function createCategory(
   raw: z.input<typeof CreateCategoryInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({
-      capability: "manage_camp_categories",
-    });
+    const session = await requireSystemManager("change the camp categories");
     const { editionId, ...rest } = CreateCategoryInput.parse(raw);
 
     // Dedupe read, sort computation, insert and audit are one atomic unit.
@@ -106,9 +104,7 @@ export async function updateCategory(
   raw: z.input<typeof UpdateCategoryInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({
-      capability: "manage_camp_categories",
-    });
+    const session = await requireSystemManager("change the camp categories");
     const { categoryId, ...rest } = UpdateCategoryInput.parse(raw);
 
     // Read, dedupe-validate, update and audit are one atomic unit.
@@ -158,9 +154,7 @@ export async function deleteCategory(
   raw: z.input<typeof DeleteCategoryInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({
-      capability: "manage_camp_categories",
-    });
+    const session = await requireSystemManager("change the camp categories");
     const { categoryId } = DeleteCategoryInput.parse(raw);
 
     // Read, picker-count, delete and audit are one atomic unit.
@@ -217,9 +211,7 @@ export async function setGroupCategory(
   raw: z.input<typeof AssignCategoryInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({
-      capability: "manage_camp_categories",
-    });
+    const session = await requireSystemManager("change the camp categories");
     const input = AssignCategoryInput.parse(raw);
 
     // Existence check, link write and audit are one atomic unit.

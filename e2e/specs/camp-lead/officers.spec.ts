@@ -90,7 +90,13 @@ test.describe("camp lead — officers are consent requests", () => {
     await submitRegistration(leadPage, camp.slug);
 
     // The member onboards WITH a phone (hard-locked private for everyone else).
-    await signUpBurner(memberPage, { onboard: true });
+    //
+    // NOT `{ onboard: true }`: that completes the Burner Bio, and a completed
+    // bio makes /onboarding redirect to /profile — so `completeBioWithPhone`
+    // then sat waiting 20s for a "Get started" button on a page it had already
+    // been bounced off. This helper IS the onboarding, and the whole point of it
+    // is that it fills the phone the shared factory leaves blank.
+    await signUpBurner(memberPage);
     await completeBioWithPhone(memberPage, { username: memberName, phone });
     await joinByInvite(memberPage, invite.url);
 

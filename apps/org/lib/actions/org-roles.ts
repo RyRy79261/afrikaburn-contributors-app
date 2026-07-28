@@ -5,7 +5,11 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import {
+  ORG_DEPARTMENT_CAP,
+  ORG_DOMAINS,
   ORG_RANK_LABELS,
+  ORG_ROLE_CAP,
+  canDeleteOrgDepartmentKind,
   canDeleteOrgRoleKind,
   canRescopeOrgRole,
   cleanOrgName,
@@ -18,9 +22,6 @@ import {
   orgPermissionsFromKeys,
   sanitizeOrgPermissions,
   uniqueDepartmentKey,
-  ORG_DEPARTMENT_CAP,
-  ORG_DOMAINS,
-  ORG_ROLE_CAP,
 } from "@quagga/core";
 import { OrgCapabilityKey, RoleColor } from "@quagga/types";
 
@@ -219,11 +220,21 @@ export async function deleteDepartment(
         .select({
           id: schema.orgDepartments.id,
           name: schema.orgDepartments.name,
+          kind: schema.orgDepartments.kind,
         })
         .from(schema.orgDepartments)
         .where(eq(schema.orgDepartments.id, input.departmentId))
         .limit(1);
       if (!department) throw new Error("That department is already gone.");
+
+      // A `system` department backs a deployed portal and cannot be removed —
+      // the same rail roles have had since org roles v1. Everything about it
+      // stays editable; only its existence is fixed.
+      if (!canDeleteOrgDepartmentKind(department.kind)) {
+        throw new Error(
+          `${department.name} is a permanent department — it is the org side of an app that is deployed, so removing it would leave that app with nobody answering for it. You can rename it, change what it may do, and change which parts of the console it owns.`,
+        );
+      }
 
       await tx
         .delete(schema.orgDepartments)

@@ -61,13 +61,17 @@ describe("the seeded system roles", () => {
     const byKey = Object.fromEntries(
       SEEDED_ORG_ROLES.map((r) => [r.key, grantedOrgCapabilities(r.permissions)]),
     );
+    // `write` became `create` + `update`, and `read_system` stopped being a
+    // capability (it is the engineer/System manager RANK now — see
+    // `runsDeployment`). Nobody gained or lost real access in either row.
     expect(byKey.org_staff).toEqual([
+      "create",
       "read",
-      "read_personal_information",
-      "write",
+      "update",
       "delete",
+      "personal_information",
     ]);
-    expect(byKey.engineer).toEqual(["read", "write", "read_system"]);
+    expect(byKey.engineer).toEqual(["create", "read", "update"]);
   });
 
   it("are `system` kind, org-wide, and keyed on the rank they replace", () => {
@@ -106,14 +110,18 @@ describe("departments seed their own permanent pair", () => {
   it("gives the lead deletion and the member none", () => {
     const [lead, member] = departmentRoleRows(dept);
     expect(grantedOrgCapabilities(lead?.permissions)).toEqual([
+      "create",
       "read",
-      "read_personal_information",
-      "write",
+      "update",
       "delete",
+      "personal_information",
     ]);
+    // The member does ordinary work: full CRUD except destruction, and no
+    // personal information. Both absences are the point of the pair.
     expect(grantedOrgCapabilities(member?.permissions)).toEqual([
+      "create",
       "read",
-      "write",
+      "update",
     ]);
   });
 

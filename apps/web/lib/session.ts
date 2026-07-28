@@ -209,6 +209,28 @@ export async function pendingBlockingRoute(
 }
 
 /**
+ * Is the CURRENT viewer behind the hard gate? For chrome, not for authorisation
+ * — `enforceGate` is what actually refuses.
+ *
+ * The gate page draws itself "stripped to a band + brand mark + sign-out — no
+ * nav can leak an escape" (questionnaires/[activationId]/page.tsx), and that
+ * stopped being true when AppShell was hoisted from the pages into
+ * `(app)/layout.tsx`: the layout wraps every route in the group, so the gate
+ * rendered the full participant nav — Directory, Create camp, Profile, Account
+ * — ABOVE its own minimal header. Two headers, and the one thing the page
+ * promised not to show. The e2e spec that would have caught it was among those
+ * timing out.
+ *
+ * Costs nothing on a gated surface: both reads below are request-`cache()`d and
+ * the page's own `enforceGate` asks for exactly the same rows.
+ */
+export async function viewerIsGated(): Promise<boolean> {
+  const campUser = await getCurrentCampUser();
+  if (!campUser) return false;
+  return (await pendingBlockingRoute(campUser.id)) !== null;
+}
+
+/**
  * Enforce the hard gate for a signed-in camp user: if a blocking action is
  * pending, redirect to its fill route unless the caller is ALREADY on that
  * route (`currentPath`) — so the fill page itself renders instead of looping.

@@ -29,7 +29,10 @@ test.describe("org staff · supplier repository", () => {
     await addDialog.getByLabel("Name").fill(name);
     await addDialog.getByRole("button", { name: /add supplier/i }).click();
     await expect(org.getByText(/supplier added/i)).toBeVisible();
-    await expect(org.getByText(name)).toBeVisible();
+    // `.first()` — the repository renders the name in the table row AND in the
+    // region labelled "Supplier repository"; the assertion is "it is on the
+    // screen", not "exactly once".
+    await expect(org.getByText(name).first()).toBeVisible();
 
     const row = org.getByRole("row", { name });
 

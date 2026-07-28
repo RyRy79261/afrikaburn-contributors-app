@@ -68,7 +68,7 @@ export default async function ActivationResultsPage({
               <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {orgCapabilityRefusal(
                 session.actor,
-                "read_personal_information",
+                "personal_information",
                 "questionnaires",
               )}
             </p>

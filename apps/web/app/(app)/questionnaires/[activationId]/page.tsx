@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { CheckCircle2, Lock, Flame } from "lucide-react";
+import { CheckCircle2, Lock } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import {
   Card,
@@ -10,7 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
-import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import { INVITE_RESUME_PATH } from "@quagga/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { readPendingInvite } from "@/lib/pending-invite";
@@ -21,7 +20,6 @@ import { db, schema } from "@/lib/db";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { QuestionnaireFill } from "@/components/questionnaire/fill";
-import { SignOutButton } from "@/components/sign-out-button";
 
 export const dynamic = "force-dynamic";
 
@@ -91,8 +89,16 @@ export default async function QuestionnaireFillPage({
   }
 
   // Blocking gate (questionnaire-spec §"Engine mechanics"): a HARD gate whose
-  // ONLY reachable actions are filling it in and signing out. The chrome is
-  // stripped to a band + brand mark + sign-out — no nav can leak an escape.
+  // ONLY reachable actions are filling it in and signing out.
+  //
+  // THE STRIPPED CHROME IS THE LAYOUT'S JOB NOW. This page used to draw its own
+  // band + brand mark + sign-out, on the reasoning "no nav can leak an escape".
+  // That was true when AppShell was rendered per page; once it was hoisted into
+  // `(app)/layout.tsx` the layout wrapped this route too, so the gate rendered
+  // the FULL participant nav — Directory, Create camp, Profile, Account — above
+  // its own minimal header. Two headers, and precisely the nav the comment
+  // promised was absent. The shell now reads `viewerIsGated()` and strips
+  // itself, which is the only place that can decide it.
   if (activation.blocking) {
     const asker = await authorName(activation);
     // If an invite is waiting behind this gate, clearing the gate completes the
@@ -102,17 +108,6 @@ export default async function QuestionnaireFillPage({
       : "/directory";
     return (
       <div className="flex min-h-svh flex-col bg-background">
-        <header className="border-b border-border">
-          <QuiltBand />
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
-            <span className="flex items-center gap-2 font-semibold">
-              <Flame className="h-5 w-5 text-primary" aria-hidden />
-              <span className="tracking-tight">Contributors</span>
-            </span>
-            <SignOutButton />
-          </div>
-        </header>
-
         <main className="mx-auto w-full max-w-xl flex-1 px-6 py-10">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-3">

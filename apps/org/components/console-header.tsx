@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { Flame } from "lucide-react";
-import { ORG_RANK_LABELS, orgCan, type OrgCapability } from "@quagga/core";
+import {
+  ORG_RANK_LABELS,
+  orgCan,
+  runsDeployment,
+  type OrgCapability,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import type { OrgSession } from "@/lib/session";
 import { getUnreadNotificationCount } from "@/lib/notifications";
@@ -22,6 +27,8 @@ import { HeaderNotificationBell } from "@/components/header-notification-bell";
  */
 type ConsoleNavItem = NavItem & {
   capability?: OrgCapability;
+  /** Rank-gated instead: the system panel is IT work, not departmental work. */
+  runsDeployment?: true;
 };
 
 const NAV_ITEMS: ConsoleNavItem[] = [
@@ -48,7 +55,7 @@ const NAV_ITEMS: ConsoleNavItem[] = [
   // Engineer and System manager only — org staff hold every other capability on
   // this bar and not this one, which is the clearest illustration that the ranks
   // are different jobs rather than tiers.
-  { href: "/system", label: "System", capability: "read_system" },
+  { href: "/system", label: "System", runsDeployment: true },
 ];
 
 /**
@@ -62,7 +69,9 @@ export async function ConsoleHeader({ session }: { session: OrgSession }) {
   // Resolved server-side against the same matrix the pages guard on. The client
   // nav never learns a capability exists — it receives the list it may show.
   const navItems: NavItem[] = NAV_ITEMS.filter(
-    (item) => !item.capability || orgCan(session.actor, item.capability),
+    (item) =>
+      (!item.capability || orgCan(session.actor, item.capability)) &&
+      (!item.runsDeployment || runsDeployment(session.actor)),
   ).map(({ href, label }) => ({ href, label }));
 
   return (

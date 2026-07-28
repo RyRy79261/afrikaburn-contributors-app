@@ -143,7 +143,29 @@ test.describe("new burner · account management", () => {
     // Restore within grace: "Keep my account" cancels the deletion.
     await webPage.getByRole("button", { name: /keep my account/i }).click();
 
-    // The scheduled state is gone — reloading the surface shows no grace banner.
+    // WAIT FOR THE ACTION, do not race it with a navigation. The control holds
+    // `pending` until the refreshed server render arrives (see
+    // CancelDeletionButton — it was deliberately built that way so the screen
+    // never disagrees with the database), and navigating straight after the
+    // click abandons the in-flight transition. On a fast laptop the cancel
+    // usually landed first; on a loaded CI runner it did not, and the surviving
+    // banner read as a broken cancel.
+    //
+    // WAIT FOR IT TO GO, not to re-enable. An earlier attempt asserted
+    // `toBeEnabled()` and failed with "element(s) not found" — correctly: on
+    // success the whole scheduled-for-deletion banner unmounts and takes this
+    // button with it. Waiting for a control to come back that is meant to
+    // disappear is a wait that can only ever time out.
+    await expect(
+      webPage.getByRole("button", { name: /keep my account/i }),
+    ).toHaveCount(0);
+
+    // The banner clears IN PLACE, without a reload...
+    await expect(
+      webPage.getByText(/scheduled for deletion/i),
+    ).toHaveCount(0);
+
+    // ...and is still gone on a fresh server render.
     await webPage.goto("/account/delete");
     await expect(
       webPage.getByText(/scheduled for deletion/i),

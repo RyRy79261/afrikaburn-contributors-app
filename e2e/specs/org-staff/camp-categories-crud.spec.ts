@@ -12,7 +12,7 @@
 //
 // Two tiers of proof, stated honestly (registry §"TWO TIERS OF PROOF"): the
 // missing controls are observable end-to-end and asserted below; the server
-// refusal itself (`requireOrgSession({ capability: "manage_camp_categories" })`)
+// refusal itself (`requireSystemManager("change the camp categories")`)
 // has no client entry point for org_staff, so its guard-deletion proof lives in
 // `apps/org/lib/__tests__/org-rank-enforcement.test.ts` and
 // `packages/core/src/__tests__/org-permissions.test.ts`, both in the unit gate.
@@ -37,7 +37,7 @@ test.describe("org staff · camp categories are read-only", () => {
 
     // …and the screen SAYS why it is read-only rather than just lacking buttons.
     await expect(
-      staff.org.getByText(/none of your org roles manage camp categories/i),
+      staff.org.getByText(/only a system manager can change the camp categories/i),
     ).toBeVisible();
 
     // No create affordance, and no per-row edit/delete controls anywhere.

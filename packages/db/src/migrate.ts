@@ -225,7 +225,12 @@ async function main(): Promise<void> {
       // INSERT-IF-MISSING on the stable `key`, never an update: a System manager
       // who has re-righted the Engineer role keeps their edit, and a role they
       // deliberately emptied is not re-filled. This restores absence only.
-      const { ensureSeededOrgRoles } = await import("./seed");
+      const { ensureSeededOrgRoles, ensureSeededOrgDepartments } =
+        await import("./seed");
+      // The two portal-backing departments get the same treatment, for the same
+      // reason: an already-seeded database skips the bootstrap above, so a
+      // deployment that predates migration 0022 would come up without them.
+      await ensureSeededOrgDepartments(drizzle(client, { schema }));
       const restored = await ensureSeededOrgRoles(drizzle(client, { schema }));
       console.log(
         restored === 0

@@ -4,16 +4,13 @@ import { cache } from "react";
 import { and, asc, eq } from "drizzle-orm";
 import {
   buildDomainOwnership,
-  isDepartmentScopedCapability,
   isSanitized,
   isSystemManager,
-  orgCan,
   orgCanInDomain,
   orgCapabilityRefusal,
   orgRankFromRole,
   sanitizeOrgPermissions,
-  ORG_RANK_LABELS,
-  NO_DOMAIN_OWNERSHIP,
+  systemManagerRefusal,
   type DomainOwnership,
   type OrgActor,
   type OrgCapability,
@@ -305,42 +302,44 @@ export const resolveOrgSession = cache(
  * where an unadorned `requireOrgSession()` is silence.
  */
 export async function requireOrgSession(options?: {
-  capability?: OrgCapability;
+  /**
+   * The CRUD verb (or `personal_information`) this action needs. Every one is
+   * department-scoped, so naming a capability REQUIRES naming a domain — see
+   * below.
+   */
+  capability: OrgCapability;
   /**
    * WHICH PART OF THE CONSOLE this action is on — `suppliers`,
    * `registrations`, `bulletins`… The guard resolves it to the department that
    * owns it (@quagga/core `org-domains`) and asks `orgCanInDomain`, which is
-   * how a department-scoped role's `delete` and personal-information access
-   * stay inside their own department.
+   * how a department-scoped role stays inside its own department.
+   *
+   * MANDATORY WHENEVER A CAPABILITY IS NAMED, enforced by the type rather than
+   * by review. It used to be optional, defaulting to "belongs to no
+   * department" — fail-closed, but silently: a guard that forgot to say where
+   * it was still compiled, still ran, and refused departmental roles for a
+   * reason nobody could see on the screen. Now the compiler asks.
    *
    * A call site names the SCREEN it is on, never a department id: the id is
    * data a System manager can change, and a guard that hardcoded one would
    * silently stop matching the day the org reorganised.
-   *
-   * Omitting it for a scoped capability means "this belongs to no part of the
-   * console", which only an org-wide role may touch — fail-closed on purpose.
    */
-  domain?: OrgDomain;
+  domain: OrgDomain;
 }): Promise<OrgSession> {
   const state = await resolveOrgSession();
   if (state.kind !== "ok") {
     throw new Error("Not authorised for the organiser console.");
   }
-  const capability = options?.capability;
-  const domain = options?.domain ?? null;
-  if (capability) {
-    // A department-scoped capability (`delete`, `read_personal_information`) is
-    // ALWAYS resolved through `orgCanInDomain`, whether or not the caller named
-    // a domain. Omitting one then means "this belongs to no department", which
-    // only an org-wide role may touch — the fail-closed direction, and the one
-    // that stops a "Suppliers lead" deleting a theme camp because the guard
-    // forgot to ask. Everything else resolves "anywhere": a department member's
-    // ordinary read and write work is deliberately not confined.
-    const permitted = isDepartmentScopedCapability(capability)
-      ? orgCanInDomain(state.actor, capability, domain)
-      : orgCan(state.actor, capability);
-    if (!permitted) {
-      throw new Error(orgCapabilityRefusal(state.actor, capability, domain));
+  if (options) {
+    // EVERY capability is department-scoped now, so there is one resolution
+    // path rather than a branch on which ones happened to be scoped. That
+    // branch was where "delete is scoped but write is not" lived, and it is the
+    // reason a department's rights screen could describe powers the department
+    // did not really have.
+    if (!orgCanInDomain(state.actor, options.capability, options.domain)) {
+      throw new Error(
+        orgCapabilityRefusal(state.actor, options.capability, options.domain),
+      );
     }
   }
   return state;
@@ -354,16 +353,23 @@ export async function requireOrgSession(options?: {
  * This is a rail, not a convenience. Editable permissions are only safe because
  * the ability to edit them cannot itself be granted away — so this guard asks
  * the anchor directly rather than a capability a role might one day carry.
+ *
+ * `what` names the refused thing, lowercase and without a full stop, for the
+ * screen that has to explain itself: "change the camp categories". It exists
+ * because the rank guards more than roles now — Ryan reserved the camp-category
+ * taxonomy to the System manager as well (27 Jul 2026), and a screen that says
+ * "manage departments, roles or who holds them" while refusing a category edit
+ * is telling the reader about a different rule than the one that stopped them.
  */
-export async function requireSystemManager(): Promise<OrgSession> {
+export async function requireSystemManager(
+  what = "manage departments, roles or who holds them",
+): Promise<OrgSession> {
   const state = await resolveOrgSession();
   if (state.kind !== "ok") {
     throw new Error("Not authorised for the organiser console.");
   }
   if (!isSystemManager(state.actor)) {
-    throw new Error(
-      `Only a ${ORG_RANK_LABELS.god.toLowerCase()} can manage departments, roles or who holds them.`,
-    );
+    throw new Error(systemManagerRefusal(what));
   }
   return state;
 }
@@ -375,13 +381,8 @@ export async function requireSystemManager(): Promise<OrgSession> {
  * is a complete answer here (it is the only capability of which that is true).
  */
 export function canManageAccounts(role: MembershipRole): boolean {
-  const rank = orgRankFromRole(role);
-  return rank
-    ? orgCan(
-        // No roles and no ownership map: `manage_accounts` is decided by the
-        // anchor alone, so neither could change the answer.
-        { rank, roles: [], domains: NO_DOMAIN_OWNERSHIP },
-        "manage_accounts",
-      )
-    : false;
+  // The System manager RANK, asked directly. Managing accounts stopped being a
+  // capability when the vocabulary became CRUD: it is the one thing that must
+  // never be grantable, and a rank cannot be written into a permissions row.
+  return orgRankFromRole(role) === "god";
 }

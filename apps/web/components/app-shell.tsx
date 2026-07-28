@@ -37,16 +37,25 @@ import { NavLink } from "./nav-link";
  * MttcT): a stranger arriving on a one-purpose page should be offered that one
  * purpose, not the whole app's navigation. It only ever affects SIGNED-OUT
  * viewers; a signed-in visitor keeps the full nav wherever they are.
+ *
+ * `gatedNav` is the opposite case and DOES apply to a signed-in viewer: someone
+ * held by the hard gate is offered the brand and a way out of the account, and
+ * nothing else. Hoisting this shell into the layout is what made the flag
+ * necessary — the gate page draws its own stripped header on the assumption
+ * that it owns the screen, and until this flag existed the full nav rendered
+ * above it. See `viewerIsGated` in lib/session.ts.
  */
 export async function AppShell({
   children,
   minimalNav = false,
+  gatedNav = false,
 }: {
   children: React.ReactNode;
   minimalNav?: boolean;
+  gatedNav?: boolean;
 }) {
   const user = await getAuthenticatedUser();
-  const showBrowseLinks = !minimalNav || Boolean(user);
+  const showBrowseLinks = (!minimalNav || Boolean(user)) && !gatedNav;
   // Both are request-scoped: the edition row is the same for everyone and the
   // camp-user upsert behind the unread count is shared with the page.
   const [editionLabel, unread] = await Promise.all([
@@ -76,9 +85,13 @@ export async function AppShell({
             )}
             {user ? (
               <>
-                <NavLink href="/profile" icon="profile" label="Profile" />
-                <NavLink href="/account" icon="account" label="Account" />
-                <HeaderNotificationBell count={unread} />
+                {!gatedNav && (
+                  <>
+                    <NavLink href="/profile" icon="profile" label="Profile" />
+                    <NavLink href="/account" icon="account" label="Account" />
+                    <HeaderNotificationBell count={unread} />
+                  </>
+                )}
                 <SignOutButton />
               </>
             ) : (

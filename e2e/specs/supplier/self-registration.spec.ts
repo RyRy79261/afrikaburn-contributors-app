@@ -31,7 +31,7 @@ test.describe("supplier self-registration", () => {
     ).toBeVisible();
 
     // Registration form is step 1 and is auto-completed by registering: 1/7.
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
     const regCard = suppliersPage
       .getByRole("listitem")
       .filter({ hasText: "Registration form" });
@@ -61,7 +61,7 @@ test.describe("supplier self-registration", () => {
     // Exactly one password field, and never a "confirm password" (NIST SP
     // 800-63B-4 forbids the confirm-twice pattern — docs/accounts-security-spec.md).
     await expect(
-      suppliersPage.getByLabel("Password", { exact: true }),
+      suppliersPage.getByLabel(/^Password/),
     ).toBeVisible();
     await expect(
       suppliersPage.getByLabel(/confirm password/i),
@@ -78,9 +78,9 @@ test.describe("supplier self-registration", () => {
     await suppliersPage.getByLabel(/business name/i).fill(uniqueSupplierName());
     await suppliersPage.getByLabel(/contact person/i).fill("Sam Supplier");
     await suppliersPage
-      .getByLabel("Email", { exact: true })
+      .getByLabel(/^Email/)
       .fill(`supplier-form-${Date.now()}@e2e.quagga.test`);
-    await suppliersPage.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
+    await suppliersPage.getByLabel(/^Password/).fill(TEST_PASSWORD);
     await suppliersPage.getByLabel(/service category/i).click();
     await suppliersPage.getByRole("option", { name: "Transport" }).click();
 
@@ -110,6 +110,6 @@ test.describe("supplier self-registration", () => {
     await expect(
       suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
     ).toBeVisible();
-    await expect(suppliersPage.getByText(/1\/7 done/i)).toBeVisible();
+    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
   });
 });

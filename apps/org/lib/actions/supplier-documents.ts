@@ -70,7 +70,10 @@ export async function createSupplierDocument(
   raw: z.input<typeof CreateDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "create",
+      domain: "supplier_documents",
+    });
     const { editionId, ...input } = CreateDocumentInput.parse(raw);
 
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
@@ -164,7 +167,10 @@ export async function updateSupplierDocument(
   raw: z.input<typeof UpdateDocumentInput>,
 ): Promise<ActionResult> {
   return runAction(async () => {
-    const session = await requireOrgSession({ capability: "write" });
+    const session = await requireOrgSession({
+      capability: "update",
+      domain: "supplier_documents",
+    });
     const { documentId, ...input } = UpdateDocumentInput.parse(raw);
 
     const binding = validateDocumentBinding(input.stepKey, input.requiredAck);
@@ -330,7 +336,10 @@ export async function listSupplierDocuments(
   editionId: string,
 ): Promise<OrgSupplierDocumentRow[]> {
   // A read: every rank sees the document list (it is org content, not a person).
-  await requireOrgSession({ capability: "read" });
+  await requireOrgSession({
+      capability: "read",
+      domain: "supplier_documents",
+    });
   const db = getDb();
   const rows = await db
     .select({

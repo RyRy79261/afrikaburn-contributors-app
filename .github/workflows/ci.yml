@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# One run per branch. Pushing again cancels the superseded run instead of
+# leaving two full e2e fleets racing each other for runners — which is what
+# happened while this file was being iterated on.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     name: lint · typecheck · test · build
@@ -32,3 +39,169 @@ jobs:
 
       - name: CI gate
         run: pnpm turbo run lint typecheck test build
+
+  # THE E2E SUITE, WHICH USED TO GATE NOTHING.
+  #
+  # 55 spec files and 144 tests existed, and CI ran `lint typecheck test build`
+  # — none of which starts a browser. So every persona journey, every refusal
+  # that protects the permission model, and the whole invite round trip could
+  # break on main and CI would stay green. The suite was only ever run by hand,
+  # on one laptop, against one Playwright project.
+  #
+  # A separate job so the fast gate above stays fast: this one has to stand up
+  # Postgres plus the two Neon proxies (the serverless driver speaks
+  # SQL-over-HTTP and WebSocket, and no single proxy does both — see
+  # docker-compose.local.yml), migrate, seed, and boot three apps.
+  #
+  # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
+  # CI runs and the thing a developer runs cannot drift apart.
+  e2e:
+    name: e2e · ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Don't cancel the others when one fails — a partial picture of what broke
+      # is far less useful than the whole one, and this suite is the only thing
+      # that exercises the product end to end.
+      fail-fast: false
+      # SPLIT BY PERSONA, NOT BY `--shard=n/8`. A mechanical slice cannot be
+      # named: "shard 2 of 8 failed" tells you nothing about what broke, and you
+      # have to open the log to learn even which app was involved. The persona
+      # directories already ARE the split, they are well balanced (6-27 tests),
+      # and the job name then says what the failure means.
+      #
+      # `side` marks which app each persona exercises. org-staff and god are the
+      # console — the surface where a mistake exposes personal information,
+      # destroys a supplier or approves the wrong thing — so they are the two
+      # worth reading first when the board goes red.
+      matrix:
+        include:
+          - persona: anon
+            label: "anon · signed-out surfaces + privacy"
+            side: web
+          - persona: new-burner
+            label: "new burner · sign-up, bio, the blocking gate"
+            side: web
+          - persona: camp-member
+            label: "camp member · a member of someone else's camp"
+            side: web
+          - persona: camp-lead
+            label: "camp lead · camp lifecycle, invites, registration"
+            side: web
+          - persona: officer
+            label: "officer · assignment consent + phone disclosure"
+            side: web
+          - persona: org-staff
+            label: "ORG staff · review queue, department scoping"
+            side: org
+          - persona: god
+            label: "ORG system manager · anti-lockout, escalation refusals"
+            side: org
+          - persona: supplier
+            label: "supplier · onboarding, documents, standing"
+            side: suppliers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
+
+      - name: Run the persona suite
+        # E2E_RESET_DB=1 so the run starts from a known-empty database. The
+        # 27 Jul audit found the local suite running against 179 users of
+        # accumulated state, which made four failures look like product bugs
+        # when they were pagination timeouts against junk data.
+        env:
+          E2E_RESET_DB: "1"
+          # TWO workers, not four. scripts/e2e-local.sh has said this all along:
+          # "the longest ones (full six-section registration, the two-user invite
+          # round trips) start timing out at four — a resource problem that reads
+          # exactly like a broken product." A runner has 4 cores and is ALSO
+          # hosting three Next servers, Postgres and two proxies, so four browser
+          # workers starve everything. The previous run proved it: every failure
+          # was locator.click / page.goto / locator.fill timing out, while the
+          # tests that did pass ran in 2-6s.
+          #
+          # Parallelism comes from SHARDS instead — 8 runners x 2 workers = 16
+          # concurrent, same throughput, no contention.
+          E2E_WORKERS: "2"
+          # 180s, not the 90s default. The officer journeys are two-user and
+          # drive a full six-section registration through the UI; they measured
+          # 54s-1.2m against a 90s cap, so they failed on whichever assertion
+          # they happened to reach and looked like six different product bugs.
+          # The real fix is a factory that seeds a registration instead of
+          # clicking through one — until then, do not fail a test for being
+          # honestly long.
+          E2E_TEST_TIMEOUT: "180000"
+          # Production build, not `next dev`. Next compiles a route on FIRST
+          # REQUEST, and there are 65 pages across the three apps — so a dev-mode
+          # run pays a multi-second compile the first time any spec visits any
+          # page, several workers block on the same cold compile, and a compile
+          # that overruns the 20s navigation cap looks exactly like a product
+          # bug. This is most of why the first run crawled.
+          E2E_SERVE: build
+          # ONE retry, not two. A genuinely broken test costs 90s x attempts, and
+          # at 2 retries the eight known failures alone burn ~36 minutes of
+          # runner time re-proving what we already know. One retry still absorbs
+          # a cold-start flake.
+          E2E_RETRIES: "1"
+          # DESKTOP GATES. `mobile-360` runs in the separate informational job
+          # below rather than here, deliberately: it has never executed once, so
+          # every spec in it is of unknown status. Making an unknown-status
+          # project blocking on the day you switch it on produces a red gate
+          # nobody trusts, which is worse than no gate. Promote it here once its
+          # failures are triaged to zero.
+          E2E_PROJECTS: desktop-chromium
+          BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
+          PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
+        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+
+      # THE SERVER'S OWN ACCOUNT OF THE FAILURE.
+      #
+      # Without this, a red board gives you the browser's side only: "page.goto
+      # timed out". Whether the server threw, or answered slowly, or never
+      # answered, is invisible — so a page that takes 20s to render and a page
+      # that 500s look identical from here. Diagnosing the 28 Jul timeouts meant
+      # rebuilding the whole stack locally to read a log CI already had and threw
+      # away. It costs one step and a few hundred KB.
+      - name: Collect the app server log
+        if: always()
+        run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Per persona, or eight uploads collide on one name.
+          name: playwright-report-${{ matrix.persona }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            server.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # MOBILE 360 IS OFF.
+  #
+  # It ran the WHOLE 144-test suite on ONE runner while the desktop jobs were
+  # split per persona, so it took an hour every single time and told us nothing
+  # we acted on — the specs were written against desktop layouts, so it fails by
+  # construction. An informational job that burns an hour per push is not
+  # informational, it is noise with a bill.
+  #
+  # Turn it back on ONLY after desktop is green, and when you do, give it the
+  # same per-persona matrix as the gating job above so it costs minutes.
