@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   cleanRoleName,
@@ -70,8 +71,33 @@ export interface ProjectRole {
  * top up a pre-feature group. Idempotent: `unique(group_id, name_normalized)`
  * makes concurrent double-seeds a no-op. Also re-scopes Team lead's
  * questionnaire audience to the baseline role id once the rows exist.
+ *
+ * ## Why this is `cache()`d, and why the insert is one statement
+ *
+ * This runs on a READ path — `listRoles` calls it first — and the camp
+ * dashboard reaches `listRoles` FOUR times in one render (directly, and inside
+ * `getMemberPermissions`, `getOfficerStatus` and `getBaselineRoleId`). Those
+ * four run concurrently in the page's `Promise.all`, so on a camp whose roles
+ * do not exist yet all four saw an empty table, all four decided to seed, and
+ * each then issued NINE separate inserts one after another — 36 sequential
+ * HTTP round trips to seed nine rows, plus four redundant existence probes.
+ *
+ * Measured against the local stack on 28 Jul: a single camp-member spec issued
+ * 72 `insert into project_roles` statements. On a laptop that is invisible; on
+ * a 4-core CI runner also hosting three Next servers, Postgres and two Neon
+ * proxies, it is most of why `/camps/[slug]` was the ONLY page in the entire
+ * e2e fleet that timed out — every one of the 30 navigation timeouts in that
+ * run was this route or its `settings/roles` child, and nothing else.
+ *
+ * `cache()` collapses the four calls to one per request, exactly as
+ * `ensureCampUser` does for the same reason (see lib/session.ts — also a write
+ * on a read path). One multi-row insert collapses the nine round trips to one.
+ * Together: 36+4 statements down to 2. The conflict target is unchanged, so
+ * two concurrent REQUESTS still race harmlessly.
  */
-export async function ensureDefaultRoles(groupId: string): Promise<void> {
+export const ensureDefaultRoles = cache(async function ensureDefaultRoles(
+  groupId: string,
+): Promise<void> {
   const existing = await db()
     .select({
       id: schema.projectRoles.id,
@@ -88,10 +114,10 @@ export async function ensureDefaultRoles(groupId: string): Promise<void> {
     ...(haveAny ? [] : defaultProjectRoleRows(groupId)),
     ...(haveOfficer ? [] : officerRoleRows(groupId)),
   ];
-  for (const row of rows) {
+  if (rows.length > 0) {
     await db()
       .insert(schema.projectRoles)
-      .values(row)
+      .values(rows)
       .onConflictDoNothing({
         target: [
           schema.projectRoles.groupId,
@@ -113,7 +139,7 @@ export async function ensureDefaultRoles(groupId: string): Promise<void> {
         .where(eq(schema.projectRoles.id, patch.roleId));
     }
   }
-}
+});
 
 /** All roles for a group, ordered by sort then name (default-seeded first). */
 export async function listRoles(groupId: string): Promise<ProjectRole[]> {

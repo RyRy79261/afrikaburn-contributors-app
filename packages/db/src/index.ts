@@ -53,11 +53,71 @@ function requireDatabaseUrl(): string {
 /**
  * HTTP driver — stateless, ideal for route handlers and server components.
  * No transactions.
+ *
+ * ## Locally and in CI this is the WEBSOCKET driver instead. Measurements:
+ *
+ *     select 1, 20 times, sequentially, against the local stack
+ *       SQL-over-HTTP (local-neon-http-proxy)   3041 ms   — 152 ms/statement
+ *       WebSocket     (wsproxy)                   41 ms   —   2 ms/statement
+ *
+ * 152 ms is not Postgres and it is not the network: `curl` to the proxy shows
+ * connect in 0.3 ms and first byte at 148 ms, every time. It is the dev shim,
+ * which stands up a fresh backend connection per request. Neon's real HTTP
+ * endpoint has no such cost, so this penalty exists ONLY in the environments
+ * that don't ship.
+ *
+ * It was not a curiosity. Every server component read in all three apps goes
+ * through this driver, so each page paid 152 ms per statement it could not
+ * parallelise — and the camp dashboard, the widest read in the product, needs
+ * about twenty. Measured cold 7.9 s, warm 4.0 s, on an idle 16-core machine
+ * with a production build. On a 4-core CI runner also hosting three Next
+ * servers, Postgres and two proxies, it went past Playwright's 20 s navigation
+ * cap: every one of the 30 navigation timeouts across the whole e2e fleet on
+ * 28 Jul was `/camps/[slug]` or its `settings/roles` child, and NOTHING else
+ * timed out. It read for a week as a flaky suite, or an underpowered runner, or
+ * a product bug in one page. It was a dev proxy.
+ *
+ * So under `NEON_LOCAL_PROXY=1` — set by scripts/e2e-local.sh and nothing that
+ * deploys — reads go over the WebSocket proxy on one shared pool. Same drizzle
+ * API, same SQL, same results; only the transport differs, and it is the
+ * transport that was lying. Production is untouched: without that variable this
+ * is the HTTP driver exactly as before.
+ *
+ * `allowExitOnIdle` so a short script (the god bootstrap, a seed) still exits
+ * when its work is done instead of being held open by an idle pool.
  */
 export function createHttpDb(): Database {
   configureLocalProxy();
+  if (process.env.NEON_LOCAL_PROXY === "1") {
+    localReadPool ??= makeLocalReadPool();
+    // The two drivers' query builders are the same API; `execute()` is the one
+    // place their return shapes differ (rows array vs pg Result), and the only
+    // caller of it — rate-limit.ts — already handles both, deliberately.
+    return drizzleServerless(localReadPool, {
+      schema,
+      logger: sqlLogger(),
+    }) as unknown as Database;
+  }
   const sql = neon(requireDatabaseUrl());
   return drizzleHttp(sql, { schema, logger: sqlLogger() });
+}
+
+/** Process-wide, so `db()` per query costs nothing after the first. */
+let localReadPool: Pool | undefined;
+
+function makeLocalReadPool(): Pool {
+  const pool = new Pool({
+    connectionString: requireDatabaseUrl(),
+    max: 10,
+    allowExitOnIdle: true,
+  });
+  // An error on an IDLE pooled client is emitted on the pool, and an unhandled
+  // 'error' event takes the process down. A dropped local connection must not
+  // kill the dev server.
+  pool.on("error", (err: Error) => {
+    console.warn("[db] local read pool client error (ignored):", err.message);
+  });
+  return pool;
 }
 
 /**
