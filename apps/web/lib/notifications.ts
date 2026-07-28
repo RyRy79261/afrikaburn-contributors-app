@@ -7,6 +7,7 @@ import {
   notificationLinkIsLocal,
   type DayGroup,
   type NotificationRow,
+  resolveNotificationLinkApp,
 } from "@quagga/core";
 import type { NotificationFilter, NotificationKind } from "@quagga/types";
 
@@ -148,11 +149,12 @@ export async function insertNotifications(
         title: r.title,
         body: r.body ?? null,
         link: r.link ?? null,
-        // Provenance and destination (migration 0021). A caller that knows
-        // better overrides; otherwise the link belongs to THIS app, which is
-        // what the bare relative path always implicitly assumed.
+        // Provenance and destination (migration 0021). ONE rule, in
+        // @quagga/core: `undefined` means "the caller did not say" and defaults
+        // to this app; an EXPLICIT null means "belongs to no single app" and
+        // must survive, which is what the bulletin fan-out relies on.
         origin: r.origin ?? null,
-        linkApp: r.linkApp ?? "web",
+        linkApp: resolveNotificationLinkApp(r.linkApp, "web"),
         bulletinId: r.bulletinId ?? null,
       })),
     );

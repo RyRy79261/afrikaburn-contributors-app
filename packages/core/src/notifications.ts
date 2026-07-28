@@ -225,6 +225,31 @@ export interface NotificationRow extends NotificationPayload {
 }
 
 /**
+ * WHICH APP a row's link belongs to, resolved once for all three writers.
+ *
+ * `undefined` means "the caller did not say", and the answer is the app doing
+ * the writing — a bare relative path has always implicitly meant that. `null`
+ * means "deliberately no app", which the bulletin fan-out passes on purpose:
+ * `/bulletins/<id>` exists in all three apps and one audience can hold a burner
+ * and a supplier who need different hosts, so null ("treat as local wherever it
+ * is read") is the only value right for both.
+ *
+ * This exists because the distinction was lost three times over. Each app wrote
+ * its own `r.linkApp ?? "<app>"`, and `??` cannot tell "not provided" from
+ * "deliberately null": `null ?? "org"` is `"org"`, so every bulletin was stamped
+ * for the ORG app, `notificationLinkIsLocal("org", "web")` then returned false
+ * on the participant inbox, the link was dropped, and the row rendered inert.
+ * A burner received an AfrikaBurn bulletin and could not open it. One helper,
+ * one rule, one test.
+ */
+export function resolveNotificationLinkApp(
+  linkApp: NotificationApp | null | undefined,
+  writingApp: NotificationApp,
+): NotificationApp | null {
+  return linkApp === undefined ? writingApp : linkApp;
+}
+
+/**
  * Should this app render the row's `link` as a link?
  *
  * Only when the link belongs here. A row minted for another app carries a path

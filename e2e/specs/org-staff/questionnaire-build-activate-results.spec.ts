@@ -136,8 +136,11 @@ test.describe("org staff · questionnaires", () => {
     // "Submit"). Choosing "Evening" avoids the Morning→submit branch, so the
     // paragraph in section 2 IS reached — proving the second section renders.
     await recipientPage.goto(`/questionnaires/${activationId}`);
+    // `.first()` — the fill page prints the title twice by design: an <h1> for
+    // the questionnaire and an <h2> for its first section, which carries the
+    // same name. The assertion is "the right questionnaire opened".
     await expect(
-      recipientPage.getByRole("heading", { name: title }),
+      recipientPage.getByRole("heading", { name: title }).first(),
     ).toBeVisible();
     await recipientPage.getByRole("radio", { name: "Evening" }).click();
     await recipientPage.getByLabel("Any dietary needs?").fill("None");
