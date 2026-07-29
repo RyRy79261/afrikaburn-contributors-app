@@ -106,6 +106,9 @@
 //     matchesCategoryFilter (./camp-categories)
 //   - org stats: deriveStatusBoardKpis (burner/camp/MV/artwork cards),
 //     deriveRegistrationFunnel, deriveOfficerCoverage,
+//     deriveWranglerCoverage (approved camps with/without a guardian angel,
+//     plus the busiest single load — a distribution figure, never a
+//     per-person performance one),
 //     deriveSupplierOnboardingRollup/StandingRollup,
 //     deriveQuestionnaireCompletion (./org-stats)
 //   - auth capability matrix: AUTH_CAPABILITIES, assertCapability,

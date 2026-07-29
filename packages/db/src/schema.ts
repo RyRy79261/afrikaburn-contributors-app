@@ -1165,6 +1165,60 @@ export const registrations = pgTable(
   }),
 );
 
+// --- Wrangler assignments -------------------------------------------------
+// A wrangler is AfrikaBurn's "dusty guardian angel" for a registered theme camp
+// (docs/synthesis.md): an org member from the theme-camp leads team who
+// shepherds ONE camp through build week and check-in. Migration 0026.
+//
+// PER EDITION, because a wrangler relationship is a fact about one burn — not a
+// property of the camp. Carrying it across a rollover would re-assign a
+// volunteer to a camp they never agreed to shepherd again, which is the mistake
+// migration 0023 fixed for officer consent.
+//
+// ONE PER CAMP PER EDITION (`wranglerGroupEditionUniq`). AfrikaBurn's own words
+// are singular, and a camp with two wranglers has none — neither owns the
+// follow-up. The other direction is unbounded: a wrangler holds many camps, and
+// that read is what the board is.
+//
+// Reassignment REPLACES this row; the history is in `audit_events`, which is
+// already this codebase's answer to who-changed-what. No milestone columns: every
+// milestone worth showing today is derivable (registration status, questionnaire
+// completion), and storing a copy would mean rendering values nobody sets as
+// fact.
+export const wranglerAssignments = pgTable(
+  "wrangler_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    // `set null`, not cascade: losing the account must not delete the record
+    // that this camp HAD a wrangler. The board shows it vacant, which is a
+    // thing someone has to act on — not never-assigned, which is not.
+    wranglerUserId: uuid("wrangler_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    assignedAt: timestamp("assigned_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (w) => ({
+    wranglerGroupEditionUniq: uniqueIndex(
+      "wrangler_assignments_group_edition_idx",
+    ).on(w.groupId, w.editionId),
+    wranglerEditionIdx: index("wrangler_assignments_wrangler_edition_idx").on(
+      w.wranglerUserId,
+      w.editionId,
+    ),
+  }),
+);
+
 // --- Section reviews -----------------------------------------------------
 // Per-section AB feedback with open/resolved state.
 

@@ -416,10 +416,6 @@ a deliberate deviation with a spec citation and/or an in-code comment.
      unconditionally) when there is <2 months of real `submitted_at` history
      (`apps/org/app/(console)/status/page.tsx`, comment) — omitted rather than drawn over
      invented points.
-   - Overview parks the Wranglers coverage card (frame `vb2fY`, a full card) as a
-     "Coming later" hint (`recent-activity`/overview comment) — there is no
-     wrangler-assignment data model yet, so faking counts would be dishonest. (Also
-     tracked under #61 — see below.)
 
    These are drawn "populated" in the canvas; the code chooses truthful empty/parked
    states. If the canvas is meant to be the literal contract, these frames should gain
@@ -434,8 +430,8 @@ carry a spec/schema dependency.
 
 | Audit finding | Frame / file:line | Tracked as |
 | --- | --- | --- |
-| Wranglers coverage card parked (no wrangler-assignment data model) | Overview `vb2fY`; `apps/org/app/(console)/page.tsx` | **#61 wrangler** (see `docs/roadmap.md:39`, `docs/mvp-proposal.md:140`, `wrangler_assignments`) |
-| MV / art registrations cannot be re-edited & resubmitted through the camp wizard (gated to `theme_camp`) | `camps/[slug]/page.tsx:368-388`; MV/art forms | **#62 MV/art edit-resubmit** |
+| ~~Wranglers coverage card parked (no wrangler-assignment data model)~~ | Overview `vb2fY`; `apps/org/app/(console)/page.tsx` | **CLOSED 29 Jul 2026** — migration 0026 `wrangler_assignments`; the tile is `WranglerCoverageCard` over real counts and the board is `/wranglers` |
+| ~~MV / art registrations cannot be re-edited & resubmitted through the camp wizard (gated to `theme_camp`)~~ | `camps/[slug]/page.tsx`; MV/art forms | **CLOSED** — `/artworks/[slug]/edit` + `/vehicles/[slug]/edit` run each kind's own submit gate; covered by `specs/new-burner/art-and-vehicle-registration.spec.ts` |
 | Supplier reference code chip never surfaced (M15) | `Q4fye`/`D6Xsb`; `onboarding/page.tsx:74`, `session.ts:118`, `suppliers.code` @ `schema.ts:818` | **#8 supplier code chip** (`docs/accounts-security-spec.md:171`) |
 | Registration feedback reply box (M3) | `P0Tcl`/`aYBCE`; `registration-summary.tsx:287-314` | **Needs schema** — a reply model on `section_reviews`; append-only migration required |
 | Bulletins to suppliers (M14) | `U8CqE`/`nXMPZ`; `audience-options.ts:31`, `packages/types/src/audience.ts` | **Needs a supplier audience resolver/selector** — new `AudienceSpec` kind + resolver |

@@ -12,6 +12,8 @@ import {
   getRegistrationDecisionLog,
   getRegistrationOfficers,
   getRegistrationRoster,
+  getWranglerCandidates,
+  getWranglerForGroup,
   type RegistrationDetail,
 } from "@/lib/queries";
 import {
@@ -81,6 +83,19 @@ export default async function RegistrationDetailPage({
   // registrations cannot satisfy it. Nothing asked until 28 Jul 2026, so the
   // Approve and Reject buttons rendered live for every console account and only
   // announced the truth as a toast after the click.
+  // The wrangler affordance asks the SAME capability as the decision, because
+  // wrangling is the continuation of the review — see lib/actions/wranglers.ts.
+  // Candidates and the current holder are read unconditionally: who shepherds a
+  // camp is org scheduling, not personal information, so there is no branch here
+  // that could withhold a name from an engineer and show it to a System manager.
+  const wranglerRefusal = orgCanInDomain(actor, "update", "registrations")
+    ? null
+    : orgCapabilityRefusal(actor, "update", "registrations");
+  const [wranglerCandidates, wrangler] = await Promise.all([
+    getWranglerCandidates(guard.session.orgGroupId),
+    getWranglerForGroup(detail.group.id, detail.edition.id),
+  ]);
+
   const decisionRefusal = orgCanInDomain(actor, "update", "registrations")
     ? null
     : orgCapabilityRefusal(actor, "update", "registrations");
@@ -140,6 +155,9 @@ export default async function RegistrationDetailPage({
         showWrangler={false}
         roster={roster}
         decisionRefusal={decisionRefusal}
+        wranglerCandidates={wranglerCandidates}
+        wrangler={wrangler}
+        wranglerRefusal={wranglerRefusal}
       />
     );
   }
@@ -179,6 +197,9 @@ export default async function RegistrationDetailPage({
       showWrangler
       roster={roster}
       decisionRefusal={decisionRefusal}
+      wranglerCandidates={wranglerCandidates}
+      wrangler={wrangler}
+      wranglerRefusal={wranglerRefusal}
     />
   );
 }

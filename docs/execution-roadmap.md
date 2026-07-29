@@ -210,7 +210,7 @@
 
 | id | scope | size | touches | blocked by | verified by |
 |---|---|---|---|---|---|
-| **M4-01** | `wrangler_assignments` table + append-only migration (org member × registered camp × edition + milestone state). | M | `schema.ts` + migration | AB confirm mechanics (#61) | migration applies; drift check clean |
+| **M4-01** ✅ | `wrangler_assignments` table + append-only migration (org member × approved camp × edition). | M | `schema.ts` + migration | ~~AB confirm mechanics (#61)~~ — shipped under stated assumptions, see below | DONE 29 Jul 2026: migration 0026 applied + verified; unique (group, edition) |
 | **M4-02** | Reply model on `section_reviews` (append-only migration) for the two-way review conversation (M3/#reply). | M | `schema.ts` + migration | schema design owner | migration applies |
 | **M4-03** | Supplier `AudienceSpec` kind + resolver (M14) so bulletins can reach suppliers. | M | `packages/types/audience.ts`, core resolver | — | resolver returns **ONLY** suppliers and **strips hard-locked fields** — a non-supplier account and a hard-locked field are both provably absent from the result (tested, adversarial) |
 | **M4-04** | Security-events model — new table *or* a queryable view over audit_events + email_change + deletion + sessions. | M | `schema.ts` / view | **Decision (write it down, ADR-style): table-vs-view.** Owner = schema owner + security reviewer; must be resolved *before* the schema owner reaches M4-04 in wave 4a (same discipline as M2-02's gate), else the single schema owner stalls or guesses mid-chain. | feed query returns rows |
@@ -222,7 +222,22 @@
 
 | id | scope | size | touches | blocked by | verified by |
 |---|---|---|---|---|---|
-| **M4-08** | Wrangler board UI + assign affordance on org review screen; wire the pre-written notification builder; flip the parked Overview coverage card live. | L | apps/org | M4-01 | assign → notification fires; card shows real counts; **notification reaches only the assigned wrangler(s) — no participant / non-assignee leak (tested, negative path)** |
+| **M4-08** ✅ | Wrangler board UI (`/wranglers`) + assign affordance on the org review screen; `wranglerAssignedNotification` wired; Overview tile flipped live. | L | apps/org | M4-01 | DONE 29 Jul 2026. The leak clause is `specs/org-staff/wrangler-assignment.spec.ts`: another camp's lead and another org member are both in the room and both assert absence. |
+
+**M4-01 shipped without the AB discovery answer, under three stated assumptions.**
+The blocker was "exact mechanics unknown". Two of the three questions turned out
+to be already answered by the model, and the third had a defensible default:
+
+  1. *When?* AfrikaBurn assigns at Form-1 acceptance (`docs/synthesis.md`), and
+     this model has no Form-1/Form-2 split — our single registration approval IS
+     that acceptance. The apparent conflict with "post-approval" was not one.
+  2. *How many?* One per camp per edition, enforced by a unique index.
+     AfrikaBurn's own words are singular; a camp with two has none.
+  3. *Milestones?* Not stored. Everything worth showing today is derivable, and
+     storing a copy would mean rendering values nobody sets as fact.
+
+If AB's answer differs, (2) is a dropped index and (3) is a new table — neither
+touches the assign flow. (1) changes only which status unlocks it.
 | **M4-09** | Registration feedback reply UI (camp-side author + display on summary & wizard). | M | apps/web registration components | M4-02 | camp posts a reply; org sees it |
 | **M4-10** | MV / art edit-resubmit flows (load existing responses → resubmit into the state machine, which already supports resubmit). | M | apps/web vehicles/artworks forms | — | MV/art registration editable + resubmittable |
 | **M4-11** | Questionnaire grid types (multiple-choice grid + checkbox grid): PaletteKind + zod schema + block editor + runner render + results aggregation. | L | `@quagga/core`, apps/org builder, apps/web runner | — | grid authored, answered, aggregated |
@@ -384,7 +399,7 @@ These are documented so scope creep has a standing answer. Do **not** treat any 
 - **Third-party IdP / integrations console / public API / MCP (M5-01/02/04) — parked until real adoption.** Research is done (82 findings) but nothing in first-party auth depends on them.
 - **Containers / water-ice-gas / attestations / PWA (M5-05/06/07) — deferred to the logistics phase.** They arrive together and share the offline-attestation problem space with Camp 404.
 - **Collectives, camp-internal tooling, working-budget, compliance review, WhatsApp/SMS (M5-10) — candidate tracks, not committed.** Each graduates only on a validated-demand + fewer-forms test.
-- **Intentionally-disabled surfaces that are correct-by-spec:** Placement tile, Budget tile, registration CTA gated to `theme_camp`, display-name edited in bio not inline, and honest empty states over invented data (the "registrations over time" chart until ≥2 months of history; the wranglers coverage card until M4-01 lands). These are honesty-over-fake-data choices, not defects.
+- **Intentionally-disabled surfaces that are correct-by-spec:** Placement tile, Budget tile, registration CTA gated to `theme_camp`, display-name edited in bio not inline, and honest empty states over invented data (the "registrations over time" chart until ≥2 months of history). These are honesty-over-fake-data choices, not defects. The wranglers coverage card was on this list until M4-01 landed on 29 Jul 2026; it now shows real counts.
 - **The `M2` canvas-is-wrong design items** (e.g. Placement drawn as active) are won't-fix by decision, not backlog.
 
 ---

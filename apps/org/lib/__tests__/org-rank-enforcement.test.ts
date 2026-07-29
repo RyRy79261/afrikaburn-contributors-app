@@ -385,6 +385,112 @@ describe("REGRESSION: a restricted control is shown restricted, not offered", ()
   });
 });
 
+describe("REGRESSION: a wrangler assignment is guarded, gated and does not leak", () => {
+  // Migration 0026 put something behind a button that had promised "unlocks
+  // after approval" since it was a stub. Three things have to stay true, and
+  // the roadmap requires an adversarial pass on the third (M4-08).
+  const wranglers = source("lib/actions/wranglers.ts");
+
+  it("asks the same capability that decides the registration", () => {
+    // Wrangling is the continuation of the review, so it is `update` in
+    // `registrations` — not a new domain nobody owns, and not an ungated action.
+    const flat = wranglers.replace(/\s+/g, "");
+    expect(flat).toContain('capability:"update",domain:"registrations"');
+    // BOTH directions. An assign that is guarded and an unassign that is not
+    // means anyone can strip every camp of its wrangler.
+    expect(
+      flat.split('capability:"update",domain:"registrations"').length - 1,
+    ).toBe(2);
+  });
+
+  it("gates on APPROVAL server-side, not in the component", () => {
+    const body = functionBody(wranglers, "assignWrangler");
+    expect(body).toContain('registration.status !== "approved"');
+    expect(body).toContain("Approve it first");
+    // …and on the kind: MV/art belong to the DMV and the Art crew.
+    expect(body).toContain('registration.campKind !== "theme_camp"');
+  });
+
+  it("refuses anyone who is not an org member, from the server", () => {
+    // The picker is a client control and this action is a public endpoint, so a
+    // hand-made request could otherwise hand a camp to any account in the
+    // database — including one of that camp's own members.
+    const body = functionBody(wranglers, "assignWrangler");
+    expect(body).toContain("schema.memberships.groupId, session.orgGroupId");
+    expect(body).toContain("isn't an AfrikaBurn org member");
+  });
+
+  it("notifies the camp and the wrangler — from ids, never from an audience", () => {
+    // THE ADVERSARIAL REQUIREMENT (roadmap M4-08): the fan-out must reach the
+    // assigned wrangler and that camp's leads, and nobody else. Both recipient
+    // lists are derived from ids this function was handed; if either ever comes
+    // from a role query or the bulletin audience resolver, it can over-send.
+    const body = functionBody(wranglers, "notifyWranglerAssigned");
+    expect(body).toContain("eq(schema.memberships.groupId, input.groupId)");
+    expect(body).toContain(
+      'inArray(schema.memberships.role, ["lead", "admin"])',
+    );
+    expect(body).toContain("input.wranglerUserId");
+    // Nothing here may reach for the broadcast machinery.
+    expect(body).not.toContain("resolveAudience");
+    expect(body).not.toContain("buildBulletinNotifications");
+    // The wrangler is filtered out of the camp copy when they are also a lead,
+    // so nobody gets the same news twice.
+    expect(body).toContain("id !== input.wranglerUserId");
+  });
+
+  it("audits both directions", () => {
+    expect(functionBody(wranglers, "assignWrangler")).toContain(
+      '"wrangler.assign"',
+    );
+    expect(functionBody(wranglers, "unassignWrangler")).toContain(
+      '"wrangler.unassign"',
+    );
+  });
+
+  it("never prints the same refusal twice on one screen", () => {
+    // The action rail has two independently-refused controls. While a
+    // registration is undecided the DecisionPanel already prints the capability
+    // sentence, so the wrangler card must show ITS reason (not approved yet)
+    // instead of repeating it — Playwright's strict mode found the duplicate in
+    // CI before a human did, and `suppliers-table.tsx` had already learned that
+    // a rail repeating a paragraph is a rail nobody reads.
+    const card = source("components/wranglers/assign-wrangler.tsx");
+    expect(card).toContain("const blockedReason = !isApproved");
+  });
+
+  it("the review screen and the board both ask before offering the control", () => {
+    const detail = source("app/(console)/registrations/[id]/page.tsx").replace(
+      /\s+/g,
+      "",
+    );
+    expect(detail).toContain('orgCanInDomain(actor,"update","registrations")');
+    expect(detail).toContain("wranglerRefusal={wranglerRefusal}");
+
+    const board = source("app/(console)/wranglers/page.tsx").replace(
+      /\s+/g,
+      "",
+    );
+    expect(board).toContain('orgCanInDomain(actor,"update","registrations")');
+    expect(board).toContain("refusal={refusal}");
+  });
+
+  it("neither wrangler read selects a personal column", () => {
+    // Who shepherds a camp is scheduling, not personal information — so these
+    // queries have no `seesPersonalInformation` branch to get wrong, and must
+    // not grow one by accident.
+    for (const fn of [
+      "getWranglerCandidates",
+      "getWranglerForGroup",
+      "getWranglerBoard",
+    ]) {
+      const body = functionBody(queries, fn);
+      expect(body).not.toContain("schema.users.email");
+      expect(body).toContain("publicMemberName");
+    }
+  });
+});
+
 describe("REGRESSION: the medical DISCLOSURE CENSUS is not readable by rank", () => {
   // A `bio.medical.view` row only exists when the subject HAS notes, so a list
   // of those rows names the burners who have disclosed a health condition.

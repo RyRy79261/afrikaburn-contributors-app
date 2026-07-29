@@ -1,5 +1,7 @@
+import Link from "next/link";
 import type {
   OfficerCoverage,
+  WranglerCoverage,
   QuestionnaireCompletionRollup,
   SupplierOnboardingRollup,
 } from "@quagga/core";
@@ -24,7 +26,91 @@ function RailHead({ title, meta }: { title: string; meta: string }) {
 
 function LegendDot({ className }: { className: string }) {
   return (
-    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${className}`} aria-hidden />
+    <span
+      className={`h-2.5 w-2.5 shrink-0 rounded-full ${className}`}
+      aria-hidden
+    />
+  );
+}
+
+/**
+ * Wrangler coverage — approved camps with a guardian angel, and without.
+ *
+ * This tile replaced a `DisabledHintTile` reading "Wrangler assignment isn't
+ * built yet — there is no assignment data to report on." That was the honest
+ * thing to show while it was true (the alternative was inventing counts), and
+ * migration 0026 is what made it untrue.
+ *
+ * `busiestLoad` is shown because the headline can look healthy while one
+ * volunteer quietly holds most of it. It is a DISTRIBUTION figure and it is
+ * framed as one: it names how lopsided the roster is, never how anyone is
+ * performing — this product does not measure people.
+ */
+export function WranglerCoverageCard({
+  coverage,
+}: {
+  coverage: WranglerCoverage;
+}) {
+  const { eligibleCamps, assigned, unassigned, wranglers, busiestLoad } =
+    coverage;
+  const pct =
+    eligibleCamps === 0 ? 0 : Math.round((assigned / eligibleCamps) * 100);
+
+  return (
+    <Card className="h-full">
+      <CardContent className="flex h-full flex-col gap-3 p-5">
+        <RailHead
+          title="Wranglers"
+          meta={`${eligibleCamps} approved camp${eligibleCamps === 1 ? "" : "s"}`}
+        />
+        {eligibleCamps === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing is approved yet. A camp gets its wrangler when its
+            registration is approved.
+          </p>
+        ) : (
+          <>
+            <p className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold tabular-nums">
+                {assigned} / {eligibleCamps}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                have a wrangler
+              </span>
+            </p>
+            <span className="h-3 w-full overflow-hidden rounded-full bg-muted">
+              <span
+                className="block h-full rounded-full bg-ab-sage"
+                style={{ width: `${pct}%` }}
+                aria-hidden
+              />
+            </span>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <li className="flex items-center gap-1.5">
+                <LegendDot className="bg-ab-sage" />
+                Assigned {assigned}
+              </li>
+              <li className="flex items-center gap-1.5">
+                <LegendDot className="bg-muted-foreground" />
+                {unassigned} waiting
+              </li>
+            </ul>
+            <p className="mt-auto text-xs text-muted-foreground">
+              {wranglers === 0
+                ? "Nobody is wrangling yet."
+                : `${wranglers} wrangler${wranglers === 1 ? "" : "s"} · busiest holds ${busiestLoad}`}{" "}
+              ·{" "}
+              <Link
+                href="/wranglers"
+                className="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Open the board
+              </Link>
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -50,8 +136,8 @@ export function OfficerCoverageCard({
         />
         {applicableCamps === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No camps are registered or in review yet, so no officer
-            requirements apply.
+            No camps are registered or in review yet, so no officer requirements
+            apply.
           </p>
         ) : (
           <>
