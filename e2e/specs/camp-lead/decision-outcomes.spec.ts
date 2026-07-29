@@ -90,6 +90,10 @@ test.describe("camp lead — what a decision leaves the camp looking at", () => 
 
     await elevateToGod(orgPage);
     await openRegistrationInConsole(orgPage, camp.name);
+    // KEEP THE URL. The withdrawal below has to be checked from the console
+    // again, and walking the queue a second time adds nothing this test is
+    // about while adding a hop that can land on the wrong row.
+    const detailUrl = orgPage.url();
     await decide(orgPage, "Approve");
     await expect(orgPage.getByText(/approve applied/i)).toBeVisible();
 
@@ -129,7 +133,7 @@ test.describe("camp lead — what a decision leaves the camp looking at", () => 
 
     // The org sees it too — a withdrawal the console does not know about would
     // leave a reviewer working a registration the camp has abandoned.
-    await openRegistrationInConsole(orgPage, camp.name);
+    await orgPage.goto(detailUrl);
     await expect(
       orgPage.getByText(/no reviewer actions are available/i),
     ).toBeVisible();

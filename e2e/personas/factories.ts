@@ -28,6 +28,7 @@ import {
   TEST_PASSWORD,
   uniqueCampName,
   uniqueEmail,
+  uniqueName,
   uniqueSupplierName,
   uniqueUsername,
 } from "../lib/identity";
@@ -146,7 +147,8 @@ export async function signUpBurner(
   // all looked like broken auth. A real person cannot click and navigate inside
   // the same 5ms; the harness could.
   const signUpResponse = await page.waitForResponse(
-    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    (r) =>
+      r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
   if (!signUpResponse.ok()) {
@@ -235,12 +237,16 @@ export async function signOut(page: Page): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const cookies = await page.context().cookies();
-    if (!cookies.some((c) => /quagga\.session_token$/.test(c.name) && c.value)) {
+    if (
+      !cookies.some((c) => /quagga\.session_token$/.test(c.name) && c.value)
+    ) {
       return;
     }
     await page.waitForTimeout(100);
   }
-  throw new Error("[e2e] sign-out did not clear the session cookie within 10s.");
+  throw new Error(
+    "[e2e] sign-out did not clear the session cookie within 10s.",
+  );
 }
 
 // --- Burner Bio (onboarding) ----------------------------------------------
@@ -274,7 +280,8 @@ export async function completeBio(
   if (username !== null) {
     await page.getByRole("textbox", { name: /username/i }).fill(username);
   }
-  if (opts.homeCity) await page.getByRole("textbox", { name: /home city/i }).fill(opts.homeCity);
+  if (opts.homeCity)
+    await page.getByRole("textbox", { name: /home city/i }).fill(opts.homeCity);
   await page.getByRole("button", { name: "Save & continue" }).click();
 
   // Step 3 — Burns & volunteering (no required fields).
@@ -336,7 +343,9 @@ export async function createCamp(
   const warning = page.getByText(/similar to existing camp/i);
   await Promise.race([
     page.waitForURL(isCampDetailUrl).catch(() => undefined),
-    warning.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
+    warning
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => undefined),
   ]);
   if (await warning.count()) {
     await createButton.click();
@@ -459,7 +468,8 @@ export async function acceptInviteAsNewBurner(
   // Same click-vs-request race as signUpBurner — wait for the POST to land
   // before anything reads the session.
   const signUpResponse = await page.waitForResponse(
-    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    (r) =>
+      r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
   if (!signUpResponse.ok()) {
@@ -526,6 +536,16 @@ export interface RegistrationInput {
   expectedPopulation?: number;
   firstArrivalDate?: string; // yyyy-mm-dd
   areaDimensions?: string;
+  /**
+   * Layout sketch links for section 4, added through the REAL FileUpload
+   * control's URL-paste path (no deployment here has BLOB_READ_WRITE_TOKEN, and
+   * a token in CI would mean the suite writes to a live blob store).
+   *
+   * Optional because most journeys do not care; when a spec does, it needs the
+   * links to be part of the SUBMITTED registration, and the wizard is read-only
+   * once submitted — so there is no adding them afterwards.
+   */
+  layoutUrls?: string[];
   soundPlan?: string;
   feeStructure?: string;
 }
@@ -607,6 +627,15 @@ export async function submitRegistration(
   await page
     .getByLabel(/camp area dimensions/i)
     .fill(input.areaDimensions ?? "20m x 15m");
+  for (const [i, layoutUrl] of (input.layoutUrls ?? []).entries()) {
+    await page.getByLabel("Paste a URL").fill(layoutUrl);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    // Each accepted link renders its own remove control — waiting on it means
+    // the next fill cannot race the list re-render.
+    await expect(
+      page.getByRole("button", { name: `Remove upload ${i + 1}` }),
+    ).toBeVisible();
+  }
 
   // Section 5 — Sound & Placement. Pick a SOOP level AND fill a sound plan so
   // completeness holds regardless of which level is the "no amplified" one.
@@ -636,7 +665,9 @@ export async function submitRegistration(
   // that is still missing the last answer. The button is enabled either way
   // (the CLIENT thinks it is complete), which is what makes this look like a
   // broken submit rather than a race.
-  await expect(page.getByText(/saved just now/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/saved just now/i)).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Submit — the gate opens only when the client sees all six sections complete;
   // handleSubmit force-saves the draft before the server re-checks completeness.
@@ -647,10 +678,49 @@ export async function submitRegistration(
   // "Submitted — awaiting review" (registration-summary.tsx). There is no
   // "Registration submitted" string anywhere in the app; the factory was
   // asserting copy that never shipped.
-  await expect(page.getByText(/submitted\s+—\s+awaiting review/i)).toBeVisible();
+  await expect(
+    page.getByText(/submitted\s+—\s+awaiting review/i),
+  ).toBeVisible();
 }
 
 // --- Suppliers -------------------------------------------------------------
+
+/**
+ * Register an ART PROJECT and stop at the DRAFT, driving `/artworks/new`.
+ *
+ * The submit gate wants an artist, a description, a footprint, a burn intent
+ * and two plans (`artworkSubmitGate`); a draft wants only the name, and the
+ * page says so — "your project exists the moment you save". A draft is enough
+ * to make the account an ART LEAD, which is what the `art_leads` audience
+ * resolves against, so this is the cheap way to build one.
+ *
+ * Returns the artwork's name and slug. The artwork is a `groups` row of kind
+ * `artwork`, so it lands on `/camps/<slug>` like any other project.
+ */
+export async function createArtProject(
+  page: Page,
+  opts: { name?: string } = {},
+): Promise<{ name: string; slug: string }> {
+  const name = opts.name ?? uniqueName("Whispering Baobab");
+  await page.goto("/artworks/new");
+  await assertConfigured(page);
+  await expect(
+    page.getByRole("heading", { name: /register an art project/i }),
+  ).toBeVisible();
+
+  await page.getByLabel("Artwork name").fill(name);
+  await page.getByRole("button", { name: /^save draft$/i }).click();
+  await page.waitForURL(isCampDetailUrl);
+
+  const slug = new URL(page.url()).pathname.split("/").pop() ?? "";
+  if (!slug) {
+    throw new Error(
+      `[factories] No slug in ${page.url()} after saving an artwork draft.`,
+    );
+  }
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+  return { name, slug };
+}
 
 /**
  * Self-register a supplier through the portal sign-up form and (when
@@ -708,7 +778,8 @@ export async function registerSupplier(
   // Same click-vs-request race as signUpBurner — wait for the POST to land
   // before anything reads the session.
   const signUpResponse = await page.waitForResponse(
-    (r) => r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
+    (r) =>
+      r.url().includes("/api/auth/sign-up") && r.request().method() === "POST",
     { timeout: 15_000 },
   );
   if (!signUpResponse.ok()) {
