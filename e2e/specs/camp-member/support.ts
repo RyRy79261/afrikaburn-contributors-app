@@ -127,40 +127,61 @@ export async function setHardLockedBioData(
   page: Page,
   sentinels: { onsiteContactName: string; medicalNotes: string },
 ): Promise<{ onsiteContactName: string; medicalNotes: string }> {
-  await page.goto("/profile?edit=1");
-  await expect(
-    page.getByRole("heading", { name: /edit your bio/i }),
-  ).toBeVisible();
-
-  // BY ROLE, not by label. Every hard-locked field ships a privacy Switch beside
-  // it whose accessible name STARTS WITH the field's own — "Medical notes —
-  // always private" — so `getByLabel("Medical notes")` matches the switch and
-  // the textarea both, and strict mode refuses. Naming the role picks the input.
-  await page
-    .getByRole("textbox", { name: "On-site contact name" })
-    .fill(sentinels.onsiteContactName);
-  await page
-    .getByRole("textbox", { name: "Medical notes" })
-    .fill(sentinels.medicalNotes);
-
-  // details → burns → privacy, then the final save.
+  // THE WHOLE EDIT IS RETRIED FROM THE TOP, not just its last click.
   //
-  // WAIT FOR THE STEP TO CHANGE between clicks. Firing the same
-  // "Save & continue" locator twice in a row raced the persist: the button
-  // disables while the server action is in flight, so Playwright's second click
-  // waited for it to re-enable and could land on the SAME step again — after
-  // which "Save changes" never appears, because the flow is one step short of
-  // the privacy page. `bio-flow.tsx` renders "Step N of 3", so the step counter
-  // is the honest signal that the click actually advanced.
-  const total = EDIT_STEP_COUNT;
-  for (let step = 1; step < total; step += 1) {
-    await expect(page.getByText(`Step ${step} of ${total}`)).toBeVisible();
-    await page.getByRole("button", { name: "Save & continue" }).click();
-    await expect(page.getByText(`Step ${step + 1} of ${total}`)).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Save changes" }).click();
+  // The editor is a three-step flow whose every "Save & continue" is a server
+  // action, and it lives behind a shell that navigates on its own (the profile
+  // page's own redirect, and `navigateOnwards` hard-navigating when an invite is
+  // waiting). Under load — two Playwright workers on one machine, which is what
+  // CI runs — a step can be torn down mid-transition, and the flow then sits one
+  // page short of the privacy step with no "Save changes" to click. Measured: it
+  // passed every single-worker run and failed roughly one org-staff shard in
+  // two, on different tests each time.
+  //
+  // Retrying only the click cannot help (the flow is on the wrong step); this
+  // re-opens the editor and walks it again, which is also what a real person
+  // does. Nothing about the assertion is weakened: the fields must still be
+  // filled and the flow must still complete, and a genuinely broken editor fails
+  // every attempt and then this call.
+  await expect(async () => {
+    await page.goto("/profile?edit=1");
+    await expect(
+      page.getByRole("heading", { name: /edit your bio/i }),
+    ).toBeVisible({ timeout: 10_000 });
 
-  await page.waitForURL(/\/profile(\?.*)?$/);
+    // BY ROLE, not by label. Every hard-locked field ships a privacy Switch
+    // beside it whose accessible name STARTS WITH the field's own — "Medical
+    // notes — always private" — so `getByLabel("Medical notes")` matches the
+    // switch and the textarea both, and strict mode refuses. Naming the role
+    // picks the input.
+    await page
+      .getByRole("textbox", { name: "On-site contact name" })
+      .fill(sentinels.onsiteContactName);
+    await page
+      .getByRole("textbox", { name: "Medical notes" })
+      .fill(sentinels.medicalNotes);
+
+    // details → burns → privacy, then the final save. WAIT FOR THE STEP TO
+    // CHANGE between clicks: the button disables while the server action is in
+    // flight, so firing the same locator twice could land on the same step
+    // again. `bio-flow.tsx` renders "Step N of 3", so the counter is the honest
+    // signal that a click actually advanced.
+    const total = EDIT_STEP_COUNT;
+    for (let step = 1; step < total; step += 1) {
+      await expect(page.getByText(`Step ${step} of ${total}`)).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.getByRole("button", { name: "Save & continue" }).click();
+      await expect(page.getByText(`Step ${step + 1} of ${total}`)).toBeVisible({
+        timeout: 10_000,
+      });
+    }
+    await page
+      .getByRole("button", { name: "Save changes" })
+      .click({ timeout: 10_000 });
+    await page.waitForURL(/\/profile(\?.*)?$/, { timeout: 15_000 });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 4_000] });
+
   return sentinels;
 }
 

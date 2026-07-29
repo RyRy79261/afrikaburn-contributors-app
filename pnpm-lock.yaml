@@ -266,6 +266,9 @@ importers:
 
   e2e:
     devDependencies:
+      '@better-auth/utils':
+        specifier: ^0.4.2
+        version: 0.4.2
       '@playwright/test':
         specifier: 1.62.0
         version: 1.62.0

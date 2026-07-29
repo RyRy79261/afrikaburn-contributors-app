@@ -50,7 +50,6 @@ test.describe("org staff · medical notes are disclosed, and the disclosure is r
 
     await signUpBurner(leadPage, { onboard: true });
     const camp = await createCamp(leadPage, { description: "Shade and tea." });
-    const invite = await inviteToCamp(leadPage, camp.slug, "member");
 
     // NAME THE USERNAME. The roster shows `publicMemberName(username)`, not the
     // account's sign-up name, and `signUpBurner` discards the one `completeBio`
@@ -58,15 +57,24 @@ test.describe("org staff · medical notes are disclosed, and the disclosure is r
     // console never prints.
     const subject = uniqueUsername("medical");
     await signUpBurner(memberPage, { onboard: true, username: subject });
-    await joinByInvite(memberPage, invite.url);
 
-    // The subject discloses. `setHardLockedBioData` drives the real profile
-    // editor — this is a burner writing their own notes, not a seeded row.
+    // THE BIO IS WRITTEN BEFORE ANY INVITE EXISTS, deliberately.
+    //
+    // The profile editor's final save goes through `navigateOnwards`, which for
+    // a burner with a waiting invite HARD-navigates to the invite-resume path
+    // (`window.location.assign`) instead of pushing to /profile. Editing the bio
+    // after joining therefore raced a full-document navigation through a
+    // three-step flow: locally it won, in CI it lost, and the failure surfaced
+    // as "Save changes" never appearing. Nothing about the disclosure needs the
+    // membership to exist first.
     const medicalNotes = uniqueName(
       "Peanut anaphylaxis, EpiPen in tent (medical-e2e)",
     );
     const onsiteContactName = uniqueName("Thandi Mokoena (medical-e2e)");
     await setHardLockedBioData(memberPage, { onsiteContactName, medicalNotes });
+
+    const invite = await inviteToCamp(leadPage, camp.slug, "member");
+    await joinByInvite(memberPage, invite.url);
 
     // The console reaches members through a registration, so there must be one.
     await submitRegistration(leadPage, camp.slug);

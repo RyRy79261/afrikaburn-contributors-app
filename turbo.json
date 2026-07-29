@@ -27,9 +27,25 @@
       "dependsOn": [
         "^build"
       ],
+      // EXCLUSIONS ARE LOAD-BEARING. `.next/**` as an output means turbo tars
+      // the whole directory into .turbo/cache on every task hash and writes it
+      // back on every restore, so anything unbounded under .next multiplies by
+      // the number of builds.
+      //
+      // `!.next/cache/**` was always here. `!.next/dev/**` was added 29 Jul
+      // 2026 after it filled a developer's machine: Next 16's dev server writes
+      // Turbopack state to `.next/dev` and it grows without bound — measured
+      // 5.7 GB for web and 4.6 GB for org after ONE dev-mode e2e run. Every
+      // build after that archived those ten gigabytes under a fresh hash (any
+      // source edit changes the hash) and restored them again on every hit. A
+      // dozen build-and-test cycles reached ~550 GB and filled the disk.
+      //
+      // scripts/e2e-local.sh also deletes `.next/dev` before a dev-mode run.
+      // Keep both: this stops it being COPIED, that stops it ACCUMULATING.
       "outputs": [
         ".next/**",
         "!.next/cache/**",
+        "!.next/dev/**",
         "dist/**",
         "out/**"
       ]

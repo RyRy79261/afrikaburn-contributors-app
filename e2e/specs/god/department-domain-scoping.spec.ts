@@ -135,93 +135,106 @@ test.describe("system manager · what a department owns is what its roles reach"
     // Registrations is the sharpest case. Approve and Reject are the console's
     // most consequential controls and until 28 Jul 2026 they rendered live for
     // every account, refusing only in a toast after the click.
+    // DEPARTMENT OWNERSHIP IS DEPLOYMENT-WIDE STATE, so the teardown is in a
+    // `finally`. Giving a department the `registrations` domain changes what
+    // EVERY other spec's org_staff account may decide; a run that died between
+    // the assignment and the delete would leave the whole review suite refused,
+    // and the next person would be debugging their own change.
     await elevateToGod(orgPage);
     await orgPage.goto("/system/roles");
+    const created: string[] = [];
+    try {
+      // Two departments: one owns suppliers, the other owns registrations.
+      const supply = departmentName();
+      const placement = departmentName();
+      for (const [name, owns] of [
+        [supply, /the supplier repository/i],
+        [placement, /registration/i],
+      ] as const) {
+        await orgPage.getByLabel(/new department/i).fill(name);
+        await orgPage.getByRole("button", { name: /add department/i }).click();
+        await expect(orgPage.getByText(/department created/i)).toBeVisible();
+        created.push(name);
+        await orgPage
+          .getByRole("button", { name: `Choose what ${name} owns` })
+          .click();
+        const dialog = orgPage.getByRole("dialog");
+        await dialog.getByLabel(owns).first().check();
+        await dialog
+          .getByRole("button", { name: /save what it owns/i })
+          .click();
+        await expect(
+          orgPage.getByText(/saved what this department owns/i),
+        ).toBeVisible();
+      }
 
-    // Two departments: one owns suppliers, the other owns registrations.
-    const supply = departmentName();
-    const placement = departmentName();
-    for (const [name, owns] of [
-      [supply, /the supplier repository/i],
-      [placement, /registration/i],
-    ] as const) {
-      await orgPage.getByLabel(/new department/i).fill(name);
-      await orgPage.getByRole("button", { name: /add department/i }).click();
-      await expect(orgPage.getByText(/department created/i)).toBeVisible();
+      // A person holding ONLY the supply department's lead role.
+      const burner = await signUpBurner(webPage, { onboard: true });
+      await gotoAccount(orgPage, burner.email);
+      await elevateVisibleRow(orgPage);
+      await gotoAccount(orgPage, burner.email);
       await orgPage
-        .getByRole("button", { name: `Choose what ${name} owns` })
+        .getByRole("button", { name: "Roles", exact: true })
+        .filter({ visible: true })
         .click();
-      const dialog = orgPage.getByRole("dialog");
-      await dialog.getByLabel(owns).first().check();
-      await dialog.getByRole("button", { name: /save what it owns/i }).click();
+      const roles = orgPage.getByRole("dialog");
+      await expect(roles).toBeVisible();
+      // The org-wide "Org staff" role elevation grants by default reaches
+      // everything, which would make this prove nothing.
+      for (const box of await roles.getByRole("checkbox").all()) {
+        if (await box.isChecked()) await box.uncheck();
+      }
+      await roles.getByLabel(new RegExp(`${supply} lead`, "i")).check();
+      await roles.getByRole("button", { name: /save roles/i }).click();
+      await expect(orgPage.getByText(/roles saved/i)).toBeVisible();
+
+      // A REGISTRATION IN A DECIDABLE STATE, built by this spec. Opening whatever
+      // happens to sit at the top of the queue is not good enough: a draft offers
+      // no Approve at all (`availableReviewActions`), so the assertion below would
+      // pass on an empty panel and prove nothing.
+      const campLead = await makeAppPage("web");
+      await signUpBurner(campLead, { onboard: true });
+      const camp = await createCamp(campLead, {
+        description: "Tea and shade.",
+      });
+      await submitRegistration(campLead, camp.slug);
+
+      // THE PROOF. The queue still OPENS — read is not a page gate, and Ryan asked
+      // for transparency with restrictions rather than obfuscation — but the
+      // decision is refused, in place, by name.
+      const leadOrg = await makeAppPage("org");
+      await signInAs(leadOrg, burner, "org");
+      await openRegistrationInConsole(leadOrg, camp.name);
+
+      const approve = leadOrg.getByRole("button", {
+        name: /approve — not available to you/i,
+      });
+      await expect(approve).toBeVisible();
+      await expect(approve).toBeDisabled();
+      // Present and disabled, never hidden — and never live.
       await expect(
-        orgPage.getByText(/saved what this department owns/i),
+        leadOrg.getByRole("button", { name: /^approve$/i }),
+      ).toHaveCount(0);
+
+      // …and the reason NAMES THE OWNING DEPARTMENT, which is the whole point of
+      // the foreign-domain branch: "your role does not reach here" would leave a
+      // supply lead with nobody to hand the registration to.
+      await expect(
+        leadOrg.getByText(/in your own department only/i),
       ).toBeVisible();
-    }
-
-    // A person holding ONLY the supply department's lead role.
-    const burner = await signUpBurner(webPage, { onboard: true });
-    await gotoAccount(orgPage, burner.email);
-    await elevateVisibleRow(orgPage);
-    await gotoAccount(orgPage, burner.email);
-    await orgPage
-      .getByRole("button", { name: "Roles", exact: true })
-      .filter({ visible: true })
-      .click();
-    const roles = orgPage.getByRole("dialog");
-    await expect(roles).toBeVisible();
-    // The org-wide "Org staff" role elevation grants by default reaches
-    // everything, which would make this prove nothing.
-    for (const box of await roles.getByRole("checkbox").all()) {
-      if (await box.isChecked()) await box.uncheck();
-    }
-    await roles.getByLabel(new RegExp(`${supply} lead`, "i")).check();
-    await roles.getByRole("button", { name: /save roles/i }).click();
-    await expect(orgPage.getByText(/roles saved/i)).toBeVisible();
-
-    // A REGISTRATION IN A DECIDABLE STATE, built by this spec. Opening whatever
-    // happens to sit at the top of the queue is not good enough: a draft offers
-    // no Approve at all (`availableReviewActions`), so the assertion below would
-    // pass on an empty panel and prove nothing.
-    const campLead = await makeAppPage("web");
-    await signUpBurner(campLead, { onboard: true });
-    const camp = await createCamp(campLead, { description: "Tea and shade." });
-    await submitRegistration(campLead, camp.slug);
-
-    // THE PROOF. The queue still OPENS — read is not a page gate, and Ryan asked
-    // for transparency with restrictions rather than obfuscation — but the
-    // decision is refused, in place, by name.
-    const leadOrg = await makeAppPage("org");
-    await signInAs(leadOrg, burner, "org");
-    await openRegistrationInConsole(leadOrg, camp.name);
-
-    const approve = leadOrg.getByRole("button", {
-      name: /approve — not available to you/i,
-    });
-    await expect(approve).toBeVisible();
-    await expect(approve).toBeDisabled();
-    // Present and disabled, never hidden — and never live.
-    await expect(
-      leadOrg.getByRole("button", { name: /^approve$/i }),
-    ).toHaveCount(0);
-
-    // …and the reason NAMES THE OWNING DEPARTMENT, which is the whole point of
-    // the foreign-domain branch: "your role does not reach here" would leave a
-    // supply lead with nobody to hand the registration to.
-    await expect(
-      leadOrg.getByText(/in your own department only/i),
-    ).toBeVisible();
-    await expect(leadOrg.getByText(new RegExp(placement, "i"))).toBeVisible();
-
-    // Clean up both departments (their roles and this person's hold go too).
-    await orgPage.goto("/system/roles");
-    for (const name of [supply, placement]) {
-      await orgPage.getByRole("button", { name: `Delete ${name}` }).click();
-      const confirm = orgPage.getByRole("dialog");
-      await confirm
-        .getByRole("button", { name: /delete department and its roles/i })
-        .click();
-      await expect(orgPage.getByText(/department deleted/i)).toBeVisible();
+      await expect(leadOrg.getByText(new RegExp(placement, "i"))).toBeVisible();
+    } finally {
+      await orgPage.goto("/system/roles");
+      for (const name of created) {
+        const trigger = orgPage.getByRole("button", { name: `Delete ${name}` });
+        if ((await trigger.count()) === 0) continue;
+        await trigger.click();
+        await orgPage
+          .getByRole("dialog")
+          .getByRole("button", { name: /delete department and its roles/i })
+          .click();
+        await expect(orgPage.getByText(/department deleted/i)).toBeVisible();
+      }
     }
   });
 

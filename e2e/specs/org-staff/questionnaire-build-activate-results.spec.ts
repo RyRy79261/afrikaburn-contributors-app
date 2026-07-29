@@ -64,8 +64,12 @@ test.describe("org staff · questionnaires", () => {
       .fill("A quick check-in for the crew.");
 
     // Several question TYPES, added to section 1 via the palette rail.
-    await org.getByRole("button", { name: "Multiple choice", exact: true }).click();
-    await org.getByRole("button", { name: "Short answer", exact: true }).click();
+    await org
+      .getByRole("button", { name: "Multiple choice", exact: true })
+      .click();
+    await org
+      .getByRole("button", { name: "Short answer", exact: true })
+      .click();
     await org.getByRole("button", { name: "Yes / No", exact: true }).click();
     // A second section (branch target + a fourth type there).
     await org.getByRole("button", { name: "Add section", exact: true }).click();
@@ -104,12 +108,13 @@ test.describe("org staff · questionnaires", () => {
     // the title as a substring, not exact. The selector chip below is a plain
     // label button.
     await org.getByRole("button", { name: /^outbound/i }).click();
-    await org
-      .getByRole("button", { name: /all current burners/i })
-      .click();
+    await org.getByRole("button", { name: /all current burners/i }).click();
     // Blocking stays OFF (default). Assert it, so a future default flip can't
     // silently turn this into a shared-account-poisoning blocking send.
-    await expect(org.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    await expect(org.getByRole("switch")).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
     await org.getByRole("button", { name: /send questionnaire/i }).click();
 
     // Send lands back on the list; the outbound activation row carries the id.
@@ -124,7 +129,9 @@ test.describe("org staff · questionnaires", () => {
       )
       .first();
     await expect(outboundRow).toBeVisible();
-    const activationId = activationIdFrom(await outboundRow.getAttribute("href"));
+    const activationId = activationIdFrom(
+      await outboundRow.getAttribute("href"),
+    );
     if (!activationId) {
       throw new Error(
         `[org-staff] Could not read the activation id from the outbound row href.`,
@@ -144,24 +151,39 @@ test.describe("org staff · questionnaires", () => {
     ).toBeVisible();
     await recipientPage.getByRole("radio", { name: "Evening" }).click();
     await recipientPage.getByLabel("Any dietary needs?").fill("None");
-    await recipientPage.getByRole("button", { name: "Yes", exact: true }).click();
+    await recipientPage
+      .getByRole("button", { name: "Yes", exact: true })
+      .click();
     await recipientPage.getByRole("button", { name: /^next$/i }).click();
     await recipientPage
       .getByLabel("Anything else to add?")
       .fill("Looking forward to it.");
-    await recipientPage.getByRole("button", { name: "Submit", exact: true }).click();
-    // The fill page confirms completion (redirects to the directory or shows the
-    // "Already submitted" state on a re-open).
+    await recipientPage
+      .getByRole("button", { name: "Submit", exact: true })
+      .click();
+
+    // WAIT FOR THE SUBMIT TO LAND before navigating away. `.click()` resolves
+    // when the event is dispatched, not when the server action returns, and
+    // `page.goto` on the next line tore the document down mid-POST: the draft
+    // saved by the earlier "Next" survived, the FINAL submit did not, and the
+    // re-opened fill page came back at "Section 1 of 2" with no completion.
+    // That reads as a broken product and is a harness race — the same one
+    // personas/factories.ts documents for sign-up.
+    //
+    // The runner's success path is `navigateOnwards(router, "/directory")`
+    // (fill.tsx `redirectTo`), so the directory URL is the honest signal that
+    // the action committed. It also deliberately defers a macrotask
+    // (lib/client-navigation.ts), which widened the window this used to win by
+    // luck.
+    await recipientPage.waitForURL(/\/directory\/?$/);
+
+    // The fill page then shows the "Already submitted" state on a re-open.
     await recipientPage.goto(`/questionnaires/${activationId}`);
-    await expect(
-      recipientPage.getByText(/already submitted/i),
-    ).toBeVisible();
+    await expect(recipientPage.getByText(/already submitted/i)).toBeVisible();
 
     // --- Results aggregate ----------------------------------------------
     await org.goto(`/questionnaires/${key}/${activationId}`);
-    await org.waitForURL(
-      new RegExp(`/questionnaires/${key}/[0-9a-f-]{36}`),
-    );
+    await org.waitForURL(new RegExp(`/questionnaires/${key}/[0-9a-f-]{36}`));
 
     // Exactly one completed response (our recipient) out of however many the
     // edition-wide audience resolved to.

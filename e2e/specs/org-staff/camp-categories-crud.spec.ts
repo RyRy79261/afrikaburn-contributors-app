@@ -39,7 +39,7 @@ import { provisionOrgStaff, desktopOnly } from "./_helpers";
 test.describe("org staff · camp categories are read-only", () => {
   test.beforeEach(() => desktopOnly(test, test.info().project.name));
 
-  test("org_staff reads the catalog but is offered no way to change it", async ({
+  test("org_staff reads the catalog but is offered no way to change it [manage-camp-categories]", async ({
     makeAppPage,
   }) => {
     skipUnlessGod();

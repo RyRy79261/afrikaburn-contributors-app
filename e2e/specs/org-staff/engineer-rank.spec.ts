@@ -34,6 +34,9 @@
 //   · apps/org/lib/__tests__/org-rank-enforcement.test.ts   (the console obeys it)
 // Delete a capability check or move a column out of its conditional and THOSE go
 // red immediately.
+//
+// Registry ids proven here (personas/registry.ts): delete-org-record,
+// read-personal-information, manage-camp-categories.
 
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import { provisionEngineer, desktopOnly } from "./_helpers";

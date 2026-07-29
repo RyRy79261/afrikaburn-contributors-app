@@ -140,7 +140,27 @@ jobs:
           #
           # Parallelism already comes from the eight per-persona jobs above:
           # 8 jobs x 2 workers = 16 concurrent.
-          E2E_WORKERS: "2"
+          #
+          # …EXCEPT ON THE SHARDS THAT SHARE THE GOD ACCOUNT. `god`, `org-staff`,
+          # `camp-lead`, `officer` and `supplier` all reach the console through
+          # ONE set of credentials (E2E_GOD_EMAIL — `elevateToGod`,
+          # `provisionOrgStaff`, `provisionEngineer`). A second worker there is
+          # not parallelism, it is two browsers signing in as the same principal
+          # and racing each other's session, and the god bootstrap writes on
+          # first load. Measured 29 Jul 2026 on the org-staff shard: 2 workers →
+          # 2 failed / 19 passed, a DIFFERENT pair each run (a bio editor torn
+          # down mid-step, a concurrent-reviewer test losing its second session);
+          # 1 worker → clean, repeatedly. A gate that fails differently every
+          # time teaches people to press re-run, which is how a real failure gets
+          # waved through.
+          #
+          # The five persona-isolated shards keep 2.
+          E2E_WORKERS: >-
+            ${{ (matrix.persona == 'god'
+              || matrix.persona == 'org-staff'
+              || matrix.persona == 'camp-lead'
+              || matrix.persona == 'officer'
+              || matrix.persona == 'supplier') && '1' || '2' }}
           # 180s, not the 90s default. The two-user journeys drive a full
           # six-section registration through the UI, and the slowest of them
           # still measure ~2m on a green run — this cap is ~1.5x the slowest

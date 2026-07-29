@@ -162,7 +162,24 @@ if [ "$E2E_SERVE" = "build" ]; then
     wait ) > "$LOG_DIR/dev.log" 2>&1 &
   DEV_PID=$!
 else
-  rm -rf apps/*/.next/cache
+  # `.next/dev` GOES TOO, and this is not housekeeping — it is damage control.
+  #
+  # Next 16's dev server writes its Turbopack state under `apps/*/.next/dev`,
+  # and it GROWS without bound across runs: measured 29 Jul 2026 after a single
+  # dev-mode run of this script, 5.7 GB for web and 4.6 GB for org.
+  #
+  # On its own that is merely wasteful. It became destructive because
+  # `turbo.json` counted `.next/**` as a build output and excluded only
+  # `.next/cache/**` — so every subsequent `turbo run build` ARCHIVED those ten
+  # gigabytes into `.turbo/cache` under a fresh hash (any source edit changes
+  # the hash), and wrote them back out again on every restore. A dozen
+  # build-and-test cycles turned ~10 GB of throwaway dev state into hundreds of
+  # gigabytes and filled the machine.
+  #
+  # Two things now stop that: `!.next/dev/**` in turbo.json's build outputs, and
+  # this line. Both are needed — the exclusion stops it being copied, this stops
+  # it accumulating in the first place.
+  rm -rf apps/*/.next/cache apps/*/.next/dev
   pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
   DEV_PID=$!
 fi
