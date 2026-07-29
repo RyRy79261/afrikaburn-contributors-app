@@ -5,10 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # For the mobile job below, which is deliberately NOT on the PR path.
-  schedule:
-    - cron: "0 2 * * *"
-  workflow_dispatch:
 
 # One run per branch. Pushing again cancels the superseded run instead of
 # leaving two full e2e fleets racing each other for runners — which is what
@@ -179,13 +175,13 @@ jobs:
           # This pins the playwright.config.ts default rather than changing it —
           # stated here so a change there is a deliberate choice in both places.
           E2E_RETRIES: "1"
-          # DESKTOP GATES. `mobile-360` does not run in CI at all — see the
-          # MOBILE 360 note at the end of this file. It still runs locally,
-          # where `scripts/e2e-local.sh` defaults to both projects. Promote it
-          # into this list only once it has been run per-persona and its
-          # failures triaged; every spec in it is of unknown status, and making
-          # an unknown-status project blocking produces a red gate nobody
-          # trusts, which is worse than no gate.
+          # DESKTOP GATES. `mobile-360` runs nightly in its own workflow
+          # (.github/workflows/mobile.yml) and never on a pull request — it is
+          # red by construction until triaged, and a permanently red check
+          # teaches people to ignore checks. It still runs locally, where
+          # scripts/e2e-local.sh defaults to both projects. Promote a persona
+          # into this list, where it WILL block, once its mobile failures reach
+          # zero.
           E2E_PROJECTS: desktop-chromium
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
@@ -209,104 +205,6 @@ jobs:
         with:
           # Per persona, or eight uploads collide on one name.
           name: playwright-report-${{ matrix.persona }}
-          path: |
-            e2e/playwright-report
-            e2e/test-results
-            server.log
-          retention-days: 14
-          if-no-files-found: ignore
-
-  # MOBILE 360 — INFORMATIONAL, PER PERSONA, NON-BLOCKING.
-  #
-  # It was off. It had run the WHOLE suite on ONE runner while desktop was split
-  # per persona, so it cost an hour on every push and told us nothing we acted
-  # on. An informational job that burns an hour is not informational, it is
-  # noise with a bill.
-  #
-  # NIGHTLY AND ON DEMAND, NEVER ON A PULL REQUEST. It runs the same per-persona
-  # matrix as the gate, so it costs minutes rather than the hour it used to.
-  #
-  # Why not on PRs. `continue-on-error` does keep the RUN green — measured, the
-  # run concluded success with all eight mobile jobs red — but the pull request
-  # then reports MERGEABLE/UNSTABLE and shows eight failed checks. Every spec in
-  # this project is of unknown status and was written against desktop layouts,
-  # so that is not a transient red: it is eight red crosses on every PR for as
-  # long as triage takes. A check that is always red teaches people to ignore
-  # checks, which costs more than the coverage is worth right now.
-  #
-  # So: nightly, plus `workflow_dispatch` when you actually want it. The reports
-  # upload under `mobile-*`, named per persona, which is the triage list.
-  # Promote a persona into `E2E_PROJECTS` on the gating job — where it WILL
-  # block — once its mobile failures reach zero. That is the direction of
-  # travel; this job exists to make it possible, not to nag.
-  e2e-mobile:
-    name: mobile · ${{ matrix.label }}
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - persona: anon
-            label: "anon · signed-out surfaces + privacy"
-          - persona: new-burner
-            label: "new burner · sign-up, bio, the blocking gate"
-          - persona: camp-member
-            label: "camp member · a member of someone else's camp"
-          - persona: camp-lead
-            label: "camp lead · camp lifecycle, invites, registration"
-          - persona: officer
-            label: "officer · assignment consent + phone disclosure"
-          - persona: org-staff
-            label: "ORG staff · review queue, department scoping"
-          - persona: god
-            label: "ORG system manager · anti-lockout, escalation refusals"
-          - persona: supplier
-            label: "supplier · onboarding, documents, standing"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.0
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
-
-      - name: Run the persona suite on mobile-360
-        env:
-          E2E_RESET_DB: "1"
-          E2E_WORKERS: "2"
-          E2E_TEST_TIMEOUT: "180000"
-          E2E_SERVE: build
-          # NO RETRY. This job exists to produce a triage list, and a retry
-          # only re-pays for a failure already recorded.
-          E2E_RETRIES: "0"
-          E2E_PROJECTS: mobile-360
-          BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
-          PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
-        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
-
-      - name: Collect the app server log
-        if: always()
-        run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
-
-      - name: Upload the report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-report-${{ matrix.persona }}
           path: |
             e2e/playwright-report
             e2e/test-results

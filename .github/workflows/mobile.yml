@@ -1,0 +1,105 @@
+name: Mobile 360
+
+# ITS OWN FILE, AND NOT ON THE PULL-REQUEST PATH.
+#
+# This lived in ci.yml behind `if: schedule || workflow_dispatch`. That worked —
+# the job skipped on every PR — but GitHub cannot interpolate a matrix for a
+# SKIPPED job, so the checks list showed a literal `mobile · ${{ matrix.label }}`
+# on every pull request. A check nobody can read is worse than no check, and the
+# whole reason this moved off the PR path was to stop it being noise.
+#
+# A separate workflow with no `pull_request` trigger cannot appear there at all.
+#
+# WHY IT IS NOT A GATE. Every spec in the mobile-360 project was written against
+# a desktop layout and the project had never executed until 28 Jul, so it is red
+# by construction until triaged. Making an unknown-status project blocking
+# produces a red board nobody trusts. This produces the triage list instead —
+# per persona, so a failure is named — and the reports upload under `mobile-*`.
+#
+# Promote a persona into `E2E_PROJECTS` on the gating job in ci.yml, where it
+# WILL block, once its mobile failures reach zero. That is the direction of
+# travel; this exists to make it possible, not to nag.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-mobile:
+    name: mobile · ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - persona: anon
+            label: "anon · signed-out surfaces + privacy"
+          - persona: new-burner
+            label: "new burner · sign-up, bio, the blocking gate"
+          - persona: camp-member
+            label: "camp member · a member of someone else's camp"
+          - persona: camp-lead
+            label: "camp lead · camp lifecycle, invites, registration"
+          - persona: officer
+            label: "officer · assignment consent + phone disclosure"
+          - persona: org-staff
+            label: "ORG staff · review queue, department scoping"
+          - persona: god
+            label: "ORG system manager · anti-lockout, escalation refusals"
+          - persona: supplier
+            label: "supplier · onboarding, documents, standing"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
+
+      - name: Run the persona suite on mobile-360
+        env:
+          E2E_RESET_DB: "1"
+          E2E_WORKERS: "2"
+          E2E_TEST_TIMEOUT: "180000"
+          E2E_SERVE: build
+          # NO RETRY. This job exists to produce a triage list, and a retry
+          # only re-pays for a failure already recorded.
+          E2E_RETRIES: "0"
+          E2E_PROJECTS: mobile-360
+          BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
+          PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
+        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+
+      - name: Collect the app server log
+        if: always()
+        run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-report-${{ matrix.persona }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            server.log
+          retention-days: 14
+          if-no-files-found: ignore
