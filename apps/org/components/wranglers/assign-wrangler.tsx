@@ -57,9 +57,20 @@ export function AssignWrangler({
   const [selected, setSelected] = useState<string>(currentWranglerUserId ?? "");
 
   const blocked = Boolean(refusal) || !isApproved;
-  const blockedReason = refusal
-    ? refusal
-    : "A camp gets its wrangler when its registration is approved.";
+  // WHICHEVER REASON IS NOT ALREADY ON THE SCREEN.
+  //
+  // Not-approved wins when both apply, and that is not arbitrary: while a
+  // registration is undecided the DecisionPanel two inches above is already
+  // printing the capability refusal, and repeating the identical paragraph in
+  // the next card is how a rail becomes something nobody reads —
+  // `suppliers-table.tsx` learned the same thing ("the reason is stated ONCE").
+  // Strict mode caught the duplicate before a person had to.
+  //
+  // Once the camp IS approved the panel offers no actions and prints nothing,
+  // so the capability sentence has to be here or it is nowhere.
+  const blockedReason = !isApproved
+    ? "A camp gets its wrangler when its registration is approved."
+    : refusal;
 
   function assign(userId: string) {
     setSelected(userId);

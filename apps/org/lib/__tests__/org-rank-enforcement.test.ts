@@ -448,6 +448,17 @@ describe("REGRESSION: a wrangler assignment is guarded, gated and does not leak"
     );
   });
 
+  it("never prints the same refusal twice on one screen", () => {
+    // The action rail has two independently-refused controls. While a
+    // registration is undecided the DecisionPanel already prints the capability
+    // sentence, so the wrangler card must show ITS reason (not approved yet)
+    // instead of repeating it — Playwright's strict mode found the duplicate in
+    // CI before a human did, and `suppliers-table.tsx` had already learned that
+    // a rail repeating a paragraph is a rail nobody reads.
+    const card = source("components/wranglers/assign-wrangler.tsx");
+    expect(card).toContain("const blockedReason = !isApproved");
+  });
+
   it("the review screen and the board both ask before offering the control", () => {
     const detail = source("app/(console)/registrations/[id]/page.tsx").replace(
       /\s+/g,
