@@ -7,12 +7,10 @@ import {
   ScrollText,
   Send,
   Tags,
-  UserCog,
   UserPlus,
   Users,
 } from "lucide-react";
 import { Card, CardContent } from "@quagga/ui/components/card";
-import { DisabledHintTile } from "@quagga/ui/components/disabled-hint-tile";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getStatusBoard } from "@/lib/queries";
 import { getRecentActivity } from "@/lib/status-board";
@@ -22,6 +20,7 @@ import { KpiCards } from "@/components/status-board/kpi-cards";
 import { RegistrationPipelineStrip } from "@/components/status-board/registration-funnel";
 import {
   OfficerCoverageCard,
+  WranglerCoverageCard,
   SupplierOnboardingCard,
 } from "@/components/status-board/coverage";
 import { RecentActivity } from "@/components/status-board/recent-activity";
@@ -140,15 +139,7 @@ export default async function OverviewPage() {
         aria-label="Coverage"
         className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
       >
-        {/* Wrangler assignment has no data model yet (no assignments exist to
-            count), so the tile is honestly parked rather than faked. */}
-        <DisabledHintTile
-          title="Wranglers"
-          hint="Wrangler assignment isn't built yet — there is no assignment data to report on."
-          tag="Coming later"
-          icon={<UserCog className="h-4 w-4" />}
-          className="h-full"
-        />
+        <WranglerCoverageCard coverage={board.wranglerCoverage} />
         <OfficerCoverageCard coverage={board.officerCoverage} />
         <SupplierOnboardingCard
           onboarding={board.supplierOnboarding}

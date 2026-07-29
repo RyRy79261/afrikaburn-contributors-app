@@ -9,6 +9,7 @@ import {
   FileCheck2,
   CheckCircle2,
   ClipboardList,
+  UserCog,
 } from "lucide-react";
 import type {
   GroupKind,
@@ -394,6 +395,26 @@ export default async function CampPage({
                       live.
                     </span>
                   </div>
+                  {/* WHO YOUR WRANGLER IS. The org's assignment notification
+                      says "<name> from the theme camp leads team is now your
+                      wrangler" and links here, so this page has to agree with
+                      it — a notification pointing at a screen that has never
+                      heard of the person is how a camp decides the app is
+                      lying to them. Name only: how to reach AfrikaBurn is the
+                      channels they already run. */}
+                  {camp.wranglerName ? (
+                    <p className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 p-3 text-sm">
+                      <UserCog
+                        className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                        aria-hidden
+                      />
+                      <span className="text-foreground">
+                        <strong>{camp.wranglerName}</strong> from the theme camp
+                        leads team is your wrangler — they&rsquo;ll help you
+                        through build week and check-in.
+                      </span>
+                    </p>
+                  ) : null}
                   {isAdmin &&
                     // Theme camps view the camp-shaped submission; MV/art view
                     // their own (locked, once approved) registration form.

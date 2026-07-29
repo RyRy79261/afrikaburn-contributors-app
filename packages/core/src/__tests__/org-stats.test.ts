@@ -17,6 +17,7 @@ import {
   REGISTRATION_STATUS_ORDER,
   type ProjectStatInput,
   type CampOfficerInput,
+  deriveWranglerCoverage,
 } from "../org-stats";
 
 // A fixture that MIRRORS the seed's theme camps (packages/db/src/seed.ts): one
@@ -162,7 +163,11 @@ describe("deriveRegistrationFunnel", () => {
 });
 
 describe("deriveOfficerCoverage", () => {
-  const noFire = { hasGenerators: false, hasOpenFlame: false, hasFuelStorage: false };
+  const noFire = {
+    hasGenerators: false,
+    hasOpenFlame: false,
+    hasFuelStorage: false,
+  };
 
   it("counts only applicable camps and reports fully-officered", () => {
     const camps: CampOfficerInput[] = [
@@ -263,10 +268,7 @@ describe("deriveQuestionnaireCompletion", () => {
       {
         activationId: "a1",
         title: "Safety check-in",
-        actions: [
-          { status: "completed" },
-          { status: "pending" },
-        ],
+        actions: [{ status: "completed" }, { status: "pending" }],
       },
       {
         activationId: "a2",
@@ -284,7 +286,11 @@ describe("deriveQuestionnaireCompletion", () => {
       pending: 1,
       completionPct: 50,
     });
-    expect(rollup.sends[1]).toMatchObject({ sent: 1, completed: 0, completionPct: 0 });
+    expect(rollup.sends[1]).toMatchObject({
+      sent: 1,
+      completed: 0,
+      completionPct: 0,
+    });
   });
 
   it("is all-zero for no sends", () => {
@@ -293,6 +299,50 @@ describe("deriveQuestionnaireCompletion", () => {
       totalSent: 0,
       totalCompleted: 0,
       completionPct: 0,
+    });
+  });
+});
+
+describe("deriveWranglerCoverage", () => {
+  it("counts only APPROVED camps as eligible", () => {
+    // A camp that has not been approved cannot be assigned — the action refuses
+    // it — so counting it as uncovered would report work nobody may do and keep
+    // the tile permanently red.
+    const coverage = deriveWranglerCoverage([
+      { isApproved: false, wranglerUserId: null },
+      { isApproved: false, wranglerUserId: "u1" },
+      { isApproved: true, wranglerUserId: null },
+    ]);
+    expect(coverage.eligibleCamps).toBe(1);
+    expect(coverage.assigned).toBe(0);
+    expect(coverage.unassigned).toBe(1);
+  });
+
+  it("reports the gap, the headcount and the busiest single load", () => {
+    const coverage = deriveWranglerCoverage([
+      { isApproved: true, wranglerUserId: "sipho" },
+      { isApproved: true, wranglerUserId: "sipho" },
+      { isApproved: true, wranglerUserId: "sipho" },
+      { isApproved: true, wranglerUserId: "ren" },
+      { isApproved: true, wranglerUserId: null },
+    ]);
+    expect(coverage.eligibleCamps).toBe(5);
+    expect(coverage.assigned).toBe(4);
+    expect(coverage.unassigned).toBe(1);
+    // Two people, not four assignments — the headline "4 of 5 covered" hides
+    // that one volunteer is holding three quarters of it.
+    expect(coverage.wranglers).toBe(2);
+    expect(coverage.busiestLoad).toBe(3);
+  });
+
+  it("is all zeroes with nothing approved, rather than dividing by nothing", () => {
+    const coverage = deriveWranglerCoverage([]);
+    expect(coverage).toEqual({
+      eligibleCamps: 0,
+      assigned: 0,
+      unassigned: 0,
+      wranglers: 0,
+      busiestLoad: 0,
     });
   });
 });

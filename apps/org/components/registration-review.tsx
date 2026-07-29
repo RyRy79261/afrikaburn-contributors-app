@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Lock, UserPlus } from "lucide-react";
+import { ChevronRight, Lock } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -8,7 +8,6 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { Badge } from "@quagga/ui/components/badge";
-import { Button } from "@quagga/ui/components/button";
 import { StatusBadge } from "@quagga/ui/components/status-badge";
 import type { SectionKey } from "@quagga/types";
 
@@ -17,11 +16,14 @@ import type {
   OfficerContactRow,
   RegistrationDetail,
   RosterMemberRow,
+  WranglerAssignmentRow,
+  WranglerCandidate,
 } from "@/lib/queries";
 import type { OfficersCopy } from "@/lib/project-review";
 import { formatDate } from "@/lib/labels";
 import { FieldList, type FieldSpec } from "@/components/field-list";
 import { DecisionPanel } from "@/components/decision-panel";
+import { AssignWrangler } from "@/components/wranglers/assign-wrangler";
 import { SectionReviewThread } from "@/components/section-review-thread";
 import { MemberRoster } from "@/components/member-roster";
 
@@ -50,6 +52,9 @@ export function RegistrationReview({
   showWrangler,
   roster,
   decisionRefusal,
+  wranglerCandidates,
+  wrangler,
+  wranglerRefusal,
 }: {
   detail: RegistrationDetail;
   decisionLog: DecisionLogRow[];
@@ -63,6 +68,12 @@ export function RegistrationReview({
   /** Why this viewer may not decide, or null when they may. Resolved by the
    * page, because only the server has the actor. */
   decisionRefusal: string | null;
+  /** Org members who could hold this camp (empty on a fresh deployment). */
+  wranglerCandidates: WranglerCandidate[];
+  /** Who holds it now, or null. */
+  wrangler: WranglerAssignmentRow | null;
+  /** Why this viewer may not assign one — the same capability as deciding. */
+  wranglerRefusal: string | null;
 }) {
   const { registration, group, edition } = detail;
 
@@ -286,28 +297,26 @@ export function RegistrationReview({
             </CardContent>
           </Card>
 
-          {/* Assign a wrangler — camp-only (theme-camp leads team owns it). */}
+          {/* Assign a wrangler — camp-only (the theme-camp leads team owns it;
+              mutant vehicles and artworks belong to the DMV and the Art crew).
+              This was a permanently disabled button promising "unlocks after
+              approval" until migration 0026 gave it something to do. */}
           {showWrangler && (
             <Card>
               <CardHeader>
                 <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
                   After approval
                 </p>
-                <CardTitle className="text-base">Assign a wrangler</CardTitle>
+                <CardTitle className="text-base">Wrangler</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">
-                  A wrangler shepherds the camp through build week and check-in.
-                  You can assign one once this registration is approved.
-                </p>
-                <Button variant="outline" disabled className="w-full">
-                  <UserPlus aria-hidden />
-                  Assign wrangler
-                </Button>
-                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                  Unlocks after approval — handled by the theme-camp leads team.
-                </p>
+              <CardContent>
+                <AssignWrangler
+                  registrationId={registration.id}
+                  candidates={wranglerCandidates}
+                  currentWranglerUserId={wrangler?.wranglerUserId ?? null}
+                  isApproved={registration.status === "approved"}
+                  refusal={wranglerRefusal}
+                />
               </CardContent>
             </Card>
           )}

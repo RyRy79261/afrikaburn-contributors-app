@@ -130,9 +130,9 @@ export async function provisionEngineer(
   await expect(
     org.getByRole("heading", { name: /registration pipeline/i }),
   ).toBeVisible();
-  await expect(
-    org.getByText(/this side is for afrikaburn staff/i),
-  ).toHaveCount(0);
+  await expect(org.getByText(/this side is for afrikaburn staff/i)).toHaveCount(
+    0,
+  );
 
   return { account, org };
 }
@@ -151,10 +151,20 @@ export async function provisionEngineer(
  */
 export async function provisionOrgStaff(
   makeAppPage: MakeAppPage,
+  opts: { username?: string } = {},
 ): Promise<OrgStaff> {
   // 1) Real participant sign-up (creates the Better Auth identity).
+  //
+  // `username` is OPTIONAL and off by default, because most console specs do
+  // not care what the account is called and onboarding costs a bio flow per
+  // provision. Pass it when a spec needs to tell two org accounts APART on
+  // screen — the console renders `publicMemberName`, so a bio-less org account
+  // shows as the literal "Unnamed burner" and every one of them looks the same.
+  // The wrangler picker excludes them for exactly that reason.
   const web = await makeAppPage("web");
-  const account = await signUpBurner(web);
+  const account = opts.username
+    ? await signUpBurner(web, { onboard: true, username: opts.username })
+    : await signUpBurner(web);
 
   // 2) First console sign-in: creates the users join row, hits the forbidden
   //    gate (no org role yet). This is the pre-elevation ground truth.
@@ -174,9 +184,9 @@ export async function provisionOrgStaff(
   await expect(
     org.getByRole("heading", { name: /registration pipeline/i }),
   ).toBeVisible();
-  await expect(
-    org.getByText(/this side is for afrikaburn staff/i),
-  ).toHaveCount(0);
+  await expect(org.getByText(/this side is for afrikaburn staff/i)).toHaveCount(
+    0,
+  );
 
   return { account, org };
 }

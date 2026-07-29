@@ -60,9 +60,7 @@ export interface BurnerStats {
 }
 
 /** BURNERS card: total bios + bios-complete %. */
-export function deriveBurnerStats(
-  bios: readonly BurnerBioStat[],
-): BurnerStats {
+export function deriveBurnerStats(bios: readonly BurnerBioStat[]): BurnerStats {
   const total = bios.length;
   const complete = bios.filter((b) => b.completedAt != null).length;
   return {
@@ -227,6 +225,64 @@ export function deriveOfficerCoverage(
     fullyOfficered: full,
     campsWithGaps: applicable - full,
     outstandingSlots,
+  };
+}
+
+// --- Wrangler coverage ----------------------------------------------------
+
+/** One camp's wrangler input for the coverage rollup. */
+export interface CampWranglerInput {
+  /** Only APPROVED camps are eligible — assignment unlocks at approval. */
+  isApproved: boolean;
+  /** The assigned wrangler's user id, or null when nobody holds this camp. */
+  wranglerUserId: string | null;
+}
+
+export interface WranglerCoverage {
+  /** Approved camps — the only ones a wrangler can be assigned to. */
+  eligibleCamps: number;
+  /** Approved camps with a wrangler. */
+  assigned: number;
+  /** Approved camps with nobody — the number someone has to act on. */
+  unassigned: number;
+  /** Distinct people holding at least one camp. */
+  wranglers: number;
+  /** The largest number of camps any one wrangler holds. */
+  busiestLoad: number;
+}
+
+/**
+ * Wrangler coverage for the Overview tile: "n of m approved camps have one".
+ *
+ * ELIGIBILITY IS APPROVAL, not registration. A camp that has not been approved
+ * cannot be assigned (the action refuses it), so counting it as uncovered would
+ * report work nobody is allowed to do yet and make the tile permanently red.
+ *
+ * `busiestLoad` is here because the failure mode of a volunteer roster is not
+ * "nobody assigned" — it is one person quietly holding fifteen camps while the
+ * headline number looks healthy. It is a load figure, not a performance one:
+ * it names a distribution problem, and it says nothing about any individual's
+ * work, which is the line this product does not cross.
+ */
+export function deriveWranglerCoverage(
+  camps: readonly CampWranglerInput[],
+): WranglerCoverage {
+  let eligible = 0;
+  let assigned = 0;
+  const load = new Map<string, number>();
+  for (const camp of camps) {
+    if (!camp.isApproved) continue;
+    eligible += 1;
+    if (!camp.wranglerUserId) continue;
+    assigned += 1;
+    load.set(camp.wranglerUserId, (load.get(camp.wranglerUserId) ?? 0) + 1);
+  }
+  return {
+    eligibleCamps: eligible,
+    assigned,
+    unassigned: eligible - assigned,
+    wranglers: load.size,
+    busiestLoad: load.size === 0 ? 0 : Math.max(...load.values()),
   };
 }
 

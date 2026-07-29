@@ -312,6 +312,16 @@ export interface CampDetail {
   joinability: Joinability;
   registered: boolean;
   registrationStatus: string | null;
+  /**
+   * The camp's wrangler for this edition, or null.
+   *
+   * NAME ONLY, and it is the same public member name the roster uses — never an
+   * email, never a phone. A camp is told WHO their guardian angel is so the
+   * notification ("Sipho from the theme camp leads team is now your wrangler")
+   * lands on a page that agrees with it; how to reach them is org business and
+   * goes through the channels AfrikaBurn already runs.
+   */
+  wranglerName: string | null;
   createdByUserId: string | null;
   members: CampMember[];
   viewerRole: MembershipRole | null;
@@ -383,6 +393,35 @@ export async function getCampBySlug(
 
   const viewerRole = members.find((m) => m.userId === viewerId)?.role ?? null;
 
+  // The wrangler, if one has been assigned this edition (migration 0026). Left
+  // join on `users` because `wrangler_user_id` is SET NULL when an account goes
+  // — a row with nobody in it is a camp whose wrangler has left, and telling
+  // them "your wrangler is —" would be worse than saying nothing, so it reads
+  // as unassigned here and shows as vacant on the org board where it can be
+  // acted on.
+  const wranglerRows = await db()
+    .select({
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+    })
+    .from(schema.wranglerAssignments)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.wranglerAssignments.wranglerUserId),
+    )
+    .where(
+      and(
+        eq(schema.wranglerAssignments.groupId, group.id),
+        eq(schema.wranglerAssignments.editionId, editionId),
+      ),
+    )
+    .limit(1);
+  const wranglerName = wranglerRows[0]
+    ? publicMemberName(wranglerRows[0].username, {
+        sanitizedAt: wranglerRows[0].sanitizedAt,
+      })
+    : null;
+
   return {
     id: group.id,
     name: group.name,
@@ -392,6 +431,7 @@ export async function getCampBySlug(
     joinability: group.joinability,
     registered: registrationStatus === "approved",
     registrationStatus,
+    wranglerName,
     createdByUserId: group.createdByUserId,
     members,
     viewerRole,

@@ -35,6 +35,7 @@ import {
   deriveRegistrationFunnel,
   deriveStatusBoardKpis,
   deriveSupplierOnboardingRollup,
+  deriveWranglerCoverage,
   deriveSupplierStandingRollup,
   domainsOwnedBy,
   grantedOrgCapabilities,
@@ -47,6 +48,7 @@ import {
   systemManagerRefusal,
   type OfficerCoverage,
   type OrgActor,
+  type WranglerCoverage,
   type OrgCapability,
   type OrgDomain,
   type OrgRank,
@@ -501,7 +503,10 @@ export async function getOrgRolesOverview(
         description: schema.orgDepartments.description,
       })
       .from(schema.orgDepartments)
-      .orderBy(asc(schema.orgDepartments.sort), asc(schema.orgDepartments.name)),
+      .orderBy(
+        asc(schema.orgDepartments.sort),
+        asc(schema.orgDepartments.name),
+      ),
     db
       .select({
         id: schema.orgRoles.id,
@@ -1630,6 +1635,7 @@ export interface StatusBoard {
   kpis: StatusBoardKpis;
   funnel: RegistrationFunnel;
   officerCoverage: OfficerCoverage;
+  wranglerCoverage: WranglerCoverage;
   supplierOnboarding: SupplierOnboardingRollup;
   supplierStandings: Record<SupplierStanding, number>;
   questionnaires: QuestionnaireCompletionRollup;
@@ -1653,6 +1659,7 @@ export async function getStatusBoard(
       kpis: deriveStatusBoardKpis({ bios: [], projects: [] }),
       funnel: deriveRegistrationFunnel([]),
       officerCoverage: deriveOfficerCoverage([]),
+      wranglerCoverage: deriveWranglerCoverage([]),
       supplierOnboarding: deriveSupplierOnboardingRollup([]),
       supplierStandings: deriveSupplierStandingRollup([]),
       questionnaires: deriveQuestionnaireCompletion([]),
@@ -1757,6 +1764,37 @@ export async function getStatusBoard(
       assignedKeys: assignedByGroup.get(r.groupId) ?? new Set<OfficerKey>(),
     }));
 
+  // Wranglers — who holds each APPROVED camp. Left join so an approved camp
+  // with nobody still appears as a row with a null wrangler, which is the number
+  // the tile exists to show.
+  const wranglerRows = await db
+    .select({
+      status: schema.registrations.status,
+      wranglerUserId: schema.wranglerAssignments.wranglerUserId,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
+    .leftJoin(
+      schema.wranglerAssignments,
+      and(
+        eq(schema.wranglerAssignments.groupId, schema.registrations.groupId),
+        eq(schema.wranglerAssignments.editionId, edition.id),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.registrations.editionId, edition.id),
+        eq(schema.groups.kind, "theme_camp"),
+      ),
+    );
+  const wranglerCamps = wranglerRows.map((r) => ({
+    isApproved: r.status === "approved",
+    wranglerUserId: r.wranglerUserId,
+  }));
+
   // Suppliers — standing + onboarding step map for the edition.
   const supplierRows = await db
     .select({
@@ -1815,6 +1853,7 @@ export async function getStatusBoard(
     kpis: deriveStatusBoardKpis({ bios: bioRows, projects }),
     funnel: deriveRegistrationFunnel(regRows.map((r) => r.status)),
     officerCoverage: deriveOfficerCoverage(officerCamps),
+    wranglerCoverage: deriveWranglerCoverage(wranglerCamps),
     supplierOnboarding: deriveSupplierOnboardingRollup(
       supplierRows.map((s) => ({ steps: s.steps })),
     ),
@@ -1823,4 +1862,204 @@ export async function getStatusBoard(
     ),
     questionnaires: deriveQuestionnaireCompletion(sends),
   };
+}
+
+// --- Wranglers -------------------------------------------------------------
+// A wrangler is an org member who shepherds ONE approved theme camp through
+// build week and check-in (schema.ts `wranglerAssignments`, migration 0026).
+//
+// NO PERSONAL-INFORMATION BRANCH IN ANY OF THESE. A wrangler's identity is the
+// name the org already shows on the accounts roster — `publicMemberName`, i.e.
+// the username — and the camp side is a group name. Nothing here selects an
+// email, a phone or a legal name, so there is no `seesPersonalInformation` gate
+// to get wrong: an engineer reading the board sees exactly what a System
+// manager does, which is the correct answer for a scheduling surface.
+
+/** One assignable person: an org member who can hold camps. */
+export interface WranglerCandidate {
+  userId: string;
+  displayName: string;
+}
+
+/**
+ * Org members who may be assigned as a wrangler — every account with an org
+ * membership, ordered by name.
+ *
+ * DELIBERATELY NOT NARROWED TO A "wrangler" ROLE. AfrikaBurn's theme-camp leads
+ * team is a handful of people whose org roles are assigned live by a System
+ * manager (docs/synthesis.md: "no seeded staff"), and requiring a particular
+ * role before anyone can be assigned would mean the feature does nothing on a
+ * fresh deployment until someone guesses the prerequisite. The RESTRICTION that
+ * matters is on who may DO the assigning, which the action guards.
+ *
+ * BUT THEY MUST HAVE A USERNAME. An org account with no Burner Bio has no
+ * display name — `publicMemberName(null)` is the literal string "Unnamed
+ * burner" — so without this filter the picker is a list of identical entries
+ * and the camp is told "Unnamed burner is now your wrangler". The only other
+ * identifier on the row is the email, and putting that in a scheduling control
+ * would make the list's CONTENTS depend on who is looking (`personal_information`
+ * is department-scoped), so two reviewers would see different rosters.
+ *
+ * Excluding them and saying why is the honest third option: the fix is thirty
+ * seconds in the person's own bio, and the empty state names it.
+ */
+export async function getWranglerCandidates(
+  orgGroupId: string,
+): Promise<WranglerCandidate[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .where(
+      and(
+        eq(schema.memberships.groupId, orgGroupId),
+        inArray(schema.memberships.role, [...ORG_RANKS]),
+      ),
+    )
+    .limit(200);
+
+  return rows
+    .filter((r) => Boolean(r.username?.trim()) && r.sanitizedAt === null)
+    .map((r) => ({
+      userId: r.userId,
+      displayName: publicMemberName(r.username, { sanitizedAt: r.sanitizedAt }),
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/** The wrangler holding one camp this edition, or null. */
+export interface WranglerAssignmentRow {
+  wranglerUserId: string | null;
+  displayName: string | null;
+  assignedAt: Date;
+}
+
+export async function getWranglerForGroup(
+  groupId: string,
+  editionId: string,
+): Promise<WranglerAssignmentRow | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      wranglerUserId: schema.wranglerAssignments.wranglerUserId,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+      assignedAt: schema.wranglerAssignments.assignedAt,
+    })
+    .from(schema.wranglerAssignments)
+    // LEFT, not inner: `wrangler_user_id` is SET NULL when the account goes, and
+    // the row survives on purpose so the board can show the camp as VACANT. An
+    // inner join would make a deleted account look like a camp that was never
+    // assigned, which is a different thing and needs a different action.
+    .leftJoin(
+      schema.users,
+      eq(schema.users.id, schema.wranglerAssignments.wranglerUserId),
+    )
+    .where(
+      and(
+        eq(schema.wranglerAssignments.groupId, groupId),
+        eq(schema.wranglerAssignments.editionId, editionId),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    wranglerUserId: row.wranglerUserId,
+    displayName: row.wranglerUserId
+      ? publicMemberName(row.username, { sanitizedAt: row.sanitizedAt })
+      : null,
+    assignedAt: row.assignedAt,
+  };
+}
+
+/** One row of the wrangler board: an approved camp and who holds it. */
+export interface WranglerBoardRow {
+  registrationId: string;
+  groupId: string;
+  campName: string;
+  campSlug: string;
+  wranglerUserId: string | null;
+  wranglerName: string | null;
+  /** Derived progress, never stored — see migration 0026. */
+  openSectionReviews: number;
+}
+
+/**
+ * The wrangler board: every APPROVED theme camp this edition with its wrangler
+ * (or none), plus the one piece of progress that is real today — how many
+ * section-review threads are still open on it.
+ *
+ * Approved only, because assignment unlocks at approval and a board listing
+ * camps nobody may be assigned to is a to-do list of things you cannot do.
+ */
+export async function getWranglerBoard(
+  editionId: string,
+): Promise<WranglerBoardRow[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      registrationId: schema.registrations.id,
+      groupId: schema.groups.id,
+      campName: schema.groups.name,
+      campSlug: schema.groups.slug,
+      wranglerUserId: schema.wranglerAssignments.wranglerUserId,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
+    .leftJoin(
+      schema.wranglerAssignments,
+      and(
+        eq(schema.wranglerAssignments.groupId, schema.registrations.groupId),
+        eq(schema.wranglerAssignments.editionId, editionId),
+      ),
+    )
+    .leftJoin(
+      schema.users,
+      eq(schema.users.id, schema.wranglerAssignments.wranglerUserId),
+    )
+    .where(
+      and(
+        eq(schema.registrations.editionId, editionId),
+        eq(schema.registrations.status, "approved"),
+        // Camps only. Mutant vehicles and artworks are shepherded by the DMV and
+        // the Art crew, not the theme-camp leads team (registration-review.tsx
+        // has scoped the affordance to `theme_camp` since it was a stub).
+        eq(schema.groups.kind, "theme_camp"),
+      ),
+    )
+    .orderBy(asc(schema.groups.name));
+
+  const openReviews = await db
+    .select({
+      registrationId: schema.sectionReviews.registrationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(schema.sectionReviews)
+    .where(eq(schema.sectionReviews.status, "open"))
+    .groupBy(schema.sectionReviews.registrationId);
+  const openByRegistration = new Map(
+    openReviews.map((r) => [r.registrationId, r.count]),
+  );
+
+  return rows.map((r) => ({
+    registrationId: r.registrationId,
+    groupId: r.groupId,
+    campName: r.campName,
+    campSlug: r.campSlug,
+    wranglerUserId: r.wranglerUserId,
+    wranglerName: r.wranglerUserId
+      ? publicMemberName(r.username, { sanitizedAt: r.sanitizedAt })
+      : null,
+    openSectionReviews: openByRegistration.get(r.registrationId) ?? 0,
+  }));
 }

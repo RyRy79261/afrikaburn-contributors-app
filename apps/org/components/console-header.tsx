@@ -35,6 +35,11 @@ const NAV_ITEMS: ConsoleNavItem[] = [
   { href: "/", label: "Overview" },
   { href: "/status", label: "Status board" },
   { href: "/registrations", label: "Registrations" },
+  // The wrangler board — who is shepherding which approved camp. Beside
+  // Registrations because it is the same team's work continuing after the
+  // decision, and because the only way to find an unassigned camp otherwise is
+  // to open every approved registration one at a time.
+  { href: "/wranglers", label: "Wranglers" },
   { href: "/questionnaires", label: "Questionnaires" },
   { href: "/bulletins", label: "Bulletins" },
   { href: "/suppliers", label: "Suppliers" },
