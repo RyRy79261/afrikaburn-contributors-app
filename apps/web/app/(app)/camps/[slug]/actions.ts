@@ -11,6 +11,7 @@ import {
 } from "@quagga/types";
 import { hasProjectPermission } from "@quagga/core";
 import { requireCampUser } from "@/lib/session";
+import { getActiveEdition } from "@/lib/edition";
 import { getViewerRole, leaveCamp } from "@/lib/groups-store";
 import {
   createInvite,
@@ -327,11 +328,17 @@ export async function respondToOfficerAction(
   const user = await requireCampUser();
   const groupId = await groupIdForSlug(parsed.data.slug);
   if (!groupId) return { ok: false, error: "Camp not found." };
+  // The edition the consent is FOR. Officer consent shares a phone number with
+  // AfrikaBurn, and that is consent for one burn — stamped so it expires with
+  // the edition rather than carrying into the next one.
+  const edition = await getActiveEdition();
+  if (!edition) return { ok: false, error: "No active edition." };
   const result = await respondToOfficer(
     user.id,
     groupId,
     parsed.data.roleId,
     parsed.data.accept,
+    edition.id,
   );
   if (result.ok) {
     revalidateRolePaths(parsed.data.slug);

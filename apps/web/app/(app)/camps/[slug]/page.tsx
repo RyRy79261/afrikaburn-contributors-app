@@ -196,11 +196,12 @@ export default async function CampPage({
   const canViewDetails =
     !!viewerPerms && hasProjectPermission(viewerPerms, "view_member_details");
 
-  // Officer status → settings-link badge; pending officer consents → banner.
-  // The consent query is app-wide, so narrow it to this camp here.
-  const myPendingOfficers = officerConsents.filter(
-    (p) => p.groupId === camp.id,
-  );
+  // Officer status → settings-link badge; the member's OWN officer roles →
+  // banner. The query is app-wide, so narrow it to this camp here. It returns
+  // both the pending invitations and the roles they have already accepted —
+  // consent that cannot be withdrawn is not consent, and the withdraw control
+  // lives in that banner (nothing else a plain member can reach can free it).
+  const myOfficerRoles = officerConsents.filter((p) => p.groupId === camp.id);
 
   const statusLabel = camp.registrationStatus
     ? STATUS_LABEL[camp.registrationStatus as RegistrationStatus]
@@ -273,13 +274,14 @@ export default async function CampPage({
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
-        {myPendingOfficers.length > 0 && (
+        {myOfficerRoles.length > 0 && (
           <OfficerConsentBanner
             slug={camp.slug}
-            invitations={myPendingOfficers.map((p) => ({
+            invitations={myOfficerRoles.map((p) => ({
               roleId: p.roleId,
               officerName: p.officerName,
               emoji: p.emoji,
+              consent: p.consent,
             }))}
             respondAction={respondToOfficerAction}
           />

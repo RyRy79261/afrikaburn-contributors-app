@@ -1249,6 +1249,12 @@ export async function getRegistrationOfficers(
         eq(schema.projectRoles.kind, "officer"),
         eq(schema.memberRoleAssignments.consentStatus, "accepted"),
         eq(schema.memberRoleAssignments.orgVisible, true),
+        // AND CONSENT GIVEN FOR THIS EDITION. Without it, an acceptance from a
+        // previous burn kept disclosing the officer's contact — and the bio
+        // joined above is the CURRENT edition's, so it was this year's phone
+        // number released on last year's consent. Officer consent is the one
+        // POPIA channel here; it expires with its edition (migration 0023).
+        eq(schema.memberRoleAssignments.consentEditionId, editionId),
       ),
     )
     .orderBy(asc(schema.projectRoles.sort));

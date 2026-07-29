@@ -162,6 +162,13 @@
       "when": 1785250151373,
       "tag": "0022_redundant_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785336551373,
+      "tag": "0023_officer_consent_edition",
+      "breakpoints": true
     }
   ]
 }

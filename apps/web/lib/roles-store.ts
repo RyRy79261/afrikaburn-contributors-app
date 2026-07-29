@@ -517,13 +517,22 @@ export async function assignOfficer(
       consentStatus: "pending",
       acceptedAt: null,
       orgVisible: false,
+      // Cleared on (re)assignment: a pending row carries no disclosure, and a
+      // row left over from a previous edition must not keep that edition's
+      // consent while it waits to be accepted again.
+      consentEditionId: null,
     })
     .onConflictDoUpdate({
       target: [
         schema.memberRoleAssignments.membershipId,
         schema.memberRoleAssignments.projectRoleId,
       ],
-      set: { consentStatus: "pending", acceptedAt: null, orgVisible: false },
+      set: {
+        consentStatus: "pending",
+        acceptedAt: null,
+        orgVisible: false,
+        consentEditionId: null,
+      },
     });
 
   // Event hook: tell the assigned member they have an officer registration to
@@ -614,9 +623,22 @@ export interface PendingOfficerConsent {
   groupId: string;
   groupName: string;
   groupSlug: string;
+  /** `pending` — awaiting their answer; `accepted` — consent they can withdraw. */
+  consent: "pending" | "accepted";
 }
 
-/** Pending officer registrations the given user must accept or decline. */
+/**
+ * The user's own officer registrations: the ones awaiting an answer AND the
+ * ones they have already accepted.
+ *
+ * Accepted rows are included because consent that cannot be withdrawn is not
+ * consent. This query fed the only control a member had, and it filtered to
+ * `pending` — so the moment someone accepted, the banner vanished and their
+ * phone number was shared with AfrikaBurn with no way back. The only remaining
+ * unassign path belongs to the camp LEAD, on a settings page that 404s a plain
+ * member: to stop sharing their own number, a person had to ask the person who
+ * assigned them.
+ */
 export async function pendingOfficerConsents(
   userId: string,
 ): Promise<PendingOfficerConsent[]> {
@@ -630,6 +652,7 @@ export async function pendingOfficerConsents(
       groupId: schema.groups.id,
       groupName: schema.groups.name,
       groupSlug: schema.groups.slug,
+      consent: schema.memberRoleAssignments.consentStatus,
     })
     .from(schema.memberRoleAssignments)
     .innerJoin(
@@ -644,7 +667,10 @@ export async function pendingOfficerConsents(
     .where(
       and(
         eq(schema.memberships.userId, userId),
-        eq(schema.memberRoleAssignments.consentStatus, "pending"),
+        inArray(schema.memberRoleAssignments.consentStatus, [
+          "pending",
+          "accepted",
+        ]),
         eq(schema.projectRoles.kind, "officer"),
       ),
     );
@@ -659,6 +685,7 @@ export async function pendingOfficerConsents(
       groupId: r.groupId,
       groupName: r.groupName,
       groupSlug: r.groupSlug,
+      consent: r.consent === "accepted" ? ("accepted" as const) : ("pending" as const),
     }));
 }
 
@@ -672,6 +699,8 @@ export async function respondToOfficer(
   groupId: string,
   roleId: string,
   accept: boolean,
+  /** The edition this consent is GIVEN FOR — it expires with that edition. */
+  editionId: string,
 ): Promise<RoleMutationResult> {
   const membership = await db()
     .select({ id: schema.memberships.id })
@@ -704,6 +733,10 @@ export async function respondToOfficer(
       consentStatus: "accepted",
       acceptedAt: new Date(),
       orgVisible: true,
+      // Consent to share a phone number with AfrikaBurn is consent for ONE
+      // burn. Stamped here so next edition's queries read it as absent and the
+      // member is asked again.
+      consentEditionId: editionId,
     })
     .where(
       and(

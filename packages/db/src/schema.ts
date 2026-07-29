@@ -959,11 +959,34 @@ export const memberRoleAssignments = pgTable(
       .default("accepted"),
     acceptedAt: timestamp("accepted_at", { mode: "date" }),
     orgVisible: boolean("org_visible").notNull().default(false),
+    // WHICH EDITION THE CONSENT WAS GIVEN FOR (migration 0023).
+    //
+    // Consent to share a phone number with AfrikaBurn is consent for ONE burn.
+    // Nothing here was edition-scoped: `memberships` is not, this table was
+    // not, and nothing resets assignments at rollover — so an officer who
+    // accepted in 2026 was still `accepted` + `org_visible` in 2027, and the
+    // org console read THIS year's bio (it joins `burner_bios` on the active
+    // edition) through LAST year's consent. A phone number, disclosed for a
+    // burn the person may not even be attending, on a consent they were never
+    // asked for. That is the single POPIA channel in this product, so it is the
+    // one place carrying state across editions is not a tidiness question.
+    //
+    // Nullable, and only officer rows care: an ordinary role chip ("Bar crew")
+    // is a camp label with no disclosure attached and legitimately persists.
+    // Existing rows are backfilled to the active edition by 0023 — there has
+    // only ever been one — so nobody is asked to re-consent for a burn already
+    // under way.
+    consentEditionId: uuid("consent_edition_id").references(() => editions.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (mra) => ({
     pk: primaryKey({ columns: [mra.membershipId, mra.projectRoleId] }),
     roleIdx: index("member_role_assignments_role_idx").on(mra.projectRoleId),
+    consentEditionIdx: index("member_role_assignments_consent_edition_idx").on(
+      mra.consentEditionId,
+    ),
   }),
 );
 
