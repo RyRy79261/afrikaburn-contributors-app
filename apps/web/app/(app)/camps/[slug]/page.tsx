@@ -423,9 +423,19 @@ export default async function CampPage({
                 (camp.kind === "theme_camp" ? (
                   <Button asChild size="sm" className="w-full">
                     <Link href={`/camps/${camp.slug}/registration`}>
-                      {camp.registrationStatus
-                        ? "Continue registration"
-                        : "Begin registration"}
+                      {/* A terminal or submitted registration is not something
+                          you "continue" — the wizard is read-only there and the
+                          label sent people to a screen that would not let them
+                          type. A withdrawn one is reopenable from that screen,
+                          which is what "View" leads to. */}
+                      {camp.registrationStatus === null
+                        ? "Begin registration"
+                        : camp.registrationStatus === "draft" ||
+                            camp.registrationStatus === "changes_requested"
+                          ? "Continue registration"
+                          : camp.registrationStatus === "withdrawn"
+                            ? "Reopen registration"
+                            : "View registration"}
                     </Link>
                   </Button>
                 ) : projectEditHref ? (

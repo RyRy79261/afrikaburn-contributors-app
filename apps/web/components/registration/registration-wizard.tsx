@@ -254,7 +254,7 @@ export function RegistrationWizard(props: WizardProps) {
   async function handleWithdraw() {
     if (
       !window.confirm(
-        "Withdraw this registration? Your camp stays, but it won't be considered for this edition until you register again.",
+        "Withdraw this registration? Your camp stays, and your answers are kept — it just won't be considered for this edition. You can reopen it from this page while the edition is open.",
       )
     ) {
       return;

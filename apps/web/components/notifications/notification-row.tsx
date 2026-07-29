@@ -34,6 +34,7 @@ export function NotificationRow({
     <NotificationItem
       kind={item.kind}
       title={item.title}
+      body={item.body}
       meta={item.meta}
       read={read}
       blocking={item.blocking}

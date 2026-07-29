@@ -545,6 +545,12 @@ export async function getConsoleBlockingQuestionnaire(
         eq(schema.requiredActions.blocking, true),
         eq(schema.requiredActions.status, "pending"),
         eq(schema.questionnaireActivations.authoredScope, "org"),
+        // Only an OPEN activation gates the console. Closing one left its
+        // `required_actions` rows `pending`, so a closed org-internal
+        // questionnaire kept every member of staff locked out of the console
+        // with the one undo — "Close" — already spent. See the matching filter
+        // in apps/web/lib/required-actions.ts.
+        eq(schema.questionnaireActivations.status, "open"),
       ),
     )
     .orderBy(asc(schema.requiredActions.createdAt));

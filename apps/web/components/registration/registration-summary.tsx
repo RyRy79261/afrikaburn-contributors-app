@@ -17,6 +17,8 @@ import {
 } from "@quagga/types";
 import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
 import { StatusBadge } from "@quagga/ui/components/status-badge";
+import { ReopenRegistrationButton } from "./reopen-registration-button";
+import type { TransitionResult } from "@/lib/registration-store";
 import type {
   CampSectionReview,
   RegistrationRow,
@@ -153,6 +155,7 @@ export function RegistrationSummary({
   reviews,
   slug,
   viewerUserId,
+  reopenAction,
 }: {
   registration: RegistrationRow;
   campName: string;
@@ -163,6 +166,8 @@ export function RegistrationSummary({
   slug: string;
   /** The viewer's db user id — labels their own replies "You". */
   viewerUserId: string | null;
+  /** Present only for a camp admin on a WITHDRAWN registration — the way back. */
+  reopenAction?: (slug: string) => Promise<TransitionResult>;
 }) {
   const r = registration;
   const banner = STATUS_BANNER[r.status];
@@ -276,7 +281,15 @@ export function RegistrationSummary({
             <p className="mt-0.5 text-sm opacity-80">{banner.body}</p>
           </div>
         </div>
-        <StatusBadge status={r.status} />
+        <div className="flex shrink-0 items-center gap-3">
+          <StatusBadge status={r.status} />
+          {/* Withdrawn is the camp's own decision and is reversible; the
+              dialog that caused it says so. Rejected is AfrikaBurn's and is
+              not, so no control appears there. */}
+          {r.status === "withdrawn" && reopenAction ? (
+            <ReopenRegistrationButton slug={slug} reopenAction={reopenAction} />
+          ) : null}
+        </div>
       </div>
 
       {/* Per-section review states + feedback threads (canvas `HmdmU`). Each

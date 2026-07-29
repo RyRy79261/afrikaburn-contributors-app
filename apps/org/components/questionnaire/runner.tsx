@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   pageQuestions,
+  validateOne,
   type Questionnaire,
   type QuestionnairePage,
   type QuestionnaireResponses,
@@ -67,18 +68,47 @@ export function QuestionnaireRunner({
     });
   }
 
+  /**
+   * THE SERVER'S VALIDATOR, not a weaker copy of it.
+   *
+   * This used to test emptiness only. The server runs `validateOne` over every
+   * question on every page (`validateResponses`), and Builder v2 exposes rules
+   * that only it enforced — `format` email/url/phone/number, `minLength`,
+   * `minSelections`/`maxSelections`, and grids whose rows default to required.
+   * So a page could pass here and be rejected there.
+   *
+   * That was survivable on an ordinary questionnaire and fatal on the console's
+   * BLOCKING gate: the rejection is keyed by question id, this runner only
+   * renders errors for questions on the CURRENT page, and the offending
+   * question is by definition on a page the walker already left. The refusal
+   * appeared nowhere, the gate never cleared, and the console stayed shut with
+   * no way forward — for staff, on a screen whose only other control is sign
+   * out.
+   */
   function validatePage(page: QuestionnairePage): boolean {
     if (page.kind === "intro") return true;
     const next: Record<string, string> = {};
     for (const q of pageQuestions(page)) {
-      const v = responses[q.id];
-      const missing = v === undefined || v === null || v === "";
-      if (missing && "required" in q && q.required) {
-        next[q.id] = "This question is required";
-      }
+      const result = validateOne(q, responses[q.id]);
+      if (!result.ok) next[q.id] = result.error;
     }
     setErrors(next);
     return Object.keys(next).length === 0;
+  }
+
+  /** The page holding the first question the SERVER rejected, so an off-page
+   * refusal is shown rather than swallowed. */
+  function pageOwningError(errs: Record<string, string>): number | null {
+    const ids = new Set(Object.keys(errs).filter((k) => !k.startsWith("_")));
+    if (ids.size === 0) return null;
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      if (!page) continue;
+      for (const q of pageQuestions(page)) {
+        if (ids.has(q.id)) return i;
+      }
+    }
+    return null;
   }
 
   function handleNext() {
@@ -95,6 +125,11 @@ export function QuestionnaireRunner({
         const result = await action(responses);
         if (!result.ok) {
           setErrors(result.errors);
+          // Walk to the page that owns the rejection. Without this the error is
+          // keyed to a question that is not on screen, nothing renders, and the
+          // gate cannot be cleared.
+          const target = pageOwningError(result.errors);
+          if (target !== null && target !== stepIndex) setStepIndex(target);
           return;
         }
         if (redirectTo) router.push(redirectTo);
@@ -104,6 +139,16 @@ export function QuestionnaireRunner({
       }
     });
   }
+
+  // A server error keyed to a question that is not on the current page. The
+  // jump in handleSubmit normally moves to it; this covers the case where it
+  // cannot be found at all.
+  const currentIds = new Set(
+    (pages[stepIndex] ? pageQuestions(pages[stepIndex]) : []).map((q) => q.id),
+  );
+  const offPageError = Object.keys(errors).some(
+    (k) => !k.startsWith("_") && !currentIds.has(k),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -158,6 +203,18 @@ export function QuestionnaireRunner({
       {(errors[FORM_ERROR_KEY] || errors._root) && (
         <p role="alert" className="text-sm text-destructive">
           {errors[FORM_ERROR_KEY] ?? errors._root}
+        </p>
+      )}
+
+      {/* LAST-RESORT BANNER. `pageOwningError` walks to the page that owns a
+          server rejection, but if the rejection names a question that is not on
+          any page the walker can reach — a definition edited under a live
+          activation, say — nothing above would render and the gate would look
+          like it simply refused to submit. A refusal must always be visible. */}
+      {offPageError && (
+        <p role="alert" className="text-sm text-destructive">
+          Something on an earlier page needs fixing before this can be
+          submitted. Use Back to review your answers.
         </p>
       )}
 

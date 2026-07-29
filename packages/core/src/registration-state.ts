@@ -23,9 +23,20 @@ export const REGISTRATION_TRANSITIONS: Record<
   changes_requested: ["submitted", "withdrawn"],
   // Approved — the entitlement-granting state; only a voluntary withdrawal.
   approved: ["withdrawn"],
-  // Terminal states.
+  // Terminal — AfrikaBurn's decision, not the camp's, so the camp cannot undo it.
   rejected: [],
-  withdrawn: [],
+  // WITHDRAWN IS NOT TERMINAL. A camp withdraws its own registration, and the
+  // confirm dialog has always promised "it won't be considered for this edition
+  // until you register again" — but there was no way back: `withdrawn` had no
+  // legal transition, `registrations` is unique on (group_id, edition_id) so no
+  // second row can be started, the wizard is read-only outside `draft` /
+  // `changes_requested`, and the org console's `decideRegistration` throws for
+  // every action out of `withdrawn`. A camp that clicked Withdraw was out for
+  // the edition, permanently, on the strength of a sentence saying otherwise.
+  //
+  // Reopening returns it to `draft` — the camp's own state, editable, not yet
+  // in front of a reviewer — which is exactly what "register again" means.
+  withdrawn: ["draft"],
 };
 
 /** Whether `from → to` is a legal registration transition. */
@@ -52,13 +63,28 @@ export function assertRegistrationTransition(
 }
 
 // --- Camp-side actions ---------------------------------------------------
-// The three actions a camp can take on its own registration, each resolved
-// through the SAME state machine the org console uses (single source of truth
-// for legal transitions — build-spec §Core logic). The wizard's server actions
-// call these instead of hard-coding target statuses.
+// The actions a camp can take on its own registration, each resolved through
+// the SAME state machine the org console uses (single source of truth for legal
+// transitions — build-spec §Core logic). The wizard's server actions call these
+// instead of hard-coding target statuses.
+//
+// `reopen` is the way back from a voluntary withdrawal — the "register again"
+// the withdraw dialog has always promised. It exists because the camp owns that
+// decision; there is deliberately no equivalent out of `rejected`, which is
+// AfrikaBurn's.
 
-export const CAMP_ACTIONS = ["submit", "resubmit", "withdraw"] as const;
+export const CAMP_ACTIONS = [
+  "submit",
+  "resubmit",
+  "withdraw",
+  "reopen",
+] as const;
 export type CampAction = (typeof CAMP_ACTIONS)[number];
+
+/** Whether the camp may reopen a withdrawn registration back into a draft. */
+export function canCampReopen(from: RegistrationStatus): boolean {
+  return canTransitionRegistration(from, "draft");
+}
 
 /** Whether the camp may submit/resubmit from the current status. Both `submit`
  * (from draft) and `resubmit` (from changes_requested) target `submitted`. The
@@ -82,7 +108,11 @@ export function resolveCampAction(
   action: CampAction,
 ): RegistrationStatus {
   const target: RegistrationStatus =
-    action === "withdraw" ? "withdrawn" : "submitted";
+    action === "withdraw"
+      ? "withdrawn"
+      : action === "reopen"
+        ? "draft"
+        : "submitted";
   return assertRegistrationTransition(from, target);
 }
 

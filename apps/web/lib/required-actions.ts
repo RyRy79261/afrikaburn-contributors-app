@@ -90,6 +90,17 @@ export const listRequiredActions = cache(async function listRequiredActions(
       blocking: schema.requiredActions.blocking,
       status: schema.requiredActions.status,
       audience: schema.questionnaireActivations.audience,
+      // CLOSING AN ACTIVATION MUST RELEASE ITS GATE. `closeActivation` flips
+      // `questionnaire_activations.status` to "closed" and leaves the
+      // `required_actions` rows `pending` — and this query never read that
+      // column, so a closed questionnaire went on hard-gating every recipient
+      // out of the whole app with no way back. "Close" is the ONLY undo for a
+      // mis-sent blocking send; it has to mean it.
+      //
+      // Read here rather than by expiring the action rows, so it is also right
+      // for rows written before the fix, and so reopening an activation
+      // restores the gate rather than needing a second migration of state.
+      activationStatus: schema.questionnaireActivations.status,
     })
     .from(schema.requiredActions)
     .leftJoin(
@@ -103,9 +114,14 @@ export const listRequiredActions = cache(async function listRequiredActions(
     .orderBy(asc(schema.requiredActions.createdAt));
   return rows
     .filter((r) => isParticipantFacingActivation(r.audience))
-    .map(({ actionKey, blocking, status }) => ({
+    .map(({ actionKey, blocking, status, activationStatus }) => ({
       actionKey,
-      blocking,
+      // A row whose activation is no longer open still EXISTS (it stays in the
+      // inbox and in the audit trail) but it cannot block. `activationStatus`
+      // is null for non-questionnaire actions like the Burner Bio, which have
+      // no activation and must keep blocking.
+      blocking:
+        blocking && (activationStatus === null || activationStatus === "open"),
       status,
     }));
 });

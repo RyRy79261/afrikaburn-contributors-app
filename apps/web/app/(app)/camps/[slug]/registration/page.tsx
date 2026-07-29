@@ -21,6 +21,7 @@ import {
 import {
   saveRegistrationDraftAction,
   submitRegistrationAction,
+  reopenRegistrationAction,
   withdrawRegistrationAction,
 } from "./actions";
 
@@ -208,6 +209,7 @@ export default async function RegistrationPage({
           reviews={reviews}
           slug={slug}
           viewerUserId={campUser.id}
+          reopenAction={reopenRegistrationAction}
         />
       ) : (
         <PreviewNotice feature="Camp registration" />

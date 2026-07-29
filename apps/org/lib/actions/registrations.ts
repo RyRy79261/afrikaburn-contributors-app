@@ -38,6 +38,7 @@ async function notifyRegistrationDecision(
   registrationId: string,
   groupId: string,
   decision: RegistrationDecision,
+  reason: string | null,
 ): Promise<void> {
   try {
     const [group] = await db
@@ -63,6 +64,9 @@ async function notifyRegistrationDecision(
       campName: group.name,
       decision,
       campSlug: group.slug,
+      // The reviewer's own words, delivered to the camp. Writing it only to
+      // `audit_events` meant nobody outside the console ever saw it.
+      reason,
     });
     await insertNotifications(
       db,
@@ -197,6 +201,7 @@ export async function decideRegistration(
         input.registrationId,
         registration.groupId,
         nextStatus as RegistrationDecision,
+        reason ?? null,
       );
     }
 

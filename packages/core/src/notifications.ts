@@ -37,32 +37,46 @@ export type RegistrationDecision = Extract<
 >;
 
 /** 🎉 A reviewer decided a camp's registration (approve / changes / reject). */
+/**
+ * `reason` is the reviewer's MANDATORY explanation for `changes_requested` and
+ * `rejected` (the console refuses the decision without one) and it belongs to
+ * the camp, not to the audit log.
+ *
+ * It used to be written to `audit_events` and nowhere else. Nothing camp-side
+ * reads that table, so the reason reached no one — while the console told the
+ * reviewer "They will see this" and the camp's own screens said "See the
+ * reviewer's notes below" and "Read their notes on the flagged sections below".
+ * Both sides were told the same untruth about the same sentence. A camp was
+ * rejected and never learned why.
+ */
 export function registrationDecisionNotification(input: {
   campName: string;
   decision: RegistrationDecision;
   campSlug?: string | null;
+  reason?: string | null;
 }): NotificationPayload {
   const link = input.campSlug ? `/camps/${input.campSlug}` : null;
+  const reason = input.reason?.trim() || null;
   switch (input.decision) {
     case "approved":
       return {
         kind: "registration",
         title: `${input.campName} has been approved — placement application is now open`,
-        body: null,
+        body: reason,
         link,
       };
     case "changes_requested":
       return {
         kind: "registration",
         title: `${input.campName}: AfrikaBurn has requested changes to your registration`,
-        body: "Open your registration to see what to update.",
+        body: reason ?? "Open your registration to see what to update.",
         link,
       };
     case "rejected":
       return {
         kind: "registration",
         title: `${input.campName}: your registration was not accepted this edition`,
-        body: null,
+        body: reason,
         link,
       };
   }

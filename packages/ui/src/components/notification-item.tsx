@@ -48,6 +48,13 @@ export interface NotificationItemProps
   kind: NotificationKind;
   /** Title copy (wraps freely). */
   title: React.ReactNode;
+  /**
+   * The notification's own words, under the title. Some notifications carry
+   * text that IS the message rather than a pointer to it — a reviewer's reason
+   * for rejecting a registration, above all — and a row that shows only the
+   * title silently discards it.
+   */
+  body?: React.ReactNode;
   /** Full meta line; overrides the derived `timeAgo · source` line. */
   meta?: React.ReactNode;
   /** Relative time, e.g. "2 hours ago". Joined with `source` when no `meta`. */
@@ -63,6 +70,7 @@ export interface NotificationItemProps
 export function NotificationItem({
   kind,
   title,
+  body,
   meta,
   timeAgo,
   source,
@@ -106,6 +114,11 @@ export function NotificationItem({
         >
           {title}
         </p>
+        {body ? (
+          <p className="whitespace-pre-line text-sm text-muted-foreground">
+            {body}
+          </p>
+        ) : null}
         {isBlocking ? (
           <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
             Required · blocks registration

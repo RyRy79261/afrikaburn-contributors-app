@@ -178,6 +178,30 @@ export async function submitRegistrationAction(
   return result;
 }
 
+/**
+ * Reopen a WITHDRAWN registration back into a draft — the "register again" the
+ * withdraw dialog promises. Only the camp's own withdrawal is reopenable; a
+ * rejection is AfrikaBurn's decision and stays terminal (registration-state.ts).
+ */
+export async function reopenRegistrationAction(
+  slug: string,
+): Promise<TransitionResult> {
+  const gate = await requireCampAdmin(slug);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const result = await applyCampAction({
+    groupId: gate.group.id,
+    editionId: gate.editionId,
+    action: "reopen",
+  });
+
+  if (result.ok) {
+    revalidatePath(`/camps/${slug}/registration`);
+    revalidatePath(`/camps/${slug}`);
+  }
+  return result;
+}
+
 /** Withdraw the registration (voluntary). */
 export async function withdrawRegistrationAction(
   slug: string,

@@ -93,6 +93,8 @@ export interface NotificationRowItem {
   id: string;
   kind: NotificationKind;
   title: string;
+  /** The notification's own message, when it has one. */
+  body: string | null;
   /** Pre-rendered meta line, e.g. "2 hours ago · AfrikaBurn". */
   meta: string | null;
   link: string | null;
@@ -110,6 +112,7 @@ export function toRowItem(
     id: string;
     kind: NotificationKind;
     title: string;
+    body?: string | null;
     link: string | null;
     createdAt: Date;
     readAt: Date | null;
@@ -124,6 +127,7 @@ export function toRowItem(
     id: view.id,
     kind: view.kind,
     title: view.title,
+    body: view.body?.trim() || null,
     meta: meta || null,
     link: view.link,
     read: view.readAt !== null,
