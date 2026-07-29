@@ -17,10 +17,15 @@
 //      and the search box does not even offer to match on one (a search that
 //      matched would be a "does this address have an account?" oracle for
 //      exactly the data the rank may not hold).
-//   3. NOTHING DESTRUCTIVE, AND NO CATEGORY CRUD — the controls are gone.
+//   3. NOTHING DESTRUCTIVE, AND NO CATEGORY CRUD — the controls are PRESENT,
+//      DISABLED, and each says why. Ryan, 28 Jul 2026: "I'd rather things be
+//      transparent with restrictions than completely obfuscated, except for
+//      private personal information." A control that vanishes teaches nobody
+//      they were restricted; it teaches them the console lacks the feature.
 //
 // HONEST SCOPE NOTE (registry §"TWO TIERS OF PROOF"). What is asserted here is
-// the observable contract: which surfaces render, and what is absent from them.
+// the observable contract: which surfaces render, and which controls on them are
+// offered versus refused.
 // The server-side refusals — `requireOrgSession({ capability: "delete" })`,
 // `requireSystemManager("change the camp categories")`, and the queries that never SELECT
 // a personal column — have no client entry point for an engineer, so their
@@ -100,17 +105,57 @@ test.describe("engineer · reads everywhere, sees nobody, deletes nothing", () =
     skipUnlessGod();
     const engineer = await provisionEngineer(makeAppPage);
 
-    // Categories: readable, with the reason stated, and no way to change them.
+    // Categories: readable, with the reason stated, and every control present
+    // but refused. DISABLED, not absent — Ryan, 28 Jul 2026: "I'd rather things
+    // be transparent with restrictions than completely obfuscated, except for
+    // private personal information."
+    //
+    // The `/^delete /` locator that used to stand here could never match: the
+    // real control is named `Delete Fire Art`, and Playwright's accessible-name
+    // match is case-sensitive. It passed on every rank, System manager included.
     await engineer.org.goto("/categories");
     await expect(
-      engineer.org.getByText(/only a system manager can change the camp categories/i),
+      engineer.org.getByText(
+        /only a system manager can change the camp categories/i,
+      ),
     ).toBeVisible();
+    const addCategory = engineer.org.getByRole("button", {
+      name: /^add category — not available to you$/i,
+    });
+    await expect(addCategory).toBeVisible();
+    await expect(addCategory).toBeDisabled();
+    const deleteCategory = engineer.org
+      .getByRole("button", { name: /^delete .+ — not available to you$/i })
+      .first();
+    await expect(deleteCategory).toBeVisible();
+    await expect(deleteCategory).toBeDisabled();
+    // …and no control carries the unrestricted name, on any row.
     await expect(
-      engineer.org.getByRole("button", { name: /^add category$/i }),
+      engineer.org.getByRole("button", { name: /^delete [^—]+$/i }),
     ).toHaveCount(0);
+
+    // Suppliers: the one genuinely DESTRUCTIVE control this rank can reach —
+    // and until 28 Jul 2026 nothing tested it, so "deletes nothing" was a spec
+    // title rather than a claim. The page never passed `deleteRefusal`, which
+    // `suppliers-table.tsx` reads as "not asked", so every rank got a live bin
+    // icon whose only feedback was a toast after pressing it.
+    await engineer.org.goto("/suppliers");
+    const remove = engineer.org
+      .getByRole("button", { name: /^remove .+ — not available to you$/i })
+      .first();
+    await expect(remove).toBeVisible();
+    await expect(remove).toBeDisabled();
+    // No row offers the unrestricted control.
     await expect(
-      engineer.org.getByRole("button", { name: /^delete / }),
+      engineer.org.getByRole("button", { name: /^remove [^—]+$/i }),
     ).toHaveCount(0);
+    // …and the reason under the table is the RANK's, not a missing role — the
+    // same sentence @quagga/core would refuse the server call with.
+    await expect(
+      engineer.org.getByText(
+        /deliberately cannot delete anything in any of them/i,
+      ),
+    ).toBeVisible();
 
     // Accounts: no access management at all (that is the System manager rank).
     await engineer.org.goto("/accounts?q=");

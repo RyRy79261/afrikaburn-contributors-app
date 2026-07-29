@@ -5,16 +5,42 @@
 // server guard and watching the spec go red — a negative-path test that still
 // passes with the guard gone is the exact failure it exists to prevent.
 //
-// The two org-console refusals below are implemented concretely (they need no
-// data setup). The data-heavy guards (free-camp discovery, cross-camp read,
-// supplier notes, hard-locked PII on public surfaces) are the M3-30 owner's to
-// complete; they are declared here as `fixme`, each citing its registry
-// capability id + refusalHint so the wiring is unambiguous — honestly marked
-// not-yet-implemented rather than silently absent or falsely green.
+// ## What this file stopped claiming, and when
+//
+// Until 28 Jul 2026 it carried five `test.fixme` stubs declaring the data-heavy
+// guards "the M3-30 owner's to complete" — free-camp discovery, cross-camp
+// registration reads, org-internal supplier notes, hard-locked PII on public
+// surfaces, and god-only surfaces reached by org staff. Every one of them had
+// been implemented and covered for weeks:
+//
+//   discover-free-camp / open-free-camp-page
+//        specs/anon/free-camp-undiscoverable.spec.ts
+//        specs/camp-member/camp-member-cross-camp-isolation.spec.ts
+//   read-other-camp-registration
+//        specs/camp-member/camp-member-cross-camp-isolation.spec.ts
+//   see-org-supplier-notes
+//        specs/supplier/isolation.spec.ts
+//   see-hard-locked-field-public
+//        specs/anon/burner-profile-privacy.spec.ts
+//        specs/camp-member/camp-member-cross-camp-isolation.spec.ts
+//   reach-god-only-surface
+//        specs/org-staff/system-panel.spec.ts
+//        specs/org-staff/cannot-elevate-accounts.spec.ts
+//        specs/org-staff/camp-categories-crud.spec.ts
+//
+// A skipped test that says "nobody has done this yet" about work that IS done is
+// worse than no test: it is a standing invitation to redo it, and it makes the
+// suite's own summary line ("5 skipped") a lie about coverage. So the stubs are
+// gone and the last test below replaces them with the thing they were pretending
+// to be — a live gate that fails when a registry capability has NO spec claiming
+// it, which is the only version of "not yet implemented" that can ever be true.
 
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test, expect } from "../fixtures";
 import { signUpBurner, signInAs } from "../personas/factories";
-import { PERSONAS } from "../personas/registry";
+import { forbiddenMatrix } from "../personas/registry";
 
 test.describe("authz negative paths", () => {
   test("anonymous is refused the org console [reach-org-console]", async ({
@@ -48,64 +74,55 @@ test.describe("authz negative paths", () => {
       orgPage.getByText(/this side is for afrikaburn staff/i),
     ).toBeVisible();
     await expect(
-      orgPage.getByRole("heading", { name: /registration queue/i }),
+      orgPage.getByRole("heading", { name: /registration pipeline/i }),
     ).toHaveCount(0);
   });
 
-  // --- Data-dependent guards — owned by the M3-30 wide pass -----------------
-  // Each references its registry capability so the assertion target is fixed.
+  test("every forbidden capability in the registry is claimed by a spec", () => {
+    // THE REGISTRY IS ONLY WORTH KEEPING IF IT IS ANSWERED. Adding a persona's
+    // forbidden capability is cheap; writing the spec that proves the refusal is
+    // not, and nothing used to notice the gap. This does: a capability id that
+    // appears in no spec file fails here, by name, with nowhere to hide.
+    //
+    // The convention it enforces is the one the suite already follows — a spec
+    // cites the registry id it proves, in its header comment or its test title
+    // (`[reach-org-console]`). Cheap to satisfy, and it makes "which spec proves
+    // this?" answerable with grep instead of archaeology.
+    //
+    // NOT a proof that the refusal works — that is each spec's job, re-proven by
+    // deleting the guard. This is a proof that a claim EXISTS, which is the
+    // failure mode five `fixme`s hid for weeks.
+    const specsRoot = fileURLToPath(new URL("../specs", import.meta.url));
+    const testsRoot = fileURLToPath(new URL(".", import.meta.url));
 
-  test.fixme("a stranger cannot discover a free camp [discover-free-camp / open-free-camp-page]", async () => {
-    // Setup: burner A creates an invite_only (free) camp; burner B (a stranger)
-    // must NOT find it in /directory, the type-ahead, or B's profile search, and
-    // opening /camps/<slug> directly must notFound()/redirect.
-    // Guard: apps/web/lib/groups-store.ts free-camp filter + camp page
-    //        `!camp.registered && !camp.viewerRole` branch.
-    expect(
-      PERSONAS.anonymous.forbidden.some((c) => c.id === "discover-free-camp"),
-    ).toBe(true);
-  });
+    function collect(dir: string): string[] {
+      const out: string[] = [];
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) out.push(...collect(full));
+        else if (entry.endsWith(".ts")) out.push(full);
+      }
+      return out;
+    }
 
-  test.fixme("a camp member cannot read another camp's registration [read-other-camp-registration]", async () => {
-    // Setup: two camps, two leads; lead B navigates to A's registration route.
-    // Guard: getCurrentCampUser/enforceGate scoping in the registration page.
-    expect(
-      PERSONAS.camp_member.forbidden.some(
-        (c) => c.id === "read-other-camp-registration",
+    const corpus = [...collect(specsRoot), ...collect(testsRoot)]
+      // This file names every id in the map above, so counting it would make the
+      // gate self-satisfying — exactly the tautology the `fixme`s were.
+      .filter((f) => !f.endsWith("negative-paths.spec.ts"))
+      .map((f) => readFileSync(f, "utf8"))
+      .join("\n");
+
+    const unclaimed = [
+      ...new Set(
+        forbiddenMatrix()
+          .map((row) => row.capability.id)
+          .filter((id) => !corpus.includes(id)),
       ),
-    ).toBe(true);
-  });
+    ].sort();
 
-  test.fixme("a supplier cannot see org-internal notes [see-org-supplier-notes]", async () => {
-    // Setup: registerSupplier + walk onboarding; assert no org `notes` string is
-    // ever present in any portal response.
-    // Guard: supplier session/onboarding query never SELECTs `notes` (M3-07).
     expect(
-      PERSONAS.supplier.forbidden.some(
-        (c) => c.id === "see-org-supplier-notes",
-      ),
-    ).toBe(true);
-  });
-
-  test.fixme("hard-locked fields never appear on a public surface [see-hard-locked-field-public]", async () => {
-    // Setup: complete a bio with phone/emergency/ID filled and every toggle set
-    // PUBLIC; assert none of HARD_LOCKED_PRIVATE_FIELDS' values appear on the
-    // public profile, directory card, or type-ahead. Guard: bio public projection.
-    expect(
-      PERSONAS.burner.forbidden.some(
-        (c) => c.id === "see-hard-locked-field-public",
-      ),
-    ).toBe(true);
-  });
-
-  test.fixme("org_staff cannot reach god-only surfaces [reach-god-only-surface]", async () => {
-    // Setup: an org_staff account (god elevates them via the accounts panel)
-    // opens a god-only surface. Guard: the System manager rank, which
-    // org_staff does not hold.
-    expect(
-      PERSONAS.org_staff.forbidden.some(
-        (c) => c.id === "reach-god-only-surface",
-      ),
-    ).toBe(true);
+      unclaimed,
+      `No spec cites these forbidden capabilities. Name the id in the owning spec's header or test title, or drop it from personas/registry.ts:\n  ${unclaimed.join("\n  ")}`,
+    ).toEqual([]);
   });
 });

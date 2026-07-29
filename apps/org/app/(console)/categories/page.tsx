@@ -14,10 +14,16 @@ import { CategoriesManager } from "@/components/categories/categories-manager";
 // READ FOR EVERY RANK, WRITTEN BY ONE. The taxonomy is edition-wide reference
 // data every camp's registration renders against, so Ryan put CRUD in the
 // System manager's hands alone (27 Jul 2026). Everyone else gets the same table
-// without the controls and a line saying why — a screen that explains its own
-// limits beats one that silently lacks buttons.
+// with the controls PRESENT BUT DISABLED, each naming the restriction and
+// pointing at the sentence below — "transparent with restrictions rather than
+// completely obfuscated, except for private personal information" (Ryan, 28 Jul
+// 2026). A screen that explains its own limits beats one that silently lacks
+// buttons, and a taxonomy is not personal information.
 
 export const dynamic = "force-dynamic";
+
+/** The one refusal sentence every disabled control on this page describes to. */
+const MANAGE_REFUSAL_ID = "camp-category-manage-refusal";
 
 export default async function CategoriesPage() {
   const guard = await guardConsole();
@@ -59,7 +65,10 @@ export default async function CategoriesPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {!canManage && (
-            <p className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground">
+            <p
+              id={MANAGE_REFUSAL_ID}
+              className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
+            >
               <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {systemManagerRefusal("change the camp categories")}
             </p>
@@ -76,6 +85,7 @@ export default async function CategoriesPage() {
             editionId={edition.id}
             categories={categories}
             canManage={canManage}
+            refusalId={MANAGE_REFUSAL_ID}
           />
         </div>
       )}

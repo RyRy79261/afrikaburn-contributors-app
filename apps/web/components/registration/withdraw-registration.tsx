@@ -112,9 +112,16 @@ export function WithdrawRegistrationButton({
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
         Withdraw registration
       </Button>
+      {/* This line used to end "can't be reopened or replaced", which stopped
+          being true when `withdrawn → draft` became a legal transition and
+          ReopenRegistrationButton shipped on the locked view. It was the only
+          sentence on the screen telling a camp that withdrawing ends their
+          edition — a false finality that would talk a wavering camp out of the
+          one action they can undo. `withdrawConsequence` (the confirm) has said
+          the accurate thing all along; this now agrees with it. */}
       <p className="max-w-prose text-xs text-muted-foreground">
         {refusal ??
-          `Withdrawing is final for AfrikaBurn ${editionYear} — a withdrawn registration can't be reopened or replaced.`}
+          `Withdrawing pulls this registration out of AfrikaBurn ${editionYear}. You can reopen it from this page while the edition is open, which returns a draft you have to submit and have reviewed again — approval does not survive it.`}
       </p>
     </div>
   );

@@ -27,8 +27,13 @@ test.describe("anonymous visitor — organiser console refuses", () => {
     ).toBeVisible();
 
     // The console's own chrome/data never rendered.
+    // NAME THE HEADING THAT ACTUALLY EXISTS. This asserted /registration
+    // queue/i until 28 Jul 2026; the page's <h1> is "Registration pipeline"
+    // (apps/org/app/(console)/registrations/page.tsx), so the count was zero
+    // whether the console rendered or not — a refusal proof that would have
+    // stayed green with the gate deleted.
     await expect(
-      orgPage.getByRole("heading", { name: /registration queue/i }),
+      orgPage.getByRole("heading", { name: /registration pipeline/i }),
     ).toHaveCount(0);
   });
 

@@ -9,6 +9,9 @@
 // pairs the refusal with a POSITIVE control (the member CAN reach their own camp)
 // so the guard is proven discriminating, not blanket-deny. Counterparts are real
 // (factory-built), never mocked.
+//
+// Registry ids proven here (personas/registry.ts): read-other-camp-registration,
+// discover-free-camp, open-free-camp-page, see-hard-locked-field-public.
 
 import { test, expect } from "../../fixtures";
 import {

@@ -49,6 +49,7 @@ export function RegistrationReview({
   officersCopy,
   showWrangler,
   roster,
+  decisionRefusal,
 }: {
   detail: RegistrationDetail;
   decisionLog: DecisionLogRow[];
@@ -59,6 +60,9 @@ export function RegistrationReview({
   officersCopy: OfficersCopy;
   showWrangler: boolean;
   roster: RosterMemberRow[];
+  /** Why this viewer may not decide, or null when they may. Resolved by the
+   * page, because only the server has the actor. */
+  decisionRefusal: string | null;
 }) {
   const { registration, group, edition } = detail;
 
@@ -273,6 +277,7 @@ export function RegistrationReview({
                 registrationId={registration.id}
                 status={registration.status}
                 subjectNoun={subjectNoun}
+                refusal={decisionRefusal}
               />
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Lock className="h-3.5 w-3.5" aria-hidden />

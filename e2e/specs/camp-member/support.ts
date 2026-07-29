@@ -20,6 +20,11 @@ function activationIdFrom(value: string | null): string | null {
   return value?.match(/questionnaires\/([0-9a-f-]{36})/i)?.[1] ?? null;
 }
 
+/** `EDIT_STEPS` in apps/web/components/onboarding/bio-flow.tsx: details, burns,
+ *  privacy. Named here so a step added there fails this loop loudly rather than
+ *  silently skipping the privacy page. */
+const EDIT_STEP_COUNT = 3;
+
 export interface AuthorQuestionnaireOptions {
   title: string;
   /** The single required short-text question's prompt (used later as its label). */
@@ -82,7 +87,9 @@ export async function authorCampQuestionnaire(
 
   // A non-blocking send does not gate the lead: router.push lands on the list.
   await leadPage.waitForURL(new RegExp(`/camps/${slug}/questionnaires$`));
-  const viewLink = leadPage.getByRole("link", { name: /view responses/i }).first();
+  const viewLink = leadPage
+    .getByRole("link", { name: /view responses/i })
+    .first();
   await expect(viewLink).toBeVisible();
   const id = activationIdFrom(await viewLink.getAttribute("href"));
   if (!id) {
@@ -121,7 +128,9 @@ export async function setHardLockedBioData(
   sentinels: { onsiteContactName: string; medicalNotes: string },
 ): Promise<{ onsiteContactName: string; medicalNotes: string }> {
   await page.goto("/profile?edit=1");
-  await expect(page.getByRole("heading", { name: /edit your bio/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /edit your bio/i }),
+  ).toBeVisible();
 
   // BY ROLE, not by label. Every hard-locked field ships a privacy Switch beside
   // it whose accessible name STARTS WITH the field's own — "Medical notes —
@@ -135,8 +144,20 @@ export async function setHardLockedBioData(
     .fill(sentinels.medicalNotes);
 
   // details → burns → privacy, then the final save.
-  await page.getByRole("button", { name: "Save & continue" }).click();
-  await page.getByRole("button", { name: "Save & continue" }).click();
+  //
+  // WAIT FOR THE STEP TO CHANGE between clicks. Firing the same
+  // "Save & continue" locator twice in a row raced the persist: the button
+  // disables while the server action is in flight, so Playwright's second click
+  // waited for it to re-enable and could land on the SAME step again — after
+  // which "Save changes" never appears, because the flow is one step short of
+  // the privacy page. `bio-flow.tsx` renders "Step N of 3", so the step counter
+  // is the honest signal that the click actually advanced.
+  const total = EDIT_STEP_COUNT;
+  for (let step = 1; step < total; step += 1) {
+    await expect(page.getByText(`Step ${step} of ${total}`)).toBeVisible();
+    await page.getByRole("button", { name: "Save & continue" }).click();
+    await expect(page.getByText(`Step ${step + 1} of ${total}`)).toBeVisible();
+  }
   await page.getByRole("button", { name: "Save changes" }).click();
 
   await page.waitForURL(/\/profile(\?.*)?$/);

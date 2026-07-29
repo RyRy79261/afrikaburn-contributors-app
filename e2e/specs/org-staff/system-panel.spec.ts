@@ -119,7 +119,7 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     ).toBeVisible();
   });
 
-  test("org staff are refused it, and told which rank holds it", async ({
+  test("org staff are refused it, and told which rank holds it [reach-god-only-surface]", async ({
     makeAppPage,
   }) => {
     skipUnlessGod();

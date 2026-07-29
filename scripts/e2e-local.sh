@@ -108,6 +108,38 @@ pkill -f "next dev" >/dev/null 2>&1 || true
 pkill -f "next start" >/dev/null 2>&1 || true
 sleep 2
 
+# …AND THEN CHECK, because those two pkills do not do what they say.
+#
+# Next renames its own process to `next-server (v16.2.11)` once it boots, so the
+# pattern only ever matched the `sh -c next start --port 3001` wrapper — the
+# process actually holding the port survived every time. An interrupted run
+# therefore left a server listening, the next run's `next start` failed to bind,
+# and the readiness loop below said "ok" because SOMETHING answered :3000. The
+# suite then ran against the previous run's build. Measured 28 Jul 2026: five
+# org-staff specs failed at sign-up in the shared factory, 15s timeouts on a
+# route the live build serves in milliseconds — a foreign server, reported as a
+# product bug.
+#
+# So: take the ports by pid, and refuse to continue if one will not come free.
+for port in 3000 3001 3002; do
+  for attempt in 1 2 3; do
+    # `|| true`: the FREE case is grep finding nothing, which under
+    # `set -euo pipefail` is a non-zero pipeline and would abort the script on
+    # the happy path.
+    holders=$(ss -ltnpH "sport = :$port" 2>/dev/null \
+      | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true)
+    [ -z "$holders" ] && break
+    if [ "$attempt" = 3 ]; then
+      echo "!! :$port is still held by pid(s) $holders after SIGTERM/SIGKILL."
+      echo "   Refusing to run: the suite would silently test that server."
+      exit 1
+    fi
+    # shellcheck disable=SC2086
+    kill $([ "$attempt" = 2 ] && echo -9) $holders 2>/dev/null || true
+    sleep 2
+  done
+done
+
 if [ "$E2E_SERVE" = "build" ]; then
   # Each app's `build` also runs `db:migrate:deploy` first. That is three extra
   # migrate passes, but they are idempotent and serialised by the advisory lock,

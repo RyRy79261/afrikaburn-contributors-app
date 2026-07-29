@@ -179,6 +179,7 @@ export default async function RegistrationPage({
           initialValues={initialValues}
           suppliers={suppliers}
           reviews={reviews}
+          decisionReason={registration?.decisionReason ?? null}
           viewerUserId={campUser.id}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
           saveAction={saveRegistrationDraftAction}

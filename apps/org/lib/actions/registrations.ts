@@ -163,6 +163,16 @@ export async function decideRegistration(
         .set({
           status: nextStatus,
           updatedAt: new Date(),
+          // ON THE ROW THE CAMP READS, not only in the audit meta. `reason` is
+          // mandatory for reject and request_changes, and it used to land in
+          // `audit_events` and the notification alone — so a camp opening its
+          // registration saw "See the reviewer's notes below" above an empty
+          // thread (migration 0025).
+          //
+          // Written for every reason-bearing action, cleared when a later
+          // transition carries none: an approval must not leave last round's
+          // "your fire plan is missing" sitting under a green banner.
+          decisionReason: reason ? reason : null,
           ...(isDecision
             ? { decidedAt: new Date(), decidedByUserId: session.dbUserId }
             : {}),

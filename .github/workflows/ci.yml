@@ -185,7 +185,21 @@ jobs:
           E2E_PROJECTS: desktop-chromium
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
-        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+        # `tests/` RIDES WITH THE ANON JOB. The matrix runs one persona
+        # directory each, and `e2e/tests/` is not a persona — so smoke, the auth
+        # round trip and the registry-driven adversarial authz suite had NEVER
+        # run in the gate, while the gate was described as covering the whole
+        # suite. negative-paths.spec.ts is the file that exists to prove the
+        # refusals, and nothing was running it.
+        #
+        # Attached to `anon` because it is the shortest job and these specs sign
+        # up their own actors, so they add ~1 min rather than a whole runner.
+        run: |
+          if [ "${{ matrix.persona }}" = "anon" ]; then
+            ./scripts/e2e-local.sh specs/anon tests
+          else
+            ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+          fi
 
       # THE SERVER'S OWN ACCOUNT OF THE FAILURE.
       #

@@ -1144,6 +1144,12 @@ export const registrations = pgTable(
     decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    // WHY, in the reviewer's own words (migration 0025). Rejecting and asking
+    // for changes both REQUIRE a reason, and until this column existed the
+    // reason reached only the audit event and the notification — never the
+    // camp's own registration page, whose banner points at the per-section
+    // feedback thread a reviewer who simply rejected never wrote to.
+    decisionReason: text("decision_reason"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },

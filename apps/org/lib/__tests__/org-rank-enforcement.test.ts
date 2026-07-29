@@ -300,6 +300,91 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
   });
 });
 
+describe("REGRESSION: a restricted control is shown restricted, not offered", () => {
+  // Ryan, 28 Jul 2026: "I'd rather things be transparent with restrictions than
+  // completely obfuscated, except for private personal information." That cuts
+  // both ways — a control the viewer cannot use must be neither hidden NOR
+  // live, and the second half is the one that rotted.
+  //
+  // `SuppliersTable` takes `deleteRefusal` and documents that OMITTING IT MEANS
+  // "NOT ASKED", in which case the bin icon is offered exactly as before. The
+  // page did not ask. So an engineer — a rank that "deliberately cannot delete
+  // anything in any department" — and any lead scoped to a department that does
+  // not own suppliers both got a live destructive control whose only feedback
+  // was a toast after they pressed it.
+  //
+  // Asserted at the PAGE, because the page is the only layer that has the actor.
+
+  it("the suppliers page answers the delete question for the table", () => {
+    // Whitespace-normalised: prettier wraps the call across four lines the
+    // moment the argument list grows, and a test that breaks on reformatting is
+    // a test people delete.
+    const page = source("app/(console)/suppliers/page.tsx").replace(/\s+/g, "");
+    expect(page).toContain(
+      'orgCanInDomain(guard.session.actor,"delete","suppliers"',
+    );
+    expect(page).toContain(
+      'orgCapabilityRefusal(guard.session.actor,"delete","suppliers"',
+    );
+    expect(page).toContain("deleteRefusal={deleteRefusal}");
+  });
+
+  it("the table still treats an unanswered page as 'not asked'", () => {
+    // The prop stays OPTIONAL on purpose: defaulting it to a refusal would take
+    // removal away from every System manager the moment a new page forgot to
+    // pass it. The regression that matters is a page that does not ask, so the
+    // test lives on the page above, not on this default.
+    const table = source("components/suppliers-table.tsx");
+    expect(table).toContain("deleteRefusal?: string | null;");
+    expect(table).toContain("not available to you");
+    expect(table).toContain("aria-describedby={DELETE_REFUSAL_ID}");
+  });
+
+  it("the registration detail answers the decide question for the panel", () => {
+    // Approve and Reject are the most consequential buttons in the console and
+    // they rendered live for every account. `decideRegistration` guards `update`
+    // in `registrations`, so a lead scoped elsewhere learned that by pressing
+    // Approve on someone else's department and reading a toast.
+    const page = source("app/(console)/registrations/[id]/page.tsx").replace(
+      /\s+/g,
+      "",
+    );
+    expect(page).toContain('orgCanInDomain(actor,"update","registrations"');
+    expect(page).toContain(
+      'orgCapabilityRefusal(actor,"update","registrations"',
+    );
+    // BOTH renders — the project branch and the theme-camp branch. Wiring one
+    // and not the other is the exact half-fix this asserts against.
+    expect(page.split("decisionRefusal={decisionRefusal}").length - 1).toBe(2);
+  });
+
+  it("the decision panel refuses in place rather than hiding the buttons", () => {
+    const panel = source("components/decision-panel.tsx");
+    expect(panel).toContain("disabled={Boolean(refusal) || pending}");
+    expect(panel).toContain("not available to you");
+    expect(panel).toContain("aria-describedby={refusal ? DECISION_REFUSAL_ID");
+  });
+
+  it("the camp-category manager disables its controls instead of dropping them", () => {
+    const manager = source("components/categories/categories-manager.tsx");
+    // Every write control is reachable in the markup and refused by `canManage`.
+    for (const control of [
+      "disabled={!canManage || pending}",
+      "not available to you",
+      "aria-describedby={canManage ? undefined : refusalId}",
+    ]) {
+      expect(manager).toContain(control);
+    }
+    // …and the page hands it the id of the one refusal sentence it prints.
+    const page = source("app/(console)/categories/page.tsx");
+    expect(page).toContain("refusalId={MANAGE_REFUSAL_ID}");
+    expect(page).toContain("id={MANAGE_REFUSAL_ID}");
+    expect(page).toContain(
+      'systemManagerRefusal("change the camp categories")',
+    );
+  });
+});
+
 describe("REGRESSION: the medical DISCLOSURE CENSUS is not readable by rank", () => {
   // A `bio.medical.view` row only exists when the subject HAS notes, so a list
   // of those rows names the burners who have disclosed a health condition.

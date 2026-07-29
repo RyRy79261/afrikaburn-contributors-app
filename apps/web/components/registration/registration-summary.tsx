@@ -76,7 +76,7 @@ const STATUS_BANNER: Record<
   },
   rejected: {
     title: "Not approved",
-    body: "This registration wasn't approved. See the reviewer's notes below.",
+    body: "This registration wasn't approved. The reviewer's reason is below, with any section notes under it.",
     icon: <XCircle className="h-5 w-5 text-destructive" aria-hidden />,
     tone: "border-destructive/40 bg-destructive/10 text-foreground",
   },
@@ -339,6 +339,21 @@ export function RegistrationSummary({
           <div className="min-w-0">
             <p className="text-sm font-medium">{banner.title}</p>
             <p className="mt-0.5 text-sm opacity-80">{banner.body}</p>
+            {/* THE REASON, IN THE REVIEWER'S OWN WORDS (migration 0025).
+                Rejecting and asking for changes both REQUIRE one, and it used
+                to reach only `audit_events.meta` and the decision
+                notification — while this banner said "See the reviewer's notes
+                below" and pointed at the per-section thread, which a reviewer
+                who simply rejected never wrote to. A camp could read its own
+                registration and find no explanation anywhere on the page. */}
+            {r.decisionReason ? (
+              <p className="mt-2 whitespace-pre-line rounded-lg border border-current/20 bg-background/40 p-3 text-sm">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide opacity-70">
+                  From the reviewer
+                </span>
+                {r.decisionReason}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">

@@ -127,7 +127,7 @@ test.describe("camp member — server-side refusals (own camp)", () => {
       orgPage.getByText(/this side is for afrikaburn staff/i),
     ).toBeVisible();
     await expect(
-      orgPage.getByRole("heading", { name: /registration queue/i }),
+      orgPage.getByRole("heading", { name: /registration pipeline/i }),
     ).toHaveCount(0);
 
     // The god-only accounts surface is likewise walled off (a camp member holds

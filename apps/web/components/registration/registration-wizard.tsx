@@ -70,6 +70,16 @@ interface WizardProps {
   initialValues: RegistrationValues;
   suppliers: SupplierOption[];
   reviews: CampSectionReview[];
+  /**
+   * WHY AFRIKABURN ASKED, in the reviewer's own words (migration 0025), or null.
+   *
+   * `applyReviewDecision` demands a reason for `request_changes` and used to
+   * file it in `audit_events.meta` and the decision notification only — so this
+   * screen told the camp to "read their notes on the flagged sections below"
+   * even when the reviewer left no section comment and the whole explanation
+   * was the sentence they typed into the dialog.
+   */
+  decisionReason: string | null;
   /** The viewer's db user id — labels their own replies "You" in the thread. */
   viewerUserId: string | null;
   blobConfigured: boolean;
@@ -312,6 +322,14 @@ export function RegistrationWizard(props: WizardProps) {
               Read their notes on the flagged sections below, update what&apos;s
               needed, then resubmit.
             </p>
+            {props.decisionReason ? (
+              <p className="mt-2 whitespace-pre-line rounded-lg border border-warning/30 bg-background/60 p-3 text-sm text-foreground">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  From the reviewer
+                </span>
+                {props.decisionReason}
+              </p>
+            ) : null}
           </div>
         </div>
       )}
