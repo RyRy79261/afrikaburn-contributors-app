@@ -58,6 +58,11 @@ export function ConsoleGate({
               submitConsoleQuestionnaire(activationId, responses)
             }
             submitLabel="Submit and unlock"
+            // The gate is handed no respondent id, so a section that asks to be
+            // shuffled is shuffled per ACTIVATION: stable across reloads (which
+            // is what matters on a gate you may return to), but the same order
+            // for everyone rather than per person.
+            shuffleSeed={activationId}
           />
         </CardContent>
       </Card>

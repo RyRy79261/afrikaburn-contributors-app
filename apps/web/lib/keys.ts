@@ -3,8 +3,16 @@ import "server-only";
 // Server-side profile keypair generation (build-spec §apps/web `/onboarding`,
 // §Schema `profile_keys`). Uses WebCrypto ECDSA P-256 (Node 22's global
 // `crypto.subtle`). Generated once at onboarding; used for nothing yet except
-// future QR attestations. The private key is stored encrypted; the public key
-// is plaintext and its fingerprint is shown on the profile.
+// future QR attestations. The public key is plaintext and its fingerprint is
+// shown on the profile.
+//
+// THE PRIVATE HALF IS THE SERVER'S, NOT THE BURNER'S. Think of the server as a
+// lock box: the key exists so that we can produce signatures proving something
+// came from this account, and it is never shown to the user, never sent to a
+// client, and never written unencrypted. Storage is therefore CONDITIONAL on
+// PGCRYPTO_KEY — `ensureProfileKeypair` (bio-store.ts) declines to mint a keypair
+// at all when there is no key to protect it with, rather than persisting one in
+// the clear under a column named `encrypted_private_key`.
 
 export interface GeneratedKeypair {
   /** Base64 of the raw (uncompressed) public key point. */

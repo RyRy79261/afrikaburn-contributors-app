@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Clock, Eye } from "lucide-react";
+import { CheckCircle2, Clock, Eye, Lock } from "lucide-react";
 import {
   flattenQuestions,
   type Questionnaire,
@@ -104,6 +104,9 @@ export function ResponseViewer({
         <TableBody>
           {respondents.map((r) => {
             const done = r.status === "completed";
+            // Closing the questionnaire expires everyone who hadn't answered.
+            // They are not "pending" — nothing is waiting on them.
+            const recalled = r.status === "expired";
             return (
               <TableRow key={r.userId}>
                 <TableCell className="font-medium">{r.displayName}</TableCell>
@@ -112,6 +115,11 @@ export function ResponseViewer({
                     <Badge variant="success">
                       <CheckCircle2 className="h-3 w-3" aria-hidden />
                       Completed
+                    </Badge>
+                  ) : recalled ? (
+                    <Badge variant="outline">
+                      <Lock className="h-3 w-3" aria-hidden />
+                      Recalled
                     </Badge>
                   ) : (
                     <Badge variant="outline">
@@ -144,7 +152,13 @@ export function ResponseViewer({
         open={viewing !== null}
         onOpenChange={(v) => !v && setViewing(null)}
       >
-        <DialogContent>
+        {/* The dialog is centred with a translate and had no height cap, so a
+            long response grew off BOTH ends of the viewport with nothing to
+            scroll — Radix locks the page behind a modal, and the dialog itself
+            had no overflow. A twenty-question response was therefore partly
+            unreadable. Cap the dialog; the answer list below scrolls inside it
+            while the title stays put. */}
+        <DialogContent className="max-h-[85svh]">
           <DialogHeader>
             <DialogTitle>{viewing?.displayName}&apos;s response</DialogTitle>
             <DialogDescription>
@@ -153,7 +167,7 @@ export function ResponseViewer({
                 : "Submitted"}
             </DialogDescription>
           </DialogHeader>
-          <dl className="flex flex-col gap-3">
+          <dl className="flex min-h-0 max-h-[60svh] flex-col gap-3 overflow-y-auto">
             {questions.map((q) => (
               <div key={q.id} className="flex flex-col gap-0.5">
                 <dt className="text-sm font-medium">{q.prompt}</dt>

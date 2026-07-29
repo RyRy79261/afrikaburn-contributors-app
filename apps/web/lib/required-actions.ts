@@ -9,6 +9,7 @@ import {
   parseActivationActionKey,
 } from "@quagga/core";
 import { db, schema } from "./db";
+import { getActiveEdition } from "./edition";
 
 // The code-side action-key → route registry (build-spec: the DB stores the key,
 // never the component). Only keys with a built page appear here.
@@ -28,10 +29,20 @@ export function actionRoute(actionKey: string): string | null {
   return ACTION_ROUTES[actionKey] ?? null;
 }
 
-/** Ensure a pending `required_actions` row exists for this user + key. Idempotent
- * (unique on user+action_key); a completed row is left untouched. */
+/**
+ * Ensure a pending `required_actions` row exists for this user + edition + key.
+ * Idempotent; a completed row is left untouched.
+ *
+ * PER EDITION (migration 0024). The key used to be (user, action_key), so an
+ * action satisfied once was satisfied for ever: a burner who completed their
+ * Burner Bio in one year had the row marked `completed`, and the next year's
+ * gate found that same row and never fired. The bio persists across editions by
+ * design, but it has to be CONFIRMED once per burn — details, emergency contact
+ * and medical notes are exactly the things that go stale.
+ */
 export async function ensureRequiredAction(input: {
   userId: string;
+  editionId: string;
   actionKey: string;
   type: "questionnaire" | "acknowledgement" | "payment" | "profile_update";
   title: string;
@@ -41,6 +52,7 @@ export async function ensureRequiredAction(input: {
     .insert(schema.requiredActions)
     .values({
       userId: input.userId,
+      editionId: input.editionId,
       actionKey: input.actionKey,
       type: input.type,
       title: input.title,
@@ -48,13 +60,25 @@ export async function ensureRequiredAction(input: {
       status: "pending",
     })
     .onConflictDoNothing({
-      target: [schema.requiredActions.userId, schema.requiredActions.actionKey],
+      target: [
+        schema.requiredActions.userId,
+        schema.requiredActions.editionId,
+        schema.requiredActions.actionKey,
+      ],
     });
 }
 
-/** Mark a required action completed for a user. No-op if it doesn't exist. */
+/**
+ * Mark a required action completed for a user IN ONE EDITION. No-op if it
+ * doesn't exist.
+ *
+ * Scoped to match the key: without the edition this would complete every
+ * edition's copy of the action at once, which is the same "satisfied for ever"
+ * bug from the other direction.
+ */
 export async function completeRequiredAction(
   userId: string,
+  editionId: string,
   actionKey: string,
 ): Promise<void> {
   await db()
@@ -63,6 +87,7 @@ export async function completeRequiredAction(
     .where(
       and(
         eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.editionId, editionId),
         eq(schema.requiredActions.actionKey, actionKey),
       ),
     );
@@ -84,6 +109,16 @@ export async function completeRequiredAction(
 export const listRequiredActions = cache(async function listRequiredActions(
   userId: string,
 ): Promise<RequiredActionLike[]> {
+  // SCOPED TO THE ACTIVE EDITION (migration 0024). Resolved here rather than
+  // threaded through the two dozen `pendingBlockingRoute` call sites: the
+  // question every one of them asks is "is this person blocked RIGHT NOW",
+  // which is always about the burn now running. `getActiveEdition` is
+  // request-cache()d, so this costs nothing.
+  //
+  // Without it, making the WRITE per-edition would have been worse than
+  // leaving it alone: last edition's pending rows would gate the app for ever.
+  const edition = await getActiveEdition();
+  if (!edition) return [];
   const rows = await db()
     .select({
       actionKey: schema.requiredActions.actionKey,
@@ -110,7 +145,12 @@ export const listRequiredActions = cache(async function listRequiredActions(
         schema.requiredActions.activationId,
       ),
     )
-    .where(eq(schema.requiredActions.userId, userId))
+    .where(
+      and(
+        eq(schema.requiredActions.userId, userId),
+        eq(schema.requiredActions.editionId, edition.id),
+      ),
+    )
     .orderBy(asc(schema.requiredActions.createdAt));
   return rows
     .filter((r) => isParticipantFacingActivation(r.audience))

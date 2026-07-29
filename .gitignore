@@ -23,3 +23,6 @@ coverage/
 !.env.example
 .vercel
 .env*
+
+# Agent worktrees — transient, never committed.
+.claude/worktrees/

@@ -116,8 +116,16 @@ export const AUTH_CAPABILITIES: Readonly<
     reason:
       "Self-hosting unlocks server-side change-email (`user.changeEmail.enabled` is set in @quagga/auth, with `sendChangeEmailVerification` wired to Resend) — it was ABSENT from managed Neon's server allowlist. Better Auth owns the identity-side token; the 48h revocation window and POPIA state machine stay ours in @quagga/core + `email_change_requests`. Committing the new address still requires an email provider to deliver the confirmation, so the user-facing flow is gated on RESEND_API_KEY. PENDING: the provider call is available but our flow is not finished — the three server actions have no caller and the confirm/revoke URLs have no route.",
     pending: true,
+    // DON'T SEND PEOPLE TO A DOOR THAT ISN'T THERE. This used to end "Ask an
+    // organiser to change it for you — they can do it from the console." They
+    // cannot: the console's Accounts surface grants org ROLES and nothing else,
+    // and the only code in the monorepo that writes `user.email` is
+    // `confirmEmailChange`, which is the very flow this `pending` flag exists to
+    // say is unfinished. So the copy sent a burner to a colleague to ask for
+    // something neither of them could do, and the burner came away thinking the
+    // failure was theirs.
     pendingMessage:
-      "Changing your email address isn't finished yet. Ask an organiser to change it for you \u2014 they can do it from the console.",
+      "Changing your sign-in email isn't finished yet \u2014 and organisers can't do it from the console either, so nobody can change it for you right now. Your current address still signs you in, and it's still where security notices go.",
   },
   accountDeletion: {
     key: "accountDeletion",
@@ -140,8 +148,16 @@ export const AUTH_CAPABILITIES: Readonly<
     reason:
       "Self-hosting exposes `unlinkAccount` server-side (managed Neon omitted it). The last-sign-in-method guard is still enforced by us from `listUserAccounts` — a member can never unlink their only method. PENDING: nothing in the app calls it yet, so the control is disabled rather than pretending.",
     pending: true,
+    // Same correction as `emailChange` above, and it mattered more here: this
+    // copy named a COMPROMISED Google account as the reason to go and ask, which
+    // is the moment someone most needs a true answer. Nothing in the console
+    // unlinks a provider — `auth.api.unlinkAccount` has no caller anywhere in
+    // the monorepo — so the organiser had nothing to offer and the burner lost
+    // time believing help was on the way. What is actually true is that the
+    // Google account itself is the thing that opens this door, so securing it
+    // with Google is the control that works today.
     pendingMessage:
-      "Unlinking a sign-in method isn't available yet. If you need Google disconnected from this account \u2014 for example because that Google account is compromised \u2014 ask an organiser and they'll do it directly.",
+      "Disconnecting a sign-in method isn't available yet, and organisers can't do it from the console either \u2014 nobody can remove Google from this account today. If that Google account is compromised, securing it with Google is what stops it being used to sign in here.",
   },
   twoFactor: {
     key: "twoFactor",

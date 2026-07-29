@@ -1,12 +1,16 @@
 import { ShieldAlert } from "lucide-react";
 import {
   DEPARTMENT_SCOPE_NOTE,
+  ENGINEER_RANK_CARVE_OUTS,
   ORG_CAPABILITY_CONSEQUENCES,
+  ORG_CAPABILITY_LABELS,
+  ORG_RANK_LABELS,
   grantScopeClause,
   orgPermissionsFromKeys,
   summarizeOrgActor,
   type OrgCapability,
   type OrgDomain,
+  type OrgRank,
 } from "@quagga/core";
 import { cn } from "@quagga/ui/lib/utils";
 
@@ -23,6 +27,14 @@ import { cn } from "@quagga/ui/lib/utils";
 // in front of them without opening another page, and a capability that is simply
 // absent from a list is indistinguishable from one nobody thought about.
 //
+// THAT LINE NAMES THE VERB AND LETS THE SCOPE NAME THE PLACE. It used to read
+// "can permanently remove suppliers and their documents" for every grant of
+// `delete`, which was written when the two supplier actions were the only ones
+// asking for it. Departments own the whole console now, so a Theme camps lead
+// was being told they could destroy suppliers they cannot touch — and, worse,
+// told nothing about the registrations they can. The domain list is the only
+// honest answer to "where", and `grantScopeClause` already produces it.
+//
 // A SCOPED GRANT NAMES THE DOMAINS, NOT JUST THE DEPARTMENT. "Can delete, in
 // Safety only" is not an answer if Safety owns nothing — it reads as access and
 // is none. Every scope clause therefore comes from `grantScopeClause`, which
@@ -36,6 +48,17 @@ export interface CapabilityGrantView {
   departments: string[] | null;
   /** Null when org-wide; EMPTY when the departments own no part of the console. */
   domains: OrgDomain[] | null;
+  /**
+   * TRUE when this is one of the grants the `engineer` RANK never resolves
+   * (`ENGINEER_RANK_CARVE_OUTS`) and the preview was NOT told whose account it
+   * is for — so this line is the org staff answer, and an engineer target would
+   * be refused exactly this one however the roles are written.
+   *
+   * Only `grantsForRoles` sets it, and only when its caller omitted the rank.
+   * The server's `summarizeOrgActor` resolves the real actor, rank included, so
+   * a grant that came from there is already exact and never carries this.
+   */
+  engineerCeilingUnchecked?: boolean;
 }
 
 /** A role as the previewing surfaces hold it: its scope, what its department
@@ -60,18 +83,25 @@ export interface PreviewRole {
  * `orgCan` refuses `manage_accounts` to every role however this is called. It
  * exists so the console cannot promise access it would then refuse.
  *
- * The rank is the door and is irrelevant to resolution unless it is `god` — and
- * a god is never a target of these surfaces (the controls are not rendered and
- * both actions refuse a god target), so `org_staff` is the honest stand-in.
+ * PASS THE TARGET ACCOUNT'S RANK WHENEVER THERE IS A TARGET ACCOUNT. The rank
+ * used to be hardcoded to `org_staff` here on the grounds that it is only the
+ * door — which stopped being true when personal information and deletion became
+ * `ENGINEER_RANK_CARVE_OUTS`. An engineer resolves neither, however their roles
+ * are written, so previewing an engineer's assignment as `org_staff` promised
+ * two grants the resolver ALWAYS refuses: the dialog said "can permanently
+ * destroy records" about an account that cannot delete anything anywhere.
  *
- * NOTE ON THE RANK STAND-IN, since PII and delete are now rank-carved-out for
- * engineers: this preview answers "what does this ROLE SET grant?", which is the
- * question a role editor asks. The accounts table does NOT use it — it renders
- * the server's `summarizeOrgActor` over the real actor, rank included — so an
- * engineer is never shown a capability their rank refuses.
+ * OMIT IT ONLY WHERE THERE IS NO ACCOUNT. The role editor asks "what does this
+ * ROLE SET grant?", a question with no person in it, and answers it as
+ * `org_staff` — the door with no ceiling on it. When the rank is omitted the
+ * carve-out grants come back flagged (`engineerCeilingUnchecked`) and
+ * `CapabilitySummary` names which of them an engineer would be refused, so an
+ * un-ranked preview is never read as a promise about a specific person.
  */
 export function grantsForRoles(
   roles: readonly PreviewRole[],
+  /** The rank of the account this preview is FOR; omitted where there is none. */
+  rank?: OrgRank,
 ): CapabilityGrantView[] {
   const names = new Map(
     roles
@@ -91,7 +121,7 @@ export function grantsForRoles(
     }
   }
   return summarizeOrgActor({
-    rank: "org_staff",
+    rank: rank ?? "org_staff",
     domains,
     roles: roles.map((r) => ({
       id: r.id,
@@ -106,6 +136,8 @@ export function grantsForRoles(
     departments:
       grant.departmentIds?.map((id) => names.get(id) ?? "a department") ?? null,
     domains: grant.domains,
+    engineerCeilingUnchecked:
+      rank === undefined && ENGINEER_RANK_CARVE_OUTS.includes(grant.capability),
   }));
 }
 
@@ -115,6 +147,15 @@ function scopeClause(grant: CapabilityGrantView): string {
 
 function sentenceCase(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** "delete" · "delete or see personal information" — the carve-outs, named. */
+function orList(capabilities: readonly OrgCapability[]): string {
+  const labels = capabilities.map((c) =>
+    ORG_CAPABILITY_LABELS[c].toLowerCase(),
+  );
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`;
 }
 
 export function CapabilitySummary({
@@ -133,6 +174,11 @@ export function CapabilitySummary({
   // change exists to close: it looks granted and reaches nothing. Say so once,
   // under the list, rather than repeating it on every line.
   const reachesNothing = grants.some((g) => g.domains?.length === 0);
+  // Resolved without knowing whose account it is, and at least one of the
+  // answers depends on that. Named rather than silently averaged: an engineer
+  // reading their own assignment preview must not be shown a deletion they can
+  // never perform.
+  const rankSensitive = grants.filter((g) => g.engineerCeilingUnchecked);
 
   return (
     <span className={cn("flex flex-col gap-1 text-xs", className)}>
@@ -159,18 +205,27 @@ export function CapabilitySummary({
         <span className="flex items-start gap-1.5 font-medium text-destructive">
           <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
-            Can permanently remove suppliers and their documents,{" "}
-            {scopeClause(destructive)}.
+            Can permanently destroy records, {scopeClause(destructive)}.
           </span>
         </span>
       ) : (
         <span className="text-muted-foreground">
-          Can delete nothing — no suppliers, no documents.
+          Can delete nothing — no record, in any part of the console.
         </span>
       )}
 
       {reachesNothing && (
         <span className="text-muted-foreground">{DEPARTMENT_SCOPE_NOTE}</span>
+      )}
+
+      {rankSensitive.length > 0 && (
+        <span className="text-muted-foreground">
+          Read as an {ORG_RANK_LABELS.org_staff.toLowerCase()} account. An{" "}
+          {ORG_RANK_LABELS.engineer.toLowerCase()} account is refused{" "}
+          {orList(rankSensitive.map((g) => g.capability))} in every department
+          however its roles are written, so it would get everything above except{" "}
+          {rankSensitive.length === 1 ? "that" : "those"}.
+        </span>
       )}
     </span>
   );

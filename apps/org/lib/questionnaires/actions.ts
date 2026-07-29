@@ -116,8 +116,16 @@ export async function saveQuestionnaireDefinition(
   raw: z.input<typeof QuestionnaireBuilderInput>,
 ): Promise<SaveDefinitionResult> {
   try {
+    // `key` present = editing an existing definition, absent = authoring a new
+    // one, and the two are different rights. Both used to ask for `update`, so
+    // a role given "may amend our questionnaires, may not write new ones" could
+    // author one from scratch. The key is read off the raw input because the
+    // capability has to be chosen before the parse; a non-string key is
+    // rejected by `QuestionnaireBuilderInput` below, so every write that
+    // actually happens took the path it was checked for.
+    const isEdit = typeof (raw as { key?: unknown } | null)?.key === "string";
     const session = await requireOrgSession({
-      capability: "update",
+      capability: isEdit ? "update" : "create",
       domain: "questionnaires",
     });
     const input = QuestionnaireBuilderInput.parse(raw);
@@ -302,11 +310,12 @@ export async function activateQuestionnaire(
 
     const db = getDb();
 
-    // Confirm the definition exists and is org-owned.
+    // Confirm the definition exists, is org-owned, and is FINISHED.
     const [def] = await db
       .select({
         key: schema.questionnaireDefinitions.key,
         version: schema.questionnaireDefinitions.version,
+        status: schema.questionnaireDefinitions.status,
         definition: schema.questionnaireDefinitions.definition,
       })
       .from(schema.questionnaireDefinitions)
@@ -315,6 +324,20 @@ export async function activateQuestionnaire(
     if (!def) throw new Error("That questionnaire no longer exists.");
     if (!def.key.startsWith("org-")) {
       throw new Error("That questionnaire cannot be sent from the console.");
+    }
+    // A DRAFT IS NOT SENDABLE. The builder's two buttons mean something —
+    // "Save draft" is explicitly "I am not finished" — and the send screen is
+    // one URL away from the list, which offers Send next to Edit on every row
+    // whatever its status. Sending a draft snapshots the half-written
+    // definition into the activation and, when it is blocking, hard-gates
+    // everyone it resolves to behind questions the author had not finished
+    // writing. Refuse, and name which state stopped it.
+    if (def.status !== "published") {
+      throw new Error(
+        def.status === "draft"
+          ? "That questionnaire is still a draft. Finish it and publish it from the builder before sending — a draft would reach its audience half-written."
+          : "That questionnaire has been unpublished, so it cannot be sent. Publish it again from the builder first.",
+      );
     }
 
     const dueAt = input.dueAt ? new Date(input.dueAt) : null;
@@ -373,6 +396,11 @@ export async function activateQuestionnaire(
           .values(
             rows.map((r) => ({
               userId: r.userId,
+              // The edition this action belongs to. Required actions are
+              // per-edition now (migration 0024) — without it the uniqueness
+              // key is (user, action_key) forever, so an action of the same key
+              // could never be raised again in a later burn.
+              editionId: input.editionId,
               type: r.type,
               actionKey: r.actionKey,
               version: def.version ?? input.version,
@@ -386,6 +414,7 @@ export async function activateQuestionnaire(
           .onConflictDoNothing({
             target: [
               schema.requiredActions.userId,
+              schema.requiredActions.editionId,
               schema.requiredActions.actionKey,
             ],
           });
@@ -417,14 +446,34 @@ export async function activateQuestionnaire(
           blocking: input.blocking,
           activationId,
         });
+
+        // WHERE THE RECIPIENT ANSWERS IT — and that is not the same app for
+        // both audiences.
+        //
+        // `/questionnaires/<activationId>` is a PARTICIPANT route, and apps/web
+        // deliberately refuses to serve it for an org-internal activation
+        // (`getFillView` → `isParticipantFacingActivation`), so it 404s. Every
+        // org-internal send was still stamped for the participant app, which
+        // meant a staff member who is also a burner got a notification that
+        // dead-ended — and a blocking one (the only kind that emails) also sent
+        // them an email saying to open the Contributors app to complete it.
+        // There was nothing there to complete.
+        //
+        // Org-internal questionnaires are answered HERE. A blocking one
+        // replaces the whole console shell the moment they open any page of it
+        // (see `(console)/layout.tsx`), so the console root is the destination
+        // that actually works. A non-blocking internal send has no fill surface
+        // in the console at all today; the root is still the right app to point
+        // at, and it is not a 404.
+        const internal = input.audience.kind === "org_internal";
         await insertNotifications(
           db,
-          // /questionnaires/<id> is a participant route.
           userIds.map((userId) => ({
             ...payload,
+            link: internal ? "/" : payload.link,
             userId,
             origin: "org" as const,
-            linkApp: "web" as const,
+            linkApp: internal ? ("org" as const) : ("web" as const),
           })),
         );
         if (
@@ -443,7 +492,13 @@ export async function activateQuestionnaire(
             await sendEmail({
               to,
               subject: payload.title,
-              text: `${payload.title}\n\nOpen the Contributors app to complete it.`,
+              // Same split as the notification link: staff complete an internal
+              // questionnaire in the console, not in the Contributors app.
+              text: `${payload.title}\n\n${
+                internal
+                  ? "Open the organiser console to complete it."
+                  : "Open the Contributors app to complete it."
+              }`,
             });
           }
         }

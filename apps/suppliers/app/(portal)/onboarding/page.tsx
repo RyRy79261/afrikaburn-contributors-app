@@ -12,6 +12,7 @@ import { PageHeading } from "@/components/page-heading";
 import {
   OnboardingChecklist,
   type StepData,
+  type StepDocument,
 } from "@/components/onboarding-checklist";
 import { DocumentsPanel, type DocumentRow } from "@/components/documents-panel";
 import {
@@ -30,22 +31,6 @@ export default async function OnboardingPage() {
 
   const { progress, supplier, edition } = session;
 
-  const steps: StepData[] = progress.steps.map((view) => ({
-    key: view.step.key,
-    order: view.step.order,
-    title: view.step.title,
-    eyebrow: stepEyebrow(view.step),
-    description: view.step.description,
-    model: buildStepCardModel(view),
-  }));
-
-  const pct = Math.round((progress.completed / progress.total) * 100);
-
-  // The SUPPLIER CODE chip (canvas `D6Xsb` desktop / `FqxsW` mobile). Null for
-  // an imported row that has not been backfilled yet — the chip then renders
-  // nothing at all, never a placeholder that reads like a real code.
-  const supplierCode = supplierCodeChipValue(supplier.code);
-
   // Documents & links for this edition, joined to this supplier's acks. The step
   // TITLE is resolved here (server side) from the core catalog so the client
   // panel never has to carry it.
@@ -62,6 +47,42 @@ export default async function OnboardingPage() {
       ? (supplierOnboardingStep(view.document.stepKey)?.title ?? null)
       : null,
   }));
+
+  // The same documents, indexed by the step they are bound to, so a step card can
+  // LINK to the thing it asks the supplier to attest they have read instead of
+  // naming it and showing nothing. Only `requiredAck` documents count: those are
+  // what completion is reconciled against (`applyDocumentAcksToSteps`), and a
+  // document with no checkbox can never complete anything.
+  const boundDocuments = new Map<string, StepDocument[]>();
+  for (const view of documents.views) {
+    const key = view.document.stepKey;
+    if (!key || !view.document.requiredAck) continue;
+    const list = boundDocuments.get(key) ?? [];
+    list.push({
+      id: view.document.id,
+      title: view.document.title,
+      sourceType: view.document.sourceType,
+      url: view.document.url,
+    });
+    boundDocuments.set(key, list);
+  }
+
+  const steps: StepData[] = progress.steps.map((view) => ({
+    key: view.step.key,
+    order: view.step.order,
+    title: view.step.title,
+    eyebrow: stepEyebrow(view.step),
+    description: view.step.description,
+    model: buildStepCardModel(view),
+    documents: boundDocuments.get(view.step.key) ?? [],
+  }));
+
+  const pct = Math.round((progress.completed / progress.total) * 100);
+
+  // The SUPPLIER CODE chip (canvas `D6Xsb` desktop / `FqxsW` mobile). Null for
+  // an imported row that has not been backfilled yet — the chip then renders
+  // nothing at all, never a placeholder that reads like a real code.
+  const supplierCode = supplierCodeChipValue(supplier.code);
 
   return (
     <div>

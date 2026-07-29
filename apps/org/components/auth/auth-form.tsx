@@ -56,11 +56,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       if (isSignUp) {
         const name = email.split("@")[0] || "Organiser";
-        const { error: signUpError } = await authClient.signUp.email({
-          email,
-          password,
-          name,
-        });
+        const { data: signUpData, error: signUpError } =
+          await authClient.signUp.email({
+            email,
+            password,
+            name,
+          });
         if (signUpError) {
           const msg = (signUpError.message ?? "").toLowerCase();
           if (msg.includes("password")) {
@@ -70,6 +71,35 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           } else {
             setNotice(SIGN_UP_GENERIC);
           }
+          return;
+        }
+        // A SESSION CAME BACK — email verification is off on this deployment, so
+        // Better Auth signed the new account straight in. Carry them to the
+        // console instead of stranding them.
+        //
+        // This is the participant app's bug, verbatim, one app over (see
+        // apps/web/components/auth/auth-form.tsx): the account existed, the
+        // session cookie was set, and the organiser was left reading "check your
+        // inbox" on the auth page waiting for a verification email that a
+        // deployment with no RESEND_API_KEY structurally cannot send. `router.
+        // refresh()` alone did not move them, because this page is not the one
+        // that redirects a signed-in visitor.
+        //
+        // Landing on "/" is honest even for a brand-new account with no org
+        // role: the console gate (resolveOrgSession) then says plainly that
+        // access is granted by role, not by signing in — which is the message
+        // this form's own subtitle already promises. Signing in is not access.
+        //
+        // The cost is the same trade the participant app documents: with
+        // verification OFF, a new address navigates while an existing one shows
+        // the notice, so sign-up becomes an account-existence oracle. With no
+        // mail there is no third outcome, and a usable sign-up beats a private
+        // one nobody can finish. With verification ON (production) no session
+        // comes back either way, both paths fall through to the notice, and
+        // enumeration-safety holds.
+        if (signUpData?.token) {
+          router.push("/");
+          router.refresh();
           return;
         }
         setNotice(SIGN_UP_GENERIC);

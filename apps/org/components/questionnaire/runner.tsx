@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  isAnswerableBlock,
   pageQuestions,
   validateOne,
   type Questionnaire,
@@ -11,8 +12,15 @@ import {
   type QuestionnaireResponseValue,
   type SaveResult,
 } from "@quagga/types";
+import {
+  deriveProgress,
+  nextPageId,
+  pageById,
+  presentationBlocks,
+} from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { QuestionField } from "./field";
+import { ContentBlockView } from "./content-block";
 
 const FORM_ERROR_KEY = "_form";
 const SAVE_FAILED =
@@ -29,13 +37,30 @@ interface RunnerProps {
   submitLabel?: string;
   /** Where to go after a successful submit (default: refresh in place). */
   redirectTo?: string;
+  /** Seed for the deterministic block shuffle. Must be STABLE for a given
+   *  respondent+questionnaire so the order never moves on reload. */
+  shuffleSeed?: string;
 }
 
 /**
- * Console questionnaire runner — the participant runner pattern (apps/web),
- * ported locally and trimmed (no privacy step; console questionnaires never
- * carry Burner-Bio privacy flags). Drives the org-internal blocking gate fill
- * view and any console-side answering.
+ * Console questionnaire runner — the org-internal blocking gate's fill view and
+ * any console-side answering.
+ *
+ * Navigation and completeness are delegated to the @quagga/core questionnaire
+ * runtime, exactly as the participant runner (apps/web) and the author preview
+ * (components/questionnaires/questionnaire-preview.tsx) do: `nextPageId` for
+ * branching, `deriveProgress` for the branch-resolved path, `presentationBlocks`
+ * for content blocks + the seeded shuffle.
+ *
+ * It used to walk `questionnaire.pages` by index and render `pageQuestions()`,
+ * which meant this app ignored two things the SAME app authors and previews:
+ *   · BRANCHING — every section was shown in document order, so an option whose
+ *     `goTo` skips a section didn't skip it, and a "not applicable to you"
+ *     branch was demanded of everyone before the console would unlock;
+ *   · CONTENT BLOCKS — `pageQuestions()` drops info panels and images, so the
+ *     explanatory panel above a question simply wasn't there.
+ * The privacy step is still absent (console questionnaires never carry
+ * Burner-Bio privacy flags), which is the only intended difference.
  */
 export function QuestionnaireRunner({
   questionnaire,
@@ -43,20 +68,46 @@ export function QuestionnaireRunner({
   action,
   submitLabel = "Finish",
   redirectTo,
+  shuffleSeed = "",
 }: RunnerProps) {
   const router = useRouter();
-  const [stepIndex, setStepIndex] = React.useState(0);
+  const firstPageId = questionnaire.pages[0]?.id ?? null;
+
+  // The trail is the respondent's ACTUAL walk — with branching, the page after
+  // this one depends on the answers, so Back pops rather than decrementing.
+  const [trail, setTrail] = React.useState<string[]>(() =>
+    firstPageId ? [firstPageId] : [],
+  );
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isPending, startTransition] = React.useTransition();
 
-  const pages = questionnaire.pages;
-  const step = pages[stepIndex];
-  const isLast = stepIndex === pages.length - 1;
-  const progress = Math.round(((stepIndex + 1) / pages.length) * 100);
+  const currentPageId = trail[trail.length - 1];
 
-  if (!step) return null;
+  const progress = React.useMemo(
+    () => deriveProgress(questionnaire, responses, currentPageId),
+    [questionnaire, responses, currentPageId],
+  );
+  const nextId = React.useMemo(
+    () =>
+      currentPageId
+        ? nextPageId(questionnaire, currentPageId, responses)
+        : null,
+    [questionnaire, currentPageId, responses],
+  );
+
+  const step = currentPageId ? pageById(questionnaire, currentPageId) : null;
+  if (!step || !currentPageId) return null;
+
+  const isLast = nextId === null;
+  // Steps are counted along the BRANCH-RESOLVED path, so the total shrinks or
+  // grows as an answer changes which sections lie ahead.
+  const stepNumber = Math.max(progress.pageIndex, 0) + 1;
+  const percent =
+    progress.pageCount > 0
+      ? Math.round((stepNumber / progress.pageCount) * 100)
+      : 100;
 
   function setResponse(id: string, value: QuestionnaireResponseValue) {
     setResponses((prev) => ({ ...prev, [id]: value }));
@@ -68,25 +119,9 @@ export function QuestionnaireRunner({
     });
   }
 
-  /**
-   * THE SERVER'S VALIDATOR, not a weaker copy of it.
-   *
-   * This used to test emptiness only. The server runs `validateOne` over every
-   * question on every page (`validateResponses`), and Builder v2 exposes rules
-   * that only it enforced — `format` email/url/phone/number, `minLength`,
-   * `minSelections`/`maxSelections`, and grids whose rows default to required.
-   * So a page could pass here and be rejected there.
-   *
-   * That was survivable on an ordinary questionnaire and fatal on the console's
-   * BLOCKING gate: the rejection is keyed by question id, this runner only
-   * renders errors for questions on the CURRENT page, and the offending
-   * question is by definition on a page the walker already left. The refusal
-   * appeared nowhere, the gate never cleared, and the console stayed shut with
-   * no way forward — for staff, on a screen whose only other control is sign
-   * out.
-   */
+  /** Client-side mirror of the server's per-question validation — the same
+   * `validateOne` the submit action runs, so what passes here passes there. */
   function validatePage(page: QuestionnairePage): boolean {
-    if (page.kind === "intro") return true;
     const next: Record<string, string> = {};
     for (const q of pageQuestions(page)) {
       const result = validateOne(q, responses[q.id]);
@@ -96,40 +131,30 @@ export function QuestionnaireRunner({
     return Object.keys(next).length === 0;
   }
 
-  /** The page holding the first question the SERVER rejected, so an off-page
-   * refusal is shown rather than swallowed. */
-  function pageOwningError(errs: Record<string, string>): number | null {
-    const ids = new Set(Object.keys(errs).filter((k) => !k.startsWith("_")));
-    if (ids.size === 0) return null;
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
-      if (!page) continue;
-      for (const q of pageQuestions(page)) {
-        if (ids.has(q.id)) return i;
-      }
-    }
-    return null;
+  function currentPageValid(): boolean {
+    const page = currentPageId ? pageById(questionnaire, currentPageId) : null;
+    return page ? validatePage(page) : true;
   }
 
   function handleNext() {
-    const current = pages[stepIndex];
-    if (current && !validatePage(current)) return;
-    setStepIndex((i) => Math.min(i + 1, pages.length - 1));
+    if (!currentPageValid()) return;
+    if (nextId === null) return;
+    setTrail((prev) => [...prev, nextId]);
   }
 
   function handleSubmit() {
-    const current = pages[stepIndex];
-    if (current && !validatePage(current)) return;
+    if (!currentPageValid()) return;
     startTransition(async () => {
       try {
         const result = await action(responses);
         if (!result.ok) {
           setErrors(result.errors);
-          // Walk to the page that owns the rejection. Without this the error is
-          // keyed to a question that is not on screen, nothing renders, and the
-          // gate cannot be cleared.
-          const target = pageOwningError(result.errors);
-          if (target !== null && target !== stepIndex) setStepIndex(target);
+          // A rejection naming a question that isn't on this page is otherwise a
+          // dead end — the message would be set on a field nobody can see, and
+          // the gate would sit there doing nothing on every press of Submit.
+          // Jump to the page that owns the first failing question instead.
+          const target = pageOwningError(questionnaire, result.errors);
+          if (target && target !== currentPageId) jumpTo(target);
           return;
         }
         if (redirectTo) router.push(redirectTo);
@@ -140,30 +165,37 @@ export function QuestionnaireRunner({
     });
   }
 
-  // A server error keyed to a question that is not on the current page. The
-  // jump in handleSubmit normally moves to it; this covers the case where it
-  // cannot be found at all.
-  const currentIds = new Set(
-    (pages[stepIndex] ? pageQuestions(pages[stepIndex]) : []).map((q) => q.id),
-  );
+  /** Rewind the trail to a page already walked, or start a fresh trail at it. */
+  function jumpTo(pageId: string) {
+    setTrail((prev) => {
+      const at = prev.indexOf(pageId);
+      return at >= 0 ? prev.slice(0, at + 1) : [pageId];
+    });
+  }
+
+  // A server error keyed to a question that is not on the page now showing.
+  // `pageOwningError` normally walks to it; this covers the case where the
+  // question belongs to no reachable page at all (a definition edited under a
+  // live activation), which would otherwise render nothing at all.
+  const currentIds = new Set(pageQuestions(step).map((q) => q.id));
   const offPageError = Object.keys(errors).some(
     (k) => !k.startsWith("_") && !currentIds.has(k),
   );
 
   return (
     <div className="flex flex-col gap-6">
-      {pages.length > 1 && (
+      {progress.pageCount > 1 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              Step {stepIndex + 1} of {pages.length}
+              Step {stepNumber} of {progress.pageCount}
             </span>
-            <span>{progress}%</span>
+            <span>{percent}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-accent transition-all"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${percent}%` }}
             />
           </div>
         </div>
@@ -187,15 +219,19 @@ export function QuestionnaireRunner({
             )}
           </div>
           <div className="flex flex-col gap-5">
-            {pageQuestions(step).map((q) => (
-              <QuestionField
-                key={q.id}
-                question={q}
-                value={responses[q.id]}
-                error={errors[q.id]}
-                onChange={(value) => setResponse(q.id, value)}
-              />
-            ))}
+            {presentationBlocks(step, shuffleSeed).map((block) =>
+              isAnswerableBlock(block) ? (
+                <QuestionField
+                  key={block.id}
+                  question={block}
+                  value={responses[block.id]}
+                  error={errors[block.id]}
+                  onChange={(value) => setResponse(block.id, value)}
+                />
+              ) : (
+                <ContentBlockView key={block.id} block={block} />
+              ),
+            )}
           </div>
         </div>
       )}
@@ -222,8 +258,8 @@ export function QuestionnaireRunner({
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-          disabled={stepIndex === 0 || isPending}
+          onClick={() => setTrail((prev) => prev.slice(0, -1))}
+          disabled={trail.length <= 1 || isPending}
         >
           Back
         </Button>
@@ -239,4 +275,22 @@ export function QuestionnaireRunner({
       </div>
     </div>
   );
+}
+
+/** The page holding the first question the server rejected, so an off-page
+ * rejection can be surfaced instead of silently swallowed. */
+function pageOwningError(
+  questionnaire: Questionnaire,
+  errors: Record<string, string>,
+): string | null {
+  const ids = new Set(
+    Object.keys(errors).filter((k) => k !== FORM_ERROR_KEY && k !== "_root"),
+  );
+  if (ids.size === 0) return null;
+  for (const page of questionnaire.pages) {
+    for (const q of pageQuestions(page)) {
+      if (ids.has(q.id)) return page.id;
+    }
+  }
+  return null;
 }

@@ -13,6 +13,7 @@ import {
   documentBelongsToEdition,
   loadDocumentsForReconcile,
 } from "@/lib/documents";
+import { lockOnboardingSteps } from "@/lib/onboarding-store";
 import { runAction, type ActionResult } from "./result";
 
 // Supplier-side acknowledgement of an org-published document
@@ -38,8 +39,9 @@ const SetAckInput = z.object({
  *  - the ack row is keyed (supplierId, documentId), so a replayed request is
  *    idempotent rather than duplicative.
  *
- * The step reconciliation runs afterwards from the RE-READ state, never from
- * anything the client sent.
+ * The step reconciliation runs afterwards from state RE-READ inside the
+ * transaction — never from anything the client sent, and never from the copy
+ * carried on the session.
  */
 export async function setDocumentAcknowledgement(
   raw: z.input<typeof SetAckInput>,
@@ -92,11 +94,19 @@ export async function setDocumentAcknowledgement(
         session.edition.id,
         tx,
       );
-      const reconciled = applyDocumentAcksToSteps(
-        session.steps,
-        documents,
-        acks,
+      // The step map must come from this transaction too. Reconciliation returns
+      // the WHOLE seven-step map and the UPDATE below persists all of it, so
+      // seeding it from `session.steps` — resolved before the transaction, on
+      // another connection — republished a stale copy of every OTHER step. An
+      // org confirmation ("Deposit received") committed in that window was
+      // reverted to "Awaiting AfrikaBurn" by a supplier merely ticking a
+      // document, with nothing in the audit trail mentioning the deposit.
+      const stored = await lockOnboardingSteps(
+        tx,
+        session.supplier.id,
+        session.edition.id,
       );
+      const reconciled = applyDocumentAcksToSteps(stored, documents, acks);
 
       if (reconciled.completed.length > 0 || reconciled.reverted.length > 0) {
         await tx

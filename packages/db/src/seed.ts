@@ -42,8 +42,15 @@
  *     registration is free. The `payments` table stays frozen in the schema for
  *     future logistics apps, but nothing is ever seeded against registrations.
  *
- * Safe to run repeatedly: every write is an upsert keyed on the row's real
- * unique constraint (or, where none exists, a find-then-write lookup).
+ * Safe to run repeatedly: every write is keyed on the row's real unique
+ * constraint (or, where none exists, a find-then-write lookup).
+ *
+ * BOOTSTRAP, NOT SYNC — and "safe to run repeatedly" means the SECOND run
+ * changes nothing, not merely that it does not crash. Anything the org can edit
+ * in the console (a supplier's standing, its onboarding progress, which domains
+ * a department owns) is INSERT-IF-MISSING here. A seed that re-asserts the
+ * committed snapshot reverts real decisions on a schedule, silently, and the
+ * deploy that did it logs nothing an organiser would ever see.
  *
  * Run via `pnpm --filter @quagga/db db:seed` once `DATABASE_URL` is set. This
  * script is NEVER part of any build step and must not run at import time.
@@ -168,13 +175,37 @@ export async function ensureSeededOrgDepartments(db: Db): Promise<number> {
           .limit(1);
     if (!existing) continue;
 
-    // Domains: only if nothing owns them yet. A deployment that filed a domain
-    // under a different department made that choice deliberately.
-    for (const domain of dept.domains) {
-      await db
-        .insert(schema.orgDepartmentDomains)
-        .values({ domain, departmentId: existing.id })
-        .onConflictDoNothing({ target: schema.orgDepartmentDomains.domain });
+    // Domains: ONLY for a department this call just created.
+    //
+    // `onConflictDoNothing` on the domain protects a domain some OTHER
+    // department owns, and that is all it protects. It does not protect a
+    // domain nobody owns — and "nobody owns it" is precisely what an org
+    // TAKING A DOMAIN AWAY from a department looks like, because
+    // `org_department_domains` records ownership by presence and an unassigned
+    // domain is a deleted row. So every deploy re-filed `registrations` and
+    // `camp_categories` under Theme camps and `suppliers` and
+    // `supplier_documents` under Suppliers, whatever the org had decided,
+    // handing every holder of those departments' LEAD roles
+    // `personal_information` over those domains again — silently, with no audit
+    // row, on a schedule nobody associated with a deploy.
+    //
+    // Gating on `row` (the insert returned one ⇒ the department did not exist)
+    // makes this a bootstrap: a department we create starts owning what it is
+    // for, and after that its domains are the org's business.
+    //
+    // In practice that branch will rarely be taken, and that is fine rather
+    // than dead: migration 0022 inserts both departments AND their domains, and
+    // migrations run before this does, so on every database that has reached
+    // 0022 the rows are already there. This stays as the belt to the migration's
+    // braces — it is what would file the domains on a database that somehow
+    // reached the seed without them.
+    if (row) {
+      for (const domain of dept.domains) {
+        await db
+          .insert(schema.orgDepartmentDomains)
+          .values({ domain, departmentId: row.id })
+          .onConflictDoNothing({ target: schema.orgDepartmentDomains.domain });
+      }
     }
 
     // The permanent lead/member pair, exactly as a System manager creating a
@@ -345,10 +376,14 @@ async function main(): Promise<void> {
   }
 }
 
-// --- Upsert helpers ------------------------------------------------------------
+// --- Write helpers -------------------------------------------------------------
 // Idempotent by construction: each keys on the row's real unique constraint
 // (schema.ts) except `suppliers`, which has none — that path does a
-// find-then-write lookup by name instead.
+// find-then-write lookup by name instead. The helpers covering rows the org
+// edits — suppliers, supplier onboarding, department domains — are
+// insert-if-missing (see each one for what a re-run used to destroy). The
+// edition, the camp-category taxonomy and the questionnaire template still
+// upsert.
 
 interface GroupSpec {
   kind: (typeof schema.groups.$inferInsert)["kind"];
@@ -432,24 +467,20 @@ async function ensureSupplier(
     .where(sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${row.name}))`)
     .limit(1);
   const existingRow = existing[0];
-  if (existingRow) {
-    return firstOrThrow(
-      await db
-        .update(schema.suppliers)
-        .set({
-          services: row.services,
-          contact: row.contact,
-          website: row.website,
-          category,
-          returning,
-          standing,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.suppliers.id, existingRow.id))
-        .returning(),
-      `supplier ${row.name}`,
-    );
-  }
+  // BOOTSTRAP, NOT SYNC — the principle stated at the top of this file, applied
+  // to the row that most needed it. This used to UPDATE the existing supplier
+  // from the sheet on every run, and `standing` is an ORG VERDICT: a supplier
+  // the org had suspended came back to `good` the moment anyone re-ran the seed,
+  // with nothing in the console to say why. `category` and `returning` are the
+  // same class of thing (the org edits them), and `contact`/`website` overwrote
+  // a corrected address with the stale one from a snapshot taken in July 2026.
+  //
+  // The trade, stated plainly: re-importing a NEWER suppliers.json no longer
+  // updates rows that already exist. That is the right way round. The console is
+  // where a supplier's details are maintained, a seed is not a merge tool, and
+  // an import that silently overwrites live decisions is the 40-suppliers
+  // incident wearing a different hat (see the note at the foot of this file).
+  if (existingRow) return existingRow;
   return firstOrThrow(
     await db
       .insert(schema.suppliers)
@@ -468,8 +499,18 @@ async function ensureSupplier(
   );
 }
 
-/** Upsert the per supplier × edition onboarding step-state map (idempotent on
- * the unique (supplier, edition) index). */
+/**
+ * Insert the per supplier × edition onboarding step-state map IF THE PAIR HAS
+ * NONE (idempotent on the unique (supplier, edition) index).
+ *
+ * Insert-if-missing, not upsert. `steps` is the sheet's snapshot of where a
+ * supplier had got to in July 2026, and the org moves it forward from there in
+ * the console — fees paid, crew passes issued, documents acknowledged. An
+ * `onConflictDoUpdate` wrote that snapshot back over the live map on every run,
+ * so every supplier's onboarding progress for the edition reverted to the
+ * imported starting state and the org's work vanished with no record that it
+ * had ever been done.
+ */
 async function ensureSupplierOnboarding(
   db: Db,
   supplierId: string,
@@ -479,12 +520,11 @@ async function ensureSupplierOnboarding(
   await db
     .insert(schema.supplierOnboarding)
     .values({ supplierId, editionId, steps })
-    .onConflictDoUpdate({
+    .onConflictDoNothing({
       target: [
         schema.supplierOnboarding.supplierId,
         schema.supplierOnboarding.editionId,
       ],
-      set: { steps, updatedAt: new Date() },
     });
 }
 

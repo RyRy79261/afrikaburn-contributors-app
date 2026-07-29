@@ -45,6 +45,7 @@ import {
 import { LayoutUploads } from "./layout-uploads";
 import { SupplierPicker } from "./supplier-picker";
 import { SectionReplyThread } from "./section-reply-thread";
+import { withdrawConsequence } from "./withdraw-registration";
 
 const OPERATING_HOURS = [
   { value: "morning", label: "Morning" },
@@ -131,6 +132,8 @@ export function RegistrationWizard(props: WizardProps) {
   const valuesRef = React.useRef(values);
   valuesRef.current = values;
   const dirtyRef = React.useRef(false);
+  /** The RENDERABLE mirror of `dirtyRef` — a ref can't drive the indicator. */
+  const [dirty, setDirty] = React.useState(false);
   /** The in-flight flush, so concurrent callers join it instead of racing it. */
   const flushRef = React.useRef<Promise<boolean> | null>(null);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,6 +189,10 @@ export function RegistrationWizard(props: WizardProps) {
         setSaveState("saved");
         setLastSavedAt(new Date());
       }
+      // The loop only exits with `dirtyRef` clear, i.e. the server now holds
+      // every edit on screen. That — not "a save happened once" — is what the
+      // indicator is allowed to call saved.
+      setDirty(false);
       return true;
     })();
 
@@ -201,6 +208,7 @@ export function RegistrationWizard(props: WizardProps) {
     (patch: Partial<RegistrationValues>) => {
       setValues((prev) => ({ ...prev, ...patch }));
       dirtyRef.current = true;
+      setDirty(true);
       setSaveState("idle");
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => void saveNow(), 1500);
@@ -252,11 +260,11 @@ export function RegistrationWizard(props: WizardProps) {
   }
 
   async function handleWithdraw() {
-    if (
-      !window.confirm(
-        "Withdraw this registration? Your camp stays, and your answers are kept — it just won't be considered for this edition. You can reopen it from this page while the edition is open.",
-      )
-    ) {
+    // Same consequence copy as the locked view's withdraw control. The old text
+    // here promised the camp could "register again" — `registrations` is UNIQUE
+    // on (group, edition) and `withdrawn` has no legal next state, so that was
+    // never true.
+    if (!window.confirm(withdrawConsequence(props.status, props.editionYear))) {
       return;
     }
     const result = await props.withdrawAction(props.slug);
@@ -357,7 +365,11 @@ export function RegistrationWizard(props: WizardProps) {
               />
             </div>
 
-            <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+            <SaveStatus
+              state={saveState}
+              dirty={dirty}
+              lastSavedAt={lastSavedAt}
+            />
           </div>
         </aside>
 
@@ -705,16 +717,33 @@ export function RegistrationWizard(props: WizardProps) {
                       setTimeout(commit, 0);
                     }}
                   />
+                  {/* The detail is stored INSIDE `s5FamilyFriendly` as
+                      "<choice> — <detail>", so it cannot exist without a
+                      choice. This field used to invent one: typing here while
+                      the required question was unanswered defaulted the choice
+                      to "Maybe" and wrote it, which meant a camp could answer
+                      "Maybe" to whether it was family-friendly — and mark the
+                      whole section complete — without ever being asked. The
+                      optional field is therefore restricted until the required
+                      one is answered, with the reason shown. */}
                   <TextField
                     id="s5-family-detail"
                     label="Family-friendly detail (optional)"
+                    disabled={family.choice === null}
+                    hint={
+                      family.choice === null
+                        ? "Answer Family-friendly? above first — this detail is saved alongside that answer."
+                        : undefined
+                    }
                     value={family.detail || null}
                     onChange={(detail) => {
-                      const choice = family.choice ?? "Maybe";
-                      const composed = detail
-                        ? `${choice} — ${detail}`
-                        : choice;
-                      update({ s5FamilyFriendly: composed });
+                      const choice = family.choice;
+                      if (!choice) return; // never answer the question for them
+                      update({
+                        s5FamilyFriendly: detail
+                          ? `${choice} — ${detail}`
+                          : choice,
+                      });
                     }}
                     onCommit={commit}
                   />
@@ -844,11 +873,22 @@ export function RegistrationWizard(props: WizardProps) {
   );
 }
 
+/**
+ * The autosave indicator. `dirty` is load-bearing: the branch used to be
+ * `state === "saved" || lastSavedAt`, so from the FIRST successful save onwards
+ * the rail read a green "Saved just now" permanently — including while the
+ * camp was typing, during the 1.5s debounce, and after any edit that had not
+ * been flushed. The one moment a camp checks that line is the moment before it
+ * closes the tab, and it was reassuring them about work the server did not have.
+ */
 function SaveStatus({
   state,
+  dirty,
   lastSavedAt,
 }: {
   state: SaveState;
+  /** Edits on screen that the server does not hold yet. */
+  dirty: boolean;
   lastSavedAt: Date | null;
 }) {
   let icon: React.ReactNode;
@@ -859,6 +899,9 @@ function SaveStatus({
   } else if (state === "error") {
     icon = <CloudOff className="h-3.5 w-3.5 text-destructive" aria-hidden />;
     text = "Save failed — we'll retry";
+  } else if (dirty) {
+    icon = <Cloud className="h-3.5 w-3.5" aria-hidden />;
+    text = "Unsaved changes — saving shortly";
   } else if (state === "saved" || lastSavedAt) {
     icon = <Cloud className="h-3.5 w-3.5 text-success" aria-hidden />;
     text = "Saved just now";

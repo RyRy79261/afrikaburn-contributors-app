@@ -141,8 +141,32 @@ export function AccountTwoFactor({
     onChanged?.();
   }
 
-  function copyCodes() {
-    void navigator.clipboard?.writeText(backupCodes.join("\n"));
+  /**
+   * Copy the backup codes — and only say "Copied" when they actually were.
+   *
+   * This used to be a fire-and-forget `void navigator.clipboard?.writeText(…)`,
+   * so the button flipped to "Copied ✓" unconditionally. The Clipboard API is
+   * unavailable outside a secure context and can be refused outright by the
+   * browser or by permissions policy, and in either case `writeText` rejects (or
+   * `navigator.clipboard` is simply undefined and NOTHING was attempted) — the
+   * tick appeared anyway. The user then pressed "I've saved them", the panel
+   * closed, and the ten codes were gone for good: we show them once and cannot
+   * show them again. That is a lockout manufactured by a reassuring tick, on the
+   * one screen where being wrong costs the most.
+   *
+   * So: await the write, and on failure say so and leave the codes on screen.
+   */
+  async function copyCodes() {
+    setError(null);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(backupCodes.join("\n"));
+    } catch {
+      setError(
+        "Your browser wouldn't let us copy to the clipboard — nothing was copied. Your codes are still on screen: download them, or select and copy them by hand.",
+      );
+      return;
+    }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }
@@ -390,6 +414,14 @@ export function AccountTwoFactor({
                 </li>
               ))}
             </ul>
+            {/* A failed copy has to be visible HERE — this panel never rendered
+                `error` before, so a refused clipboard write had nowhere to
+                surface even once it was detected. */}
+            {error ? (
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {error}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"

@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Eye, Info } from "lucide-react";
+import { Eye } from "lucide-react";
 import { nextPageId, pageById } from "@quagga/core";
 import {
   pageBlocks,
-  type ContentBlock,
   type Questionnaire,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
@@ -21,6 +20,7 @@ import {
 } from "@quagga/ui/components/dialog";
 
 import { QuestionField } from "@/components/questionnaire/field";
+import { ContentBlockView } from "@/components/questionnaire/content-block";
 
 // Author preview (questionnaire-spec §"Builder v2": the "Preview" control next
 // to "Send"). Renders the CURRENT draft the way a respondent walks it —
@@ -53,7 +53,12 @@ export function QuestionnairePreview({
         Preview
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        {/* Capped, with the walk scrolling INSIDE (see PreviewRunner). With no
+            cap a long section ran off the bottom of the viewport and took the
+            Back/Next controls with it; Radix locks the page behind a modal and
+            the dialog had no overflow of its own, so the author could neither
+            read the rest of the section nor advance past it. */}
+        <DialogContent className="max-h-[85svh] max-w-2xl">
           <DialogHeader>
             <DialogTitle>Preview</DialogTitle>
             <DialogDescription>
@@ -66,40 +71,6 @@ export function QuestionnairePreview({
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function ContentBlockView({ block }: { block: ContentBlock }) {
-  if (block.kind === "info_block") {
-    return (
-      <div className="flex gap-3 rounded-md border border-border bg-muted/40 p-4">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
-        <div className="flex min-w-0 flex-col gap-1">
-          {block.heading && (
-            <p className="text-sm font-semibold">{block.heading}</p>
-          )}
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {block.body}
-          </p>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <figure className="flex flex-col gap-1.5">
-      {/* Author-supplied remote URL — no host allowlisting configured. */}
-      <img
-        src={block.url}
-        alt={block.alt}
-        loading="lazy"
-        className="w-full rounded-md border border-border object-cover"
-      />
-      {block.caption && (
-        <figcaption className="text-xs text-muted-foreground">
-          {block.caption}
-        </figcaption>
-      )}
-    </figure>
   );
 }
 
@@ -166,47 +137,50 @@ function PreviewRunner({ definition }: { definition: Questionnaire }) {
   const sectionNumber = definition.pages.findIndex((p) => p.id === currentId) + 1;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 flex-col gap-6">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="secondary">Section {sectionNumber}</Badge>
         <span>of {definition.pages.length}</span>
       </div>
 
-      {page.kind === "intro" ? (
-        <div className="flex flex-col gap-3 py-4">
-          <h2 className="text-2xl font-semibold tracking-tight">
-            {page.heading}
-          </h2>
-          <p className="whitespace-pre-wrap text-muted-foreground">
-            {page.body}
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-5">
-          <div>
-            <h2 className="text-lg font-semibold">{page.title}</h2>
-            {page.subtitle && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {page.subtitle}
-              </p>
-            )}
+      {/* Only the section body scrolls — the Back/Next row below stays put. */}
+      <div className="flex min-h-0 max-h-[60svh] flex-1 flex-col overflow-y-auto pr-1">
+        {page.kind === "intro" ? (
+          <div className="flex flex-col gap-3 py-4">
+            <h2 className="text-2xl font-semibold tracking-tight">
+              {page.heading}
+            </h2>
+            <p className="whitespace-pre-wrap text-muted-foreground">
+              {page.body}
+            </p>
           </div>
+        ) : (
           <div className="flex flex-col gap-5">
-            {pageBlocks(page).map((block) =>
-              "prompt" in block ? (
-                <QuestionField
-                  key={block.id}
-                  question={block}
-                  value={responses[block.id]}
-                  onChange={(value) => setResponse(block.id, value)}
-                />
-              ) : (
-                <ContentBlockView key={block.id} block={block} />
-              ),
-            )}
+            <div>
+              <h2 className="text-lg font-semibold">{page.title}</h2>
+              {page.subtitle && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {page.subtitle}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-5">
+              {pageBlocks(page).map((block) =>
+                "prompt" in block ? (
+                  <QuestionField
+                    key={block.id}
+                    question={block}
+                    value={responses[block.id]}
+                    onChange={(value) => setResponse(block.id, value)}
+                  />
+                ) : (
+                  <ContentBlockView key={block.id} block={block} />
+                ),
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
         <Button

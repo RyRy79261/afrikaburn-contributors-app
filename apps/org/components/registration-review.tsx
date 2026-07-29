@@ -167,7 +167,18 @@ export function RegistrationReview({
               membership is not the secret). Without a name on the region there
               is no way, for a reader OR for a test, to ask "is this person here
               because they accepted?" rather than "is this person on the page?".
-              The POPIA spec was asserting the latter and proving nothing. */}
+              The POPIA spec was asserting the latter and proving nothing.
+
+              A BARE ROW IS A PERMISSION OUTCOME, NOT THE OFFICER'S ANSWER.
+              `getRegistrationOfficers` selects email/phone only for a reviewer
+              who reads personal information in the registrations domain
+              (apps/org/lib/queries.ts); everyone else gets the same roster with
+              those columns never selected. Rendered as bare rows, that told a
+              reviewer without the grant the exact opposite of the truth: that a
+              camp's Safety Baron had accepted the post and left no way to reach
+              them. Every officer on this list accepted — that is the query's
+              filter — so the absence is named, and named honestly, without
+              widening who sees the details. */}
           <Card role="region" aria-labelledby="officers-heading">
             <CardHeader>
               <CardTitle id="officers-heading" className="text-base">
@@ -181,26 +192,45 @@ export function RegistrationReview({
                   {officersCopy.empty}
                 </p>
               ) : (
-                <ul className="flex flex-col divide-y divide-border">
-                  {officers.map((o) => (
-                    <li
-                      key={`${o.officerKey}-${o.email ?? o.displayName ?? "x"}`}
-                      className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
-                    >
-                      <span className="font-medium">
-                        {o.emoji ? `${o.emoji} ` : ""}
-                        {o.officerName}
-                      </span>
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
-                        <span>{o.displayName ?? "—"}</span>
-                        {o.email && <span>{o.email}</span>}
-                        {o.phone && (
-                          <span className="tabular-nums">{o.phone}</span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="flex flex-col divide-y divide-border">
+                    {officers.map((o) => (
+                      <li
+                        key={`${o.officerKey}-${o.email ?? o.displayName ?? "x"}`}
+                        className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm"
+                      >
+                        <span className="font-medium">
+                          {o.emoji ? `${o.emoji} ` : ""}
+                          {o.officerName}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
+                          <span>{o.displayName ?? "—"}</span>
+                          {o.email || o.phone ? (
+                            <>
+                              {o.email && <span>{o.email}</span>}
+                              {o.phone && (
+                                <span className="tabular-nums">{o.phone}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="flex items-center gap-1 italic">
+                              <Lock className="h-3 w-3 shrink-0" aria-hidden />
+                              Contact details withheld
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {officers.some((o) => !o.email && !o.phone) && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Contact details are shown only to reviewers who may see
+                      personal information for registrations. Withheld means
+                      they are not shared with you — not that the officer gave
+                      none.
+                    </p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

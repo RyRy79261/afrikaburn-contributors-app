@@ -162,6 +162,26 @@ export async function cancelPendingDeletion(input: {
         title: payload.title,
         body: payload.body ?? null,
         link: payload.link ?? null,
+        // Provenance + destination, both of which this insert used to leave
+        // NULL. It writes the row directly rather than through an app's
+        // `insertNotifications`, so it got none of the stamping that helper
+        // does — and a null `link_app` means "treat as local wherever it is
+        // read" (`notificationLinkIsLocal`).
+        //
+        // WHAT WENT WRONG: the payload's link is `ACCOUNT_PATH` (`/account`),
+        // and `/account` exists ONLY in apps/web — the console has `/accounts`,
+        // a different screen, and the supplier portal has neither. But this
+        // runs from the Better Auth session-create hook, which fires on sign-in
+        // in ALL THREE apps, so an org staffer or a supplier who cancelled a
+        // deletion by coming back got an inbox row that rendered as a link and
+        // 404'd on click. Stamping `web` makes the other two show the row
+        // without pretending it is clickable.
+        //
+        // `system` because nobody sent this: signing back in (or the explicit
+        // Cancel button) did, which is what apps/web's own security-notification
+        // writer stamps for the same class of row.
+        origin: "system",
+        linkApp: "web",
       });
     } catch {
       // The change happened; the inbox row is a courtesy.

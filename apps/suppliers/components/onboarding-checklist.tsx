@@ -6,6 +6,8 @@ import {
   Check,
   CircleDashed,
   Clock,
+  ExternalLink,
+  FileText,
   Loader2,
   Plus,
   Trash2,
@@ -24,8 +26,22 @@ import { toast } from "@quagga/ui/components/toast";
 import { cn } from "@quagga/ui/lib/utils";
 import type { SupplierOnboardingStepKey } from "@quagga/types";
 import { setOnboardingStep } from "@/lib/actions/onboarding";
+import { setDocumentAcknowledgement } from "@/lib/actions/documents";
 import { updateSupplierProfile } from "@/lib/actions/register";
 import type { StepCardModel, StepStatusTone } from "@/lib/onboarding-view";
+
+/**
+ * A required document the org has bound to this step. When a step carries any of
+ * these, acknowledging them is the ONLY thing that completes it — the server
+ * refuses a direct step write for exactly that reason — so the card's control
+ * writes acknowledgements, and the card can link to what it asks about.
+ */
+export interface StepDocument {
+  id: string;
+  title: string;
+  sourceType: "file" | "link";
+  url: string;
+}
 
 export interface StepData {
   key: SupplierOnboardingStepKey;
@@ -35,6 +51,8 @@ export interface StepData {
   eyebrow: string;
   description: string;
   model: StepCardModel;
+  /** Required documents bound to this step, in catalog order. Often empty. */
+  documents: StepDocument[];
 }
 
 export interface SupplierProfile {
@@ -210,6 +228,82 @@ function useStepTransition() {
   return { pending, run };
 }
 
+/**
+ * Acknowledge (or withdraw) every required document bound to a step, as one user
+ * action. This is the ONLY writer of a document-bound step — `setOnboardingStep`
+ * refuses those outright — so the checklist button and the Documents panel
+ * checkbox now drive the same acknowledgement rather than two different things
+ * that disagreed with each other.
+ *
+ * Sequential, and it stops on the first refusal: a partial acknowledgement is a
+ * real state (the step simply stays incomplete until the rest are ticked), so
+ * there is nothing to unwind — but continuing past an error would bury it.
+ */
+function useDocumentAcks() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function setAcks(
+    documents: StepDocument[],
+    acknowledged: boolean,
+    successMsg: string,
+  ) {
+    startTransition(async () => {
+      for (const doc of documents) {
+        const result = await setDocumentAcknowledgement({
+          documentId: doc.id,
+          acknowledged,
+        });
+        if (!result.ok) {
+          toast.error("Couldn't update that step", {
+            description: result.error,
+          });
+          router.refresh();
+          return;
+        }
+      }
+      toast.success(successMsg);
+      router.refresh();
+    });
+  }
+
+  return { pending, setAcks };
+}
+
+/**
+ * Links to the documents a step is bound to.
+ *
+ * THE DEFECT THIS CLOSES: the agreement card asked suppliers to tick "I have read
+ * and agree to the AfrikaBurn Supplier Agreement" while showing them no agreement
+ * at all. When the org had published one it sat in the Documents panel further up
+ * the page with nothing connecting the two; when it hadn't, the attestation was
+ * about a document that did not exist anywhere in the portal. Every link here is
+ * rendered FROM a bound document, so this can never name one that isn't there.
+ */
+function BoundDocumentLinks({ documents }: { documents: StepDocument[] }) {
+  return (
+    <ul className="flex flex-col gap-1">
+      {documents.map((doc) => (
+        <li key={doc.id}>
+          <a
+            href={doc.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {doc.sourceType === "file" ? (
+              <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            ) : (
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            )}
+            Read {doc.title}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function SimpleStepActions({ step }: { step: StepData }) {
   const { pending, run } = useStepTransition();
   const { primaryAction, secondaryAction } = step.model;
@@ -329,30 +423,57 @@ function RegistrationStepForm({ profile }: { profile: SupplierProfile }) {
   );
 }
 
+/**
+ * Step 2 — signing the Supplier Agreement.
+ *
+ * Which control this renders depends on whether the org has bound a required
+ * document to the step, because that decides who may complete it:
+ *
+ *  - BOUND — the acknowledgement completes the step, and it is the only thing
+ *    that may (`setOnboardingStep` refuses a bound step server-side). The card
+ *    links to the agreement and its button writes the acknowledgement, so the
+ *    supplier can read the document they are attesting to, and so ticking some
+ *    other document later can no longer silently un-sign this one.
+ *  - UNBOUND — there is no agreement in the portal to have read, so the wording
+ *    does not pretend otherwise: it attests to the agreement AfrikaBurn supplied
+ *    off-platform, and says plainly that the portal has no copy.
+ */
 function AgreementStep({ step }: { step: StepData }) {
-  const { pending, run } = useStepTransition();
+  const { pending: stepPending, run } = useStepTransition();
+  const { pending: ackPending, setAcks } = useDocumentAcks();
   const [ack, setAck] = useState(step.model.status === "completed");
+
+  const bound = step.documents;
+  const busy = stepPending || ackPending;
 
   if (step.model.status === "completed") {
     return (
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm text-success">
-          You&apos;ve acknowledged the Supplier Agreement.
-        </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => run(step.key, "pending", "Acknowledgement withdrawn.")}
-        >
-          Undo
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-success">
+            You&apos;ve acknowledged the Supplier Agreement.
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() =>
+              bound.length > 0
+                ? setAcks(bound, false, "Acknowledgement withdrawn.")
+                : run(step.key, "pending", "Acknowledgement withdrawn.")
+            }
+          >
+            Undo
+          </Button>
+        </div>
+        {bound.length > 0 && <BoundDocumentLinks documents={bound} />}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {bound.length > 0 && <BoundDocumentLinks documents={bound} />}
       <label className="flex cursor-pointer items-start gap-2.5 text-sm">
         <input
           type="checkbox"
@@ -361,17 +482,39 @@ function AgreementStep({ step }: { step: StepData }) {
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-[var(--color-primary)]"
         />
         <span className="text-muted-foreground">
-          I have read and agree to the AfrikaBurn Supplier Agreement, and I
-          understand my deposit is refunded only on full compliance with it.
+          {bound.length > 0 ? (
+            <>
+              I have read the Supplier Agreement linked above and agree to it,
+              and I understand my deposit is refunded only on full compliance
+              with it.
+            </>
+          ) : (
+            <>
+              I agree to the AfrikaBurn Supplier Agreement as the Supplier Team
+              has provided it to me, and I understand my deposit is refunded only
+              on full compliance with it.
+            </>
+          )}
         </span>
       </label>
+      {bound.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          AfrikaBurn hasn&apos;t published the agreement in this portal for this
+          edition. Ask the Supplier Team for a copy at suppliers@afrikaburn.com
+          before you sign.
+        </p>
+      )}
       <div>
         <Button
           size="sm"
-          disabled={!ack || pending}
-          onClick={() => run(step.key, "completed", "Agreement acknowledged.")}
+          disabled={!ack || busy}
+          onClick={() =>
+            bound.length > 0
+              ? setAcks(bound, true, "Agreement acknowledged.")
+              : run(step.key, "completed", "Agreement acknowledged.")
+          }
         >
-          {pending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          {busy ? <Loader2 className="animate-spin" aria-hidden /> : null}
           Sign the agreement
         </Button>
       </div>

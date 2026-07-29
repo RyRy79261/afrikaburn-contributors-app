@@ -326,6 +326,45 @@ export async function getDeclaredSupplierIds(
   return rows.map((r) => r.supplierId);
 }
 
+/** A supplier a registration declared, for the read-only summary. */
+export interface DeclaredSupplier {
+  id: string;
+  name: string;
+  /** Standing NOW — a supplier may have been suspended after the declaration. */
+  standing: SupplierStanding;
+}
+
+/**
+ * The suppliers declared on a registration, read straight from the declarations
+ * — deliberately NOT through `listSuppliersForPicker`.
+ *
+ * The locked summary used to name its declared suppliers by filtering the
+ * picker list, and the picker excludes `suspended` suppliers by design. So the
+ * moment AfrikaBurn suspended a supplier a camp had already declared, that name
+ * silently vanished from the camp's own submitted answers: a camp that listed
+ * three suppliers would open its registration and see two, with nothing to say
+ * one had been dropped. The declaration is a record of what the camp submitted,
+ * so it is always shown; standing rides along so the UI can mark a suspended one
+ * rather than hide it.
+ */
+export async function getDeclaredSuppliers(
+  registrationId: string,
+): Promise<DeclaredSupplier[]> {
+  return db()
+    .select({
+      id: schema.suppliers.id,
+      name: schema.suppliers.name,
+      standing: schema.suppliers.standing,
+    })
+    .from(schema.supplierDeclarations)
+    .innerJoin(
+      schema.suppliers,
+      eq(schema.suppliers.id, schema.supplierDeclarations.supplierId),
+    )
+    .where(eq(schema.supplierDeclarations.registrationId, registrationId))
+    .orderBy(asc(schema.suppliers.name));
+}
+
 /** The persisted registration field values (excluding server-managed columns). */
 export interface RegistrationValues {
   campDescription: string | null;
@@ -573,14 +612,37 @@ export async function applyCampAction(input: {
     }
   }
 
-  await db()
+  // TOCTOU guard — the same compare-and-set the org console's decide path uses.
+  // `existing.status` was read a moment ago (and the camp's page may have been
+  // open for an hour), and the transition above was validated against THAT
+  // value, not against whatever the row holds now. Without re-checking the
+  // status in the WHERE clause, a camp lead sitting on a stale page could
+  // resubmit a registration AfrikaBurn had meanwhile REJECTED, or one already
+  // withdrawn — both terminal states the state machine forbids — because the
+  // check and the write were not the same instant. Guarding on the exact status
+  // makes the losing writer update zero rows, and zero rows is reported back
+  // rather than silently accepted as a success.
+  const updated = await db()
     .update(schema.registrations)
     .set({
       status: target,
       updatedAt: new Date(),
       ...(target === "submitted" ? { submittedAt: new Date() } : {}),
     })
-    .where(eq(schema.registrations.id, existing.id));
+    .where(
+      and(
+        eq(schema.registrations.id, existing.id),
+        eq(schema.registrations.status, existing.status),
+      ),
+    )
+    .returning({ id: schema.registrations.id });
+  if (updated.length === 0) {
+    return {
+      ok: false,
+      error:
+        "This registration changed since you opened it — reload and try again.",
+    };
+  }
 
   return { ok: true, status: target, registrationId: existing.id };
 }

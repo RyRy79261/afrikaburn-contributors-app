@@ -90,12 +90,13 @@ export function SupplierSignUpForm() {
 
     setPending(true);
     try {
-      const { error: signUpError } = await authClient.signUp.email({
-        email: email.trim(),
-        password,
-        // The account's display name is the business — that is who signs in.
-        name: businessName.trim(),
-      });
+      const { data: signUpData, error: signUpError } =
+        await authClient.signUp.email({
+          email: email.trim(),
+          password,
+          // The account's display name is the business — that is who signs in.
+          name: businessName.trim(),
+        });
 
       if (signUpError) {
         const message = (signUpError.message ?? "").toLowerCase();
@@ -111,10 +112,22 @@ export function SupplierSignUpForm() {
         return;
       }
 
+      // NO SESSION TOKEN MEANS NO SESSION — the provider is holding the account
+      // back until the address is verified. `registerSupplier` cannot run without
+      // one (it would only refuse with "Sign in first."), so don't call it and
+      // don't dress the refusal up as a failure. This branch is also the only one
+      // entitled to promise an email: `requireEmailVerification` is derived, and
+      // is true ONLY when an email provider is configured (@quagga/auth env.ts),
+      // which is the same condition that makes `sendOnSignUp` true.
+      if (!signUpData?.token) {
+        setNotice(
+          "Account created. Confirm your email from the link we've sent, then sign in — the portal will ask for your business details and finish setting up your supplier profile.",
+        );
+        return;
+      }
+
       // Create the supplier profile. This is the action that seeds onboarding
-      // step 1 and issues the SUP-YYYY-NNNN code. If the provider is holding the
-      // session back pending email verification it refuses — which is not an
-      // error, so we say so plainly rather than inventing a half-made account.
+      // step 1 and issues the SUP-YYYY-NNNN code.
       const registered = await registerSupplier({
         name: businessName.trim(),
         // Free-text "person · email" line — the same shape the sheet import
@@ -124,8 +137,14 @@ export function SupplierSignUpForm() {
       });
 
       if (!registered.ok) {
-        setNotice(
-          "Account created. Confirm your email from the link we've sent, then sign in — we'll finish setting up your supplier profile.",
+        // SAY WHAT ACTUALLY HAPPENED. This branch used to show the verification
+        // notice above and throw `registered.error` away — so a business whose
+        // name collides with an existing AfrikaBurn listing was told their
+        // account was made and a link was on its way, and then waited for an
+        // email that (with no provider configured) was never sent, for a profile
+        // that had been refused for a reason nobody showed them.
+        setError(
+          `Your account was created, but the supplier profile wasn't: ${registered.error} Sign in and the portal will offer the registration form again.`,
         );
         return;
       }

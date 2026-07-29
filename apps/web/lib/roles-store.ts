@@ -10,6 +10,8 @@ import {
   canDeleteRoleKind,
   canRenameRoleKind,
   enforceKindPermissions,
+  isInReviewStatus,
+  isRegisteredStatus,
   isValidRoleName,
   normalizeRoleName,
   officerAcceptedNotification,
@@ -487,15 +489,46 @@ export async function setMemberRoles(
  * Assign a member to an OFFICER role — creates a PENDING officer registration
  * the member must accept (questionnaire-spec §"Officers are ALSO
  * registrations"). Re-assigning resets to pending (not org-visible).
+ *
+ * `allowElevated` means the same thing it means on `setMemberRoles`: the caller
+ * has verified the actor holds `manage_roles` (`setMemberRolesAction` computes
+ * exactly that with `hasProjectPermission(membership, "manage_roles")`). Left
+ * unset it REFUSES an elevating role — a path whose only permission gate is
+ * `assign_roles` has to fail closed.
  */
 export async function assignOfficer(
   groupId: string,
   membershipId: string,
   roleId: string,
+  opts?: { allowElevated?: boolean },
 ): Promise<RoleMutationResult> {
   const roles = await listRoles(groupId);
   const role = roles.find((r) => r.id === roleId && r.kind === "officer");
   if (!role) return { ok: false, error: "That officer role doesn't exist." };
+
+  // THE SAME ESCALATION GUARD `setMemberRoles` APPLIES — this path never had it.
+  //
+  // Officer roles seed with no permissions, but they are ordinary `project_roles`
+  // rows and the officer accordion renders the PrivilegeEditor beside them ("you
+  // can still choose what this officer may do inside your camp",
+  // components/roles/officer-row.tsx), so a camp CAN give Safety Baron
+  // manage_roles. And an officer assignment is self-acceptable: the person named
+  // is the person who accepts it, and acceptance is what makes the role count in
+  // `getMemberPermissions`. So a member holding only `assign_roles` could name
+  // THEMSELVES to that officer role, click Accept on their own consent banner,
+  // and walk out holding the very authority the quick-assign path refuses to
+  // hand them — the guard was one function away, on a route nobody had joined up.
+  if (
+    !opts?.allowElevated &&
+    roleGrantsElevatedPrivileges(role.kind, role.permissions)
+  ) {
+    return {
+      ok: false,
+      error:
+        "Only a role manager can assign roles that manage roles or members.",
+    };
+  }
+
   const membership = await db()
     .select({ id: schema.memberships.id })
     .from(schema.memberships)
@@ -715,7 +748,39 @@ export async function respondToOfficer(
   const membershipId = membership[0]?.id;
   if (!membershipId) return { ok: false, error: "You're not in this camp." };
 
+  // THE ROLE MUST BE AN OFFICER ROLE OF THIS CAMP before anything is touched.
+  //
+  // `roleId` arrives straight from the client (actions.ts `OfficerRespondInput`
+  // validates only that it is a uuid) and this action carries NO permission gate
+  // by design — a member consenting on their own behalf needs none. Without this
+  // check that made it a free write on any assignment row of their own
+  // membership:
+  //   · `accept: false` deleted ANY role they held. A member could quietly drop
+  //     the Team lead role their lead had given them — and because questionnaire
+  //     audiences are role-scoped (`membershipIdsWithRoles`), dropping the role
+  //     is how you leave the audience of a questionnaire aimed at it. No
+  //     permission required, nothing in the UI, and the lead's roster just
+  //     forgets.
+  //   · `accept: true` stamped `org_visible` + an `accepted_at` on a row that was
+  //     never a consent moment at all. That flag has exactly one meaning — this
+  //     person agreed to AfrikaBurn holding their contact details — and today
+  //     only the org's own `kind = officer` filter keeps a mislabelled row out of
+  //     the officer contact list (apps/org/lib/queries.ts
+  //     `getRegistrationOfficers`). A consent flag you can set on a non-consent
+  //     row is not a consent flag.
+  const roles = await listRoles(groupId);
+  const officerRole = roles.find(
+    (r) => r.id === roleId && r.kind === "officer",
+  );
+  if (!officerRole) {
+    return { ok: false, error: "That officer role doesn't exist." };
+  }
+
   if (!accept) {
+    // Declining is idempotent on purpose: the row may already be gone (the camp
+    // withdrew the ask while the banner sat open), and "leave the slot
+    // unassigned" is exactly what a no-op delete achieves. Accepting is NOT
+    // idempotent — see below.
     await db()
       .delete(schema.memberRoleAssignments)
       .where(
@@ -727,7 +792,15 @@ export async function respondToOfficer(
     return { ok: true };
   }
 
-  await db()
+  // REPORT WHAT ACTUALLY HAPPENED. This returned `{ ok: true }` whether or not a
+  // row was updated, and the banner turns that into "Thanks — you're
+  // registered." (components/roles/officer-consent-banner.tsx). So a member
+  // whose assignment had been withdrawn — or removed by the lead while the
+  // banner sat open on their phone — was told they were a registered officer
+  // while the camp's officer slot still read "not yet assigned" and AfrikaBurn
+  // had no contact for the post. For a Safety Baron that is the kind of belief
+  // that only gets tested on site.
+  const accepted = await db()
     .update(schema.memberRoleAssignments)
     .set({
       consentStatus: "accepted",
@@ -743,22 +816,27 @@ export async function respondToOfficer(
         eq(schema.memberRoleAssignments.membershipId, membershipId),
         eq(schema.memberRoleAssignments.projectRoleId, roleId),
       ),
-    );
+    )
+    .returning({
+      membershipId: schema.memberRoleAssignments.membershipId,
+    });
+  if (accepted.length === 0) {
+    return {
+      ok: false,
+      error: "That officer role isn't waiting on you any more.",
+    };
+  }
 
   // Event hook: confirm the acceptance back to the officer (org can now reach
-  // them). Thin + best-effort.
+  // them). Thin + best-effort. The role was already loaded above, so this no
+  // longer re-fetches it.
   try {
-    const [role] = await db()
-      .select({ name: schema.projectRoles.name })
-      .from(schema.projectRoles)
-      .where(eq(schema.projectRoles.id, roleId))
-      .limit(1);
     const camp = await campNameAndSlug(groupId);
-    if (role && camp) {
+    if (camp) {
       await insertNotifications(db(), [
         {
           ...officerAcceptedNotification({
-            officerLabel: role.name,
+            officerLabel: officerRole.name,
             campName: camp.name,
             campSlug: camp.slug,
           }),
@@ -861,16 +939,6 @@ export interface OfficerStatus {
   officers: OfficerRoleView[];
 }
 
-// A registration counts as "in flight or registered" for officer requirements
-// unless it's absent (free camp) or has been withdrawn/rejected.
-const IN_FLIGHT_STATUSES = new Set([
-  "draft",
-  "submitted",
-  "under_review",
-  "changes_requested",
-  "approved",
-]);
-
 /**
  * The officer picture for a camp: which officers are required/recommended (from
  * its registration triggers), who is assigned to each (with consent), and the
@@ -894,9 +962,23 @@ export async function getOfficerStatus(
     )
     .limit(1);
   const registration = reg[0];
-  const isRegisteredOrInFlight = registration
-    ? IN_FLIGHT_STATUSES.has(registration.status)
-    : false;
+  // ONE definition of "registered or in flight" — approved, or somewhere in the
+  // review pipeline — composed from the @quagga/core predicates the org console
+  // already derives its officer-coverage denominator from.
+  //
+  // This used to be a private status Set here, and it disagreed with the org's
+  // list (apps/org/lib/queries.ts `OFFICER_IN_FLIGHT`) on `draft`: a camp part-way
+  // through drafting its registration was told on its own Roles & Officers page
+  // that it had required officers outstanding — red badge, count on the dashboard
+  // — while the console counted the same camp as not applicable and left it out
+  // of coverage entirely. One of the two had to be wrong about the same camp on
+  // the same day. `draft` goes, because that is what every other surface says: a
+  // draft has not been submitted to anyone, core's `outstandingOfficers` scopes
+  // requirements to "an approved registration OR one in flight", and the camp's
+  // own settings page promises "requirements apply once you register".
+  const status = registration?.status;
+  const isRegisteredOrInFlight =
+    isRegisteredStatus(status) || isInReviewStatus(status);
 
   const triggers = {
     soundLevel: soundLevelFromValue(registration?.sound),

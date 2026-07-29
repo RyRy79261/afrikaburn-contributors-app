@@ -157,6 +157,48 @@ export async function loadDocumentsForReconcile(
 }
 
 /**
+ * The acknowledgement-carrying documents bound to one onboarding step, for one
+ * edition — i.e. the documents `applyDocumentAcksToSteps` reconciles that step
+ * against, and therefore the only thing that may complete it.
+ *
+ * Unlike the panel loaders above, this deliberately does NOT swallow errors. It
+ * guards a write, and a swallowed failure would fail OPEN — returning "nothing
+ * is bound" is precisely the bypass it exists to close.
+ */
+export async function requiredDocumentsBoundToStep(
+  editionId: string,
+  stepKey: SupplierOnboardingStepKey,
+  db: DbOrTx = getDb(),
+): Promise<SupplierDocument[]> {
+  const rows = await db
+    .select({
+      id: schema.supplierDocuments.id,
+      title: schema.supplierDocuments.title,
+      sourceType: schema.supplierDocuments.sourceType,
+      url: schema.supplierDocuments.url,
+      requiredAck: schema.supplierDocuments.requiredAck,
+      stepKey: schema.supplierDocuments.stepKey,
+      sort: schema.supplierDocuments.sort,
+    })
+    .from(schema.supplierDocuments)
+    .where(
+      and(
+        eq(schema.supplierDocuments.editionId, editionId),
+        eq(schema.supplierDocuments.stepKey, stepKey),
+        eq(schema.supplierDocuments.requiredAck, true),
+      ),
+    )
+    .orderBy(
+      asc(schema.supplierDocuments.sort),
+      asc(schema.supplierDocuments.title),
+    );
+  return rows.map((r) => ({
+    ...r,
+    stepKey: (r.stepKey as SupplierOnboardingStepKey | null) ?? null,
+  }));
+}
+
+/**
  * Confirm a document belongs to the supplier's own edition before acting on it.
  * Server-side authz: a forged document id from another edition must not create
  * an acknowledgement row.

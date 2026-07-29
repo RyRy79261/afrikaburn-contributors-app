@@ -446,14 +446,58 @@ export const verification = pgTable(
 // silent regression to get wrong). @quagga/auth sets `rateLimit.storage:'database'`
 // so limiter counters are SHARED across serverless lambdas; that requires this
 // table to exist. Model name `rateLimit` (adapter key), physical table `rate_limit`.
-// `last_request` is epoch millis (bigint). Expired rows are pruned by a later job
-// (P1-6); Better Auth does not auto-TTL them.
+// `last_request` is epoch millis (bigint).
+//
+// BETTER AUTH OWNS THIS TABLE OUTRIGHT, INCLUDING DELETING FROM IT. Its database
+// storage wrapper calls `deleteExpiredRows` after a successful window roll, which
+// issues `DELETE … WHERE last_request < now - max(configured window, 10s, 60s)`
+// — an UNFILTERED sweep of every row in the table, not only the ones it wrote
+// (verified in better-auth 1.6.25, dist/api/rate-limiter/index.mjs). With our
+// defaults that cutoff is 60 seconds. Nothing of ours may live here: our own
+// counters go in `action_rate_limit` below. The comment this replaces said
+// "Better Auth does not auto-TTL them" — it does, and believing otherwise cost
+// us a 15-minute password-reset budget (see `action_rate_limit`).
 export const rateLimit = pgTable("rate_limit", {
   id: text("id").primaryKey(),
   key: text("key").notNull().unique(),
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
+
+// OUR OWN fixed-window counters, for the limits Better Auth never sees
+// (migration 0024). `src/rate-limit.ts` is the only writer.
+//
+// WHY IT IS NOT A NAMESPACE INSIDE `rate_limit`. It was, and that was the bug.
+// Better Auth's sweep (above) deletes any row whose `last_request` is older than
+// ~60 seconds, and for OUR rows that column holds the WINDOW START, which by
+// design does not move for the life of the window. So the forgot-password
+// counter — 3 attempts per 15 minutes, shared by all three apps — was deleted
+// about a minute into its window by the next piece of auth traffic to touch the
+// table, and the next attempt inserted a fresh row with count = 1. A 15-minute
+// budget was in practice a 60-second one: 3 reset emails a minute, indefinitely,
+// which is enough to flood an inbox and is exactly what the limit exists to
+// stop. A separate table is the only fix that does not depend on a library's
+// pruning cutoff staying where it is today.
+//
+// `key` is the primary key (the caller namespaces it, e.g.
+// `forgot_password:198.51.100.7`). `window_start` is epoch millis and is the
+// window's START, not the last hit — `consumeRateLimit` resets it only when the
+// window has elapsed, which is what makes the budget fixed rather than rolling.
+// Rows are swept by that same statement once they are long dead; the index is
+// what keeps that sweep from scanning the table.
+export const actionRateLimit = pgTable(
+  "action_rate_limit",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull(),
+    windowStart: bigint("window_start", { mode: "number" }).notNull(),
+  },
+  (r) => ({
+    windowStartIdx: index("action_rate_limit_window_start_idx").on(
+      r.windowStart,
+    ),
+  }),
+);
 
 // --- Two-factor authentication (TOTP + backup codes) ---------------------
 // Owned by the Better Auth `twoFactor` plugin (better-auth/plugins/two-factor),
@@ -1285,6 +1329,25 @@ export const questionnaireResponses = pgTable(
   }),
 );
 
+// A required action belongs to AN EDITION (migration 0024). It is keyed
+// (user, EDITION, action_key), not (user, action_key).
+//
+// The Burner Bio is why. `burner_bios` has always been per-edition — a bio is
+// re-confirmed for each burn, because contact numbers, emergency contacts and
+// medical notes go stale in a year and the whole point of collecting them is
+// that they are true when someone is in the desert. The GATE that makes a
+// burner do that re-confirmation is a `required_actions` row with
+// `action_key = 'burner_bio'`, and while the key was (user, action_key) there
+// could only ever be ONE such row per person, FOREVER: completed for 2027,
+// still completed in 2028, `ensureRequiredAction`'s ON CONFLICT DO NOTHING
+// silently discarding the new edition's row. The gate fired once in a burner's
+// lifetime and then never again, and nothing anywhere reported that — the 2028
+// onboarding simply never appeared and every 2027 phone number was treated as
+// current.
+//
+// Ryan, 28 Jul 2026: the bio PERSISTS across editions but must be UPDATED once
+// per edition, so the gate must fire again. The edition in the key is what
+// makes "again" expressible.
 export const requiredActions = pgTable(
   "required_actions",
   {
@@ -1292,6 +1355,10 @@ export const requiredActions = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** The edition this action is owed FOR. Part of the uniqueness key. */
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
     type: requiredActionTypeEnum("type").notNull(),
     actionKey: text("action_key").notNull(),
     version: text("version"),
@@ -1307,10 +1374,11 @@ export const requiredActions = pgTable(
     completedAt: timestamp("completed_at", { mode: "date" }),
   },
   (ra) => ({
-    userActionIdx: uniqueIndex("required_actions_user_action_idx").on(
-      ra.userId,
-      ra.actionKey,
-    ),
+    // The edition sits in the MIDDLE so the index still serves a lookup by user
+    // alone (`listRequiredActions`) on its leading column.
+    userEditionActionIdx: uniqueIndex(
+      "required_actions_user_edition_action_idx",
+    ).on(ra.userId, ra.editionId, ra.actionKey),
     userStatusIdx: index("required_actions_user_status_idx").on(
       ra.userId,
       ra.status,
@@ -1559,6 +1627,19 @@ export const auditEvents = pgTable(
   (a) => ({
     actorIdx: index("audit_events_actor_idx").on(a.actorId),
     actionIdx: index("audit_events_action_idx").on(a.action),
+    // Added in migration 0024. `audit_events` is APPEND-ONLY and never pruned,
+    // so it is the one table here that only ever grows — and until these two
+    // existed, three hot readers scanned all of it:
+    //   · the status board's recent-activity card and the audit trail page,
+    //     both `ORDER BY created_at DESC LIMIT n` over the whole log;
+    //   · the medical access log, `created_at >= <lookback>` (the action index
+    //     narrowed that one, the date range did not);
+    //   · POPIA erasure, which rewrites `meta` `WHERE actor_id = … OR subject = …`
+    //     and had an index for the first half of that OR and none for the second.
+    // DESC to match how every reader orders it (Postgres can walk a btree
+    // backwards, but the matching order lets `ORDER BY … LIMIT` stop at n).
+    subjectIdx: index("audit_events_subject_idx").on(a.subject),
+    createdAtIdx: index("audit_events_created_at_idx").on(a.createdAt.desc()),
   }),
 );
 

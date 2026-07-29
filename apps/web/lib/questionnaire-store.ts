@@ -142,6 +142,10 @@ export async function createAndActivateProjectQuestionnaire(
         .values(
           rows.map((r) => ({
             userId: r.userId,
+            // Per-edition (migration 0024): the uniqueness key is
+            // (user, edition, action_key), so the same action key can be raised
+            // again in a later burn instead of being permanently spent.
+            editionId: input.editionId,
             type: r.type,
             actionKey: r.actionKey,
             activationId: r.activationId,
@@ -154,6 +158,7 @@ export async function createAndActivateProjectQuestionnaire(
         .onConflictDoNothing({
           target: [
             schema.requiredActions.userId,
+            schema.requiredActions.editionId,
             schema.requiredActions.actionKey,
           ],
         });
@@ -764,6 +769,6 @@ export async function submitResponse(input: {
       },
     });
 
-  await completeRequiredAction(input.userId, actionKey);
+  await completeRequiredAction(input.userId, editionId, actionKey);
   return { ok: true };
 }

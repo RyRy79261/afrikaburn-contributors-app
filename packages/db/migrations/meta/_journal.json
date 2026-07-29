@@ -169,6 +169,13 @@
       "when": 1785336551373,
       "tag": "0023_officer_consent_edition",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785422951373,
+      "tag": "0024_lively_maverick",
+      "breakpoints": true
     }
   ]
 }

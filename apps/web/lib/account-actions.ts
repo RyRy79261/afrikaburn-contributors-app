@@ -27,7 +27,8 @@ import {
   maskEmail,
   passwordChangedEmail,
   passwordChangedNotification,
-  passwordResetCompletedEmail,
+  // NB: no `passwordResetCompletedEmail` — @quagga/auth's `onPasswordReset` hook
+  // already sends that mail from the provider's own success path.
   passwordResetCompletedNotification,
   DELETION_GRACE_PERIOD_DAYS,
   EMAIL_CHANGE_CONFIRM_TTL_HOURS,
@@ -286,6 +287,81 @@ const ResetPasswordInput = z.object({
 });
 
 /**
+ * WHOSE reset is this? Read from the Better Auth `verification` row the reset
+ * link's token names, BEFORE the provider consumes it. Returns the Better Auth
+ * user id, or null.
+ *
+ * This reaches into a provider-owned table, which is why it is here and heavily
+ * caveated rather than buried in a helper: Better Auth's `request-password-reset`
+ * stores the row as `identifier = "reset-password:<token>"`, `value = user.id`
+ * (better-auth 1.6.x, api/routes/password), and `reset-password` CONSUMES it, so
+ * after the call there is nothing left to ask. The alternative — an
+ * `emailAndPassword.onPasswordReset` hook in @quagga/auth — is where this
+ * belongs long term; it already exists there and sends the completion EMAIL, but
+ * it has no request context and no route into this app's inbox tables.
+ *
+ * Deliberately best-effort and silent on failure: if a future Better Auth changes
+ * that identifier we resolve nobody, skip the record, and the reset itself is
+ * completely unaffected. It never gates, and it never throws.
+ */
+async function identityForResetToken(token: string): Promise<string | null> {
+  try {
+    const [row] = await db()
+      .select({ value: schema.verification.value })
+      .from(schema.verification)
+      .where(eq(schema.verification.identifier, `reset-password:${token}`))
+      .limit(1);
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Record a COMPLETED password reset against the account it happened to: one
+ * `security_events` row and one inbox row.
+ *
+ * NOT EXPORTED, on purpose. Every export of a "use server" module is a
+ * network-reachable endpoint, and this one takes an account identifier — exported,
+ * it would let anyone post a "your password was reset" alarm into any burner's
+ * inbox. Its predecessor `notifyPasswordResetCompleted` was exported and
+ * session-based, which was safe but unusable: a reset revokes every session
+ * (`revokeSessionsOnPasswordReset`), so there is no session at the only moment it
+ * could have been called, and in the event it was called by nothing at all.
+ *
+ * NO EMAIL FROM HERE. @quagga/auth's `emailAndPassword.onPasswordReset` hook
+ * already sends `password-reset-completed` on the provider's own success, so
+ * mailing again would double up on the one message people actually read. The
+ * gap this closes is the log and the inbox — which /account/security promises in
+ * as many words ("Password changes, password resets… all land here — and in your
+ * inbox — the moment they happen") and, until now, never delivered for a reset.
+ */
+async function recordPasswordResetCompleted(authUserId: string): Promise<void> {
+  try {
+    const [row] = await db()
+      .select({ userId: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.authUserId, authUserId))
+      .limit(1);
+    // No app-side row yet (an identity that has never opened the participant
+    // app). Nothing to attach a notification to; the provider's email still went.
+    if (!row) return;
+
+    await notifySecurity(
+      row.userId,
+      null,
+      passwordResetCompletedNotification(),
+      null,
+    );
+    await recordSecurityEvent(row.userId, "password_reset_completed");
+  } catch {
+    // The password ALREADY changed. Book-keeping must never turn a successful
+    // reset into an error the burner reads as "it didn't work" and retries with
+    // a token that is now spent.
+  }
+}
+
+/**
  * Complete a password reset from an emailed link. Backed by
  * `auth.api.resetPassword`; `revokeSessionsOnPasswordReset` is set in
  * @quagga/auth so every session is invalidated on success. The token is in hand,
@@ -304,6 +380,10 @@ export async function resetPassword(
     if (!assessment.ok)
       throw new Error(assessment.error ?? "That password won't do.");
 
+    // Resolve WHO first — the provider call consumes the token, taking the only
+    // link between this request and an account with it.
+    const authUserId = await identityForResetToken(input.token);
+
     try {
       await auth.api.resetPassword({
         body: { token: input.token, newPassword: input.newPassword },
@@ -314,27 +394,11 @@ export async function resetPassword(
       );
     }
 
-    // The account is identified by the token, not by a session — so the
-    // notification is written by the sign-in that follows, where we know who it
-    // is. What we CAN do here is nothing that pretends otherwise.
-    return { message: "Password reset. Sign in with your new password." };
-  });
-}
+    // Only now — after a reset that actually committed — is there anything true
+    // to record.
+    if (authUserId) await recordPasswordResetCompleted(authUserId);
 
-/**
- * Post-reset notification, called once the reset-er signs back in. Split out so
- * the reset action never has to guess an identity it doesn't hold.
- */
-export async function notifyPasswordResetCompleted(): Promise<AccountActionResult> {
-  return run(async () => {
-    const user = await requireCampUser();
-    await notifySecurity(
-      user.id,
-      user.email,
-      passwordResetCompletedNotification(),
-      passwordResetCompletedEmail({ when: new Date() }),
-    );
-    await recordSecurityEvent(user.id, "password_reset_completed");
+    return { message: "Password reset. Sign in with your new password." };
   });
 }
 
@@ -613,6 +677,25 @@ export async function confirmEmailChange(
  * Revoke a change from the OLD address's link, inside the 48h window. Available
  * to an UNAUTHENTICATED caller on purpose: the whole point is that someone who
  * has lost control of their account can pull the change back from their email.
+ *
+ * THIS IS THE MIRROR OF `confirmEmailChange`, AND IT HAS TO BE.
+ *
+ * It was not. It flipped the request row to `revoked`, wrote the security event,
+ * and told the reader "Reversed. Your sign-in email is back to what it was."
+ * while `user.email` — the actual sign-in identity, which `confirmEmailChange`
+ * had already moved — still held the NEW address. Picture what that is for:
+ * someone's session is stolen, the thief points the account at their own inbox
+ * and confirms it, and the 48-hour revocation email is the victim's one lever.
+ * They pulled it, read a sentence saying they had their account back, and were
+ * still locked out. A revocation that only revokes the paperwork is worse than
+ * no revocation at all, because it stops the person looking for real help.
+ *
+ * So the undo now does what confirm did, backwards, in one transaction:
+ *  - the request row moves out of its current state (a compare-and-set, so two
+ *    clicks of the same emailed link cannot restore twice);
+ *  - `user.email` and `users.email` go back to `currentEmail`;
+ *  - if any of it fails, ALL of it fails and nothing is announced.
+ * Success is only ever claimed for a transaction that committed.
  */
 export async function revokeEmailChange(
   raw: z.input<typeof TokenInput>,
@@ -654,10 +737,86 @@ export async function revokeEmailChange(
       );
     }
 
-    await handle
-      .update(schema.emailChangeRequests)
-      .set({ status: "revoked", revokedAt: now, updatedAt: now })
-      .where(eq(schema.emailChangeRequests.id, request.id));
+    // Is there an identity change to PUT BACK? Only `providerCommittedAt` says
+    // so — the same field `isEmailChangeEffective` reads. A confirmed row without
+    // it means our side moved and the provider's did not, so the burner never
+    // stopped signing in with `currentEmail` and there is nothing to restore;
+    // inventing a restore would be the mirror image of the lie being fixed.
+    const applied = !pending && request.providerCommittedAt != null;
+
+    // The revocation link is unauthenticated, so the account it belongs to comes
+    // from the request row, never from a caller.
+    let authUserId: string | null = null;
+    if (applied) {
+      const [owner] = await handle
+        .select({ authUserId: schema.users.authUserId })
+        .from(schema.users)
+        .where(eq(schema.users.id, request.userId))
+        .limit(1);
+      authUserId = owner?.authUserId ?? null;
+      if (!authUserId) {
+        throw new Error(
+          "We couldn't reverse this automatically. Contact AfrikaBurn — nothing has been changed.",
+        );
+      }
+    }
+
+    try {
+      await withTransaction(async (tx) => {
+        // COMPARE-AND-SET on the status we validated a moment ago. Without it,
+        // two clicks of the same emailed link (or a click racing the confirm
+        // link) could each pass the guard above and each write the address back,
+        // announcing two reversals for one event.
+        const moved = await tx
+          .update(schema.emailChangeRequests)
+          .set({ status: "revoked", revokedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(schema.emailChangeRequests.id, request.id),
+              eq(schema.emailChangeRequests.status, request.status),
+            ),
+          )
+          .returning({ id: schema.emailChangeRequests.id });
+        if (!moved[0]) {
+          // Someone got here first. Throwing rolls the whole thing back.
+          throw new Error("That link is no longer valid.");
+        }
+
+        if (!applied || !authUserId) return;
+
+        // `emailVerified` goes back to true by the SAME standard confirm uses:
+        // clicking a link we sent to this address is proof of control of it, and
+        // this link went to `currentEmail`. Leaving the flag as confirm set it
+        // would assert proof of an address the account no longer holds.
+        await tx
+          .update(schema.user)
+          .set({
+            email: request.currentEmail,
+            emailVerified: true,
+            updatedAt: now,
+          })
+          .where(eq(schema.user.id, authUserId));
+
+        await tx
+          .update(schema.users)
+          .set({ email: request.currentEmail })
+          .where(eq(schema.users.id, request.userId));
+      });
+    } catch (err) {
+      // CLAIMED SINCE. The window is 48 hours, and an address freed by the
+      // confirm can be taken by another account inside it — so the address we
+      // are trying to hand back may no longer be free. The transaction has
+      // already rolled back, so the request is still `confirmed` and this link
+      // still works until the window closes; say so plainly rather than
+      // reporting a reversal that did not happen.
+      if (isUniqueViolation(err)) {
+        throw new Error(
+          "Your previous address can't be put back — it's now signing in to another account. Nothing has been changed. Contact AfrikaBurn and we'll sort this out.",
+          { cause: err },
+        );
+      }
+      throw err;
+    }
 
     await notifySecurity(
       request.userId,
@@ -669,9 +828,10 @@ export async function revokeEmailChange(
 
     revalidatePath("/account");
     return {
-      message: pending
-        ? "Stopped. Your sign-in email is unchanged."
-        : "Reversed. Your sign-in email is back to what it was.",
+      message: applied
+        ? "Reversed. Your sign-in email is back to what it was."
+        : // Pending, or confirmed-but-never-applied: the address never moved.
+          "Stopped. Your sign-in email is unchanged.",
     };
   });
 }

@@ -11,6 +11,7 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import {
   getDeclaredSupplierIds,
+  getDeclaredSuppliers,
   getRegistration,
   getRegistrationCampContext,
   getSectionReviews,
@@ -99,7 +100,6 @@ export default async function RegistrationPage({
     context.editionId,
   );
   const status = registration?.status ?? "draft";
-  const suppliers = await listSuppliersForPicker(context.editionId);
 
   const header = (
     <header className="mb-6 flex flex-col gap-2">
@@ -123,6 +123,9 @@ export default async function RegistrationPage({
 
   // Editable path: draft or changes_requested (the resubmit loop).
   if (isEditableStatus(status)) {
+    // The picker repository — editable path only; the locked summary reads the
+    // declarations themselves so a suspended supplier isn't dropped from them.
+    const suppliers = await listSuppliersForPicker(context.editionId);
     const declaredIds = registration
       ? await getDeclaredSupplierIds(registration.id)
       : [];
@@ -190,12 +193,14 @@ export default async function RegistrationPage({
   const reviews = registration
     ? await getSectionReviews(registration.id, context.editionId)
     : [];
-  const declaredIds = registration
-    ? await getDeclaredSupplierIds(registration.id)
+  // Read the declarations directly. This used to intersect the declared ids with
+  // `suppliers` — the PICKER list — which excludes suspended suppliers by
+  // design, so suspending a supplier silently erased it from every camp's
+  // submitted answers. The summary now shows what was declared and marks the
+  // suspension instead.
+  const declaredSuppliers = registration
+    ? await getDeclaredSuppliers(registration.id)
     : [];
-  const supplierNames = suppliers
-    .filter((s) => declaredIds.includes(s.id))
-    .map((s) => s.name);
 
   return (
     <>
@@ -205,11 +210,13 @@ export default async function RegistrationPage({
           registration={registration}
           campName={context.group.name}
           description={context.group.description}
-          supplierNames={supplierNames}
+          declaredSuppliers={declaredSuppliers}
           reviews={reviews}
           slug={slug}
+          editionYear={context.editionYear}
           viewerUserId={campUser.id}
           reopenAction={reopenRegistrationAction}
+          withdrawAction={withdrawRegistrationAction}
         />
       ) : (
         <PreviewNotice feature="Camp registration" />

@@ -39,6 +39,14 @@ const nullableText = (max: number) =>
     .nullish()
     .transform((v) => v ?? null);
 
+/**
+ * A whole number, 0..max. Decimals and negatives are REJECTED, not coerced —
+ * "expected population: 4.5" is a mistake, not an intention.
+ *
+ * The wizard's `NumberField` now enforces the same rule inline so a bad entry
+ * never reaches this schema, but the rule stays here too: this is the boundary,
+ * and the field is not the only thing that can post to a server action.
+ */
 const nullableInt = (max: number) =>
   z
     .number()
@@ -47,6 +55,68 @@ const nullableInt = (max: number) =>
     .max(max)
     .nullish()
     .transform((v) => v ?? null);
+
+/** Human labels for the number/text fields, so a rejected payload can say WHICH
+ * answer it choked on. */
+const VALUE_LABELS: Record<string, string> = {
+  campDescription: "Camp description",
+  s1ContactEmail: "Contact email",
+  s1AltContactName: "Alternative contact (name)",
+  s1AltContactPhone: "Alternative contact (phone)",
+  s1AltContactEmail: "Alternative contact (email)",
+  s2LntPlan: "Leave No Trace plan",
+  s2LntLeadName: "LNT lead name",
+  s2LntLeadPhone: "LNT lead phone",
+  s2LntLeadEmail: "LNT lead email",
+  s3ParticipationPlan: "Participation plan",
+  s3OperatingHours: "Operating hours",
+  s3ScheduleDetail: "Schedule detail",
+  s3GiftingFood: "Gifting food?",
+  s4ExpectedPopulation: "Expected population",
+  s4FirstArrivalDate: "First arrival date",
+  s4WorkAccessPasses: "Work Access Passes",
+  s4AreaDimensions: "Camp area dimensions",
+  s4LayoutUploadUrls: "Layout sketches / plans",
+  s5AmplifiedMusic: "Sound level (SOOP)",
+  s5SoundPlan: "Sound plan",
+  s5PlacementFirstChoice: "Placement — first choice",
+  s5PlacementSecondChoice: "Placement — second choice",
+  s5NeighbourRequest: "Neighbour request",
+  s5FamilyFriendly: "Family-friendly?",
+  s6SuppliersNote: "Suppliers note",
+  s6PaidPerformers: "Paid performers?",
+  s6FeeStructure: "Camp fee structure",
+  s6ExpectedBudgetZar: "Expected budget in ZAR",
+  s6PlugAndPlayAck: "Plug & Play acknowledgement",
+  supplierIds: "Declared suppliers",
+};
+
+/**
+ * Turn a Zod failure into something a camp lead can act on.
+ *
+ * The old message was "Some answers weren't in the expected format." for every
+ * failure, and because the autosave keeps retrying the SAME rejected payload,
+ * one stray decimal (see `nullableInt`) put the wizard in a permanent "Save
+ * failed — we'll retry" loop with no way to find out which of the ~30 answers,
+ * on which of the six sections, was at fault. Name the fields.
+ */
+function describeInvalidValues(error: z.ZodError): string {
+  const fields = [
+    ...new Set(
+      error.issues
+        .map((issue) => String(issue.path[0] ?? ""))
+        .filter((key) => key.length > 0)
+        .map((key) => VALUE_LABELS[key] ?? key),
+    ),
+  ];
+  if (fields.length === 0) {
+    return "Some answers weren't in the expected format.";
+  }
+  return (
+    `We couldn't save ${fields.join(", ")}. Check ${fields.length === 1 ? "that answer" : "those answers"} ` +
+    `— number fields take whole numbers only.`
+  );
+}
 
 const RegistrationValuesSchema = z.object({
   campDescription: nullableText(4000),
@@ -135,7 +205,7 @@ export async function saveRegistrationDraftAction(
 
   const parsed = RegistrationValuesSchema.safeParse(rawValues);
   if (!parsed.success) {
-    return { ok: false, error: "Some answers weren't in the expected format." };
+    return { ok: false, error: describeInvalidValues(parsed.error) };
   }
 
   const result = await saveRegistrationDraft({
