@@ -121,7 +121,8 @@ export async function recentNotifications(
   }));
 }
 
-/** Rows per INSERT. Six parameters each, well inside Postgres' 65535 ceiling. */
+/** Rows per INSERT. Eight bound columns each, so Postgres' 65535-parameter
+ * ceiling lands at 8191 rows — 1000 keeps a wide margin. */
 const NOTIFICATION_INSERT_CHUNK = 1000;
 
 /**

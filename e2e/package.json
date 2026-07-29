@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "End-to-end Playwright suite for the three Quagga Portal apps (web / org / suppliers). Drives the REAL UI against a deployed preview — no DB back doors.",
+  "description": "End-to-end Playwright suite for the three Quagga Portal apps (web / org / suppliers). Drives the REAL UI against a deployed preview \u2014 no DB back doors.",
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -14,6 +14,7 @@
     "install:browsers": "playwright install --with-deps chromium"
   },
   "devDependencies": {
+    "@better-auth/utils": "^0.4.2",
     "@playwright/test": "1.62.0",
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",

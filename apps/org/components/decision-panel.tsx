@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, MessageSquareWarning, Play, X } from "lucide-react";
+import {
+  Check,
+  MessageSquareWarning,
+  Play,
+  ShieldAlert,
+  X,
+} from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { Textarea } from "@quagga/ui/components/textarea";
 import {
@@ -31,16 +37,37 @@ const ICON: Record<ReviewAction, React.ReactNode> = {
 
 const NEEDS_REASON: ReviewAction[] = ["request_changes", "reject"];
 
+/** The one restriction sentence every refused decision button points at. */
+const DECISION_REFUSAL_ID = "registration-decision-refusal";
+
 export function DecisionPanel({
   registrationId,
   status,
   subjectNoun = "camp",
+  refusal,
 }: {
   registrationId: string;
   status: RegistrationStatus;
   /** How the reviewed thing is named in dialog copy ("camp" / "mutant vehicle"
    * / "artwork"). Keeps request-changes + reject copy honest per kind. */
   subjectNoun?: string;
+  /**
+   * WHY THIS VIEWER MAY NOT DECIDE, in the words the server would refuse them
+   * with — or null/undefined when they may.
+   *
+   * `decideRegistration` asks for `update` in the `registrations` domain, which
+   * a lead scoped to a department that does not own registrations cannot
+   * satisfy. Until 28 Jul 2026 nothing asked: Approve and Reject rendered live
+   * for every console account, and pressing Approve on someone else's
+   * department produced a toast. A destructive-looking control that turns out
+   * to be decorative — the same defect the suppliers table already fixed.
+   *
+   * DISABLED, NOT HIDDEN: "I'd rather things be transparent with restrictions
+   * than completely obfuscated, except for private personal information"
+   * (Ryan, 28 Jul 2026). The reviewer still sees that a decision exists and who
+   * makes it, which is what tells them where to send the registration.
+   */
+  refusal?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -97,14 +124,29 @@ export function DecisionPanel({
                   ? "destructive"
                   : "outline"
             }
-            disabled={pending}
+            disabled={Boolean(refusal) || pending}
             onClick={() => onClick(action)}
+            aria-label={
+              refusal
+                ? `${REVIEW_ACTION_LABELS[action]} — not available to you`
+                : undefined
+            }
+            aria-describedby={refusal ? DECISION_REFUSAL_ID : undefined}
           >
             {ICON[action]}
             {REVIEW_ACTION_LABELS[action]}
           </Button>
         ))}
       </div>
+      {refusal && (
+        <p
+          id={DECISION_REFUSAL_ID}
+          className="flex items-start gap-2 text-xs text-muted-foreground"
+        >
+          <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{refusal}</span>
+        </p>
+      )}
 
       <Dialog
         open={reasonFor !== null}

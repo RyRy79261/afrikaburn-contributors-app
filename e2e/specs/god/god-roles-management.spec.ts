@@ -168,11 +168,14 @@ test.describe("system manager · departments, roles and what deleting costs", ()
 
     // THE RESOLVED UNION, on the row — not a role chip a reviewer has to decode.
     // The seeded Org staff role carries `delete`, so the honest answer here is
-    // that this person can permanently remove suppliers.
+    // that this person can destroy records.
+    //
+    // The copy names the VERB and lets the scope clause name the place. It used
+    // to say "permanently remove suppliers and their documents" on every
+    // department's rights screen — one department's nouns describing every
+    // department's power, which is the defect that prompted the CRUD rework.
     await expect(
-      orgPage
-        .getByText(/can permanently remove suppliers and their documents/i)
-        .first(),
+      orgPage.getByText(/can permanently destroy records/i).first(),
     ).toBeVisible();
 
     // And the live preview in the assignment dialog resolves the DRAFT, so the
@@ -200,9 +203,7 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await gotoAccount(orgPage, burner.email);
     await expect(
-      orgPage
-        .getByText(/can permanently remove suppliers and their documents/i)
-        .first(),
+      orgPage.getByText(/can permanently destroy records/i).first(),
     ).toBeVisible();
   });
 
@@ -217,7 +218,8 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     await elevateVisibleRow(orgPage);
 
     // The elevated account reaches the console — and is refused the surface that
-    // decides what it may do. `manage_accounts` is not grantable to any role, so
+    // decides what it may do. Account management is the RANK, not a grantable
+    // capability, so
     // this refusal cannot be edited away by anyone but a System manager.
     const staffOrg = await makeAppPage("org");
     await signInAs(staffOrg, burner, "org");

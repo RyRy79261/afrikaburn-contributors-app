@@ -78,6 +78,21 @@ export function CampMembers(props: CampMembersProps) {
   const [members, setMembers] = React.useState<CampMemberVM[]>(props.members);
   const [assignFor, setAssignFor] = React.useState<CampMemberVM | null>(null);
 
+  // Re-seed the optimistic roster whenever the server sends a fresh one.
+  //
+  // `members` exists so the chips move the instant a save succeeds, but
+  // `useState(props.members)` IGNORES its argument on every render after the
+  // first — so the `router.refresh()` fired after a save repainted the whole
+  // page EXCEPT this list, and any wrong optimistic value survived until a full
+  // page load. That is what made the dropped-chip bug below sticky rather than
+  // momentary. This is React's documented "adjust state when a prop changes"
+  // pattern (a render-phase set, not an effect, so nothing flashes).
+  const [seenMembers, setSeenMembers] = React.useState(props.members);
+  if (seenMembers !== props.members) {
+    setSeenMembers(props.members);
+    setMembers(props.members);
+  }
+
   const role = React.useCallback(
     (id: string) => props.roles.find((r) => r.id === id),
     [props.roles],
@@ -178,10 +193,24 @@ export function CampMembers(props: CampMembersProps) {
           slug={props.slug}
           onClose={() => setAssignFor(null)}
           onSaved={(roleIds) => {
+            // MERGE, don't replace. The dialog only ever returns the ASSIGNABLE
+            // selection, but a roster row's chips also carry the ids the dialog
+            // can't touch — the baseline role everyone holds, and any accepted
+            // officer role. Overwriting `roleIds` with the selection therefore
+            // stripped the "Burner" chip off whoever you had just given a role
+            // to, and (before the re-seed above) left it stripped: the roster
+            // read as if assigning a role had cost them their membership one.
+            const assignable = new Set(props.assignableRoleIds);
             setMembers((prev) =>
               prev.map((m) =>
                 m.membershipId === assignFor.membershipId
-                  ? { ...m, roleIds }
+                  ? {
+                      ...m,
+                      roleIds: [
+                        ...m.roleIds.filter((id) => !assignable.has(id)),
+                        ...roleIds,
+                      ],
+                    }
                   : m,
               ),
             );
@@ -229,7 +258,10 @@ function AssignRolesDialog({
       });
       if (result.ok) {
         toast.success("Roles updated");
-        // Preserve baseline chip on the client view.
+        // The ASSIGNABLE selection only — the roster merges it over the chips
+        // this dialog never had (baseline, accepted officers). The comment here
+        // used to claim this call preserved the baseline chip; it did the
+        // opposite.
         onSaved(selected);
       } else {
         toast.error(result.error);

@@ -76,7 +76,13 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-r-md"
             aria-label={visible ? "Hide password" : "Show password"}
             aria-pressed={visible}
-            tabIndex={-1}
+            // NO tabIndex={-1} HERE. It used to carry one, which took the only
+            // control for revealing a password out of the tab order on every
+            // password field in all three apps — sign-in, sign-up, reset, change
+            // password. Anyone working keyboard-only (or with a switch device)
+            // could type a 15-character passphrase and had no way to check it,
+            // which is precisely the audience a show/hide toggle exists for.
+            // The focus ring below is styled for exactly this reason.
           >
             {visible ? (
               <EyeOff className="h-4 w-4" aria-hidden />

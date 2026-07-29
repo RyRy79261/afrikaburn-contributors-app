@@ -76,7 +76,7 @@ test.describe("supplier isolation law", () => {
       orgPage.getByText(/this side is for afrikaburn staff/i),
     ).toBeVisible();
     await expect(
-      orgPage.getByRole("heading", { name: /registration queue/i }),
+      orgPage.getByRole("heading", { name: /registration pipeline/i }),
     ).toHaveCount(0);
   });
 

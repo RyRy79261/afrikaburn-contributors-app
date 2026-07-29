@@ -10,6 +10,7 @@ import {
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -47,7 +48,6 @@ function actorName(email: string | null | undefined): string {
   if (!email) return "Unknown actor";
   return email.split("@")[0] ?? email;
 }
-
 
 function ReadRow({ row }: { row: MedicalReadRow }) {
   return (
@@ -96,19 +96,26 @@ export function MedicalAccessPanel({
         </CardTitle>
         <CardDescription>
           Every time someone opened a burner&apos;s medical notes in the last{" "}
-          {lookbackDays} days. Notes themselves are never shown
-          here — only who looked, at whose, and when.
+          {lookbackDays} days. Notes themselves are never shown here — only who
+          looked, at whose, and when.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-
         {shown.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nobody has opened a burner&apos;s medical notes in this window.
           </p>
         ) : (
           <>
+            {/* NAMED. The audit page renders two tables and neither carried an
+                accessible name, so a screen reader announced "table" twice with
+                nothing to tell them apart — on the one page whose whole purpose
+                is answering "who saw my medical information?". Visually hidden
+                because the Card title already says it on screen. */}
             <Table>
+              <TableCaption className="sr-only">
+                Medical-notes reads: who looked, whose notes, and when
+              </TableCaption>
               <TableHeader>
                 <TableRow>
                   <TableHead>Who looked</TableHead>

@@ -31,7 +31,14 @@
 // apps/org/lib/__tests__/org-rank-enforcement.test.ts.
 
 import { test, expect, skipUnlessGod } from "../../fixtures";
-import { elevateToGod, signInAs, signUpBurner } from "../../personas/factories";
+import {
+  createCamp,
+  elevateToGod,
+  signInAs,
+  signUpBurner,
+  submitRegistration,
+} from "../../personas/factories";
+import { openRegistrationInConsole } from "../camp-lead/support";
 import { elevateVisibleRow, gotoAccount } from "./support";
 
 /** A department name no earlier run can have taken (names are unique org-wide). */
@@ -64,7 +71,9 @@ test.describe("system manager · what a department owns is what its roles reach"
 
     // …and the lead role's own summary agrees: its sharp rights reach nothing.
     await expect(
-      orgPage.getByText(/owns no part of the console, so this reaches nothing/i).first(),
+      orgPage
+        .getByText(/owns no part of the console, so this reaches nothing/i)
+        .first(),
     ).toBeVisible();
 
     // (2) GIVE IT THE SUPPLY-RELATED PART OF THE CONSOLE.
@@ -82,7 +91,9 @@ test.describe("system manager · what a department owns is what its roles reach"
     // order, and a spec that silently follows it stops proving what it says.
     await owns.getByLabel(/the supplier repository/i).check();
     await owns.getByRole("button", { name: /save what it owns/i }).click();
-    await expect(orgPage.getByText(/saved what this department owns/i)).toBeVisible();
+    await expect(
+      orgPage.getByText(/saved what this department owns/i),
+    ).toBeVisible();
 
     // (3) DURABLE, AND RESOLVED. A fresh server render shows the ownership on
     // the department and the lead role's delete confined to it BY NAME.
@@ -110,6 +121,123 @@ test.describe("system manager · what a department owns is what its roles reach"
     await expect(orgPage.getByText(/department deleted/i)).toBeVisible();
   });
 
+  test("a supply lead is refused the DECISION on someone else's department, and told whose it is", async ({
+    orgPage,
+    webPage,
+    makeAppPage,
+  }) => {
+    // THE FOREIGN-DEPARTMENT BRANCH. The suite proved a departmental grant does
+    // not reach a domain NOBODY owns (accounts, audit — the test below). It had
+    // never proved the other branch: a domain ANOTHER department owns, whose
+    // refusal is a different sentence written by `scopeReason` and which names
+    // the owner so the reader knows where to send the work.
+    //
+    // Registrations is the sharpest case. Approve and Reject are the console's
+    // most consequential controls and until 28 Jul 2026 they rendered live for
+    // every account, refusing only in a toast after the click.
+    // DEPARTMENT OWNERSHIP IS DEPLOYMENT-WIDE STATE, so the teardown is in a
+    // `finally`. Giving a department the `registrations` domain changes what
+    // EVERY other spec's org_staff account may decide; a run that died between
+    // the assignment and the delete would leave the whole review suite refused,
+    // and the next person would be debugging their own change.
+    await elevateToGod(orgPage);
+    await orgPage.goto("/system/roles");
+    const created: string[] = [];
+    try {
+      // Two departments: one owns suppliers, the other owns registrations.
+      const supply = departmentName();
+      const placement = departmentName();
+      for (const [name, owns] of [
+        [supply, /the supplier repository/i],
+        [placement, /registration/i],
+      ] as const) {
+        await orgPage.getByLabel(/new department/i).fill(name);
+        await orgPage.getByRole("button", { name: /add department/i }).click();
+        await expect(orgPage.getByText(/department created/i)).toBeVisible();
+        created.push(name);
+        await orgPage
+          .getByRole("button", { name: `Choose what ${name} owns` })
+          .click();
+        const dialog = orgPage.getByRole("dialog");
+        await dialog.getByLabel(owns).first().check();
+        await dialog
+          .getByRole("button", { name: /save what it owns/i })
+          .click();
+        await expect(
+          orgPage.getByText(/saved what this department owns/i),
+        ).toBeVisible();
+      }
+
+      // A person holding ONLY the supply department's lead role.
+      const burner = await signUpBurner(webPage, { onboard: true });
+      await gotoAccount(orgPage, burner.email);
+      await elevateVisibleRow(orgPage);
+      await gotoAccount(orgPage, burner.email);
+      await orgPage
+        .getByRole("button", { name: "Roles", exact: true })
+        .filter({ visible: true })
+        .click();
+      const roles = orgPage.getByRole("dialog");
+      await expect(roles).toBeVisible();
+      // The org-wide "Org staff" role elevation grants by default reaches
+      // everything, which would make this prove nothing.
+      for (const box of await roles.getByRole("checkbox").all()) {
+        if (await box.isChecked()) await box.uncheck();
+      }
+      await roles.getByLabel(new RegExp(`${supply} lead`, "i")).check();
+      await roles.getByRole("button", { name: /save roles/i }).click();
+      await expect(orgPage.getByText(/roles saved/i)).toBeVisible();
+
+      // A REGISTRATION IN A DECIDABLE STATE, built by this spec. Opening whatever
+      // happens to sit at the top of the queue is not good enough: a draft offers
+      // no Approve at all (`availableReviewActions`), so the assertion below would
+      // pass on an empty panel and prove nothing.
+      const campLead = await makeAppPage("web");
+      await signUpBurner(campLead, { onboard: true });
+      const camp = await createCamp(campLead, {
+        description: "Tea and shade.",
+      });
+      await submitRegistration(campLead, camp.slug);
+
+      // THE PROOF. The queue still OPENS — read is not a page gate, and Ryan asked
+      // for transparency with restrictions rather than obfuscation — but the
+      // decision is refused, in place, by name.
+      const leadOrg = await makeAppPage("org");
+      await signInAs(leadOrg, burner, "org");
+      await openRegistrationInConsole(leadOrg, camp.name);
+
+      const approve = leadOrg.getByRole("button", {
+        name: /approve — not available to you/i,
+      });
+      await expect(approve).toBeVisible();
+      await expect(approve).toBeDisabled();
+      // Present and disabled, never hidden — and never live.
+      await expect(
+        leadOrg.getByRole("button", { name: /^approve$/i }),
+      ).toHaveCount(0);
+
+      // …and the reason NAMES THE OWNING DEPARTMENT, which is the whole point of
+      // the foreign-domain branch: "your role does not reach here" would leave a
+      // supply lead with nobody to hand the registration to.
+      await expect(
+        leadOrg.getByText(/in your own department only/i),
+      ).toBeVisible();
+      await expect(leadOrg.getByText(new RegExp(placement, "i"))).toBeVisible();
+    } finally {
+      await orgPage.goto("/system/roles");
+      for (const name of created) {
+        const trigger = orgPage.getByRole("button", { name: `Delete ${name}` });
+        if ((await trigger.count()) === 0) continue;
+        await trigger.click();
+        await orgPage
+          .getByRole("dialog")
+          .getByRole("button", { name: /delete department and its roles/i })
+          .click();
+        await expect(orgPage.getByText(/department deleted/i)).toBeVisible();
+      }
+    }
+  });
+
   test("a departmental lead reads NO email addresses — the scoped PII rule, in a browser", async ({
     orgPage,
     webPage,
@@ -129,7 +257,9 @@ test.describe("system manager · what a department owns is what its roles reach"
     const owns = orgPage.getByRole("dialog");
     await owns.getByLabel(/the supplier repository/i).check();
     await owns.getByRole("button", { name: /save what it owns/i }).click();
-    await expect(orgPage.getByText(/saved what this department owns/i)).toBeVisible();
+    await expect(
+      orgPage.getByText(/saved what this department owns/i),
+    ).toBeVisible();
 
     // …and a real person holding ONLY that department's lead role. The seeded
     // lead role carries `read_personal_information`, which is exactly why this
@@ -184,9 +314,7 @@ test.describe("system manager · what a department owns is what its roles reach"
     ).toHaveCount(0);
     // …and the search box does not offer to match one either, because a match
     // would be an oracle for exactly the data they may not hold.
-    await expect(
-      leadOrg.getByPlaceholder(/search by username/i),
-    ).toBeVisible();
+    await expect(leadOrg.getByPlaceholder(/search by username/i)).toBeVisible();
 
     // The medical-notes census is refused whole, for the same reason: the audit
     // log spans every camp, and no department owns it.

@@ -6,6 +6,7 @@ import {
   parseSupplierCode,
   nextSupplierSequence,
   issueSupplierCode,
+  contactNamesAddress,
 } from "../supplier-code";
 
 describe("formatSupplierCode", () => {
@@ -102,5 +103,58 @@ describe("issueSupplierCode", () => {
     const existing = ["SUP-2027-0001"];
     const first = issueSupplierCode(2027, existing);
     expect(issueSupplierCode(2027, [...existing, first])).toBe("SUP-2027-0003");
+  });
+});
+
+describe("contactNamesAddress — the supplier claim boundary", () => {
+  // The takeover this replaced: `ILIKE '%address%'` on a free-text contact.
+  // Both attack addresses below are ordinary registerable Gmail addresses and
+  // are literal substrings of a seeded supplier's contact string.
+  it("refuses a shorter address that is merely a SUBSTRING of the listed one", () => {
+    expect(
+      contactNamesAddress(
+        "Zizipho Gcasamba z.gcasamba@gmail.com",
+        "gcasamba@gmail.com",
+      ),
+    ).toBe(false);
+    expect(
+      contactNamesAddress(
+        "Lenny deharnstretchtents85@gmail.com",
+        "harnstretchtents85@gmail.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts the address the contact actually names", () => {
+    expect(
+      contactNamesAddress(
+        "Zizipho Gcasamba z.gcasamba@gmail.com",
+        "z.gcasamba@gmail.com",
+      ),
+    ).toBe(true);
+    expect(
+      contactNamesAddress(
+        "Bookings: ops@loskop.co.za / 082 555 0147",
+        "OPS@LosKop.co.za",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses a longer address that merely CONTAINS the listed one", () => {
+    expect(
+      contactNamesAddress("ops@loskop.co.za", "ops@loskop.co.za.evil.net"),
+    ).toBe(false);
+  });
+
+  it("handles several addresses in one contact string", () => {
+    const contact = "Ops ops@loskop.co.za, accounts accounts@loskop.co.za";
+    expect(contactNamesAddress(contact, "accounts@loskop.co.za")).toBe(true);
+    expect(contactNamesAddress(contact, "counts@loskop.co.za")).toBe(false);
+  });
+
+  it("is safe on empty, null and address-free contacts", () => {
+    expect(contactNamesAddress(null, "a@b.com")).toBe(false);
+    expect(contactNamesAddress("phone only 082 555 0147", "a@b.com")).toBe(false);
+    expect(contactNamesAddress("a@b.com", "   ")).toBe(false);
   });
 });

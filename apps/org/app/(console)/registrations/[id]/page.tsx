@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Check, ExternalLink, X } from "lucide-react";
+import { orgCanInDomain, orgCapabilityRefusal } from "@quagga/core";
 import {
   SECTION_KEYS,
   SECTION_LABELS,
@@ -75,6 +76,15 @@ export default async function RegistrationDetailPage({
     getRegistrationRoster(detail.group.id),
   ]);
 
+  // MAY THIS VIEWER DECIDE? `decideRegistration` guards `update` in the
+  // `registrations` domain; a lead scoped to a department that does not own
+  // registrations cannot satisfy it. Nothing asked until 28 Jul 2026, so the
+  // Approve and Reject buttons rendered live for every console account and only
+  // announced the truth as a toast after the click.
+  const decisionRefusal = orgCanInDomain(actor, "update", "registrations")
+    ? null
+    : orgCapabilityRefusal(actor, "update", "registrations");
+
   const projectKind = asProjectKind(detail.group.kind);
 
   if (projectKind) {
@@ -129,6 +139,7 @@ export default async function RegistrationDetailPage({
         officersCopy={officersCopy(detail.group.kind)}
         showWrangler={false}
         roster={roster}
+        decisionRefusal={decisionRefusal}
       />
     );
   }
@@ -167,6 +178,7 @@ export default async function RegistrationDetailPage({
       officersCopy={officersCopy("theme_camp")}
       showWrangler
       roster={roster}
+      decisionRefusal={decisionRefusal}
     />
   );
 }

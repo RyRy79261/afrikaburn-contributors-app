@@ -56,6 +56,20 @@ async function openDetailFromQueue(
       await org.waitForURL(/\/registrations\/[0-9a-f-]{36}$/i);
       return org.url();
     }
+    // SAY WHICH FAILURE THIS IS. The console renders a full-screen gate for an
+    // unauthenticated or non-org session, and a gate has no camp links — so a
+    // lost session surfaced as "never appeared in the registrations queue",
+    // which sends the reader to look at the queue, the ordering and the seed
+    // data. Measured 29 Jul 2026: six tests failed exactly this way in one run
+    // and the cause was upstream of the queue entirely.
+    if (
+      (await org.getByText(/restricted to afrikaburn staff/i).count()) ||
+      (await org.getByText(/this side is for afrikaburn staff/i).count())
+    ) {
+      throw new Error(
+        `[org-staff] The console showed the STAFF GATE, not the queue — this session is not an org session. "${campName}" may well be in the queue; nothing here could see it.`,
+      );
+    }
     if (await org.getByText(/no registrations/i).count()) break;
   }
   throw new Error(
@@ -87,15 +101,12 @@ test.describe("org staff · registration review loop", () => {
     await staff.org.getByRole("combobox").first().click();
     await staff.org.getByRole("option", { name: "Approved" }).click();
     await expect(staff.org).toHaveURL(/status=approved/);
-    await expect(
-      staff.org.getByRole("link", { name: campName }),
-    ).toHaveCount(0);
+    await expect(staff.org.getByRole("link", { name: campName })).toHaveCount(
+      0,
+    );
 
     // Open the detail from the queue (back to Submitted first).
-    const detailUrl = await openDetailFromQueue(
-      staff.org,
-      campName,
-    );
+    const detailUrl = await openDetailFromQueue(staff.org, campName);
     expect(detailUrl).toMatch(/\/registrations\/[0-9a-f-]{36}$/i);
     await expect(
       staff.org.getByRole("heading", { name: campName }),
@@ -196,7 +207,9 @@ test.describe("org staff · registration review loop", () => {
       .fill("Duplicate of an existing 2027 registration.");
     await dialog.getByRole("button", { name: /^confirm$/i }).click();
     await expect(staff.org.getByText(/reject applied/i)).toBeVisible();
-    await expect(staff.org.getByText(/submitted\s*→\s*rejected/i)).toBeVisible();
+    await expect(
+      staff.org.getByText(/submitted\s*→\s*rejected/i),
+    ).toBeVisible();
 
     // B is stale — it still shows the submitted actions. Approving now is an
     // illegal transition on a terminal row; the SERVER must refuse it. (Fails

@@ -33,7 +33,9 @@ import { appAlerts } from "../../lib/dom";
 
 /** True for a real camp-detail URL (/camps/<slug>) but NOT the /camps/new form. */
 function isCampSlugUrl(url: URL): boolean {
-  return /\/camps\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith("/camps/new");
+  return (
+    /\/camps\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith("/camps/new")
+  );
 }
 
 /** Fill the create-camp form's name (+ optional description) without submitting. */
@@ -94,7 +96,9 @@ export async function attemptCreateCamp(
     const message = (await appAlerts(page).textContent()) ?? undefined;
     return { outcome: "error", message: message ?? undefined };
   }
-  throw new Error("attemptCreateCamp: no outcome (created/warn/error) observed");
+  throw new Error(
+    "attemptCreateCamp: no outcome (created/warn/error) observed",
+  );
 }
 
 /** Confirm a warned (near-duplicate) create by clicking "Create camp" again. */
@@ -135,7 +139,10 @@ export async function completeBioWithPhone(
 
 // --- Custom roles (Roles & Officers settings) ------------------------------
 
-export async function gotoRolesSettings(page: Page, slug: string): Promise<void> {
+export async function gotoRolesSettings(
+  page: Page,
+  slug: string,
+): Promise<void> {
   await page.goto(`/camps/${slug}/settings/roles`);
   await expect(
     page.getByRole("heading", { name: /roles & officers/i }),
@@ -167,7 +174,10 @@ export async function createCustomRole(
   await page.getByLabel("Name", { exact: true }).fill(role.name);
   await page.getByLabel("Role icon").fill(role.emoji);
 
-  const swatch = page.getByRole("button", { name: role.colorLabel, exact: true });
+  const swatch = page.getByRole("button", {
+    name: role.colorLabel,
+    exact: true,
+  });
   await swatch.click();
   await expect(swatch).toHaveAttribute("aria-pressed", "true");
 
@@ -180,9 +190,7 @@ export async function createCustomRole(
   // Persistence, not a toast: the new role appears as a row in the list, and the
   // empty-state copy is gone.
   await expect(page.getByText(role.name).first()).toBeVisible();
-  await expect(
-    page.getByText(/no custom roles yet/i),
-  ).toHaveCount(0);
+  await expect(page.getByText(/no custom roles yet/i)).toHaveCount(0);
 }
 
 // --- Quick-assign a custom role to a member (camp dashboard) ----------------
@@ -310,6 +318,20 @@ export async function openRegistrationInConsole(
         orgPage.getByRole("heading", { name: campName }),
       ).toBeVisible();
       return;
+    }
+    // SAY WHICH FAILURE THIS IS. The console renders a full-screen gate for an
+    // unauthenticated or non-org session, and a gate has no camp links — so a
+    // lost session surfaced as "never appeared in the registrations queue",
+    // which sends the reader to look at the queue, the ordering and the seed
+    // data. Measured 29 Jul 2026: six tests failed exactly this way in one run
+    // and the cause was upstream of the queue entirely.
+    if (
+      (await orgPage.getByText(/restricted to afrikaburn staff/i).count()) ||
+      (await orgPage.getByText(/this side is for afrikaburn staff/i).count())
+    ) {
+      throw new Error(
+        `[camp-lead] The console showed the STAFF GATE, not the queue — this session is not an org session. "${campName}" may well be in the queue; nothing here could see it.`,
+      );
     }
     if (await orgPage.getByText(/no registrations/i).count()) break;
   }

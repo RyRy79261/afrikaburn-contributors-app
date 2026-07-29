@@ -45,6 +45,34 @@ interface FieldProps {
  * stored value is always `other:<text>`; see @quagga/types OTHER_PREFIX). */
 const OTHER_SENTINEL = "__other__";
 
+/**
+ * True when this question's control is a single HTML labelable element carrying
+ * `id={question.id}` — i.e. when `<label for>` actually resolves to something.
+ *
+ * Everything else (the yes/no pair, the scale, the rating, radio rows, chips,
+ * grids, the year toggles, the uploader) is a COMPOSITE of buttons with no such
+ * element, so `<label for>` on those pointed at nothing: the prompt was on
+ * screen but was announced by nothing, clicking it focused nothing, and a
+ * screen-reader user heard "Yes button / No button" with no idea what was being
+ * asked. Those get an ARIA group labelled by the prompt instead. */
+function isLabelableControl(question: Question): boolean {
+  switch (question.kind) {
+    case "short_text":
+    case "email":
+    case "phone":
+    case "long_text":
+    case "date":
+    case "time":
+      return true;
+    // The dropdown variant renders a real <button> trigger with the id; the
+    // radio-row and image-grid variants do not.
+    case "single_select":
+      return question.display === "dropdown";
+    default:
+      return false;
+  }
+}
+
 /** Render one questionnaire question as a labelled control. Data-driven — the
  * `kind` (and, for choice questions, the `display` variant) picks the control;
  * the value shape follows the question kind. */
@@ -56,24 +84,48 @@ export function QuestionField({
   options,
   blobConfigured = false,
 }: FieldProps) {
-  const describedBy = error
-    ? `${question.id}-error`
-    : question.helper
-      ? `${question.id}-help`
-      : undefined;
+  const labelId = `${question.id}-label`;
+  const helpId = question.helper ? `${question.id}-help` : null;
+  const errorId = error ? `${question.id}-error` : null;
+  // BOTH the hint and the error, in reading order. Previously the error
+  // REPLACED the hint, so the one moment a respondent most needs "dd/mm/yyyy"
+  // is the moment it stopped being announced.
+  const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
+  const required = "required" in question && question.required === true;
+  const labelable = isLabelableControl(question);
+
+  const prompt = (
+    <>
+      {question.prompt}
+      {required && (
+        <span className="ml-1 text-primary" aria-hidden>
+          *
+        </span>
+      )}
+      {/* The asterisk is decorative. A labelable control announces required-ness
+          through `aria-required`; a composite has no element that may carry it
+          (`aria-required` is not valid on role="group"), so say it in words. */}
+      {required && !labelable && <span className="sr-only"> (required)</span>}
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={question.id} className="text-sm font-medium">
-        {question.prompt}
-        {"required" in question && question.required && (
-          <span className="ml-1 text-primary" aria-hidden>
-            *
-          </span>
-        )}
-      </label>
+      {labelable ? (
+        <label
+          id={labelId}
+          htmlFor={question.id}
+          className="text-sm font-medium"
+        >
+          {prompt}
+        </label>
+      ) : (
+        <span id={labelId} className="text-sm font-medium">
+          {prompt}
+        </span>
+      )}
       {question.helper && (
-        <p id={`${question.id}-help`} className="text-xs text-muted-foreground">
+        <p id={helpId ?? undefined} className="text-xs text-muted-foreground">
           {question.helper}
         </p>
       )}
@@ -84,16 +136,42 @@ export function QuestionField({
         onChange={onChange}
         options={options}
         describedBy={describedBy}
+        labelledBy={labelId}
+        invalid={Boolean(error)}
+        required={required}
         blobConfigured={blobConfigured}
       />
 
       {error && (
-        <p id={`${question.id}-error`} className="text-xs text-destructive">
+        // `role="alert"` because nothing else tells a non-sighted respondent
+        // that Next didn't advance: the message simply appeared under a control
+        // they may not be on. aria-describedby covers re-reading it later.
+        <p
+          id={errorId ?? undefined}
+          role="alert"
+          className="text-xs text-destructive"
+        >
           {error}
         </p>
       )}
     </div>
   );
+}
+
+/** ARIA wiring every control gets, derived once by `QuestionField`. */
+interface ControlAria {
+  describedBy?: string;
+  /** Id of the prompt element — the accessible name for composite controls. */
+  labelledBy: string;
+  invalid: boolean;
+  required: boolean;
+}
+
+/** ARIA attributes spread onto a composite control's wrapper. */
+interface GroupAria {
+  "aria-labelledby": string;
+  "aria-describedby": string | undefined;
+  "aria-invalid": true | undefined;
 }
 
 function Control({
@@ -102,8 +180,23 @@ function Control({
   onChange,
   options,
   describedBy,
+  labelledBy,
+  invalid,
+  required,
   blobConfigured = false,
-}: FieldProps & { describedBy?: string }) {
+}: FieldProps & ControlAria) {
+  // Spread onto the labelable controls (the ones `<label for>` resolves to).
+  const inputAria = {
+    "aria-describedby": describedBy,
+    "aria-invalid": invalid || undefined,
+    "aria-required": required || undefined,
+  } as const;
+  // Spread onto a composite's wrapper, which stands in as the control.
+  const groupAria: GroupAria = {
+    "aria-labelledby": labelledBy,
+    "aria-describedby": describedBy,
+    "aria-invalid": invalid || undefined,
+  };
   switch (question.kind) {
     case "short_text":
     case "email":
@@ -115,13 +208,16 @@ function Control({
           placeholder={
             "placeholder" in question ? question.placeholder : undefined
           }
-          aria-describedby={describedBy}
+          {...inputAria}
           onChange={(e) => onChange(e.target.value)}
         />
       );
 
     case "phone":
       return (
+        // `describedBy` is the only ARIA hook @quagga/ui's PhoneInput exposes on
+        // its inner <input>; the error text still reaches the respondent through
+        // it, but there is no aria-invalid/aria-required to set from here.
         <PhoneInput
           id={question.id}
           value={typeof value === "string" ? value : ""}
@@ -138,7 +234,7 @@ function Control({
           rows={5}
           value={typeof value === "string" ? value : ""}
           placeholder={question.placeholder}
-          aria-describedby={describedBy}
+          {...inputAria}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -149,7 +245,7 @@ function Control({
           id={question.id}
           type="date"
           value={typeof value === "string" ? value : ""}
-          aria-describedby={describedBy}
+          {...inputAria}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -162,7 +258,7 @@ function Control({
           type="time"
           className="max-w-[10rem]"
           value={typeof value === "string" ? value : ""}
-          aria-describedby={describedBy}
+          {...inputAria}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -173,7 +269,7 @@ function Control({
     case "file_link": {
       const url = typeof value === "string" ? value : "";
       return (
-        <div className="flex flex-col gap-1.5">
+        <div role="group" {...groupAria} className="flex flex-col gap-1.5">
           <FileUpload
             value={url ? [url] : []}
             onChange={(urls) => onChange(urls[0] ?? "")}
@@ -193,7 +289,7 @@ function Control({
 
     case "boolean":
       return (
-        <div className="flex gap-2">
+        <div role="group" {...groupAria} className="flex gap-2">
           {[
             { v: true, label: "Yes" },
             { v: false, label: "No" },
@@ -225,8 +321,7 @@ function Control({
         <div className="flex flex-col gap-1.5">
           <div
             role="radiogroup"
-            aria-describedby={describedBy}
-            aria-label={question.prompt}
+            {...groupAria}
             className="flex flex-wrap items-end gap-2"
           >
             {steps.map((n) => (
@@ -273,8 +368,7 @@ function Control({
         <div className="flex flex-col gap-1.5">
           <div
             role="radiogroup"
-            aria-describedby={describedBy}
-            aria-label={question.prompt}
+            {...groupAria}
             className="flex flex-wrap items-center gap-1"
           >
             {steps.map((n) => {
@@ -346,7 +440,7 @@ function Control({
                 onChange(v === OTHER_SENTINEL ? toOtherAnswer(otherText) : v)
               }
             >
-              <SelectTrigger id={question.id} aria-describedby={describedBy}>
+              <SelectTrigger id={question.id} {...inputAria}>
                 <SelectValue placeholder="Choose an option" />
               </SelectTrigger>
               <SelectContent>
@@ -379,8 +473,7 @@ function Control({
           <div className="flex flex-col gap-2">
             <div
               role="radiogroup"
-              aria-describedby={describedBy}
-              aria-label={question.prompt}
+              {...groupAria}
               className="grid grid-cols-2 gap-2 sm:grid-cols-3"
             >
               {opts.map((opt) => (
@@ -409,12 +502,7 @@ function Control({
 
       // Default: radio rows (with option thumbnails when the author set them).
       return (
-        <div
-          className="flex flex-col gap-1.5"
-          role="radiogroup"
-          aria-describedby={describedBy}
-          aria-label={question.prompt}
-        >
+        <div className="flex flex-col gap-1.5" role="radiogroup" {...groupAria}>
           {opts.map((opt) => (
             <button
               key={opt.value}
@@ -492,7 +580,8 @@ function Control({
         return (
           <div className="flex flex-col gap-2">
             <div
-              aria-describedby={describedBy}
+              role="group"
+              {...groupAria}
               className="grid grid-cols-2 gap-2 sm:grid-cols-3"
             >
               {opts.map((opt) => (
@@ -526,7 +615,7 @@ function Control({
 
       return (
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2" aria-describedby={describedBy}>
+          <div className="flex flex-wrap gap-2" role="group" {...groupAria}>
             {opts.map((opt) => {
               const on = selectedSet.has(opt.value);
               return (
@@ -572,20 +661,21 @@ function Control({
           question={question}
           value={value}
           onChange={onChange}
-          describedBy={describedBy}
+          groupAria={groupAria}
         />
       );
 
     case "years": {
       const selected = Array.isArray(value) ? value.map((v) => String(v)) : [];
       return (
+        // Radix ToggleGroup's root already carries role="group".
         <ToggleGroup
           type="multiple"
           variant="outline"
           size="sm"
           value={selected}
           onValueChange={(vals) => onChange(vals)}
-          aria-describedby={describedBy}
+          {...groupAria}
           className="justify-start"
         >
           {attendedYearOptions().map(({ year, disabled }) => (
@@ -618,12 +708,12 @@ function GridControl({
   question,
   value,
   onChange,
-  describedBy,
+  groupAria,
 }: {
   question: Extract<Question, { kind: "multi_choice_grid" | "checkbox_grid" }>;
   value: QuestionnaireResponseValue | undefined;
   onChange: (value: QuestionnaireResponseValue) => void;
-  describedBy?: string;
+  groupAria: GroupAria;
 }) {
   const single = question.kind === "multi_choice_grid";
   const answer: Record<string, string[]> =
@@ -648,11 +738,8 @@ function GridControl({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table
-        className="w-full border-collapse text-sm"
-        aria-describedby={describedBy}
-      >
+    <div className="overflow-x-auto" role="group" {...groupAria}>
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
             <td className="p-2" />

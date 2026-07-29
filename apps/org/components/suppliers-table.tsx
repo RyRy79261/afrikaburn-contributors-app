@@ -1,11 +1,12 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ShieldAlert, Trash2 } from "lucide-react";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@quagga/ui/components/responsive-data-table";
 import { Badge } from "@quagga/ui/components/badge";
+import { Button } from "@quagga/ui/components/button";
 import { cn } from "@quagga/ui/lib/utils";
 import { deriveOnboardingProgress, standingLabel } from "@quagga/core";
 import type { SupplierOverviewRow } from "@/lib/queries";
@@ -13,6 +14,9 @@ import { SupplierStandingSelect } from "./supplier-standing-select";
 import { SupplierNotesDrawer } from "./supplier-notes-drawer";
 import { SupplierDeleteButton } from "./supplier-delete-button";
 import { SupplierOnboardingStepList } from "./supplier-onboarding-steps";
+
+/** The one restriction sentence every disabled bin icon points at. */
+const DELETE_REFUSAL_ID = "supplier-delete-refusal";
 
 /**
  * The supplier repository table (supplier model v2). Columns: supplier ·
@@ -25,13 +29,47 @@ import { SupplierOnboardingStepList } from "./supplier-onboarding-steps";
  * header row is disabled and whose rows stack Supplier / Onboarding / Standing
  * / Notes). Expansion, the standing select and the notes drawer all work in
  * both layouts — the primitive owns the chevron and the open set.
+ *
+ * REMOVAL IS RESTRICTED, VISIBLY — WHEN THE PAGE SAYS SO (`deleteRefusal`).
+ * `deleteSupplier` asks for `delete` in the suppliers domain, and two kinds of
+ * console account can never satisfy that: an engineer, whose rank carve-out
+ * refuses deletion in every department, and anyone whose roles are scoped to a
+ * department that does not own suppliers. The bin icon was offered to both, and
+ * both could only learn the truth by pressing it and reading a toast — a
+ * destructive-looking control that turns out to be decorative, which is the
+ * worst of both worlds.
+ *
+ * Disabled rather than hidden, deliberately: the row still shows that removal
+ * exists and the note under the table says whose job it is. A control that
+ * vanishes teaches nobody that they were restricted — it teaches them the
+ * console does not have the feature.
  */
 export function SuppliersTable({
   suppliers,
   editionId,
+  deleteRefusal,
 }: {
   suppliers: SupplierOverviewRow[];
   editionId: string | null;
+  /**
+   * WHY THIS VIEWER MAY NOT REMOVE A SUPPLIER, in the words the server would
+   * refuse them with — or null/omitted when they may.
+   *
+   * The page resolves it, because only the server has the actor:
+   *
+   *   deleteRefusal={
+   *     orgCanInDomain(session.actor, "delete", "suppliers")
+   *       ? null
+   *       : orgCapabilityRefusal(session.actor, "delete", "suppliers")
+   *   }
+   *
+   * OMITTING IT MEANS "NOT ASKED", and the control is offered exactly as it
+   * always was — a caller that has not answered yet must not silently take a
+   * removal away from the System managers and org staff who do hold it. That is
+   * the only reason it is optional: a page that renders this table without
+   * answering is a page that still shows a control it cannot honour.
+   */
+  deleteRefusal?: string | null;
 }) {
   const columns: ResponsiveColumn<SupplierOverviewRow>[] = [
     {
@@ -129,22 +167,50 @@ export function SuppliersTable({
             supplierName={s.name}
             count={s.notesCount}
           />
-          <SupplierDeleteButton supplierId={s.id} supplierName={s.name} />
+          {deleteRefusal ? (
+            // The reason is stated ONCE under the table rather than on every
+            // row — it is the same sentence for all of them, and a dense table
+            // that repeats a paragraph per row is a table nobody reads. The
+            // control is described by `aria-describedby` so a screen reader
+            // reaches that sentence from the row it is on.
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled
+              aria-label={`Remove ${s.name} — not available to you`}
+              aria-describedby={DELETE_REFUSAL_ID}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </Button>
+          ) : (
+            <SupplierDeleteButton supplierId={s.id} supplierName={s.name} />
+          )}
         </div>
       ),
     },
   ];
 
   return (
-    <ResponsiveDataTable
-      columns={columns}
-      data={suppliers}
-      getRowKey={(s) => s.id}
-      caption="Supplier repository"
-      renderExpanded={(s) => (
-        <SupplierExpansion supplier={s} editionId={editionId} />
+    <>
+      <ResponsiveDataTable
+        columns={columns}
+        data={suppliers}
+        getRowKey={(s) => s.id}
+        caption="Supplier repository"
+        renderExpanded={(s) => (
+          <SupplierExpansion supplier={s} editionId={editionId} />
+        )}
+      />
+      {deleteRefusal && (
+        <p
+          id={DELETE_REFUSAL_ID}
+          className="flex items-start gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground"
+        >
+          <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{deleteRefusal}</span>
+        </p>
       )}
-    />
+    </>
   );
 }
 

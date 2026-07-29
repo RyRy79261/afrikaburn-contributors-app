@@ -38,8 +38,9 @@ pnpm --filter @quagga/e2e e2e:ui              # interactive
 pnpm --filter @quagga/e2e e2e:report          # open last HTML report
 ```
 
-`pnpm e2e:local` runs **`desktop-chromium` only**; `mobile-360` runs only via the
-`--filter` commands above.
+`pnpm e2e:local` runs **both projects** (`desktop-chromium` and `mobile-360`) —
+narrow it with `E2E_PROJECTS=desktop-chromium`. CI runs `desktop-chromium` only;
+`mobile-360` has never been triaged, so it is expected red.
 
 Two things `e2e:local` does on purpose, both of which look wrong until you know why:
 it **kills and restarts `next dev`** (a long-lived dev server keeps a stale module
@@ -203,11 +204,26 @@ exactly as a real user.
 
 ## CI wiring (M3-31 — downstream of this harness)
 
-- **PR:** `e2e:smoke` (`--grep @smoke`) against the preview — shells load, an auth
-  round trip, a negative path.
-- **Nightly:** full suite, both projects, on the `deployment_status` event (carries
-  the preview URL); send `x-vercel-protection-bypass`; throwaway Neon branch,
-  deleted on completion; upload traces/videos on failure.
+This section described a plan. What actually ships is in
+`.github/workflows/ci.yml`, and it is different — recorded here so the two do
+not disagree:
+
+- **PR and push to main:** the WHOLE suite on `desktop-chromium`, split into
+  eight per-persona jobs so a red job names what broke. Blocking. Runs against a
+  local stack the job stands up itself (Postgres + the two Neon proxies via
+  `docker-compose.local.yml`), not against a Vercel preview — so there is no
+  preview URL, no bypass header and no Neon branch involved.
+- **Nightly (02:00 UTC) and `workflow_dispatch`:** the same eight personas on
+  `mobile-360`. NOT on pull requests: every mobile spec is of unknown status and
+  was written against a desktop layout, so it would put eight red crosses on
+  every PR until triage is done, and a check that is always red teaches people
+  to ignore checks. Reports upload under `mobile-*`.
+- Traces, screenshots, the HTML report AND the app server log upload on every
+  job, pass or fail (`playwright-report-<persona>` / `mobile-<persona>`).
+
+The plan's smoke-only PR gate was abandoned deliberately: a gate that runs three
+specs cannot catch a permission regression, which is the class of bug this suite
+exists for.
 
 ## Selector traps (each of these cost a debugging session)
 

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ClipboardList, Plus, CheckCircle2, Clock } from "lucide-react";
-import { hasProjectPermission } from "@quagga/core";
+import { ClipboardList, Plus, CheckCircle2, Clock, Lock } from "lucide-react";
+import {
+  canAuthorProjectQuestionnaire,
+  hasProjectPermission,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -30,6 +33,8 @@ import {
 } from "@/lib/roles-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
+import { CloseQuestionnaireButton } from "@/components/questionnaire/close-questionnaire-button";
+import { closeQuestionnaireAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,9 +81,12 @@ export default async function CampQuestionnairesPage({
   // (questionnaire-spec §"Roles v2"). UI hiding is never the security boundary —
   // the create action re-enforces the audience scope server-side.
   const viewerPerms = await getMemberPermissions(camp.id, user.id);
-  const canManage =
-    !!viewerPerms && hasProjectPermission(viewerPerms, "manage_questionnaires");
-  if (!canManage) notFound();
+  if (
+    !viewerPerms ||
+    !hasProjectPermission(viewerPerms, "manage_questionnaires")
+  ) {
+    notFound();
+  }
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
 
   const questionnaires = await listProjectQuestionnaires(camp.id);
@@ -121,6 +129,34 @@ export default async function CampQuestionnairesPage({
     return names.length > 0 ? names.join(" & ") : "selected roles";
   }
 
+  // Why this viewer may not close each questionnaire (null = they may).
+  // Recalling a send is the same authority as making it, so it runs the same
+  // scope predicate the send ran — against the audience it actually went to.
+  const closeRefusalById = new Map<string, string | null>(
+    questionnaires.map((q) => {
+      const activation = detailById.get(q.activationId)?.activation;
+      const aud = activation?.audience;
+      if (!activation || aud?.kind !== "project") {
+        return [
+          q.activationId,
+          "Only this camp's own questionnaires can be closed here.",
+        ] as const;
+      }
+      const allowed = canAuthorProjectQuestionnaire(
+        viewerPerms,
+        aud,
+        activation.blocking,
+        baselineRole?.id ?? null,
+      );
+      return [
+        q.activationId,
+        allowed
+          ? null
+          : "Outside your questionnaire permissions — a lead or admin can close it.",
+      ] as const;
+    }),
+  );
+
   return (
     <>
       <div className="flex flex-col gap-6">
@@ -145,14 +181,12 @@ export default async function CampQuestionnairesPage({
                 </p>
               </div>
             </div>
-            {canManage && (
-              <Button asChild>
-                <Link href={`/camps/${slug}/questionnaires/new`}>
-                  <Plus className="h-4 w-4" aria-hidden />
-                  New questionnaire
-                </Link>
-              </Button>
-            )}
+            <Button asChild>
+              <Link href={`/camps/${slug}/questionnaires/new`}>
+                <Plus className="h-4 w-4" aria-hidden />
+                New questionnaire
+              </Link>
+            </Button>
           </div>
 
           {legendRoles.length > 0 && (
@@ -230,6 +264,10 @@ export default async function CampQuestionnairesPage({
                       <ul className="flex flex-col divide-y divide-border">
                         {respondents.map((r) => {
                           const done = r.status === "completed";
+                          // Closing the questionnaire expires whoever hadn't
+                          // answered — say "recalled", not "pending": nobody is
+                          // waiting on them any more.
+                          const recalled = r.status === "expired";
                           const chips = chipsByUserId.get(r.userId) ?? [];
                           return (
                             <li
@@ -264,6 +302,11 @@ export default async function CampQuestionnairesPage({
                                       aria-hidden
                                     />
                                   </Badge>
+                                ) : recalled ? (
+                                  <Badge variant="outline">
+                                    <Lock className="h-3 w-3" aria-hidden />
+                                    Recalled
+                                  </Badge>
                                 ) : (
                                   <Badge variant="outline">
                                     <Clock className="h-3 w-3" aria-hidden />
@@ -282,8 +325,8 @@ export default async function CampQuestionnairesPage({
                       </p>
                     )}
 
-                    {isAdmin && (
-                      <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isAdmin && (
                         <Button asChild variant="outline" size="sm">
                           <Link
                             href={`/camps/${slug}/questionnaires/${q.activationId}`}
@@ -291,8 +334,17 @@ export default async function CampQuestionnairesPage({
                             View responses
                           </Link>
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      {q.status === "open" && (
+                        <CloseQuestionnaireButton
+                          slug={slug}
+                          activationId={q.activationId}
+                          blocking={q.blocking}
+                          refusal={closeRefusalById.get(q.activationId)}
+                          action={closeQuestionnaireAction}
+                        />
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );

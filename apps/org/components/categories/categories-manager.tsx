@@ -39,11 +39,18 @@ import {
 // enforced there via @quagga/core, never here.
 //
 // `canManage` comes from the ONE capability matrix on the server
-// (`manage_camp_categories`, System manager only — Ryan, 27 Jul 2026), which is
-// the same check `createCategory`/`updateCategory`/`deleteCategory` re-run. So
-// when it is false every control is gone AND every action would refuse: the
-// read-only table is a truthful picture of the permission, not a decoration over
-// buttons that would have worked.
+// (`requireSystemManager`, System manager only — Ryan, 27 Jul 2026), which is
+// the same check `createCategory`/`updateCategory`/`deleteCategory` re-run.
+//
+// When it is false the controls are DISABLED AND EXPLAINED, not removed —
+// "transparent with restrictions rather than completely obfuscated, except for
+// private personal information" (Ryan, 28 Jul 2026). A taxonomy is not personal
+// information, and a reader who sees no buttons at all cannot tell "this console
+// has no such feature" from "this feature is not mine". Every disabled control
+// names the restriction in its accessible name and points (`refusalId`) at the
+// one refusal sentence the page already prints above the table; the server
+// re-checks regardless, so nothing here is load-bearing for authorisation. Same
+// shape as suppliers-table.tsx.
 
 interface FormState {
   label: string;
@@ -71,11 +78,14 @@ export function CategoriesManager({
   editionId,
   categories,
   canManage,
+  refusalId,
 }: {
   editionId: string;
   categories: CampCategoryRow[];
-  /** From `orgCan(actor, "manage_camp_categories")` — System manager only. */
+  /** From `isSystemManager(actor)` — the RANK, not a grantable capability. */
   canManage: boolean;
+  /** id of the page's refusal sentence; every disabled control describes to it. */
+  refusalId: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -188,101 +198,122 @@ export function CategoriesManager({
     <div className="flex flex-col gap-4">
       <Card>
         <CardContent className="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Category</TableHead>
-            <TableHead className="w-28">Used by</TableHead>
-            <TableHead className="w-20">Sort</TableHead>
-            <TableHead className="w-32 text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {categories.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={4}
-                className="py-8 text-center text-sm text-muted-foreground"
-              >
-                No categories yet. Add the first one below.
-              </TableCell>
-            </TableRow>
-          ) : (
-            categories.map((row, index) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <span className="flex items-center gap-3">
-                    <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-base"
-                      aria-hidden
-                    >
-                      {row.emoji ?? "·"}
-                    </span>
-                    <span className="font-medium">{row.label}</span>
-                  </span>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground tabular-nums">
-                  {row.usage} camp{row.usage === 1 ? "" : "s"}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground tabular-nums">
-                  {row.sort}
-                </TableCell>
-                <TableCell>
-                  <span className="flex items-center justify-end gap-1">
-                    {canManage && (
-                      <>
-                        <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={pending || index === 0}
-                      onClick={() => move(index, -1)}
-                      aria-label={`Move ${row.label} up`}
-                    >
-                      <ChevronUp className="h-4 w-4" aria-hidden />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={pending || index === categories.length - 1}
-                      onClick={() => move(index, 1)}
-                      aria-label={`Move ${row.label} down`}
-                    >
-                      <ChevronDown className="h-4 w-4" aria-hidden />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={pending}
-                      onClick={() => openEdit(row)}
-                      aria-label={`Edit ${row.label}`}
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={pending}
-                      onClick={() => setDeleting(row)}
-                      aria-label={`Delete ${row.label}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </>
-                    )}
-                  </span>
-                </TableCell>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead className="w-28">Used by</TableHead>
+                <TableHead className="w-20">Sort</TableHead>
+                <TableHead className="w-32 text-right">Actions</TableHead>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {categories.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="py-8 text-center text-sm text-muted-foreground"
+                  >
+                    No categories yet. Add the first one below.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                categories.map((row, index) => (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <span className="flex items-center gap-3">
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-base"
+                          aria-hidden
+                        >
+                          {row.emoji ?? "·"}
+                        </span>
+                        <span className="font-medium">{row.label}</span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground tabular-nums">
+                      {row.usage} camp{row.usage === 1 ? "" : "s"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground tabular-nums">
+                      {row.sort}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!canManage || pending || index === 0}
+                          onClick={() => move(index, -1)}
+                          aria-label={
+                            canManage
+                              ? `Move ${row.label} up`
+                              : `Move ${row.label} up — not available to you`
+                          }
+                          aria-describedby={canManage ? undefined : refusalId}
+                        >
+                          <ChevronUp className="h-4 w-4" aria-hidden />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={
+                            !canManage ||
+                            pending ||
+                            index === categories.length - 1
+                          }
+                          onClick={() => move(index, 1)}
+                          aria-label={
+                            canManage
+                              ? `Move ${row.label} down`
+                              : `Move ${row.label} down — not available to you`
+                          }
+                          aria-describedby={canManage ? undefined : refusalId}
+                        >
+                          <ChevronDown className="h-4 w-4" aria-hidden />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!canManage || pending}
+                          onClick={() => openEdit(row)}
+                          aria-label={
+                            canManage
+                              ? `Edit ${row.label}`
+                              : `Edit ${row.label} — not available to you`
+                          }
+                          aria-describedby={canManage ? undefined : refusalId}
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!canManage || pending}
+                          onClick={() => setDeleting(row)}
+                          aria-label={
+                            canManage
+                              ? `Delete ${row.label}`
+                              : `Delete ${row.label} — not available to you`
+                          }
+                          aria-describedby={canManage ? undefined : refusalId}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </Button>
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      {/* Add category — a collapsed row that opens into the form. Absent for a
-          rank that cannot manage the taxonomy; the same rank's write would be
-          refused server-side, so this is agreement, not concealment. */}
-      {canManage && (
+      {/* Add category — a collapsed row that opens into the form.
+          RESTRICTED, NOT REMOVED, for a rank that cannot manage the taxonomy.
+          Hiding it left a reader unable to tell "this console has no such
+          feature" from "this feature is not mine", and the screen already
+          carries the reason below. */}
       <div className="rounded-xl border border-dashed border-border p-4">
         {adding ? (
           <div className="flex flex-col gap-3">
@@ -334,7 +365,12 @@ export function CategoriesManager({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-3 text-left"
+            disabled={!canManage}
+            aria-label={
+              canManage ? undefined : "Add category — not available to you"
+            }
+            aria-describedby={canManage ? undefined : refusalId}
+            className="flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border">
               <Plus className="h-4 w-4 text-accent" aria-hidden />
@@ -348,7 +384,6 @@ export function CategoriesManager({
           </button>
         )}
       </div>
-      )}
 
       <p className="text-xs text-muted-foreground">
         Camps choose up to {CATEGORY_SUGGESTED_MAX} categories on their profile;

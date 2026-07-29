@@ -72,8 +72,8 @@ function requireDatabaseUrl(): string {
  * about twenty. Measured cold 7.9 s, warm 4.0 s, on an idle 16-core machine
  * with a production build. On a 4-core CI runner also hosting three Next
  * servers, Postgres and two proxies, it went past Playwright's 20 s navigation
- * cap: every one of the 30 navigation timeouts across the whole e2e fleet on
- * 28 Jul was `/camps/[slug]` or its `settings/roles` child, and NOTHING else
+ * cap: all 37 navigation timeouts across the whole e2e fleet on 28 Jul were
+ * `/camps/[slug]` (32) or its `settings/roles` child (5), and NOTHING else
  * timed out. It read for a week as a flaky suite, or an underpowered runner, or
  * a product bug in one page. It was a dev proxy.
  *
@@ -91,8 +91,10 @@ export function createHttpDb(): Database {
   if (process.env.NEON_LOCAL_PROXY === "1") {
     localReadPool ??= makeLocalReadPool();
     // The two drivers' query builders are the same API; `execute()` is the one
-    // place their return shapes differ (rows array vs pg Result), and the only
-    // caller of it — rate-limit.ts — already handles both, deliberately.
+    // place their return shapes differ (rows array vs pg Result). Two callers:
+    // rate-limit.ts, which handles both shapes deliberately, and
+    // apps/org/lib/system-probe.ts, which awaits `select 1` and discards the
+    // result — so neither can see the difference.
     return drizzleServerless(localReadPool, {
       schema,
       logger: sqlLogger(),

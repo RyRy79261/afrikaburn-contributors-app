@@ -1,14 +1,16 @@
 "use server";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { isSanitized } from "@quagga/core";
 
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getDb, schema, withTransaction } from "@/lib/db";
+import { getDb, schema, withTransaction, type Transaction } from "@/lib/db";
 import { writeAuditEvent } from "@/lib/audit";
 import { assignSupplierCode } from "@/lib/supplier-code";
+import { requiredDocumentsBoundToStep } from "@/lib/documents";
+import { lockOnboardingSteps } from "@/lib/onboarding-store";
 import { runAction, type ActionResult } from "./result";
 
 // A signed-in user with no matching supplier row registers themselves as a
@@ -30,6 +32,34 @@ const RegisterSupplierInput = z.object({
   category: z.string().trim().max(120).optional(),
   website: z.string().trim().max(300).optional(),
 });
+
+/**
+ * Any OTHER listing already using this business name, case- and
+ * whitespace-insensitively (the same normalisation the seed dedupes on), or null
+ * when the name is free. `exceptSupplierId` excludes the caller's own row on the
+ * rename path — otherwise saving an unchanged profile would collide with itself.
+ *
+ * `claimed` says whether an account is already linked to the listing found; the
+ * two cases need different advice, because only one of them has a person on the
+ * other end.
+ */
+async function findNameClash(
+  tx: Transaction,
+  name: string,
+  exceptSupplierId?: string,
+): Promise<{ claimed: boolean } | null> {
+  const sameName = sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${name}))`;
+  const [row] = await tx
+    .select({ claimed: sql<boolean>`${schema.suppliers.userId} IS NOT NULL` })
+    .from(schema.suppliers)
+    .where(
+      exceptSupplierId
+        ? and(sameName, ne(schema.suppliers.id, exceptSupplierId))
+        : sameName,
+    )
+    .limit(1);
+  return row ?? null;
+}
 
 export async function registerSupplier(
   raw: z.input<typeof RegisterSupplierInput>,
@@ -82,27 +112,27 @@ export async function registerSupplier(
         // immediately eligible in the org's supplier picker. The suspension
         // stayed on a row nobody was looking at any more.
         //
-        // Any existing listing under the same name (case- and
-        // whitespace-insensitive, the same normalisation the seed dedupes on)
-        // stops self-registration and routes them to the org. That deliberately
-        // also catches the honest case — an imported listing they want to claim
-        // — because claiming is an org-mediated action, not a self-service one.
-        const [sameName] = await tx
-          .select({
-            id: schema.suppliers.id,
-            standing: schema.suppliers.standing,
-            claimed: sql<boolean>`${schema.suppliers.userId} IS NOT NULL`,
-          })
-          .from(schema.suppliers)
-          .where(
-            sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${input.name}))`,
-          )
-          .limit(1);
-        if (sameName) {
+        // Any existing listing under the same name stops self-registration.
+        // That deliberately also catches the honest case — an imported listing
+        // they want to claim — because a second row would split the business's
+        // history and standing across two listings.
+        //
+        // THE ADVICE HAD TO CHANGE TOO. Both messages used to send suppliers to
+        // "an administrator" to have the listing linked to their account. No
+        // such control exists: on a supplier listing the org console can set
+        // standing, move onboarding steps, add notes, and add or delete the
+        // listing — there is no link or unlink anywhere in it. The only writer of
+        // `suppliers.user_id` on an existing row in the whole codebase is the
+        // automatic email-overlap claim in `lib/session.ts`, which fires when a
+        // VERIFIED sign-in address appears on an UNCLAIMED listing's contact
+        // line. So that is what the unclaimed case now describes, and the claimed
+        // case no longer promises a re-link nobody can perform.
+        const clash = await findNameClash(tx, input.name);
+        if (clash) {
           throw new Error(
-            sameName.claimed
-              ? "A supplier with that business name is already registered. If that's you, ask AfrikaBurn to link it to this account rather than creating a second listing."
-              : "AfrikaBurn already has a listing for that business name. Ask an administrator to link it to this account — that keeps your history and standing intact.",
+            clash.claimed
+              ? "A supplier with that business name is already registered and linked to an account. If that's you, sign in with it instead. If it isn't, email suppliers@afrikaburn.com — the link can't be moved from inside the portal."
+              : "AfrikaBurn already has a listing for that business name. If it's yours, sign in with the email address AfrikaBurn holds for that listing and the portal claims it for you automatically, history and standing intact. If you're not sure which address that is, email suppliers@afrikaburn.com.",
           );
         }
 
@@ -211,6 +241,24 @@ export async function updateSupplierProfile(
     // profile whose step map wasn't updated (or vice-versa) would misrepresent
     // the supplier's onboarding state.
     await withTransaction(async (tx) => {
+      // THE REGISTER-TIME NAME GUARD WAS WORTHLESS WITHOUT THIS ONE.
+      //
+      // `registerSupplier` refuses a new listing under a name AfrikaBurn already
+      // has, which is what stops a suspended supplier signing up again and
+      // landing a second row with standing `good`, immediately eligible in the
+      // org's supplier picker. Renaming was not guarded at all, so the check was
+      // one extra click away: register as "Karoo Tents (New)", then save the
+      // profile as "Karoo Tents". Same laundered listing, same clean standing,
+      // same suspension left sitting on a row nobody looks at.
+      //
+      // Same normalisation and same refusal as registration, with this listing
+      // excluded so an unchanged name still saves.
+      if (await findNameClash(tx, input.name, session.supplier.id)) {
+        throw new Error(
+          "Another supplier is already listed under that business name, so this listing can't take it. Email suppliers@afrikaburn.com if the two are the same business.",
+        );
+      }
+
       await tx
         .update(schema.suppliers)
         .set({
@@ -222,11 +270,31 @@ export async function updateSupplierProfile(
         })
         .where(eq(schema.suppliers.id, session.supplier.id));
 
-      // Filling in registration details satisfies step 1.
-      const nextSteps = {
-        ...session.steps,
-        registration_form: "completed" as const,
-      };
+      // Read the map inside this transaction (see `lockOnboardingSteps`): the
+      // whole seven-step map is rewritten below, so seeding it from the session's
+      // pre-transaction copy would republish stale values for every other step
+      // and undo anything the org confirmed in the meantime.
+      const stored = await lockOnboardingSteps(
+        tx,
+        session.supplier.id,
+        session.edition.id,
+      );
+
+      // Filling in registration details satisfies step 1 — UNLESS the org has
+      // bound a required document to it. A document-bound step has exactly one
+      // completion path, the acknowledgement (`setOnboardingStep` refuses for the
+      // same reason): completing it here as well would leave the step flapping,
+      // marked done by a profile save and reverted by the supplier's next
+      // acknowledgement. The profile still saves; only the step is left alone.
+      const boundToRegistration = await requiredDocumentsBoundToStep(
+        session.edition.id,
+        "registration_form",
+        tx,
+      );
+      const nextSteps =
+        boundToRegistration.length > 0
+          ? stored
+          : { ...stored, registration_form: "completed" as const };
       await tx
         .update(schema.supplierOnboarding)
         .set({ steps: nextSteps, updatedAt: new Date() })

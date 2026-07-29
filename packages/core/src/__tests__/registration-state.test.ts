@@ -38,11 +38,22 @@ describe("registration state machine", () => {
     );
   });
 
-  it("treats rejected and withdrawn as terminal", () => {
+  it("treats rejected as terminal — AfrikaBurn's decision, not the camp's", () => {
     expect(REGISTRATION_TRANSITIONS.rejected).toEqual([]);
-    expect(REGISTRATION_TRANSITIONS.withdrawn).toEqual([]);
     for (const to of ALL_STATUSES) {
       expect(canTransitionRegistration("rejected", to)).toBe(false);
+    }
+  });
+
+  it("lets a WITHDRAWN registration be reopened as a draft", () => {
+    // The camp withdrew its own registration, and the confirm dialog promises
+    // it can "register again". `withdrawn: []` made that a lie with no way out:
+    // one row per (group, edition), the wizard read-only outside draft /
+    // changes_requested, and the console refusing every action out of
+    // withdrawn. Reopening returns it to the camp's own editable state.
+    expect(canTransitionRegistration("withdrawn", "draft")).toBe(true);
+    for (const to of ALL_STATUSES) {
+      if (to === "draft") continue;
       expect(canTransitionRegistration("withdrawn", to)).toBe(false);
     }
   });
@@ -113,8 +124,15 @@ describe("camp-side actions", () => {
     expect(canCampWithdraw("rejected")).toBe(false);
   });
 
-  it("exposes exactly the three camp actions", () => {
-    expect(CAMP_ACTIONS).toEqual(["submit", "resubmit", "withdraw"]);
+  it("exposes exactly the four camp actions", () => {
+    expect(CAMP_ACTIONS).toEqual([
+      "submit",
+      "resubmit",
+      "withdraw",
+      // The way back from a voluntary withdrawal — the "register again" the
+      // withdraw dialog promises. Deliberately no equivalent out of `rejected`.
+      "reopen",
+    ]);
   });
 });
 

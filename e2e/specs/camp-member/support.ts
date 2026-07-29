@@ -20,6 +20,11 @@ function activationIdFrom(value: string | null): string | null {
   return value?.match(/questionnaires\/([0-9a-f-]{36})/i)?.[1] ?? null;
 }
 
+/** `EDIT_STEPS` in apps/web/components/onboarding/bio-flow.tsx: details, burns,
+ *  privacy. Named here so a step added there fails this loop loudly rather than
+ *  silently skipping the privacy page. */
+const EDIT_STEP_COUNT = 3;
+
 export interface AuthorQuestionnaireOptions {
   title: string;
   /** The single required short-text question's prompt (used later as its label). */
@@ -82,7 +87,9 @@ export async function authorCampQuestionnaire(
 
   // A non-blocking send does not gate the lead: router.push lands on the list.
   await leadPage.waitForURL(new RegExp(`/camps/${slug}/questionnaires$`));
-  const viewLink = leadPage.getByRole("link", { name: /view responses/i }).first();
+  const viewLink = leadPage
+    .getByRole("link", { name: /view responses/i })
+    .first();
   await expect(viewLink).toBeVisible();
   const id = activationIdFrom(await viewLink.getAttribute("href"));
   if (!id) {
@@ -120,26 +127,61 @@ export async function setHardLockedBioData(
   page: Page,
   sentinels: { onsiteContactName: string; medicalNotes: string },
 ): Promise<{ onsiteContactName: string; medicalNotes: string }> {
-  await page.goto("/profile?edit=1");
-  await expect(page.getByRole("heading", { name: /edit your bio/i })).toBeVisible();
+  // THE WHOLE EDIT IS RETRIED FROM THE TOP, not just its last click.
+  //
+  // The editor is a three-step flow whose every "Save & continue" is a server
+  // action, and it lives behind a shell that navigates on its own (the profile
+  // page's own redirect, and `navigateOnwards` hard-navigating when an invite is
+  // waiting). Under load — two Playwright workers on one machine, which is what
+  // CI runs — a step can be torn down mid-transition, and the flow then sits one
+  // page short of the privacy step with no "Save changes" to click. Measured: it
+  // passed every single-worker run and failed roughly one org-staff shard in
+  // two, on different tests each time.
+  //
+  // Retrying only the click cannot help (the flow is on the wrong step); this
+  // re-opens the editor and walks it again, which is also what a real person
+  // does. Nothing about the assertion is weakened: the fields must still be
+  // filled and the flow must still complete, and a genuinely broken editor fails
+  // every attempt and then this call.
+  await expect(async () => {
+    await page.goto("/profile?edit=1");
+    await expect(
+      page.getByRole("heading", { name: /edit your bio/i }),
+    ).toBeVisible({ timeout: 10_000 });
 
-  // BY ROLE, not by label. Every hard-locked field ships a privacy Switch beside
-  // it whose accessible name STARTS WITH the field's own — "Medical notes —
-  // always private" — so `getByLabel("Medical notes")` matches the switch and
-  // the textarea both, and strict mode refuses. Naming the role picks the input.
-  await page
-    .getByRole("textbox", { name: "On-site contact name" })
-    .fill(sentinels.onsiteContactName);
-  await page
-    .getByRole("textbox", { name: "Medical notes" })
-    .fill(sentinels.medicalNotes);
+    // BY ROLE, not by label. Every hard-locked field ships a privacy Switch
+    // beside it whose accessible name STARTS WITH the field's own — "Medical
+    // notes — always private" — so `getByLabel("Medical notes")` matches the
+    // switch and the textarea both, and strict mode refuses. Naming the role
+    // picks the input.
+    await page
+      .getByRole("textbox", { name: "On-site contact name" })
+      .fill(sentinels.onsiteContactName);
+    await page
+      .getByRole("textbox", { name: "Medical notes" })
+      .fill(sentinels.medicalNotes);
 
-  // details → burns → privacy, then the final save.
-  await page.getByRole("button", { name: "Save & continue" }).click();
-  await page.getByRole("button", { name: "Save & continue" }).click();
-  await page.getByRole("button", { name: "Save changes" }).click();
+    // details → burns → privacy, then the final save. WAIT FOR THE STEP TO
+    // CHANGE between clicks: the button disables while the server action is in
+    // flight, so firing the same locator twice could land on the same step
+    // again. `bio-flow.tsx` renders "Step N of 3", so the counter is the honest
+    // signal that a click actually advanced.
+    const total = EDIT_STEP_COUNT;
+    for (let step = 1; step < total; step += 1) {
+      await expect(page.getByText(`Step ${step} of ${total}`)).toBeVisible({
+        timeout: 10_000,
+      });
+      await page.getByRole("button", { name: "Save & continue" }).click();
+      await expect(page.getByText(`Step ${step + 1} of ${total}`)).toBeVisible({
+        timeout: 10_000,
+      });
+    }
+    await page
+      .getByRole("button", { name: "Save changes" })
+      .click({ timeout: 10_000 });
+    await page.waitForURL(/\/profile(\?.*)?$/, { timeout: 15_000 });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 4_000] });
 
-  await page.waitForURL(/\/profile(\?.*)?$/);
   return sentinels;
 }
 
@@ -162,19 +204,25 @@ export async function setHardLockedBioData(
  * COULDN'T FIND THAT CAMP" — and no camp data appears. So the refusal is real;
  * only the status line disagrees with it.
  *
- * It is NOT the loading boundaries, which was the obvious theory. Removing
- * every `loading.tsx` in the app (root, the `(app)` group, and all three camp
- * segments) and rebuilding changed nothing; so did removing the segment's own
- * `not-found.tsx`. A `notFound()` thrown inside a `force-dynamic` page is
- * simply answered on a response Next has already committed, while an unmatched
- * route is answered before there is one.
+ * THREE FIXES WERE TRIED AND MEASURED. None moved the status:
+ *   1. Removing every `loading.tsx` in the app — root, the `(app)` group, and
+ *      all three camp segments. No change.
+ *   2. Removing the segment's own `not-found.tsx`. No change.
+ *   3. Hoisting the existence check into a `camps/[slug]/layout.tsx`, so it
+ *      resolves before the page. No change: still 200.
  *
- * That is worth fixing in the product — a nonexistent camp answering 200 is
- * wrong for crawlers and for any uptime check — but it is a status-code bug, not
- * an authorisation one, and pinning six specs to a status the framework does not
- * emit here only re-reports the same finding six times. So this asserts the
- * property that actually protects a member of another camp: the refusal
- * renders, and `forbidden` content does not.
+ * The cause is above all three. `(app)/layout.tsx` declares
+ * `dynamic = "force-dynamic"` for the whole group, so the response is committed
+ * before any descendant — layout or page — decides anything, while an unmatched
+ * route is answered before there is a response at all. The two remaining routes
+ * are dropping `force-dynamic` (which that layout's comment explains would let a
+ * signed-out shell be prerendered and then served to everyone — a real bug, in
+ * exchange for a status line) or DB-aware middleware on every camp URL. Both
+ * cost more than they buy.
+ *
+ * So this asserts the property that actually protects a member of another camp:
+ * the refusal renders, and forbidden content does not. If the status ever
+ * matters enough to pay for, the note above is what has already been ruled out.
  *
  * Pass `absent` (the camp name, a member's name, anything the viewer must not
  * see) and it is asserted missing from the page.

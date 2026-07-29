@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   CheckCircle2,
+  Circle,
   Clock,
   ExternalLink,
   FileClock,
@@ -17,11 +18,15 @@ import {
 } from "@quagga/types";
 import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
 import { StatusBadge } from "@quagga/ui/components/status-badge";
+import { ReopenRegistrationButton } from "./reopen-registration-button";
 import type {
   CampSectionReview,
+  DeclaredSupplier,
   RegistrationRow,
+  TransitionResult,
 } from "@/lib/registration-store";
 import { SectionReplyThread } from "./section-reply-thread";
+import { WithdrawRegistrationButton } from "./withdraw-registration";
 
 // Read-only post-submission view (build-spec §apps/web): status banner +
 // read-only sections + per-section AB feedback threads. The resubmit loop lives
@@ -71,7 +76,7 @@ const STATUS_BANNER: Record<
   },
   rejected: {
     title: "Not approved",
-    body: "This registration wasn't approved. See the reviewer's notes below.",
+    body: "This registration wasn't approved. The reviewer's reason is below, with any section notes under it.",
     icon: <XCircle className="h-5 w-5 text-destructive" aria-hidden />,
     tone: "border-destructive/40 bg-destructive/10 text-foreground",
   },
@@ -103,8 +108,20 @@ function formatRelative(date: Date): string {
   return date.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
 }
 
-/** Per-section review state → row status pill + icon (canvas P0Tcl section rows). */
-function sectionStatus(reviews: CampSectionReview[]): {
+/**
+ * Per-section review state → row status pill + icon (canvas P0Tcl section rows).
+ *
+ * `complete` is the SERVER's verdict — `registrations.completed_sections`, which
+ * `saveRegistrationDraft` recomputes from the core predicates on every save and
+ * never takes from the client. Without it this fell through to a green
+ * "Complete" for any section that simply had no review attached, so a
+ * registration withdrawn or rejected while half-empty presented six green ticks
+ * and "Complete" against sections the camp had never filled in.
+ */
+function sectionStatus(
+  reviews: CampSectionReview[],
+  complete: boolean,
+): {
   label: string;
   variant: NonNullable<BadgeProps["variant"]>;
   icon: React.ReactNode;
@@ -130,6 +147,18 @@ function sectionStatus(reviews: CampSectionReview[]): {
       ),
     };
   }
+  if (!complete) {
+    return {
+      label: "Incomplete",
+      variant: "outline",
+      icon: (
+        <Circle
+          className="h-5 w-5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+      ),
+    };
+  }
   return {
     label: "Complete",
     variant: "success",
@@ -149,23 +178,32 @@ export function RegistrationSummary({
   registration,
   campName,
   description,
-  supplierNames,
+  declaredSuppliers,
   reviews,
   slug,
+  editionYear,
   viewerUserId,
+  reopenAction,
+  withdrawAction,
 }: {
   registration: RegistrationRow;
   campName: string;
   description: string | null;
-  supplierNames: string[];
+  /** Every supplier the camp declared, suspended ones included (see below). */
+  declaredSuppliers: DeclaredSupplier[];
   reviews: CampSectionReview[];
   /** Camp slug — for the reply action (never trusted for authz server-side). */
   slug: string;
+  editionYear: number;
   /** The viewer's db user id — labels their own replies "You". */
   viewerUserId: string | null;
+  /** Present only for a camp admin on a WITHDRAWN registration — the way back. */
+  reopenAction?: (slug: string) => Promise<TransitionResult>;
+  withdrawAction: (slug: string) => Promise<TransitionResult>;
 }) {
   const r = registration;
   const banner = STATUS_BANNER[r.status];
+  const completedSections = new Set(r.completedSections);
   const reviewsBySection = new Map<string, CampSectionReview[]>();
   for (const rev of reviews) {
     const list = reviewsBySection.get(rev.sectionKey) ?? [];
@@ -193,7 +231,34 @@ export function RegistrationSummary({
       "—"
     );
 
-  const suppliers = supplierNames.length > 0 ? supplierNames.join(", ") : "—";
+  // Declared suppliers are shown WHOLE. A suspended one is marked, never
+  // dropped: this list is the record of what the camp submitted, and quietly
+  // shortening it left a camp reading its own registration back with a supplier
+  // missing and no explanation.
+  const anySuspended = declaredSuppliers.some(
+    (s) => s.standing === "suspended",
+  );
+  const suppliers =
+    declaredSuppliers.length > 0 ? (
+      <span className="flex flex-col gap-1">
+        {declaredSuppliers.map((s) => (
+          <span key={s.id} className="flex flex-wrap items-center gap-2">
+            {s.name}
+            {s.standing === "suspended" && (
+              <Badge variant="warning">Suspended</Badge>
+            )}
+          </span>
+        ))}
+        {anySuspended && (
+          <span className="mt-1 text-xs text-muted-foreground">
+            AfrikaBurn has suspended a supplier you declared. Talk to the camp
+            liaison before relying on them for this edition.
+          </span>
+        )}
+      </span>
+    ) : (
+      "—"
+    );
 
   const fieldsBySection: Record<SectionKey, Field[]> = {
     identity: [
@@ -274,9 +339,32 @@ export function RegistrationSummary({
           <div className="min-w-0">
             <p className="text-sm font-medium">{banner.title}</p>
             <p className="mt-0.5 text-sm opacity-80">{banner.body}</p>
+            {/* THE REASON, IN THE REVIEWER'S OWN WORDS (migration 0025).
+                Rejecting and asking for changes both REQUIRE one, and it used
+                to reach only `audit_events.meta` and the decision
+                notification — while this banner said "See the reviewer's notes
+                below" and pointed at the per-section thread, which a reviewer
+                who simply rejected never wrote to. A camp could read its own
+                registration and find no explanation anywhere on the page. */}
+            {r.decisionReason ? (
+              <p className="mt-2 whitespace-pre-line rounded-lg border border-current/20 bg-background/40 p-3 text-sm">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide opacity-70">
+                  From the reviewer
+                </span>
+                {r.decisionReason}
+              </p>
+            ) : null}
           </div>
         </div>
-        <StatusBadge status={r.status} />
+        <div className="flex shrink-0 items-center gap-3">
+          <StatusBadge status={r.status} />
+          {/* Withdrawn is the camp's own decision and is reversible; the
+              dialog that caused it says so. Rejected is AfrikaBurn's and is
+              not, so no control appears there. */}
+          {r.status === "withdrawn" && reopenAction ? (
+            <ReopenRegistrationButton slug={slug} reopenAction={reopenAction} />
+          ) : null}
+        </div>
       </div>
 
       {/* Per-section review states + feedback threads (canvas `HmdmU`). Each
@@ -285,7 +373,7 @@ export function RegistrationSummary({
       <div className="flex flex-col gap-3">
         {SECTION_KEYS.map((key) => {
           const secReviews = reviewsBySection.get(key) ?? [];
-          const st = sectionStatus(secReviews);
+          const st = sectionStatus(secReviews, completedSections.has(key));
           return (
             <div key={key} className="rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -359,6 +447,13 @@ export function RegistrationSummary({
           );
         })}
       </div>
+
+      <WithdrawRegistrationButton
+        slug={slug}
+        status={r.status}
+        editionYear={editionYear}
+        withdrawAction={withdrawAction}
+      />
     </div>
   );
 }

@@ -42,7 +42,7 @@ jobs:
 
   # THE E2E SUITE, WHICH USED TO GATE NOTHING.
   #
-  # 55 spec files and 144 tests existed, and CI ran `lint typecheck test build`
+  # 58 spec files and 232 tests existed, and CI ran `lint typecheck test build`
   # — none of which starts a browser. So every persona journey, every refusal
   # that protects the permission model, and the whole invite round trip could
   # break on main and CI would stay green. The suite was only ever run by hand,
@@ -127,48 +127,99 @@ jobs:
         # when they were pagination timeouts against junk data.
         env:
           E2E_RESET_DB: "1"
-          # TWO workers, not four. scripts/e2e-local.sh has said this all along:
-          # "the longest ones (full six-section registration, the two-user invite
-          # round trips) start timing out at four — a resource problem that reads
-          # exactly like a broken product." A runner has 4 cores and is ALSO
-          # hosting three Next servers, Postgres and two proxies, so four browser
-          # workers starve everything. The previous run proved it: every failure
-          # was locator.click / page.goto / locator.fill timing out, while the
-          # tests that did pass ran in 2-6s.
+          # TWO workers. A runner has 4 cores and is ALSO hosting three Next
+          # servers, Postgres and two proxies, so this is a judgement about a
+          # real ceiling — but it is only a judgement. It has NOT been re-tested
+          # since the actual cause of the timeouts was found and fixed, and the
+          # claim that once stood here ("four workers starve everything, the
+          # previous run proved it") was never true: every timed-out URL in that
+          # fleet was `/camps/[slug]` or its `settings/roles` child and nothing
+          # else, which is not what a starved runner looks like. It was the dev
+          # SQL proxy — see packages/db/src/index.ts. If you want more
+          # throughput, four is worth measuring now; measure it, do not assume.
           #
-          # Parallelism comes from SHARDS instead — 8 runners x 2 workers = 16
-          # concurrent, same throughput, no contention.
-          E2E_WORKERS: "2"
-          # 180s, not the 90s default. The officer journeys are two-user and
-          # drive a full six-section registration through the UI; they measured
-          # 54s-1.2m against a 90s cap, so they failed on whichever assertion
-          # they happened to reach and looked like six different product bugs.
-          # The real fix is a factory that seeds a registration instead of
-          # clicking through one — until then, do not fail a test for being
-          # honestly long.
+          # Parallelism already comes from the eight per-persona jobs above:
+          # 8 jobs x 2 workers = 16 concurrent.
+          #
+          # …EXCEPT ON THE SHARDS THAT SHARE THE GOD ACCOUNT. `god`, `org-staff`,
+          # `camp-lead`, `officer` and `supplier` all reach the console through
+          # ONE set of credentials (E2E_GOD_EMAIL — `elevateToGod`,
+          # `provisionOrgStaff`, `provisionEngineer`). A second worker there is
+          # not parallelism, it is two browsers signing in as the same principal
+          # and racing each other's session, and the god bootstrap writes on
+          # first load. Measured 29 Jul 2026 on the org-staff shard: 2 workers →
+          # 2 failed / 19 passed, a DIFFERENT pair each run (a bio editor torn
+          # down mid-step, a concurrent-reviewer test losing its second session);
+          # 1 worker → clean, repeatedly. A gate that fails differently every
+          # time teaches people to press re-run, which is how a real failure gets
+          # waved through.
+          #
+          # The five persona-isolated shards keep 2.
+          E2E_WORKERS: >-
+            ${{ (matrix.persona == 'god'
+              || matrix.persona == 'org-staff'
+              || matrix.persona == 'camp-lead'
+              || matrix.persona == 'officer'
+              || matrix.persona == 'supplier') && '1' || '2' }}
+          # 180s, not the 90s default. The two-user journeys drive a full
+          # six-section registration through the UI, and the slowest of them
+          # still measure ~2m on a green run — this cap is ~1.5x the slowest
+          # real test, not spare room. It survived the proxy fix because these
+          # journeys are interaction-bound, not render-bound: making pages 28x
+          # faster barely moved them.
+          #
+          # This once said "the real fix is a factory that seeds a registration
+          # instead of clicking through one". That is not a fix available here:
+          # @quagga/e2e is defined as "drives the REAL UI — no DB back doors"
+          # (its package.json), and it is meant to be runnable against a deployed
+          # preview, where there is no database to seed. The cost is the price of
+          # the guarantee. 180s is the honest cap for it.
           E2E_TEST_TIMEOUT: "180000"
           # Production build, not `next dev`. Next compiles a route on FIRST
           # REQUEST, and there are 65 pages across the three apps — so a dev-mode
           # run pays a multi-second compile the first time any spec visits any
           # page, several workers block on the same cold compile, and a compile
           # that overruns the 20s navigation cap looks exactly like a product
-          # bug. This is most of why the first run crawled.
+          # bug. It also tests what actually ships.
+          #
+          # This was ONCE blamed for the slow runs ("most of why the first run
+          # crawled"). It was not: the runs kept crawling on a production build
+          # for hours afterwards. See packages/db/src/index.ts for what it was.
           E2E_SERVE: build
-          # ONE retry, not two. A genuinely broken test costs 90s x attempts, and
-          # at 2 retries the eight known failures alone burn ~36 minutes of
-          # runner time re-proving what we already know. One retry still absorbs
-          # a cold-start flake.
+          # ONE retry. A genuinely broken test costs `E2E_TEST_TIMEOUT x
+          # attempts` per failure, so a second retry triples the cost of a red
+          # board to re-prove what the first two attempts already showed. One
+          # still absorbs a cold-start flake, and Playwright reports
+          # retry-then-pass as flaky, so nothing is hidden by it.
+          #
+          # This pins the playwright.config.ts default rather than changing it —
+          # stated here so a change there is a deliberate choice in both places.
           E2E_RETRIES: "1"
-          # DESKTOP GATES. `mobile-360` runs in the separate informational job
-          # below rather than here, deliberately: it has never executed once, so
-          # every spec in it is of unknown status. Making an unknown-status
-          # project blocking on the day you switch it on produces a red gate
-          # nobody trusts, which is worse than no gate. Promote it here once its
-          # failures are triaged to zero.
+          # DESKTOP GATES. `mobile-360` runs nightly in its own workflow
+          # (.github/workflows/mobile.yml) and never on a pull request — it is
+          # red by construction until triaged, and a permanently red check
+          # teaches people to ignore checks. It still runs locally, where
+          # scripts/e2e-local.sh defaults to both projects. Promote a persona
+          # into this list, where it WILL block, once its mobile failures reach
+          # zero.
           E2E_PROJECTS: desktop-chromium
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-a-real-one-0000
           PGCRYPTO_KEY: ci-only-pgcrypto-key-0000000000
-        run: ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+        # `tests/` RIDES WITH THE ANON JOB. The matrix runs one persona
+        # directory each, and `e2e/tests/` is not a persona — so smoke, the auth
+        # round trip and the registry-driven adversarial authz suite had NEVER
+        # run in the gate, while the gate was described as covering the whole
+        # suite. negative-paths.spec.ts is the file that exists to prove the
+        # refusals, and nothing was running it.
+        #
+        # Attached to `anon` because it is the shortest job and these specs sign
+        # up their own actors, so they add ~1 min rather than a whole runner.
+        run: |
+          if [ "${{ matrix.persona }}" = "anon" ]; then
+            ./scripts/e2e-local.sh specs/anon tests
+          else
+            ./scripts/e2e-local.sh specs/${{ matrix.persona }}
+          fi
 
       # THE SERVER'S OWN ACCOUNT OF THE FAILURE.
       #
@@ -194,14 +245,3 @@ jobs:
             server.log
           retention-days: 14
           if-no-files-found: ignore
-
-  # MOBILE 360 IS OFF.
-  #
-  # It ran the WHOLE 144-test suite on ONE runner while the desktop jobs were
-  # split per persona, so it took an hour every single time and told us nothing
-  # we acted on — the specs were written against desktop layouts, so it fails by
-  # construction. An informational job that burns an hour per push is not
-  # informational, it is noise with a bill.
-  #
-  # Turn it back on ONLY after desktop is green, and when you do, give it the
-  # same per-persona matrix as the gating job above so it costs minutes.

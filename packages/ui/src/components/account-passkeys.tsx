@@ -66,9 +66,23 @@ export function AccountPasskeys({
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const supported =
-    typeof window !== "undefined" &&
-    typeof window.PublicKeyCredential !== "undefined";
+  // WebAuthn support is UNKNOWN until a browser has actually been asked.
+  //
+  // This was `typeof window !== "undefined" && typeof window.PublicKeyCredential
+  // !== "undefined"` evaluated during render. On the server the first half is
+  // false, so every visitor was served HTML that said "This browser doesn't
+  // support passkeys" with the Add button already disabled — a verdict on a
+  // browser nobody had consulted, and wrong for the large majority of them. It
+  // also disagreed with the client's first render, which is a hydration mismatch.
+  //
+  // null = not asked yet. We render the button live and say nothing about
+  // support in that state: claiming nothing is the only honest thing to say
+  // before the answer exists. `useEffect` runs after mount, in the real browser,
+  // and only then may the card refuse — with its reason.
+  const [supported, setSupported] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    setSupported(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -228,12 +242,12 @@ export function AccountPasskeys({
                   setError(null);
                   setAdding(true);
                 }}
-                disabled={!supported}
+                disabled={supported === false}
               >
                 Add a passkey
               </Button>
             </div>
-            {!supported ? (
+            {supported === false ? (
               <p className="text-xs text-muted-foreground">
                 This browser doesn&rsquo;t support passkeys. You can still sign in
                 with your password.

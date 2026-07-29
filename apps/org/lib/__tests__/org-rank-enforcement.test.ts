@@ -20,7 +20,7 @@ import { describe, it, expect } from "vitest";
 //     suppliers lead a theme camp's members. The domain each query names is
 //     asserted here, because getting it wrong is silent and invisible in review.
 //  2. EVERY MUTATION NAMES THE CAPABILITY IT NEEDS. A destructive action asks
-//     for `delete`, the camp-category taxonomy asks for `manage_camp_categories`,
+//     for `delete`, the camp-category taxonomy asks for the System manager RANK,
 //     account access asks for `manage_accounts`. An engineer is then refused
 //     server-side with an honest message rather than merely losing a button.
 //
@@ -108,7 +108,7 @@ describe("REGRESSION: an engineer's payload carries no personal information", ()
     // The System panel's org-access roster. An engineer may open that page —
     // it is THEIR page — so the roster on it is the one people-returning query
     // most likely to be written as "they can see this page, so let them see the
-    // rows", which is exactly the mistake. It asks `accounts`, NOT `read_system`
+    // rows", which is exactly the mistake. It asks `accounts`, NOT `runsDeployment`
     // and not the system panel's own domain: page access never implies rows.
     getOrgAccessRoster: { domain: "accounts", columns: ["schema.users.email"] },
     getRegistrationOfficers: {
@@ -253,7 +253,7 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
   const systemPage = source("app/(console)/system/page.tsx");
 
   it("checks the deployment-running RANK before it queries anything", () => {
-    // `read_system` stopped being a capability: opening the system panel is
+    // `runsDeployment` replaced the old `read_system` capability: opening the system panel is
     // "do you run this deployment", which is the engineer/System manager RANK.
     // Collapsing it into `isSystemManager` would have locked engineers out of
     // the panel that exists for them — see `runsDeployment` in @quagga/core.
@@ -297,6 +297,91 @@ describe("REGRESSION: the System panel is gated, and gates its own controls", ()
     // lives in the deriver. Asserted here only that the page does not reach
     // around it into process.env for something to display.
     expect(systemPage).not.toContain("process.env");
+  });
+});
+
+describe("REGRESSION: a restricted control is shown restricted, not offered", () => {
+  // Ryan, 28 Jul 2026: "I'd rather things be transparent with restrictions than
+  // completely obfuscated, except for private personal information." That cuts
+  // both ways — a control the viewer cannot use must be neither hidden NOR
+  // live, and the second half is the one that rotted.
+  //
+  // `SuppliersTable` takes `deleteRefusal` and documents that OMITTING IT MEANS
+  // "NOT ASKED", in which case the bin icon is offered exactly as before. The
+  // page did not ask. So an engineer — a rank that "deliberately cannot delete
+  // anything in any department" — and any lead scoped to a department that does
+  // not own suppliers both got a live destructive control whose only feedback
+  // was a toast after they pressed it.
+  //
+  // Asserted at the PAGE, because the page is the only layer that has the actor.
+
+  it("the suppliers page answers the delete question for the table", () => {
+    // Whitespace-normalised: prettier wraps the call across four lines the
+    // moment the argument list grows, and a test that breaks on reformatting is
+    // a test people delete.
+    const page = source("app/(console)/suppliers/page.tsx").replace(/\s+/g, "");
+    expect(page).toContain(
+      'orgCanInDomain(guard.session.actor,"delete","suppliers"',
+    );
+    expect(page).toContain(
+      'orgCapabilityRefusal(guard.session.actor,"delete","suppliers"',
+    );
+    expect(page).toContain("deleteRefusal={deleteRefusal}");
+  });
+
+  it("the table still treats an unanswered page as 'not asked'", () => {
+    // The prop stays OPTIONAL on purpose: defaulting it to a refusal would take
+    // removal away from every System manager the moment a new page forgot to
+    // pass it. The regression that matters is a page that does not ask, so the
+    // test lives on the page above, not on this default.
+    const table = source("components/suppliers-table.tsx");
+    expect(table).toContain("deleteRefusal?: string | null;");
+    expect(table).toContain("not available to you");
+    expect(table).toContain("aria-describedby={DELETE_REFUSAL_ID}");
+  });
+
+  it("the registration detail answers the decide question for the panel", () => {
+    // Approve and Reject are the most consequential buttons in the console and
+    // they rendered live for every account. `decideRegistration` guards `update`
+    // in `registrations`, so a lead scoped elsewhere learned that by pressing
+    // Approve on someone else's department and reading a toast.
+    const page = source("app/(console)/registrations/[id]/page.tsx").replace(
+      /\s+/g,
+      "",
+    );
+    expect(page).toContain('orgCanInDomain(actor,"update","registrations"');
+    expect(page).toContain(
+      'orgCapabilityRefusal(actor,"update","registrations"',
+    );
+    // BOTH renders — the project branch and the theme-camp branch. Wiring one
+    // and not the other is the exact half-fix this asserts against.
+    expect(page.split("decisionRefusal={decisionRefusal}").length - 1).toBe(2);
+  });
+
+  it("the decision panel refuses in place rather than hiding the buttons", () => {
+    const panel = source("components/decision-panel.tsx");
+    expect(panel).toContain("disabled={Boolean(refusal) || pending}");
+    expect(panel).toContain("not available to you");
+    expect(panel).toContain("aria-describedby={refusal ? DECISION_REFUSAL_ID");
+  });
+
+  it("the camp-category manager disables its controls instead of dropping them", () => {
+    const manager = source("components/categories/categories-manager.tsx");
+    // Every write control is reachable in the markup and refused by `canManage`.
+    for (const control of [
+      "disabled={!canManage || pending}",
+      "not available to you",
+      "aria-describedby={canManage ? undefined : refusalId}",
+    ]) {
+      expect(manager).toContain(control);
+    }
+    // …and the page hands it the id of the one refusal sentence it prints.
+    const page = source("app/(console)/categories/page.tsx");
+    expect(page).toContain("refusalId={MANAGE_REFUSAL_ID}");
+    expect(page).toContain("id={MANAGE_REFUSAL_ID}");
+    expect(page).toContain(
+      'systemManagerRefusal("change the camp categories")',
+    );
   });
 });
 

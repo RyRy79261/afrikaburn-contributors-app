@@ -17,7 +17,7 @@ import { Switch } from "@quagga/ui/components/switch";
 import { toast } from "@quagga/ui/components/toast";
 
 import { saveBulletin } from "@/lib/actions/bulletins";
-import { previewAudienceCount } from "@/lib/questionnaires/actions";
+import { previewBulletinAudienceCount } from "./audience-count";
 import {
   BULLETIN_AUDIENCE_OPTIONS,
   audienceCountNoun,
@@ -33,10 +33,15 @@ import { plainPreview } from "./preview-text";
 // callout tells the author. Anything that needs an answer is a questionnaire.
 //
 // The audience count comes from the SAME server resolver questionnaires use
-// (previewAudienceCount → @quagga/core resolveAudience); this form never
-// counts anything itself. Saving/publishing goes through `saveBulletin`, which
-// re-validates with Zod and re-checks the audience authz server-side — the
-// disabled button here is convenience, never the security boundary.
+// (previewBulletinAudienceCount → @quagga/core resolveAudience); this form
+// never counts anything itself. It calls the BULLETINS-domain preview and not
+// the questionnaire flow's `previewAudienceCount`, which gates on the
+// questionnaires domain: a Bulletins-department author was refused their own
+// audience count, in a message naming a department that owns a different
+// screen, while Publish — correctly gated on `bulletins` — stayed armed.
+// Saving/publishing goes through `saveBulletin`, which re-validates with Zod
+// and re-checks the audience authz server-side; the disabled button here is
+// convenience, never the security boundary.
 
 export interface BulletinComposerProps {
   editionId: string;
@@ -91,7 +96,7 @@ export function BulletinComposer({
     let cancelled = false;
     setResolved((prev) => ({ ...prev, loading: true, error: null }));
     const timer = setTimeout(async () => {
-      const result = await previewAudienceCount({
+      const result = await previewBulletinAudienceCount({
         audience: JSON.parse(specKey) as AudienceSpec,
         editionId,
       });
@@ -213,18 +218,31 @@ export function BulletinComposer({
               />
             </Field>
 
+            {/* The pin's copy describes what the pin ACTUALLY does. It used to
+                promise "a banner on recipient dashboards until dismissed", and
+                both halves were wrong: the only banner in the product is on the
+                burner camp dashboard (apps/web `/camps/[slug]`), and it carries
+                no ✕ — PinnedBulletinBanner renders one only when handed an
+                `onDismiss`, which its single call site does not pass. Suppliers
+                and org staff have no banner at all; a pin shows on their
+                bulletin page as a "Pinned" marker. Unpinning is here: switch it
+                off and save, which works on a published bulletin too. */}
             <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium">Pin to dashboards</span>
+                <span className="text-sm font-medium">
+                  Pin to camp dashboards
+                </span>
                 <p className="max-w-md text-xs text-muted-foreground">
-                  Pinned bulletins show as a banner on recipient dashboards
-                  until dismissed.
+                  Pinned bulletins sit in a banner at the top of a recipient&rsquo;s
+                  camp dashboard until you unpin them here — readers cannot
+                  dismiss it. Suppliers and org staff get no banner; the pin
+                  just shows on their copy of the bulletin.
                 </p>
               </div>
               <Switch
                 checked={pinned}
                 onCheckedChange={setPinned}
-                aria-label="Pin to dashboards"
+                aria-label="Pin to camp dashboards"
                 className="mt-1"
               />
             </div>

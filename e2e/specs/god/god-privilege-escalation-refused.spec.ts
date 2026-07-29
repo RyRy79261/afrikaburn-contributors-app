@@ -12,7 +12,7 @@
 //      inert ("You"), so god cannot self-demote or reassign god here either.
 //
 // On the org_staff→god path specifically: the sole System-manager-only server
-// boundary is setOrgStaffRole, which requires the `manage_accounts` capability.
+// boundary is setOrgStaffRole, which requires the System manager RANK (`requireSystemManager`) — not a capability, so no role can be given it.
 // There is no org_staff-reachable trigger for it — the correct posture, not a
 // gap — so the
 // server refusal of a non-god CALLER is covered by the action-level tests

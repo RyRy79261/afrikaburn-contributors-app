@@ -49,7 +49,7 @@ export async function expectConsoleForbidden(page: Page): Promise<void> {
  * Assert the current session holds GOD specifically, not merely some org role.
  * Both god and org_staff clear the console gate, so "reached the console" alone
  * does not distinguish them. The accounts panel's copy DOES: only a System
- * manager (`manage_accounts`, which no role may hold since org roles v1) is
+ * manager (the RANK, which no role may hold or be granted) is
  * pointed at the roles surface in the system panel. That line is always
  * rendered (viewport-robust), unlike the header "Owner" badge which is hidden
  * below the `sm` breakpoint.

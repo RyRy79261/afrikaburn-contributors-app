@@ -12,6 +12,7 @@ import {
 } from "@quagga/core";
 import { db, schema } from "./db";
 import { isDatabaseConfigured } from "./config";
+import { getActiveEdition } from "./edition";
 import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
 import {
   actionRoute,
@@ -160,12 +161,19 @@ export const ensureCampUser = cache(async function ensureCampUser(
   }
 
   await bootstrapGod(campUser, authUser.emailVerified);
-  await ensureRequiredAction({
-    userId: campUser.id,
-    actionKey: BURNER_BIO_ACTION_KEY,
-    type: "questionnaire",
-    title: "Complete your Burner Bio",
-  });
+  // Per edition (migration 0024): the bio persists, but it is CONFIRMED once
+  // per burn, so this raises a fresh action for the edition now running rather
+  // than finding last year's completed row and staying silent.
+  const activeEdition = await getActiveEdition();
+  if (activeEdition) {
+    await ensureRequiredAction({
+      userId: campUser.id,
+      editionId: activeEdition.id,
+      actionKey: BURNER_BIO_ACTION_KEY,
+      type: "questionnaire",
+      title: "Complete your Burner Bio",
+    });
+  }
 
   return campUser;
 });

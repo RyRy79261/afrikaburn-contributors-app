@@ -113,9 +113,16 @@ test.describe("camp lead — officers are consent requests", () => {
     // The member accepts — the single sanctioned phone-sharing consent.
     await acceptOfficerRequest(memberPage, camp.slug);
 
-    // Post-consent: the same reviewer page now shows the officer with their phone.
+    // Post-consent: the same reviewer page now shows the officer with their
+    // phone IN THE OFFICERS REGION. Scoped, not page-wide: the member roster on
+    // the same review prints every member's display name whatever their consent
+    // says (correctly — camp membership is not the secret), so a page-wide
+    // `getByText(memberName).first()` resolves to the roster and passes even if
+    // the officers block is empty. The name half then proves nothing about
+    // consent, which is the entire subject of this test.
     await orgPage.reload();
-    await expect(orgPage.getByText(memberName).first()).toBeVisible();
-    await expect(orgPage.getByText(phoneProbe).first()).toBeVisible();
+    const officersRegion = orgPage.getByRole("region", { name: /officers/i });
+    await expect(officersRegion.getByText(memberName)).toBeVisible();
+    await expect(officersRegion.getByText(phoneProbe).first()).toBeVisible();
   });
 });

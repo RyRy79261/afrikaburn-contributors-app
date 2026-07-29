@@ -99,3 +99,47 @@ export function issueSupplierCode(
 ): string {
   return formatSupplierCode(year, nextSupplierSequence(year, existingCodes));
 }
+
+// --- Contact-address matching (account → supplier claim) -------------------
+
+/**
+ * Email-like tokens inside a free-text contact string.
+ *
+ * `suppliers.contact` is prose typed by an organiser — "Zizipho Gcasamba
+ * z.gcasamba@gmail.com", "Bookings: ops@losKop.co.za / 082 555 0147" — so the
+ * address has to be picked out of it rather than compared whole.
+ */
+const CONTACT_ADDRESS = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/**
+ * DOES THIS CONTACT STRING NAME THIS EXACT ADDRESS?
+ *
+ * The account→supplier claim ("an unlinked row whose contact mentions your
+ * VERIFIED address is yours") used a SQL `ILIKE '%address%'`, which is a
+ * substring test — and a substring test on an email address is a takeover.
+ * Every seeded contact is free-text webmail, so:
+ *
+ *   contact "Zizipho Gcasamba z.gcasamba@gmail.com"
+ *     → register gcasamba@gmail.com, verify it, sign in, claim Poswa Logistics
+ *   contact "Lenny deharnstretchtents85@gmail.com"
+ *     → register harnstretchtents85@gmail.com and claim that supplier
+ *
+ * The shorter address is a literal substring of the longer one, both are
+ * ordinary registerable Gmail addresses, and the claim writes `user_id` onto
+ * the row — which hands over the supplier's onboarding, documents, standing and
+ * org-internal correspondence.
+ *
+ * So the address is compared as a WHOLE TOKEN, case-insensitively, against the
+ * addresses actually present in the string. `a@b.com` no longer matches
+ * `xa@b.com`, `a@b.com.evil.net` or `a@b.comm`.
+ */
+export function contactNamesAddress(
+  contact: string | null | undefined,
+  address: string,
+): boolean {
+  if (!contact) return false;
+  const wanted = address.trim().toLowerCase();
+  if (!wanted) return false;
+  const found = contact.toLowerCase().match(CONTACT_ADDRESS);
+  return found ? found.includes(wanted) : false;
+}

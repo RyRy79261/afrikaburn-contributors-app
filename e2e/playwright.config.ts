@@ -35,7 +35,11 @@ export default defineConfig({
   // One still absorbs a cold-start flake. Raise with E2E_RETRIES when chasing
   // something intermittent.
   retries: IS_CI ? Number(process.env.E2E_RETRIES ?? 1) : 0,
-  // Bounded workers in CI to protect the Neon branch's compute; unbounded locally.
+  // Bounded workers in CI; unbounded locally. The default is never reached
+  // through the only runner in this repo — scripts/e2e-local.sh always passes
+  // `--workers`, and CI sets E2E_WORKERS=2 — so it is a fallback for a bare
+  // `playwright test`, not the effective CI value. There is no Neon branch
+  // involved either: CI runs Postgres in Docker (docker-compose.local.yml).
   workers: IS_CI ? Number(process.env.E2E_WORKERS ?? 4) : undefined,
   timeout: TIMEOUTS.test,
   expect: { timeout: TIMEOUTS.expect },

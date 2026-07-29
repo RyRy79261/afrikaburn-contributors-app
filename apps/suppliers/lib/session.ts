@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, ilike, isNull } from "drizzle-orm";
 import {
   deriveOnboardingProgress,
+  contactNamesAddress,
   isSanitized,
   type SupplierOnboardingProgress,
 } from "@quagga/core";
@@ -113,8 +114,23 @@ function escapeLikePattern(value: string): string {
  *      claimed by setting `user_id` (the "email overlap links a burner account"
  *      rule). Only VERIFIED emails may claim a row, so an unverified/asserted
  *      email can never hijack an imported supplier.
- * The verified address is matched as a LITERAL substring (wildcards escaped) and
- * selection is deterministic (oldest row first) so a repeat sign-in always
+ * The address must be named as a WHOLE ADDRESS in the contact string, not
+ * merely appear inside it. The SQL `ILIKE '%address%'` is now only a cheap
+ * prefilter; `contactNamesAddress` (@quagga/core) makes the decision by pulling
+ * the email-like tokens out of the free text and comparing them exactly.
+ *
+ * A substring test here was a takeover. `suppliers.contact` is prose full of
+ * webmail addresses, so with `%address%` alone:
+ *   contact "Zizipho Gcasamba z.gcasamba@gmail.com"
+ *     → register gcasamba@gmail.com, verify it, sign in, own Poswa Logistics
+ *   contact "Lenny deharnstretchtents85@gmail.com"
+ *     → register harnstretchtents85@gmail.com and own that supplier
+ * The shorter address is a literal substring of the longer one, both are
+ * ordinary registerable Gmail addresses, and the claim writes `user_id` — which
+ * hands over that business's onboarding, documents, standing and the org's
+ * internal correspondence about them.
+ *
+ * Selection stays deterministic (oldest row first) so a repeat sign-in always
  * claims the same row rather than an arbitrary one.
  * Returns null when nothing matches — the caller shows the register form.
  */
@@ -145,8 +161,14 @@ async function resolveSupplierForUser(
   const email = user.primaryEmail?.trim();
   if (!email || !user.emailVerified) return null;
 
-  // Email overlap: a still-unlinked row whose contact mentions this address.
-  const [candidate] = await db
+  // Email overlap: a still-unlinked row whose contact NAMES this address.
+  //
+  // The ILIKE is a prefilter only — it narrows the scan to rows that mention
+  // the address somewhere. `contactNamesAddress` then decides, by comparing
+  // whole email tokens, so a substring can no longer claim a listing. Bounded
+  // at 20 candidates: an address that appears inside more than twenty different
+  // suppliers' contact strings is not an identity, it is a red flag.
+  const candidates = await db
     .select(cols)
     .from(schema.suppliers)
     .where(
@@ -156,7 +178,10 @@ async function resolveSupplierForUser(
       ),
     )
     .orderBy(asc(schema.suppliers.createdAt), asc(schema.suppliers.id))
-    .limit(1);
+    .limit(20);
+  const candidate = candidates.find((row) =>
+    contactNamesAddress(row.contact, email),
+  );
   if (!candidate) return null;
 
   await db

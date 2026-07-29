@@ -2,12 +2,12 @@
 //
 // Access management belongs to the System manager alone. In
 // `apps/org/lib/actions/accounts.ts`, `setOrgStaffRole` requires the
-// `manage_accounts` capability — which since org roles v1 NO ROLE MAY HOLD, so
+// System manager RANK — which no role may hold or be granted, so
 // it resolves for the System manager and nobody else (@quagga/core
 // `org-permissions`). Role assignment (`setAccountOrgRoles`) and the whole
 // departments/roles surface require the `god` anchor directly. The Accounts
 // PAGE renders for org_staff but strictly read-only
-// (`orgCan(actor, "manage_accounts") === false` → no action controls).
+// (`isSystemManager(actor) === false` → no action controls).
 //
 // HONEST SCOPE NOTE (per the task's "say so explicitly" rule): a test that goes
 // red specifically when that capability check is deleted CANNOT be written
@@ -17,7 +17,7 @@
 // gate: `apps/org/lib/__tests__/org-rank-enforcement.test.ts` asserts each
 // action names its capability, and
 // `packages/core/src/__tests__/org-permissions.test.ts` asserts org_staff is
-// refused `manage_accounts`. What IS faithfully assertable end-to-end is the
+// refused the rank. What IS faithfully assertable end-to-end is the
 // observable contract below: org_staff reaches the Accounts page, sees the
 // read-only copy, and is offered NO elevation affordance anywhere.
 

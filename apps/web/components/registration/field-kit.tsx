@@ -17,29 +17,63 @@ import {
 // panels. Each fires `onCommit` on blur so the wizard can autosave; `onChange`
 // keeps the live value flowing for counters and completeness indicators.
 
+/**
+ * Label + hint wrapper.
+ *
+ * Two modes, because only ONE of them can use a `<label>` honestly:
+ *  · `htmlFor` — a single labelable control (input / textarea). Real `<label>`,
+ *    clicking it focuses the control.
+ *  · `labelId` — a GROUP of buttons or a Radix trigger. `<label for=…>` cannot
+ *    name those (the spec only allows it to point at labelable elements), so
+ *    the caller wires `aria-labelledby={labelId}` on its own group wrapper and
+ *    this renders a plain `<span>` — a `<label>` pointing at nothing is a lie to
+ *    both the browser and the accessibility tree.
+ *
+ * Passing neither leaves the control ANONYMOUS to a screen reader, which is what
+ * used to happen for every button-group and select field here: the visible text
+ * "Operating hours *" sat next to a row of pills announced only as "Day",
+ * "Night" — the question itself was never read out.
+ */
 export function Labeled({
   label,
   htmlFor,
+  labelId,
   hint,
   required,
   children,
 }: {
   label: string;
   htmlFor?: string;
+  /** Id stamped on the label text, for a group's `aria-labelledby`. */
+  labelId?: string;
   hint?: string;
   required?: boolean;
   children: React.ReactNode;
 }) {
+  const labelText = (
+    <>
+      {label}
+      {required && (
+        <span className="ml-1 text-accent" aria-hidden>
+          *
+        </span>
+      )}
+    </>
+  );
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-        {label}
-        {required && (
-          <span className="ml-1 text-accent" aria-hidden>
-            *
-          </span>
-        )}
-      </label>
+      {htmlFor ? (
+        <label
+          htmlFor={htmlFor}
+          className="text-sm font-medium text-foreground"
+        >
+          {labelText}
+        </label>
+      ) : (
+        <span id={labelId} className="text-sm font-medium text-foreground">
+          {labelText}
+        </span>
+      )}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {children}
     </div>
@@ -56,6 +90,7 @@ export function TextField({
   required,
   type = "text",
   placeholder,
+  disabled,
 }: {
   id: string;
   label: string;
@@ -66,6 +101,8 @@ export function TextField({
   required?: boolean;
   type?: string;
   placeholder?: string;
+  /** Restricted rather than hidden — pair with a `hint` saying why. */
+  disabled?: boolean;
 }) {
   return (
     <Labeled label={label} htmlFor={id} hint={hint} required={required}>
@@ -74,6 +111,7 @@ export function TextField({
         type={type}
         value={value ?? ""}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onCommit}
       />
@@ -81,6 +119,41 @@ export function TextField({
   );
 }
 
+/**
+ * Parse what the user typed against the same rule the server enforces
+ * (`nullableInt`: an integer, at least `min`). Empty is "not answered", not an
+ * error.
+ */
+function parseWholeNumber(
+  raw: string,
+  min: number,
+): { value: number | null; error: string | null } {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return { value: null, error: null };
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return { value: null, error: "Enter a number." };
+  if (!Number.isInteger(n)) {
+    return { value: null, error: "Whole numbers only — no decimals." };
+  }
+  if (n < min) return { value: null, error: `Enter ${min} or more.` };
+  return { value: n, error: null };
+}
+
+/**
+ * Whole-number field. The typed TEXT lives here and only a value that passes
+ * `parseWholeNumber` is handed up to the draft.
+ *
+ * It used to pass `Number(raw)` up unconditionally. The server schema is
+ * `z.number().int().min(0)`, so a single "4.5" or "-3" — both of which a
+ * `type="number"` input accepts happily — made the whole autosave payload fail
+ * Zod. The camp then saw a permanent "Save failed — we'll retry" (the wizard
+ * keeps the draft dirty and retries the same rejected payload forever), submit
+ * refused because `handleSubmit` will not submit an unflushed draft, and the
+ * only explanation offered was "Some answers weren't in the expected format" —
+ * naming no field, on a section the camp may not even have open. Now the
+ * problem is reported next to the offending input and the draft keeps its last
+ * valid value.
+ */
 export function NumberField({
   id,
   label,
@@ -102,6 +175,24 @@ export function NumberField({
   min?: number;
   placeholder?: string;
 }) {
+  const [raw, setRaw] = React.useState(value === null ? "" : String(value));
+  // Re-sync only when the draft's value is something this text does not already
+  // represent (a fresh load, or a reset elsewhere). Comparing on the PARSED
+  // value means "007" and a half-typed entry are left alone instead of being
+  // rewritten under the user's cursor.
+  React.useEffect(() => {
+    setRaw((prev) =>
+      parseWholeNumber(prev, min).value === value
+        ? prev
+        : value === null
+          ? ""
+          : String(value),
+    );
+  }, [value, min]);
+
+  const { error } = parseWholeNumber(raw, min);
+  const errorId = `${id}-error`;
+
   return (
     <Labeled label={label} htmlFor={id} hint={hint} required={required}>
       <Input
@@ -109,14 +200,29 @@ export function NumberField({
         type="number"
         inputMode="numeric"
         min={min}
-        value={value ?? ""}
+        step={1}
+        value={raw}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={
+          error ? "border-destructive focus-visible:ring-destructive" : ""
+        }
         onChange={(e) => {
-          const raw = e.target.value;
-          onChange(raw === "" ? null : Number(raw));
+          const next = e.target.value;
+          setRaw(next);
+          const parsed = parseWholeNumber(next, min);
+          // Only a valid entry (or a cleared field) reaches the draft — an
+          // invalid one must never become part of an autosave payload.
+          if (parsed.error === null) onChange(parsed.value);
         }}
         onBlur={onCommit}
       />
+      {error && (
+        <p id={errorId} className="text-xs text-destructive" aria-live="polite">
+          {error}
+        </p>
+      )}
     </Labeled>
   );
 }
@@ -230,9 +336,10 @@ export function YesNoField({
   hint?: string;
   required?: boolean;
 }) {
+  const labelId = React.useId();
   return (
-    <Labeled label={label} hint={hint} required={required}>
-      <div className="flex gap-2">
+    <Labeled label={label} labelId={labelId} hint={hint} required={required}>
+      <div role="group" aria-labelledby={labelId} className="flex gap-2">
         {[
           { v: true, l: "Yes" },
           { v: false, l: "No" },
@@ -272,12 +379,17 @@ export function CheckGroup({
   hint?: string;
   required?: boolean;
 }) {
+  const labelId = React.useId();
   function toggle(v: string) {
     onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
   }
   return (
-    <Labeled label={label} hint={hint} required={required}>
-      <div className="flex flex-wrap gap-2">
+    <Labeled label={label} labelId={labelId} hint={hint} required={required}>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className="flex flex-wrap gap-2"
+      >
         {options.map((opt) => {
           const on = value.includes(opt.value);
           return (
@@ -324,9 +436,14 @@ export function RadioChoiceGroup({
   /** Small info line under the group (e.g. the SOOP explainer). */
   footnote?: string;
 }) {
+  const labelId = React.useId();
   return (
-    <Labeled label={label} hint={hint} required={required}>
-      <div role="radiogroup" className="flex flex-col gap-2">
+    <Labeled label={label} labelId={labelId} hint={hint} required={required}>
+      <div
+        role="radiogroup"
+        aria-labelledby={labelId}
+        className="flex flex-col gap-2"
+      >
         {options.map((opt) => {
           const on = opt.value === value;
           return (
@@ -398,11 +515,20 @@ export function PlacementSelect({
   placeholder?: string;
   flagNote?: string;
 }) {
+  const labelId = React.useId();
+  const triggerId = React.useId();
   const active = options.find((o) => o.value === value);
   return (
-    <Labeled label={label} hint={hint} required={required}>
+    <Labeled label={label} labelId={labelId} hint={hint} required={required}>
       <Select value={value ?? undefined} onValueChange={onChange}>
-        <SelectTrigger>
+        {/* The trigger names itself from BOTH the field label and its own
+            content, so it announces "Placement — first choice, Chill zone"
+            rather than just the zone (or, before this, nothing at all when no
+            zone was picked and the trigger held only a placeholder). */}
+        <SelectTrigger
+          id={triggerId}
+          aria-labelledby={`${labelId} ${triggerId}`}
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -443,10 +569,15 @@ export function ChoiceGroup({
   hint?: string;
   required?: boolean;
 }) {
+  const labelId = React.useId();
   const active = options.find((o) => o.value === value);
   return (
-    <Labeled label={label} hint={hint} required={required}>
-      <div className="flex flex-wrap gap-2">
+    <Labeled label={label} labelId={labelId} hint={hint} required={required}>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className="flex flex-wrap gap-2"
+      >
         {options.map((opt) => {
           const on = opt.value === value;
           return (

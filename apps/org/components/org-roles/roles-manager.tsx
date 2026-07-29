@@ -12,7 +12,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
+  DEPARTMENT_SCOPED_CAPABILITIES,
   DEPARTMENT_SCOPE_NOTE,
+  ENGINEER_RANK_CARVE_OUTS,
   GRANTABLE_ORG_CAPABILITIES,
   ORG_CAPABILITY_DESCRIPTIONS,
   ORG_CAPABILITY_LABELS,
@@ -20,9 +22,11 @@ import {
   ORG_DOMAIN_DESCRIPTIONS,
   ORG_DOMAIN_LABELS,
   ORG_RANK_LABELS,
+  SEEDED_ORG_DEPARTMENTS,
   canDeleteOrgRoleKind,
   canRescopeOrgRole,
   departmentDomainsNote,
+  isDepartmentScopedCapability,
   listDomainLabels,
   type OrgCapability,
   type OrgDomain,
@@ -80,7 +84,7 @@ import {
 // Client-side only for the forms and dialogs. Every mutation is a server action
 // that re-checks the `god` anchor (`requireSystemManager`), so `canManage` here
 // decides what is OFFERED and never what is permitted — an engineer reading this
-// page with `read_system` sees the model and no controls, and would still be
+// page via `runsDeployment` sees the model and no controls, and would still be
 // refused server-side if they forged the call.
 //
 // THREE RULES THIS SCREEN IS BUILT AROUND:
@@ -89,20 +93,77 @@ import {
 //     department takes its roles AND everyone's hold on them; the dialog names
 //     the people and counts the ones who would be left able to sign in and do
 //     nothing. A toast afterwards is not a substitute for a sentence before.
-//  2. Permanence is EXPLAINED, never a greyed-out button. A control that is
-//     simply missing teaches nobody why.
+//  2. Permanence is EXPLAINED, in the place the control it blocks would be. A
+//     button that is simply missing teaches nobody why, and a live one the
+//     server will refuse teaches them the console is guessing — so a permanent
+//     ROLE's editor states the reason in the slot its Delete button occupies,
+//     and a permanent DEPARTMENT's Delete button is disabled with the reason
+//     beside it rather than firing an action that always throws.
 //  3. Rights are described by CONSEQUENCE. Someone here is deciding what a
-//     colleague can destroy, so the checklist says "permanently removes
-//     suppliers and their documents", not "delete".
+//     colleague can destroy, so the checklist says "permanently destroys
+//     records in the domains this department owns", not "delete". It used to
+//     name ONE department's things — "suppliers and their documents" — on
+//     EVERY department's rights screen, which is the defect that prompted the
+//     CRUD rework: the verb belongs to the capability, the nouns belong to the
+//     domain list beside it.
 //  4. A DEPARTMENT THAT OWNS NOTHING SAYS SO. Scoping is now two decisions —
 //     which department a role belongs to, and what that department owns — and
 //     the first is worthless without the second. Every place a scoped role
 //     appears, the domains behind it appear with it, including the empty case.
+//  5. WHICH RIGHTS A DEPARTMENT CONFINES IS READ, NEVER RESTATED. Two screens
+//     here answer that question — the "what does this department own?" dialog
+//     and the role editor's checklist — and they gave opposite answers for a
+//     while: one named two rights, the other said every capability. Both now
+//     read `DEPARTMENT_SCOPED_CAPABILITIES`, so the answer moves in one place
+//     or not at all.
 
 const NO_DEPARTMENT = "__none__";
 
 /** Deleting nothing costs nothing — the shape used before any query answers. */
 const NO_IMPACT: DeletionImpact = { people: 0, leftWithNothing: 0, labels: [] };
+
+/** "delete and see personal information" — or "…or…", for a sentence that
+ * denies the list rather than granting it. */
+function listCapabilityLabels(
+  capabilities: readonly OrgCapability[],
+  conjunction: "and" | "or" = "and",
+): string {
+  const labels = capabilities.map((c) =>
+    ORG_CAPABILITY_LABELS[c].toLowerCase(),
+  );
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return labels[0] as string;
+  return `${labels.slice(0, -1).join(", ")} ${conjunction} ${labels[labels.length - 1]}`;
+}
+
+/** THE RIGHTS A DEPARTMENT CONFINES, read from the model (house rule 5). */
+const CONFINED_RIGHTS = listCapabilityLabels(DEPARTMENT_SCOPED_CAPABILITIES);
+
+/**
+ * PERMANENT DEPARTMENTS, resolved from the key.
+ *
+ * `canDeleteOrgDepartmentKind` is the server's answer and it reads
+ * `org_departments.kind`, a column `getOrgRolesOverview` does not select — so
+ * this screen offered a Delete button on Theme camps and Suppliers that
+ * `deleteDepartment` has always thrown on, and the only way to learn that was
+ * to press it and read a toast.
+ *
+ * The key is an exact stand-in for the column, not an approximation: migration
+ * 0022 seeds these two keys as `system` and promotes any hand-created row that
+ * already held one, nothing else ever writes that kind (`createDepartment`
+ * takes the column default, `custom`), and the key is unique — so a department
+ * someone later names "Suppliers" is keyed `suppliers_2` and stays deletable.
+ * The server still decides; this only stops the console offering the refusal.
+ */
+function isPermanentDepartment(department: { key: string }): boolean {
+  return SEEDED_ORG_DEPARTMENTS.some((d) => d.key === department.key);
+}
+
+/** Why a permanent department has no live Delete control, beside the one it
+ * has instead. The server's refusal says the same thing at more length. */
+function permanentDepartmentReason(name: string): string {
+  return `Permanent — ${name} is the org side of an app that is deployed, so removing it would leave that app with nobody answering for it. Its name, its rights and the parts of the console it owns all stay yours to change.`;
+}
 
 export interface RoleImpacts {
   byRole: Record<string, DeletionImpact>;
@@ -212,9 +273,15 @@ export function RolesManager({
           <CardDescription>
             Roles tied to no department: what they grant, they grant everywhere.
             The two permanent ones carry exactly the rights org staff and
-            engineers held when those were hardcoded ranks — and you can change
-            either, including giving the engineer role access to personal
-            information. A {ORG_RANK_LABELS.god.toLowerCase()} holds everything
+            engineers held when those were hardcoded ranks, and you can change
+            either. One thing you cannot change from here: an account whose door
+            is {ORG_RANK_LABELS.engineer.toLowerCase()} is refused{" "}
+            {listCapabilityLabels(ENGINEER_RANK_CARVE_OUTS, "or")} in every
+            department, whatever roles it is given — that ceiling is the rank
+            rather than the role, so ticking{" "}
+            {ENGINEER_RANK_CARVE_OUTS.length === 1 ? "it" : "them"} on the{" "}
+            {ORG_RANK_LABELS.engineer} role changes nothing for the people
+            holding it. A {ORG_RANK_LABELS.god.toLowerCase()} holds everything
             regardless and needs no role at all.
           </CardDescription>
         </CardHeader>
@@ -330,7 +397,15 @@ export function RolesManager({
                 <div key={d.id} className="rounded-lg border border-border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium">{d.name}</p>
+                      <p className="flex flex-wrap items-center gap-2 font-medium">
+                        {d.name}
+                        {isPermanentDepartment(d) && (
+                          <Badge variant="outline" className="gap-1">
+                            <Lock className="h-3 w-3" aria-hidden />
+                            Permanent
+                          </Badge>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {d.description ?? `Key: ${d.key}`}
                       </p>
@@ -370,11 +445,20 @@ export function RolesManager({
                         >
                           Rename
                         </Button>
+                        {/* Disabled, not hidden, on the two permanent ones:
+                            the server refuses them and a control that is
+                            simply absent reads as a console that forgot the
+                            feature. The reason is under the name, where it can
+                            be read without pressing anything. */}
                         <Button
                           variant="ghost"
                           size="sm"
-                          disabled={pending}
-                          aria-label={`Delete ${d.name}`}
+                          disabled={pending || isPermanentDepartment(d)}
+                          aria-label={
+                            isPermanentDepartment(d)
+                              ? `Delete ${d.name} — permanent, cannot be deleted`
+                              : `Delete ${d.name}`
+                          }
                           onClick={() => setConfirmDeleteDepartment(d)}
                         >
                           <Trash2 aria-hidden />
@@ -383,6 +467,12 @@ export function RolesManager({
                       </div>
                     )}
                   </div>
+                  {canManage && isPermanentDepartment(d) && (
+                    <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <Lock className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>{permanentDepartmentReason(d.name)}</span>
+                    </p>
+                  )}
                   {/* WHAT IT OWNS, on the department itself and not buried in
                       a dialog: it is the other half of every scoped role below
                       it, and the empty case is a warning rather than a blank. */}
@@ -569,10 +659,10 @@ export function RolesManager({
               What does {editingDomains?.name ?? "this department"} own?
             </DialogTitle>
             <DialogDescription>
-              This is what a role scoped to this department reaches. Two rights
-              are confined by it — seeing people&rsquo;s details, and permanently
-              deleting — so ticking a box here decides whose contact details and
-              medical notes this department&rsquo;s leads can read.
+              This is what a role scoped to this department reaches. The rights
+              a department confines are {CONFINED_RIGHTS}, so ticking a box here
+              decides whose contact details and medical notes this
+              department&rsquo;s leads can read.
             </DialogDescription>
           </DialogHeader>
           {editingDomains && (
@@ -814,16 +904,24 @@ function RoleRow({
             {role.holders} {role.holders === 1 ? "person holds it" : "people hold it"}
           </span>
         </span>
+        {/* `org_staff` NAMED, not defaulted: this row describes a ROLE, not a
+            person, and org staff is the door with no rank ceiling on it — the
+            full extent of what the role carries. The engineer ceiling is a
+            fact about ACCOUNTS and is stated once, on the org-wide card
+            above, rather than repeated under every role on the page. */}
         <CapabilitySummary
-          grants={grantsForRoles([
-            {
-              id: role.id,
-              departmentId: role.departmentId,
-              departmentName: role.departmentName,
-              departmentDomains,
-              capabilities: role.capabilities,
-            },
-          ])}
+          grants={grantsForRoles(
+            [
+              {
+                id: role.id,
+                departmentId: role.departmentId,
+                departmentName: role.departmentName,
+                departmentDomains,
+                capabilities: role.capabilities,
+              },
+            ],
+            "org_staff",
+          )}
           emptyLabel="Grants nothing at all — holding it changes nothing."
         />
         {role.kind === "system" && (
@@ -989,16 +1087,21 @@ function RoleEditor({
 
   // The same resolver the server will run, on the draft in front of them —
   // including what the chosen department owns, so "scoped to Safety" is
-  // previewed as the nothing it is when Safety owns nothing.
-  const preview = grantsForRoles([
-    {
-      id: role?.id ?? "draft",
-      departmentId: draft.departmentId,
-      departmentName,
-      departmentDomains,
-      capabilities: draft.capabilities,
-    },
-  ]);
+  // previewed as the nothing it is when Safety owns nothing. Resolved as
+  // `org_staff` for the reason the role rows are: a role is not a person, and
+  // this is the whole of what the role carries.
+  const preview = grantsForRoles(
+    [
+      {
+        id: role?.id ?? "draft",
+        departmentId: draft.departmentId,
+        departmentName,
+        departmentDomains,
+        capabilities: draft.capabilities,
+      },
+    ],
+    "org_staff",
+  );
 
   return (
     <Dialog
@@ -1050,7 +1153,7 @@ function RoleEditor({
               !rescopable
                 ? "This is one of the department's own permanent roles, so it stays there."
                 : draft.departmentId === null
-                  ? "Org-wide grants its rights everywhere. Scoping it to a department confines the sharp ones — personal information and deletion — to what that department owns."
+                  ? `Org-wide grants its rights everywhere. Scoping it to a department confines ${CONFINED_RIGHTS} to what that department owns.`
                   : departmentDomainsNote(departmentDomains)
             }
           >
@@ -1129,20 +1232,30 @@ function RoleEditor({
                   <span className="text-xs text-muted-foreground">
                     {ORG_CAPABILITY_DESCRIPTIONS[c]}
                   </span>
-                  {/* EVERY capability is department-scoped now, so every one
-                      of them says where it lands. Under the old vocabulary only
-                      `delete` and personal information were scoped, which is why
-                      a department's rights screen could describe powers that
-                      were really org-wide — and why every department's delete
-                      row talked about suppliers. */}
-                  {draft.departmentId !== null && (
+                  {/* WHERE THIS ONE LANDS — asked of the model
+                      (`isDepartmentScopedCapability`) rather than asserted here,
+                      because the "what does this department own?" dialog answers
+                      the same question and the two used to disagree: this
+                      checklist claimed every capability was confined while that
+                      dialog named two. A right the model does NOT confine says
+                      so in the same breath, because "I scoped the role, so it is
+                      contained" is exactly the wrong thing to leave someone
+                      believing about a right that still applies everywhere. */}
+                  {draft.departmentId !== null &&
+                    (isDepartmentScopedCapability(c) ? (
                       <span className="text-xs text-muted-foreground">
                         Scoped to {departmentName ?? "this department"}:{" "}
                         {departmentDomains.length === 0
                           ? "which owns no part of the console, so ticking this grants nothing at all."
                           : `${listDomainLabels(departmentDomains)} — and nothing else.`}
                       </span>
-                    )}
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Not confined by {departmentName ?? "the department"} —
+                        this one applies across the whole console however the
+                        role is scoped.
+                      </span>
+                    ))}
                 </span>
               </label>
             ))}

@@ -63,6 +63,24 @@ interface BuilderMember {
   roleIds: string[];
 }
 
+/**
+ * What THIS author's `manage_questionnaires` grant actually covers, resolved on
+ * the server through `canAuthorProjectQuestionnaire` (the same predicate the
+ * send re-runs). Lead/admin hold the backstop, so everything is true for them.
+ *
+ * Out-of-scope choices are rendered DISABLED with the reason next to them rather
+ * than hidden: a member who can send to two roles should be able to see that the
+ * others exist and why they are not theirs to send to.
+ */
+interface BuilderScope {
+  /** May they send to the whole camp (the baseline audience)? */
+  canTargetEveryone: boolean;
+  /** The role ids they may target. */
+  targetableRoleIds: string[];
+  /** May they mark a send blocking (it hard-gates the recipient's app)? */
+  mayBlock: boolean;
+}
+
 function genId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -88,20 +106,29 @@ export function QuestionnaireBuilder({
   slug,
   roles,
   members,
+  scope,
   action,
 }: {
   slug: string;
   roles: BuilderRole[];
   members: BuilderMember[];
+  scope: BuilderScope;
   action: typeof createQuestionnaireAction;
 }) {
   const router = useRouter();
+  const targetable = React.useMemo(
+    () => new Set(scope.targetableRoleIds),
+    [scope.targetableRoleIds],
+  );
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [questions, setQuestions] = React.useState<BuilderQuestion[]>([
     newQuestion(),
   ]);
-  const [mode, setMode] = React.useState<"everyone" | "roles">("everyone");
+  // Don't open on an audience this author can't send to.
+  const [mode, setMode] = React.useState<"everyone" | "roles">(
+    scope.canTargetEveryone ? "everyone" : "roles",
+  );
   const [roleIds, setRoleIds] = React.useState<string[]>([]);
   const [blocking, setBlocking] = React.useState(false);
   const [dueAt, setDueAt] = React.useState("");
@@ -133,6 +160,14 @@ export function QuestionnaireBuilder({
     }
     if (mode === "roles" && roleIds.length === 0)
       return "Pick at least one role, or send to everyone.";
+    // Mirrors the server's refusal so the author is told before they send, not
+    // after. The server remains the boundary.
+    if (mode === "everyone" && !scope.canTargetEveryone)
+      return "Your questionnaire permission doesn't cover the whole camp — pick the roles it does cover.";
+    if (mode === "roles" && roleIds.some((id) => !targetable.has(id)))
+      return "One of the roles you picked is outside your questionnaire permission.";
+    if (blocking && !scope.mayBlock)
+      return "Your questionnaire permission doesn't allow blocking sends.";
     return null;
   }
 
@@ -396,23 +431,34 @@ export function QuestionnaireBuilder({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex gap-2">
-            {(["everyone", "roles"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={mode === m}
-                onClick={() => setMode(m)}
-                className={cn(
-                  "flex-1 rounded-md border px-3 py-2 text-sm transition-colors",
-                  mode === m
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {m === "everyone" ? "Everyone in this camp" : "By role"}
-              </button>
-            ))}
+            {(["everyone", "roles"] as const).map((m) => {
+              const allowed = m === "everyone" ? scope.canTargetEveryone : true;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  disabled={!allowed}
+                  onClick={() => setMode(m)}
+                  className={cn(
+                    "flex-1 rounded-md border px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                    mode === m
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-input bg-background text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {m === "everyone" ? "Everyone in this camp" : "By role"}
+                </button>
+              );
+            })}
           </div>
+
+          {!scope.canTargetEveryone && (
+            <p className="text-xs text-muted-foreground">
+              Your questionnaire permission covers specific roles, not the whole
+              camp — a lead or admin can widen it.
+            </p>
+          )}
 
           {mode === "roles" &&
             (roles.length === 0 ? (
@@ -421,19 +467,35 @@ export function QuestionnaireBuilder({
                 everyone.
               </p>
             ) : (
-              <ToggleGroup
-                type="multiple"
-                variant="outline"
-                value={roleIds}
-                onValueChange={setRoleIds}
-                className="justify-start"
-              >
-                {roles.map((r) => (
-                  <ToggleGroupItem key={r.id} value={r.id}>
-                    {r.name}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+              <>
+                <ToggleGroup
+                  type="multiple"
+                  variant="outline"
+                  value={roleIds}
+                  onValueChange={setRoleIds}
+                  className="justify-start"
+                >
+                  {roles.map((r) => (
+                    <ToggleGroupItem
+                      key={r.id}
+                      value={r.id}
+                      disabled={!targetable.has(r.id)}
+                      title={
+                        targetable.has(r.id)
+                          ? undefined
+                          : "Outside your questionnaire permission"
+                      }
+                    >
+                      {r.name}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                {roles.some((r) => !targetable.has(r.id)) && (
+                  <p className="text-xs text-muted-foreground">
+                    Greyed-out roles are outside your questionnaire permission.
+                  </p>
+                )}
+              </>
             ))}
 
           <p className="text-sm text-muted-foreground">
@@ -470,9 +532,10 @@ export function QuestionnaireBuilder({
               <button
                 type="button"
                 aria-pressed={blocking}
+                disabled={!scope.mayBlock}
                 onClick={() => setBlocking(true)}
                 className={cn(
-                  "flex-1 rounded-md border px-3 py-2 text-sm transition-colors",
+                  "flex-1 rounded-md border px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                   blocking
                     ? "border-destructive bg-destructive/10 text-foreground"
                     : "border-input bg-background text-muted-foreground hover:bg-muted",
@@ -481,6 +544,13 @@ export function QuestionnaireBuilder({
                 Required (blocks the app)
               </button>
             </div>
+            {!scope.mayBlock && (
+              <p className="text-xs text-muted-foreground">
+                Blocking sends lock a member out of the app until they answer,
+                so they need the &quot;may block&quot; part of the questionnaire
+                permission. Yours doesn&apos;t have it.
+              </p>
+            )}
             <div>
               <BlockingBadge blocking={blocking} />
             </div>

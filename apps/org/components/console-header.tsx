@@ -16,7 +16,7 @@ import { HeaderNotificationBell } from "@/components/header-notification-bell";
 /**
  * A nav entry, optionally gated on a capability from the ONE matrix.
  *
- * Hiding is never the security boundary — `/system` re-checks `read_system`
+ * Hiding is never the security boundary — `/system` re-checks `runsDeployment`
  * server-side and refuses out loud — but an entry that leads somewhere the
  * viewer will be refused is its own defect, and both read the same predicate so
  * the two cannot drift.

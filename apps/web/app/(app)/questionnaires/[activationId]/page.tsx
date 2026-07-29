@@ -107,50 +107,52 @@ export default async function QuestionnaireFillPage({
       ? INVITE_RESUME_PATH
       : "/directory";
     return (
-      <div className="flex min-h-svh flex-col bg-background">
-        <main className="mx-auto w-full max-w-xl flex-1 px-6 py-10">
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <BlockingBadge blocking />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {activation.title}
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {asker} asks:
-                </p>
-              </div>
-              {activation.description && (
-                <p className="text-sm text-muted-foreground">
-                  {activation.description}
-                </p>
-              )}
+      // NO full-screen wrapper. This used to own the whole viewport because it
+      // drew its own header; the shell draws the chrome now, and a `min-h-svh`
+      // column nested inside the shell's already-padded `flex-1` container just
+      // overflows it and doubles the padding.
+      <div className="mx-auto w-full max-w-xl">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <BlockingBadge blocking />
             </div>
-
-            <Card>
-              <CardContent className="pt-6">
-                <QuestionnaireFill
-                  activationId={activationId}
-                  questionnaire={activation.definition}
-                  initialResponses={initialResponses}
-                  redirectTo={afterGate}
-                  submitLabel="Submit answers"
-                  gate
-                  respondentSeed={user.id}
-                  blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
-                />
-              </CardContent>
-            </Card>
-
-            <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              You can&apos;t use the portal until this is done — it only takes a
-              couple of minutes.
-            </p>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {activation.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {asker} asks:
+              </p>
+            </div>
+            {activation.description && (
+              <p className="text-sm text-muted-foreground">
+                {activation.description}
+              </p>
+            )}
           </div>
-        </main>
+
+          <Card>
+            <CardContent className="pt-6">
+              <QuestionnaireFill
+                activationId={activationId}
+                questionnaire={activation.definition}
+                initialResponses={initialResponses}
+                redirectTo={afterGate}
+                submitLabel="Submit answers"
+                gate
+                respondentSeed={user.id}
+                blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+              />
+            </CardContent>
+          </Card>
+
+          <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+            <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            You can&apos;t use the portal until this is done — it only takes a
+            couple of minutes.
+          </p>
+        </div>
       </div>
     );
   }

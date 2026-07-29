@@ -209,8 +209,9 @@ const USERNAME_TAKEN = "That username is already taken. Try another.";
 /**
  * Validate + persist a bio from questionnaire responses. Enforces the privacy
  * hard-lock, encrypts the ID document (dropping it if crypto is unconfigured),
- * ensures the profile keypair exists, and — on completion — clears the blocking
- * Burner Bio required action. `final` marks the bio complete.
+ * ensures the profile keypair exists WHEN one can be stored safely, and — on
+ * completion — clears the blocking Burner Bio required action. `final` marks the
+ * bio complete.
  */
 export async function saveBio(input: {
   userId: string;
@@ -434,7 +435,11 @@ export async function saveBio(input: {
   await ensureProfileKeypair(input.userId);
 
   if (input.final) {
-    await completeRequiredAction(input.userId, BURNER_BIO_ACTION_KEY);
+    await completeRequiredAction(
+      input.userId,
+      input.editionId,
+      BURNER_BIO_ACTION_KEY,
+    );
   }
 
   return { ok: true };
@@ -458,8 +463,34 @@ export async function savePrivacyFlags(
     );
 }
 
-/** Ensure a profile keypair exists for the user (generate + store once). */
+/**
+ * Ensure a profile keypair exists for the user (generate + store once).
+ *
+ * FAIL CLOSED WITH NO KEY — no keypair at all beats a fake one.
+ *
+ * This used to end `safeEncrypt(pair.privateKeyB64) ?? pair.privateKeyB64`, so on
+ * any deployment without PGCRYPTO_KEY (local, preview, and the demo) the profile
+ * PRIVATE KEY was written verbatim into a column called `encrypted_private_key`.
+ * Nothing downstream could tell the two apart: every reader — and every person
+ * reading the schema — would take that column at its word. The server is meant to
+ * be the lock box for this key, and a lock box whose contents are in the clear
+ * while the label says otherwise is worse than an empty one.
+ *
+ * The keypair exists only so the server can SIGN things as this account (future
+ * QR attestations); the private half is never shown to the user and never leaves
+ * this process. A signature made with a key that sat in plaintext proves nothing,
+ * so refusing to mint one is the honest outcome — not a degradation of anything
+ * a burner can currently see.
+ *
+ * The caller must therefore cope with there being no keypair: `saveBio` ignores
+ * the result (the bio still saves — the env-less boot law), and
+ * `getKeyFingerprint` already returns null when the row is absent, which the
+ * profile renders as "no fingerprint" exactly as it does for an account that has
+ * not reached this point yet. Once a key is configured, the next save mints one.
+ */
 export async function ensureProfileKeypair(userId: string): Promise<void> {
+  if (!isCryptoConfigured()) return;
+
   const existing = await db()
     .select({ userId: schema.profileKeys.userId })
     .from(schema.profileKeys)
@@ -468,8 +499,11 @@ export async function ensureProfileKeypair(userId: string): Promise<void> {
   if (existing[0]) return;
 
   const pair = await generateProfileKeypair();
-  const encryptedPrivate =
-    safeEncrypt(pair.privateKeyB64) ?? pair.privateKeyB64;
+  // Belt and braces: `safeEncrypt` is the only thing that decides whether a
+  // ciphertext exists, so honour ITS answer rather than the check above.
+  const encryptedPrivate = safeEncrypt(pair.privateKeyB64);
+  if (!encryptedPrivate) return;
+
   await db()
     .insert(schema.profileKeys)
     .values({

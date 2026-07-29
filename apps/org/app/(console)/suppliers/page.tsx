@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { orgCanInDomain, orgCapabilityRefusal } from "@quagga/core";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getSuppliersOverview } from "@/lib/queries";
@@ -14,6 +15,23 @@ export default async function SuppliersPage() {
 
   const edition = await getActiveEdition();
   const suppliers = await getSuppliersOverview(edition?.id ?? null);
+
+  // ASK THE QUESTION THE TABLE CANNOT. `SuppliersTable` documents this exact
+  // call and treats an omitted prop as "not asked" — which is what it was, so
+  // every rank got a live bin icon, engineers and other-department leads
+  // included. `deleteSupplier` guards `delete` in `suppliers`, so pressing it
+  // returned a toast; the control looked destructive and was decorative.
+  //
+  // Disabled and explained rather than removed: "I'd rather things be
+  // transparent with restrictions than completely obfuscated, except for
+  // private personal information" (Ryan, 28 Jul 2026).
+  const deleteRefusal = orgCanInDomain(
+    guard.session.actor,
+    "delete",
+    "suppliers",
+  )
+    ? null
+    : orgCapabilityRefusal(guard.session.actor, "delete", "suppliers");
 
   return (
     <div>
@@ -49,6 +67,7 @@ export default async function SuppliersPage() {
           <SuppliersTable
             suppliers={suppliers}
             editionId={edition?.id ?? null}
+            deleteRefusal={deleteRefusal}
           />
         </div>
       )}
