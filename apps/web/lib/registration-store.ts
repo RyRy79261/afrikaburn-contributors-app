@@ -627,6 +627,16 @@ export async function applyCampAction(input: {
     .set({
       status: target,
       updatedAt: new Date(),
+      // THE REVIEWER'S WORDS BELONG TO THE STATE THEY WERE SAID ABOUT.
+      // `decision_reason` holds the reason for the CURRENT state, and a camp
+      // moving itself out of `changes_requested` has acted on that feedback —
+      // carrying it into `submitted` left "From the reviewer: your LNT section
+      // needs more detail" sitting under "Submitted — awaiting review", which
+      // reads as though AfrikaBurn is still asking. Same for a withdrawal.
+      // The org's own decide path already clears it on any transition that
+      // carries no reason; this is the camp-side half of the same invariant
+      // (migration 0027 corrected the rows 0025's backfill wrote).
+      decisionReason: null,
       ...(target === "submitted" ? { submittedAt: new Date() } : {}),
     })
     .where(
