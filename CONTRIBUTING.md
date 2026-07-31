@@ -64,6 +64,30 @@ Prose headlines — `deletion didn't know about the rest of the product` — rea
 well in a changelog and sort, filter and tool badly. Put that sentence in the PR
 body's summary, where it earns its place.
 
+### Enforcement
+
+Both halves are checked, because this repo **merges** pull requests rather than
+squashing them — every individual commit lands on `main`, so the PR title is not
+the only thing anyone reads.
+
+| where                                               | what                                       | escape hatch             |
+| --------------------------------------------------- | ------------------------------------------ | ------------------------ |
+| `.husky/commit-msg`                                 | your commit message, as you write it       | `git commit --no-verify` |
+| `.github/workflows/ci.yml` → **commit conventions** | the PR title, and every commit the PR adds | none                     |
+
+The hook comes from `pnpm install` (via the `prepare` script). CI checks the
+range from the merge base, so history already on `main` is out of scope — this
+binds new commits without demanding the old ones be rewritten.
+
+Rules live in `commitlint.config.mjs`. It extends `@commitlint/config-conventional`
+and changes three things: the scope list is the enum above (an unlisted scope
+fails — `fix(accounts):` looks reasonable and names nothing that exists), the
+header limit is 72 rather than 100, and long body/footer lines warn instead of
+failing, because hard-wrapping a URL to satisfy a linter makes a message worse.
+
+Merge commits and git-generated reverts are ignored; they cannot be conventional
+and are not written by a person.
+
 ## Pull request descriptions
 
 `.github/pull_request_template.md` is applied automatically. Two sections in it

@@ -14,6 +14,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Conventional Commits with a workspace scope (CONTRIBUTING.md,
+  # commitlint.config.mjs). BOTH halves are checked, because this repo MERGES
+  # pull requests rather than squashing them: every individual commit lands on
+  # `main`, so linting only the PR title would let unconventional history
+  # through, and linting only the commits would leave the PR list — the thing
+  # people actually read — unchecked.
+  #
+  # The local `commit-msg` hook covers the same ground, but a hook only binds a
+  # machine that has run `pnpm install`, and `--no-verify` skips it. This does
+  # not.
+  commitlint:
+    name: commit conventions
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      # `fetch-depth: 0` — the range check below needs the merge base, and the
+      # default shallow clone does not have it.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # The PR title. It is what the reviewer list shows and what a reader scans;
+      # it is also the subject GitHub offers if this is ever squashed.
+      - name: Lint the pull-request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" | pnpm exec commitlint
+
+      # Every commit the PR adds. `--from`/`--to` over the merge base, so
+      # anything already on main is out of scope — this enforces new history
+      # without demanding the old history be rewritten.
+      - name: Lint the commits in this pull request
+        run: |
+          pnpm exec commitlint \
+            --from "${{ github.event.pull_request.base.sha }}" \
+            --to "${{ github.event.pull_request.head.sha }}" \
+            --verbose
+
   ci:
     name: lint · typecheck · test · build
     runs-on: ubuntu-latest
