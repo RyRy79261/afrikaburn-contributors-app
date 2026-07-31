@@ -394,6 +394,23 @@ export async function searchAccounts(
   const q = query.trim();
   const like = `%${q}%`;
 
+  // MATCH THE INTERNAL ID ONLY WHEN THE TERM LOOKS LIKE ONE.
+  //
+  // A sanitized account has no email and no username, so the id is the only
+  // handle left on it — but a naive `id::text ILIKE '%q%'` is a disaster at any
+  // scale, because a v4 uuid is 32 hex characters: measured over 200k generated
+  // uuids, "a" matches 89% of them, "e" 86%, and "4" matches ONE HUNDRED
+  // PERCENT (it is the version nibble). With `ORDER BY created_at DESC LIMIT 50`
+  // and no relevance ranking, searching "ab" for a user called "abbie" returned
+  // fifty unrelated newer accounts and not abbie — the row the System manager
+  // was looking for, silently evicted, on the only screen that can grant or
+  // revoke console access.
+  //
+  // Eight characters of hex is ~1 in 4 billion, and it is what someone actually
+  // types when they are chasing an id: they paste it. Anything shorter, or with
+  // a non-hex character in it, is a name search and must not touch the id.
+  const looksLikeId = /^[0-9a-f-]{8,}$/i.test(q);
+
   const rows = await db
     .select({
       userId: schema.users.id,
@@ -416,8 +433,28 @@ export async function searchAccounts(
           ? or(
               ilike(schema.users.email, like),
               ilike(schema.users.username, like),
+              // A TOMBSTONE HAS NEITHER. Sanitization nulls `email` and
+              // `username`, so a departed account could not be found by any
+              // search term at all — it surfaced only if it happened to fall in
+              // the 50 newest rows of the unfiltered listing. That mattered
+              // because a departed staffer's console access used to survive on
+              // the row, and this is the only screen that could take it away.
+              //
+              // Sanitization now revokes that access itself, so this is no
+              // longer the last line of defence — but "the console cannot see an
+              // account that exists" is its own defect, and a System manager
+              // auditing who ever held access needs the row to be reachable.
+              // Searching the internal id is the only handle a tombstone keeps.
+              ...(looksLikeId
+                ? [ilike(sql`${schema.users.id}::text`, like)]
+                : []),
             )
-          : ilike(schema.users.username, like)
+          : or(
+              ilike(schema.users.username, like),
+              ...(looksLikeId
+                ? [ilike(sql`${schema.users.id}::text`, like)]
+                : []),
+            )
         : undefined,
     )
     .orderBy(desc(schema.users.createdAt))

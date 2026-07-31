@@ -91,10 +91,7 @@ export function assessPassword(password: string): PasswordAssessment {
 // here so no one hand-writes "no account with that email".
 
 export type EnumerationSafeSurface =
-  | "sign_in"
-  | "sign_up"
-  | "forgot_password"
-  | "email_change_request";
+  "sign_in" | "sign_up" | "forgot_password" | "email_change_request";
 
 /**
  * The one message a surface may show, whether or not the account exists. Used
@@ -104,7 +101,8 @@ export const ENUMERATION_SAFE_MESSAGES: Readonly<
   Record<EnumerationSafeSurface, string>
 > = {
   sign_in: "That email and password combination didn't work. Please try again.",
-  sign_up: "Check your inbox — if we can create that account, a confirmation link is on its way.",
+  sign_up:
+    "Check your inbox — if we can create that account, a confirmation link is on its way.",
   forgot_password:
     "If that account exists, we've emailed a reset link. Check your inbox.",
   email_change_request:
@@ -112,7 +110,9 @@ export const ENUMERATION_SAFE_MESSAGES: Readonly<
 };
 
 /** The enumeration-safe message for a surface. Never branch on existence. */
-export function enumerationSafeMessage(surface: EnumerationSafeSurface): string {
+export function enumerationSafeMessage(
+  surface: EnumerationSafeSurface,
+): string {
   return ENUMERATION_SAFE_MESSAGES[surface];
 }
 
@@ -182,7 +182,8 @@ export interface DeletionRequestState {
  * - `cancelled`    — the burner came back.
  * - `sanitized`    — done; the stub is all that remains.
  */
-export type DeletionPhase = "none" | "grace" | "due" | "cancelled" | "sanitized";
+export type DeletionPhase =
+  "none" | "grace" | "due" | "cancelled" | "sanitized";
 
 /** Resolve the phase of a request at `now`. Null request ⇒ `none`. */
 export function deletionPhase(
@@ -286,12 +287,24 @@ export interface DeletionGuardContext {
   signInMethodCount: number;
   /** True when the supplier account has an unfinished onboarding (warn, not block). */
   hasInFlightSupplierOnboarding?: boolean;
+  /**
+   * The org rank this account holds, or null. NOT a block — deleting an org
+   * staffer strands nobody — but it is console access that is about to be
+   * revoked, and it was previously invisible: this assessor knew only `god`, so
+   * `org_staff` and `engineer` could self-delete through the participant app
+   * with no warning while their `org_role_assignments` survived on the tombstone.
+   */
+  orgRole?: string | null;
+  /**
+   * The supplier listing this account has claimed, by name, or null. Warned
+   * about because the listing is released back to unclaimed on sanitization —
+   * the business survives, the link does not.
+   */
+  claimedSupplierName?: string | null;
 }
 
 export type DeletionBlockCode =
-  | "sole_camp_lead"
-  | "sole_org_god"
-  | "no_sign_in_method";
+  "sole_camp_lead" | "sole_org_god" | "no_sign_in_method";
 
 export interface DeletionBlock {
   code: DeletionBlockCode;
@@ -301,7 +314,10 @@ export interface DeletionBlock {
 }
 
 export interface DeletionWarning {
-  code: "supplier_onboarding_in_flight";
+  code:
+    | "supplier_onboarding_in_flight"
+    | "org_access_revoked"
+    | "supplier_listing_released";
   message: string;
 }
 
@@ -362,11 +378,37 @@ export function assessDeletionEligibility(
     });
   }
 
+  // Console access is not a lockout risk — losing an `org_staff` account
+  // strands nobody — so it warns rather than blocks. It exists because the
+  // consequence copy never mentioned console access at all, and the person
+  // deleting is usually the only one who knows they had it.
+  if (ctx.orgRole && ctx.orgRole !== "member") {
+    warnings.push({
+      code: "org_access_revoked",
+      message:
+        "This account has AfrikaBurn console access. Deleting it revokes every org role it holds — a System manager has to grant them again to whoever takes the work over.",
+    });
+  }
+
+  if (ctx.claimedSupplierName) {
+    warnings.push({
+      code: "supplier_listing_released",
+      message: `${ctx.claimedSupplierName} is claimed by this account. Deleting it releases the listing so the business can be claimed again — the listing and its history stay, your link to it does not. Note that the contact address on the business record is part of that record and is not erased with your account.`,
+    });
+  }
+
   if (ctx.hasInFlightSupplierOnboarding) {
     warnings.push({
       code: "supplier_onboarding_in_flight",
+      // "…and notifies the AfrikaBurn supplier team" stood here and was false —
+      // nothing anywhere sends that. It went unnoticed because the field driving
+      // this warning was never populated, so the card had never rendered for a
+      // single person; wiring the field up on 31 Jul 2026 would have shipped the
+      // false promise to the first supplier who tried to delete. Either build
+      // the notification or stop claiming it, and claiming it is the one thing
+      // that cannot stay.
       message:
-        "Your supplier onboarding for this edition isn't finished. Deleting your account leaves it incomplete and notifies the AfrikaBurn supplier team.",
+        "Your supplier onboarding for this edition isn't finished. Deleting your account leaves it incomplete — tell your AfrikaBurn contact if someone else is taking it over.",
     });
   }
 
@@ -403,12 +445,16 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /** Expiry for a confirmation token issued at `requestedAt`. */
 export function emailChangeExpiresAt(requestedAt: Date): Date {
-  return new Date(requestedAt.getTime() + EMAIL_CHANGE_CONFIRM_TTL_HOURS * HOUR_MS);
+  return new Date(
+    requestedAt.getTime() + EMAIL_CHANGE_CONFIRM_TTL_HOURS * HOUR_MS,
+  );
 }
 
 /** The end of the revocation window for a change confirmed at `confirmedAt`. */
 export function emailChangeRevocableUntil(confirmedAt: Date): Date {
-  return new Date(confirmedAt.getTime() + EMAIL_CHANGE_REVOCATION_HOURS * HOUR_MS);
+  return new Date(
+    confirmedAt.getTime() + EMAIL_CHANGE_REVOCATION_HOURS * HOUR_MS,
+  );
 }
 
 /** The stored shape (a row from `email_change_requests`). */

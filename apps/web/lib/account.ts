@@ -1,12 +1,13 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   AUTH_CAPABILITIES,
   assessDeletionEligibility,
   deletionDaysRemaining,
   deletionPhase,
+  deriveOnboardingProgress,
   emailChangePhase,
   type AuthCapability,
   type DeletionEligibility,
@@ -339,14 +340,25 @@ export async function buildDeletionGuardContext(
   const handle = db();
 
   // Projects where this user holds the structural `lead` role, with the total
-  // number of leads on each — a leadCount of 1 means they are the only one.
+  // number of LIVE leads on each — a leadCount of 1 means they are the only one.
+  //
+  // THE JOIN TO `users` AND THE `sanitized_at` FILTER ARE THE GUARD.
+  // Sanitization deliberately PRESERVES memberships (account-sanitization.ts:
+  // "no delete of memberships") so the camp's history stays intact — which means
+  // a departed lead's row is still `role = 'lead'` and still counted. Without
+  // this filter a camp whose only other lead is a tombstone reported
+  // `leadCount = 2`, the sole-lead block never fired, and the last LIVE lead
+  // walked out of a camp that then had nobody who could administer it.
   const leadRows = await handle
     .select({
       groupId: schema.groups.id,
       name: schema.groups.name,
       leadCount: sql<number>`(
         select count(*)::int from ${schema.memberships} m2
-        where m2.group_id = ${schema.groups.id} and m2.role = 'lead'
+        join ${schema.users} u2 on u2.id = m2.user_id
+        where m2.group_id = ${schema.groups.id}
+          and m2.role = 'lead'
+          and u2.sanitized_at is null
       )`,
     })
     .from(schema.memberships)
@@ -373,6 +385,7 @@ export async function buildDeletionGuardContext(
 
   let isOrgGod = false;
   let orgGodCount = 0;
+  let mineRole: string | null = null;
   if (orgGroup) {
     const [mine] = await handle
       .select({ role: schema.memberships.role })
@@ -385,22 +398,98 @@ export async function buildDeletionGuardContext(
       )
       .limit(1);
     isOrgGod = mine?.role === "god";
+    mineRole = mine?.role ?? null;
 
+    // LIVE System managers only, for the same reason as the lead count above —
+    // and this one strands the whole deployment rather than one camp.
+    //
+    // Measured on the real query: gods A and B, A deletes (count 2, allowed),
+    // A is sanitized but A's `god` membership row survives, so the count is
+    // STILL 2 and B is allowed too. Zero live System managers, guard reporting
+    // two, and no screen can recover it — apps/org/lib/actions/accounts.ts
+    // deliberately forbids the console from ever granting `god`, so the way back
+    // is an env change to GOD_EMAILS plus a fresh sign-up.
+    //
+    // `bootstrapGod` makes it worse over time: a deleted god still listed in
+    // GOD_EMAILS gets a NEW users row and a NEW god membership on their next
+    // sign-in while the tombstone's membership stays, so every cycle inflated
+    // the count by one and made the guard progressively more permissive.
     const [{ count } = { count: 0 }] = await handle
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
       .where(
         and(
           eq(schema.memberships.groupId, orgGroup.id),
           eq(schema.memberships.role, "god"),
+          isNull(schema.users.sanitizedAt),
         ),
       );
     orgGodCount = Number(count);
   }
 
+  // ORG ACCESS THIS ACCOUNT HOLDS. `org_staff` and `engineer` had no guard and
+  // no warning at all: the rank was invisible to `assessDeletionEligibility`,
+  // which only ever knew about `god`. So a staffer could self-delete through the
+  // participant app, their org membership and every `org_role_assignments` row
+  // survived on the tombstone, and the console kept a live access grant pointing
+  // at a dead account. Not a block — nobody is stranded by it — but they are
+  // told, and sanitization now revokes it (account-sanitize.ts).
+  const orgRole =
+    orgGroup && mineRole && mineRole !== "member" ? mineRole : null;
+
+  // SUPPLIER ONBOARDING, at last. `hasInFlightSupplierOnboarding` has been
+  // declared in @quagga/core and checked by `assessDeletionEligibility` since
+  // the field was written, and NOTHING has ever set it — so the "Worth knowing"
+  // card never rendered and a supplier mid-onboarding was told nothing. The
+  // warning text was already written; only the value was missing.
+  let hasInFlightSupplierOnboarding = false;
+  let claimedSupplierName: string | null = null;
+  const [supplier] = await handle
+    .select({ id: schema.suppliers.id, name: schema.suppliers.name })
+    .from(schema.suppliers)
+    .where(eq(schema.suppliers.userId, userId))
+    .limit(1);
+  if (supplier) {
+    claimedSupplierName = supplier.name;
+    // Onboarding is PER EDITION, so "in flight" means the ACTIVE edition's
+    // checklist is started-but-not-finished. A supplier with no row for this
+    // edition has not begun, which is not something to warn about mid-deletion.
+    const [onboarding] = await handle
+      .select({ steps: schema.supplierOnboarding.steps })
+      .from(schema.supplierOnboarding)
+      .innerJoin(
+        schema.editions,
+        eq(schema.editions.id, schema.supplierOnboarding.editionId),
+      )
+      .where(
+        and(
+          eq(schema.supplierOnboarding.supplierId, supplier.id),
+          eq(schema.editions.isActive, true),
+        ),
+      )
+      .limit(1);
+    if (onboarding) {
+      const progress = deriveOnboardingProgress(onboarding.steps);
+      // STARTED but not finished. A supplier who has touched nothing is not
+      // "in flight" — warning them mid-deletion about a checklist they never
+      // began is noise, and this warning has to mean something to survive.
+      hasInFlightSupplierOnboarding =
+        !progress.isOnboarded && progress.completed + progress.awaiting > 0;
+    }
+  }
+
   const signInMethodCount = (await listLinkedAccounts()).length;
 
-  return { ledProjects, isOrgGod, orgGodCount, signInMethodCount };
+  return {
+    ledProjects,
+    isOrgGod,
+    orgGodCount,
+    signInMethodCount,
+    hasInFlightSupplierOnboarding,
+    orgRole,
+    claimedSupplierName,
+  };
 }
 
 /** The full /account/delete view model. */
