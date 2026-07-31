@@ -1,0 +1,8 @@
+# Conventional Commits with a workspace scope — see CONTRIBUTING.md.
+#
+# Local half of the enforcement; CI checks the PR title and every commit in the
+# range too (.github/workflows/ci.yml), because a hook only binds machines that
+# have run `pnpm install`.
+#
+# To bypass deliberately: `git commit --no-verify`. CI will still refuse it.
+npx --no -- commitlint --edit "$1"
