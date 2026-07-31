@@ -301,7 +301,7 @@ export async function acceptOfficerRequest(
 export async function openRegistrationInConsole(
   orgPage: Page,
   campName: string,
-): Promise<void> {
+): Promise<string> {
   // updated_at DESC is NOT enough under parallel load: 4 workers each bump
   // updated_at, so a just-submitted camp can be pushed off page 1 before we
   // click. The camp name is unique per worker, so page until we find it.
@@ -317,7 +317,17 @@ export async function openRegistrationInConsole(
       await expect(
         orgPage.getByRole("heading", { name: campName }),
       ).toBeVisible();
-      return;
+      // RETURN THE URL so a spec that needs the detail again can `goto` it.
+      //
+      // Calling this helper a SECOND time inside one test has failed twice now
+      // (camp-lead/decision-outcomes 28 Jul, camp-lead/review-loop 29 Jul) with
+      // the console rendering its chrome over an empty body. I have not
+      // root-caused that, and I am not pretending otherwise — but the first
+      // call is reliable and the URL it lands on is stable, so re-walking the
+      // queue is a hop with nothing to gain: it depends on `updated_at`
+      // ordering and pagination that the test does not care about. Specs that
+      // need to come back should hold this and navigate straight there.
+      return orgPage.url();
     }
     // SAY WHICH FAILURE THIS IS. The console renders a full-screen gate for an
     // unauthenticated or non-org session, and a gate has no camp links — so a

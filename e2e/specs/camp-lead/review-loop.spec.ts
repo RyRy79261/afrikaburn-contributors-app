@@ -6,13 +6,17 @@
 // queue as submitted. The org counterpart is a real god session (elevateToGod),
 // never mocked; the whole spec skips cleanly without E2E_GOD_EMAIL.
 //
-// KNOWN GAP (honest): the camp-side "reply on the thread" affordance is NOT yet
-// built. The write path exists server-side (replyToSectionReviewAction in
-// apps/web/.../registration/actions.ts, gated by @quagga/core
-// canReplyToSectionReview) but its own source comment says "The reply UI itself
-// is built by a later agent" — the wizard and summary render org feedback
-// READ-ONLY. So the lead-reply step is a `test.fixme` below, not a silently
-// dropped assertion; it will light up unchanged once the reply UI ships.
+// THE REPLY HALF USED TO BE A `test.fixme` HERE, on the grounds that "the
+// camp-side reply affordance is NOT yet built" and "the wizard and summary
+// render org feedback READ-ONLY". Both statements stopped being true at some
+// point and nobody came back: `SectionReplyThread` is mounted in BOTH surfaces
+// (registration-summary.tsx and registration-wizard.tsx) and posts through
+// `replyToSectionReviewAction`.
+//
+// A skipped test claiming a feature is unbuilt, about a feature that is built,
+// is worse than no test — it is a standing invitation to build it twice, and it
+// makes the suite's own "1 skipped" a lie about coverage. Same defect the five
+// stubs in tests/negative-paths.spec.ts had. It is a real test now.
 
 import type { Page } from "@playwright/test";
 import { test, expect, skipUnlessGod } from "../../fixtures";
@@ -59,9 +63,7 @@ test.describe("camp lead — org review loop", () => {
       "The Leave No Trace section needs more detail before this can be approved.",
     );
     // Org side reflects the new state.
-    await expect(
-      orgPage.getByText(/changes requested/i).first(),
-    ).toBeVisible();
+    await expect(orgPage.getByText(/changes requested/i).first()).toBeVisible();
 
     // Lead side: the registration reopens as an editable wizard, banners the
     // request, and shows the org's feedback on the flagged section.
@@ -97,33 +99,53 @@ test.describe("camp lead — org review loop", () => {
 
   // The camp-side reply UI is not yet built (see file header). This is the
   // assertion it exists to hold, parked as fixme rather than dropped: once a
-  // "Reply" affordance renders on the wizard's Org-feedback panel, remove
-  // `.fixme` and drive it — the server action (replyToSectionReviewAction) and
-  // its authz predicate (canReplyToSectionReview) are already in place.
-  test.fixme(
-    "the lead can reply on a section review thread (UI pending)",
-    async ({ webPage, orgPage }) => {
-      skipUnlessGod();
-      await signUpBurner(webPage, { onboard: true });
-      const camp = await createCamp(webPage, { description: "Chai at dawn." });
-      await submitRegistration(webPage, camp.slug);
+  test("the lead replies on a section thread, and the reviewer sees it", async ({
+    webPage,
+    orgPage,
+  }) => {
+    skipUnlessGod();
+    test.setTimeout(240_000);
 
-      await elevateToGod(orgPage);
-      await openRegistrationInConsole(orgPage, camp.name);
-      await addSectionComment(orgPage, "lnt", "Tell us more about grey water.");
-      await decide(orgPage, "Request changes", "Needs LNT detail.");
+    await signUpBurner(webPage, { onboard: true });
+    const camp = await createCamp(webPage, { description: "Chai at dawn." });
+    await submitRegistration(webPage, camp.slug);
 
-      // TODO(reply-ui): once the wizard renders a reply box under Org feedback,
-      // the lead posts a reply and it appears in the thread. No such control
-      // exists today — the wizard shows org feedback read-only.
-      await webPage.goto(`/camps/${camp.slug}/registration`);
-      await goToSection(webPage, /leave no trace/i);
-      const reply = webPage.getByRole("textbox", { name: /reply/i });
-      await reply.fill("Added — grey water is evaporated in lined trays.");
-      await webPage.getByRole("button", { name: /post reply|reply/i }).click();
-      await expect(
-        webPage.getByText(/grey water is evaporated in lined trays/i),
-      ).toBeVisible();
-    },
-  );
+    const ask = uniqueName("Tell us more about grey water (reply-loop-probe)");
+    await elevateToGod(orgPage);
+    // Hold the URL — the reviewer comes back to this page at the end, and
+    // walking the queue a second time is a hop this test does not need.
+    const detailUrl = await openRegistrationInConsole(orgPage, camp.name);
+    await addSectionComment(orgPage, "lnt", ask);
+    await decide(orgPage, "Request changes", "Needs LNT detail.");
+
+    // The lead opens the flagged section and finds the org's comment plus a way
+    // to answer it. `changes_requested` reopens the wizard, so this is the
+    // editable surface.
+    await webPage.goto(`/camps/${camp.slug}/registration`);
+    await goToSection(webPage, /leave no trace/i);
+    await expect(webPage.getByText(ask)).toBeVisible();
+
+    const answer = uniqueName(
+      "Grey water is evaporated in lined trays (reply-loop-probe)",
+    );
+    await webPage
+      .getByRole("button", { name: /^reply$/i })
+      .first()
+      .click();
+    await webPage.getByRole("textbox", { name: "Your reply" }).fill(answer);
+    await webPage.getByRole("button", { name: /^send reply$/i }).click();
+    await expect(webPage.getByText(answer)).toBeVisible();
+
+    // IT SURVIVES A RELOAD, so it reached `section_review_replies` rather than
+    // component state.
+    await webPage.reload();
+    await goToSection(webPage, /leave no trace/i);
+    await expect(webPage.getByText(answer)).toBeVisible();
+
+    // THE HALF NOBODY HAS EVER CHECKED. A reply the reviewer cannot read is a
+    // camp talking to itself — and this is a two-way conversation or it is
+    // nothing. The org's own thread on that section must carry it.
+    await orgPage.goto(detailUrl);
+    await expect(orgPage.locator("#lnt").getByText(answer)).toBeVisible();
+  });
 });
