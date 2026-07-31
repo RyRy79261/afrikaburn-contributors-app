@@ -1,12 +1,14 @@
 import "server-only";
 
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import {
+  assessDeletionEligibility,
   buildSanitizationPlan,
   deletionCompletedEmail,
   isSanitizationDue,
 } from "@quagga/core";
 
+import { buildDeletionGuardContext } from "@/lib/account";
 import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
@@ -45,6 +47,14 @@ import { sendEmail } from "@/lib/email";
 // Note what is NOT here: no delete of memberships, questionnaire responses,
 // required actions, supplier acks, or audit events. Preserving those is the
 // entire point — the cascade would be the damage.
+//
+// What IS here, since 31 Jul 2026: the three things this account was holding ON
+// BEHALF OF OTHERS are released — a claimed supplier listing, any wrangler
+// assignment, and console access. Each of those foreign keys is declared
+// `ON DELETE SET NULL` in the schema precisely so losing a person leaves the
+// thing VACANT rather than broken, and NONE of them could ever fire, because
+// keeping the `users` row is the whole design. The cascade the schema was
+// relying on had to be written out by hand.
 
 export interface SanitizationOutcome {
   ok: boolean;
@@ -103,6 +113,51 @@ export async function sanitizeAccount(
       ...base,
       error:
         "That deletion request isn't due — it's cancelled, already done, or still inside its grace period.",
+    };
+  }
+
+  // 0. RE-CHECK THE ANTI-LOCKOUT GUARD, AT THE MOMENT OF ERASURE.
+  //
+  //    Eligibility was assessed once, when the request was CREATED
+  //    (account-actions.ts), and nothing re-asked before this point. That is a
+  //    hole the tombstone filters alone do not close, because the property is
+  //    about the FINAL state, not about the state on the day someone clicked:
+  //
+  //      Two System managers, A and B. On day 0 A requests deletion — B is live,
+  //      so the count is 2 and it is allowed. On day 1 B requests deletion — A
+  //      is still live (the grace period has not elapsed, nothing is sanitized
+  //      yet), so the count is still 2 and that is allowed too. On day 14 the
+  //      sweeper erases both. Zero live System managers, and no screen can grant
+  //      `god` back — the console deliberately forbids it, so the way back is an
+  //      env change to GOD_EMAILS plus a fresh sign-up.
+  //
+  //    The same argument applies one level down to a camp's last live lead.
+  //
+  //    This hole predates the tombstone fix and is not caused by it; the fix
+  //    narrows it (the sequential case is now blocked) but only a check HERE can
+  //    close it, because only here is the outcome final.
+  //
+  //    A caught account is LEFT PENDING rather than failed or force-deleted: the
+  //    request stays, the grace period has already elapsed so the next sweep
+  //    retries, and the moment someone else is granted `god` or made a camp lead
+  //    it proceeds on its own. Erasing anyway would strand the deployment;
+  //    cancelling the request would silently overturn a person's erasure
+  //    decision, which is theirs and not ours.
+  const guard = await buildDeletionGuardContext(userId);
+  const eligibility = assessDeletionEligibility({
+    ...guard,
+    // The sign-in-method count is irrelevant now — that guard exists so nobody
+    // deletes an account they can no longer prove is theirs, and they already
+    // proved it when they asked. Re-applying it here would strand every
+    // request whose last social link happened to be revoked in the meantime.
+    signInMethodCount: 1,
+  });
+  if (!eligibility.ok) {
+    return {
+      ...base,
+      error: `Still blocked at sanitization time, so nothing was erased: ${eligibility.blocks
+        .map((b) => b.message)
+        .join(" ")}`,
     };
   }
 
@@ -196,7 +251,91 @@ export async function sanitizeAccount(
       .set({ status: "completed", completedAt: now, updatedAt: now })
       .where(eq(schema.accountDeletionRequests.id, requestId));
 
-    // 6. Strip PII out of the AUDIT TRAIL without destroying it.
+    // 6. RELEASE WHAT THE ACCOUNT WAS HOLDING ON BEHALF OF OTHERS.
+    //
+    //    Three foreign keys in this schema are declared `ON DELETE SET NULL`
+    //    precisely so that losing a person leaves the thing they held VACANT
+    //    rather than broken. None of them ever fired, because sanitization
+    //    keeps the `users` row on purpose — so the cascade the schema was
+    //    relying on is a cascade that can never happen here, and it has to be
+    //    done by hand:
+    //
+    //      · `suppliers.user_id` — a deleted supplier contact left the listing
+    //        claimed by a tombstone forever. `resolveSupplierForUser` could
+    //        then neither match the same human's NEW account (different uuid)
+    //        nor re-link by email overlap (the row is not unclaimed), so they
+    //        landed in `kind: 'unlinked'` permanently while the org console
+    //        showed the supplier as account-linked. Only a manual UPDATE fixed
+    //        it. Ryan, 31 Jul 2026: release it so the business can be claimed
+    //        again — the listing and its history stay, the link does not.
+    //
+    //      · `wrangler_assignments.wrangler_user_id` — schema.ts says "the
+    //        board shows it vacant, which is a thing someone has to act on".
+    //        It did not: the camp kept a non-null wrangler rendering as
+    //        "Departed Burner", and the `(group, edition)` unique index still
+    //        read as filled, so the board never flagged the camp as needing a
+    //        new guardian angel.
+    //
+    //      · `org_role_assignments` — console access outliving the account.
+    //        Revoked below with the membership demotion.
+    const releasedSuppliers = await tx
+      .update(schema.suppliers)
+      .set({ userId: null, updatedAt: now })
+      .where(eq(schema.suppliers.userId, userId))
+      .returning({ id: schema.suppliers.id });
+    const releasedSupplierIds = releasedSuppliers.map((r) => r.id);
+
+    const vacatedWranglers = await tx
+      .update(schema.wranglerAssignments)
+      .set({ wranglerUserId: null, updatedAt: now })
+      .where(eq(schema.wranglerAssignments.wranglerUserId, userId))
+      .returning({ groupId: schema.wranglerAssignments.groupId });
+    const vacatedWranglerGroupIds = vacatedWranglers.map((r) => r.groupId);
+
+    // 7. REVOKE CONSOLE ACCESS.
+    //
+    //    An `org_staff` or `engineer` account could self-delete with no guard
+    //    and no warning, and its org membership plus every `org_role_assignments`
+    //    row survived — a live access grant pointing at a dead account. Worse,
+    //    the console could not clean it up: `searchAccounts` matches on email
+    //    and username, both NULL on a tombstone, so the row was findable only
+    //    in the unfiltered 50-newest listing.
+    //
+    //    The membership row itself STAYS (like every other membership — the
+    //    history is the point) but is demoted to `member`, which is the rank
+    //    that grants nothing.
+    //    `org_role_assignments` is keyed by MEMBERSHIP, not by user, so the
+    //    memberships have to be resolved first.
+    const orgMemberships = await tx
+      .select({ id: schema.memberships.id })
+      .from(schema.memberships)
+      .innerJoin(
+        schema.groups,
+        eq(schema.groups.id, schema.memberships.groupId),
+      )
+      .where(
+        and(
+          eq(schema.memberships.userId, userId),
+          eq(schema.groups.kind, "org"),
+        ),
+      );
+    const orgMembershipIds = orgMemberships.map((m) => m.id);
+    let releasedOrgRoleIds: string[] = [];
+    if (orgMembershipIds.length > 0) {
+      const revoked = await tx
+        .delete(schema.orgRoleAssignments)
+        .where(
+          inArray(schema.orgRoleAssignments.membershipId, orgMembershipIds),
+        )
+        .returning({ orgRoleId: schema.orgRoleAssignments.orgRoleId });
+      releasedOrgRoleIds = revoked.map((r) => r.orgRoleId);
+      await tx
+        .update(schema.memberships)
+        .set({ role: "member" })
+        .where(inArray(schema.memberships.id, orgMembershipIds));
+    }
+
+    // 8. Strip PII out of the AUDIT TRAIL without destroying it.
     //
     //    The trail itself is deliberately preserved — it is the record of what
     //    this account did, keyed by our internal id, and POPIA erasure does not
@@ -214,6 +353,38 @@ export async function sanitizeAccount(
          AND meta IS NOT NULL
          AND (meta ? 'email' OR meta ? 'contactEmail' OR meta ? 'primaryEmail')
     `);
+
+    // WHAT WAS RELEASED, recorded so it can be reconstructed.
+    //
+    // An earlier version of this block asserted in a comment that the releases
+    // above were "audited by the row written below". They were not:
+    // `plan.audit.meta` is built by @quagga/core BEFORE the transaction and
+    // carries only {reason, bioRows, membershipsPreserved, stub}. So a staffer's
+    // org roles were hard-deleted with no record of WHICH roles, a supplier
+    // listing lost the only trace it had ever been claimed, and a wrangler
+    // assignment was vacated without the `wrangler.unassign` event the console's
+    // own control writes for exactly that change.
+    //
+    // A System manager asking "who held what before they left?" deserves an
+    // answer. Ids only — no email, no name — so recording it does not undo the
+    // erasure it records.
+    if (
+      releasedOrgRoleIds.length > 0 ||
+      releasedSupplierIds.length > 0 ||
+      vacatedWranglerGroupIds.length > 0
+    ) {
+      await tx.insert(schema.auditEvents).values({
+        actorId: userId,
+        action: "account.released_holdings",
+        subject: userId,
+        meta: {
+          orgRoleIds: releasedOrgRoleIds,
+          supplierIds: releasedSupplierIds,
+          wranglerGroupIds: vacatedWranglerGroupIds,
+          reason: "account sanitization",
+        },
+      });
+    }
 
     // The proof that erasure happened. Names no personal data — only our internal
     // id and counts — so recording it does not undo what it records.

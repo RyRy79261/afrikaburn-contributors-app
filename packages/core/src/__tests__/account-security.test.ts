@@ -122,7 +122,9 @@ describe("enumeration-safe messaging", () => {
 
   it("detects the phrases that WOULD leak existence", () => {
     expect(leaksAccountExistence("No account with that email")).toBe(true);
-    expect(leaksAccountExistence("That email is already registered")).toBe(true);
+    expect(leaksAccountExistence("That email is already registered")).toBe(
+      true,
+    );
     expect(leaksAccountExistence("User not found")).toBe(true);
     expect(leaksAccountExistence("That email address is already taken")).toBe(
       true,
@@ -138,7 +140,9 @@ describe("enumeration-safe messaging", () => {
 
 // --- Deletion grace-period state machine ---------------------------------
 
-function pending(overrides: Partial<DeletionRequestState> = {}): DeletionRequestState {
+function pending(
+  overrides: Partial<DeletionRequestState> = {},
+): DeletionRequestState {
   return {
     status: "pending",
     requestedAt: T0,
@@ -192,9 +196,9 @@ describe("deletion grace period", () => {
 
   it("allows cancellation only during grace", () => {
     expect(canCancelDeletion(pending(), T0)).toBe(true);
-    expect(canCancelDeletion(pending(), new Date(T0.getTime() + 14 * DAY))).toBe(
-      false,
-    );
+    expect(
+      canCancelDeletion(pending(), new Date(T0.getTime() + 14 * DAY)),
+    ).toBe(false);
     expect(canCancelDeletion(pending({ status: "cancelled" }), T0)).toBe(false);
     expect(canCancelDeletion(null, T0)).toBe(false);
   });
@@ -229,15 +233,17 @@ describe("deletion grace period", () => {
 
   it("is a no-op when nothing is pending", () => {
     expect(cancelDeletionOnSignIn(null, T0).ok).toBe(false);
-    expect(cancelDeletionOnSignIn(pending({ status: "cancelled" }), T0).ok).toBe(
-      false,
-    );
+    expect(
+      cancelDeletionOnSignIn(pending({ status: "cancelled" }), T0).ok,
+    ).toBe(false);
   });
 });
 
 // --- Deletion guards ------------------------------------------------------
 
-function ctx(overrides: Partial<DeletionGuardContext> = {}): DeletionGuardContext {
+function ctx(
+  overrides: Partial<DeletionGuardContext> = {},
+): DeletionGuardContext {
   return {
     ledProjects: [],
     isOrgGod: false,
@@ -246,6 +252,78 @@ function ctx(overrides: Partial<DeletionGuardContext> = {}): DeletionGuardContex
     ...overrides,
   };
 }
+
+describe("assessDeletionEligibility — the warnings nobody was getting", () => {
+  // Every one of these is a live-data finding from 31 Jul 2026, on a deployed
+  // product. The assessor knew only about `god`, so an org staffer and a
+  // supplier contact could both delete through the participant app and be told
+  // nothing about what it would take with them.
+
+  it("warns that console access is revoked, without blocking", () => {
+    // NOT a block: losing an org_staff account strands nobody, unlike the last
+    // System manager. But the consequence copy never mentioned console access
+    // at all, and the person deleting is usually the only one who knows they
+    // had it.
+    const result = assessDeletionEligibility(ctx({ orgRole: "org_staff" }));
+    expect(result.ok).toBe(true);
+    expect(result.warnings.map((w) => w.code)).toContain("org_access_revoked");
+  });
+
+  it("does not warn about console access for a plain member", () => {
+    expect(
+      assessDeletionEligibility(ctx({ orgRole: "member" })).warnings,
+    ).toEqual([]);
+    expect(assessDeletionEligibility(ctx({ orgRole: null })).warnings).toEqual(
+      [],
+    );
+  });
+
+  it("warns that a claimed supplier listing is released, and names it", () => {
+    const result = assessDeletionEligibility(
+      ctx({ claimedSupplierName: "Karoo Ice" }),
+    );
+    expect(result.ok).toBe(true);
+    const warning = result.warnings.find(
+      (w) => w.code === "supplier_listing_released",
+    );
+    expect(warning?.message).toContain("Karoo Ice");
+    // THE HONEST HALF. `suppliers.contact` is a field on the BUSINESS record and
+    // survives erasure — it is also what the claim path matches addresses
+    // against. The delete page promises "your email address" is erased, so this
+    // warning has to say plainly that the one on the business record is not.
+    expect(warning?.message).toMatch(/contact address .* is not erased/i);
+  });
+
+  it("warns about an unfinished supplier onboarding — the field that was never set", () => {
+    // `hasInFlightSupplierOnboarding` has been declared here and checked here
+    // since it was written, and NOTHING populated it, so this card had never
+    // rendered for anyone. The message was already written; only the value was
+    // missing.
+    const result = assessDeletionEligibility(
+      ctx({ hasInFlightSupplierOnboarding: true }),
+    );
+    const warning = result.warnings.find(
+      (w) => w.code === "supplier_onboarding_in_flight",
+    );
+    expect(warning).toBeDefined();
+    // AND IT MUST NOT PROMISE A NOTIFICATION. The original copy said deleting
+    // "notifies the AfrikaBurn supplier team" and nothing sends that — harmless
+    // only for as long as the warning never rendered, which is exactly how long
+    // nobody noticed.
+    expect(warning?.message).not.toMatch(/notif/i);
+  });
+
+  it("reports every warning at once, like it reports every block", () => {
+    const result = assessDeletionEligibility(
+      ctx({
+        orgRole: "engineer",
+        claimedSupplierName: "Karoo Ice",
+        hasInFlightSupplierOnboarding: true,
+      }),
+    );
+    expect(result.warnings).toHaveLength(3);
+  });
+});
 
 describe("assessDeletionEligibility", () => {
   it("permits deletion for an ordinary member", () => {
@@ -376,9 +454,9 @@ describe("email change", () => {
   it("walks none → awaiting_confirm → expired", () => {
     expect(emailChangePhase(null, T0)).toBe("none");
     expect(emailChangePhase(change(), T0)).toBe("awaiting_confirm");
-    expect(
-      emailChangePhase(change(), new Date(T0.getTime() + 3 * HOUR)),
-    ).toBe("expired");
+    expect(emailChangePhase(change(), new Date(T0.getTime() + 3 * HOUR))).toBe(
+      "expired",
+    );
   });
 
   it("walks confirmed → revocable → settled", () => {
@@ -401,7 +479,9 @@ describe("email change", () => {
     expect(
       canConfirmEmailChange(change(), new Date(T0.getTime() + 3 * HOUR)),
     ).toBe(false);
-    expect(canConfirmEmailChange(change({ status: "revoked" }), T0)).toBe(false);
+    expect(canConfirmEmailChange(change({ status: "revoked" }), T0)).toBe(
+      false,
+    );
     expect(canConfirmEmailChange(null, T0)).toBe(false);
   });
 
@@ -449,7 +529,9 @@ describe("email change", () => {
 
     // And a commit stamp on a non-confirmed row proves nothing either.
     expect(
-      isEmailChangeEffective(change({ status: "pending", providerCommittedAt: T0 })),
+      isEmailChangeEffective(
+        change({ status: "pending", providerCommittedAt: T0 }),
+      ),
     ).toBe(false);
     expect(isEmailChangeEffective(null)).toBe(false);
   });
