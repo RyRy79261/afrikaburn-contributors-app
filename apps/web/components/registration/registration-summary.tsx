@@ -346,7 +346,15 @@ export function RegistrationSummary({
                 below" and pointed at the per-section thread, which a reviewer
                 who simply rejected never wrote to. A camp could read its own
                 registration and find no explanation anywhere on the page. */}
-            {r.decisionReason ? (
+            {/* ONLY WHERE IT IS STILL TRUE. `decision_reason` is the reviewer's
+                words for the CURRENT state, and of the locked states only
+                `rejected` carries any. Rendering it unconditionally put an old
+                change-request under a green "Approved" banner and under
+                "Withdrawn" — sentences AfrikaBurn was no longer saying,
+                presented as if they were. Migration 0027 cleared the rows
+                0025's backfill wrote; this stops the screen re-creating the
+                same lie from any future stray value. */}
+            {r.decisionReason && r.status === "rejected" ? (
               <p className="mt-2 whitespace-pre-line rounded-lg border border-current/20 bg-background/40 p-3 text-sm">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide opacity-70">
                   From the reviewer
