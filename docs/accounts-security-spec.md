@@ -377,10 +377,28 @@ unwired (no device-fingerprint record); the active-session list is the check.
 
 **Closed since the 25 Jul snapshot:**
 
-- `/account`, `/account/security`, `/account/delete` all ship in `apps/web`
-  (`apps/web/components/account/*`), with the 2FA enrolment, passkey management and
-  2FA sign-in challenge components shared from `@quagga/ui`
-  (`account-two-factor.tsx`, `account-passkeys.tsx`, `account-two-factor-challenge.tsx`).
+- `/account`, `/account/security`, `/account/delete` ship in **all three apps**
+  (roadmap M4-21). The whole suite is shared: the read side in
+  `@quagga/auth/account` (sessions, passkeys, linked methods, 2FA flag, the
+  `security_events` log) and the presentation in `@quagga/ui`
+  (`account-shell`, `account-sessions`, `account-sign-in-methods`,
+  `account-change-password`, `account-security-events`, `account-capability-notice`,
+  `account-delete-elsewhere`, plus the pre-existing `account-two-factor`,
+  `account-passkeys` and `account-two-factor-challenge`). Each app supplies only its
+  own auth client, server actions and paths.
+- **The account routes deliberately sit OUTSIDE each app's own gate**, in their own
+  route group. The console gate refuses anyone without an org role and replaces the
+  console entirely when a blocking questionnaire is pending; the portal gate refuses
+  anyone whose email has not claimed a supplier listing. Both are right for what they
+  guard and wrong for somebody's own password — an ex-organiser with a live session on
+  a lost laptop, or a supplier who was never matched to a listing, is exactly who needs
+  this surface. The only requirement is a live signed-in identity
+  (`resolveAccountUser`), and every read is scoped to it by Better Auth itself.
+- **Deletion has ONE implementation and it stays on `apps/web`.** The other two carry a
+  Delete tab that explains itself, states what THAT app loses (org access and roles; a
+  claimed supplier listing released back to unclaimed), and deep-links to the
+  participant app. A second entry point would be a second place for the eligibility
+  guards and the grace period to be forgotten.
 - The org **`/suppliers/signup-management`** console page is live.
 - The supplier portal's **`/signup`** and redesigned **`/signin`** both exist.
 - **2FA / backup codes / passkeys** — shipped (migration 0015). No longer blocked on
@@ -391,10 +409,10 @@ unwired (no device-fingerprint record); the active-session list is the check.
 - **New-device sign-in notification** builder exists but is not wired: it needs a
   per-account record of seen device fingerprints to avoid firing on every session,
   and that column does not exist yet. It fires on nothing rather than on everything.
-- **The account surfaces are only mounted in `apps/web`.** Neither `apps/org` nor
-  `apps/suppliers` has an `/account` route; both carry `/auth/*` only. Since SSO spans
-  the apex, a burner manages their account on the web app and it applies everywhere —
-  but an org-only or supplier-only user currently has no in-app way to change their
-  password or enrol 2FA.
+- **Email change is offered on `apps/web` only.** The other two name the sign-in
+  address and carry the same disabled control with the capability's own explanation.
+  Like deletion, it is a token-and-grace-period flow with one implementation; unlike
+  deletion, its control is disabled everywhere, so there is nothing to hand over to
+  yet.
 - **The ID-retention purge job** is unwired: only the pure rule and its tests exist
   (see §ID document below).
