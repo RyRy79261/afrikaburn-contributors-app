@@ -95,19 +95,27 @@ function buildAuthEmail(input: AuthEmailInput): AuthEmailBody {
 }
 
 /**
- * Send an auth email. Never throws: a Better Auth hook that throws would fail the
- * whole auth request, so a delivery failure is logged and swallowed. Returns
+ * Send ONE already-composed message to ONE recipient. Never throws — every
+ * caller here is on a path where the thing being announced has already happened,
+ * and failing it because the announcement did not send helps nobody. Returns
  * whether it was actually delivered (false = console-logged, provider unset).
+ *
+ * SINGLE RECIPIENT BY TYPE, deliberately. The apps' own `lib/email.ts` carries a
+ * fan-out path because it mails rosters; every security notice is addressed to
+ * exactly one person, and an array here is one careless call away from putting a
+ * second address in the `To:` header — which is the POPIA disclosure the apps'
+ * multi-recipient path was rewritten to prevent.
  */
-export async function sendAuthEmail(
+export async function sendSingleEmail(
   env: AuthEnv,
-  input: AuthEmailInput,
+  to: string,
+  subject: string,
+  text: string,
+  logPrefix = "auth:email",
 ): Promise<boolean> {
-  const { subject, text } = buildAuthEmail(input);
-
   if (!isEmailProviderConfigured(env)) {
     console.info(
-      `[auth:email:console] (RESEND_API_KEY unset) → ${input.to}\n` +
+      `[${logPrefix}:console] (RESEND_API_KEY unset) → ${to}\n` +
         `  subject: ${subject}\n  ${text.replace(/\n/g, "\n  ")}`,
     );
     return false;
@@ -122,21 +130,34 @@ export async function sendAuthEmail(
       },
       body: JSON.stringify({
         from: DEFAULT_FROM,
-        to: [input.to],
+        to: [to],
         subject,
         text,
       }),
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => res.statusText);
-      console.error(`[auth:email] Resend responded ${res.status}: ${detail}`);
+      console.error(`[${logPrefix}] Resend responded ${res.status}: ${detail}`);
       return false;
     }
     return true;
   } catch (err) {
     console.error(
-      `[auth:email] send failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[${logPrefix}] send failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
   }
+}
+
+/**
+ * Send an auth email. Never throws: a Better Auth hook that throws would fail the
+ * whole auth request, so a delivery failure is logged and swallowed. Returns
+ * whether it was actually delivered (false = console-logged, provider unset).
+ */
+export async function sendAuthEmail(
+  env: AuthEnv,
+  input: AuthEmailInput,
+): Promise<boolean> {
+  const { subject, text } = buildAuthEmail(input);
+  return sendSingleEmail(env, input.to, subject, text);
 }
