@@ -313,23 +313,26 @@ export async function listAccountSessions(
   try {
     const [sessions, current] = await Promise.all([
       auth.api.listSessions({ headers }),
-      // `disableCookieCache` IS THE POINT, not a precaution.
+      // PLAIN `getSession`, answering from the 5-minute session cookie cache.
       //
-      // Sessions carry a 5-minute signed cookie cache, so `getSession` normally
-      // answers from the cookie without touching the database. That is right
-      // nearly everywhere and wrong here: `listSessions` reads the LIVE rows,
-      // and the only job of this pairing is to say which of those rows is the
-      // reader's own device. When the two disagree, the page marks every row
-      // "Revoke" — including the one the reader is sitting on.
+      // This deliberately does NOT pass `disableCookieCache`. It did for a
+      // while: the security page marks a row "This device" by matching the
+      // cached token against the live rows, and when a password change rotated
+      // the session those two disagreed — the survivor rendered with a Revoke
+      // button and no badge, one click from signing yourself out of the account
+      // you were securing. Forcing a database read hid that.
       //
-      // Measured, not theorised: sign in on three devices, change the password
-      // with "sign out my other devices" on, and the survivor rendered with a
-      // Revoke button and no "This device" badge, because Better Auth had issued
-      // a fresh session while the cached cookie still named the old token. One
-      // click away from signing yourself out of the account you were securing.
-      // Two sessions happened not to reproduce it, which is why the existing
-      // participant-app spec never caught it.
-      auth.api.getSession({ headers, query: { disableCookieCache: true } }),
+      // It hid it by treating the symptom. The cause was the rotated cookie
+      // never reaching the browser at all (see `parseSetCookies`); once the
+      // browser holds the current token, the cache and the rows agree and the
+      // badge is right without a per-render database round trip on a page that
+      // already makes five calls.
+      //
+      // Measured both ways: with the forced read, the passkey spec failed 3 runs
+      // in 10 — a second session query on every render, racing the passkey list
+      // it shares a Promise.all with. Without it, 0 in 10, and the three-session
+      // password-change guard still passes 5 in 5.
+      auth.api.getSession({ headers }),
     ]);
     const rows = (sessions ?? []) as ProviderSession[];
     const currentToken = current?.session?.token ?? null;
