@@ -228,12 +228,18 @@ before committing design work, and never stage `design/ab-initial-app.pen` from 
 code-focused commit.
 
 **One editor at a time, and it may not be you.** The canvas is no longer a
-single-operator file — designers work on it too. `.pen` is ENCRYPTED, so git
-cannot merge it: two parallel edits end with one person's work thrown away.
-`.gitattributes` marks it `-merge` so git refuses rather than silently producing
-a file Pencil cannot open. Before touching it, check nobody else has it (the
-process is in CONTRIBUTING.md §"Designers: working on the canvas"), pull first,
-and push the moment you stop.
+single-operator file — designers work on it too. `.pen` is plain JSON (173k
+lines, one nested node tree), so git WILL happily line-merge two parallel edits
+into structurally valid, semantically broken output: duplicate node ids, a frame
+with children from two versions, one edit's geometry against the other's
+content. Pencil opens that and shows something subtly wrong. `.gitattributes`
+marks it `-merge` so git refuses instead. Before touching it, check nobody else
+has it (CONTRIBUTING.md §"Designers: working on the canvas"), pull first, and
+push the moment you stop.
+
+Editing it by hand is still a bad idea — use the `mcp__pencil__*` tools, which
+understand the schema — but that is a "don't hand-edit 173k lines of generated
+JSON" rule, not an encryption one.
 
 ## Git
 

@@ -75,11 +75,19 @@ the screen — the codebase is full of examples.
 `design/ab-initial-app.pen` is the source of truth for how the product looks. It
 opens in [Pencil](https://pen.dev), and it lives in git like everything else.
 
-**One person edits it at a time.** This is not a preference. `.pen` files are
-encrypted, which means git cannot merge them — if two people change the canvas in
-parallel, git will stop and say "both modified" and somebody has to throw their
-work away and redo it by hand. `.gitattributes` makes git refuse rather than
-silently produce a corrupt file, which is the best that can be done about it.
+**One person edits it at a time.** This is not a preference, and the reason is
+worth knowing: the file is 173,000 lines of JSON describing one deeply nested
+node tree. Git *can* merge that line by line — which is the danger, not the
+safeguard. Two designers' edits merged line-wise produce structurally valid JSON
+that is semantically wrong: duplicated node ids, a frame holding children from
+two different versions, one edit's geometry against the other's content. Pencil
+opens it and shows something subtly broken, which is far worse than a file that
+refuses to open, because nobody notices until it has been designed on top of.
+
+`.gitattributes` marks `*.pen` as `-merge`, so git stops and says "both
+modified" rather than doing it. Somebody then picks a side, reopens it in Pencil
+and redoes the losing change by hand. That is the best outcome available, which
+is why the coordination below matters more than it looks.
 
 So, in practice:
 
