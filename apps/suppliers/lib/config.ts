@@ -17,6 +17,16 @@ export function isDatabaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+/**
+ * Where the account suite's Delete tab sends people. Deletion is requested on
+ * the participant app, which owns the eligibility checks, the grace period and
+ * the sweeper. Configurable per environment; falls back to the dev port so the
+ * link works env-less, the same way apps/org resolves it.
+ */
+export function participantAppUrl(): string {
+  return process.env.NEXT_PUBLIC_PARTICIPANT_APP_URL ?? "http://localhost:3000";
+}
+
 /** Human-readable list of the backing services still to be configured. */
 export function missingConfig(): string[] {
   const missing: string[] = [];

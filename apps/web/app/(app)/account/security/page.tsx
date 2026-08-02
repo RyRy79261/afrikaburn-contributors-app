@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
-import { EmptyState } from "@quagga/ui/components/empty-state";
+import { AccountSecurityEvents } from "@quagga/ui/components/account-security-events";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
@@ -41,14 +41,6 @@ import { listSecurityEvents } from "./events";
 // Active sessions and revocation remain real (database sessions).
 
 export const dynamic = "force-dynamic";
-
-function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export default async function AccountSecurityPage() {
   const authUser = await getAuthenticatedUser();
@@ -111,43 +103,11 @@ export default async function AccountSecurityPage() {
       </Card>
 
       {/* --- Security events: real rows only, with the gap named. --- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent security events</CardTitle>
-          <CardDescription>
-            What&rsquo;s happened to your account. We email you when these
-            occur.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {events.length === 0 ? (
-            <EmptyState
-              title="Nothing to report"
-              description="Password changes, password resets, email-change requests and deletion requests all land here — and in your inbox — the moment they happen."
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {events.map((event) => (
-                <li
-                  key={event.id}
-                  className="flex flex-wrap items-start justify-between gap-3 border-b border-border py-3 last:border-b-0 last:pb-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{event.title}</p>
-                    {event.body ? (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {event.body}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="shrink-0 text-xs text-muted-foreground">
-                    {formatDate(event.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+      <AccountSecurityEvents
+        events={events}
+        emptyDescription="Password changes, password resets, email-change requests and deletion requests all land here — and in your inbox — the moment they happen."
+        note={
+          <>
             This is a log of security actions on your account — password
             changes, sign-outs, email-change steps and deletion requests —
             recorded as they happen. New-device sign-in alerts aren&rsquo;t
@@ -155,9 +115,9 @@ export default async function AccountSecurityPage() {
             you&rsquo;ve used, and we don&rsquo;t), so the active-session list
             above is the reliable place to spot a sign-in you don&rsquo;t
             recognise.
-          </p>
-        </CardContent>
-      </Card>
+          </>
+        }
+      />
     </AccountShell>
   );
 }

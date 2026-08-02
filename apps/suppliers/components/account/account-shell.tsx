@@ -4,16 +4,13 @@ import {
   type AccountSectionLink,
 } from "@quagga/ui/components/account-shell";
 
-// The participant app's account chrome — the shared shell (@quagga/ui, roadmap
-// M4-21) with THIS app's sections and footer.
+// The portal's account chrome — the shared shell (@quagga/ui, roadmap M4-21)
+// with the portal's own sections.
 //
-// The participant app is the only one of the three that offers all three
-// sections, because it is the only one that owns deletion: the org console and
-// the supplier portal carry a Delete tab that explains itself and links back
-// here. That difference is exactly why the section list is a prop.
-//
-// `account/loading.tsx` mirrors this shape, which is why switching account tabs
-// does not blank the page.
+// The footer draws the line this app most needs drawn: these settings are about
+// the PERSON signing in, not the BUSINESS. A supplier's standing, documents and
+// onboarding belong to the listing and are managed elsewhere in the portal;
+// what lives here is a password, a second factor and a list of devices.
 
 export type AccountSection = "manage" | "security" | "delete";
 
@@ -42,10 +39,10 @@ export function AccountShell({
       description={description}
       footer={
         <>
-          These settings sit behind your Burner profile. What you look like to
-          other burners lives on{" "}
-          <Link href="/profile" className="text-primary hover:underline">
-            your profile
+          These are your personal sign-in settings, not your business&rsquo;s.
+          Your standing, documents and onboarding live on{" "}
+          <Link href="/onboarding" className="text-primary hover:underline">
+            the portal
           </Link>
           .
         </>

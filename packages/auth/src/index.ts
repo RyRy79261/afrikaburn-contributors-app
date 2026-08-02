@@ -26,7 +26,12 @@
 // support is tracked in @quagga/core AUTH_CAPABILITIES.
 
 export { auth, createAuth, buildAuthOptions, type Auth } from "./config";
-export { sendAuthEmail, type AuthEmailInput, type AuthEmailKind } from "./email";
+export {
+  sendAuthEmail,
+  sendSingleEmail,
+  type AuthEmailInput,
+  type AuthEmailKind,
+} from "./email";
 // Wrap any `auth.api.signInEmail` call made purely to VERIFY a password, so the
 // session-create hook does not read it as the burner returning.
 export { withReauth, isReauth } from "./reauth";

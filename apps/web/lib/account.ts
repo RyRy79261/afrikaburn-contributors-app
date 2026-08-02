@@ -1,6 +1,6 @@
 import "server-only";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   AUTH_CAPABILITIES,
@@ -19,9 +19,17 @@ import {
   type LedProject,
 } from "@quagga/core";
 
-import { auth } from "@quagga/auth";
+import {
+  listAccountPasskeys as sharedListAccountPasskeys,
+  listAccountSessions as sharedListAccountSessions,
+  listLinkedAccounts as sharedListLinkedAccounts,
+  parseSetCookies,
+  type AccountPasskey as SharedAccountPasskey,
+  type AccountSession as SharedAccountSession,
+  type LinkedAccount as SharedLinkedAccount,
+} from "@quagga/auth/account";
 import { db, schema } from "@/lib/db";
-import { isAuthConfigured, isDatabaseConfigured } from "@/lib/config";
+import { isDatabaseConfigured } from "@/lib/config";
 
 // Read side of the account surfaces (/account, /account/security,
 // /account/delete) — docs/accounts-security-spec.md.
@@ -48,238 +56,43 @@ export function accountCapabilities(): AuthCapability[] {
   return Object.values(AUTH_CAPABILITIES);
 }
 
-// --- Sessions -------------------------------------------------------------
+// --- Sessions, passkeys, sign-in methods ----------------------------------
+//
+// EXTRACTED to @quagga/auth/account (roadmap M4-21) now that the org console and
+// the supplier portal mount the same suite. These are questions about one Better
+// Auth identity and nothing about a burner, so three copies would have been
+// three chances for one app's security page to drift into telling a different
+// story about the same account.
+//
+// Re-exported under their original names, and wrapped where the shared version
+// takes the request `headers` explicitly (@quagga/auth deliberately does not
+// import `next/headers` — it is called from scripts that have no request).
 
-/** One active session as the security page shows it. */
-export interface AccountSession {
-  id: string;
-  token: string;
-  createdAt: Date | null;
-  updatedAt: Date | null;
-  expiresAt: Date | null;
-  /** Raw user-agent from the provider; humanised for display. */
-  userAgent: string | null;
-  ipAddress: string | null;
-  /** True for the session making this request. */
-  current: boolean;
+export {
+  deviceLabel,
+  describeSignInMethods,
+  getTwoFactorEnabled,
+  type AccountSession,
+  type AccountPasskey,
+  type LinkedAccount,
+} from "@quagga/auth/account";
+
+/** This request's active sessions, newest first, with this device flagged. */
+export async function listAccountSessions(): Promise<SharedAccountSession[]> {
+  return sharedListAccountSessions(await headers());
 }
 
-type ProviderSession = {
-  id?: string | null;
-  token?: string | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-  expiresAt?: string | Date | null;
-  userAgent?: string | null;
-  ipAddress?: string | null;
-};
-
-function toDate(v: string | Date | null | undefined): Date | null {
-  if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/**
- * The account's active sessions, newest first. Backed by the provider's
- * `list-sessions` endpoint (a SUPPORTED capability).
- *
- * Returns [] rather than throwing when auth is unconfigured or the provider call
- * fails — an unreachable provider must degrade the security page, not break it.
- */
-export async function listAccountSessions(): Promise<AccountSession[]> {
-  if (!isAuthConfigured()) return [];
-  try {
-    const hdrs = await headers();
-    const [sessions, current] = await Promise.all([
-      auth.api.listSessions({ headers: hdrs }),
-      auth.api.getSession({ headers: hdrs }),
-    ]);
-    const rows = (sessions ?? []) as ProviderSession[];
-    const currentToken = current?.session?.token ?? null;
-
-    return rows
-      .map((s) => ({
-        id: s.id ?? s.token ?? "",
-        token: s.token ?? "",
-        createdAt: toDate(s.createdAt),
-        updatedAt: toDate(s.updatedAt),
-        expiresAt: toDate(s.expiresAt),
-        userAgent: s.userAgent ?? null,
-        ipAddress: s.ipAddress ?? null,
-        current: Boolean(currentToken) && s.token === currentToken,
-      }))
-      .filter((s) => s.token !== "")
-      .sort(
-        (a, b) =>
-          (b.updatedAt?.getTime() ?? b.createdAt?.getTime() ?? 0) -
-          (a.updatedAt?.getTime() ?? a.createdAt?.getTime() ?? 0),
-      );
-  } catch {
-    return [];
-  }
+/** This request's registered passkeys. */
+export async function listAccountPasskeys(): Promise<SharedAccountPasskey[]> {
+  return sharedListAccountPasskeys(await headers());
 }
 
 /**
- * A short device label from a user-agent string. Deliberately coarse — the point
- * is "is this me?", and a full UA string in a security list is noise a burner
- * cannot act on.
- */
-export function deviceLabel(userAgent: string | null): string {
-  if (!userAgent) return "Unknown device";
-  const ua = userAgent.toLowerCase();
-  const os = ua.includes("android")
-    ? "Android"
-    : ua.includes("iphone") || ua.includes("ipad")
-      ? "iOS"
-      : ua.includes("mac os")
-        ? "macOS"
-        : ua.includes("windows")
-          ? "Windows"
-          : ua.includes("linux")
-            ? "Linux"
-            : "Unknown OS";
-  // Order matters: Edge and Chrome both claim Safari, Chrome claims Safari.
-  const browser = ua.includes("edg/")
-    ? "Edge"
-    : ua.includes("firefox")
-      ? "Firefox"
-      : ua.includes("chrome")
-        ? "Chrome"
-        : ua.includes("safari")
-          ? "Safari"
-          : "browser";
-  return `${browser} on ${os}`;
-}
-
-// --- Two-factor + passkeys (self-hosted plugins, migration 0015) ----------
-
-/**
- * Whether TOTP two-factor is switched ON for this auth identity. Read straight
- * from `user.two_factor_enabled` (the flag the twoFactor plugin flips after the
- * first successful TOTP verify). Returns false — never throws — when the DB is
- * unconfigured or the row is missing, so the security page still renders.
- */
-export async function getTwoFactorEnabled(
-  authUserId: string,
-): Promise<boolean> {
-  if (!isDatabaseConfigured()) return false;
-  try {
-    const [row] = await db()
-      .select({ enabled: schema.user.twoFactorEnabled })
-      .from(schema.user)
-      .where(eq(schema.user.id, authUserId))
-      .limit(1);
-    return row?.enabled === true;
-  } catch {
-    return false;
-  }
-}
-
-/** One registered passkey, as the security page shows it. */
-export interface AccountPasskey {
-  id: string;
-  name: string | null;
-  deviceType: string | null;
-  createdAt: string | null;
-}
-
-/**
- * The account's registered passkeys, backed by `auth.api.listPasskeys`. Returns
- * [] (never throws) when auth is unconfigured or the call fails — an unreachable
- * provider must degrade the security page, not break it.
- */
-export async function listAccountPasskeys(): Promise<AccountPasskey[]> {
-  if (!isAuthConfigured()) return [];
-  try {
-    const data = await auth.api.listPasskeys({ headers: await headers() });
-    const rows = (data ?? []) as {
-      id?: string | null;
-      name?: string | null;
-      deviceType?: string | null;
-      createdAt?: string | Date | null;
-    }[];
-    return rows
-      .map((p) => ({
-        id: p.id ?? "",
-        name: p.name ?? null,
-        deviceType: p.deviceType ?? null,
-        createdAt: toDate(p.createdAt)?.toISOString() ?? null,
-      }))
-      .filter((p) => p.id !== "");
-  } catch {
-    return [];
-  }
-}
-
-// --- Linked sign-in methods ----------------------------------------------
-
-export interface LinkedAccount {
-  id: string;
-  providerId: string;
-  createdAt: Date | null;
-}
-
-/**
- * The account's linked sign-in methods (password counts as the `credential`
+ * This request's linked sign-in methods (a password counts as the `credential`
  * provider). Powers both the /account list and the last-method guard.
  */
-export async function listLinkedAccounts(): Promise<LinkedAccount[]> {
-  if (!isAuthConfigured()) return [];
-  try {
-    const data = await auth.api.listUserAccounts({ headers: await headers() });
-    const rows = (data ?? []) as {
-      id?: string | null;
-      providerId?: string | null;
-      provider?: string | null;
-      createdAt?: string | Date | null;
-    }[];
-    return rows
-      .map((a) => ({
-        id: a.id ?? "",
-        providerId: a.providerId ?? a.provider ?? "unknown",
-        createdAt: toDate(a.createdAt),
-      }))
-      .filter((a) => a.id !== "");
-  } catch {
-    return [];
-  }
-}
-
-/** Human labels for the provider ids the app can actually issue. */
-const SIGN_IN_METHOD_LABELS: Record<string, string> = {
-  credential: "Email",
-  google: "Google",
-};
-
-/**
- * Human-readable sign-in method(s) for a set of linked accounts, in a stable
- * order (Email, then Google, then anything else), de-duplicated. Returns null
- * when nothing determinable is linked so callers can render an honest fallback
- * ("Not available") rather than a wrong literal. Single source of truth for the
- * /profile Account card and any other surface that names the sign-in method.
- */
-export function describeSignInMethods(
-  accounts: LinkedAccount[],
-): string | null {
-  const labels: string[] = [];
-  for (const a of accounts) {
-    const known = SIGN_IN_METHOD_LABELS[a.providerId];
-    if (known) {
-      labels.push(known);
-    } else if (a.providerId && a.providerId !== "unknown") {
-      labels.push(a.providerId.charAt(0).toUpperCase() + a.providerId.slice(1));
-    }
-  }
-  const unique = [...new Set(labels)];
-  if (unique.length === 0) return null;
-  const order = ["Email", "Google"];
-  const rank = (label: string) => {
-    const i = order.indexOf(label);
-    return i === -1 ? order.length : i;
-  };
-  unique.sort((a, b) => rank(a) - rank(b));
-  return unique.join(", ");
+export async function listLinkedAccounts(): Promise<SharedLinkedAccount[]> {
+  return sharedListLinkedAccounts(await headers());
 }
 
 // --- Deletion state -------------------------------------------------------
@@ -553,4 +366,30 @@ export async function buildEmailChangeView(
     newEmail: request?.newEmail ?? null,
     providerApplied: request?.providerCommittedAt != null,
   };
+}
+
+/**
+ * Hand Better Auth's response cookies back to the browser.
+ *
+ * Calling `auth.api.*` from a server action bypasses the `/api/auth/*` route
+ * handler, so the headers Better Auth wants to send back are returned to US and
+ * then dropped. For a read that is harmless; for `changePassword` — which
+ * deletes every session including the caller's and issues a fresh one — it means
+ * the browser keeps a cookie naming a row that no longer exists, survives only
+ * as long as the 5-minute session cookie cache, and is then signed out with no
+ * explanation. See `parseSetCookies` in @quagga/auth/account for the measurement.
+ *
+ * Best-effort by design: the password HAS already changed by the time this runs,
+ * so a failure here must not turn a successful change into a reported failure.
+ * The worst case without it is the pre-existing behaviour.
+ */
+export async function applyAuthCookies(responseHeaders: Headers): Promise<void> {
+  try {
+    const store = await cookies();
+    for (const c of parseSetCookies(responseHeaders)) {
+      store.set(c.name, c.value, c.options);
+    }
+  } catch {
+    // Cookies are read-only in some server contexts; never fail the action.
+  }
 }

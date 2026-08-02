@@ -4,16 +4,14 @@ import {
   type AccountSectionLink,
 } from "@quagga/ui/components/account-shell";
 
-// The participant app's account chrome — the shared shell (@quagga/ui, roadmap
-// M4-21) with THIS app's sections and footer.
+// The console's account chrome — the shared shell (@quagga/ui, roadmap M4-21)
+// with the console's own sections.
 //
-// The participant app is the only one of the three that offers all three
-// sections, because it is the only one that owns deletion: the org console and
-// the supplier portal carry a Delete tab that explains itself and links back
-// here. That difference is exactly why the section list is a prop.
-//
-// `account/loading.tsx` mirrors this shape, which is why switching account tabs
-// does not blank the page.
+// Three tabs, same as the participant app, but the Delete one explains itself
+// and hands over rather than acting: deletion has one implementation and it
+// lives where the eligibility checks, the grace period and the sweeper are. A
+// missing tab would have read as "an organiser account cannot be deleted",
+// which is false.
 
 export type AccountSection = "manage" | "security" | "delete";
 
@@ -42,10 +40,10 @@ export function AccountShell({
       description={description}
       footer={
         <>
-          These settings sit behind your Burner profile. What you look like to
-          other burners lives on{" "}
-          <Link href="/profile" className="text-primary hover:underline">
-            your profile
+          These are your personal sign-in settings, not AfrikaBurn&rsquo;s. What
+          you may do in the console is decided by your org roles —{" "}
+          <Link href="/" className="text-primary hover:underline">
+            back to the console
           </Link>
           .
         </>

@@ -67,6 +67,34 @@ export function capabilityIsUsable(cap: AuthCapability): boolean {
   return cap.support === "supported" && !cap.pending;
 }
 
+/** What a capability notice should say, or `label: null` for "say nothing". */
+export interface CapabilityVerdict {
+  label: string | null;
+  message: string;
+}
+
+/**
+ * Resolve a capability into the words a disabled control's notice shows. The
+ * ONE place the two independent reasons a control can be refused — the provider
+ * cannot do it, or we have not finished wiring it — are turned into one
+ * sentence, so the org console and the supplier portal cannot invent a third
+ * phrasing for the same refusal now that all three apps mount the account suite
+ * (roadmap M4-21).
+ *
+ * `label: null` means there is genuinely nothing to say. Note the order: a
+ * `supported` capability that is still `pending` DOES get a notice — that pair
+ * is what previously rendered a disabled button beside no explanation at all.
+ */
+export function capabilityVerdict(cap: AuthCapability): CapabilityVerdict {
+  const pending = capabilityPendingMessage(cap);
+  const message = pending || cap.userMessage || "Not available yet.";
+  if (capabilityIsUsable(cap)) return { label: null, message };
+  return {
+    label: cap.support === "supported" ? "Not finished yet" : "Not available yet",
+    message,
+  };
+}
+
 /**
  * The matrix. Ordered as the spec's Security-principles list, so a reader can
  * walk the spec and this table side by side.

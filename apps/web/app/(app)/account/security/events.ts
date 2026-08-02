@@ -1,24 +1,25 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
 import { describeSecurityEvent } from "@quagga/core";
-
-import { db, schema } from "@/lib/db";
-import { isDatabaseConfigured } from "@/lib/config";
-import { deviceLabel } from "@/lib/account";
+import {
+  deviceLabel,
+  listSecurityEvents as readSecurityEvents,
+} from "@quagga/auth/account";
 
 // The "recent security events" feed (canvas G35eq §"Recent security events").
 //
 // This reads the real `security_events` LOG — an append-only record written at
 // the moment each account action succeeds (password change/reset, single-session
 // revoke, sign-out-everywhere, the three email-change steps, deletion
-// request/cancel), recorded thinly and best-effort by `recordSecurityEvent` in
-// lib/account-actions.ts. It REPLACES the earlier stopgap that derived the feed
-// from `notifications` (which conflated inbox messages with the event record).
+// request/cancel), recorded thinly and best-effort by `recordSecurityEvent`.
 //
-// The display title comes from @quagga/core `describeSecurityEvent` (no strings
-// stored in the DB); the body is composed here from the request context
-// (device + IP) the log captured. What this feed still does NOT contain:
+// The ROW READ moved to @quagga/auth/account (roadmap M4-21) so the org console
+// and the supplier portal show the same history for the same account; what stays
+// here is the PRESENTATION: the display title comes from @quagga/core
+// `describeSecurityEvent` (no strings stored in the DB) and the body is composed
+// from the request context the log captured.
+//
+// What this feed still does NOT contain:
 //  • new-device sign-ins — no per-account device-fingerprint record exists, so
 //    the builder fires on nothing; the active-session list above is the check.
 //  • anything from before this table started being written to.
@@ -46,28 +47,11 @@ export async function listSecurityEvents(
   userId: string,
   limit = 10,
 ): Promise<SecurityEvent[]> {
-  if (!isDatabaseConfigured()) return [];
-  try {
-    const rows = await db()
-      .select({
-        id: schema.securityEvents.id,
-        kind: schema.securityEvents.kind,
-        ip: schema.securityEvents.ip,
-        userAgent: schema.securityEvents.userAgent,
-        createdAt: schema.securityEvents.createdAt,
-      })
-      .from(schema.securityEvents)
-      .where(eq(schema.securityEvents.userId, userId))
-      .orderBy(desc(schema.securityEvents.createdAt))
-      .limit(limit);
-    return rows.map((r) => ({
-      id: r.id,
-      title: describeSecurityEvent(r.kind),
-      body: eventBody(r.userAgent, r.ip),
-      createdAt: r.createdAt,
-    }));
-  } catch {
-    // A failed read must degrade the card, never break the security page.
-    return [];
-  }
+  const rows = await readSecurityEvents(userId, limit);
+  return rows.map((r) => ({
+    id: r.id,
+    title: describeSecurityEvent(r.kind),
+    body: eventBody(r.userAgent, r.ip),
+    createdAt: r.createdAt,
+  }));
 }

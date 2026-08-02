@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PackageOpen } from "lucide-react";
+import { PackageOpen, UserRound } from "lucide-react";
 import { Badge } from "@quagga/ui/components/badge";
+import { Button } from "@quagga/ui/components/button";
 import { standingLabel, standingTone } from "@quagga/core";
 import type { SupplierSession } from "@/lib/session";
 import { PortalNav, type NavItem } from "@/components/portal-nav";
@@ -65,6 +66,16 @@ export async function PortalHeader({ session }: { session: SupplierSession }) {
                 query and the layout is not re-rendered on client-side
                 navigation, so awaiting it costs a full page load, once. */}
             <HeaderNotificationBell count={unread} />
+            {/* Personal, not the business — so it sits beside sign-out rather
+                than in the nav below, which is all about the listing. It is the
+                only way into two-factor and passkeys for a supplier, so it
+                cannot live behind a menu nobody opens. */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/account" aria-label="Your account">
+                <UserRound className="h-4 w-4" aria-hidden />
+                <span className="sr-only sm:not-sr-only sm:ml-2">Account</span>
+              </Link>
+            </Button>
             <SignOutButton />
           </div>
         </div>

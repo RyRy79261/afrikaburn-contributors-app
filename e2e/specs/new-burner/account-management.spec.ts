@@ -36,20 +36,30 @@ test.describe("new burner · account management", () => {
     test.slow();
     const account = await signUpBurner(webPage, { onboard: true });
 
-    // A SECOND signed-in session for the same account (a second device).
+    // TWO more signed-in sessions for the same account.
+    //
+    // Two, not one, and that is a fix rather than padding. With a single other
+    // device this test passed while the app was quietly broken: a password
+    // change deletes EVERY session including the caller's and issues a fresh
+    // one, and the new cookie was being dropped on the way back out of the
+    // server action — so the browser was left holding a cookie for a row that no
+    // longer existed, alive only until the 5-minute session cookie cache
+    // expired. Three sessions is what made it visible.
     const secondDevice = await makeAppPage("web");
     await signInAs(secondDevice, account);
+    const thirdDevice = await makeAppPage("web");
+    await signInAs(thirdDevice, account);
 
-    // Two sessions are live before we change anything (server-rendered list).
+    // Three sessions are live before we change anything (server-rendered list).
     await webPage.goto("/account/security");
     await expect(
       webPage.getByRole("heading", { name: /active sessions/i }),
     ).toBeVisible();
-    // "This device" for the current one, plus a "Revoke" for the other → 2.
+    // "This device" for the current one, plus a "Revoke" for each other → 2.
     await expect(webPage.getByText(/this device/i)).toBeVisible();
     await expect(
       webPage.getByRole("button", { name: /^revoke$/i }),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
 
     // Change the password with "sign out my other devices" left ON (default).
     await webPage.goto("/account");
@@ -66,11 +76,19 @@ test.describe("new burner · account management", () => {
       .click();
     await expect(webPage.getByText(/password changed/i)).toBeVisible();
 
-    // Server-side proof #1: the other session is gone — only THIS device remains.
+    // Server-side proof #1: the other sessions are gone — only THIS device
+    // remains, and the page can still SEE that it is this device.
+    //
+    // The second assertion is the regression guard. Before the rotated session
+    // cookie was handed back, the survivor rendered with no "This device" badge
+    // and a Revoke button of its own: one click from signing yourself out of the
+    // account you had just secured, and signed out anyway once the cookie cache
+    // ran down. A list that cannot find you in it is not a working security page.
     await webPage.goto("/account/security");
     await expect(
       webPage.getByRole("button", { name: /^revoke$/i }),
     ).toHaveCount(0);
+    await expect(webPage.getByText(/this device/i)).toBeVisible();
 
     // Server-side proof #2: the credential actually rotated. In a THIRD cold
     // context the OLD password is refused and the NEW one signs in.

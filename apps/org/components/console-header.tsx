@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flame } from "lucide-react";
+import { Flame, UserRound } from "lucide-react";
 import {
   ORG_RANK_LABELS,
   orgCan,
@@ -7,6 +7,7 @@ import {
   type OrgCapability,
 } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
+import { Button } from "@quagga/ui/components/button";
 import type { OrgSession } from "@/lib/session";
 import { getUnreadNotificationCount } from "@/lib/notifications";
 import { ConsoleNav, type NavItem } from "@/components/console-nav";
@@ -127,6 +128,16 @@ export async function ConsoleHeader({ session }: { session: OrgSession }) {
                 query and the layout is not re-rendered on client-side
                 navigation, so awaiting it costs a full page load, once. */}
             <HeaderNotificationBell count={unread} />
+            {/* Personal, not console work — so it sits beside sign-out rather
+                than in the nav below, which is AfrikaBurn's business. It is the
+                only way into two-factor and passkeys for an organiser, so it
+                cannot live behind a menu nobody opens. */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/account" aria-label="Your account">
+                <UserRound className="h-4 w-4" aria-hidden />
+                <span className="sr-only sm:not-sr-only sm:ml-2">Account</span>
+              </Link>
+            </Button>
             <SignOutButton />
           </div>
         </div>

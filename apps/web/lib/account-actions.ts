@@ -51,6 +51,7 @@ import { requireCampUser } from "@/lib/session";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { insertNotifications } from "@/lib/notifications";
 import {
+  applyAuthCookies,
   buildDeletionGuardContext,
   getDeletionRequest,
   listLinkedAccounts,
@@ -190,14 +191,16 @@ export async function changePassword(
     // credential oracle. `changePassword` re-authenticates with the current
     // password server-side; we never verify a password ourselves.
     try {
-      await auth.api.changePassword({
+      const result = await auth.api.changePassword({
         body: {
           currentPassword: input.currentPassword,
           newPassword: input.newPassword,
           revokeOtherSessions: input.revokeOtherSessions,
         },
         headers: await headers(),
+        returnHeaders: true,
       });
+      await applyAuthCookies(result.headers);
     } catch {
       throw new Error(
         "That didn't work. Check your current password and try again.",
