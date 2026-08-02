@@ -1,0 +1,74 @@
+name: Design change
+description: A screen should look, read or behave differently
+labels: ["design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For design and UX changes — spacing, hierarchy, wording, flow, states we
+        forgot. You do not need to write it as a spec; describe the problem and
+        what you'd rather see.
+
+        The canvas (`design/ab-initial-app.pen`, opened in Pencil) is the source
+        of truth for how things should look. If you've already changed it there,
+        say so below — the two shouldn't drift apart.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      options:
+        - Participant app (the one burners use)
+        - Organiser console (org staff)
+        - Supplier portal
+        - Shared component (appears in more than one)
+    validations:
+      required: true
+
+  - type: input
+    id: screen
+    attributes:
+      label: Which screen or component?
+      placeholder: e.g. /account/security, the registration wizard's Sound step, the notification bell
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong with it now?
+      description: The problem, not the fix. "The submit button looks disabled when it isn't" beats "make it darker".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you do instead?
+      description: A sketch, a frame in the canvas, a reference from somewhere else, or just a sentence.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: canvas
+    attributes:
+      label: Is it in the canvas yet?
+      options:
+        - "Not yet — this is just the idea"
+        - "Yes, I've updated the .pen file"
+        - "The canvas already shows this; the app doesn't match it"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: honesty
+    attributes:
+      label: One thing to check
+      description: |
+        This product has a rule it takes seriously: a control must never imply
+        something that isn't true. A disabled button explains why. A list never
+        shows a placeholder that reads like real data. If your change touches
+        that, say how it stays honest.
+      options:
+        - label: My proposal doesn't show anything the app can't actually deliver
+          required: false

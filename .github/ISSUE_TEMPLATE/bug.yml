@@ -1,0 +1,69 @@
+name: Something is broken
+description: A screen, flow or control that does the wrong thing
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. You don't need to know why it's broken — a
+        clear description of what you saw is genuinely the useful part.
+
+        **If this is a security or privacy problem** (you could see someone
+        else's information, or get somewhere you shouldn't), close this and
+        report it privately instead — see SECURITY.md.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app?
+      description: There are three, and they look similar on purpose.
+      options:
+        - Participant app (the one burners use)
+        - Organiser console (org staff)
+        - Supplier portal
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, and what the app did back.
+      placeholder: |
+        I was on my camp's registration, filled in the Leave No Trace section
+        and pressed Save. It said "Saved" but when I came back the section was
+        empty again.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+      description: One line is fine. It's often the bit that reveals we disagree about what "correct" is.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did you see it?
+      options:
+        - Running it locally
+        - A pull request preview
+        - The live site
+    validations:
+      required: true
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Screenshot, or anything else
+      description: |
+        Screenshots are welcome and usually enough. If you have a browser
+        console error, paste it — but don't worry if you don't know how to get one.
+
+        **Please blank out anyone's personal details** before uploading.
+    validations:
+      required: false

@@ -1,0 +1,40 @@
+# Who must review what.
+#
+# This is not a statement about who is trusted. It is a list of the places where
+# a mistake is expensive or hard to undo, and it exists so that a well-meaning
+# change to one of them cannot merge without the person who knows why it is
+# shaped that way.
+#
+# CODEOWNERS only takes effect once branch protection requires review from code
+# owners — see SECURITY.md §"Repository settings".
+
+# Default: nothing is owned, so ordinary app and UI work needs no special review.
+
+# ---------------------------------------------------------------------------
+# MIGRATIONS — the sharpest edge in the repo.
+#
+# This product is DEPLOYED, with real camps and real people in it. Migrations are
+# append-only and the deploy applies them automatically. A migration merged here
+# runs against production on the next deploy; there is no staging step that would
+# catch it first, and an already-applied migration cannot be edited — only
+# corrected by another one.
+/packages/db/migrations/  @RyRy79261
+/packages/db/src/schema.ts @RyRy79261
+
+# AUTH — sessions, passwords, two-factor, passkeys, the cookie handling.
+# Self-hosted Better Auth pinned to an exact version on purpose: it has a track
+# record of high-severity advisories and we own the patch watch.
+/packages/auth/           @RyRy79261
+
+# CORE — the domain rules every app reads. Permissions, privacy classes, the
+# registration state machine, the submit gate. A change here changes behaviour in
+# three apps at once, usually without touching any of them.
+/packages/core/           @RyRy79261
+
+# CI, licence, and the rules themselves.
+/.github/                 @RyRy79261
+/LICENSE                  @RyRy79261
+/AGENTS.md                @RyRy79261
+/CONTRIBUTING.md          @RyRy79261
+/SECURITY.md              @RyRy79261
+/turbo.json               @RyRy79261

@@ -1,5 +1,108 @@
 # Contributing
 
+Thanks for being here. This is the AfrikaBurn Contributors App — three apps
+serving burners, AfrikaBurn's organisers, and the suppliers who work with them.
+It is volunteer-built and **already live**, with real people's information in it.
+That second part shapes most of the rules below.
+
+You do not need to be a backend engineer to contribute. Most of the work is
+front-end, design and wording, and none of it needs you to understand the
+database.
+
+**Before anything else: the app is live, so never test against it.** Run it
+locally. [`SECURITY.md`](SECURITY.md) explains why in more detail, and it is the
+one rule with no exceptions.
+
+## Getting set up
+
+You need **Node 22+**, **pnpm**, and **Docker** (only for the end-to-end tests —
+skip it if you are doing front-end work).
+
+```bash
+pnpm install
+pnpm --filter @quagga/web dev          # participant app  → localhost:3000
+pnpm --filter @quagga/org dev          # organiser console → localhost:3001
+pnpm --filter @quagga/suppliers dev    # supplier portal   → localhost:3002
+```
+
+**Everything boots without a database.** There is no `.env` to beg for and no
+secret to be handed. Screens that need data render an honest "not configured"
+state instead of crashing, which is deliberate — it means a designer or
+front-end contributor can run the real app on day one and see real layouts.
+
+When you *do* want real data locally:
+
+```bash
+pnpm e2e:local                    # brings up Postgres, migrates, seeds, runs everything
+pnpm e2e:local specs/new-burner   # ...or just one persona
+```
+
+That seeds fake camps and fake burners. No real person is ever in it.
+
+## Where things live
+
+```
+apps/web           participant app     — what burners see
+apps/org           organiser console   — AfrikaBurn staff
+apps/suppliers     supplier portal
+packages/ui        shared components   — used by all three
+packages/core      the domain rules    — permissions, privacy, state machines
+packages/db        schema + migrations
+design/            the Pencil canvas + brand assets
+docs/              the specs. Where a spec and the code disagree, say so in your PR.
+```
+
+If you are changing how something **looks**, you are almost certainly in
+`apps/*/components/` or `packages/ui/`. If you find yourself in `packages/core`
+or `packages/db`, pause — those change behaviour in three apps at once, and they
+need a review from the maintainer (see [`.github/CODEOWNERS`](.github/CODEOWNERS)).
+
+## The house rule
+
+**Nothing in this product may claim something that isn't true.**
+
+That sounds abstract; it is extremely concrete in review. A disabled button says
+why it is disabled. A page never shows a placeholder that reads like real data.
+A "saved" toast appears only after something was actually saved. A security
+notice is never sent for a change that did not happen.
+
+It is the single most common reason a change gets sent back, so it is worth
+knowing before you write anything. If a control can't do the thing yet, say so on
+the screen — the codebase is full of examples.
+
+## Designers: working on the canvas
+
+`design/ab-initial-app.pen` is the source of truth for how the product looks. It
+opens in [Pencil](https://pen.dev), and it lives in git like everything else.
+
+**One person edits it at a time.** This is not a preference. `.pen` files are
+encrypted, which means git cannot merge them — if two people change the canvas in
+parallel, git will stop and say "both modified" and somebody has to throw their
+work away and redo it by hand. `.gitattributes` makes git refuse rather than
+silently produce a corrupt file, which is the best that can be done about it.
+
+So, in practice:
+
+1. Say in the channel that you're taking the canvas.
+2. `git pull` **first**, always.
+3. Make your changes in Pencil.
+4. Commit and push **as soon as you stop**, even if the work isn't finished —
+   a pushed half-change costs nothing; an unpushed one blocks everyone.
+5. Say you're done.
+
+If you want to propose something without touching the canvas, open a
+**Design change** issue instead — that path exists precisely so you don't have to
+take the file.
+
+Keep `design/pen-lessons.md` up to date when you learn something about the
+format the hard way. Several people have already paid for those lessons.
+
+## Working on an issue
+
+Say so on the issue before you start, so two people don't build the same thing.
+Small PRs get reviewed quickly; large ones sit. If a change is getting big, open
+it early as a draft and ask.
+
 ## Commit and pull-request titles
 
 [Conventional Commits](https://www.conventionalcommits.org/) with a **workspace
@@ -117,3 +220,30 @@ E2E_SERVE=build E2E_PROJECTS=desktop-chromium ./scripts/e2e-local.sh specs/<pers
 `scripts/e2e-local.sh` frees ports 3000-3002 first and refuses to run if it
 cannot — a leftover server from an interrupted run will otherwise be silently
 tested instead of your build.
+
+**If you are doing front-end or design work**, the first command is the one that
+matters. The e2e suite needs Docker and takes about ten minutes; run it if you
+touched sign-in, sessions, permissions, or anything a person's privacy depends
+on. Otherwise CI will run it for you on the pull request, on every shard, for
+free — and unlike most projects, **it runs on forks too**, because none of it
+needs a secret.
+
+### Two traps that have cost real time
+
+- **A long-lived `next dev` keeps a stale module graph.** Delete a file something
+  imports and the running server serves 500s while the build stays green. If you
+  have deleted or moved anything, restart dev.
+- **Local Postgres is not Neon.** Green locally is strong evidence, never proof.
+
+## Review
+
+The maintainer reviews everything. Changes under
+[`.github/CODEOWNERS`](.github/CODEOWNERS) — migrations, auth, `packages/core`,
+CI — need their approval specifically, because those are the places where a
+mistake is expensive or cannot be undone. Migrations in particular run against
+the live database on the next deploy.
+
+Expect questions about *why*, not just *what*. The comments in this codebase
+carry a lot of history — most of them exist because something went wrong once —
+and a change that removes a guard will be asked what the guard was for. That is
+not suspicion of you; it is how the reasoning survives people leaving.

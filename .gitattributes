@@ -1,0 +1,25 @@
+# Pencil design files are ENCRYPTED, and git must not pretend otherwise.
+#
+# `design/*.pen` is the canvas the whole product is drawn from. It is not text:
+# git cannot diff it, and it absolutely cannot merge it. Left to its defaults git
+# would happily attempt a three-way merge, produce a file that is neither
+# designer's work, and hand back something Pencil then refuses to open — with the
+# original of both sides already gone.
+#
+# `-merge` makes git STOP and say "both modified" instead. That is the correct
+# outcome: somebody has to pick a side, reopen it in Pencil, and redo the losing
+# change by hand. Loud and annoying beats silent and destroyed.
+#
+# WHICH MEANS: one person edits the canvas at a time. Say so in the channel
+# before you start, and push as soon as you stop. See CONTRIBUTING.md
+# §"Designers: working on the canvas".
+*.pen binary -merge
+
+# Brand assets — binary, diffable only as "changed".
+design/brand/** binary
+
+# Keep line endings sane for contributors on Windows (several of us are on WSL).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

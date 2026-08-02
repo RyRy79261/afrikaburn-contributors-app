@@ -229,6 +229,37 @@ Visual system: "Tankwa Night" — dark-first, AfrikaBurn's real brand colours, M
 and the `QuiltBand` motif across each app header. Full token tables in
 [`docs/build-spec.md`](docs/build-spec.md) §7.
 
+## Contributing
+
+We'd love the help, and you do not need to be a backend engineer — most of the
+work is front-end, design and wording.
+
+**[Read `CONTRIBUTING.md`](CONTRIBUTING.md)** — how to get it running (it boots
+without a database, so there is no `.env` to beg for), where things live, the
+commit convention, and the workflow for designers editing the Pencil canvas.
+
+| I want to… | Go here |
+| --- | --- |
+| Report something broken | [Open an issue](../../issues/new/choose) → *Something is broken* |
+| Suggest a design or UX change | [Open an issue](../../issues/new/choose) → *Design change* |
+| Fix wording in the app | [Open an issue](../../issues/new/choose) → *Wording fix* |
+| Propose a feature | [Open an issue](../../issues/new/choose) → *Feature or change request* |
+| Report a **security or privacy** problem | **Privately** — [`SECURITY.md`](SECURITY.md). Never a public issue. |
+| Write some code | [`CONTRIBUTING.md`](CONTRIBUTING.md), then pick up an issue and say so on it |
+
+Two things to know before you start:
+
+- **The app is live**, with real participants' personal information in it. Run it
+  locally; never test against the deployment. [`SECURITY.md`](SECURITY.md)
+  explains why, and it is the one rule with no exceptions.
+- **Nothing in this product may claim something that isn't true** — a disabled
+  control says why, a "saved" message means something was saved. It is the most
+  common reason a change gets sent back.
+
+Licensed **FSL-1.1-ALv2** (see [`LICENSE`](LICENSE)): source-available, converting
+to Apache 2.0 two years after each release. Contributions come in under those same
+terms — there is no CLA to sign.
+
 ## Documents
 
 `docs/build-spec.md` wins for engineering; `AGENTS.md` wins for process.

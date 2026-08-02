@@ -53,6 +53,15 @@ Two traps that already cost real time:
 - **Local Postgres is not Neon.** The proxies are faithful enough to catch
   logic, not pooling behaviour or cold starts. Green locally is strong evidence,
   never proof for production.
+- **Watch the disk, and do not undo `turbo.json`'s output excludes.** `.next/dev`
+  holds unbounded Turbopack state. It was once counted as build output, so every
+  build archived a fresh copy: about a dozen build-and-test cycles reached
+  ~550 GB and filled a real machine. `!.next/dev/**` in `turbo.json` and the
+  cleanup in `scripts/e2e-local.sh` are what stop it — both carry the incident in
+  a comment. If you are running many build cycles, `df -h` occasionally.
+- **Clean up git worktrees.** Agent runs that use `isolation: "worktree"` leave
+  full checkouts behind; ten of them were once sitting at 2.3 GB. `git worktree
+  list`, then `git worktree remove` what has finished.
 
 ## Hard engineering rules
 
@@ -213,9 +222,18 @@ frame into a component manifest, run the geometric/style/content checks in
 `design/qa/audit.py` (zero `[DEFECT]` tolerance, warnings dispositioned or
 whitelisted-with-reason), and only then do targeted section-level screenshots.
 
-**Saving**: the app writes to disk only when Ryan manually saves. Never assume the
-`.pen` file on disk reflects live canvas state; ask Ryan to save before committing
-design work, and never stage `design/ab-initial-app.pen` from a code-focused commit.
+**Saving**: the app writes to disk only when the canvas operator manually saves.
+Never assume the `.pen` file on disk reflects live canvas state; ask them to save
+before committing design work, and never stage `design/ab-initial-app.pen` from a
+code-focused commit.
+
+**One editor at a time, and it may not be you.** The canvas is no longer a
+single-operator file — designers work on it too. `.pen` is ENCRYPTED, so git
+cannot merge it: two parallel edits end with one person's work thrown away.
+`.gitattributes` marks it `-merge` so git refuses rather than silently producing
+a file Pencil cannot open. Before touching it, check nobody else has it (the
+process is in CONTRIBUTING.md §"Designers: working on the canvas"), pull first,
+and push the moment you stop.
 
 ## Git
 

@@ -1,0 +1,58 @@
+name: Feature or change request
+description: Something the app should do that it doesn't
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing much: a lot of this product is already planned in
+        `docs/execution-roadmap.md`, and it may already be on there with a
+        reason it hasn't happened yet. Worth a look — but if you're not sure,
+        file it anyway. A duplicate costs a minute; a good idea nobody mentioned
+        costs a season.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: |
+        Who is stuck, and on what. This project serves burners, AfrikaBurn staff
+        and suppliers, and the same feature is often right for one and wrong for
+        another — so say who you have in mind.
+      placeholder: |
+        A camp lead who runs two camps has to sign out and back in to see the
+        second one, because the dashboard only ever shows the first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should happen instead?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who is this for?
+      multiple: true
+      options:
+        - Burners / camp members
+        - Camp leads
+        - AfrikaBurn org staff
+        - Suppliers
+        - Whoever is maintaining this
+    validations:
+      required: true
+
+  - type: textarea
+    id: real
+    attributes:
+      label: Has this actually bitten someone?
+      description: |
+        Optional, and the most useful box on the form. "A camp lead asked me
+        about this at the last meeting" carries far more weight than a
+        hypothetical, and it usually changes what gets built.
+    validations:
+      required: false

@@ -1,0 +1,10 @@
+# A blank issue is a blank stare. Every path below asks the few questions that
+# otherwise turn into three rounds of "which app?" and "what did you expect?".
+blank_issues_enabled: false
+contact_links:
+  - name: Found a security problem?
+    url: https://github.com/RyRy79261/afrikaburn-contributors-app/security/advisories/new
+    about: Report it privately, never in a public issue. The deployment is live and has real people's data in it — see SECURITY.md.
+  - name: Not sure it's a bug?
+    url: https://github.com/RyRy79261/afrikaburn-contributors-app/discussions
+    about: Ask first. "Is this meant to work like this?" is a good question and costs nobody anything.
