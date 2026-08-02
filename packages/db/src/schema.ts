@@ -1374,18 +1374,46 @@ export const questionnaireResponses = pgTable(
       () => questionnaireActivations.id,
       { onDelete: "set null" },
     ),
+    /**
+     * WHICH CAMP this answer is about, when the questionnaire asks about a camp
+     * rather than a person (migration 0028, Form 2 — roadmap M4-20).
+     *
+     * Null for every questionnaire that really is about the respondent: the
+     * Burner Bio spine, the org's internal check-ins. Set for Form 2, which asks
+     * how big your camp is, where it wants to be and what noise it will make —
+     * none of which are facts about the person filling it in.
+     *
+     * It exists because a person may lead more than one approved camp. Without
+     * it that lead has ONE Form-2 answer for TWO camps, and mirroring it onto a
+     * registration means guessing which camp they meant.
+     */
+    groupId: uuid("group_id").references(() => groups.id, {
+      onDelete: "cascade",
+    }),
     completedAt: timestamp("completed_at", { mode: "date" }),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (r) => ({
-    // Identity is (user, questionnaire, EDITION). Re-sending inside one edition
-    // updates this row; a new edition gets its own.
-    userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx").on(
-      r.userId,
-      r.definitionKey,
-      r.editionId,
-    ),
+    // Identity is (user, questionnaire, EDITION) for a PERSON-scoped answer, and
+    // (user, questionnaire, EDITION, CAMP) for a camp-scoped one. Re-sending
+    // inside one edition updates the row; a new edition gets its own.
+    //
+    // TWO PARTIAL INDEXES rather than one widened index, because Postgres treats
+    // NULLs as DISTINCT in a unique index: adding `group_id` to the existing one
+    // would have quietly allowed unlimited duplicate Burner Bio rows per person.
+    // Splitting them states the rule instead of relying on a NULL subtlety.
+    userDefIdx: uniqueIndex("questionnaire_responses_user_def_idx")
+      .on(r.userId, r.definitionKey, r.editionId)
+      .where(sql`${r.groupId} is null`),
+    userDefGroupIdx: uniqueIndex("questionnaire_responses_user_def_group_idx")
+      .on(r.userId, r.definitionKey, r.editionId, r.groupId)
+      .where(sql`${r.groupId} is not null`),
     defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
+    // "Which approved camps have returned this form?" — the org's chase list.
+    groupIdx: index("questionnaire_responses_group_idx").on(
+      r.groupId,
+      r.definitionKey,
+    ),
   }),
 );
 
