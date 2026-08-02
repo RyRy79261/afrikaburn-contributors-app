@@ -59,6 +59,7 @@ import { pathToFileURL } from "node:url";
 import { eq, and, sql } from "drizzle-orm";
 import {
   CANONICAL_CAMP_CATEGORIES,
+  SOUND_SCALE,
   SEEDED_ORG_DEPARTMENTS,
   departmentRoleRows,
   normalizeCategoryLabel,
@@ -327,6 +328,120 @@ export async function seedReferenceData(db: Db): Promise<void> {
         },
       ],
     };
+    // --- FORM 2 (roadmap M4-20) ---------------------------------------------
+    //
+    // AfrikaBurn's second registration form, asked in January: how big are you,
+    // when do you arrive, where do you want to be, what noise will you make —
+    // and the layout diagram it calls mandatory. Form 1 (September) asks intent
+    // and is our wizard; this is everything nobody knows in September.
+    //
+    // A DEFINITION only, like the safety check-in: no activation, no audience,
+    // no responses. AfrikaBurn releases it from the console in January, which is
+    // the whole reason Form 2 is a questionnaire rather than more wizard steps.
+    //
+    // THE QUESTION IDS ARE A CONTRACT, not incidental names. `mapForm2Answers`
+    // (@quagga/core) mirrors each one into the registration column the wizard
+    // used to write, so the sound answer still drives the camp's required
+    // officers and the review screen still has a Size panel to show. Rename one
+    // in the console and the mirror REPORTS the column as unfilled rather than
+    // failing silently — but it will be unfilled, so don't.
+    //
+    // The sound options come from @quagga/core's SOUND_SCALE rather than being
+    // retyped here: that scale is what `soundLevelFromValue` matches against to
+    // decide whether a camp owes a sound officer, and a seed with its own
+    // wording would be a second, drifting copy of a safety rule.
+    const form2: Questionnaire = {
+      version: "1",
+      pages: [
+        {
+          id: "size",
+          kind: "questions",
+          title: "Size & logistics",
+          questions: [
+            {
+              id: "expected_population",
+              kind: "short_text",
+              // `format: "integer"` is what makes this a NUMBER question — there
+              // is no numeric kind, and the mirror's `count()` accepts a numeric
+              // string for exactly this reason.
+              format: "integer",
+              min: 1,
+              maxLength: 6,
+              prompt: "How many people will be camping with you?",
+              required: true,
+            },
+            {
+              id: "first_arrival_date",
+              kind: "date",
+              prompt: "When does your first person arrive on site?",
+              required: true,
+            },
+            {
+              id: "area_dimensions",
+              kind: "short_text",
+              prompt: "Roughly how much space do you need? (e.g. 20m x 15m)",
+              maxLength: 120,
+              required: true,
+            },
+            {
+              id: "layout_diagram",
+              kind: "file_link",
+              prompt:
+                "Upload your camp layout diagram — interactive area, private camping, ablutions, water and fuel storage, parking, and your camp name on the drawing.",
+              required: true,
+            },
+          ],
+        },
+        {
+          id: "sound_placement",
+          kind: "questions",
+          title: "Sound & placement",
+          questions: [
+            {
+              id: "amplified_music",
+              kind: "single_select",
+              prompt: "What sound will you be running?",
+              required: true,
+              options: SOUND_SCALE.map((level) => ({
+                value: level.value,
+                label: level.label,
+              })),
+            },
+            {
+              id: "sound_plan",
+              kind: "long_text",
+              prompt:
+                "Tell us about your sound: what you're playing, when, and how you'll keep it neighbourly.",
+              maxLength: 1000,
+              required: false,
+            },
+            {
+              id: "placement_first_choice",
+              kind: "short_text",
+              prompt: "Where would you most like to be placed?",
+              maxLength: 200,
+              required: false,
+            },
+            {
+              id: "family_friendly",
+              kind: "short_text",
+              prompt: "Is your camp family-friendly?",
+              maxLength: 120,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+    const form2Def = await ensureQuestionnaireDefinition(db, {
+      key: "org-theme-camp-form-2-2027",
+      title: "Theme Camp Form 2",
+      definition: form2,
+      version: "1",
+      createdByUserId: null,
+    });
+    console.log(`[seed] questionnaire template: ${form2Def.key}`);
+
     const safetyDef = await ensureQuestionnaireDefinition(db, {
       key: "org-safety-checkin-2027",
       title: "Pre-event safety check-in",
