@@ -58,7 +58,11 @@ export interface TranscribeResponse {
   text: string;
 }
 
-function json(body: unknown, status: number, headers?: Record<string, string>): Response {
+function json(
+  body: unknown,
+  status: number,
+  headers?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
@@ -85,7 +89,10 @@ export function createTranscribeHandler(
       // Not an error the user can act on. The UI should hide the microphone
       // when this is the case rather than offering a button that 503s.
       return json(
-        { error: "Dictation isn't switched on for this deployment.", code: "not-configured" },
+        {
+          error: "Dictation isn't switched on for this deployment.",
+          code: "not-configured",
+        },
         503,
       );
     }
@@ -97,9 +104,29 @@ export function createTranscribeHandler(
     });
     if (!verdict.allowed) {
       return json(
-        { error: "Too many recordings this hour. Please type instead.", code: "rate-limited" },
+        {
+          error: "Too many recordings this hour. Please type instead.",
+          code: "rate-limited",
+        },
         429,
         { "Retry-After": String(verdict.retryAfterSeconds) },
+      );
+    }
+
+    // Refuse an oversized body BEFORE parsing it. `formData()` materialises the
+    // whole upload in memory, so the size check below — which is the authority,
+    // and still runs — was happening after the cost it exists to avoid. A
+    // signed-in caller could make the server buffer far more than the cap,
+    // thirty times an hour. `Content-Length` is a hint (absent on a chunked
+    // request), which is why this is an extra guard and not a replacement.
+    const declared = Number(request.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
+      return json(
+        {
+          error: "That recording is too long. Keep it under a minute or two.",
+          code: "too-large",
+        },
+        413,
       );
     }
 
@@ -118,7 +145,10 @@ export function createTranscribeHandler(
     }
     if (file.size > MAX_AUDIO_BYTES) {
       return json(
-        { error: "That recording is too long. Keep it under a minute or two.", code: "too-large" },
+        {
+          error: "That recording is too long. Keep it under a minute or two.",
+          code: "too-large",
+        },
         413,
       );
     }
@@ -127,7 +157,10 @@ export function createTranscribeHandler(
     // the only thing standing between this endpoint and an arbitrary upload.
     if (!ALLOWED_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix))) {
       return json(
-        { error: `That isn't an audio recording (${file.type || "no type"}).`, code: "bad-type" },
+        {
+          error: `That isn't an audio recording (${file.type || "no type"}).`,
+          code: "bad-type",
+        },
         415,
       );
     }
@@ -157,7 +190,13 @@ export function createTranscribeHandler(
       });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        return json({ error: "Transcription timed out. Please type instead.", code: "timeout" }, 504);
+        return json(
+          {
+            error: "Transcription timed out. Please type instead.",
+            code: "timeout",
+          },
+          504,
+        );
       }
       console.error("[transcribe] request failed:", error);
       return json({ error: "Transcription failed. Please type instead." }, 502);
@@ -170,7 +209,10 @@ export function createTranscribeHandler(
       // request is somebody's voice.
       console.error(`[transcribe] Groq ${response.status}`);
       return json(
-        { error: "Transcription failed. Please type instead.", code: "upstream" },
+        {
+          error: "Transcription failed. Please type instead.",
+          code: "upstream",
+        },
         502,
       );
     }
@@ -180,10 +222,15 @@ export function createTranscribeHandler(
     } | null;
     const text = typeof payload?.text === "string" ? payload.text.trim() : "";
     if (!text) {
-      return json({ error: "We couldn't hear any speech in that.", code: "empty" }, 422);
+      return json(
+        { error: "We couldn't hear any speech in that.", code: "empty" },
+        422,
+      );
     }
 
-    console.log(`[AUDIT] transcription for user ${viewer.id} (${file.size} bytes)`);
+    console.log(
+      `[AUDIT] transcription for user ${viewer.id} (${file.size} bytes)`,
+    );
 
     const body: TranscribeResponse = { text };
     return json(body, 200);

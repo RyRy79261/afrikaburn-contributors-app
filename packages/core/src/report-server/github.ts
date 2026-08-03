@@ -112,10 +112,26 @@ export async function createIssue(input: {
     switch (response.status) {
       case 401:
         return { ok: false, failure: "bad-token", detail };
-      case 403:
+      case 403: {
+        // 403 is BOTH "this token may not" and "you are being throttled" —
+        // secondary rate limits and abuse detection come back 403 with a
+        // retry hint. Calling a throttled request "misconfigured" tells the
+        // reporter to give up on something that would work in a minute.
+        const throttled =
+          response.headers.get("retry-after") !== null ||
+          response.headers.get("x-ratelimit-remaining") === "0";
+        return {
+          ok: false,
+          failure: throttled ? "unavailable" : "no-access",
+          detail,
+        };
+      }
+      case 429:
+        // Primary rate limit. Transient by definition.
+        return { ok: false, failure: "unavailable", detail };
       case 404:
-        // 404 rather than 403 is what GitHub returns for a token that cannot
-        // see the repository at all, so the two are the same problem.
+        // What GitHub returns for a token that cannot see the repository at
+        // all — the same problem as a 403 that is not throttling.
         return { ok: false, failure: "no-access", detail };
       case 410:
         return { ok: false, failure: "issues-disabled", detail };

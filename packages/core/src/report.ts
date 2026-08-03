@@ -492,7 +492,14 @@ export function assembleIssue(input: AssembleIssueInput): AssembledIssue {
   if (flagNote) parts.push(flagNote);
 
   if (structured) {
-    title = scrub(found, structured.title, 140);
+    // Fallback for the same reason the template branch has one: the schema
+    // enforces a non-empty title BEFORE sanitization, and sanitization can
+    // still empty it — a title of `<unknown>` is tag-shaped and reduces to "".
+    // GitHub refuses an issue with no title, so the whole report would fail
+    // after every expensive part of it had succeeded.
+    title =
+      scrub(found, structured.title, 140) ||
+      (type === "bug" ? "Bug report" : "Feature request");
     // EXPLICITLY MARKED. Everything from here to the end of the report is a
     // stranger's words, restructured — it is not repository text, and it is not
     // the account holder's. Without the marker a summary renders as ordinary
