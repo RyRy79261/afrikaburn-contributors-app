@@ -182,16 +182,24 @@ export const GITHUB_LABELS: readonly GithubLabel[] = [
     description: "Entry state — not yet categorised",
   },
   {
+    // NOT for an in-app report. Those carry no reporter identity, so nobody is
+    // subscribed to the thread and nothing can ever satisfy the wait — the
+    // label would park the issue permanently. See docs/triage.md.
     name: "status: needs-info",
     color: "d4c5f9",
-    description: "Waiting on the reporter",
+    description:
+      "Waiting on the person who filed it — never on an in-app report",
   },
   {
     name: "status: in-progress",
     color: "c2e0c6",
     description: "Actively being worked",
   },
-  { name: "status: blocked", color: "b60205", description: "Cannot proceed yet" },
+  {
+    name: "status: blocked",
+    color: "b60205",
+    description: "Cannot proceed yet",
+  },
   {
     name: "status: wontfix",
     color: "e6e6e6",
@@ -272,7 +280,11 @@ export const GITHUB_LABELS: readonly GithubLabel[] = [
     color: "c5def5",
     description: "Schema and migrations",
   },
-  { name: "area: ui", color: "c5def5", description: "Layout, styling, components" },
+  {
+    name: "area: ui",
+    color: "c5def5",
+    description: "Layout, styling, components",
+  },
 
   // agent: — WHO DOES THE WORK.
   //
@@ -291,7 +303,8 @@ export const GITHUB_LABELS: readonly GithubLabel[] = [
   {
     name: "needs-human",
     color: "f9d0c4",
-    description: "Requires a person's judgement — routines must skip it",
+    description:
+      "Requires a person's judgement — a routine may propose, never decide",
   },
   {
     name: "agent: ready",
@@ -367,11 +380,7 @@ function fenced(content: string): string {
 }
 
 /** Sanitize, remembering what was removed so the issue can say so. */
-function scrub(
-  found: Set<RedactionKind>,
-  text: string,
-  max: number,
-): string {
+function scrub(found: Set<RedactionKind>, text: string, max: number): string {
   const result = sanitizeReportText(text, max);
   for (const kind of result.redacted) found.add(kind);
   return result.text;
