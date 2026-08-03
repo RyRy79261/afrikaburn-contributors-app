@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 
 import {
+  FORM_2_COLUMNS,
   FORM_2_QUESTIONNAIRE_KEY,
   buildActivationRequiredActions,
   resolveAudience,
@@ -282,4 +283,112 @@ export async function sendForm2(
         err instanceof Error ? err.message : "Could not send Form 2. Try again.",
     };
   }
+}
+
+/** One approved camp's Form-2 state, for the chase list. */
+export interface Form2CampStatus {
+  groupId: string;
+  name: string;
+  /** True once Form 2 has been activated for this camp this edition. */
+  asked: boolean;
+  /** True once someone answered for this camp. */
+  answered: boolean;
+  /**
+   * Columns Form 2 owns that are still empty on the registration row. Populated
+   * only once answered — before that, "empty" just means "not asked yet".
+   *
+   * This is the column that catches a renamed question id. If a camp answered
+   * and its sound is still blank, the mirror could not place it, and the org can
+   * see that rather than discovering it when placement asks.
+   */
+  unfilled: string[];
+}
+
+/**
+ * The Form-2 chase list: every approved camp, whether it was asked, whether it
+ * answered, and what the mirror could not fill.
+ *
+ * A READ, exported from an action module because it belongs with the send it
+ * describes — a chase list that disagreed with what was actually sent would be
+ * worse than none.
+ */
+export async function listForm2Status(
+  editionId: string,
+): Promise<Form2CampStatus[]> {
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      groupId: schema.registrations.groupId,
+      name: schema.groups.name,
+      s4ExpectedPopulation: schema.registrations.s4ExpectedPopulation,
+      s4FirstArrivalDate: schema.registrations.s4FirstArrivalDate,
+      s4AreaDimensions: schema.registrations.s4AreaDimensions,
+      s4LayoutUploadUrls: schema.registrations.s4LayoutUploadUrls,
+      s5AmplifiedMusic: schema.registrations.s5AmplifiedMusic,
+      s5SoundPlan: schema.registrations.s5SoundPlan,
+      s5PlacementFirstChoice: schema.registrations.s5PlacementFirstChoice,
+      s5FamilyFriendly: schema.registrations.s5FamilyFriendly,
+    })
+    .from(schema.registrations)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.registrations.groupId))
+    .where(
+      and(
+        eq(schema.registrations.editionId, editionId),
+        eq(schema.registrations.status, "approved"),
+        eq(schema.groups.kind, "theme_camp"),
+      ),
+    )
+    .orderBy(asc(schema.groups.name));
+  if (rows.length === 0) return [];
+
+  const groupIds = rows.map((r) => r.groupId);
+
+  const asked = await db
+    .select({ groupId: schema.questionnaireActivations.groupId })
+    .from(schema.questionnaireActivations)
+    .where(
+      and(
+        eq(
+          schema.questionnaireActivations.questionnaireKey,
+          FORM_2_QUESTIONNAIRE_KEY,
+        ),
+        eq(schema.questionnaireActivations.editionId, editionId),
+        inArray(schema.questionnaireActivations.groupId, groupIds),
+      ),
+    );
+  const askedIds = new Set(asked.map((a) => a.groupId).filter(Boolean));
+
+  const answered = await db
+    .select({ groupId: schema.questionnaireResponses.groupId })
+    .from(schema.questionnaireResponses)
+    .where(
+      and(
+        eq(
+          schema.questionnaireResponses.definitionKey,
+          FORM_2_QUESTIONNAIRE_KEY,
+        ),
+        eq(schema.questionnaireResponses.editionId, editionId),
+        inArray(schema.questionnaireResponses.groupId, groupIds),
+      ),
+    );
+  const answeredIds = new Set(answered.map((a) => a.groupId).filter(Boolean));
+
+  return rows.map((r) => {
+    const isAnswered = answeredIds.has(r.groupId);
+    // Only meaningful once answered — see the field's own note.
+    const unfilled = isAnswered
+      ? FORM_2_COLUMNS.filter((c) => {
+          const v = r[c as keyof typeof r];
+          return v === null || v === undefined || (Array.isArray(v) && v.length === 0);
+        })
+      : [];
+    return {
+      groupId: r.groupId,
+      name: r.name,
+      asked: askedIds.has(r.groupId),
+      answered: isAnswered,
+      unfilled: [...unfilled],
+    };
+  });
 }

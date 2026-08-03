@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: mobile-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # LEAST PRIVILEGE. Without this block every job inherits the repository's

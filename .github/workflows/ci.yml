@@ -6,9 +6,15 @@ on:
   pull_request:
     branches: [main]
 
-# One run per branch. Pushing again cancels the superseded run instead of
-# leaving two full e2e fleets racing each other for runners — which is what
-# happened while this file was being iterated on.
+# One run per workflow per branch. Pushing again cancels the superseded run
+# instead of leaving two full e2e fleets racing each other for runners — which
+# is what happened while this file was being iterated on.
+#
+# KEYED ON `github.workflow`, not a hand-written prefix (matching camp-404 and
+# ops-board). The prefix was previously spelled out per file, which works right
+# up until a new workflow copy-pastes the block and silently joins CI's group —
+# at which point one cancels the other and the symptom is a check that
+# mysteriously never completes. The built-in name cannot drift.
 # LEAST PRIVILEGE. Without this block every job inherits the repository's
 # default GITHUB_TOKEN scope, which on many repos is read/write across issues,
 # packages, deployments and the contents themselves. Nothing in this workflow
@@ -19,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

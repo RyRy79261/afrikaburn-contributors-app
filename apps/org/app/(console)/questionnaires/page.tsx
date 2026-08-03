@@ -4,7 +4,11 @@ import { Building2, FileText, Pencil, Plus, Send, Users } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { Badge } from "@quagga/ui/components/badge";
 import { Card, CardContent } from "@quagga/ui/components/card";
+import { orgCanInDomain } from "@quagga/core";
 import { guardConsole } from "@/lib/gate";
+import { getActiveEdition } from "@/lib/queries";
+import { listForm2Status } from "@/lib/actions/form-2";
+import { Form2Panel } from "@/components/questionnaire/form-2-panel";
 import { PageHeading } from "@/components/page-heading";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { formatDate } from "@/lib/labels";
@@ -51,6 +55,12 @@ export default async function QuestionnairesPage() {
 
   const questionnaires = await listOrgQuestionnaires();
 
+  // Form 2 is sent per-camp rather than to an audience, so it gets its own
+  // panel above the list — see the component for why.
+  const edition = await getActiveEdition();
+  const form2Camps = edition ? await listForm2Status(edition.id) : [];
+  const canSendForm2 = orgCanInDomain(guard.session.actor, "create", "questionnaires");
+
   const internal = questionnaires.filter(
     (q) => activationsFor(q, "internal").length > 0,
   );
@@ -74,6 +84,15 @@ export default async function QuestionnairesPage() {
           </Button>
         }
       />
+
+      {edition ? (
+        <Form2Panel
+          editionId={edition.id}
+          editionName={edition.name}
+          camps={form2Camps}
+          canSend={canSendForm2}
+        />
+      ) : null}
 
       {questionnaires.length === 0 ? (
         <Card>
