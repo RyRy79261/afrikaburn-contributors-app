@@ -9,12 +9,12 @@ skip line and exits 0, so the build still succeeds. This is the order of operati
 for the first real deployment.
 
 **There is no manual data step any more.** The same deploy runner also **bootstraps
-the reference data** — it seeds only when it finds `editions` empty *(Ryan, 27 Jul
+the reference data** — it seeds only when it finds `editions` empty _(Ryan, 27 Jul
 2026: the first real deployment came up with a perfect schema, working Google sign-in
 and no active edition, so every DB-backed page fell through to "Preview mode" — which
 reads as a configuration problem when the configuration was correct. Seeding was a
 manual step nothing told you about, and the person who needed to run it could not:
-the connection string is a secret they cannot copy out of Vercel.)*
+the connection string is a secret they cannot copy out of Vercel.)_
 
 **It is a bootstrap, not a sync.** A database that already has an edition is left
 alone. Camp categories and supplier records are editable in the org console, and
@@ -84,11 +84,11 @@ sender for the MVP.
 
 ## 4. Vercel — three projects, one repo
 
-| Project | Root Directory | Port locally |
-|---|---|---|
-| `afrikaburn-contributors-web` | `apps/web` | 3000 |
-| `afrikaburn-contributors-org` | `apps/org` | 3001 |
-| `afrikaburn-contributors-suppliers` | `apps/suppliers` | 3002 |
+| Project                             | Root Directory   | Port locally |
+| ----------------------------------- | ---------------- | ------------ |
+| `afrikaburn-contributors-web`       | `apps/web`       | 3000         |
+| `afrikaburn-contributors-org`       | `apps/org`       | 3001         |
+| `afrikaburn-contributors-suppliers` | `apps/suppliers` | 3002         |
 
 All three depend on `@quagga/db`, so any committed migration invalidates all three
 builds and each one applies migrations on deploy — that is intentional. Safety comes
@@ -106,7 +106,7 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
 - Env vars for the **in-app reporter** (all three projects; every one of them is
   optional and the app boots without them — see §4a).
 - **Never set `AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` on a real
-  deployment.** They exist to *raise* the auth limiter's ceiling for a test
+  deployment.** They exist to _raise_ the auth limiter's ceiling for a test
   environment where every Playwright worker hammers sign-up from one address. Setting
   them in production disables the protection that is doing its job.
 
@@ -121,12 +121,12 @@ reporter files is authored by whoever owns the token**, from words somebody else
 typed. The issue body says so on every issue, and the label carries the same
 warning, but the GitHub account on it is yours.
 
-| Variable | Effect when unset |
-|---|---|
-| `GITHUB_TOKEN` | The reporter returns 503 and files nothing. Fine-grained PAT, **Issues: read and write** on this repository only. |
-| `GITHUB_REPO` | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`. |
-| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost. |
-| `GROQ_API_KEY` | Dictation is unavailable; the reporter is typing-only. Used for Whisper transcription only. |
+| Variable            | Effect when unset                                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`      | The reporter returns 503 and files nothing. Fine-grained PAT, **Issues: read and write**, scoped to the repository named by `GITHUB_REPO` (or the default below) and nothing else. |
+| `GITHUB_REPO`       | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`.                                                                                                                 |
+| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost.                                                     |
+| `GROQ_API_KEY`      | Dictation is unavailable; the reporter is typing-only. Used for Whisper transcription only.                                                                                        |
 
 Two things follow from the reporter being public-facing:
 
@@ -156,14 +156,13 @@ starts — surfacing as three red `Vercel – …` checks on the pull request.
 
 That is a genuinely misleading signal, so recognise it by the clock:
 
-| | pending → outcome |
-| --- | --- |
-| a real build | minutes |
-| quota rejection | **~1 second** |
+|                 | pending → outcome |
+| --------------- | ----------------- |
+| a real build    | minutes           |
+| quota rejection | **~1 second**     |
 
 Production keeps deploying perfectly throughout, because it needs no new branch. The
-code is fine. Every local reproduction passes. Diagnosed the hard way on PR #10 (3 Aug
-2026) after eliminating the checkout, the build and the migrator one at a time.
+code is fine. Every local reproduction passes. Diagnosed the hard way on PR #10 (3 Aug 2026) after eliminating the checkout, the build and the migrator one at a time.
 
 `.github/workflows/neon-pr-cleanup.yml` deletes the branch when a PR closes, which
 stops the leak going forward. It needs two repository secrets:
@@ -184,6 +183,7 @@ curl -sS -H "Authorization: Bearer $NEON_API_KEY" \
 Check the list against open PRs before deleting anything, then
 `DELETE .../branches/<id>` the ones whose PR has closed. Never touch the primary
 branch — that is production, with real burners' registrations in it.
+
 - `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
 - **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
   `/api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
@@ -211,9 +211,9 @@ the data it verifies, which is also exactly the kickoff demo script.
 3. **Org → Accounts**: elevate a second account to `org_staff`, and a third to
    `engineer`. Confirm the engineer sees no email addresses in the accounts table,
    gets no destructive controls, is refused the medical-access audit panel — and
-   *does* reach `/system`, which `org_staff` does not. The ranks are jobs, not a
+   _does_ reach `/system`, which `org_staff` does not. The ranks are jobs, not a
    ladder; this is the step that proves it.
-3b. **Org → /system**: confirm every env check reads as expected and that the
+   3b. **Org → /system**: confirm every env check reads as expected and that the
    database probe reports a live round trip. It never prints a secret.
 4. **Org → Registrations**: Camp 404 is in the queue on `submitted`. Walk the real
    review loop — request changes on a section, watch the notification land on the
