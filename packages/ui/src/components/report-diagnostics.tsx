@@ -95,13 +95,13 @@ export function ReportDiagnosticsPanel({
           about the device you&rsquo;re on.
         </p>
 
-        <dl className="space-y-2 rounded-md bg-background px-3 py-3">
-          {fields.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Reading them from this browser&hellip;
-            </p>
-          ) : (
-            fields.map((field) => (
+        {fields.length === 0 ? (
+          <p className="rounded-md bg-background px-3 py-3 text-xs text-muted-foreground">
+            Reading them from this browser&hellip;
+          </p>
+        ) : (
+          <dl className="space-y-2 rounded-md bg-background px-3 py-3">
+            {fields.map((field) => (
               <div key={field.label} className="flex gap-3">
                 <dt className="w-24 shrink-0 text-[10px] font-bold uppercase leading-relaxed tracking-wide text-muted-foreground">
                   {field.label}
@@ -112,9 +112,9 @@ export function ReportDiagnosticsPanel({
                   {field.value}
                 </dd>
               </div>
-            ))
-          )}
-        </dl>
+            ))}
+          </dl>
+        )}
 
         {errorCount > 0 && (
           <p className="flex gap-2 rounded-md bg-warning/10 px-3 py-2.5 text-xs leading-relaxed text-foreground">

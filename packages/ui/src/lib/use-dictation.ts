@@ -22,11 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { transcribeRecording } from "./report-client";
 
 export type DictationState =
-  | "idle"
-  | "requesting"
-  | "recording"
-  | "transcribing"
-  | "unsupported";
+  "idle" | "requesting" | "recording" | "transcribing" | "unsupported";
 
 export interface UseDictationOptions {
   /** Called with the transcript. Append or replace — the UI decides. */
@@ -110,6 +106,17 @@ export function useDictation(options: UseDictationOptions): UseDictation {
         setState("idle");
         setError("We couldn't use the microphone. You can type instead.");
       }
+      return;
+    }
+
+    // The permission prompt is open across that await, and the dialog can be
+    // closed while it is. The unmount effect has already run by then and found
+    // `recorderRef.current` null, so nothing would ever release these tracks:
+    // no recorder means no `stop()`, no `onstop`, and the browser's recording
+    // indicator stays lit until the page is reloaded. A live microphone nobody
+    // asked for is the worst failure this hook has.
+    if (!mountedRef.current) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
 

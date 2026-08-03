@@ -96,7 +96,24 @@ export async function submitReport(
   });
 
   if (!response.ok) throw await readError(response);
-  return (await response.json()) as ReportResponse;
+
+  // Checked, not cast. The dialog renders these two straight into "Filed as
+  // issue #N" and the link beside it, so a malformed 201 becomes "#undefined"
+  // and a dead link — which reads like the report went nowhere.
+  const body: unknown = await response.json().catch(() => null);
+  if (
+    !body ||
+    typeof body !== "object" ||
+    typeof (body as ReportResponse).url !== "string" ||
+    typeof (body as ReportResponse).number !== "number"
+  ) {
+    throw new ReportError(
+      "It may have been filed, but we couldn't read the answer. Check the issues before sending it again.",
+      "bad-response",
+      response.status,
+    );
+  }
+  return body as ReportResponse;
 }
 
 /**

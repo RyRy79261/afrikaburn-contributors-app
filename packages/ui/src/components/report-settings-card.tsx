@@ -87,9 +87,10 @@ export function ReportSettingsCard() {
           <span>
             Reports are filed as public issues on GitHub by the AfrikaBurn
             maintainer account, on your behalf, and they arrive untriaged. Your
-            name, email and account ID are never in them — we keep a private
-            note pairing the issue with your account so we can come back with a
-            question.
+            name, email and account ID are never in them. The server writes an
+            audit line pairing the issue number with your account, so a
+            maintainer reading that log could work out who to ask — but nothing
+            notifies you, and nobody is watching the issue on your behalf.
           </span>
         </p>
       </CardContent>

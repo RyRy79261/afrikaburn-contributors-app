@@ -202,8 +202,16 @@ export function ReportDialog({
       setDictated(true);
       // Appended, never replacing: somebody who typed two sentences and then
       // spoke a third must not lose the two.
+      //
+      // Clamped, because `maxLength` on the textarea only governs typing. A
+      // long dictation could push the field past the server's cap, and the
+      // report would then be refused at submit — after the recording, with no
+      // indication which part was too much.
       setDescription((current) =>
-        current ? `${current.trimEnd()} ${text}` : text,
+        (current ? `${current.trimEnd()} ${text}` : text).slice(
+          0,
+          REPORT_DESCRIPTION_MAX,
+        ),
       );
     },
   });
@@ -283,7 +291,8 @@ export function ReportDialog({
               <DialogDescription className="text-xs leading-relaxed">
                 Filed as a public issue on GitHub by the AfrikaBurn maintainer
                 account, on your behalf. It arrives untriaged, and it is not
-                anonymous to us — we keep a note of who sent it.
+                anonymous to us — the server logs which account sent it, though
+                nothing on the issue itself names you.
               </DialogDescription>
             </div>
 
