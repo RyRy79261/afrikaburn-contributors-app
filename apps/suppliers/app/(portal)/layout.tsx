@@ -1,3 +1,5 @@
+import { ReportLauncher } from "@quagga/ui/components/report-launcher";
+
 import { resolveSupplierSession } from "@/lib/session";
 import { GateScreen } from "@/components/gate-screen";
 import { PortalHeader } from "@/components/portal-header";
@@ -17,7 +19,18 @@ export default async function PortalLayout({
   children: React.ReactNode;
 }) {
   const state = await resolveSupplierSession();
-  if (state.kind !== "ok") return <GateScreen state={state} />;
+  if (state.kind !== "ok") {
+    // Kept ON THE GATE for anyone the session could identify: "the portal
+    // won't recognise my company" is a report, and the gate screen is the one
+    // place it can be filed from. `lib/report-viewer.ts` accepts the same
+    // states.
+    return (
+      <>
+        <GateScreen state={state} />
+        {state.kind !== "unauthenticated" && <ReportLauncher />}
+      </>
+    );
+  }
 
   const { kind: _kind, ...session } = state;
   void _kind;
@@ -28,6 +41,7 @@ export default async function PortalLayout({
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
         {children}
       </div>
+      <ReportLauncher />
     </div>
   );
 }
