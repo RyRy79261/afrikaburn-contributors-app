@@ -12,6 +12,9 @@
 
 import {
   REPORT_DESCRIPTION_MAX,
+  REPORT_ENV_VALUE_MAX,
+  REPORT_LOG_MESSAGE_MAX,
+  REPORT_LOG_STACK_MAX,
   ReportRequestSchema,
   assembleIssue,
   type ReportResponse,
@@ -59,7 +62,11 @@ export interface ReportHandlerOptions {
   }) => Promise<RateLimitVerdict>;
 }
 
-function json(body: unknown, status: number, headers?: Record<string, string>): Response {
+function json(
+  body: unknown,
+  status: number,
+  headers?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...headers },
@@ -145,7 +152,35 @@ export function createReportHandler(
       report.description,
       REPORT_DESCRIPTION_MAX,
     );
-    const screen = screenReport(report.description, redaction.redacted);
+
+    // The DIAGNOSTICS are screened too, and this is not a refinement — it is
+    // the case the screen exists for. `withholdDiagnostics` fires on
+    // third-party identifiers, and the likeliest place one appears is an error
+    // message quoting the record that failed to render, not the sentence a
+    // reporter typed. Screening the description alone meant a log carrying
+    // somebody's ID number was published under the maintainer's account while
+    // the screen reported nothing to withhold.
+    const diagnosticsRedaction = [
+      ...report.diagnostics.environment.flatMap((field) => [
+        ...sanitizeReportText(field.label, 60).redacted,
+        ...sanitizeReportText(field.value, REPORT_ENV_VALUE_MAX).redacted,
+      ]),
+      ...report.diagnostics.errorLogs.flatMap((log) => [
+        ...sanitizeReportText(log.message, REPORT_LOG_MESSAGE_MAX).redacted,
+        ...(log.stack
+          ? sanitizeReportText(log.stack, REPORT_LOG_STACK_MAX).redacted
+          : []),
+        ...(log.route ? sanitizeReportText(log.route, 300).redacted : []),
+      ]),
+    ];
+
+    // The description's own text is what the LANGUAGE patterns read; the
+    // redaction kinds are pooled from both, because "somebody else is in this
+    // report" is true whether they turned up in the prose or in a stack trace.
+    const screen = screenReport(report.description, [
+      ...redaction.redacted,
+      ...diagnosticsRedaction,
+    ]);
 
     // Does anything survive redaction? `assembleIssue` sanitizes again — this
     // is not that pass, it is the question of whether there is a report left to
@@ -191,7 +226,8 @@ export function createReportHandler(
       );
       return json(
         {
-          error: FAILURE_MESSAGES[result.failure] ?? FAILURE_MESSAGES.unavailable,
+          error:
+            FAILURE_MESSAGES[result.failure] ?? FAILURE_MESSAGES.unavailable,
           code: result.failure,
         },
         result.failure === "unavailable" ? 502 : 503,

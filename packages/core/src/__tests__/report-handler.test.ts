@@ -95,7 +95,9 @@ describe("createReportHandler", () => {
     });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe("https://api.github.com/repos/owner/repo/issues");
+    expect(calls[0]?.url).toBe(
+      "https://api.github.com/repos/owner/repo/issues",
+    );
     expect(calls[0]?.body.labels).toContain("needs-triage");
     expect(calls[0]?.body.labels).toContain("source: in-app");
     expect(calls[0]?.body.labels).toContain("app: org");
@@ -167,7 +169,12 @@ describe("createReportHandler", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("does not echo the submitted report back in a validation error", async () => {
+  it("withholds diagnostics when the ERROR LOG carries somebody else's id", async () => {
+    // The screen used to read the description alone. An ID number in a stack
+    // trace — which is where one actually turns up, quoting the record that
+    // failed to render — sailed past it, and the diagnostics were published
+    // under the maintainer's account with the screen reporting nothing wrong.
+    const calls = stubGithub();
     const handler = createReportHandler({
       surface: "web",
       identify: async () => ({ id: "user-1" }),
@@ -175,7 +182,72 @@ describe("createReportHandler", () => {
     });
 
     const response = await handler(
-      post({ type: "bug", description: "" }),
+      post({
+        ...validReport,
+        description: "The roster page crashes when I open it.",
+        diagnostics: {
+          environment: [{ label: "Path", value: "/camps/mad-hatters" }],
+          errorLogs: [
+            {
+              timestamp: Date.now(),
+              source: "console.error",
+              message: "render failed for member 8801015009087",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const body = calls[0]!.body as { body: string; labels: string[] };
+    expect(body.body).toContain("Diagnostics withheld");
+    expect(body.body).not.toContain("8801015009087");
+    // And a person is asked to look, because a third party is in the report.
+    expect(body.labels).toContain("needs-human");
+  });
+
+  it("publishes diagnostics when nothing in them belongs to a third party", async () => {
+    const calls = stubGithub();
+    const handler = createReportHandler({
+      surface: "web",
+      identify: async () => ({ id: "user-1" }),
+      consumeRateLimit: async () => ALLOW,
+    });
+
+    const response = await handler(
+      post({
+        ...validReport,
+        diagnostics: {
+          environment: [{ label: "Viewport", value: "360x740 @ 3x" }],
+          errorLogs: [],
+        },
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const body = calls[0]!.body as { body: string; labels: string[] };
+    expect(body.body).toContain("360x740");
+    expect(body.body).not.toContain("Diagnostics withheld");
+    expect(body.labels).not.toContain("needs-human");
+  });
+
+  it("does not echo the submitted report back in a validation error", async () => {
+    const handler = createReportHandler({
+      surface: "web",
+      identify: async () => ({ id: "user-1" }),
+      consumeRateLimit: async () => ALLOW,
+    });
+
+    // The sensitive string has to be IN the rejected payload, or the negative
+    // assertion below passes on a report that never contained it — which is
+    // what it did: the description was empty, so nothing could be echoed.
+    // `description` is over the cap AND carries an address; the handler must
+    // name the field and quote none of it.
+    const response = await handler(
+      post({
+        type: "bug",
+        description: "nikki@example.com ".repeat(400),
+      }),
     );
     expect(response.status).toBe(400);
     const payload = await response.text();
