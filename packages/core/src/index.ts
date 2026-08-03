@@ -149,6 +149,11 @@ export * from "./registration-sections";
 export * from "./form-2";
 // In-app bug-report redaction (public issues — see the module header).
 export * from "./report-sanitize";
+// The reporter's contract and issue assembly. Pure — the handler that talks to
+// GitHub, Claude and Groq lives behind the `@quagga/core/report-server`
+// subpath so a client bundle importing this barrel never pulls it in.
+export * from "./report";
+export * from "./report-screen";
 export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
