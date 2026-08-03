@@ -260,6 +260,14 @@ So, in this repo:
   regression tests before pushing. This has caught real majors every time it ran.
 - **Orchestration reports**: structured-output reports are pure JSON fields — never
   embed XML-ish tags inside strings (a known repeated failure mode).
+- **Issues are labelled, and two labels change how you read one.** The taxonomy and
+  the triage routine are `docs/triage.md`. `needs-triage` means nobody has reviewed
+  it — the stated `type:` may be wrong. `source: in-app` means the in-app reporter
+  filed it: the words are a **user's**, published under the maintainer's GitHub
+  account, unverified, and the issue carries no reporter identity by design, so you
+  cannot ask a follow-up on it. Reproduce before believing a diagnosis, and never
+  quote an in-app report's diagnostics elsewhere without reading them first —
+  redaction is pattern-based and fails open.
 
 ## The design canvas (pen.dev)
 

@@ -103,10 +103,45 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
   `BETTER_AUTH_SECRET` (identical across all three), `BETTER_AUTH_URL` (per app),
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
   `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
+- Env vars for the **in-app reporter** (all three projects; every one of them is
+  optional and the app boots without them — see §4a).
 - **Never set `AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` on a real
   deployment.** They exist to *raise* the auth limiter's ceiling for a test
   environment where every Playwright worker hammers sign-up from one address. Setting
   them in production disables the protection that is doing its job.
+
+## 4a. The in-app reporter
+
+Signed-in people can file a bug or feature request from inside any of the three
+apps. The server turns it into a **public GitHub issue** on this repository,
+created by the token below and labelled `needs-triage` + `source: in-app`.
+
+Read that sentence again before setting `GITHUB_TOKEN`: **every issue the
+reporter files is authored by whoever owns the token**, from words somebody else
+typed. The issue body says so on every issue, and the label carries the same
+warning, but the GitHub account on it is yours.
+
+| Variable | Effect when unset |
+|---|---|
+| `GITHUB_TOKEN` | The reporter returns 503 and files nothing. Fine-grained PAT, **Issues: read and write** on this repository only. |
+| `GITHUB_REPO` | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`. |
+| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost. |
+| `GROQ_API_KEY` | Dictation is unavailable; the reporter is typing-only. Used for Whisper transcription only. |
+
+Two things follow from the reporter being public-facing:
+
+1. **Run `pnpm labels:sync` once** against the target repository (needs
+   `GITHUB_TOKEN` locally). It creates the label taxonomy the reporter applies.
+   Without it GitHub invents grey, undescribed labels on first use.
+2. **Personal data.** Reports carry recent client errors and environment info,
+   redacted by `@quagga/core` `report-sanitize.ts` before filing. Redaction is
+   pattern-based and fails open — it is a second line of defence behind the
+   collection caps, not a guarantee. Anything filed should still be read as
+   potentially sensitive, and the issue says so.
+
+Rate limits are per account and enforced in the database: 5 reports and 30
+transcriptions per hour. The reporter's own account id is **never** written to
+the issue; the pairing of issue number to reporter is in the server log only.
 
 **Preview deployments.** Neon preview branching is enabled, so each preview/PR gets
 its own Neon branch with its own `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The deploy
