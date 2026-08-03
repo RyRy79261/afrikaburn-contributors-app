@@ -97,9 +97,23 @@ elsewhere:
 Not code, so not something a pull request can set. For a maintainer, in
 *Settings*:
 
-- **Branch protection on `main`** — require a pull request, require the CI checks
-  (`lint · typecheck · test · build`, `commit conventions`, and the e2e shards),
-  and require review from code owners so `CODEOWNERS` has effect.
+- **Branch protection on `main`** — require a pull request, require review from code
+  owners so `CODEOWNERS` has effect, and require **exactly one status check**:
+
+  ```
+  CI pass
+  ```
+
+  That is the aggregate gate at the bottom of `.github/workflows/ci.yml`. It needs
+  every other job — the build gate, the commit-convention check and all eight e2e
+  shards — and fails if any of them did. Require *that* rather than the individual
+  checks: the shard list changes as personas are added, and a shard nobody
+  remembered to mark required is one that can go red without blocking a merge.
+  Adding a shard needs no change here.
+
+  Leave the three `Vercel – …` checks **unrequired**. They are external statuses,
+  not jobs, so the gate cannot cover them — and they fail for reasons that have
+  nothing to do with the code (see `docs/deploy.md` on Neon branch quota).
 - **Private vulnerability reporting** — *Settings → Security* → enable. This is
   what the top of this file tells people to use.
 - **Secret scanning + push protection** — free on public repositories. Push
