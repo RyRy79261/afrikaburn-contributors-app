@@ -77,7 +77,16 @@ test.describe("org staff · wrangler assignment", () => {
     // --- REFUSED BEFORE APPROVAL ------------------------------------------
     // The screen's promise, now true: the control is present and disabled, and
     // it says which of the two refusals applies.
-    await openRegistrationInConsole(staff.org, camp.name);
+    // HOLD THE URL. `openRegistrationInConsole` says in its own header that
+    // calling it a second time inside one test renders the console's chrome
+    // over an empty body — twice in July, and a third time on this branch (CI
+    // run 30836259396, both the attempt and the retry). It is not root-caused,
+    // and re-walking the queue was never the point of this test: the detail
+    // URL is stable, so come back to it directly.
+    const registrationUrl = await openRegistrationInConsole(
+      staff.org,
+      camp.name,
+    );
     const picker = staff.org.getByRole("combobox", {
       name: /^assign wrangler/i,
     });
@@ -157,7 +166,7 @@ test.describe("org staff · wrangler assignment", () => {
     // The unique index on (group, edition) is what makes a camp have ONE
     // guardian angel; a second row would make "who is my wrangler?"
     // unanswerable.
-    await openRegistrationInConsole(staff.org, camp.name);
+    await staff.org.goto(registrationUrl);
     await staff.org.getByRole("combobox", { name: "Assign wrangler" }).click();
     await staff.org.getByRole("option", { name: reviewerName }).click();
     await expect(staff.org.getByText(/wrangler assigned/i)).toBeVisible();
