@@ -389,3 +389,59 @@ describe("resolveAudience — org officer", () => {
     expect(resolveAudience(spec, officerCtx())).toEqual([]);
   });
 });
+
+// `leads` mode (roadmap M4-20). Form 2 asks a camp how big it is, where it wants
+// to be and what noise it will make — questions only someone who can answer FOR
+// the camp should answer. `lead`/`admin` are structural: they are the membership
+// row rather than a grant on top of it, so `roles` mode has no id to name them by.
+describe("project audience — leads mode", () => {
+  const ctx = {
+    memberships: [
+      { membershipId: "m1", userId: "u-lead", groupId: "g1", role: "lead" as const },
+      { membershipId: "m2", userId: "u-admin", groupId: "g1", role: "admin" as const },
+      { membershipId: "m3", userId: "u-member", groupId: "g1", role: "member" as const },
+      // Another camp's lead — the control. A per-camp send must never widen.
+      { membershipId: "m4", userId: "u-other", groupId: "g2", role: "lead" as const },
+    ],
+    groups: [],
+    registrations: [],
+    bios: [],
+    roleAssignments: [],
+    editionId: "e1",
+    orgGroupId: "org1",
+  };
+
+  it("reaches lead and admin, and nobody else", () => {
+    const got = resolveAudience(
+      { kind: "project", groupId: "g1", mode: "leads", roleIds: [] },
+      ctx,
+    );
+    expect([...got].sort()).toEqual(["u-admin", "u-lead"]);
+  });
+
+  it("does not reach a plain member of the same camp", () => {
+    const got = resolveAudience(
+      { kind: "project", groupId: "g1", mode: "leads", roleIds: [] },
+      ctx,
+    );
+    expect(got).not.toContain("u-member");
+  });
+
+  it("does not leak into another camp", () => {
+    // The failure that matters: one camp's Form 2 reaching a different camp's
+    // lead would put one camp's business in another camp's inbox.
+    const got = resolveAudience(
+      { kind: "project", groupId: "g1", mode: "leads", roleIds: [] },
+      ctx,
+    );
+    expect(got).not.toContain("u-other");
+  });
+
+  it("ignores roleIds — structural roles are not grants", () => {
+    const got = resolveAudience(
+      { kind: "project", groupId: "g1", mode: "leads", roleIds: ["some-role"] },
+      ctx,
+    );
+    expect([...got].sort()).toEqual(["u-admin", "u-lead"]);
+  });
+});

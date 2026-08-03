@@ -59,6 +59,7 @@ import { pathToFileURL } from "node:url";
 import { eq, and, sql } from "drizzle-orm";
 import {
   CANONICAL_CAMP_CATEGORIES,
+  FORM_2_QUESTIONNAIRE_KEY,
   SOUND_SCALE,
   SEEDED_ORG_DEPARTMENTS,
   departmentRoleRows,
@@ -434,7 +435,7 @@ export async function seedReferenceData(db: Db): Promise<void> {
       ],
     };
     const form2Def = await ensureQuestionnaireDefinition(db, {
-      key: "org-theme-camp-form-2-2027",
+      key: FORM_2_QUESTIONNAIRE_KEY,
       title: "Theme Camp Form 2",
       definition: form2,
       version: "1",

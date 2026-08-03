@@ -194,11 +194,24 @@ function resolveOutboundSelector(
 function resolveProjectAudience(
   ctx: AudienceContext,
   groupId: string,
-  mode: "everyone" | "roles",
+  mode: "everyone" | "roles" | "leads",
   roleIds: readonly string[],
 ): string[] {
   const inGroup = ctx.memberships.filter((m) => m.groupId === groupId);
   if (mode === "everyone") return inGroup.map((m) => m.userId);
+
+  // THE CAMP'S DECISION-MAKERS, read off the membership row itself.
+  //
+  // `lead` and `admin` are structural: they are not grants layered on top of a
+  // membership, they ARE the membership, which is why they have no role id for
+  // `roles` mode to name. Every camp has at least one without anyone
+  // configuring anything — the no-lockout backstop guarantees it — so this is
+  // the one camp audience that can never resolve to nobody by misconfiguration.
+  if (mode === "leads") {
+    return inGroup
+      .filter((m) => m.role === "lead" || m.role === "admin")
+      .map((m) => m.userId);
+  }
 
   const wanted = new Set(roleIds);
   if (wanted.size === 0) return [];

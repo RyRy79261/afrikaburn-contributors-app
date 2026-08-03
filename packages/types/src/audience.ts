@@ -125,7 +125,21 @@ export type OrgSuppliersAudience = z.infer<typeof OrgSuppliersAudience>;
 export const ProjectAudience = z.object({
   kind: z.literal("project"),
   groupId: z.string().min(1),
-  mode: z.enum(["everyone", "roles"]),
+  /**
+   * WHO IN THE CAMP.
+   *
+   * - `everyone` — every member.
+   * - `roles` — holders of specific PROJECT roles (`roleIds`), the camp's own
+   *   custom roles and officers.
+   * - `leads` — the camp's decision-makers: `lead` and `admin` memberships.
+   *   Distinct from `roles` because those two are STRUCTURAL — they are the
+   *   membership row itself, not a grant on top of it, so they have no role id
+   *   to name. Added for Form 2 (roadmap M4-20), which asks a camp how big it
+   *   is and where it wants to be: questions only someone who can answer FOR
+   *   the camp should be answering, and which every camp has someone for
+   *   without anybody configuring a role first.
+   */
+  mode: z.enum(["everyone", "roles", "leads"]),
   roleIds: z.array(z.string().min(1)).default([]),
 });
 export type ProjectAudience = z.infer<typeof ProjectAudience>;

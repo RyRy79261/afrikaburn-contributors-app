@@ -31,16 +31,31 @@ import type { QuestionnaireResponses } from "@quagga/types";
 // shrugging. A mapping that fails silently is worse than no mapping: the camp
 // believes it has declared its sound level and the console believes it has not.
 
-/** The registration columns Form 2 fills. Mirrors the schema's typed columns. */
+/**
+ * The seeded Form-2 template's key. One constant, because the org action that
+ * sends it, the submit path that mirrors it and the tests that pin the two
+ * together must all mean the same questionnaire.
+ */
+export const FORM_2_QUESTIONNAIRE_KEY = "org-theme-camp-form-2-2027";
+
+/**
+ * The registration columns Form 2 fills.
+ *
+ * NON-NULLABLE on purpose, even though every one of these columns is nullable in
+ * the database. A mapping result only ever carries values it actually mapped —
+ * `mapForm2Answers` returns a `Partial` and reports what it could not place
+ * separately — so "present but null" is not a state this type should be able to
+ * express. Allowing it would let a blank answer overwrite a real earlier one.
+ */
 export interface Form2Columns {
-  s4ExpectedPopulation: number | null;
-  s4FirstArrivalDate: string | null;
-  s4AreaDimensions: string | null;
-  s4LayoutUploadUrls: string[] | null;
-  s5AmplifiedMusic: string | null;
-  s5SoundPlan: string | null;
-  s5PlacementFirstChoice: string | null;
-  s5FamilyFriendly: string | null;
+  s4ExpectedPopulation: number;
+  s4FirstArrivalDate: string;
+  s4AreaDimensions: string;
+  s4LayoutUploadUrls: string[];
+  s5AmplifiedMusic: string;
+  s5SoundPlan: string;
+  s5PlacementFirstChoice: string;
+  s5FamilyFriendly: string;
 }
 
 /** How each column is filled, so coercion is declared once rather than inline. */

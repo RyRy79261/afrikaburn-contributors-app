@@ -1,9 +1,11 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
+  FORM_2_QUESTIONNAIRE_KEY,
   activationRequiredActionKey,
   buildActivationRequiredActions,
+  mapForm2Answers,
   isParticipantFacingActivation,
   parseActivationActionKey,
   publicMemberName,
@@ -744,6 +746,16 @@ export async function submitResponse(input: {
   }
 
   const now = new Date();
+
+  // WHICH CAMP this answer is about, when the questionnaire asks about a camp
+  // rather than a person (migration 0028). Form 2 is activated once PER APPROVED
+  // CAMP, each activation carrying its `groupId`, so the answer inherits it —
+  // which is what lets a lead of two camps answer twice, once for each.
+  //
+  // Null for everything else (the Burner Bio, org check-ins), and those keep
+  // their own uniqueness rule.
+  const campId = activation.groupId ?? null;
+
   await db()
     .insert(schema.questionnaireResponses)
     .values({
@@ -753,14 +765,22 @@ export async function submitResponse(input: {
       definitionVersion: DEFINITION_VERSION,
       responses: validated.responses,
       activationId: input.activationId,
+      groupId: campId,
       completedAt: now,
     })
     .onConflictDoUpdate({
-      target: [
-        schema.questionnaireResponses.userId,
-        schema.questionnaireResponses.definitionKey,
-        schema.questionnaireResponses.editionId,
-      ],
+      target: campId
+        ? [
+            schema.questionnaireResponses.userId,
+            schema.questionnaireResponses.definitionKey,
+            schema.questionnaireResponses.editionId,
+            schema.questionnaireResponses.groupId,
+          ]
+        : [
+            schema.questionnaireResponses.userId,
+            schema.questionnaireResponses.definitionKey,
+            schema.questionnaireResponses.editionId,
+          ],
       // MANDATORY, and its absence is a runtime error rather than a subtle one.
       // Migration 0028 split the uniqueness rule in two: person-scoped answers
       // are unique per (user, definition, edition) WHERE group_id IS NULL, and
@@ -770,7 +790,9 @@ export async function submitResponse(input: {
       // exclusion constraint matching the ON CONFLICT specification" — which is
       // what happened to every questionnaire write, the Burner Bio included,
       // until an e2e run caught it.
-      targetWhere: isNull(schema.questionnaireResponses.groupId),
+      targetWhere: campId
+        ? isNotNull(schema.questionnaireResponses.groupId)
+        : isNull(schema.questionnaireResponses.groupId),
       set: {
         responses: validated.responses,
         activationId: input.activationId,
@@ -780,5 +802,66 @@ export async function submitResponse(input: {
     });
 
   await completeRequiredAction(input.userId, editionId, actionKey);
+
+  // FORM 2 → THE REGISTRATION ROW (roadmap M4-20).
+  //
+  // The answers do not stay in jsonb. `getOfficerStatus` derives a camp's
+  // REQUIRED OFFICERS from the sound answer, and the org review screen, the
+  // camp's own summary and placement all read the same typed columns the wizard
+  // used to write. An answer left only in the response blob would be an answer
+  // the rest of the product cannot act on — a camp with a full rig owing no
+  // sound officer, and nothing on any screen saying why.
+  //
+  // AFTER the response is committed, and deliberately not inside it: the camp
+  // HAS answered, and a failure to mirror must not lose their submission or
+  // report it as failed. It surfaces as unfilled columns on the org's chase
+  // list instead, which is a visible, fixable state.
+  if (campId && activation.questionnaireKey === FORM_2_QUESTIONNAIRE_KEY) {
+    await mirrorForm2(campId, editionId, validated.responses);
+  }
+
   return { ok: true };
+}
+
+/**
+ * Write a Form-2 response onto its camp's registration row.
+ *
+ * Best-effort by contract. `mapForm2Answers` reports the columns it could not
+ * place (a question the org renamed, an answer left blank); those are simply not
+ * written, so an existing value is never overwritten with nothing.
+ */
+async function mirrorForm2(
+  groupId: string,
+  editionId: string,
+  responses: QuestionnaireResponses,
+): Promise<void> {
+  try {
+    const { columns, unfilled } = mapForm2Answers(responses);
+    if (Object.keys(columns).length === 0) return;
+
+    await db()
+      .update(schema.registrations)
+      .set({ ...columns, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.registrations.groupId, groupId),
+          eq(schema.registrations.editionId, editionId),
+        ),
+      );
+
+    if (unfilled.length > 0) {
+      // Not an error — a camp may legitimately skip the optional questions. It
+      // is logged because the OTHER cause is a renamed question id silently
+      // breaking the contract, and that one is invisible from the screen.
+      console.info(
+        `[form-2] mirrored for group ${groupId}; unfilled: ${unfilled.join(", ")}`,
+      );
+    }
+  } catch (err) {
+    // The camp's answer is already saved. Losing the mirror is recoverable —
+    // losing their submission is not.
+    console.error(
+      `[form-2] mirror failed for group ${groupId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
