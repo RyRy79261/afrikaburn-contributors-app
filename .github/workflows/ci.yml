@@ -315,10 +315,13 @@ jobs:
   # required is a shard that can go red without blocking a merge. The failure
   # mode is silent, which is the worst kind.
   #
-  # So protection requires exactly one: `CI pass`. It succeeds only if every job
-  # above did, and it needs no maintenance when the matrix changes — a new shard
-  # is covered the moment it is added, because `needs: [e2e]` is the whole
-  # matrix, not a list of its legs.
+  # So protection requires exactly one: `CI pass`. `ci` and `e2e` must SUCCEED;
+  # `commitlint` may also be `skipped`, because it is pull-request-only and does
+  # not run on a push to main. Nothing else is tolerated — see the step below.
+  #
+  # It needs no maintenance when the matrix changes: a new shard is covered the
+  # moment it is added, because `needs: [e2e]` is the whole matrix rather than a
+  # list of its legs.
   #
   # Same pattern as camp-404 and ops-board.
   #

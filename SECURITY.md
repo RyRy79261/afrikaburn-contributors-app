@@ -100,7 +100,7 @@ Not code, so not something a pull request can set. For a maintainer, in
 - **Branch protection on `main`** — require a pull request, require review from code
   owners so `CODEOWNERS` has effect, and require **exactly one status check**:
 
-  ```
+  ```text
   CI pass
   ```
 
