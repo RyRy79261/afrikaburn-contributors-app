@@ -22,6 +22,7 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { resolveConsoleAccount, listLinkedAccounts } from "@/lib/account";
 import { resolveOrgSession } from "@/lib/session";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
+import { ReportSettingsCard } from "@quagga/ui/components/report-settings-card";
 import { AccountShell } from "@/components/account/account-shell";
 import { SignInMethods } from "@/components/account/account-clients";
 
@@ -103,7 +104,9 @@ export default async function OrgAccountPage() {
       <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
-          <CardDescription>How we reach you, and how you got in.</CardDescription>
+          <CardDescription>
+            How we reach you, and how you got in.
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col">
           <Row
@@ -177,6 +180,11 @@ export default async function OrgAccountPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Last card on the page, as drawn. The corner pill is how a report gets
+          filed; this is where somebody who wants to know what one SENDS can
+          read it without starting one. */}
+      <ReportSettingsCard />
     </AccountShell>
   );
 }

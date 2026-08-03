@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PackageOpen } from "lucide-react";
 
+import { ReportLauncher } from "@quagga/ui/components/report-launcher";
+
 import { getAuthenticatedUser } from "@/lib/auth";
 import { resolveSupplierSession } from "@/lib/session";
 import { PortalHeader } from "@/components/portal-header";
@@ -81,6 +83,10 @@ export default async function AccountLayout({
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
         {children}
       </div>
+      {/* Signed in is the only requirement here, and the only one the reporter
+          has either — an account with no console role or no listing can still
+          file. */}
+      <ReportLauncher />
     </div>
   );
 }

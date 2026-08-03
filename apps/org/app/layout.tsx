@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { Toaster } from "@quagga/ui/components/toast";
+import { ClientErrorCapture } from "@quagga/ui/components/client-error-capture";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import "@quagga/ui/styles.css";
 
@@ -38,6 +39,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark org-accent ${montserrat.variable}`}>
       <body className="font-sans antialiased">
+        {/* Renders nothing. Fills the recent-errors buffer the reporter
+            attaches. Mounted at the root so it is already collecting by the
+            time anybody notices something is wrong. */}
+        <ClientErrorCapture />
         <QuiltBand />
         {children}
         <Toaster />

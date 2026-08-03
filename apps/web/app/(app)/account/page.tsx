@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
+import { ReportSettingsCard } from "@quagga/ui/components/report-settings-card";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser } from "@/lib/session";
@@ -194,6 +195,11 @@ export default async function AccountPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Last card on the page, as drawn (canvas SjInE / U6ixd). The corner
+          pill is how a report actually gets filed; this is where somebody who
+          wants to know what one SENDS can read it without starting one. */}
+      <ReportSettingsCard />
     </AccountShell>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import { Toaster } from "@quagga/ui/components/toast";
+import { ClientErrorCapture } from "@quagga/ui/components/client-error-capture";
 import "@quagga/ui/styles.css";
 
 // AfrikaBurn's brand face. Exposed as --font-brand; globals.css falls through
@@ -38,6 +39,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${montserrat.variable}`}>
       <body className="font-sans antialiased">
+        {/* Renders nothing. Fills the recent-errors buffer the reporter
+            attaches — mounted at the root so it is already collecting by the
+            time anybody notices something is wrong. */}
+        <ClientErrorCapture />
         {children}
         <Toaster />
       </body>

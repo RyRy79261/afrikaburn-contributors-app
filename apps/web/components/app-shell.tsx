@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Flame } from "lucide-react";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
+import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getEditionLabel } from "@/lib/edition";
 import { getUnreadNotificationCount } from "@/lib/notifications";
@@ -121,6 +122,12 @@ export async function AppShell({
           reference and AfrikaBurn collects.
         </p>
       </footer>
+
+      {/* Signed in only: filing needs a session, and offering the control to
+          somebody the endpoint would refuse is worse than not offering it. It
+          stays for a GATED viewer — being held by the gate is a thing worth
+          reporting, and frequently the reason somebody is reporting. */}
+      {user && <ReportLauncher />}
     </div>
   );
 }

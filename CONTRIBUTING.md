@@ -111,6 +111,21 @@ Say so on the issue before you start, so two people don't build the same thing.
 Small PRs get reviewed quickly; large ones sit. If a change is getting big, open
 it early as a draft and ask.
 
+**Read the labels before you pick something up** — the full taxonomy and the
+triage routine are in [`docs/triage.md`](docs/triage.md), but two of them change
+how you should read an issue:
+
+- **`needs-triage`** means nobody has looked at it yet. The `type:` may be wrong
+  and there is no agreed priority. Not a great first pick unless you're triaging.
+- **`source: in-app`** means it was filed by the in-app reporter — the words are a
+  user's, published under the maintainer's GitHub account, and unverified. Expect
+  to reproduce it before believing the diagnosis, and expect not to be able to
+  reply to the reporter (the issue deliberately carries no account identity).
+
+If an issue contains personal information that should not be public, **say so
+privately** ([`SECURITY.md`](SECURITY.md)) rather than commenting on it. Editing
+it out is not enough — GitHub keeps the edit history.
+
 ## Commit and pull-request titles
 
 [Conventional Commits](https://www.conventionalcommits.org/) with a **workspace

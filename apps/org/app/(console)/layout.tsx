@@ -1,3 +1,5 @@
+import { ReportLauncher } from "@quagga/ui/components/report-launcher";
+
 import { resolveOrgSession } from "@/lib/session";
 import { GateScreen } from "@/components/gate-screen";
 import { ConsoleHeader } from "@/components/console-header";
@@ -23,7 +25,18 @@ export default async function ConsoleLayout({
   children: React.ReactNode;
 }) {
   const state = await resolveOrgSession();
-  if (state.kind !== "ok") return <GateScreen state={state} />;
+  if (state.kind !== "ok") {
+    // The reporter stays available ON THE GATE, for anyone the session could
+    // identify. "The console won't let me in" is precisely the report worth
+    // having, and it is unfileable from a screen that offers nothing but the
+    // refusal. `lib/report-viewer.ts` accepts the same states this does.
+    return (
+      <>
+        <GateScreen state={state} />
+        {state.kind !== "unauthenticated" && <ReportLauncher />}
+      </>
+    );
+  }
 
   const { kind: _kind, ...session } = state;
   void _kind;
@@ -31,13 +44,18 @@ export default async function ConsoleLayout({
   const gate = await getConsoleBlockingQuestionnaire(session.dbUserId);
   if (gate) {
     return (
-      <ConsoleGate
-        activationId={gate.activationId}
-        title={gate.title}
-        description={gate.description}
-        questionnaire={gate.questionnaire}
-        initialResponses={gate.existingResponses}
-      />
+      <>
+        <ConsoleGate
+          activationId={gate.activationId}
+          title={gate.title}
+          description={gate.description}
+          questionnaire={gate.questionnaire}
+          initialResponses={gate.existingResponses}
+        />
+        {/* Same reasoning as the gate above: a questionnaire that will not
+            submit is a bug somebody has no other way to tell us about. */}
+        <ReportLauncher />
+      </>
     );
   }
 
@@ -47,6 +65,7 @@ export default async function ConsoleLayout({
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
         {children}
       </div>
+      <ReportLauncher />
     </div>
   );
 }

@@ -43,7 +43,7 @@ Working today: sign-up/sign-in (email+password, Google, 2FA, passkeys), the Burn
 Bio onboarding flow, self-created camps with invites and roles, the six-section
 registration wizard and the org review loop, camp/org questionnaires, bulletins and
 notifications, the supplier repository and portal, camp-category taxonomy, the audit
-trail, and the org System panel.
+trail, the org System panel, and the in-app reporter (below).
 
 Not built: container transport, water/ice/gas logistics, offline QR attestations,
 placement maps, payment processing. See [`docs/roadmap.md`](docs/roadmap.md).
@@ -240,6 +240,7 @@ commit convention, and the workflow for designers editing the Pencil canvas.
 
 | I want to… | Go here |
 | --- | --- |
+| Report something broken **while using the app** | The in-app reporter — it files the issue for you (see below) |
 | Report something broken | [Open an issue](../../issues/new/choose) → *Something is broken* |
 | Suggest a design or UX change | [Open an issue](../../issues/new/choose) → *Design change* |
 | Fix wording in the app | [Open an issue](../../issues/new/choose) → *Wording fix* |
@@ -256,6 +257,34 @@ Two things to know before you start:
   control says why, a "saved" message means something was saved. It is the most
   common reason a change gets sent back.
 
+### The in-app reporter
+
+Signed-in people can file a bug or feature request from inside any of the three
+apps, with recent client errors attached and dictation if they'd rather speak than
+type. The server turns it into a **public issue on this repository**, labelled
+`needs-triage` — see [`docs/triage.md`](docs/triage.md) for what happens next.
+
+Three things about it are deliberate and worth knowing before you touch it:
+
+- **The issues are authored by the maintainer's GitHub token, from words somebody
+  else typed.** Every one of them says so in the body, and carries `source: in-app`.
+  That is not decoration — it is the only thing distinguishing a participant's
+  report from the account holder's own words.
+- **The reporter's identity is never published.** The repository is public and an
+  account id is personal data. The pairing of issue number to reporter is in the
+  server log alone, which is also how you reach somebody for more detail.
+- **Reports are redacted, and redaction fails open.** Emails, phone numbers, ID
+  numbers and JSON fragments are stripped before filing
+  ([`report-sanitize.ts`](packages/core/src/report-sanitize.ts)); names and free-text
+  medical notes cannot be. The real defence is the collection caps in
+  [`report.ts`](packages/core/src/report.ts) — collecting little enough that there
+  is not much to leak. Never describe a filed report as anonymised.
+
+It needs no configuration to build or run. Unset `GITHUB_TOKEN` and the endpoint
+returns a 503 that says so; unset `ANTHROPIC_API_KEY` and reports file from a plain
+template; unset `GROQ_API_KEY` and dictation is unavailable. Setup is in
+[`docs/deploy.md`](docs/deploy.md) §4a, and `pnpm labels:sync` creates the labels.
+
 Licensed **FSL-1.1-ALv2** (see [`LICENSE`](LICENSE)): source-available, converting
 to Apache 2.0 two years after each release. Contributions come in under those same
 terms — there is no CLA to sign.
@@ -268,6 +297,7 @@ terms — there is no CLA to sign.
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | [`docs/build-spec.md`](docs/build-spec.md)                         | The engineering contract: schema, routes, org ranks, the System panel, seed law     |
 | [`docs/deploy.md`](docs/deploy.md)                                 | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test          |
+| [`docs/triage.md`](docs/triage.md)                                 | The issue queue: the label taxonomy, the triage routine, and handling in-app reports |
 | [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md) | Auth, account management, the medical-notes consent model, ID retention             |
 | [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)         | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI     |
 | [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)         | The questionnaire engine — definitions, activations, audiences, blocking flows      |
