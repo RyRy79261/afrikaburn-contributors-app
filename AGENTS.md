@@ -5,6 +5,28 @@ project actually runs. `README.md` has the product overview; the `docs/` specs a
 feature contracts. **Where anything conflicts, `docs/build-spec.md` wins for
 engineering and this file wins for process.**
 
+## Read this first
+
+**This product is LIVE.** Real AfrikaBurn participants, real camps, and real personal
+information — phone numbers, emergency contacts, medical notes, identity documents.
+There is no staging environment. Three things follow, and none of them are optional:
+
+1. **Never test against the deployed apps.** Run the stack locally (`pnpm e2e:local`)
+   — it seeds fake data and contains no real person. Creating an account or a camp on
+   the live site to check a theory is not a shortcut, it is production data.
+2. **A migration you merge runs against production on the next deploy.** There is no
+   step in between that would catch it. See rule 1 under Hard engineering rules.
+3. **You are working in someone else's repository.** Branch, open a pull request, and
+   let the maintainer review — never commit to `main`. (Branch protection is not yet
+   switched on at the time of writing, so nothing *stops* you. That makes the rule
+   more important, not less.)
+
+If you find a security or privacy problem, report it privately — `SECURITY.md`.
+
+**Human contributors start at `CONTRIBUTING.md`**; it covers setup, the commit
+convention and the designer workflow. This file is the operating guide for agents and
+wins on process where the two overlap.
+
 ## What this is
 
 The AfrikaBurn Contributors App ("Quagga Portal" — name still pending the working
@@ -32,8 +54,9 @@ pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (o
 ```
 
 **The unit gate does not run a single browser.** `turbo run … test` lints and
-typechecks `@quagga/e2e` but never executes Playwright, so the 141 persona specs
-prove nothing until `pnpm e2e:local` runs them. It brings up Postgres + the two
+typechecks `@quagga/e2e` but never executes Playwright, so the persona suite — 172
+tests across 70 spec files and 8 personas — proves nothing until `pnpm e2e:local`
+runs them. It brings up Postgres + the two
 Neon proxies (`docker-compose.local.yml`), migrates, seeds, boots all three apps
 and runs the suite. **Run it for anything touching auth, sessions, privacy
 projection, or the invite round trip** — a whole class of defect is invisible to
@@ -42,7 +65,7 @@ inbox" message that no deployment without a mail provider could ever satisfy)
 passed lint, typecheck, unit tests and build, and died on first contact with a
 browser.
 
-Two traps that already cost real time:
+Four traps that already cost real time:
 
 - **A long-lived `next dev` keeps a stale module graph.** Delete a file that
   something imports and the running server serves 500s *while `turbo build`
@@ -187,11 +210,47 @@ Two traps that already cost real time:
   state; fix it with honest empty-state copy, never with a seeded row.
   *(Ryan, 26 Jul 2026. See `packages/db/src/seed.ts` header + `docs/deploy.md`.)*
 
+## Verification (how to be right, not just confident)
+
+Nearly every expensive mistake in this repository has the same shape: a plausible
+belief, stated as fact, never measured. These are real, all of them recent, and each
+one passed a confident review first:
+
+- A migration verified against a live database — inserts, both uniqueness rules, the
+  cascade — that still broke **every questionnaire write in the product**. The
+  verification never ran an `ON CONFLICT` upsert, which is how the app actually
+  writes. *Proving a constraint behaves is not proving the queries that depend on it
+  still run.*
+- A one-line "safety" addition to a session read that tripled a spec's CI failure
+  rate. Ten runs on each side of the change found it; reasoning about it did not.
+- `.pen` files documented as "encrypted" in three files, taken from a tool's own
+  description. `file` says JSON. Nobody had run `file`.
+- Three separate wrong diagnoses of the same CI failure, each argued well. The
+  answer came from a **timestamp**: a real build takes minutes, and these were dying
+  in one second, so nothing was building at all.
+
+So, in this repo:
+
+- **Measure before you claim.** If you are about to write "this is because…", run the
+  thing that would show it. A `git log`, a `df -h`, a `file`, two timestamps.
+- **Attribute before you blame.** A failing test on your branch is not automatically
+  yours, and not automatically flake. Run it on `main`. Run it in isolation. Run it
+  several times — a single green run does not disprove a 30% flake rate.
+- **A test that cannot fail proves nothing.** After writing a regression test, break
+  the thing on purpose and watch it go red. Several tests here say so in a comment
+  because that check found them vacuous.
+- **Report what happened.** If a step was skipped, say so. If something is unverified,
+  say which part. "Verified" is a strong word here and it gets read literally.
+
 ## Process
 
 - **Design before build.** Every new feature gets pen.dev frames first; Ryan reviews;
   code starts after. When you create any new page frame, create its mobile 360 pair in
   the same session (pairing convention below).
+- **No skills, and no new tooling layers, without asking.** Ryan's standing
+  preference (3 Aug 2026): don't install agent skills or add abstraction on top of
+  the workflow that already exists. The commands in this file are the interface.
+  Suggest, don't add.
 - **Specs are contracts.** Feature behavior lives in `docs/*-spec.md`; update the spec
   when Ryan changes direction, then implement the spec. Sources of ground truth:
   `docs/sources/quaggapedia/` and `docs/sources/afrikaburn-org/` (mirrored corpora with
@@ -243,8 +302,34 @@ JSON" rule, not an encryption one.
 
 ## Git
 
-- Commit on `main` with explicit paths; imperative subjects explaining why; gate green
-  first. Push after milestones (the orchestrator pushes; task agents usually don't).
+**Branch, then pull request. Never commit to `main`.** This changed when the repo
+opened to contributors (Aug 2026); the old "commit on main" instruction is gone,
+because `main` is what deploys to a live product.
+
+Checked 3 Aug 2026: branch protection is **not** enabled yet, so this is a
+convention the tooling does not currently enforce. Follow it anyway — and note
+that `.github/CODEOWNERS` does nothing at all until protection requires
+code-owner review (`SECURITY.md` §"Repository settings" has the list).
+
+```bash
+git checkout main && git pull --ff-only
+git checkout -b <type>-<short-description>     # e.g. feat-form-2-questionnaire
+# …work, gate green…
+git push -u origin <branch>
+gh pr create                                   # the template's sections are load-bearing
+```
+
+- **Commit subjects are Conventional Commits with a workspace scope**, and this is
+  ENFORCED — a `commit-msg` hook locally, and a CI job that lints both the PR title
+  and every commit in the range. `fix(web,org): deletion guards counted deleted
+  accounts as live`. Lowercase, imperative, no full stop, ≤72 chars, scope from the
+  workspace list. Prose subjects are rejected. Full rules: `CONTRIBUTING.md`.
+- **The PR template's Database and Risk sections are load-bearing.** The product is
+  deployed; "no schema changes" is a real and useful answer, and leaving it blank is
+  not.
+- **Some paths need the maintainer's review** (`.github/CODEOWNERS`): migrations,
+  `packages/auth`, `packages/core`, `.github/`, the licence. Not a trust statement —
+  a list of places where a mistake is expensive or cannot be undone.
 - The repo is PUBLIC: no real personal contact data (supplier contacts are scrubbed on
   import), no naming real businesses in negative demo states (use fictional names like
   "LosKop Catering").
