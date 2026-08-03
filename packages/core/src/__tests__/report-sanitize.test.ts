@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import {
-  describeRedactions,
-  sanitizeReportText,
-} from "../report-sanitize";
+import { describeRedactions, sanitizeReportText } from "../report-sanitize";
 
 // The in-app reporter files PUBLIC GitHub issues. Anything that survives this
 // function is world-readable the instant the issue exists, indexed, and kept in
@@ -85,6 +82,25 @@ describe("sanitizeReportText", () => {
       expect(out).not.toMatch(/Alice|Ren|Jabu/);
     });
 
+    it("removes a NESTED object whole, outer scalars included", () => {
+      // The regex this replaced could not cross a nested brace: it matched only
+      // the innermost `{...}` and published every value beside it. A serialised
+      // bio or roster — the highest-risk payload here — is exactly that shape.
+      const out = clean(
+        'failed to render {"name":"Alice Hatter","meta":{"camp":"Mad Hatters"},"medical":"epileptic"}',
+      );
+      expect(out).toBe("failed to render [structured data removed]");
+      expect(out).not.toMatch(/Alice|Hatters|epileptic/);
+    });
+
+    it("leaves an unbalanced bracket to the scalar rules", () => {
+      // Not a blob it can bound, so it must not eat the rest of the report —
+      // but the phone number inside still has to go.
+      const out = clean('truncated log {"phone":"+27 82 123 4567"');
+      expect(out).not.toMatch(/082|123 4567/);
+      expect(out).toMatch(/truncated log/);
+    });
+
     it("catches the realistic case: a payload inside a stack trace", () => {
       const stack = [
         "TypeError: Cannot read properties of undefined",
@@ -101,10 +117,19 @@ describe("sanitizeReportText", () => {
   });
 
   describe("markup", () => {
-    it("strips tags, including unterminated ones", () => {
+    it("strips whole tags", () => {
       expect(clean("hello <b>world</b>")).toBe("hello world");
-      // `<script` with no closing bracket: a naive regex leaves it behind.
-      expect(clean("bad <script")).toBe("bad");
+      expect(clean("<script>alert(1)</script>")).toBe("alert(1)");
+    });
+
+    it("escapes an unterminated bracket rather than dropping the rest", () => {
+      // This used to return "bad", discarding everything after the `<`. An
+      // unterminated `<` is far more often a comparison than a tag, and the
+      // text after it is the diagnostic half a triager is told to trust.
+      expect(clean("bad <script")).toBe("bad &lt;script");
+      expect(clean("Expected count < 10, got NaN at roster.tsx:42")).toBe(
+        "Expected count &lt; 10, got NaN at roster.tsx:42",
+      );
     });
 
     it("does not backtrack pathologically on repeated angle brackets", () => {
@@ -124,7 +149,10 @@ describe("sanitizeReportText", () => {
 
   it("handles empty and non-string input without throwing", () => {
     expect(sanitizeReportText("")).toEqual({ text: "", redacted: [] });
-    expect(sanitizeReportText(null as never)).toEqual({ text: "", redacted: [] });
+    expect(sanitizeReportText(null as never)).toEqual({
+      text: "",
+      redacted: [],
+    });
   });
 
   it("is deterministic across repeated calls", () => {

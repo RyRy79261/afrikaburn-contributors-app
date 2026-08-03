@@ -69,13 +69,6 @@ export interface RedactionResult {
  * as `[phone]3`, which is both wrong and still leaks three digits.
  */
 const RULES: readonly { kind: RedactionKind; pattern: RegExp; to: string }[] = [
-  // A JSON object or array of any size. Bounded repetition rather than a greedy
-  // `.*` so a pathological input cannot backtrack quadratically.
-  {
-    kind: "structured-data",
-    pattern: /[[{][^[\]{}]{0,4000}[\]}]/g,
-    to: "[structured data removed]",
-  },
   {
     kind: "email",
     pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
@@ -143,10 +136,76 @@ function stripMarkup(text: string): string {
     }
     out += text.slice(i, lt);
     const gt = text.indexOf(">", lt + 1);
-    if (gt === -1) break; // unterminated tag — drop the remainder
+    if (gt === -1) {
+      // An unterminated `<` is far more often a comparison than a tag —
+      // "Expected count < 10, got NaN at roster.tsx:42" is an ordinary line in
+      // an attached error log. Dropping the remainder threw away the
+      // diagnostic tail, which is the half a triager is told to trust. Keep it
+      // and escape the bracket so it cannot open a tag downstream.
+      out += "&lt;" + text.slice(lt + 1);
+      break;
+    }
     i = gt + 1;
   }
   return out;
+}
+
+/**
+ * Remove JSON objects and arrays, INCLUDING their nested contents.
+ *
+ * A hand-written brace scanner, not a regex. The pattern this replaces
+ * (`[[{][^[\]{}]{0,4000}[\]}]`) could not cross a nested brace, so on
+ * `{"name":"Alice Hatter","meta":{"x":1}}` it matched only the inner `{"x":1}`
+ * and published the name — the exact payload this rule exists to remove, and
+ * the common shape of a serialised bio or roster.
+ *
+ * Linear and non-backtracking: one pass, depth counted, and a span longer than
+ * `MAX_SPAN` is abandoned rather than eating the rest of the report.
+ */
+const MAX_SPAN = 4_000;
+
+function stripStructuredData(text: string): { text: string; found: boolean } {
+  let out = "";
+  let i = 0;
+  let found = false;
+
+  while (i < text.length) {
+    const char = text[i];
+    if (char !== "{" && char !== "[") {
+      out += char;
+      i += 1;
+      continue;
+    }
+
+    // Walk forward to the matching close, counting depth.
+    let depth = 0;
+    let end = -1;
+    for (let j = i; j < text.length && j - i <= MAX_SPAN; j += 1) {
+      const c = text[j];
+      if (c === "{" || c === "[") depth += 1;
+      else if (c === "}" || c === "]") {
+        depth -= 1;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+    }
+
+    if (end === -1) {
+      // Unbalanced, or longer than the cap. Not a blob we can bound, so keep
+      // the bracket and move on — the scalar rules below still run over it.
+      out += char;
+      i += 1;
+      continue;
+    }
+
+    out += "[structured data removed]";
+    found = true;
+    i = end + 1;
+  }
+
+  return { text: out, found };
 }
 
 /**
@@ -166,6 +225,14 @@ export function sanitizeReportText(
 
   let text = stripMarkup(input);
   const found = new Set<RedactionKind>();
+
+  // Structured data goes FIRST and is not a regex rule: a JSON blob may contain
+  // every other pattern, and removing the blob whole beats leaving a shredded
+  // husk of `[email]` placeholders that still reveals the shape of what was
+  // there. See `stripStructuredData`.
+  const structured = stripStructuredData(text);
+  text = structured.text;
+  if (structured.found) found.add("structured-data");
 
   for (const rule of RULES) {
     // `pattern` carries /g, so reset lastIndex — a shared regex is stateful and
