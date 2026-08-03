@@ -306,3 +306,64 @@ jobs:
             server.log
           retention-days: 14
           if-no-files-found: ignore
+
+  # THE ONE REQUIRED CHECK.
+  #
+  # Branch protection can only require checks BY NAME, so requiring the e2e
+  # shards individually means eight entries that have to be re-edited every time
+  # a persona is added or renamed — and a shard nobody remembered to mark
+  # required is a shard that can go red without blocking a merge. The failure
+  # mode is silent, which is the worst kind.
+  #
+  # So protection requires exactly one: `CI pass`. `ci` and `e2e` must SUCCEED;
+  # `commitlint` may also be `skipped`, because it is pull-request-only and does
+  # not run on a push to main. Nothing else is tolerated — see the step below.
+  #
+  # It needs no maintenance when the matrix changes: a new shard is covered the
+  # moment it is added, because `needs: [e2e]` is the whole matrix rather than a
+  # list of its legs.
+  #
+  # Same pattern as camp-404 and ops-board.
+  #
+  # `if: always()` is what makes it work at all. Without it this job would be
+  # SKIPPED when an upstream job fails, and a skipped required check does not
+  # block a merge — the gate would pass by not running, which is precisely
+  # backwards.
+  ci-pass:
+    name: CI pass
+    if: always()
+    needs: [commitlint, ci, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every job passed
+        run: |
+          echo "commit conventions : ${{ needs.commitlint.result }}"
+          echo "lint/typecheck/... : ${{ needs.ci.result }}"
+          echo "e2e (all shards)   : ${{ needs.e2e.result }}"
+          echo
+
+          # UNCONDITIONAL — these run on every event and must succeed.
+          #
+          # `needs.e2e.result` covers the WHOLE matrix: with fail-fast disabled
+          # every shard runs, and the aggregate is `failure` if any single one
+          # failed. That is the property that makes this maintenance-free.
+          for job in "ci:${{ needs.ci.result }}" "e2e:${{ needs.e2e.result }}"; do
+            name="${job%%:*}"; result="${job#*:}"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name did not pass (result: $result)"
+              exit 1
+            fi
+          done
+
+          # GATED — `commitlint` only runs on pull requests, so `skipped` is a
+          # legitimate outcome on a push to main and must not fail the gate.
+          # Anything else (failure, cancelled) must.
+          case "${{ needs.commitlint.result }}" in
+            success|skipped) ;;
+            *)
+              echo "::error::commit conventions did not pass (result: ${{ needs.commitlint.result }})"
+              exit 1
+              ;;
+          esac
+
+          echo "All jobs passed."
