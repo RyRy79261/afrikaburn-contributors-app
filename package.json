@@ -3,7 +3,7 @@
   "private": true,
   "license": "FSL-1.1-ALv2",
   "version": "0.0.0",
-  "description": "AfrikaBurn Contributors App \u2014 participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
+  "description": "AfrikaBurn Contributors App — participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -12,6 +12,7 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "e2e:local": "./scripts/e2e-local.sh",
+    "labels:sync": "tsx scripts/setup-github-labels.ts",
     "prepare": "husky",
     "commitlint": "commitlint"
   },
@@ -20,6 +21,7 @@
     "@commitlint/config-conventional": "^21.2.0",
     "husky": "^9.1.7",
     "prettier": "^3.8.3",
+    "tsx": "^4.23.5",
     "turbo": "^2.9.14",
     "typescript": "^6.0.3"
   },
