@@ -147,6 +147,8 @@ export * from "./registration-state";
 export * from "./registration-sections";
 // Form 2 → registration-row mirroring (roadmap M4-20).
 export * from "./form-2";
+// In-app bug-report redaction (public issues — see the module header).
+export * from "./report-sanitize";
 export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
