@@ -112,6 +112,43 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
 its own Neon branch with its own `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The deploy
 migrator runs against that branch — which is correct and desired: every preview
 migrates its own isolated branch, never production.
+
+**Those branches are not cleaned up by anyone, and running out of them looks like a
+broken build.** The Vercel–Neon integration creates a branch per preview and never
+removes it. Once the project hits its branch quota Neon stops issuing new ones, and
+Vercel then **rejects the preview deployment in about one second**, before any build
+starts — surfacing as three red `Vercel – …` checks on the pull request.
+
+That is a genuinely misleading signal, so recognise it by the clock:
+
+| | pending → outcome |
+| --- | --- |
+| a real build | minutes |
+| quota rejection | **~1 second** |
+
+Production keeps deploying perfectly throughout, because it needs no new branch. The
+code is fine. Every local reproduction passes. Diagnosed the hard way on PR #10 (3 Aug
+2026) after eliminating the checkout, the build and the migrator one at a time.
+
+`.github/workflows/neon-pr-cleanup.yml` deletes the branch when a PR closes, which
+stops the leak going forward. It needs two repository secrets:
+
+- `NEON_API_KEY` — a Neon API key (Account settings → API keys)
+- `NEON_PROJECT_ID` — the Neon project id
+
+**It does not clear a backlog.** Branches from PRs that closed before the workflow
+existed have to be removed once, by hand, from the Neon console or the API:
+
+```bash
+# list the preview branches that are left
+curl -sS -H "Authorization: Bearer $NEON_API_KEY" \
+  "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+  | jq -r '.branches[] | select(.primary != true) | select(.name | startswith("preview/")) | "\(.id)  \(.name)"'
+```
+
+Check the list against open PRs before deleting anything, then
+`DELETE .../branches/<id>` the ones whose PR has closed. Never touch the primary
+branch — that is production, with real burners' registrations in it.
 - `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
 - **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
   `/api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion

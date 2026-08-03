@@ -1,0 +1,34 @@
+# Pencil design files must never be auto-merged.
+#
+# `design/*.pen` is the canvas the whole product is drawn from. It IS text —
+# 173k lines of pretty-printed JSON, one deeply nested node tree — so git will
+# cheerfully three-way merge it line by line, and that is exactly the problem.
+#
+# A line-level merge of two designers' edits to a node tree produces STRUCTURALLY
+# VALID JSON that is semantically wrong: duplicated node ids, a frame carrying
+# children from two different versions, geometry from one edit against content
+# from the other. Pencil then opens it — and shows something subtly, quietly
+# broken. A file that fails to open is an inconvenience; a file that opens
+# looking almost right is a defect nobody catches until it has been designed on
+# top of.
+#
+# `-merge` makes git STOP and say "both modified" instead. Somebody picks a side,
+# reopens it in Pencil, and redoes the losing change by hand. Loud and annoying
+# beats silent and wrong.
+#
+# Diffs stay ON deliberately: it is JSON, and a small edit produces a readable
+# diff worth looking at. Only the automatic merge is refused.
+#
+# WHICH MEANS: one person edits the canvas at a time. Say so in the channel
+# before you start, and push as soon as you stop. See CONTRIBUTING.md
+# §"Designers: working on the canvas".
+*.pen -merge
+
+# Brand assets — binary, diffable only as "changed".
+design/brand/** binary
+
+# Keep line endings sane for contributors on Windows (several of us are on WSL).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

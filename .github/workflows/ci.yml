@@ -9,6 +9,15 @@ on:
 # One run per branch. Pushing again cancels the superseded run instead of
 # leaving two full e2e fleets racing each other for runners — which is what
 # happened while this file was being iterated on.
+# LEAST PRIVILEGE. Without this block every job inherits the repository's
+# default GITHUB_TOKEN scope, which on many repos is read/write across issues,
+# packages, deployments and the contents themselves. Nothing in this workflow
+# writes anything back — it lints, typechecks, builds and runs browsers — so it
+# gets read access and nothing else. A compromised dependency in a build step
+# then has no token worth stealing.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

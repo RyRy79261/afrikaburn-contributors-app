@@ -29,6 +29,15 @@ concurrency:
   group: mobile-${{ github.ref }}
   cancel-in-progress: true
 
+# LEAST PRIVILEGE. Without this block every job inherits the repository's
+# default GITHUB_TOKEN scope, which on many repos is read/write across issues,
+# packages, deployments and the contents themselves. Nothing in this workflow
+# writes anything back — it lints, typechecks, builds and runs browsers — so it
+# gets read access and nothing else. A compromised dependency in a build step
+# then has no token worth stealing.
+permissions:
+  contents: read
+
 jobs:
   e2e-mobile:
     name: mobile · ${{ matrix.label }}

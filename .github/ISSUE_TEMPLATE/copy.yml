@@ -1,0 +1,47 @@
+name: Wording fix
+description: Text in the app that's wrong, unclear, or says something we can't back up
+labels: ["copy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Small, and worth its own form. The words in this app are load-bearing:
+        they tell burners what happens to their personal information, what a
+        deletion does, and why a control is refused. A sentence that overstates
+        what the product does is a defect, not a typo.
+
+  - type: input
+    id: where
+    attributes:
+      label: Where is it?
+      placeholder: e.g. the delete-account page, the "Sound & placement" wizard step
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: What does it say now?
+      description: Copy and paste it if you can, so it's findable in the code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: What should it say?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is it?
+      options:
+        - "Unclear — I couldn't tell what would happen"
+        - "Wrong — it doesn't match what the app actually does"
+        - "Overpromises — it claims something we don't deliver"
+        - "Tone — accurate but reads badly"
+        - "Typo or grammar"
+    validations:
+      required: true
