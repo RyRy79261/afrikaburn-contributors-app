@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { resolveCampAction } from "@quagga/core";
 import type {
   MembershipRole,
@@ -173,6 +173,16 @@ export async function createProjectRegistration(
             schema.questionnaireResponses.definitionKey,
             schema.questionnaireResponses.editionId,
           ],
+          // MANDATORY, and its absence is a runtime error rather than a subtle one.
+          // Migration 0028 split the uniqueness rule in two: person-scoped answers
+          // are unique per (user, definition, edition) WHERE group_id IS NULL, and
+          // camp-scoped ones include the camp. Postgres will not use a PARTIAL index
+          // to resolve ON CONFLICT unless the statement repeats its predicate, so
+          // without this the insert fails outright with "there is no unique or
+          // exclusion constraint matching the ON CONFLICT specification" — which is
+          // what happened to every questionnaire write, the Burner Bio included,
+          // until an e2e run caught it.
+          targetWhere: isNull(schema.questionnaireResponses.groupId),
           set: {
             responses: input.answers,
             completedAt: input.submit ? now : null,

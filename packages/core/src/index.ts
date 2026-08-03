@@ -16,6 +16,12 @@
 //     (canCampSubmit, canCampWithdraw, resolveCampAction) (./registration-state)
 //   - per-section completeness predicates: isSectionComplete,
 //     completedSectionsFor (./registration-sections)
+//   - THE TWO-FORM SPLIT: Form 1 (September, intent) is what the submit gate
+//     asks for; Form 2 (January — size, placement, sound, layout diagram) ships
+//     as an org questionnaire whose answers are MIRRORED back into the same
+//     registration columns, so the officer requirements derived from the sound
+//     answer and every review surface keep reading one source:
+//     mapForm2Answers, FORM_2_FIELD_MAP, FORM_2_COLUMNS (./form-2)
 //   - sound scale (SOUND_SCALE, isNoAmplifiedSound) (./sound)
 //   - placement zones per edition (getPlacementZones) (./placement-zones)
 //   - privacy classes: HARD_LOCKED_PRIVATE_FIELDS (no access path),
@@ -139,6 +145,8 @@ export * from "./name-dedupe";
 export * from "./word-count";
 export * from "./registration-state";
 export * from "./registration-sections";
+// Form 2 → registration-row mirroring (roadmap M4-20).
+export * from "./form-2";
 export * from "./sound";
 export * from "./placement-zones";
 export * from "./privacy";
