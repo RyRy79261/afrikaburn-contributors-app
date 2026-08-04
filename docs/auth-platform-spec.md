@@ -1,145 +1,22 @@
-# Auth Platform Spec — Self-Hosted Better Auth (Plan of Record)
+# Auth & Security Spec — self-hosted Better Auth
 
-> ## ✅ EXECUTED — read as the _reasoning_, not as a to-do list
->
-> _Status added 27 Jul 2026._ The migration this document plans **has happened**.
-> `@quagga/auth` runs Better Auth **1.6.25** (not the 1.5.x this text anticipates),
-> mounted in all three apps at `/api/auth/[...all]`; the auth tables landed as
-> migration 0013 and the two-factor + passkey tables as 0015. Managed Neon Auth is
-> gone.
->
-> So when you read a future tense here — "we will move off", "this unblocks 2FA",
-> "P0-6 delete managed Neon Auth" — read it as the argument for a decision already
-> taken. The threat model, the POPIA analysis, the observability plan and the
-> [VERIFIED]/[INFERRED] discipline are all still live and still worth citing.
->
-> **Not yet done from this plan:** the OAuth-provider / IdP track (§ on becoming an
-> IdP for Camp 404) is still parked, and the observability wiring is partial.
-> The current shipped-capability list is `AUTH_CAPABILITIES` in `@quagga/core` and
-> `docs/accounts-security-spec.md` §"What we run" — those are the authorities on what
-> exists today; this file is the authority on why.
+Better Auth **1.6.25**, self-hosted in `packages/auth`, mounted per app at
+`/api/auth/[...all]`. One account pool, auth tables owned by `packages/db`
+(migration 0013), 2FA/TOTP and passkeys since 0015, DB-backed rate limiting.
 
-_Synthesised from the COMPLETE seven-domain research set (better-auth-core, passkeys,
-ci-regression, security-hardening, observability, compliance-reporting, threat-model —
-82 findings). Ryan, rewritten 2026-07-26 from the full corpus. This is the plan of record
-for moving the AfrikaBurn Contributors App off **managed Neon Auth** (Neon-hosted Better
-Auth 1.4.18) onto **self-hosted Better Auth** — the library mounted in our own
-`/api/auth/*` route handlers, auth tables owned by `packages/db`. It supersedes
-the earlier managed-auth path as the active one and promotes a controlled
-form of Option B._
+This document is the **security and compliance contract**: the architecture, the
+methods offered, the hardening that must hold, POPIA obligations and incident
+runbooks, and the threat model. It is written as what exists and must keep
+existing — not as a plan.
 
-> **Provenance & honesty rule.** Every claim carries **[VERIFIED]** (the research confirmed
-> it against primary docs/source, citation inline) or **[INFERRED]** (reasoned, not directly
-> confirmed — treat as a hypothesis to validate). Where a finding was explicitly marked
-> unverified in the research, it is marked here too — uncertainty is never laundered. This
-> rewrite draws on all seven domains; the earlier draft of this file only saw the first four
-> and left observability partial and compliance + threat-model largely absent. Those three
-> are now built in full.
->
-> **This is not legal advice.** The POPIA sections are grounded in cited South African legal
-> commentary but must be reviewed by someone with a POPIA mandate before an incident.
-
----
-
-## 1. DECISION SUMMARY
-
-**Recommended architecture (5 bullets):**
-
-1. **One `@quagga/auth` package exporting ONE `betterAuth()` config**, mounted
-   independently in each of the three Next.js apps at `app/api/auth/[...all]/route.ts`,
-   all pointing `drizzleAdapter` at the **same Neon database**. Not a proxy, not a central
-   auth server — each Vercel project runs its own in-process copy of the library against the
-   shared DB, so every server component/action gets a zero-network-hop
-   `auth.api.getSession()` and the `@quagga/core` server-enforced authz predicates keep
-   working. This is the documented "multiple apps sharing the same database" pattern.
-   **[VERIFIED]** https://www.answeroverflow.com/m/1369121288609730710 ·
-   https://github.com/better-auth/better-auth/discussions/6055 ·
-   https://better-auth.com/docs/integrations/next
-2. **Move OFF the 1.4.18 pin to Better Auth 1.5.x** (the pin existed _only_ to match managed
-   Neon's internal version; self-hosting removes the reason). 1.5 unlocks non-destructive
-   versioned secret rotation, the production OAuth 2.1 Provider for the parked IdP, and
-   adapter repackaging. Budget for its breaking changes. **[VERIFIED]**
-   https://better-auth.com/blog/1-5 ·
-   https://github.com/better-auth/better-auth/releases/tag/v1.5.0
-3. **Database sessions (Better Auth default) + `cookieCache`**, cross-subdomain cookies on a
-   **custom apex domain** (`app.` / `org.` / `suppliers.`). Keeps the revocable session list
-   the accounts-security-spec depends on; the apex is a hard prerequisite that `*.vercel.app`
-   cannot satisfy (Public Suffix List). **[VERIFIED]**
-   https://better-auth.com/docs/concepts/session-management ·
-   https://better-auth.com/docs/concepts/cookies
-4. **Auth-method ladder: password (15+ char, breach-checked) primary, email-OTP / magic-link
-   low-friction fallback, TOTP + backup codes and passkeys as optional opt-in upgrades.**
-   Passkey-first is deferred — the SA volunteer device mix (Android-dominant, fragmented)
-   makes it a recovery hazard. TOTP, passkeys, HIBP, and CAPTCHA are all Better Auth
-   _plugins_ that are **structurally impossible on managed Neon Auth** — self-hosting is what
-   unlocks them. **[VERIFIED]** https://neon.com/docs/auth/guides/plugins
-5. **Do the migration NOW, greenfield.** No deployed database, no real users → data-migration
-   cost is **zero**. Blast radius is small and mechanical: three route handlers added, three
-   `neon-auth.ts` + client files rewritten, one dependency removed, one appended migration.
-   `@quagga/core` account logic, migration 0011, and the branded auth form all survive.
-   **[VERIFIED]** https://better-auth.com/docs/integrations/next ·
-   https://better-auth.com/docs/installation
-
-**Total cost — blunt version:**
-
-- **The auth stack itself is $0.** Better Auth + all plugins (passkey, two-factor, HIBP,
-  CAPTCHA) are MIT/open-source with **no per-MAU fee** — a real saving vs managed Neon Auth's
-  MAU tiers. Auth tables live in the Neon DB we already run. **[VERIFIED]**
-- **HIBP breach check: free** (range API, no key, no rate limit). **Cloudflare Turnstile
-  CAPTCHA: free** (Turnstile free plan; **no hard volume cap is published for standard use** — do
-  NOT treat ~1M solves/mo as a guaranteed verified threshold, and note Cloudflare could change
-  terms, with a steep free→Enterprise jump). **CI: free** — public-repo GitHub Actions standard runners
-  are _unmetered_; CodeQL, gitleaks, trufflehog all free on public repos. **Observability:
-  free** on Grafana Cloud's free tier (10k metric series / 50GB logs / 50GB traces, **14-day
-  retention**). **[VERIFIED]**
-- **What is NOT free / has a threshold:** the **custom apex domain** (a real annual
-  registration cost — the one unavoidable paid line, and a hard blocker for SSO _and_
-  cross-app passkeys); **Neon free tier** is 0.5GB / 100 compute-hrs / 10 branches per project
-  — aggressive branch-per-PR CI can exhaust the 10-branch include (then $1.50/branch-mo);
-  **Vercel plan** — WAF custom rate-limit rules and possibly Protection-Bypass-for-Automation
-  (needed for Playwright-against-preview) are Pro-only ($20/user/mo), and Hobby is
-  non-commercial-use; **Grafana** past 14-day retention or 10k series costs money (we stay
-  under at hundreds of users); **Upstash Redis** only if we outgrow DB-backed rate limiting
-  (free to 500K commands/mo). **[VERIFIED]**
-- **The invisible cost is operational.** Self-hosting transfers uptime, key custody,
-  breach-blocklist, rate-limiting, **and CVE-patching** responsibility from Neon to us. Better
-  Auth has a demonstrated history of high-severity auth advisories (trustedOrigins ATO
-  GHSA-vp58-j275-797x; email-verify open-redirect GHSA-8jhw-6pjj-8723) that managed Neon
-  patched for us silently. For a volunteer-run non-profit holding POPIA-hard-locked PII, that
-  burden is real and must be owned deliberately. **[VERIFIED]**
-  https://github.com/better-auth/better-auth/security/advisories/GHSA-vp58-j275-797x ·
-  https://github.com/better-auth/better-auth/security/advisories/GHSA-8jhw-6pjj-8723
-
-**Honest effort estimate — a sum of the §12 t-shirt sizes, not a separately-invented range.**
-The research only ever gave t-shirt sizes (trivial/small/medium/large) and **no day counts**; the
-day conversion here is the spec's own inference, applied consistently with the §12 legend
-**S ≈ <1d (≈0.5–1d), M ≈ 1–2d, L ≈ 3–5d**. These figures are re-derived directly from the §12
-phased table so the two sections cannot disagree. **[INFERRED sizing]**
-
-- **Phase 0 (before kickoff demo): ~7–14 days** — 4 M + 6 S (§12). Core swap (package + config +
-  three route handlers + client rewrite + one migration), 1.5 breaking-change absorption +
-  re-greening the gate, and branded reset/verify views.
-- **Phase 1 (before real users): ~21–40 days** — 2 L + 11 M + 8 S (+1 external, no eng size)
-  (§12): TOTP + backup codes, security hardening, CI regression guards (**L, ~3–5d**),
-  observability wiring (**L, ~3–5d** — those two L tasks alone are ~6–10 days), auth-flow tests,
-  POPIA engineering artefacts, and the account surfaces the accounts-security-spec left as open
-  seams. The external POPIA org/legal artefacts (P1-19b: Information Officer registration, PAIA
-  manual) are **not** in this day range — they are a Regulator/organisational process with its
-  own lead time (§8.7, decision 16).
-- **Phase 2 (before third-party IdP): ~10–17 days** — 2 L + 2 M + 3 S (§12), separately deployed,
-  revisited when Part 2 revives.
-
-Total to a defensible "real users" state: **~28–54 engineering days** — the sum of Phase 0
-(~7–14) and Phase 1 (~21–40) t-shirt sizes. This is a wide range because it is a t-shirt sum, not
-a measured estimate: treat the spread as genuine uncertainty. (The earlier ~12–21-day headline
-was inconsistent with the §12 table and is corrected here.)
-
-**The single most dangerous silent regression in the whole migration** is rate-limit storage:
-Better Auth's default in-memory store is per-lambda on Vercel and effectively non-functional
-against credential stuffing. If we self-host without setting `rateLimit.storage:'database'`,
-account-lockout protection **quietly does not exist while appearing configured.** This is the
-highest-value, easiest-to-miss config in the move. **[VERIFIED]** (§6, §9)
-https://better-auth.com/docs/concepts/rate-limit
+> **Section numbering has gaps, deliberately.** §1 (decision summary), §4
+> (migration off managed Neon Auth), §5 (the CI suite to build) and §12 (phased
+> task breakdown) described work that has since been done; they were removed
+> rather than left to be read as outstanding. The surviving sections keep their
+> original numbers so that the 75 internal cross-references remain valid. Git
+> has the removed text at `044ea30`. The CI suite they specified now lives in
+> `.github/workflows/ci.yml`; the architecture is mapped in
+> [`architecture.md`](architecture.md).
 
 ---
 
@@ -345,173 +222,6 @@ https://neon.com/docs/auth/guides/plugins
 
 ---
 
-## 4. MIGRATION PLAN — off managed Neon Auth
-
-**The greenfield "do it now" argument [VERIFIED]:** no deployed database, no real users → data
--migration cost is **zero**. The same move after launch means migrating live identity + session
-rows and re-enrolling any passkeys against a corrected rpID. Do it before the kickoff demo.
-
-**Steps [VERIFIED]** (https://better-auth.com/docs/integrations/next ·
-https://better-auth.com/docs/installation):
-
-1. Add `better-auth` (1.5.x) + `@better-auth/drizzle-adapter` (+ `@better-auth/passkey`;
-   two-factor is core) to a new **`@quagga/auth`** package.
-2. Generate the auth tables via the CLI, place them in `packages/db/src/schema.ts`, run
-   `db:generate` → **one appended migration**. Make the identity-vs-profile boundary decision
-   (§2.3) _before_ this step.
-3. Define the shared `betterAuth()` config: `drizzleAdapter`, email/password, Google social,
-   `crossSubDomainCookies`, Resend callbacks, `cookieCache`, plugins (twoFactor, passkey,
-   haveIBeenPwned, captcha), rate-limit `storage: 'database'`.
-4. In each app add `app/api/auth/[...all]/route.ts` via `toNextJsHandler`.
-5. Replace `lib/auth-client.ts` with `createAuthClient` from `better-auth/react` (+ plugin
-   clients: `passkeyClient`, `twoFactorClient`).
-6. Replace the `@neondatabase/auth` `AuthView` usage in `app/auth/[...path]/page.tsx`. Our
-   branded `AuthForm` already handles sign-in/sign-up; build reset/verify views ourselves
-   (`apps/web/app/auth/forgot-password` + `reset-password` already exist).
-
-**What DELETES [VERIFIED]** (confirmed present in the repo):
-
-- `apps/{web,org,suppliers}/lib/neon-auth.ts` (the `createNeonAuth` files).
-- The `@neondatabase/auth` imports in each `lib/auth-client.ts` and the `AuthView` import in
-  the auth pages.
-- The `@neondatabase/auth` dependency itself.
-- The `NEON_AUTH_BASE_URL` / `NEON_AUTH_COOKIE_SECRET` env wiring in each `lib/config.ts` and
-  in `turbo.json` globalEnv → replaced by `BETTER_AUTH_SECRET` + reuse of `DATABASE_URL`.
-  Update each `isAuthConfigured()` to probe `BETTER_AUTH_SECRET`.
-
-**What SURVIVES unchanged:** `@quagga/core` account logic (account-security,
-account-sanitization, security-notifications), migration 0011, the branded auth form.
-
-**Rules to honour during the swap [VERIFIED]:** AGENTS.md rule 4 (env-less boot) — keep the
-build-time placeholder-secret pattern so all three apps still boot to a graceful "not
-configured" state. AGENTS.md rule 1 — no migrate step enters any build script. AGENTS.md rule 3
-— rewrite the better-auth pin to the validated 1.5/1.6 version rather than deleting the pin.
-
-**Capability layer cleanup [VERIFIED as open question — §11]:** once self-hosted,
-2FA/passkeys/change-email all become native, so `assertCapability('emailChange')` and the
-`AUTH_CAPABILITIES` table may become dead code. Decide whether to flip every entry to
-`supported` and retire the probe layer, or keep it as a defence-in-depth seam **and reuse it as
-a kill-switch surface** (§8.6).
-
----
-
-## 5. CI REGRESSION SUITE (GitHub Actions)
-
-**Free-tier reality [VERIFIED]:** the repo is public, so standard `ubuntu-latest` runners are
-**unmetered** — the private-repo 2,000 min/mo cap does not apply. The whole pipeline costs $0
-on standard runners; the only real budget is Neon compute-hours (main+nightly only) and
-wall-clock. **CodeQL is also free** for public repos and should be enabled.
-https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions ·
-https://github.com/github/codeql-action
-
-### 5.1 DB engine for integration tests [VERIFIED]
-
-Two-tier: (1) default DB integration tests to **PGlite** (`drizzle-orm/pglite`) — in-process
-WASM Postgres, no Docker, ms startup, free; works because our sensitive columns are AES-GCM'd in
-Node (`packages/db/src/crypto.ts`), not via pgcrypto, so there is no server-extension dependency
-to emulate. (2) Add **one** Neon-branch / Neon-Local "driver-fidelity + migration-apply" job
-that applies committed migrations to an empty DB and smoke-queries through the real
-`@neondatabase/serverless` drivers. https://orm.drizzle.team/docs/connect-pglite ·
-https://neon.com/docs/guides/branching-github-actions
-**Caveat [VERIFIED]:** PGlite uses a _different_ Drizzle driver than production (`pglite` vs
-`neon-http`/`neon-serverless`), so it validates schema/query/authz logic but NOT the neon HTTP
-no-transactions quirk or WebSocket pool behaviour — the Neon-Local job is required to cover the
-transport. Transaction-heavy atomicity (sanitization, privilege-escalation guards) must also
-run on Neon-Local, where a genuine WebSocket pool + real BEGIN/COMMIT exist. PGlite runs
-Postgres single-user; v0.4+ (Mar 2026) added connection multiplexing but do not assert
-HTTP-driver no-transaction behaviour on it.
-
-### 5.2 The three workflows [VERIFIED]
-
-- **PR (fast, blocking):** `pnpm turbo run lint typecheck test build` (switch install to
-  `--frozen-lockfile` — currently `--no-frozen-lockfile` with a TODO) + Vitest incl. the
-  regression guards below (PGlite for DB) + `pnpm audit` + gitleaks + CodeQL PR analysis + the
-  **better-auth pin-guard** (assert the pin string still equals the validated version). Gate
-  behind `concurrency` groups to cancel superseded runs.
-- **main (post-merge):** same gate + Neon-Local/Neon-branch migration-apply + driver-fidelity
-  integration job. **Neon-branch quota mitigation [VERIFIED]:** the Neon free tier is
-  **100 compute-hrs + 10 branches per project/month** — so the CI branch job **MUST delete its
-  branch on run completion and use scale-to-zero**, or run **Neon-Local** (Docker service, which
-  consumes no branch from the 10-branch include), to avoid exhausting the cap (then $1.50/branch-
-  mo). This is the concrete mitigation for the branch-exhaustion risk flagged in §1.
-- **nightly (scheduled):** full Playwright E2E against a fresh Vercel preview (sign-up → verify
-  → sign-in → 2FA → passkey → reset → delete-grace, using the `agent-inbox` skill for email +
-  Better Auth's `getOTP`; WebAuthn via Playwright's CDP virtual authenticator), trufflehog
-  full-history verified scan, `pnpm audit` trend. (CodeQL full scan runs on a **weekly** cadence,
-  not nightly — see §5.4.)
-  **Preview-URL wiring [VERIFIED]:** obtain the preview URL by triggering E2E on the GitHub
-  **`deployment_status` event** (Vercel fires it per deploy with the preview URL in the payload)
-  rather than racing the build; `patrickedqvist/wait-for-vercel-preview` polling is the fallback.
-  **Gotcha [VERIFIED]:** Vercel Deployment Protection silently hangs Playwright unless the
-  Protection-Bypass-for-Automation secret (`x-vercel-protection-bypass` header) is sent —
-  and whether that bypass is free on Hobby is unconfirmed (§11).
-
-Caching: keep `actions/setup-node` `cache: pnpm`; add turbo caching (Vercel Remote Cache, free,
-or `actions/cache` on `.turbo`).
-
-### 5.3 Regression guards (drive tests off the source-of-truth enums)
-
-- **Authz completeness [VERIFIED]:** table-driven matrix over `PROJECT_PERMISSION_KEYS`
-  (`view_member_details`, `manage_questionnaires`, `assign_roles`, `manage_roles`,
-  `manage_members`) × role-shapes asserting (a) default-deny for non-backstop empty-grant
-  members, (b) lead/admin/god backstop returns true irrevocably, (c) implications
-  (`manage_roles`⇒`assign_roles`; `canManageQuestionnaireAudience` denies blocking-without-
-  mayBlock and out-of-scope targets). **Plus a completeness meta-test** iterating
-  `ProjectPermissionKey.options` (the Zod enum) that fails the build if any key is missing from
-  the matrix — the guard that makes adding a privilege without a deny-by-default test a red
-  build. This generalises the existing `privacy.test.ts` `HARD_LOCKED_PRIVATE_FIELDS`
-  length-pin pattern. (`packages/core/src/project-permissions.ts`)
-- **PII projection boundary [VERIFIED]:** drive off `HARD_LOCKED_PRIVATE_FIELDS` — build a
-  fully-populated bio, run it through EVERY public projection (bio public projection from
-  `BIO_FIELD_CATALOG` in `bio.ts`, directory/type-ahead/officer-org projections) and assert no
-  hard-locked key appears; a catalog-integrity test asserting `locked === true` for every
-  hard-locked key; assert `officerContactVisibleToOrg` is the only phone-surfacing path
-  (`{isOfficer:true, consent:'accepted'}`). Register projections in one array and iterate so a
-  new unregistered projection is caught. (`packages/core/src/privacy.ts`, `bio.ts`,
-  `officers.ts`)
-- **Route authz census [INFERRED — bespoke, needs its own tests]:** a Vitest test that globs
-  `apps/*/app/**/route.ts` + server actions and fails any that neither call a known
-  `@quagga/core` authz predicate NOR appear in an explicit reviewed `PUBLIC_ROUTES` allowlist.
-  Converts "did someone remember the check" into a mechanical failure. **The allowlist needs
-  human curation — consider a second-approver policy so "make it public" can't be a silent
-  one-line diff (§11).**
-- **Migration safety [INFERRED — bespoke]:** (a) append-only —
-  `git diff --name-status origin/main...HEAD -- packages/db/migrations` fails on M/D of any
-  existing migration or `_journal.json` entry; (b) sync — `db:generate` on clean checkout
-  produces no diff (plus `drizzle-kit check`); (c) apply — `drizzle-kit migrate` against empty
-  branch succeeds and is idempotent. **Base-ref handling needs care** — this repo had a history
-  rewrite (24 Jul 2026), which breaks naive `origin/main...HEAD`.
-- **No-migrate-in-build [VERIFIED]:** grep every `package.json` build script + `turbo.json`
-  build task and fail on any `drizzle-kit migrate`/`db:migrate` reference (AGENTS.md rule 1).
-- **Better Auth flow tests [VERIFIED]:** use
-  `getTestInstance(options, {testWith:'postgres'})` — its `ctx.test` helpers give `login()`,
-  `getOTP()`, `getCookies()` (Playwright-shaped, for injecting a session and skipping slow UI
-  login). Test: sign-in sets cookie; session list/revoke; reset invalidates all sessions;
-  verification token single-use; and the managed-impossible set — 2FA enrol+verify+backup,
-  passkey register, change-email with the 48h window.
-  https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/test-utils/test-instance.ts
-
-### 5.4 Supply chain [VERIFIED]
-
-`--frozen-lockfile`; pin-guard test on the better-auth override; `pnpm audit` (gate on
-high/critical); GitHub native secret scanning + push protection; gitleaks (PR + pre-commit);
-trufflehog (nightly full-history verified — matters because the repo history was rewritten once
-to purge secrets); CodeQL (`javascript-typescript`, PR + weekly full). Renovate/Dependabot with
-a cooldown (`minimumReleaseAge`/`cooldown`) to dodge freshly-published compromised versions
-(Spring 2026 npm/pnpm worm incidents Miasma/TeamPCP), and ignore/pin better-auth +
-`@radix-ui/react-slot` from auto-bumps. **Note [VERIFIED risk]:** `minimumReleaseAge` is a
-pnpm 11 default; repo is on pnpm 10.30.0 — confirm 10.x honours it or plan the bump.
-https://christian-schneider.net/blog/dependency-cooldowns-supply-chain-defense/
-
-### 5.5 Sequencing note [VERIFIED conflict — §11]
-
-Most auth-flow tests (2FA/passkey/change-email) are **meaningless on managed Neon Auth** — the
-capabilities refuse. Recommended: build the provider-independent guards (authz matrix, PII
-projection, route census, migration safety, no-migrate-in-build, pin-guard) **now**, and add
-the auth-flow E2E **at migration time**.
-
----
-
 ## 6. SECURITY HARDENING CHECKLIST
 
 - **Rate limiting [VERIFIED — the highest-value, easiest-to-miss config]:** enable Better
@@ -568,7 +278,7 @@ the auth-flow E2E **at migration time**.
   `@neondatabase/auth 0.4.1-beta` wrapper for the plain pinned library, and gives us version
   control managed Neon does not (a bad managed internal build would be un-opt-out-able).
   Subscribe to the better-auth GHSA feed; never auto-upgrade auth; keep the plugin set minimal.
-  **But** self-hosting inherits the CVE-patch treadmill (§1, §9) — document the emergency
+  **But** self-hosting inherits the CVE-patch treadmill (§9.6) — document the emergency
   un-pin procedure and name a GHSA-watch owner.
 - **Encryption-at-rest hardening [VERIFIED — from POPIA §19, see §8.4]:** AES-256-GCM is
   sufficient as the primitive; the real risk is key management. The current scheme collapses to
@@ -579,156 +289,24 @@ the auth-flow E2E **at migration time**.
 
 ---
 
-## 7. OBSERVABILITY
+## 7. OBSERVABILITY — NOT BUILT
 
-_(Full domain — the earlier draft had only the first two findings; this is the complete panel-
-by-panel dashboard, alert routing, and the crux of how telemetry escapes Vercel serverless.)_
+Recorded as a gap, because three sections below point at it.
 
-### 7.1 Backend — Grafana Cloud Free, not self-hosted, not Vercel Observability Plus [VERIFIED]
+There is no metrics backend, no dashboard and no alerting. Failures surface as
+Vercel runtime logs and nothing watches them. The consequences are specific and
+worth stating rather than implying:
 
-Use **Grafana Cloud Free** as the single observability backend (metrics + logs + traces +
-synthetics + profiles in one free account, no credit card). **Do NOT self-host the
-Prometheus/Loki/Grafana (LGTM) stack** — Vercel is serverless, and there is no free always-on
-box that can reliably hold a Prometheus TSDB + Loki at the uptime you'd want; self-hosting means
-paying for and operating a separate persistent box, the opposite of near-free for a volunteer
-team. **Do NOT pay for Vercel Observability Plus** ($10/mo add-on, Pro-only) for auth
-monitoring.
+- **No failed-login-spike detector.** §8.10A's credential-stuffing runbook opens
+  with "confirm the signal"; today that means reading logs by hand.
+- **No alert on a `BETTER_AUTH_SECRET` drift**, whose symptom is every session
+  dying at once (§9.7).
+- **No success-rate or error-budget signal** on any auth flow.
 
-Free-tier envelope (verified 2026): **10,000 active metric series, 50 GB logs/mo, 50 GB
-traces/mo, 50 GB profiles/mo, 14-day retention on everything, 3 seats**, plus k6 (500 VUh) and
-synthetic monitoring. At hundreds of users an auth workload stays far under all limits → $0.
-Paid only above 10k series (~$6.50 per 1k extra) or past 14-day retention. Vercel Hobby gives
-only ~10k observability events/mo with short retention; the useful tier is Pro-only.
-**The one real limiter is 14-day retention** — fine for incident response and "is credential
-stuffing happening _now_", NOT for quarterly trend/capacity analysis or a campaign investigated
-3 weeks later. **[VERIFIED]** https://grafana.com/products/cloud/free-tier/ ·
-https://vercel.com/docs/observability/observability-plus
-**Mitigation [INFERRED]:** export daily digest _summaries_ (counts) to a cheap long-lived store
-if longitudinal analysis is needed; do not treat the free backend as your system of record.
-
-### 7.2 CRUX — how telemetry escapes Vercel serverless [VERIFIED]
-
-**Push OTLP over HTTP directly from the Next.js runtime** to Grafana Cloud's OTLP gateway
-(`https://otlp-gateway-<region>.grafana.net/otlp`, auth via
-`OTEL_EXPORTER_OTLP_HEADERS = 'Authorization=Basic <base64 instanceID:token>'`). This sidesteps
-two dead ends:
-
-1. **Prometheus scraping cannot reach ephemeral serverless functions.** There is no stable
-   target to pull and no cumulative counter state across invocations — you need _delta_
-   temporality and a _push_ model. OTel is push-based and works "behind firewalls, in
-   serverless environments"; Prometheus is pull/scrape with no delta concept, so it is the
-   wrong tool against FaaS.
-2. **Vercel Log Drains are Pro-plan-only** — not a free path to ship logs off Vercel.
-   Direct in-function OTLP push is free on Hobby and more reliable.
-
-**IMPORTANT verified caveat:** `@vercel/otel` emits **TRACES only** out of the box — "the
-no-code configuration currently only works for tracing, not metrics." So use `@vercel/otel` for
-request/auth-endpoint traces + latency, but auth **metrics and logs must be pushed by us**: an
-OTLP exporter with **delta temporality**, **SimpleSpanProcessor-style immediate export** (no
-batching/BatchSpanProcessor delay), **HTTP transport**, **low span counts**, and an **explicit
-flush before the handler returns** (serverless can't hold cumulative counters between invocations,
-and anything batched or held is exactly what drops when a function returns before flush — the
-immediate-export + HTTP-transport combo is the part most likely to be gotten wrong).
-**[VERIFIED]** https://vercel.com/docs/tracing/instrumentation ·
-https://www.npmjs.com/package/@vercel/otel · https://github.com/vercel/otel/issues/192
-
-**Design recommendation [INFERRED, grounded in the codebase]:** treat **structured JSON log
-lines in Loki as the primary signal source** and compute the dashboard metrics with **LogQL**
-(`count_over_time` / `rate` over labelled JSON), rather than maintaining OTel counters across
-ephemeral invocations. Neon's managed Better Auth exposes no native Prometheus/OTel metrics
-endpoint, so a log-derived model is both simpler and more robust here. Reserve true OTel metrics
-for endpoint latency histograms via traces. **[INFERRED]**
-
-### 7.3 Structured logging + cross-app correlation + redaction [INFERRED best-practice]
-
-Emit single-line JSON from all three apps with a shared schema:
-`{timestamp, app, event, outcome, request_id, session_id (hashed), user_id (opaque, never
-email), route, latency_ms, err_code}`. Generate/propagate a `request_id` (accept an incoming
-W3C `traceparent` from `@vercel/otel`, else mint one) and stamp it on every log line AND return
-it in responses, so a flow crossing apps (e.g. a supplier action hitting shared `@quagga/core`)
-is traceable end-to-end. Label by `app` + `event` for LogQL.
-
-**REDACT hard [VERIFIED against the PII the spec hard-locks]:** never log passwords, reset/verify
-tokens, TOTP/backup codes, session tokens, Resend API keys, `PGCRYPTO_KEY`, or any hard-locked
-PII (phone, emergency contacts, ID/passport, medical) — log opaque user ids and hashed
-identifiers only. This is POPIA-relevant: logs shipped to Grafana Cloud (US region by default)
-become a **cross-border data flow** (§8.3), so keep PII out entirely and/or choose an
-appropriate region and document the transfer. **[INFERRED — Grafana's current region list and
-whether an EU ingestion region is available on free was not verified.]**
-
-### 7.4 Auth dashboard — panel by panel
-
-**[INFERRED design; maps directly to accounts-security-spec principles. Query shapes are LogQL
-over structured events unless noted.]**
-
-1. **Sign-in success vs failure rate** — two series per app,
-   `sum(count_over_time({app=~"web|org|suppliers", event="sign_in"} | json | outcome="success" [5m]))`
-   vs `outcome="failure"`; failure ratio as a stat with a threshold.
-2. **Failure-spike / credential-stuffing** — rate of `sign_in.failure` by source IP and by
-   email-not-found, top-k table; the primary stuffing signal.
-3. **Lockouts** — count of lockout events (our ≤10-consecutive-failure rule) over time.
-4. **Password-reset volume** — `requestPasswordReset` events/hr (spike = targeted attack or
-   email problem).
-5. **Email delivery failures (Resend)** — count of `email.send.failure` by template (verify,
-   reset, security-notification). **Critical** — a broken reset/verify email silently locks
-   users out of the recovery path.
-6. **Token/verification failures** — `verifyEmail` / reset-token failures, split expired vs
-   invalid.
-7. **Auth-endpoint latency** — p50/p95/p99 from `@vercel/otel` traces on `/api/auth/*` per app.
-8. **Active session count / new-session rate** — from `listSessions`-backed events.
-9. **New-device sign-ins** — once the device-fingerprint column exists (currently unwired per
-   accounts-security-spec; it is the primary compromise tripwire for a camp lead — §9).
-10. **2FA enrolment rate & passkey adoption** — **CURRENTLY ZERO/N/A on managed Neon Auth**
-    (provider-blocked; no 2FA/passkey plugin). Keep the panels defined but expect them empty
-    until self-hosted Better Auth lands them — **this empty panel is itself an argument for
-    self-hosting.**
-11. **HIBP dependency health** — outbound latency / error rate (informs the fail-open policy).
-12. **Error budget / auth availability** — ratio of 5xx+timeouts on `/api/auth/*` vs total.
-
-### 7.5 Alerting — what pages a human vs what is a daily digest [VERIFIED routing, INFERRED split]
-
-Route free via **Grafana Alerting contact points** — email, Slack (webhook or bot), and Telegram
-are all supported at no added cost. Telegram is the cheapest reliable "push to phone" for a
-volunteer team. **Do NOT architect around Grafana OnCall** — its 2026 free-tier limits were not
-confirmed; use plain contact points + notification policies for routing/severity.
-
-**PAGE IMMEDIATELY** (near-instant, free):
-
-- (a) auth-endpoint availability / error-budget burn — `/api/auth/*` 5xx or timeout ratio over
-  threshold;
-- (b) **credential-stuffing signature** — sign-in failure rate spikes above N× baseline, or many
-  failures across many accounts from few IPs;
-- (c) **Resend email-send failure rate spike** — a broken reset/verify email silently locks
-  users out;
-- (d) total auth outage — no successful sign-ins in X minutes during active hours;
-- (e) uptime probe down (from synthetics).
-
-**Sudden drop in sign-in success rate** → possible misconfiguration, especially
-**`BETTER_AUTH_SECRET` drift across the three projects** (design risk #1, §2.1). Wire this alert
-explicitly.
-
-**DAILY DIGEST** (email, low urgency): lockout counts, password-reset volume, 2FA enrolment
-trend (when available), new-device sign-in summary, error-budget remaining.
-
-### 7.6 Uptime / synthetic checks [VERIFIED]
-
-Two free layers. (1) **Grafana Cloud Synthetic Monitoring** free tier (~5 checks per sources;
-confirm exact count in-console) — HTTP checks against each app's sign-in page and a lightweight
-`/api/auth` health route, alerting via the same Grafana Alerting. (2) **Better Stack Free** (10
-monitors @ 3-min, 1 status page, commercial use allowed) as an independent second opinion — an
-external monitor matters because a Grafana-only setup can't tell you Grafana itself is down.
-**AVOID UptimeRobot Free** — since Dec 2024 its free plan is restricted to personal,
-non-commercial use, a poor fit and possible TOS violation for a non-profit monitoring its own
-production service. https://betterstack.com/community/comparisons/better-stack-vs-uptimerobot/
-
-**Observability open questions [carried from research]:** exact Grafana synthetic free-check
-count for 2026; whether an EU/non-US Grafana ingestion region suitable for POPIA exists and at
-what cost; whether logs (not just metrics/traces) are accepted over the same OTLP endpoint on
-free at our volume; whether Neon's managed Better Auth exposes ANY structured auth event/webhook
-to subscribe to (materially changes the effort of §7.2) — another data point for the self-host
-decision.
-
----
+The previous version of this section specified a Grafana Cloud Free deployment
+in detail. It was never built, and a specification nobody implemented reads as
+a description of reality to the next person — which is why it is a stub now.
+Pick it up from `roadmap.md` when it is real work rather than a preference.
 
 ## 8. COMPLIANCE (POPIA) & INCIDENT RESPONSE
 
@@ -937,7 +515,7 @@ middleware) that disables writes and hides PII surfaces (directory, profile, exp
 **without a redeploy**; (2) a **per-capability disable** reusing the existing
 `AUTH_CAPABILITIES`/`assertCapability` pattern so an incident can instantly flip e.g. "account
 export" or "officer phone-sharing" to unavailable — this is the concrete second life for the
-capability layer that §4 asks about; (3) an emergency **revoke-ALL-sessions** broadcast (rotating
+capability layer described above; (3) an emergency **revoke-ALL-sessions** broadcast (rotating
 `BETTER_AUTH_SECRET` is the blunt version); (4) reuse the `ACCOUNT_SWEEP_SECRET` pattern for any
 incident-only endpoint so it never runs unauthenticated or in a build. **Prefer DB-flag over env
 for anything you need to flip in seconds** — env changes on Vercel need a redeploy. **[VERIFIED]**
@@ -1162,131 +740,26 @@ watch owner**; `trustedOrigins` = explicit absolute URLs only, never wildcards.
 
 ---
 
-## 11. DECISIONS RYAN MUST MAKE (conflicts & open questions)
+## 11. OPEN DECISIONS
 
-1. **Apex domain — buy it.** Cross-subdomain SSO _and_ cross-app passkeys (rpID) are both hard-
-   blocked on a custom apex; `*.vercel.app` cannot do either. The one unavoidable paid line and
-   gates the whole design. Which apex, and is it purchased?
-2. **Identity-vs-profile table boundary (§2.3).** Does Better Auth's `user` table _become_ our
-   `users` table, or sit beside it? Near-irreversible; touches migration 0011's `sanitized_at` and
-   the Lost-Cat plan. Decide before generating auth tables.
-3. **Social sign-in topology.** Centralise Google through `apps/web` (one callback + shared
-   cookie) or register a redirect URI per app?
-4. **Better Auth version pin.** 1.5.0 confirmed; later 1.6.x tags exist. Confirm newest stable +
-   React 19 / Next 16 compat and rewrite AGENTS.md rule 3 to that pin. **Also: document the
-   emergency un-pin procedure for a critical CVE and name the GHSA-watch owner (§9.6).**
-5. **Retire the capability-probe layer, or repurpose it?** Once self-hosted, `AUTH_CAPABILITIES`
-   - `assertCapability` may be dead code — but §8.11 wants it kept as the per-capability
-     kill-switch surface. Recommended: **keep and repurpose**, don't delete.
-6. **Is 2FA/TOTP + passkeys a _launch_ requirement, or phase 1?** Self-hosting unblocks both
-   immediately. Given a god account is password-only today (§8.10C), consider requiring MFA for
-   god/org_staff at launch even if optional for everyone else.
-7. **Rate-limit storage:** Neon DB (free, needs a prune job) — recommended — vs Upstash now.
-   Confirm DB-first and confirm the ≤10-failure lockout thresholds/backoff.
-8. **CAPTCHA scope:** sign-up only, or also sign-in + reset (Turnstile default covers all three)?
-9. **Audit-log & PII retention windows (§8.8).** No POPIA statutory number — set documented
-   windows per PII class (6–12 months suggested for security logs) + purge jobs.
-10. **ID/passport storage (§8.2).** The research says: absent a named downstream purpose, **do not
-    collect it.** Confirm — is there a concrete MVP/near-roadmap use? If yes: documented lawful
-    purpose, minimum retention, encryption-at-rest confirmed.
-11. **Medical-notes encryption (§8.3).** `medical_notes` is currently plaintext while lower-risk
-    ID is encrypted. Fix the inversion before real data lands — confirm the field-level encryption
-    change.
-12. **Vercel plan (Hobby vs Pro).** Determines WAF custom rules, Attack Challenge Mode, and
-    whether **Protection-Bypass-for-Automation** (needed for free Playwright-against-preview) is
-    available — if Pro-only, "free E2E" becomes a paid dependency. Hobby is also non-commercial-
-    use. **[VERIFIED as unresolved]**
-13. **passkey `origin` — single string or array? [VERIFIED as unconfirmed]** Determines whether
-    three mounted instances can share the passkey table or whether we need one central auth
-    service earlier. **Needs a spike.** Also verify cross-instance passkey counter atomicity.
-14. **Should org/god accounts be REQUIRED to enrol two passkeys or passkey+TOTP**, enforced in
-    `@quagga/core`? Policy, not technical.
-15. **`requireMembership` funnel (§9.3).** Introduce the mandatory tenant-scoping gate before the
-    surface expands, so no store function hand-rolls its own filter?
-16. **POPIA accountability status (§8.7).** Has AfrikaBurn already registered an Information
-    Officer and published a PAIA manual? If not, both are prerequisites before real data
-    collection.
-17. **Neon cookie-secret rotation self-service? [open question].** Can `NEON_AUTH_COOKIE_SECRET` /
-    the managed signing secret be rotated by us or does it need Neon support? Moot after
-    self-hosting, but relevant for the interim.
-18. **PUBLIC_ROUTES allowlist policy (§5.3).** Who reviews additions — should "make it public"
-    require a second approver so it can't be a silent one-line diff?
+Still open, and each one blocks or shapes something below. Items resolved since
+this list was written have been removed rather than left ticking.
 
-**Conflicts surfaced between reports:**
+| #   | Decision                                                                                                                                                                                                                    | Blocks                                                |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | **A custom apex domain.** `*.vercel.app` is on the Public Suffix List, so it can carry neither a shared session cookie nor a passkey `rpID` wider than one subdomain.                                                       | Cross-app sign-on; cross-app passkeys (§9.4)          |
+| 2   | **Retention windows per PII class** (§8.8). POPIA s14 gives no statutory number; 6–12 months is suggested for security logs. Needs numbers plus a purge job.                                                                | Automated purge; the accountability artefacts in §8.7 |
+| 3   | **CAPTCHA scope** — sign-up only, or sign-in and reset too.                                                                                                                                                                 | The rate-limit story in §6                            |
+| 4   | **Whether org and god accounts MUST enrol a second factor.** Policy, not capability: 2FA and passkeys both ship today.                                                                                                      | §9.2                                                  |
+| 5   | **Vercel plan (Hobby vs Pro).** Determines WAF custom rules, Attack Challenge Mode, and Protection-Bypass-for-Automation — without which Playwright-against-preview is a paid dependency. Hobby is also non-commercial-use. | CI; the WAF half of §6                                |
+| 6   | **Passkey `origin`: single string or array.** Decides whether three mounted instances share one passkey table or need a central auth service. Needs a spike.                                                                | §9.4                                                  |
+| 7   | **Named owner for the GHSA watch** (§9.6). Self-hosting inherits the CVE-patch treadmill; a treadmill with no name on it stops.                                                                                             | Emergency un-pin procedure                            |
 
-- **Branch-preview identity:** the better-auth-core report **disproves** platform-architecture-
-  spec's "Option B loses branch identity" con. Resolved (§2.6) — the con is struck.
-- **IdP topology:** the earlier research assumed the IdP is a _separate deployment_;
-  the research asks whether, now that auth lives in our own DB, the IdP becomes just another
-  plugin on the same instance. Left open (§9.4 / decision 5) — not silently picked.
-- **CI sequencing:** the ci-regression report flags most auth-flow tests are meaningless on
-  managed Neon → surfaced as the §5.5 recommendation (guards now, flow-E2E at migration).
-- **ID/passport:** the earlier draft hedged on whether storage is defensible; the full research
-  reaches the minimisation conclusion — this rewrite leads with "don't collect absent a named
-  purpose" (§8.2).
-
----
-
-## 12. PHASED TASK BREAKDOWN
-
-### Phase 0 — must be true before the kickoff demo
-
-| Task                                     | Scope (one line)                                                                                                        | Size         |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------ |
-| P0-1 Decide identity-vs-profile boundary | Pick: BA `user` = our `users`, or beside it (§2.3)                                                                      | S (decision) |
-| P0-2 Create `@quagga/auth` package       | Shared `betterAuth()`: drizzleAdapter, email/password, Google, Resend callbacks, cookieCache, **DB rate-limit storage** | M            |
-| P0-3 Generate + place auth tables        | CLI generate → `packages/db/schema.ts` → one appended migration                                                         | M            |
-| P0-4 Mount route handlers in all 3 apps  | `app/api/auth/[...all]/route.ts` via `toNextJsHandler`                                                                  | S            |
-| P0-5 Rewrite auth clients                | `createAuthClient` in each `lib/auth-client.ts`; branded reset/verify views                                             | M            |
-| P0-6 Delete managed Neon Auth            | Remove `neon-auth.ts` ×3, `@neondatabase/auth` dep, `NEON_AUTH_*` env; `isAuthConfigured()`→`BETTER_AUTH_SECRET`        | S            |
-| P0-7 Upgrade to 1.5.x + absorb breaks    | Bump, fix `InferUser`/`getMigrations`/etc., rewrite AGENTS.md rule 3 pin                                                | M            |
-| P0-8 Env-less boot preserved             | Placeholder-secret pattern still boots all 3 apps to "not configured" (rule 4)                                          | S            |
-| P0-9 Green the gate                      | `pnpm turbo run lint typecheck test build` passes                                                                       | S            |
-| P0-10 Confirm apex domain purchased      | The hard blocker for SSO + passkeys (decision)                                                                          | S (external) |
-
-### Phase 1 — before real users
-
-| Task                                                              | Scope                                                                                                                                                                                                                                                                                             | Size                           |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| P1-1 Cross-subdomain cookie SSO                                   | `crossSubDomainCookies` + `trustedOrigins` on the apex across 3 apps                                                                                                                                                                                                                              | S                              |
-| P1-2 TOTP + backup codes                                          | `twoFactor()` plugin, `storeBackupCodes:'encrypted'`, enrol/verify/regenerate UI                                                                                                                                                                                                                  | M                              |
-| P1-3 Account surfaces                                             | Mount `/account`, `/account/security`, `/account/delete` (backend already built)                                                                                                                                                                                                                  | M                              |
-| P1-4 HIBP breach check                                            | `haveIBeenPwned` plugin + fail-open-on-outage (never on-match) policy                                                                                                                                                                                                                             | S                              |
-| P1-5 CAPTCHA                                                      | Turnstile plugin on sign-up (+ sign-in/reset per decision 8)                                                                                                                                                                                                                                      | S                              |
-| P1-6 Rate limit + lockout                                         | DB storage on in prod + ≤10-fail lockout logic + prune job                                                                                                                                                                                                                                        | M                              |
-| P1-7 Security headers + nonce CSP                                 | HSTS/nosniff/frame-ancestors/Permissions-Policy + middleware nonce                                                                                                                                                                                                                                | M                              |
-| P1-8 Enumeration + reset hardening                                | `requireEmailVerification:true`, `revokeSessionsOnPasswordReset:true`, explicit `baseURL`, no-wildcard `trustedOrigins`                                                                                                                                                                           | S                              |
-| P1-9 Auth audit events                                            | Wire events into `audit_events` + `meta` scrubbing boundary + retention purge job                                                                                                                                                                                                                 | M                              |
-| P1-10 CI regression guards                                        | Authz matrix, PII projection, route census, migration safety, no-migrate-in-build, pin-guard, `--frozen-lockfile`, CodeQL, gitleaks                                                                                                                                                               | L                              |
-| P1-11 Auth-flow tests                                             | `getTestInstance` tests for 2FA/passkey/change-email/session/reset                                                                                                                                                                                                                                | M                              |
-| P1-12 Observability wiring                                        | `@vercel/otel` traces + hand-rolled OTLP metrics/logs push (delta + flush) → Grafana Cloud free; auth panels + alert rules + Telegram/Slack contact points; synthetics + Better Stack                                                                                                             | L                              |
-| P1-13 Secret-rotation runbook                                     | 1.5 versioned-secret rotation documented; single-source env doc; `PGCRYPTO_KEY` versioned-key scheme                                                                                                                                                                                              | M                              |
-| P1-14a Passkey `origin` spike (**GATES P1-14b**)                  | Resolve decision 13: does the plugin `origin` accept an ARRAY or only a single string? + verify cross-instance counter/replay atomicity. **A single-string result forces a topology revisit (one central auth service) that is OUT of the P1-14b budget** — sequence this first                   | S                              |
-| P1-14b Passkey plugin                                             | `@better-auth/passkey`, rpID=apex, discoverable + conditional UI. **Size is CONDITIONAL on the P1-14a spike:** M only if the array/multi-origin path holds; a single-string outcome invalidates the mounted-per-app shape (§2.1) and makes the size unknowable until re-scoped                    | M (conditional)                |
-| P1-15 Kill-switch                                                 | DB-backed maintenance/read-only flag + per-capability disable + revoke-all broadcast (§8.11)                                                                                                                                                                                                      | M                              |
-| P1-16 New-device notification                                     | Wire the existing builder + add device-fingerprint column (compromise tripwire, actor 3)                                                                                                                                                                                                          | M                              |
-| P1-17 `requireMembership` funnel + cross-tenant tests             | Single tenant-scoping gate; adversarial cross-camp read tests (§9.3)                                                                                                                                                                                                                              | M                              |
-| P1-18 PII-strip helper (build now, IdP-reused)                    | One unconditional `@quagga/core` hard-lock stripper for `/api/me` and first-party (§9.4)                                                                                                                                                                                                          | S                              |
-| P1-19a POPIA engineering deliverables                             | `security.txt` (RFC 9116) + `SECURITY.md` + GitHub Private Vulnerability Reporting intake (§8.9). (Encryption fixes tracked separately in P1-20; ID/passport is decision 10.)                                                                                                                     | S                              |
-| P1-19b POPIA org/legal artefacts (**EXTERNAL — not engineering**) | Processing register, **Information Officer registration with the SA Information Regulator**, PAIA manual (§8.7). **Blocked on §11 decision 16** (has AfrikaBurn already registered an IO?); IO registration is a **Regulator process with its own lead time**, not completable in an eng day-size | — (external / no eng day-size) |
-| P1-20 Fix medical-notes encryption                                | Field-level encrypt `medical_notes` to match ID/passport (§8.3)                                                                                                                                                                                                                                   | S                              |
-
-### Phase 2 — before third-party IdP (parked; revisit when Part 2 revives)
-
-| Task                                          | Scope                                                                                                | Size         |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------ |
-| P2-1 OAuth 2.1 Provider spike                 | Validate the 1.5 provider on a separate deployment; check issue #7558 class                          | M            |
-| P2-2 Decide IdP topology                      | Same-instance plugin vs separate deployment (conflict, §11)                                          | S (decision) |
-| P2-3 Client registration console              | Org "Integrations" page: secrets hashed/rotated, redirect URIs, PKCE, scopes, consent, revoke, audit | L            |
-| P2-4 `/api/me` scoped endpoint                | Least-privilege claims + the P1-18 hard-locked strip at the boundary                                 | M            |
-| P2-5 god bootstrap federated-claim refusal    | Ensure god elevation refuses federated `email_verified` (§9.2)                                       | S            |
-| P2-6 Device-keypair attestation model         | If logistics phase lands: device-held keypairs replacing server-held `profile_keys` (§9.5)           | L            |
-| P2-7 Related Origin Requests (only if needed) | `/.well-known/webauthn` allowlist if truly different registrable domains must share passkeys         | S            |
-
-_Sizes: S ≈ <1d, M ≈ 1–2d, L ≈ 3–5d. All INFERRED sizing._
-
----
-
-_End of plan of record. Where this document and any earlier research conflict,
-this document wins for the auth-platform decision; `docs/build-spec.md` still wins for general
-engineering per AGENTS.md._
+**Closed since:** the identity/profile table boundary (Better Auth's `user`
+table sits beside `users`); the version pin (1.6.25); rate-limit storage
+(database, shared across lambdas); whether to keep the capability layer (kept,
+as the kill-switch surface in §8.11); whether 2FA and passkeys are launch
+requirements (both shipped); ID/passport storage (collected under a documented
+lawful purpose, pgcrypto-encrypted); and the medical-notes encryption inversion
+(fixed — `medical_notes` is ciphertext, and is dropped rather than persisted
+when `PGCRYPTO_KEY` is unset).
