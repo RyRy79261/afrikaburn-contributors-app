@@ -108,7 +108,7 @@ Three things that will otherwise stop you:
 pnpm turbo run lint typecheck test build   # the fast gate — never runs a browser
 pnpm e2e:local                             # the other gate — 8 personas, from cold
 pnpm e2e:local specs/new-burner            # ...or just one
-pnpm test:coverage                         # coverage floors for @quagga/core
+pnpm test:coverage                         # coverage floors — all 8 workspaces
 ```
 
 ## Stack
@@ -141,7 +141,7 @@ action cannot disagree.
 |                          |                                   |                                 |                             |
 | ------------------------ | --------------------------------- | ------------------------------- | --------------------------- |
 | **125k** lines of TS/TSX | **44** tables · **29** migrations | **72** routes across 3 apps     | **51** shared UI components |
-| **1,237** unit tests     | **165** e2e tests · 8 personas    | **92%** line coverage in `core` | **116** design frames       |
+| **2,662** unit tests     | **165** e2e tests · 8 personas    | **8** workspaces with coverage floors | **116** design frames |
 
 Started 22 July 2026. Public repo, so: no real personal contact data, and no
 naming real businesses in negative demo states.
