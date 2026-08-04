@@ -18,7 +18,11 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-import { StructuredReportSchema, type ReportType, type StructuredReport } from "../report";
+import {
+  StructuredReportSchema,
+  type ReportType,
+  type StructuredReport,
+} from "../report";
 
 /**
  * Opus 5, deliberately, for a call that runs at most a handful of times a day.
@@ -52,7 +56,8 @@ const OUTPUT_SCHEMA = {
   properties: {
     title: {
       type: "string",
-      description: "Concise issue title, at most about 100 characters. No '[Bug]' prefix.",
+      description:
+        "Concise issue title, at most about 100 characters. No '[Bug]' prefix.",
     },
     summary: {
       type: "string",
@@ -61,9 +66,13 @@ const OUTPUT_SCHEMA = {
     stepsToReproduce: {
       type: "array",
       items: { type: "string" },
-      description: "Ordered reproduction steps. Omit unless the reporter gave them.",
+      description:
+        "Ordered reproduction steps. Omit unless the reporter gave them.",
     },
-    expected: { type: "string", description: "What the reporter expected to happen." },
+    expected: {
+      type: "string",
+      description: "What the reporter expected to happen.",
+    },
     actual: { type: "string", description: "What actually happened." },
   },
   required: ["title", "summary"],
@@ -125,7 +134,10 @@ export async function structureReport(
     return validated.success ? validated.data : null;
   } catch (error) {
     // Never fatal. The report is already in hand and gets filed either way.
-    console.error("[report] structuring failed; filing from the template:", error);
+    console.error(
+      "[report] structuring failed; filing from the template:",
+      error,
+    );
     return null;
   }
 }

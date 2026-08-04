@@ -18,7 +18,8 @@ vi.mock("@/lib/db", async () => {
   return { ...actual, getDb: () => current().handle };
 });
 
-const { getEditionLabel, FALLBACK_EDITION_LABEL } = await import("@/lib/edition");
+const { getEditionLabel, FALLBACK_EDITION_LABEL } =
+  await import("@/lib/edition");
 
 const ACTIVE = {
   name: "AfrikaBurn 2027",
@@ -78,7 +79,9 @@ describe("getEditionLabel", () => {
       db.rows("editions", [ACTIVE]);
       // 26 April, not 25 — which is what a local-timezone parse prints for a
       // reader behind UTC.
-      expect(await getEditionLabel()).toBe("AfrikaBurn 2027 · 26 April – 2 May");
+      expect(await getEditionLabel()).toBe(
+        "AfrikaBurn 2027 · 26 April – 2 May",
+      );
     } finally {
       process.env.TZ = original;
     }

@@ -219,7 +219,12 @@ describe("previewAudienceCount", () => {
 
   it("refuses a PROJECT audience — those are authored from the camp dashboard", async () => {
     const result = await previewAudienceCount({
-      audience: { kind: "project", groupId: "g", mode: "everyone", roleIds: [] },
+      audience: {
+        kind: "project",
+        groupId: "g",
+        mode: "everyone",
+        roleIds: [],
+      },
       editionId: EDITION_ID,
     });
     expect(result).toEqual({
@@ -271,7 +276,12 @@ describe("activateQuestionnaire", () => {
 
   it("refuses a definition that cannot be sent from the console", async () => {
     db.seed("questionnaire_definitions", [
-      { key: "camp-survey", version: "1", status: "published", definition: DEFINITION },
+      {
+        key: "camp-survey",
+        version: "1",
+        status: "published",
+        definition: DEFINITION,
+      },
     ]);
     await expect(
       activateQuestionnaire({ ...INPUT, questionnaireKey: "camp-survey" }),

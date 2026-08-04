@@ -76,8 +76,9 @@ describe("ReportLauncher", () => {
     await screen.findByRole("dialog");
     // With no GROQ_API_KEY the microphone must be hidden, not offered and then
     // refused.
-    expect(screen.queryByRole("button", { name: /Dictate|microphone/i }))
-      .toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Dictate|microphone/i }),
+    ).toBeNull();
   });
 });
 
@@ -113,7 +114,9 @@ describe("ReportSettingsCard", () => {
     // The two choice buttons are display:none'd rather than unmounted, which
     // takes them out of the tab order and the accessibility tree in a real
     // browser. jsdom loads no Tailwind, so the class is what is observable.
-    const choices = screen.getByText("Report a bug").closest("div") as HTMLElement;
+    const choices = screen
+      .getByText("Report a bug")
+      .closest("div") as HTMLElement;
     expect(choices.className).toContain("hidden");
     // The disclosure survives the feature being off — what a report WOULD
     // attach is still the question being answered.

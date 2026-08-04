@@ -49,7 +49,11 @@ import {
   type OrgDomain,
 } from "../org-domains";
 import { canViewMedicalNotes, isOrgStaffRole } from "../medical-access";
-import { ORG_APP_ROLES, MembershipRole, type OrgPermissions } from "@quagga/types";
+import {
+  ORG_APP_ROLES,
+  MembershipRole,
+  type OrgPermissions,
+} from "@quagga/types";
 
 /** A role grant, defaulting to org-wide + nothing granted. */
 function role(
@@ -279,7 +283,10 @@ describe("THE RESOLUTION MATRIX, longhand", () => {
   });
 
   it("lists an actor's capabilities consistently with orgCan", () => {
-    const a = actor("engineer", [seeded("engineer"), role("d", { delete: true })]);
+    const a = actor("engineer", [
+      seeded("engineer"),
+      role("d", { delete: true }),
+    ]);
     const listed = new Set(orgCapabilitiesFor(a));
     for (const capability of ORG_CAPABILITIES) {
       expect(listed.has(capability)).toBe(orgCan(a, capability));
@@ -489,7 +496,9 @@ describe("department scoping — what a department OWNS is what it reaches", () 
     expect(canReadPersonalInformationIn(suppliersLead, "registrations")).toBe(
       false,
     );
-    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(
+      false,
+    );
     // …and symmetrically, so the rule is a boundary rather than a special case.
     expect(canReadPersonalInformationIn(campsLead, "registrations")).toBe(true);
     expect(canReadPersonalInformationIn(campsLead, "suppliers")).toBe(false);
@@ -543,7 +552,9 @@ describe("department scoping — what a department OWNS is what it reaches", () 
     // action question are different questions, and only one of them is scoped.
     expect(orgCan(suppliersLead, "delete")).toBe(true);
     expect(canReadPersonalInformationAnywhere(suppliersLead)).toBe(true);
-    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(
+      false,
+    );
     expect(canReadPersonalInformationIn(suppliersLead, "registrations")).toBe(
       false,
     );
@@ -583,7 +594,11 @@ describe("department scoping — what a department OWNS is what it reaches", () 
     // Move suppliers to Theme camps and the same roles resolve differently with
     // no role edit at all — which is the point of ownership being data.
     const moved = buildDomainOwnership([
-      { domain: "suppliers", departmentId: CAMPS, departmentName: "Theme camps" },
+      {
+        domain: "suppliers",
+        departmentId: CAMPS,
+        departmentName: "Theme camps",
+      },
     ]);
     const lead = actor(
       "org_staff",
@@ -619,7 +634,9 @@ describe("department scoping — what a department OWNS is what it reaches", () 
 describe("personal information", () => {
   it("is a role grant now — the seeded Engineer does not hold it", () => {
     expect(
-      canReadPersonalInformationAnywhere(actor("engineer", [seeded("engineer")])),
+      canReadPersonalInformationAnywhere(
+        actor("engineer", [seeded("engineer")]),
+      ),
     ).toBe(false);
     expect(
       canReadPersonalInformationAnywhere(
@@ -642,7 +659,8 @@ describe("personal information", () => {
     const widened = actor("engineer", [
       role("engineer", {
         read: true,
-        create: true, update: true,
+        create: true,
+        update: true,
         personal_information: true,
       }),
     ]);
@@ -668,7 +686,8 @@ describe("personal information", () => {
     const staff = actor("org_staff", [
       role("engineer", {
         read: true,
-        create: true, update: true,
+        create: true,
+        update: true,
         personal_information: true,
       }),
     ]);
@@ -785,9 +804,7 @@ describe("refusals", () => {
     expect(orgCapabilityRefusal(engineer, "personal_information")).toMatch(
       /personal information/i,
     );
-    expect(orgCapabilityRefusal(engineer, "update")).toMatch(
-      /system manager/i,
-    );
+    expect(orgCapabilityRefusal(engineer, "update")).toMatch(/system manager/i);
     // Administering rights is the RANK, so it has its own refusal rather than
     // an arm in the capability one.
     expect(systemManagerRefusal("edit roles")).toMatch(/not be granted/i);
@@ -1023,8 +1040,12 @@ describe("consequence copy — what an editor is actually deciding", () => {
   it("every capability has a label, a consequence and a description", () => {
     for (const capability of ORG_CAPABILITIES) {
       expect(ORG_CAPABILITY_LABELS[capability]).toBeTruthy();
-      expect(ORG_CAPABILITY_CONSEQUENCES[capability].length).toBeGreaterThan(10);
-      expect(ORG_CAPABILITY_DESCRIPTIONS[capability].length).toBeGreaterThan(30);
+      expect(ORG_CAPABILITY_CONSEQUENCES[capability].length).toBeGreaterThan(
+        10,
+      );
+      expect(ORG_CAPABILITY_DESCRIPTIONS[capability].length).toBeGreaterThan(
+        30,
+      );
     }
   });
 

@@ -54,10 +54,12 @@ test.describe("the system panel belongs to IT, not to the operator tier", () => 
     // The nav entry is there for this rank — the page and the bar read one
     // predicate, so if the page renders and the entry is missing, they disagree.
     await expect(
-      engineer.org.getByRole("navigation", { name: /console/i }).getByRole("link", {
-        name: "System",
-        exact: true,
-      }),
+      engineer.org
+        .getByRole("navigation", { name: /console/i })
+        .getByRole("link", {
+          name: "System",
+          exact: true,
+        }),
     ).toBeVisible();
 
     // The two panels the brief asked for, both actually rendered.

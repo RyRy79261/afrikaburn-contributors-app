@@ -11,10 +11,7 @@ export { configureLocalProxy } from "./local-proxy";
 // Shared by @quagga/auth's session-create hook AND apps/web's explicit Cancel
 // button, so "signing in cancels it" and "pressing Cancel cancels it" cannot
 // drift into two different behaviours.
-export {
-  cancelPendingDeletion,
-  type CancelDeletionResult,
-} from "./deletion";
+export { cancelPendingDeletion, type CancelDeletionResult } from "./deletion";
 // Server actions that call `auth.api.*` in-process skip Better Auth's HTTP
 // limiter entirely; this is the counter that covers them.
 export {
@@ -132,7 +129,8 @@ function makeLocalReadPool(): Pool {
  * evidence. Counting the statements one render actually issues settled it in a
  * single run. Prefix is greppable on purpose (`grep -c '\[sql\]'`).
  */
-function sqlLogger(): { logQuery(query: string, params: unknown[]): void } | undefined {
+function sqlLogger():
+  { logQuery(query: string, params: unknown[]): void } | undefined {
   if (process.env.QUAGGA_SQL_LOG !== "1") return undefined;
   return {
     logQuery(query: string) {

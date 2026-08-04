@@ -137,7 +137,10 @@ describe("applyCampAction — the decision_reason invariant", () => {
       }),
     ).toEqual({ ok: true, status: "submitted", registrationId: REGISTRATION });
 
-    const set = dbMock.onlyQuery("update").arg("set") as Record<string, unknown>;
+    const set = dbMock.onlyQuery("update").arg("set") as Record<
+      string,
+      unknown
+    >;
     expect(set.decisionReason).toBeNull();
     expect(set.status).toBe("submitted");
     expect(set.submittedAt).toBeInstanceOf(Date);
@@ -162,7 +165,10 @@ describe("applyCampAction — the decision_reason invariant", () => {
       }),
     ).toMatchObject({ ok: true, status: "withdrawn" });
 
-    const set = dbMock.onlyQuery("update").arg("set") as Record<string, unknown>;
+    const set = dbMock.onlyQuery("update").arg("set") as Record<
+      string,
+      unknown
+    >;
     expect(set.decisionReason).toBeNull();
     expect(set).not.toHaveProperty("submittedAt");
   });
@@ -188,7 +194,10 @@ describe("applyCampAction — the decision_reason invariant", () => {
         editionId: EDITION,
         action: "submit",
       }),
-    ).toEqual({ ok: false, error: "Complete all six sections before submitting." });
+    ).toEqual({
+      ok: false,
+      error: "Complete all six sections before submitting.",
+    });
     expect(dbMock.queriesOfKind("update")).toHaveLength(0);
   });
 
@@ -466,9 +475,27 @@ describe("the read helpers", () => {
 
   it("listSuppliersForPicker EXCLUDES suspended suppliers", async () => {
     dbMock.queue([
-      { id: "s-1", name: "Bakkie Hire", services: "Vehicles", standing: "good", steps: null },
-      { id: "s-2", name: "LosKop Catering", services: "Food", standing: "suspended", steps: {} },
-      { id: "s-3", name: "Watch Co", services: "Gear", standing: "watch", steps: {} },
+      {
+        id: "s-1",
+        name: "Bakkie Hire",
+        services: "Vehicles",
+        standing: "good",
+        steps: null,
+      },
+      {
+        id: "s-2",
+        name: "LosKop Catering",
+        services: "Food",
+        standing: "suspended",
+        steps: {},
+      },
+      {
+        id: "s-3",
+        name: "Watch Co",
+        services: "Gear",
+        standing: "watch",
+        steps: {},
+      },
     ]);
 
     const options = await listSuppliersForPicker(EDITION);

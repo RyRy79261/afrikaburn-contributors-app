@@ -33,8 +33,7 @@ export interface PasswordAssessment {
 }
 
 export type ChangePasswordResult =
-  | { ok: true; message?: string }
-  | { ok: false; error: string };
+  { ok: true; message?: string } | { ok: false; error: string };
 
 export function AccountChangePassword({
   minLength,

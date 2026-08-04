@@ -119,7 +119,9 @@ async function notifyWranglerAssigned(
       const recipients = await db
         .select({ email: schema.users.email })
         .from(schema.users)
-        .where(inArray(schema.users.id, [...campUserIds, input.wranglerUserId]));
+        .where(
+          inArray(schema.users.id, [...campUserIds, input.wranglerUserId]),
+        );
       const to = recipients
         .map((r) => r.email)
         .filter((e): e is string => Boolean(e));
@@ -297,7 +299,9 @@ export async function unassignWrangler(
             eq(schema.wranglerAssignments.editionId, registration.editionId),
           ),
         )
-        .returning({ wranglerUserId: schema.wranglerAssignments.wranglerUserId });
+        .returning({
+          wranglerUserId: schema.wranglerAssignments.wranglerUserId,
+        });
       if (removed.length === 0) {
         throw new Error("That camp doesn't have a wrangler to remove.");
       }

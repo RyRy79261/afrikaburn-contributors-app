@@ -184,7 +184,10 @@ function hostOf(url: string | undefined): string | null {
 /** True when the resolved base URL is actually served under our apex. */
 export function isUnderApex(env: AuthEnv): boolean {
   const host = hostOf(resolveBaseURL(env));
-  return host === AUTH_APEX_DOMAIN || (host?.endsWith(`.${AUTH_APEX_DOMAIN}`) ?? false);
+  return (
+    host === AUTH_APEX_DOMAIN ||
+    (host?.endsWith(`.${AUTH_APEX_DOMAIN}`) ?? false)
+  );
 }
 
 /**
@@ -284,7 +287,8 @@ export function resolveTrustedOrigins(env: AuthEnv): string[] {
  */
 export function authConfigWarnings(env: AuthEnv): string[] {
   const warnings: string[] = [];
-  const isProd = env.VERCEL_ENV === "production" || env.NODE_ENV === "production";
+  const isProd =
+    env.VERCEL_ENV === "production" || env.NODE_ENV === "production";
 
   if (!isAuthConfigured(env)) {
     warnings.push(

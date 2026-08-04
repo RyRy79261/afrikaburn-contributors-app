@@ -197,8 +197,9 @@ describe("decideRegistration", () => {
     await decideRegistration({ registrationId: REG_ID, action: "approve" });
 
     const [update] = db.recorded("update", "registrations");
-    expect((update?.values as { decisionReason: string | null }).decisionReason)
-      .toBeNull();
+    expect(
+      (update?.values as { decisionReason: string | null }).decisionReason,
+    ).toBeNull();
   });
 
   it("does not stamp decidedAt for a non-decision transition", async () => {
@@ -247,7 +248,11 @@ describe("decideRegistration", () => {
     // Deduplicated: one lead holding two rows must not be told twice.
     const rows = db.inserted("notifications") as { userId: string }[];
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ userId: "lead-1", origin: "org", linkApp: "web" });
+    expect(rows[0]).toMatchObject({
+      userId: "lead-1",
+      origin: "org",
+      linkApp: "web",
+    });
   });
 
   it("commits the decision even when the notification hook fails", async () => {

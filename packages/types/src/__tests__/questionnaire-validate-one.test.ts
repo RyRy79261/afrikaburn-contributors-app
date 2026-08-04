@@ -75,7 +75,10 @@ describe("validateOne — email", () => {
   });
 
   it("refuses a non-string before it reaches the regex", () => {
-    expect(validateOne(EMAIL, 5)).toEqual({ ok: false, error: "Expected text" });
+    expect(validateOne(EMAIL, 5)).toEqual({
+      ok: false,
+      error: "Expected text",
+    });
   });
 });
 
@@ -291,9 +294,9 @@ describe("validateOne — time", () => {
 
 describe("validateOne — file_link", () => {
   it("stores the TRIMMED url", () => {
-    expect(validateOne(FILE_LINK, "  https://example.com/layout.pdf  ")).toEqual(
-      { ok: true, value: "https://example.com/layout.pdf" },
-    );
+    expect(
+      validateOne(FILE_LINK, "  https://example.com/layout.pdf  "),
+    ).toEqual({ ok: true, value: "https://example.com/layout.pdf" });
   });
 
   it("refuses a non-http scheme and a non-string", () => {
@@ -427,7 +430,9 @@ describe("validateOne — exhaustiveness over the question union", () => {
     for (const { question, answer } of KIND_SAMPLES) {
       const result = validateOne(question, answer);
       expect(result, `no result for kind ${question.kind}`).toBeDefined();
-      expect(result.ok, `sample answer refused for ${question.kind}`).toBe(true);
+      expect(result.ok, `sample answer refused for ${question.kind}`).toBe(
+        true,
+      );
     }
   });
 });

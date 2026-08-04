@@ -33,9 +33,8 @@ vi.mock("@/lib/db", async () => {
 });
 
 const { getAuthenticatedUser } = await import("@/lib/auth");
-const { resolveSupplierSession, requireSupplierSession } = await import(
-  "@/lib/session"
-);
+const { resolveSupplierSession, requireSupplierSession } =
+  await import("@/lib/session");
 
 const VERIFIED: AuthenticatedUser = {
   id: "auth-alice",
@@ -69,7 +68,9 @@ beforeEach(() => {
   // branch below is the one the app actually takes.
   vi.stubEnv("DATABASE_URL", "postgres://stub/does-not-connect");
   vi.mocked(getAuthenticatedUser).mockResolvedValue(VERIFIED);
-  db.rows("users", [{ id: "user-alice", email: VERIFIED.primaryEmail, sanitizedAt: null }]);
+  db.rows("users", [
+    { id: "user-alice", email: VERIFIED.primaryEmail, sanitizedAt: null },
+  ]);
   db.rows("editions", [{ id: "ed-2027", name: "AfrikaBurn 2027", year: 2027 }]);
 });
 
@@ -242,7 +243,11 @@ describe("resolveSupplierSession", () => {
   });
 
   it("falls back to the most recent edition when none is marked active", async () => {
-    db.rows("editions", [], [{ id: "ed-2026", name: "AfrikaBurn 2026", year: 2026 }]);
+    db.rows(
+      "editions",
+      [],
+      [{ id: "ed-2026", name: "AfrikaBurn 2026", year: 2026 }],
+    );
     db.rows("suppliers", [listing()]);
     db.rows("supplier_onboarding", [{ steps: {} }]);
 
@@ -300,7 +305,11 @@ describe("resolveSupplierSession", () => {
     // would otherwise pass every assertion above.
     const at = new Date("2026-07-01T08:30:00.000Z");
     db.rows("users", [
-      { id: "user-alice", email: VERIFIED.primaryEmail, sanitizedAt: pgTimestamp(at) },
+      {
+        id: "user-alice",
+        email: VERIFIED.primaryEmail,
+        sanitizedAt: pgTimestamp(at),
+      },
     ]);
 
     expect((await resolveSupplierSession()).kind).toBe("unauthenticated");
@@ -313,7 +322,10 @@ describe("requireSupplierSession", () => {
     // state — "you have no listing" and "you are signed out" are the same
     // refusal to a caller who should not learn which.
     const cases: [string, () => void][] = [
-      ["unauthenticated", () => vi.mocked(getAuthenticatedUser).mockResolvedValue(null)],
+      [
+        "unauthenticated",
+        () => vi.mocked(getAuthenticatedUser).mockResolvedValue(null),
+      ],
       ["not_ready", () => vi.stubEnv("DATABASE_URL", "")],
       ["unlinked", () => db.rows("suppliers", [], [])],
     ];
@@ -326,7 +338,9 @@ describe("requireSupplierSession", () => {
       db.rows("users", [
         { id: "user-alice", email: VERIFIED.primaryEmail, sanitizedAt: null },
       ]);
-      db.rows("editions", [{ id: "ed-2027", name: "AfrikaBurn 2027", year: 2027 }]);
+      db.rows("editions", [
+        { id: "ed-2027", name: "AfrikaBurn 2027", year: 2027 },
+      ]);
       arrange();
 
       await expect(requireSupplierSession()).rejects.toThrow(

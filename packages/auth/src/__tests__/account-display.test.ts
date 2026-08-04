@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 
-import { deviceLabel, describeSignInMethods, type LinkedAccount } from "../account";
+import {
+  deviceLabel,
+  describeSignInMethods,
+  type LinkedAccount,
+} from "../account";
 
 // THE TWO PURE FUNCTIONS THE ACCOUNT SECURITY PAGE PUTS IN FRONT OF A DECISION.
 //
@@ -38,13 +42,23 @@ describe("deviceLabel", () => {
   });
 
   it("resolves every OS it models, and names the gap otherwise", () => {
-    expect(deviceLabel("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toContain("Android");
-    expect(deviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)")).toContain("iOS");
+    expect(deviceLabel("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toContain(
+      "Android",
+    );
+    expect(
+      deviceLabel("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"),
+    ).toContain("iOS");
     // An iPad is iOS too — a separate label here would split one person's two
     // Apple devices into two vocabularies for no benefit.
-    expect(deviceLabel("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)")).toContain("iOS");
-    expect(deviceLabel("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toContain("macOS");
-    expect(deviceLabel("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toContain("Windows");
+    expect(
+      deviceLabel("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)"),
+    ).toContain("iOS");
+    expect(
+      deviceLabel("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"),
+    ).toContain("macOS");
+    expect(deviceLabel("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toContain(
+      "Windows",
+    );
     expect(deviceLabel("Mozilla/5.0 (X11; Linux x86_64)")).toContain("Linux");
     expect(deviceLabel("curl/8.5.0")).toContain("Unknown OS");
   });
@@ -60,7 +74,9 @@ describe("deviceLabel", () => {
     ).toBe("Safari on macOS");
     // Not "Unknown browser": the sentence reads "browser on Linux", which is
     // honest about knowing the platform and not the client.
-    expect(deviceLabel("curl/8.5.0 (X11; Linux x86_64)")).toBe("browser on Linux");
+    expect(deviceLabel("curl/8.5.0 (X11; Linux x86_64)")).toBe(
+      "browser on Linux",
+    );
   });
 
   it("is case-insensitive, because a user agent is not a controlled string", () => {
@@ -92,18 +108,24 @@ describe("describeSignInMethods", () => {
   it("orders Email, then Google, then anything else, whatever the input order", () => {
     // The order is the product's, not the database's: two accounts that linked
     // the same two methods in a different sequence must read identically.
-    expect(describeSignInMethods(linked("google", "credential"))).toBe("Email, Google");
-    expect(describeSignInMethods(linked("credential", "google"))).toBe("Email, Google");
-    expect(describeSignInMethods(linked("github", "google", "credential"))).toBe(
-      "Email, Google, Github",
+    expect(describeSignInMethods(linked("google", "credential"))).toBe(
+      "Email, Google",
     );
+    expect(describeSignInMethods(linked("credential", "google"))).toBe(
+      "Email, Google",
+    );
+    expect(
+      describeSignInMethods(linked("github", "google", "credential")),
+    ).toBe("Email, Google, Github");
   });
 
   it("de-duplicates two accounts on the same provider into one label", () => {
     // Better Auth can hold more than one `credential` row; "Email, Email" would
     // read as two independent ways in and make the last-method guard's warning
     // look wrong.
-    expect(describeSignInMethods(linked("credential", "credential"))).toBe("Email");
+    expect(describeSignInMethods(linked("credential", "credential"))).toBe(
+      "Email",
+    );
   });
 
   it("title-cases an unmapped provider rather than dropping it", () => {
@@ -111,6 +133,8 @@ describe("describeSignInMethods", () => {
     // what the last-method guard needs. "unknown" is the ONLY value discarded,
     // because it names an absence rather than a provider.
     expect(describeSignInMethods(linked("github"))).toBe("Github");
-    expect(describeSignInMethods(linked("credential", "unknown"))).toBe("Email");
+    expect(describeSignInMethods(linked("credential", "unknown"))).toBe(
+      "Email",
+    );
   });
 });

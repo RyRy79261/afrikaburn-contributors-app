@@ -34,7 +34,11 @@ const QN = Questionnaire.parse({
       questions: [
         { id: "name", kind: "short_text", prompt: "Your name" },
         { id: "aside", kind: "info_block", body: "We only ask once." },
-        { id: "attended", kind: "years", prompt: "Which burns have you been to?" },
+        {
+          id: "attended",
+          kind: "years",
+          prompt: "Which burns have you been to?",
+        },
       ],
     },
     {
@@ -96,9 +100,7 @@ describe("validateResponses — normalisation", () => {
   it("collects an error for EVERY failing question, keyed by question id", () => {
     // Stopping at the first failure would make a respondent fix one field per
     // round trip.
-    expect(
-      validateResponses(QN, { name: "", contact_email: "nope" }),
-    ).toEqual({
+    expect(validateResponses(QN, { name: "", contact_email: "nope" })).toEqual({
       ok: false,
       errors: {
         name: "This question is required",
@@ -114,7 +116,10 @@ describe("validateResponses — normalisation", () => {
         { id: "only", kind: "intro", heading: "Hello", body: "Nothing to do." },
       ],
     });
-    expect(validateResponses(introOnly, {})).toEqual({ ok: true, responses: {} });
+    expect(validateResponses(introOnly, {})).toEqual({
+      ok: true,
+      responses: {},
+    });
   });
 });
 

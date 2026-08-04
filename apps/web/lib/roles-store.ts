@@ -718,7 +718,8 @@ export async function pendingOfficerConsents(
       groupId: r.groupId,
       groupName: r.groupName,
       groupSlug: r.groupSlug,
-      consent: r.consent === "accepted" ? ("accepted" as const) : ("pending" as const),
+      consent:
+        r.consent === "accepted" ? ("accepted" as const) : ("pending" as const),
     }));
 }
 

@@ -115,7 +115,11 @@ function count(value: unknown): number | null {
 
 /** The layout diagram(s). Capped at four, matching the wizard's own limit. */
 function urls(value: unknown): string[] | null {
-  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? [value]
+      : [];
   const cleaned = raw
     .filter((v): v is string => typeof v === "string")
     .map((v) => v.trim())

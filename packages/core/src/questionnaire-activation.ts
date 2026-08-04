@@ -97,7 +97,9 @@ export interface RequiredActionCompletion {
 }
 
 /** Build the completion patch for a submitted response (default now). */
-export function completeRequiredAction(now: Date = new Date()): RequiredActionCompletion {
+export function completeRequiredAction(
+  now: Date = new Date(),
+): RequiredActionCompletion {
   return { status: "completed", completedAt: now };
 }
 

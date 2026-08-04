@@ -46,10 +46,12 @@ describe("org role kinds mirror the camp side", () => {
   it("pins a department's seeded roles to their department", () => {
     // A "Suppliers lead" role that could be re-pointed at Safety would be a
     // department-scoped grant that no longer describes a department.
-    expect(
-      canRescopeOrgRole({ kind: "system", departmentId: "dept-1" }),
-    ).toBe(false);
-    expect(canRescopeOrgRole({ kind: "system", departmentId: null })).toBe(true);
+    expect(canRescopeOrgRole({ kind: "system", departmentId: "dept-1" })).toBe(
+      false,
+    );
+    expect(canRescopeOrgRole({ kind: "system", departmentId: null })).toBe(
+      true,
+    );
     expect(canRescopeOrgRole({ kind: "custom", departmentId: "dept-1" })).toBe(
       true,
     );
@@ -59,7 +61,10 @@ describe("org role kinds mirror the camp side", () => {
 describe("the seeded system roles", () => {
   it("carry EXACTLY the rights the hardcoded ranks carried", () => {
     const byKey = Object.fromEntries(
-      SEEDED_ORG_ROLES.map((r) => [r.key, grantedOrgCapabilities(r.permissions)]),
+      SEEDED_ORG_ROLES.map((r) => [
+        r.key,
+        grantedOrgCapabilities(r.permissions),
+      ]),
     );
     // `write` became `create` + `update`, and `read_system` stopped being a
     // capability (it is the engineer/System manager RANK now — see
@@ -143,22 +148,24 @@ describe("names and keys", () => {
   it("disambiguates a taken key rather than colliding", () => {
     expect(uniqueDepartmentKey("suppliers", [])).toBe("suppliers");
     expect(uniqueDepartmentKey("suppliers", ["suppliers"])).toBe("suppliers_2");
-    expect(
-      uniqueDepartmentKey("suppliers", ["suppliers", "suppliers_2"]),
-    ).toBe("suppliers_3");
+    expect(uniqueDepartmentKey("suppliers", ["suppliers", "suppliers_2"])).toBe(
+      "suppliers_3",
+    );
   });
 
   it("namespaces a custom role's key so it can never look seeded", () => {
     expect(customOrgRoleKey("Bulletin editor", [])).toBe(
       "custom.bulletin_editor",
     );
-    expect(customOrgRoleKey("Bulletin editor", ["custom.bulletin_editor"])).toBe(
-      "custom.bulletin_editor_2",
-    );
+    expect(
+      customOrgRoleKey("Bulletin editor", ["custom.bulletin_editor"]),
+    ).toBe("custom.bulletin_editor_2");
   });
 
   it("normalises names case/space/punct-insensitively", () => {
-    expect(normalizeOrgName("Theme Camps")).toBe(normalizeOrgName("theme-camps"));
+    expect(normalizeOrgName("Theme Camps")).toBe(
+      normalizeOrgName("theme-camps"),
+    );
     expect(cleanOrgName("  Theme   camps ")).toBe("Theme camps");
   });
 

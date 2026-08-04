@@ -83,9 +83,7 @@ describe("AckRow", () => {
     const box = screen.getByRole("checkbox");
     fireEvent.click(box);
     expect(onChange).toHaveBeenCalled();
-    expect(
-      screen.getByText("I have read the supplier basics"),
-    ).toBeDefined();
+    expect(screen.getByText("I have read the supplier basics")).toBeDefined();
   });
 });
 

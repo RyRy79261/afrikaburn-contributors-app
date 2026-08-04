@@ -35,9 +35,7 @@ test.describe("org staff · bulletins", () => {
     await staff.org.goto("/bulletins/new");
     const title = uniqueName("Build week notice");
     const marker = `Bring closed shoes ${Date.now().toString(36)}`;
-    await staff.org
-      .getByPlaceholder(/ticket resale window/i)
-      .fill(title);
+    await staff.org.getByPlaceholder(/ticket resale window/i).fill(title);
 
     // The body is a tiptap markdown editor (contenteditable, aria-labelled).
     const body = staff.org.getByRole("textbox", { name: /bulletin body/i });
@@ -46,9 +44,7 @@ test.describe("org staff · bulletins", () => {
 
     // Audience picker (the AudienceSelect trigger carries id="bulletin-audience").
     await staff.org.locator("#bulletin-audience").click();
-    await staff.org
-      .getByRole("option", { name: "Theme camp leads" })
-      .click();
+    await staff.org.getByRole("option", { name: "Theme camp leads" }).click();
 
     await staff.org.getByRole("button", { name: /publish bulletin/i }).click();
     await expect(staff.org.getByText(/bulletin published/i)).toBeVisible();

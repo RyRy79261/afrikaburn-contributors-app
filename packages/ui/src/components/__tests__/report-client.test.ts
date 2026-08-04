@@ -58,26 +58,32 @@ describe("submitReport", () => {
   it.each([
     ["no number", { url: "https://example.com/1" }],
     ["no url", { number: 7 }],
-    ["a number sent as a string", { url: "https://example.com/1", number: "7" }],
+    [
+      "a number sent as a string",
+      { url: "https://example.com/1", number: "7" },
+    ],
     ["a url sent as a number", { url: 1, number: 7 }],
     ["a null body", null],
-  ])("refuses a malformed 201 (%s) rather than half-building a response", async (
-    _label,
-    body,
-  ) => {
-    stubFetch({ json: async () => body });
-    // The alternative is "#undefined" and a dead link, which the reporter reads
-    // as "nothing happened" and then files again.
-    await expect(
-      submitReport({ type: "bug", description: "x" }),
-    ).rejects.toMatchObject({ name: "ReportError", code: "bad-response" });
-  });
+  ])(
+    "refuses a malformed 201 (%s) rather than half-building a response",
+    async (_label, body) => {
+      stubFetch({ json: async () => body });
+      // The alternative is "#undefined" and a dead link, which the reporter reads
+      // as "nothing happened" and then files again.
+      await expect(
+        submitReport({ type: "bug", description: "x" }),
+      ).rejects.toMatchObject({ name: "ReportError", code: "bad-response" });
+    },
+  );
 
   it("prefers the server's own error string and code", async () => {
     stubFetch({
       ok: false,
       status: 429,
-      json: async () => ({ error: "You've filed a few already today.", code: "rate-limited" }),
+      json: async () => ({
+        error: "You've filed a few already today.",
+        code: "rate-limited",
+      }),
     });
     const failure = await submitReport({ type: "bug", description: "x" }).catch(
       (e: unknown) => e,
@@ -108,7 +114,11 @@ describe("submitReport", () => {
   });
 
   it("falls back when the body is JSON but says nothing usable", async () => {
-    stubFetch({ ok: false, status: 500, json: async () => ({ error: 42, code: 9 }) });
+    stubFetch({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 42, code: 9 }),
+    });
     const err = (await submitReport({ type: "bug", description: "x" }).catch(
       (e: unknown) => e,
     )) as ReportError;
@@ -183,20 +193,20 @@ describe("transcribeRecording", () => {
     ["audio/mp4;codecs=mp4a.40.2", "dictation.mp4"],
     ["audio/webm;codecs=opus", "dictation.webm"],
     ["", "dictation.webm"],
-  ])("names an %s part %s so Whisper can identify the container", async (
-    type,
-    expected,
-  ) => {
-    const fetchMock = stubFetch({ json: async () => ({ text: "hello" }) });
-    await transcribeRecording(new Blob([new Uint8Array(8)], { type }));
+  ])(
+    "names an %s part %s so Whisper can identify the container",
+    async (type, expected) => {
+      const fetchMock = stubFetch({ json: async () => ({ text: "hello" }) });
+      await transcribeRecording(new Blob([new Uint8Array(8)], { type }));
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const form = init.body as FormData;
-    const part = form.get("audio") as File;
-    // Safari records mp4, everything else webm. Getting this wrong silently
-    // degrades every dictation on one platform.
-    expect(part.name).toBe(expected);
-  });
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const form = init.body as FormData;
+      const part = form.get("audio") as File;
+      // Safari records mp4, everything else webm. Getting this wrong silently
+      // degrades every dictation on one platform.
+      expect(part.name).toBe(expected);
+    },
+  );
 
   it("returns the transcript the server sent", async () => {
     stubFetch({ json: async () => ({ text: "the map is blank" }) });
@@ -220,7 +230,10 @@ describe("transcribeRecording", () => {
     stubFetch({
       ok: false,
       status: 503,
-      json: async () => ({ error: "Dictation isn't switched on.", code: "no-key" }),
+      json: async () => ({
+        error: "Dictation isn't switched on.",
+        code: "no-key",
+      }),
     });
     const err = (await transcribeRecording(
       new Blob(["x"], { type: "audio/webm" }),

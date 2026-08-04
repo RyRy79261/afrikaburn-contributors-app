@@ -4,9 +4,8 @@ import { boundStrings, dbMock } from "@/test/db-mock";
 import { resetNextMocks, revalidated } from "@/test/next-mocks";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
-vi.mock(
-  "next/cache",
-  async () => (await import("@/test/next-mocks")).nextCacheMock(),
+vi.mock("next/cache", async () =>
+  (await import("@/test/next-mocks")).nextCacheMock(),
 );
 
 const session = vi.hoisted(() => ({ user: null as unknown }));
@@ -27,9 +26,8 @@ const {
 } = await import("../notifications");
 const { getBulletinForCurrentUser, getPinnedBulletinsForCurrentUser } =
   await import("../bulletins");
-const { markNotificationRead, markAllNotificationsRead } = await import(
-  "../notifications-actions"
-);
+const { markNotificationRead, markAllNotificationsRead } =
+  await import("../notifications-actions");
 
 const USER = "cccccccc-0000-0000-0000-000000000001";
 const CAMP_USER = {
@@ -253,9 +251,9 @@ describe("bulletins — read-side audience enforcement", () => {
       },
     ]);
 
-    expect(
-      (await getPinnedBulletinsForCurrentUser()).map((b) => b.id),
-    ).toEqual([BULLETIN_ID]);
+    expect((await getPinnedBulletinsForCurrentUser()).map((b) => b.id)).toEqual(
+      [BULLETIN_ID],
+    );
   });
 
   it("both are empty signed out and env-less", async () => {
@@ -275,9 +273,9 @@ describe("notification actions — own rows only", () => {
   it("pins user_id to the authenticated user, so a forged id updates nothing", async () => {
     dbMock.queue([]);
 
-    expect(await markNotificationRead({ notificationId: NOTIFICATION_ID })).toEqual(
-      { ok: true },
-    );
+    expect(
+      await markNotificationRead({ notificationId: NOTIFICATION_ID }),
+    ).toEqual({ ok: true });
 
     const update = dbMock.writesTo(schema.notifications)[0]!;
     // The authenticated user's id is bound into the WHERE alongside the

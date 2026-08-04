@@ -46,7 +46,9 @@ describe("DismissiblePinnedBulletinBanner", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
 
-    rerender(<DismissiblePinnedBulletinBanner title="Gate opens" href="/b/1" />);
+    rerender(
+      <DismissiblePinnedBulletinBanner title="Gate opens" href="/b/1" />,
+    );
     // The dashboard around this re-renders constantly; a banner that came back
     // on every parent update would be unclosable in practice.
     expect(container.innerHTML).toBe("");

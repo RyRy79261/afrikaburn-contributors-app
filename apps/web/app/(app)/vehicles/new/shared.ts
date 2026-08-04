@@ -42,7 +42,9 @@ export const VehicleRegistrationInput = z.object({
   confirmWarnings: z.boolean().default(false),
 });
 
-export type VehicleRegistrationValues = z.infer<typeof VehicleRegistrationInput>;
+export type VehicleRegistrationValues = z.infer<
+  typeof VehicleRegistrationInput
+>;
 
 export type VehicleRegistrationActionResult =
   | { status: "created"; slug: string }

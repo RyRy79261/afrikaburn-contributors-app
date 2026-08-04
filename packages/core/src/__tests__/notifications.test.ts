@@ -54,8 +54,18 @@ function baseCtx(): AudienceContext {
       membership("campUnregLead", CAMP_UNREG, "lead"),
     ],
     registrations: [
-      { groupId: CAMP_REG, editionId: EDITION, status: "approved", grantsInterest: null },
-      { groupId: CAMP_UNREG, editionId: EDITION, status: "draft", grantsInterest: null },
+      {
+        groupId: CAMP_REG,
+        editionId: EDITION,
+        status: "approved",
+        grantsInterest: null,
+      },
+      {
+        groupId: CAMP_UNREG,
+        editionId: EDITION,
+        status: "draft",
+        grantsInterest: null,
+      },
     ],
     bios: [
       { userId: "campRegLead", editionId: EDITION },
@@ -107,7 +117,9 @@ describe("bulletin audience (shared resolver, second consumer)", () => {
       selectors: ["mv_grant_requesters"],
     };
     const userIds = resolveBulletinAudience(spec, baseCtx());
-    expect(buildBulletinNotifications({ bulletinId: "b-x", title: "x" }, userIds)).toEqual([]);
+    expect(
+      buildBulletinNotifications({ bulletinId: "b-x", title: "x" }, userIds),
+    ).toEqual([]);
   });
 });
 
@@ -140,17 +152,44 @@ describe("preview privacy — no hard-locked fields in any payload", () => {
   // deliberately carry NO secret so a leak could only come from a builder
   // echoing something it shouldn't. We assert the output mentions no secret.
   const payloads: NotificationPayload[] = [
-    registrationDecisionNotification({ campName: "Mad Hatters", decision: "approved", campSlug: "mad-hatters" }),
-    registrationDecisionNotification({ campName: "Karoo Kombuis", decision: "changes_requested" }),
-    registrationDecisionNotification({ campName: "Camp 404", decision: "rejected" }),
-    questionnaireReleasedNotification({ title: "Build week availability", blocking: true, activationId: "a-1" }),
+    registrationDecisionNotification({
+      campName: "Mad Hatters",
+      decision: "approved",
+      campSlug: "mad-hatters",
+    }),
+    registrationDecisionNotification({
+      campName: "Karoo Kombuis",
+      decision: "changes_requested",
+    }),
+    registrationDecisionNotification({
+      campName: "Camp 404",
+      decision: "rejected",
+    }),
+    questionnaireReleasedNotification({
+      title: "Build week availability",
+      blocking: true,
+      activationId: "a-1",
+    }),
     questionnaireReleasedNotification({ title: "Feedback", blocking: false }),
-    officerAssignmentRequestNotification({ officerLabel: "Safety Baron", campName: "Mad Hatters", campSlug: "mad-hatters" }),
-    officerAcceptedNotification({ officerLabel: "Fire Safety Officer", campName: "Mad Hatters" }),
-    wranglerAssignedNotification({ wranglerName: "Sipho", campName: "Mad Hatters" }),
+    officerAssignmentRequestNotification({
+      officerLabel: "Safety Baron",
+      campName: "Mad Hatters",
+      campSlug: "mad-hatters",
+    }),
+    officerAcceptedNotification({
+      officerLabel: "Fire Safety Officer",
+      campName: "Mad Hatters",
+    }),
+    wranglerAssignedNotification({
+      wranglerName: "Sipho",
+      campName: "Mad Hatters",
+    }),
     supplierStandingNotification({ standingLabel: "In Good Standing" }),
     supplierStepConfirmedNotification({ stepLabel: "Deposit received" }),
-    bulletinNotification({ bulletinTitle: "Ticket resale window opens", bulletinId: "b-1" }),
+    bulletinNotification({
+      bulletinTitle: "Ticket resale window opens",
+      bulletinId: "b-1",
+    }),
   ];
 
   it("no builder emits any hard-locked value", () => {
@@ -170,12 +209,18 @@ describe("preview privacy — no hard-locked fields in any payload", () => {
   });
 
   it("blank needles never false-positive", () => {
-    const payload = bulletinNotification({ bulletinTitle: "x", bulletinId: "b" });
+    const payload = bulletinNotification({
+      bulletinTitle: "x",
+      bulletinId: "b",
+    });
     expect(notificationMentionsAny(payload, ["", "   "])).toBe(false);
   });
 
   it("registration decision preview carries the camp name, not private contact", () => {
-    const p = registrationDecisionNotification({ campName: "Mad Hatters", decision: "approved" });
+    const p = registrationDecisionNotification({
+      campName: "Mad Hatters",
+      decision: "approved",
+    });
     expect(p.title).toContain("Mad Hatters");
     expect(notificationMentionsAny(p, SECRETS)).toBe(false);
   });
@@ -185,11 +230,17 @@ describe("preview privacy — no hard-locked fields in any payload", () => {
 
 describe("questionnaire release blocking flag", () => {
   it("flags blocking questionnaires explicitly", () => {
-    const p = questionnaireReleasedNotification({ title: "Build week", blocking: true });
+    const p = questionnaireReleasedNotification({
+      title: "Build week",
+      blocking: true,
+    });
     expect(p.title).toMatch(/REQUIRED/);
   });
   it("non-blocking releases carry no REQUIRED flag", () => {
-    const p = questionnaireReleasedNotification({ title: "Survey", blocking: false });
+    const p = questionnaireReleasedNotification({
+      title: "Survey",
+      blocking: false,
+    });
     expect(p.title).not.toMatch(/REQUIRED/);
   });
 });
@@ -201,12 +252,22 @@ describe("shouldSendImmediateEmail", () => {
     expect(shouldSendImmediateEmail("registration")).toBe(true);
   });
   it("sends for blocking questionnaires only", () => {
-    expect(shouldSendImmediateEmail("questionnaire", { blocking: true })).toBe(true);
-    expect(shouldSendImmediateEmail("questionnaire", { blocking: false })).toBe(false);
+    expect(shouldSendImmediateEmail("questionnaire", { blocking: true })).toBe(
+      true,
+    );
+    expect(shouldSendImmediateEmail("questionnaire", { blocking: false })).toBe(
+      false,
+    );
     expect(shouldSendImmediateEmail("questionnaire")).toBe(false);
   });
   it("never sends immediate email for bulletins, roles, suppliers, security, wrangler", () => {
-    for (const kind of ["bulletin", "role", "supplier", "security", "wrangler"] as const) {
+    for (const kind of [
+      "bulletin",
+      "role",
+      "supplier",
+      "security",
+      "wrangler",
+    ] as const) {
       expect(shouldSendImmediateEmail(kind)).toBe(false);
     }
   });

@@ -105,12 +105,16 @@ describe("security notifications", () => {
       newDeviceSignInNotification({ deviceLabel: "Chrome on macOS" }),
     ];
     for (const n of actionable) {
-      expect(`${n.title} ${n.body ?? ""}`.toLowerCase()).toContain("wasn't you");
+      expect(`${n.title} ${n.body ?? ""}`.toLowerCase()).toContain(
+        "wasn't you",
+      );
     }
   });
 
   it("phrases a REQUESTED email change without claiming anything changed", () => {
-    const n = emailChangeRequestedNotification({ newEmailMasked: "a…@example.com" });
+    const n = emailChangeRequestedNotification({
+      newEmailMasked: "a…@example.com",
+    });
     expect(n.body?.toLowerCase()).toContain("nothing has changed yet");
     expect(n.title.toLowerCase()).toContain("requested");
   });

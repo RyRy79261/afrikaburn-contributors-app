@@ -72,7 +72,10 @@ function queryStub(): Database {
   // Thenable, so both `await db.insert(...).values(...)` and
   // `await db.select(...).from(...).limit(1)` settle on the fixture.
   self.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
-    (dbError ? Promise.reject(dbError) : Promise.resolve(dbRows)).then(res, rej);
+    (dbError ? Promise.reject(dbError) : Promise.resolve(dbRows)).then(
+      res,
+      rej,
+    );
   return self as unknown as Database;
 }
 
@@ -155,7 +158,12 @@ describe("listAccountSessions", () => {
 
   it("sorts newest first on updatedAt, falling back to createdAt, then to 0", async () => {
     api.listSessions.mockResolvedValue([
-      { id: "stale", token: "a", updatedAt: "2026-01-03T00:00:00.000Z", createdAt: "2026-01-01T00:00:00.000Z" },
+      {
+        id: "stale",
+        token: "a",
+        updatedAt: "2026-01-03T00:00:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
       { id: "newest", token: "b", createdAt: "2026-01-05T00:00:00.000Z" },
       { id: "undated", token: "c" },
     ]);
@@ -199,7 +207,13 @@ describe("listAccountSessions", () => {
     // An Invalid Date renders as literal garbage in the session list; null
     // renders as the honest "unknown" the card already handles.
     api.listSessions.mockResolvedValue([
-      { id: "s1", token: "t", createdAt: "not-a-date", updatedAt: null, expiresAt: "2026-02-01T00:00:00.000Z" },
+      {
+        id: "s1",
+        token: "t",
+        createdAt: "not-a-date",
+        updatedAt: null,
+        expiresAt: "2026-02-01T00:00:00.000Z",
+      },
     ]);
     api.getSession.mockResolvedValue(null);
 
@@ -224,7 +238,12 @@ describe("listAccountSessions", () => {
 
   it("carries the user agent and IP through untouched for display", async () => {
     api.listSessions.mockResolvedValue([
-      { id: "s1", token: "t", userAgent: "Mozilla/5.0", ipAddress: "203.0.113.7" },
+      {
+        id: "s1",
+        token: "t",
+        userAgent: "Mozilla/5.0",
+        ipAddress: "203.0.113.7",
+      },
       { id: "s2", token: "u" },
     ]);
     api.getSession.mockResolvedValue(null);
@@ -268,7 +287,12 @@ describe("listAccountSessions", () => {
 describe("listAccountPasskeys", () => {
   it("emits createdAt as an ISO string and drops id-less rows", async () => {
     api.listPasskeys.mockResolvedValue([
-      { id: "pk1", name: "YubiKey", deviceType: "singleDevice", createdAt: "2026-03-04T05:06:07.000Z" },
+      {
+        id: "pk1",
+        name: "YubiKey",
+        deviceType: "singleDevice",
+        createdAt: "2026-03-04T05:06:07.000Z",
+      },
       { id: null, name: "ghost" },
       { id: "pk2", createdAt: "nonsense" },
     ]);
@@ -305,11 +329,15 @@ describe("listAccountPasskeys", () => {
 // --- Linked sign-in methods ----------------------------------------------
 
 describe("listLinkedAccounts", () => {
-  it("falls back providerId → provider → \"unknown\", and drops id-less rows", async () => {
+  it('falls back providerId → provider → "unknown", and drops id-less rows', async () => {
     // Better Auth has shipped both key spellings; picking one and ignoring the
     // other is how the sign-in-methods list silently empties itself.
     api.listUserAccounts.mockResolvedValue([
-      { id: "a1", providerId: "credential", createdAt: "2026-01-01T00:00:00.000Z" },
+      {
+        id: "a1",
+        providerId: "credential",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
       { id: "a2", provider: "google" },
       { id: "a3" },
       { providerId: "credential" },
@@ -322,7 +350,9 @@ describe("listLinkedAccounts", () => {
       ["a2", "google"],
       ["a3", "unknown"],
     ]);
-    expect(accounts[0]?.createdAt?.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(accounts[0]?.createdAt?.toISOString()).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
     expect(accounts[1]?.createdAt).toBeNull();
   });
 
@@ -335,7 +365,9 @@ describe("listLinkedAccounts", () => {
     api.listUserAccounts.mockResolvedValue(null);
     await expect(listLinkedAccounts(NO_HEADERS)).resolves.toEqual([]);
 
-    api.listUserAccounts.mockRejectedValue(new Error("auth server unreachable"));
+    api.listUserAccounts.mockRejectedValue(
+      new Error("auth server unreachable"),
+    );
     await expect(listLinkedAccounts(NO_HEADERS)).resolves.toEqual([]);
   });
 });
@@ -344,9 +376,13 @@ describe("listLinkedAccounts", () => {
 
 describe("resolveAccountUser", () => {
   it("returns the {id, authUserId, email} triple for a live account", async () => {
-    dbRows = [{ id: "user-uuid", email: "alice@example.com", sanitizedAt: null }];
+    dbRows = [
+      { id: "user-uuid", email: "alice@example.com", sanitizedAt: null },
+    ];
 
-    await expect(resolveAccountUser("auth-1", "alice@example.com")).resolves.toEqual({
+    await expect(
+      resolveAccountUser("auth-1", "alice@example.com"),
+    ).resolves.toEqual({
       id: "user-uuid",
       authUserId: "auth-1",
       // The stored email wins over the one the session carried — the row is the
@@ -358,15 +394,25 @@ describe("resolveAccountUser", () => {
   it("refuses a sanitized account, which a stale cookie cache can still present", async () => {
     // The session cookie cache lives for five minutes. Without this refusal a
     // deleted account reaches a surface that changes credentials.
-    dbRows = [{ id: "user-uuid", email: null, sanitizedAt: new Date("2026-02-01T00:00:00.000Z") }];
+    dbRows = [
+      {
+        id: "user-uuid",
+        email: null,
+        sanitizedAt: new Date("2026-02-01T00:00:00.000Z"),
+      },
+    ];
 
-    await expect(resolveAccountUser("auth-1", "alice@example.com")).resolves.toBeNull();
+    await expect(
+      resolveAccountUser("auth-1", "alice@example.com"),
+    ).resolves.toBeNull();
   });
 
   it("upserts with onConflictDoNothing on the auth id, never DoUpdate", async () => {
     // DoUpdate here would write the session's email back over a row whose email
     // a deletion deliberately nulled — un-erasing the PII the erasure removed.
-    dbRows = [{ id: "user-uuid", email: "alice@example.com", sanitizedAt: null }];
+    dbRows = [
+      { id: "user-uuid", email: "alice@example.com", sanitizedAt: null },
+    ];
 
     await resolveAccountUser("auth-1", "alice@example.com");
 
@@ -441,7 +487,11 @@ describe("recordSecurityEvent", () => {
   });
 
   it("records null context rather than an empty string when neither header is present", async () => {
-    await recordSecurityEvent(new Headers(), "user-uuid", "sessions_revoked_others");
+    await recordSecurityEvent(
+      new Headers(),
+      "user-uuid",
+      "sessions_revoked_others",
+    );
 
     expect(insertedPayloads()).toEqual([
       {

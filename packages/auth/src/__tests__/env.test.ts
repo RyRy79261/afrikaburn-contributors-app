@@ -51,20 +51,30 @@ describe("resolveBaseURL", () => {
 describe("cross-subdomain cookie scoping", () => {
   it("scopes to the apex only when served under the apex", () => {
     expect(
-      resolveCookieDomain({ BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev" }),
+      resolveCookieDomain({
+        BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
+      }),
     ).toBe(AUTH_COOKIE_DOMAIN);
-    expect(isUnderApex({ BETTER_AUTH_URL: `https://${AUTH_APEX_DOMAIN}` })).toBe(true);
+    expect(
+      isUnderApex({ BETTER_AUTH_URL: `https://${AUTH_APEX_DOMAIN}` }),
+    ).toBe(true);
   });
 
   it("does NOT scope on a *.vercel.app preview or localhost", () => {
-    expect(resolveCookieDomain({ VERCEL_URL: "preview.vercel.app" })).toBeUndefined();
-    expect(resolveCookieDomain({ BETTER_AUTH_URL: "http://localhost:3000" })).toBeUndefined();
+    expect(
+      resolveCookieDomain({ VERCEL_URL: "preview.vercel.app" }),
+    ).toBeUndefined();
+    expect(
+      resolveCookieDomain({ BETTER_AUTH_URL: "http://localhost:3000" }),
+    ).toBeUndefined();
     expect(resolveCookieDomain({})).toBeUndefined();
   });
 
   it("is not fooled by an apex-suffix lookalike host", () => {
     expect(
-      resolveCookieDomain({ BETTER_AUTH_URL: "https://quagga.ryanjnoble.dev.evil.com" }),
+      resolveCookieDomain({
+        BETTER_AUTH_URL: "https://quagga.ryanjnoble.dev.evil.com",
+      }),
     ).toBeUndefined();
   });
 
@@ -72,12 +82,16 @@ describe("cross-subdomain cookie scoping", () => {
     // A typo'd base URL must fail closed. Reading it as apex-hosted would
     // silently switch on cross-subdomain cookie scoping for an origin that
     // cannot carry it, which breaks every cookie the deployment sets.
-    expect(isUnderApex({ BETTER_AUTH_URL: "app.quagga.ryanjnoble.dev" })).toBe(false);
-    expect(resolveCookieDomain({ BETTER_AUTH_URL: "not a url at all" })).toBeUndefined();
+    expect(isUnderApex({ BETTER_AUTH_URL: "app.quagga.ryanjnoble.dev" })).toBe(
+      false,
+    );
+    expect(
+      resolveCookieDomain({ BETTER_AUTH_URL: "not a url at all" }),
+    ).toBeUndefined();
     // …and the same typo must not poison the trusted-origins list either.
-    expect(resolveTrustedOrigins({ BETTER_AUTH_URL: "not a url at all" })).toEqual([
-      ...PRODUCTION_ORIGINS,
-    ]);
+    expect(
+      resolveTrustedOrigins({ BETTER_AUTH_URL: "not a url at all" }),
+    ).toEqual([...PRODUCTION_ORIGINS]);
   });
 });
 
@@ -88,9 +102,9 @@ describe("resolveUseSecureCookies", () => {
     // The one real case: a PRODUCTION build served over plain http, which is
     // exactly how the E2E suite runs the apps locally. There the browser drops
     // every __Secure- cookie and sign-up "succeeds" with no session at all.
-    expect(resolveUseSecureCookies({ BETTER_AUTH_URL: "http://localhost:3000" })).toBe(
-      false,
-    );
+    expect(
+      resolveUseSecureCookies({ BETTER_AUTH_URL: "http://localhost:3000" }),
+    ).toBe(false);
   });
 
   it("is undefined everywhere else, so Better Auth's secure default stands", () => {
@@ -99,10 +113,14 @@ describe("resolveUseSecureCookies", () => {
     // opt out of Secure cookies by being misread.
     expect(resolveUseSecureCookies({})).toBeUndefined();
     expect(
-      resolveUseSecureCookies({ BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev" }),
+      resolveUseSecureCookies({
+        BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+      }),
     ).toBeUndefined();
     // A Vercel preview URL carries no protocol and is resolved to https.
-    expect(resolveUseSecureCookies({ VERCEL_URL: "preview.vercel.app" })).toBeUndefined();
+    expect(
+      resolveUseSecureCookies({ VERCEL_URL: "preview.vercel.app" }),
+    ).toBeUndefined();
   });
 });
 
@@ -118,8 +136,12 @@ describe("resolveRateLimit", () => {
     expect(resolveRateLimit({ AUTH_RATE_LIMIT_MAX: "0" })).toEqual({});
     expect(resolveRateLimit({ AUTH_RATE_LIMIT_MAX: "-5" })).toEqual({});
     expect(resolveRateLimit({ AUTH_RATE_LIMIT_MAX: "lots" })).toEqual({});
-    expect(resolveRateLimit({ AUTH_RATE_LIMIT_WINDOW_SECONDS: "0" })).toEqual({});
-    expect(resolveRateLimit({ AUTH_RATE_LIMIT_WINDOW_SECONDS: "soon" })).toEqual({});
+    expect(resolveRateLimit({ AUTH_RATE_LIMIT_WINDOW_SECONDS: "0" })).toEqual(
+      {},
+    );
+    expect(
+      resolveRateLimit({ AUTH_RATE_LIMIT_WINDOW_SECONDS: "soon" }),
+    ).toEqual({});
   });
 
   it("raising the max also raises the four sensitive paths", () => {
@@ -149,7 +171,10 @@ describe("resolveRateLimit", () => {
     const limit = resolveRateLimit({ AUTH_RATE_LIMIT_MAX: "500" });
 
     expect(limit.window).toBeUndefined();
-    expect(limit.customRules?.["/sign-up/email"]).toEqual({ window: 60, max: 500 });
+    expect(limit.customRules?.["/sign-up/email"]).toEqual({
+      window: 60,
+      max: 500,
+    });
   });
 
   it("a window alone yields no custom rules at all", () => {
@@ -168,10 +193,14 @@ describe("passkey rpID and origins", () => {
     // ONE passkey has to work on app., org. and suppliers., which is what an
     // apex rpID plus all three expected origins buys. Widening it later would
     // mean re-enrolling every user.
-    const env: AuthEnv = { BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev" };
+    const env: AuthEnv = {
+      BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+    };
 
     expect(resolvePasskeyRpID(env)).toBe(AUTH_APEX_DOMAIN);
-    expect(resolvePasskeyOrigins(env)?.sort()).toEqual([...PRODUCTION_ORIGINS].sort());
+    expect(resolvePasskeyOrigins(env)?.sort()).toEqual(
+      [...PRODUCTION_ORIGINS].sort(),
+    );
   });
 
   it("is undefined off the apex, so the plugin derives it from the request", () => {
@@ -211,7 +240,9 @@ describe("resolveRequireEmailVerification (DERIVED, never a hardcoded weakening)
   });
 
   it("is true once a provider exists (default)", () => {
-    expect(resolveRequireEmailVerification({ RESEND_API_KEY: "re_x" })).toBe(true);
+    expect(resolveRequireEmailVerification({ RESEND_API_KEY: "re_x" })).toBe(
+      true,
+    );
   });
 
   it("honours an explicit opt-out only when a provider exists", () => {

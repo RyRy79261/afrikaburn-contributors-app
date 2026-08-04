@@ -48,7 +48,9 @@ beforeEach(() => {
 describe("setOrgStaffRole", () => {
   it("refuses a caller who is not the System manager", async () => {
     requireSystemManager.mockRejectedValue(
-      new Error("Only a System manager may manage departments, roles or who holds them."),
+      new Error(
+        "Only a System manager may manage departments, roles or who holds them.",
+      ),
     );
     const result = await setOrgStaffRole({ userId: TARGET, action: "elevate" });
     expect(result.ok).toBe(false);
@@ -86,7 +88,10 @@ describe("setOrgStaffRole", () => {
     expect((demote as { error: string }).error).toMatch(/GOD_EMAILS/);
 
     db.seed("memberships", [{ id: "mem-1", role: "god" }]);
-    const elevate = await setOrgStaffRole({ userId: TARGET, action: "elevate" });
+    const elevate = await setOrgStaffRole({
+      userId: TARGET,
+      action: "elevate",
+    });
     expect(elevate).toMatchObject({ ok: false });
 
     expect(db.recorded("delete", "memberships")).toHaveLength(0);

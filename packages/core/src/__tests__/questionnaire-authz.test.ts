@@ -124,11 +124,29 @@ describe("canManageProjectRoles", () => {
 
 describe("canAuthorProjectQuestionnaire — permission scope enforced", () => {
   const BASELINE = "role-baseline";
-  const BURNER_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "roles", roleIds: [BASELINE] };
-  const CREW_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "roles", roleIds: ["role-crew"] };
-  const EVERYONE_AUD: ProjectAudience = { kind: "project", groupId: CAMP_A, mode: "everyone", roleIds: [] };
+  const BURNER_AUD: ProjectAudience = {
+    kind: "project",
+    groupId: CAMP_A,
+    mode: "roles",
+    roleIds: [BASELINE],
+  };
+  const CREW_AUD: ProjectAudience = {
+    kind: "project",
+    groupId: CAMP_A,
+    mode: "roles",
+    roleIds: ["role-crew"],
+  };
+  const EVERYONE_AUD: ProjectAudience = {
+    kind: "project",
+    groupId: CAMP_A,
+    mode: "everyone",
+    roleIds: [],
+  };
 
-  const lead: PermissionMembership = { structuralRole: "lead", rolePermissions: [] };
+  const lead: PermissionMembership = {
+    structuralRole: "lead",
+    rolePermissions: [],
+  };
   const scopedMember: PermissionMembership = {
     structuralRole: "member",
     rolePermissions: [
@@ -137,21 +155,40 @@ describe("canAuthorProjectQuestionnaire — permission scope enforced", () => {
   };
 
   it("lead/admin may author any project audience (backstop)", () => {
-    expect(canAuthorProjectQuestionnaire(lead, CREW_AUD, true, BASELINE)).toBe(true);
+    expect(canAuthorProjectQuestionnaire(lead, CREW_AUD, true, BASELINE)).toBe(
+      true,
+    );
   });
 
   it("everyone audience maps to the baseline role id", () => {
-    expect(projectAudienceTargetRoleIds(EVERYONE_AUD, BASELINE)).toEqual([BASELINE]);
-    expect(projectAudienceTargetRoleIds(CREW_AUD, BASELINE)).toEqual(["role-crew"]);
+    expect(projectAudienceTargetRoleIds(EVERYONE_AUD, BASELINE)).toEqual([
+      BASELINE,
+    ]);
+    expect(projectAudienceTargetRoleIds(CREW_AUD, BASELINE)).toEqual([
+      "role-crew",
+    ]);
   });
 
   it("scoped member may target their allowed audience but not others", () => {
-    expect(canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, false, BASELINE)).toBe(true);
-    expect(canAuthorProjectQuestionnaire(scopedMember, EVERYONE_AUD, false, BASELINE)).toBe(true);
-    expect(canAuthorProjectQuestionnaire(scopedMember, CREW_AUD, false, BASELINE)).toBe(false);
+    expect(
+      canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, false, BASELINE),
+    ).toBe(true);
+    expect(
+      canAuthorProjectQuestionnaire(
+        scopedMember,
+        EVERYONE_AUD,
+        false,
+        BASELINE,
+      ),
+    ).toBe(true);
+    expect(
+      canAuthorProjectQuestionnaire(scopedMember, CREW_AUD, false, BASELINE),
+    ).toBe(false);
   });
 
   it("scoped member without mayBlock cannot send a blocking questionnaire", () => {
-    expect(canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, true, BASELINE)).toBe(false);
+    expect(
+      canAuthorProjectQuestionnaire(scopedMember, BURNER_AUD, true, BASELINE),
+    ).toBe(false);
   });
 });

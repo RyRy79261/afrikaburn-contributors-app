@@ -34,12 +34,18 @@ test.describe("camp member — blocking questionnaire gate", () => {
     await joinByInvite(memberPage, invite.url);
 
     const title = uniqueName("Mandatory safety briefing ack");
-    const prompt = uniqueName("Confirm you've read the fire-safety brief (camp-member-e2e)");
-    const { activationId } = await authorCampQuestionnaire(leadPage, camp.slug, {
-      title,
-      prompt,
-      blocking: true,
-    });
+    const prompt = uniqueName(
+      "Confirm you've read the fire-safety brief (camp-member-e2e)",
+    );
+    const { activationId } = await authorCampQuestionnaire(
+      leadPage,
+      camp.slug,
+      {
+        title,
+        prompt,
+        blocking: true,
+      },
+    );
     const gateUrl = new RegExp(`/questionnaires/${activationId}$`);
 
     // Trap #1: heading for the camp dashboard redirects to the gate.

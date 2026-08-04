@@ -77,7 +77,9 @@ test.describe("system manager · camp categories", () => {
     await expect(
       deleteDialog.getByText(/nothing uses this category/i),
     ).toBeVisible();
-    await deleteDialog.getByRole("button", { name: /remove category/i }).click();
+    await deleteDialog
+      .getByRole("button", { name: /remove category/i })
+      .click();
     await expect(orgPage.getByText(/removed/i)).toBeVisible();
     await expect(orgPage.getByText(renamed)).toHaveCount(0);
   });

@@ -17,9 +17,10 @@ export const ARTWORK_POWER_OPTIONS = [
 
 export type ArtworkPowerKey = (typeof ARTWORK_POWER_OPTIONS)[number]["value"];
 
-export const ARTWORK_POWER_KEYS = ARTWORK_POWER_OPTIONS.map(
-  (o) => o.value,
-) as [ArtworkPowerKey, ...ArtworkPowerKey[]];
+export const ARTWORK_POWER_KEYS = ARTWORK_POWER_OPTIONS.map((o) => o.value) as [
+  ArtworkPowerKey,
+  ...ArtworkPowerKey[],
+];
 
 /** Burn-intent callout (fire-art-safety.md: perimeter "3 times the height of
  * the structure"; fire-fire-safety.md: no open fires on the ground, P.A.S.S.). */

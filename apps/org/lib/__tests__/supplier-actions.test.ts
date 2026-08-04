@@ -474,7 +474,14 @@ describe("supplier documents", () => {
     db.seed("supplier_documents", [
       // The current row, then the (empty) document list the reconciler reads
       // back inside the same transaction.
-      [{ id: DOC_ID, sort: 0, editionId: EDITION_ID, stepKey: SELF_SERVICE_STEP }],
+      [
+        {
+          id: DOC_ID,
+          sort: 0,
+          editionId: EDITION_ID,
+          stepKey: SELF_SERVICE_STEP,
+        },
+      ],
       [],
     ]);
     db.seed("supplier_onboarding", [
@@ -507,7 +514,14 @@ describe("supplier documents", () => {
     // An unclaimed catalogue row has no account to tell, and an insert of zero
     // rows is a write the fan-out must not attempt.
     db.seed("supplier_documents", [
-      [{ id: DOC_ID, sort: 0, editionId: EDITION_ID, stepKey: SELF_SERVICE_STEP }],
+      [
+        {
+          id: DOC_ID,
+          sort: 0,
+          editionId: EDITION_ID,
+          stepKey: SELF_SERVICE_STEP,
+        },
+      ],
       [],
     ]);
     db.seed("supplier_onboarding", [
@@ -556,7 +570,13 @@ describe("supplier documents", () => {
     // The acks cascade away with it, so the audit row is the only place that
     // count survives.
     db.seed("supplier_documents", [
-      [{ title: "Agreement", stepKey: SELF_SERVICE_STEP, editionId: EDITION_ID }],
+      [
+        {
+          title: "Agreement",
+          stepKey: SELF_SERVICE_STEP,
+          editionId: EDITION_ID,
+        },
+      ],
       [],
     ]);
     db.seed("supplier_document_acks", [{ acks: 5 }]);

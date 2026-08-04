@@ -156,9 +156,9 @@ const C = {
   reachGodOnlySurface: {
     id: "reach-god-only-surface",
     app: "org",
-    action: "reach a system-manager-only surface (e.g. accounts role management)",
-    refusalHint:
-      'requireSystemManager() throws for every rank below god',
+    action:
+      "reach a system-manager-only surface (e.g. accounts role management)",
+    refusalHint: "requireSystemManager() throws for every rank below god",
   },
   manageCampCategories: {
     id: "manage-camp-categories",
@@ -173,7 +173,7 @@ const C = {
     action:
       "open /system — the deployment's configuration, health and org-access roster",
     refusalHint:
-      'the page resolves runsDeployment(actor) BEFORE it queries and renders the refusal instead; org_staff is the ONLY rank refused, which is what proves the ranks are jobs rather than tiers',
+      "the page resolves runsDeployment(actor) BEFORE it queries and renders the refusal instead; org_staff is the ONLY rank refused, which is what proves the ranks are jobs rather than tiers",
   },
   readPersonalInformation: {
     id: "read-personal-information",

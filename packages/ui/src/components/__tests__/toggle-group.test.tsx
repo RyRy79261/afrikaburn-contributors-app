@@ -85,6 +85,8 @@ describe("ToggleGroup", () => {
         </ToggleGroupItem>
       </ToggleGroup>,
     );
-    expect(screen.getByRole("radio", { name: "A" }).className).toContain("w-24");
+    expect(screen.getByRole("radio", { name: "A" }).className).toContain(
+      "w-24",
+    );
   });
 });

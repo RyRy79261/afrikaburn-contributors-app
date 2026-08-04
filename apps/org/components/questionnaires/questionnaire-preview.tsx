@@ -134,7 +134,8 @@ function PreviewRunner({ definition }: { definition: Questionnaire }) {
     setHistory((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   }
 
-  const sectionNumber = definition.pages.findIndex((p) => p.id === currentId) + 1;
+  const sectionNumber =
+    definition.pages.findIndex((p) => p.id === currentId) + 1;
 
   return (
     <div className="flex min-h-0 flex-col gap-6">

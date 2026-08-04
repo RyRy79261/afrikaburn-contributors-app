@@ -94,8 +94,14 @@ describe("text format — the numeric presets", () => {
     // A whitespace-only answer reaches here because validateOne treats only the
     // literal empty string as missing.
     const q = shortText({ format: "number" });
-    expect(validateOne(q, "   ")).toEqual({ ok: false, error: "Enter a number" });
-    expect(validateOne(q, "abc")).toEqual({ ok: false, error: "Enter a number" });
+    expect(validateOne(q, "   ")).toEqual({
+      ok: false,
+      error: "Enter a number",
+    });
+    expect(validateOne(q, "abc")).toEqual({
+      ok: false,
+      error: "Enter a number",
+    });
     expect(validateOne(q, "1.5").ok).toBe(true);
   });
 

@@ -86,7 +86,9 @@ describe("getRecentActivity", () => {
   it("honours the row limit the card asks for", async () => {
     db.seed("audit_events", []);
     await getRecentActivity(GOD, 3);
-    expect(db.recorded("select", "audit_events")[0]?.methods).toContain("limit");
+    expect(db.recorded("select", "audit_events")[0]?.methods).toContain(
+      "limit",
+    );
   });
 });
 
@@ -165,7 +167,10 @@ describe("probeDatabase — it must never take the diagnostic page down with it"
     // A driver error quotes the connection string it failed on. Belt and braces
     // on a credential is cheap, and this page is the one an engineer screenshots.
     process.env.DATABASE_URL = "postgres://user:s3cr3t@db.example.com/quagga";
-    db.fail("editions", "could not connect to postgres://user:s3cr3t@db.example.com/quagga");
+    db.fail(
+      "editions",
+      "could not connect to postgres://user:s3cr3t@db.example.com/quagga",
+    );
 
     const probe = await probeDatabase();
 

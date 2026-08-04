@@ -81,9 +81,9 @@ describe("encrypted columns", () => {
     for (const { table, column } of found) {
       const plaintext = column.name.replace(/_encrypted$/, "");
       const names = byName.get(table)?.columns.map((c) => c.name) ?? [];
-      expect(`${table}: ${names.includes(plaintext) ? plaintext : "none"}`).toBe(
-        `${table}: none`,
-      );
+      expect(
+        `${table}: ${names.includes(plaintext) ? plaintext : "none"}`,
+      ).toBe(`${table}: none`);
     }
   });
 });
@@ -91,12 +91,19 @@ describe("encrypted columns", () => {
 describe("questionnaire_responses uniqueness (migration 0028)", () => {
   const config = byName.get("questionnaire_responses");
   const unique = (config?.indexes ?? [])
-    .map((index) => (index as unknown as { config: {
-      name: string;
-      unique: boolean;
-      columns: { name: string }[];
-      where?: SQL;
-    } }).config)
+    .map(
+      (index) =>
+        (
+          index as unknown as {
+            config: {
+              name: string;
+              unique: boolean;
+              columns: { name: string }[];
+              where?: SQL;
+            };
+          }
+        ).config,
+    )
     .filter((index) => index.unique);
 
   it("keeps TWO partial unique indexes, each carrying its predicate", () => {
@@ -110,8 +117,12 @@ describe("questionnaire_responses uniqueness (migration 0028)", () => {
     // CALLER's half; this pins the schema's.
     expect(unique).toHaveLength(2);
 
-    const personScoped = unique.find((i) => !i.columns.some((c) => c.name === "group_id"));
-    const campScoped = unique.find((i) => i.columns.some((c) => c.name === "group_id"));
+    const personScoped = unique.find(
+      (i) => !i.columns.some((c) => c.name === "group_id"),
+    );
+    const campScoped = unique.find((i) =>
+      i.columns.some((c) => c.name === "group_id"),
+    );
 
     expect(personScoped?.columns.map((c) => c.name)).toEqual([
       "user_id",
@@ -135,7 +146,8 @@ describe("account_deletion_requests still answers the cancellation query", () =>
     // deletion.ts selects these by name. A rename would be caught by tsc there,
     // but this states the dependency where the column lives — the 14-day
     // "just sign in" promise is the thing on the other end of it.
-    const columns = byName.get("account_deletion_requests")?.columns.map((c) => c.name) ?? [];
+    const columns =
+      byName.get("account_deletion_requests")?.columns.map((c) => c.name) ?? [];
     for (const required of [
       "id",
       "user_id",
@@ -146,7 +158,9 @@ describe("account_deletion_requests still answers the cancellation query", () =>
       "completed_at",
       "updated_at",
     ]) {
-      expect(`${required}: ${columns.includes(required)}`).toBe(`${required}: true`);
+      expect(`${required}: ${columns.includes(required)}`).toBe(
+        `${required}: true`,
+      );
     }
   });
 });

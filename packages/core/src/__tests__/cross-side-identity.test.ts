@@ -220,7 +220,9 @@ describe("ALL THREE HATS AT ONCE — camp lead + officer + system engineer", () 
     // most likely to be mistaken for an authority.
     const asOfficer: OrgActor = { ...engineerHat };
     for (const capability of ORG_CAPABILITIES) {
-      expect(orgCan(asOfficer, capability)).toBe(orgCan(engineerHat, capability));
+      expect(orgCan(asOfficer, capability)).toBe(
+        orgCan(engineerHat, capability),
+      );
     }
   });
 
@@ -239,7 +241,8 @@ describe("ALL THREE HATS AT ONCE — camp lead + officer + system engineer", () 
           departmentId: CAMPS_DEPT,
           permissions: {
             read: true,
-            create: true, update: true,
+            create: true,
+            update: true,
             personal_information: true,
             delete: true,
           },

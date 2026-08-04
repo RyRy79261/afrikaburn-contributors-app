@@ -58,8 +58,6 @@ beforeEach(() => {
   uploadMock.mockResolvedValue({ url: "https://blob.example/uploaded.png" });
 });
 
-
-
 describe("honest degradation when Blob is not configured", () => {
   it("offers a URL field and says why, instead of a dropzone that does nothing", () => {
     const { container } = renderUpload({ blobConfigured: false });
@@ -86,8 +84,9 @@ describe("adding a URL by hand", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(await screen.findByText("That doesn't look like a valid URL."))
-      .toBeDefined();
+    expect(
+      await screen.findByText("That doesn't look like a valid URL."),
+    ).toBeDefined();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -99,7 +98,9 @@ describe("adding a URL by hand", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(await screen.findByText("That link is already added.")).toBeDefined();
+    expect(
+      await screen.findByText("That link is already added."),
+    ).toBeDefined();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -158,8 +159,9 @@ describe("validate", () => {
       target: { files: [fileOfSize(10, "photo.png", "image/png")] },
     });
 
-    expect(await screen.findByText("That file type isn't allowed here."))
-      .toBeDefined();
+    expect(
+      await screen.findByText("That file type isn't allowed here."),
+    ).toBeDefined();
     expect(uploadMock).not.toHaveBeenCalled();
   });
 
@@ -209,7 +211,9 @@ describe("uploading", () => {
     });
 
     await waitFor(() => expect(uploadMock).toHaveBeenCalled());
-    expect(uploadMock.mock.calls[0]![0]).toBe("bulletin/my-holiday-snap-1-.png");
+    expect(uploadMock.mock.calls[0]![0]).toBe(
+      "bulletin/my-holiday-snap-1-.png",
+    );
   });
 
   it("surfaces the upload error's own message", async () => {
@@ -240,9 +244,13 @@ describe("uploading", () => {
   it("shows live progress while a file is in flight", async () => {
     let release: ((v: { url: string }) => void) | undefined;
     uploadMock.mockImplementation(
-      (_path: string, _file: File, opts: {
-        onUploadProgress: (p: { percentage: number }) => void;
-      }) => {
+      (
+        _path: string,
+        _file: File,
+        opts: {
+          onUploadProgress: (p: { percentage: number }) => void;
+        },
+      ) => {
         opts.onUploadProgress({ percentage: 42 });
         return new Promise((resolve) => {
           release = resolve;
@@ -273,7 +281,9 @@ describe("uploading", () => {
       },
     });
 
-    expect(await screen.findByText("Only 2 more files fit here.")).toBeDefined();
+    expect(
+      await screen.findByText("Only 2 more files fit here."),
+    ).toBeDefined();
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(uploadMock).toHaveBeenCalledTimes(2);
   });
@@ -289,7 +299,9 @@ describe("uploading", () => {
 
     // "Only 1 more files fit here" is the kind of thing nobody files a bug for
     // and everybody notices.
-    expect(await screen.findByText("Only 1 more file fits here.")).toBeDefined();
+    expect(
+      await screen.findByText("Only 1 more file fits here."),
+    ).toBeDefined();
   });
 
   it("uploads what was dropped on the dropzone", async () => {
@@ -355,7 +367,11 @@ describe("the cap and removal", () => {
   });
 
   it("falls back to the raw string when a stored value is not a URL", () => {
-    renderUpload({ variant: "file", value: ["legacy-local-path"], maxFiles: 2 });
+    renderUpload({
+      variant: "file",
+      value: ["legacy-local-path"],
+      maxFiles: 2,
+    });
     // Legacy rows exist; rendering nothing for them would hide a real document.
     expect(screen.getByText("legacy-local-path")).toBeDefined();
   });
@@ -366,6 +382,8 @@ describe("the cap and removal", () => {
       maxFiles: 2,
       disabled: true,
     });
-    expect(screen.queryByRole("button", { name: "Remove upload 1" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Remove upload 1" }),
+    ).toBeNull();
   });
 });

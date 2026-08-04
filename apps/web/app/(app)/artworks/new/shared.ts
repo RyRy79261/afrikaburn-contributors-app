@@ -45,7 +45,9 @@ export const ArtworkRegistrationInput = z.object({
   confirmWarnings: z.boolean().default(false),
 });
 
-export type ArtworkRegistrationValues = z.infer<typeof ArtworkRegistrationInput>;
+export type ArtworkRegistrationValues = z.infer<
+  typeof ArtworkRegistrationInput
+>;
 
 export type ArtworkRegistrationActionResult =
   | { status: "created"; slug: string }
@@ -60,7 +62,11 @@ export function artworkSubmitGate(
   if (!input.description) {
     return "Describe the artwork — this is what the Art crew and the WTF Guide read.";
   }
-  if (input.widthM === null || input.depthM === null || input.heightM === null) {
+  if (
+    input.widthM === null ||
+    input.depthM === null ||
+    input.heightM === null
+  ) {
     return "Give the footprint in metres — width, depth and height.";
   }
   if (input.burnIntent === null) {
@@ -101,7 +107,11 @@ export function buildArtworkPayload(input: ArtworkRegistrationValues): {
     description: input.description ?? null,
     columns: {
       imageUrls: input.imageUrls,
-      areaDimensions: formatFootprint(input.widthM, input.depthM, input.heightM),
+      areaDimensions: formatFootprint(
+        input.widthM,
+        input.depthM,
+        input.heightM,
+      ),
       placementNotes: input.placementNotes ?? null,
       lntPlan: input.strikePlan ?? null,
       grantsInterest: input.grantInterest,

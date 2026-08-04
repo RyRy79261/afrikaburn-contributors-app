@@ -99,7 +99,10 @@ describe("listSupplierAcks", () => {
     // towards this edition's progress.
     db.rows("supplier_document_acks", [
       { documentId: "doc-1", ackedAt: pgTimestamp(ACKED_AT) },
-      { documentId: "doc-from-another-edition", ackedAt: pgTimestamp(ACKED_AT) },
+      {
+        documentId: "doc-from-another-edition",
+        ackedAt: pgTimestamp(ACKED_AT),
+      },
     ]);
 
     const acks = await listSupplierAcks(SUPPLIER, ["doc-1"]);
@@ -158,7 +161,9 @@ describe("the write-path loaders, which must NOT swallow", () => {
   async function thrownBy(fn: () => Promise<unknown>): Promise<unknown> {
     return fn().then(
       () => {
-        throw new Error("expected the query failure to propagate, but it did not");
+        throw new Error(
+          "expected the query failure to propagate, but it did not",
+        );
       },
       (err: unknown) => err,
     );
@@ -222,7 +227,9 @@ describe("documentBelongsToEdition", () => {
     // Server-side authz: a forged document id must not create an ack row.
     db.rows("supplier_documents", []);
 
-    expect(await documentBelongsToEdition("doc-elsewhere", EDITION)).toBe(false);
+    expect(await documentBelongsToEdition("doc-elsewhere", EDITION)).toBe(
+      false,
+    );
   });
 
   it("is true for one of the supplier's own edition's documents", async () => {
@@ -241,7 +248,9 @@ describe("with no database configured", () => {
   it("the panel loaders degrade to empty without querying", async () => {
     expect(await listEditionDocuments(EDITION)).toEqual([]);
     expect(await listSupplierAcks(SUPPLIER, ["doc-1"])).toEqual([]);
-    expect((await loadSupplierDocumentsPanel(SUPPLIER, EDITION)).views).toEqual([]);
+    expect((await loadSupplierDocumentsPanel(SUPPLIER, EDITION)).views).toEqual(
+      [],
+    );
     expect(db.queries).toEqual([]);
   });
 });

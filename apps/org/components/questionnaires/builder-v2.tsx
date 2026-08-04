@@ -133,15 +133,16 @@ function specForChoice(choice: string): AudienceSpec | null {
 }
 
 function sectionLabel(page: QuestionnairePage, index: number): string {
-  const title =
-    page.kind === "questions" ? page.title : page.heading;
+  const title = page.kind === "questions" ? page.title : page.heading;
   return `${index + 1}. ${title?.trim() || "Untitled section"}`;
 }
 
 function emptyDraft(): Questionnaire {
   return {
     version: "1",
-    pages: [{ id: "section_1", kind: "questions", title: "Section 1", questions: [] }],
+    pages: [
+      { id: "section_1", kind: "questions", title: "Section 1", questions: [] },
+    ],
   };
 }
 
@@ -248,7 +249,10 @@ export function QuestionnaireBuilderV2({
   function addBlock(kind: PaletteKind) {
     setDraft((prev) => {
       const taken = takenIds(prev);
-      const id = allocateId(kind === "info_block" || kind === "image_block" ? "block" : "q", taken);
+      const id = allocateId(
+        kind === "info_block" || kind === "image_block" ? "block" : "q",
+        taken,
+      );
       const target = Math.min(activeSection, prev.pages.length - 1);
       return {
         ...prev,
@@ -265,7 +269,10 @@ export function QuestionnaireBuilderV2({
     setDraft((prev) => {
       const taken = takenIds(prev);
       const id = allocateId("section", taken);
-      return { ...prev, pages: [...prev.pages, createSection(id, prev.pages.length)] };
+      return {
+        ...prev,
+        pages: [...prev.pages, createSection(id, prev.pages.length)],
+      };
     });
     setActiveSection(draft.pages.length);
   }
@@ -354,139 +361,151 @@ export function QuestionnaireBuilderV2({
   return (
     <BlobConfigProvider value={blobConfigured}>
       <div className="flex flex-col gap-6">
-      {/* Fewer-forms warning — the builder holds ITSELF to the principle. */}
-      <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
-        <Tent className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
-        <div className="text-sm">
-          <p className="font-semibold text-foreground">
-            Every question you add is a question someone in the desert has to
-            answer.
-          </p>
-          <p className="mt-1 text-muted-foreground">
-            Ask for the least you need. Mark a question required only if a
-            missing answer genuinely blocks the burn.
-          </p>
+        {/* Fewer-forms warning — the builder holds ITSELF to the principle. */}
+        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+          <Tent className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+          <div className="text-sm">
+            <p className="font-semibold text-foreground">
+              Every question you add is a question someone in the desert has to
+              answer.
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              Ask for the least you need. Mark a question required only if a
+              missing answer genuinely blocks the burn.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <DefinitionIssuePanel issues={issues} sectionTitles={sectionTitles} />
+        <DefinitionIssuePanel issues={issues} sectionTitles={sectionTitles} />
 
-      <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
-        <PaletteRail
-          activeLabel={
-            definition.pages[Math.min(activeSection, definition.pages.length - 1)]
-              ? sectionLabel(
-                  definition.pages[
-                    Math.min(activeSection, definition.pages.length - 1)
-                  ]!,
-                  Math.min(activeSection, definition.pages.length - 1),
-                )
-              : "—"
-          }
-          onAdd={addBlock}
-          onAddSection={addSection}
-        />
+        <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
+          <PaletteRail
+            activeLabel={
+              definition.pages[
+                Math.min(activeSection, definition.pages.length - 1)
+              ]
+                ? sectionLabel(
+                    definition.pages[
+                      Math.min(activeSection, definition.pages.length - 1)
+                    ]!,
+                    Math.min(activeSection, definition.pages.length - 1),
+                  )
+                : "—"
+            }
+            onAdd={addBlock}
+            onAddSection={addSection}
+          />
 
-        <div className="flex min-w-0 flex-col gap-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium">
-                  Title <span className="text-destructive">*</span>
-                </span>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Pre-event safety check-in"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium">Description</span>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={2}
-                  placeholder="One line telling recipients why you're asking."
-                />
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {definition.pages.length}{" "}
-                {definition.pages.length === 1 ? "section" : "sections"} ·{" "}
-                {questionCount} {questionCount === 1 ? "question" : "questions"}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex min-w-0 flex-col gap-5">
+            <Card>
+              <CardHeader>
+                <CardTitle>Details</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium">
+                    Title <span className="text-destructive">*</span>
+                  </span>
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Pre-event safety check-in"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium">Description</span>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    placeholder="One line telling recipients why you're asking."
+                  />
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {definition.pages.length}{" "}
+                  {definition.pages.length === 1 ? "section" : "sections"} ·{" "}
+                  {questionCount}{" "}
+                  {questionCount === 1 ? "question" : "questions"}
+                </p>
+              </CardContent>
+            </Card>
 
-          {definition.pages.map((page, pageIndex) => (
-            <SectionEditor
-              key={page.id}
-              page={page}
-              pageIndex={pageIndex}
-              totalSections={definition.pages.length}
-              active={activeSection === pageIndex}
-              issues={issues}
-              allPages={definition.pages}
-              titleLocked={pageIndex === 0}
-              onActivate={() => setActiveSection(pageIndex)}
-              onChangePage={(next) => updatePage(pageIndex, next)}
-              onChangeBlocks={(blocks) => updateBlocks(pageIndex, blocks)}
-              onMoveSection={(delta) => moveSection(pageIndex, delta)}
-              onRemoveSection={() => removeSection(pageIndex)}
-              onAddBlock={(kind) => {
-                setActiveSection(pageIndex);
-                addBlock(kind);
-              }}
-            />
-          ))}
+            {definition.pages.map((page, pageIndex) => (
+              <SectionEditor
+                key={page.id}
+                page={page}
+                pageIndex={pageIndex}
+                totalSections={definition.pages.length}
+                active={activeSection === pageIndex}
+                issues={issues}
+                allPages={definition.pages}
+                titleLocked={pageIndex === 0}
+                onActivate={() => setActiveSection(pageIndex)}
+                onChangePage={(next) => updatePage(pageIndex, next)}
+                onChangeBlocks={(blocks) => updateBlocks(pageIndex, blocks)}
+                onMoveSection={(delta) => moveSection(pageIndex, delta)}
+                onRemoveSection={() => removeSection(pageIndex)}
+                onAddBlock={(kind) => {
+                  setActiveSection(pageIndex);
+                  addBlock(kind);
+                }}
+              />
+            ))}
 
-          <Button variant="outline" onClick={addSection} className="self-start">
-            <Layers aria-hidden />
-            Add section
+            <Button
+              variant="outline"
+              onClick={addSection}
+              className="self-start"
+            >
+              <Layers aria-hidden />
+              Add section
+            </Button>
+          </div>
+
+          <SendRail
+            audienceChoice={audienceChoice}
+            onAudienceChange={setAudienceChoice}
+            resolvedCount={resolvedCount}
+            hasEdition={editionId !== null}
+            blocking={blocking}
+            onBlockingChange={setBlocking}
+            dueAt={dueAt}
+            onDueAtChange={setDueAt}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+          {initial ? (
+            <Badge
+              variant={initial.status === "published" ? "success" : "outline"}
+            >
+              {initial.status}
+            </Badge>
+          ) : null}
+          <span className="mr-auto text-xs text-muted-foreground">
+            {liveIssues.length > 0
+              ? `${liveIssues.length} ${liveIssues.length === 1 ? "problem" : "problems"} to fix before this can be saved.`
+              : "Ready to save."}
+          </span>
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/questionnaires")}
+          >
+            Cancel
+          </Button>
+          <QuestionnairePreview definition={definition} />
+          <Button
+            variant="outline"
+            onClick={() => save(false)}
+            disabled={pending}
+          >
+            Save draft
+          </Button>
+          <Button onClick={() => save(true)} disabled={pending}>
+            <Send aria-hidden />
+            {pending ? "Saving…" : "Publish & choose audience"}
           </Button>
         </div>
-
-        <SendRail
-          audienceChoice={audienceChoice}
-          onAudienceChange={setAudienceChoice}
-          resolvedCount={resolvedCount}
-          hasEdition={editionId !== null}
-          blocking={blocking}
-          onBlockingChange={setBlocking}
-          dueAt={dueAt}
-          onDueAtChange={setDueAt}
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-        {initial ? (
-          <Badge variant={initial.status === "published" ? "success" : "outline"}>
-            {initial.status}
-          </Badge>
-        ) : null}
-        <span className="mr-auto text-xs text-muted-foreground">
-          {liveIssues.length > 0
-            ? `${liveIssues.length} ${liveIssues.length === 1 ? "problem" : "problems"} to fix before this can be saved.`
-            : "Ready to save."}
-        </span>
-        <Button variant="ghost" onClick={() => router.push("/questionnaires")}>
-          Cancel
-        </Button>
-        <QuestionnairePreview definition={definition} />
-        <Button
-          variant="outline"
-          onClick={() => save(false)}
-          disabled={pending}
-        >
-          Save draft
-        </Button>
-        <Button onClick={() => save(true)} disabled={pending}>
-          <Send aria-hidden />
-          {pending ? "Saving…" : "Publish & choose audience"}
-        </Button>
-      </div>
       </div>
     </BlobConfigProvider>
   );
@@ -526,7 +545,11 @@ function PaletteRail({
           </button>
 
           <PaletteGroup label="Content" entries={content} onAdd={onAdd} />
-          <PaletteGroup label="Question types" entries={questions} onAdd={onAdd} />
+          <PaletteGroup
+            label="Question types"
+            entries={questions}
+            onAdd={onAdd}
+          />
         </CardContent>
       </Card>
     </aside>
@@ -598,9 +621,10 @@ function SectionEditor({
   // Forward-only: a section may only branch to one that comes AFTER it, or to
   // submit. The validator enforces this; the picker never offers otherwise.
   const branchTargets: BranchTarget[] = [
-    ...allPages
-      .slice(pageIndex + 1)
-      .map((p, i) => ({ value: p.id, label: sectionLabel(p, pageIndex + 1 + i) })),
+    ...allPages.slice(pageIndex + 1).map((p, i) => ({
+      value: p.id,
+      label: sectionLabel(p, pageIndex + 1 + i),
+    })),
     { value: SUBMIT_TARGET, label: "Submit the questionnaire" },
   ];
 
@@ -666,7 +690,9 @@ function SectionEditor({
               <Input
                 value={page.title}
                 disabled={titleLocked}
-                onChange={(e) => onChangePage({ ...page, title: e.target.value })}
+                onChange={(e) =>
+                  onChangePage({ ...page, title: e.target.value })
+                }
                 placeholder="Section title"
               />
               {titleLocked ? (
@@ -727,10 +753,11 @@ function SectionEditor({
                       ...pageBlocks(p).map((b) => b.id),
                     ]),
                   );
-                  const prefix = blockPaletteKind(block) === "info_block" ||
+                  const prefix =
+                    blockPaletteKind(block) === "info_block" ||
                     blockPaletteKind(block) === "image_block"
-                    ? "block"
-                    : "q";
+                      ? "block"
+                      : "q";
                   const next = [...blocks];
                   next.splice(
                     blockIndex + 1,

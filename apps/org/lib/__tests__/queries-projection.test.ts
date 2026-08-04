@@ -763,9 +763,14 @@ describe("getRosterMemberDetail — the only org surface that resolves medical n
       { ...MEMBER, medicalNotes: encrypt("Severe bee-sting allergy") },
     ]);
 
-    const detail = await getRosterMemberDetail("group-1", EDITION.id, "user-1", {
-      includeMedicalNotes: true,
-    });
+    const detail = await getRosterMemberDetail(
+      "group-1",
+      EDITION.id,
+      "user-1",
+      {
+        includeMedicalNotes: true,
+      },
+    );
 
     expect(detail?.medicalNotes).toBe("Severe bee-sting allergy");
     expect(detail?.medicalNotesUnreadable).toBe(false);
@@ -779,9 +784,14 @@ describe("getRosterMemberDetail — the only org surface that resolves medical n
       { ...MEMBER, medicalNotes: encrypt("Severe bee-sting allergy") },
     ]);
 
-    const detail = await getRosterMemberDetail("group-1", EDITION.id, "user-1", {
-      includeMedicalNotes: false,
-    });
+    const detail = await getRosterMemberDetail(
+      "group-1",
+      EDITION.id,
+      "user-1",
+      {
+        includeMedicalNotes: false,
+      },
+    );
 
     expect(detail?.medicalNotes).toBeNull();
     expect(selectedColumns("memberships")).not.toContain("medicalNotes");
@@ -803,9 +813,14 @@ describe("getRosterMemberDetail — the only org surface that resolves medical n
     db.seed("memberships", [
       { ...MEMBER, medicalNotes: "not-ciphertext-at-all" },
     ]);
-    const broken = await getRosterMemberDetail("group-1", EDITION.id, "user-1", {
-      includeMedicalNotes: true,
-    });
+    const broken = await getRosterMemberDetail(
+      "group-1",
+      EDITION.id,
+      "user-1",
+      {
+        includeMedicalNotes: true,
+      },
+    );
     expect(broken).toMatchObject({
       medicalNotes: null,
       medicalNotesUnreadable: true,
@@ -874,7 +889,10 @@ describe("getSuppliersOverview", () => {
 
     expect(selectedColumns("suppliers")).not.toContain("contact");
     expect(JSON.stringify(rows)).not.toContain("+27 82 000 0000");
-    expect(rows[0]).toMatchObject({ steps: { docs: "complete" }, notesCount: 2 });
+    expect(rows[0]).toMatchObject({
+      steps: { docs: "complete" },
+      notesCount: 2,
+    });
   });
 
   it("falls back to an empty step map and a zero note count", async () => {

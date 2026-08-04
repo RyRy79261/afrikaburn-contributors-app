@@ -6,13 +6,11 @@ import { authMock } from "@/test/auth-mock";
 import { redirectTarget, resetNextMocks } from "@/test/next-mocks";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
-vi.mock(
-  "next/headers",
-  async () => (await import("@/test/next-mocks")).nextHeadersMock(),
+vi.mock("next/headers", async () =>
+  (await import("@/test/next-mocks")).nextHeadersMock(),
 );
-vi.mock(
-  "@quagga/auth",
-  async () => (await import("@/test/auth-mock")).authModuleMock(),
+vi.mock("@quagga/auth", async () =>
+  (await import("@/test/auth-mock")).authModuleMock(),
 );
 
 const {
@@ -112,7 +110,9 @@ describe("ensureCampUser — keeping the email fresh", () => {
 
     const campUser = await ensureCampUser(authUser());
 
-    const update = dbMock.writesTo(schema.users).find((q) => q.kind === "update");
+    const update = dbMock
+      .writesTo(schema.users)
+      .find((q) => q.kind === "update");
     expect(update?.arg("set")).toEqual({ email: GOD_EMAIL });
     // …and the value the caller gets back is the fresh one, not the row's.
     expect(campUser?.email).toBe(GOD_EMAIL);
@@ -320,9 +320,7 @@ describe("pendingBlockingRoute — the hard-gate spine", () => {
       },
     ]);
 
-    expect(await pendingBlockingRoute(USER_ID)).toBe(
-      "/questionnaires/abc-123",
-    );
+    expect(await pendingBlockingRoute(USER_ID)).toBe("/questionnaires/abc-123");
   });
 
   it("falls back to /onboarding for a key with no page built for it", async () => {

@@ -181,7 +181,10 @@ export function validateQuestionnaireDefinition(
       if (!isAnswerableBlock(block)) return;
       issues.push(...rangeIssues(block, blockPath));
 
-      if (block.kind === "multi_choice_grid" || block.kind === "checkbox_grid") {
+      if (
+        block.kind === "multi_choice_grid" ||
+        block.kind === "checkbox_grid"
+      ) {
         // Row ids key the response map (per-row answers), so a duplicate would
         // silently overwrite a row's answer; column values are the stored
         // answers, so they must be unique and not collide with `other:`.

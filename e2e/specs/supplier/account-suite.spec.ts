@@ -19,7 +19,11 @@
 // Neither test needs god credentials, so both run everywhere.
 
 import { test, expect } from "../../fixtures";
-import { registerSupplier, signInAs, signUpBurner } from "../../personas/factories";
+import {
+  registerSupplier,
+  signInAs,
+  signUpBurner,
+} from "../../personas/factories";
 
 test.describe("supplier · the account suite", () => {
   test("an account with no listing can still manage its own security", async ({
@@ -60,9 +64,7 @@ test.describe("supplier · the account suite", () => {
     // Deletion hands over rather than acting, and says so honestly for an
     // account holding nothing.
     await portal.goto("/account/delete");
-    await expect(
-      portal.getByText(/holds no supplier listing/i),
-    ).toBeVisible();
+    await expect(portal.getByText(/holds no supplier listing/i)).toBeVisible();
     await expect(
       portal.getByRole("button", { name: /delete my account/i }),
     ).toHaveCount(0);

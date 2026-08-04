@@ -41,7 +41,9 @@ test.describe("new burner · session lifecycle", () => {
     ).toBeVisible();
   });
 
-  test("sign-out ends the session for protected routes", async ({ webPage }) => {
+  test("sign-out ends the session for protected routes", async ({
+    webPage,
+  }) => {
     await signUpBurner(webPage, { onboard: true });
     await signOut(webPage);
     await webPage.goto("/profile");

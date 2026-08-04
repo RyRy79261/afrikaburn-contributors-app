@@ -82,8 +82,11 @@ describe("support detection", () => {
 
     await waitFor(() =>
       expect(
-        (screen.getByRole("button", { name: "Add a passkey" }) as HTMLButtonElement)
-          .disabled,
+        (
+          screen.getByRole("button", {
+            name: "Add a passkey",
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(false),
     );
     expect(screen.queryByText(/doesn't support passkeys/)).toBeNull();
@@ -98,8 +101,11 @@ describe("support detection", () => {
       /This browser doesn’t support passkeys\. You can still sign in with your password\./,
     );
     expect(
-      (screen.getByRole("button", { name: "Add a passkey" }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole("button", {
+          name: "Add a passkey",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 });
@@ -114,7 +120,10 @@ describe("the list", () => {
     expect(screen.getByText(/haven’t added any passkeys yet/)).toBeDefined();
 
     rerender(
-      <AccountPasskeys client={client} passkeys={[ROW, { ...ROW, id: "pk-2" }]} />,
+      <AccountPasskeys
+        client={client}
+        passkeys={[ROW, { ...ROW, id: "pk-2" }]}
+      />,
     );
     expect(screen.getByText("2 set up")).toBeDefined();
   });
@@ -246,11 +255,18 @@ describe("removing", () => {
 
   it("renders the server's reason and does not claim a change happened", async () => {
     const { client, deletePasskey } = makeClient({
-      remove: { data: null, error: { message: "That passkey is already gone." } },
+      remove: {
+        data: null,
+        error: { message: "That passkey is already gone." },
+      },
     });
     const onChanged = vi.fn();
     render(
-      <AccountPasskeys client={client} passkeys={[ROW]} onChanged={onChanged} />,
+      <AccountPasskeys
+        client={client}
+        passkeys={[ROW]}
+        onChanged={onChanged}
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Remove/ }));
 

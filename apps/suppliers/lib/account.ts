@@ -120,7 +120,9 @@ export async function getClaimedSupplier(
  * so a failure here must not turn a successful change into a reported failure.
  * The worst case without it is the pre-existing behaviour.
  */
-export async function applyAuthCookies(responseHeaders: Headers): Promise<void> {
+export async function applyAuthCookies(
+  responseHeaders: Headers,
+): Promise<void> {
   try {
     const store = await cookies();
     for (const c of parseSetCookies(responseHeaders)) {

@@ -50,12 +50,18 @@ test.describe("camp member — a closed activation releases the gate", () => {
     await joinByInvite(memberPage, invite.url);
 
     const title = uniqueName("Withdrawn safety briefing");
-    const prompt = uniqueName("This question is never answered (close-gate-e2e)");
-    const { activationId } = await authorCampQuestionnaire(leadPage, camp.slug, {
-      title,
-      prompt,
-      blocking: true,
-    });
+    const prompt = uniqueName(
+      "This question is never answered (close-gate-e2e)",
+    );
+    const { activationId } = await authorCampQuestionnaire(
+      leadPage,
+      camp.slug,
+      {
+        title,
+        prompt,
+        blocking: true,
+      },
+    );
     const gateUrl = new RegExp(`/questionnaires/${activationId}$`);
 
     // The member is genuinely trapped — asserted, not assumed. Without this the
@@ -79,11 +85,17 @@ test.describe("camp member — a closed activation releases the gate", () => {
     // Close it from the camp's questionnaires list. The control confirms in
     // place and names the consequence being tested.
     await leadPage.goto(`/camps/${camp.slug}/questionnaires`);
-    await leadPage.getByRole("button", { name: /^close$/i }).first().click();
+    await leadPage
+      .getByRole("button", { name: /^close$/i })
+      .first()
+      .click();
     await expect(
       leadPage.getByText(/recipients stop being blocked/i),
     ).toBeVisible();
-    await leadPage.getByRole("button", { name: /^close$/i }).first().click();
+    await leadPage
+      .getByRole("button", { name: /^close$/i })
+      .first()
+      .click();
     await expect(leadPage.getByText(/questionnaire closed/i)).toBeVisible();
 
     // THE RELEASE. The member never answered, and the app opens anyway.

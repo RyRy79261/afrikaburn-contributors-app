@@ -72,7 +72,10 @@ describe("supplierPickerEligibility", () => {
   });
 
   it("good + onboarded renders normally with no tags", () => {
-    const e = supplierPickerEligibility({ standing: "good", isOnboarded: true });
+    const e = supplierPickerEligibility({
+      standing: "good",
+      isOnboarded: true,
+    });
     expect(e.eligible).toBe(true);
     expect(e.caution).toBe(false);
     expect(e.tags).toEqual([]);

@@ -81,7 +81,9 @@ const ENV_KEYS = [
   "VERCEL",
   "NEON_LOCAL_PROXY",
 ] as const;
-const ENV_SNAPSHOT = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+const ENV_SNAPSHOT = Object.fromEntries(
+  ENV_KEYS.map((k) => [k, process.env[k]]),
+);
 
 /** Index of the first recorded query matching `needle`, or -1. */
 function queryIndex(needle: string | RegExp): number {
@@ -151,7 +153,9 @@ describe("runDeployMigrations — the advisory lock", () => {
     expect(h.drizzle).toHaveBeenCalledWith(h.client);
     expect(h.migrate).toHaveBeenCalledWith(
       { handedTo: h.client },
-      expect.objectContaining({ migrationsFolder: expect.stringContaining("migrations") }),
+      expect.objectContaining({
+        migrationsFolder: expect.stringContaining("migrations"),
+      }),
     );
   });
 
@@ -178,8 +182,12 @@ describe("runDeployMigrations — the advisory lock", () => {
     // A stranded lock blocks every subsequent deploy of all three apps until
     // somebody notices.
     h.migrate.mockRejectedValueOnce(new Error("relation already exists"));
-    await expect(runDeployMigrations()).rejects.toThrow(/relation already exists/);
-    expect(queryTexts().some((t) => t.includes("pg_advisory_unlock"))).toBe(true);
+    await expect(runDeployMigrations()).rejects.toThrow(
+      /relation already exists/,
+    );
+    expect(queryTexts().some((t) => t.includes("pg_advisory_unlock"))).toBe(
+      true,
+    );
     expect(h.state.released).toBe(1);
     expect(h.state.poolsEnded).toBe(1);
   });
@@ -191,7 +199,9 @@ describe("runDeployMigrations — the advisory lock", () => {
     const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
     h.state.unlockFails = true;
     h.migrate.mockRejectedValueOnce(new Error("relation already exists"));
-    await expect(runDeployMigrations()).rejects.toThrow(/relation already exists/);
+    await expect(runDeployMigrations()).rejects.toThrow(
+      /relation already exists/,
+    );
     expect(warned).toHaveBeenCalled();
     expect(h.state.poolsEnded).toBe(1);
   });
@@ -217,8 +227,12 @@ describe("runDeployMigrations — bootstrap versus repair", () => {
     // finds no org group and the console is unreachable.
     vi.spyOn(console, "error").mockImplementation(() => {});
     h.state.editionRowCount = 0;
-    h.seedReferenceData.mockRejectedValueOnce(new Error("supplier import failed"));
-    await expect(runDeployMigrations()).rejects.toThrow(/supplier import failed/);
+    h.seedReferenceData.mockRejectedValueOnce(
+      new Error("supplier import failed"),
+    );
+    await expect(runDeployMigrations()).rejects.toThrow(
+      /supplier import failed/,
+    );
     const texts = queryTexts();
     expect(texts).toContain("ROLLBACK");
     expect(texts).not.toContain("COMMIT");
@@ -246,7 +260,9 @@ describe("runDeployMigrations — bootstrap versus repair", () => {
     h.state.editionRowCount = 1;
     h.ensureSeededOrgRoles.mockResolvedValueOnce(2);
     await runDeployMigrations();
-    expect(logged.mock.calls.flat().join(" ")).toContain("seeded 2 missing org role(s)");
+    expect(logged.mock.calls.flat().join(" ")).toContain(
+      "seeded 2 missing org role(s)",
+    );
 
     logged.mockClear();
     h.ensureSeededOrgRoles.mockResolvedValueOnce(0);

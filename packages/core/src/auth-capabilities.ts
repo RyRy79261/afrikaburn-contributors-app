@@ -90,7 +90,8 @@ export function capabilityVerdict(cap: AuthCapability): CapabilityVerdict {
   const message = pending || cap.userMessage || "Not available yet.";
   if (capabilityIsUsable(cap)) return { label: null, message };
   return {
-    label: cap.support === "supported" ? "Not finished yet" : "Not available yet",
+    label:
+      cap.support === "supported" ? "Not finished yet" : "Not available yet",
     message,
   };
 }
@@ -158,7 +159,8 @@ export const AUTH_CAPABILITIES: Readonly<
   accountDeletion: {
     key: "accountDeletion",
     support: "supported",
-    method: "sanitizeAccount (@quagga/web) — direct identity delete + app-row sanitization",
+    method:
+      "sanitizeAccount (@quagga/web) — direct identity delete + app-row sanitization",
     reason:
       "Deletion is a 14-day-grace + sweeper flow, not a single call. The sweeper's `sanitizeAccount` erases our application rows (the 'Lost Cat' plan; our `users` row survives as a stub) AND hard-deletes the Better Auth IDENTITY — the `session`, `account` (password hash) and `user` (email PII) rows — by direct transactional delete on the shared DB (SANITIZATION_IDENTITY_TABLES). We do this ourselves rather than via `auth.api.deleteUser` because the sanitization ordering, tombstone and audit trail are ours to own; the effect (identity gone, sessions revoked, cannot sign back in) is the same. The `users` tombstone (`sanitizedAt`) is enforced at every session resolver via `assertNotSanitized`/`isSanitized`.",
   },
@@ -244,8 +246,7 @@ export function unavailableCapabilities(): AuthCapability[] {
 }
 
 export type CapabilityGuardResult =
-  | { ok: true }
-  | { ok: false; message: string; support: AuthCapabilitySupport };
+  { ok: true } | { ok: false; message: string; support: AuthCapabilitySupport };
 
 /**
  * FAIL-CLOSED gate for an action that needs a provider capability. Call this at

@@ -31,8 +31,9 @@ describe("the toast() entry points", () => {
 
     render(<Toaster />);
     // info is a status, not an alert — it must not interrupt a screen reader.
-    expect(screen.getByText("Saved").closest("[role]")?.getAttribute("role"))
-      .toBe("status");
+    expect(
+      screen.getByText("Saved").closest("[role]")?.getAttribute("role"),
+    ).toBe("status");
   });
 
   it("gives the error variant role=alert and the other three role=status", () => {
@@ -106,25 +107,25 @@ describe("normalizeDuration", () => {
   it.each([
     ["a negative number", -1],
     ["NaN", Number.NaN],
-  ])("falls back to the default rather than scheduling a nonsense timer for %s", (
-    _label,
-    duration,
-  ) => {
-    vi.useFakeTimers();
-    toast("Odd", { duration });
-    render(<Toaster />);
+  ])(
+    "falls back to the default rather than scheduling a nonsense timer for %s",
+    (_label, duration) => {
+      vi.useFakeTimers();
+      toast("Odd", { duration });
+      render(<Toaster />);
 
-    // Left as-is, a negative or NaN delay fires on the next tick and the
-    // message is gone before anyone reads it.
-    act(() => {
-      vi.advanceTimersByTime(100);
-    });
-    expect(screen.queryByText("Odd")).not.toBeNull();
-    act(() => {
-      vi.advanceTimersByTime(5_000);
-    });
-    expect(screen.queryByText("Odd")).toBeNull();
-  });
+      // Left as-is, a negative or NaN delay fires on the next tick and the
+      // message is gone before anyone reads it.
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(screen.queryByText("Odd")).not.toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+      expect(screen.queryByText("Odd")).toBeNull();
+    },
+  );
 });
 
 describe("dismiss", () => {
@@ -156,7 +157,9 @@ describe("dismiss", () => {
 
     // The close button is icon-only, so its accessible name is the only thing
     // distinguishing two stacked toasts for a screen-reader user.
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss: Second message" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss: Second message" }),
+    );
     expect(screen.queryByText("Second message")).toBeNull();
     expect(screen.getByText("First message")).toBeDefined();
   });
@@ -167,8 +170,9 @@ describe("Toaster", () => {
     const { container } = render(<Toaster className="custom-anchor" />);
     const region = screen.getByRole("region", { name: "Notifications" });
     expect(region.className).toContain("custom-anchor");
-    expect(container.querySelectorAll("[role='status'],[role='alert']"))
-      .toHaveLength(0);
+    expect(
+      container.querySelectorAll("[role='status'],[role='alert']"),
+    ).toHaveLength(0);
   });
 
   it("shows a toast raised after it mounted, without a provider", () => {

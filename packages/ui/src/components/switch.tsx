@@ -21,11 +21,10 @@ import { cn } from "../lib/utils";
 const PRIVACY_CAPS =
   "text-[10px] font-semibold uppercase tracking-wide leading-none text-muted-foreground select-none";
 
-export interface SwitchProps
-  extends Omit<
-    React.ButtonHTMLAttributes<HTMLButtonElement>,
-    "onChange" | "type" | "value"
-  > {
+export interface SwitchProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "onChange" | "type" | "value"
+> {
   variant?: "default" | "privacy";
   /** Controlled on/off state. */
   checked?: boolean;
@@ -93,7 +92,10 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
       <span className={cn("inline-flex items-center gap-2", className)}>
         <span className={PRIVACY_CAPS}>
           {hardLocked ? (
-            <Lock className="mr-1 inline-block h-3 w-3 align-[-1px]" aria-hidden />
+            <Lock
+              className="mr-1 inline-block h-3 w-3 align-[-1px]"
+              aria-hidden
+            />
           ) : null}
           {caps}
         </span>

@@ -158,7 +158,9 @@ describe("refusals", () => {
       to: "completed",
     });
 
-    expect(refusal(result)).toBe("Sign in as a registered supplier to do that.");
+    expect(refusal(result)).toBe(
+      "Sign in as a registered supplier to do that.",
+    );
     expect(db.queries).toEqual([]);
   });
 });
@@ -226,7 +228,9 @@ describe("a permitted transition", () => {
   });
 
   it("lets a self-service step be undone", async () => {
-    db.rows("supplier_onboarding", [{ steps: { agreement_signed: "completed" } }]);
+    db.rows("supplier_onboarding", [
+      { steps: { agreement_signed: "completed" } },
+    ]);
 
     success(
       await setOnboardingStep({ stepKey: "agreement_signed", to: "pending" }),

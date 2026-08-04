@@ -9,8 +9,14 @@ async function freshIndex() {
   return import("../index");
 }
 
-const ENV_KEYS = ["DATABASE_URL", "NEON_LOCAL_PROXY", "QUAGGA_SQL_LOG"] as const;
-const ENV_SNAPSHOT = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+const ENV_KEYS = [
+  "DATABASE_URL",
+  "NEON_LOCAL_PROXY",
+  "QUAGGA_SQL_LOG",
+] as const;
+const ENV_SNAPSHOT = Object.fromEntries(
+  ENV_KEYS.map((k) => [k, process.env[k]]),
+);
 const NEON_SNAPSHOT = {
   wsProxy: neonConfig.wsProxy,
   fetchEndpoint: neonConfig.fetchEndpoint,
@@ -28,9 +34,12 @@ const opened: Pool[] = [];
  * that `QUAGGA_SQL_LOG` reaches the thing that logs queries, not merely that a
  * factory returned an object.
  */
-function installedLogger(db: unknown): { logQuery(query: string, params: unknown[]): void } {
-  return (db as { session: { logger: { logQuery(q: string, p: unknown[]): void } } })
-    .session.logger;
+function installedLogger(db: unknown): {
+  logQuery(query: string, params: unknown[]): void;
+} {
+  return (
+    db as { session: { logger: { logQuery(q: string, p: unknown[]): void } } }
+  ).session.logger;
 }
 
 beforeEach(() => {
@@ -113,11 +122,15 @@ describe("the NEON_LOCAL_PROXY transport switch", () => {
     const pool = (createHttpDb() as unknown as { $client: Pool }).$client;
     opened.push(pool);
 
-    expect(() => pool.emit("error", new Error("connection terminated unexpectedly"))).not.toThrow();
+    expect(() =>
+      pool.emit("error", new Error("connection terminated unexpectedly")),
+    ).not.toThrow();
     expect(warned).toHaveBeenCalledOnce();
     const message = String(warned.mock.calls[0]?.[0]);
     expect(message).toContain("[db]");
-    expect(String(warned.mock.calls[0]?.[1])).toContain("connection terminated");
+    expect(String(warned.mock.calls[0]?.[1])).toContain(
+      "connection terminated",
+    );
   });
 });
 

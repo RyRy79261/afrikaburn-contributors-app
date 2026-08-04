@@ -19,14 +19,19 @@ const TOTP_URI =
 const CODES = ["11111111", "22222222", "33333333"];
 
 /** A stub Better Auth client whose every method is a spy the test can steer. */
-function makeClient(over: {
-  enable?: unknown;
-  verifyTotp?: unknown;
-  disable?: unknown;
-  generateBackupCodes?: unknown;
-} = {}) {
+function makeClient(
+  over: {
+    enable?: unknown;
+    verifyTotp?: unknown;
+    disable?: unknown;
+    generateBackupCodes?: unknown;
+  } = {},
+) {
   const enable = vi.fn().mockResolvedValue(
-    over.enable ?? { data: { totpURI: TOTP_URI, backupCodes: CODES }, error: null },
+    over.enable ?? {
+      data: { totpURI: TOTP_URI, backupCodes: CODES },
+      error: null,
+    },
   );
   const verifyTotp = vi
     .fn()
@@ -105,7 +110,10 @@ describe("the setup key", () => {
 
   it("shows no setup key rather than throwing when the URI is malformed", async () => {
     const { client } = makeClient({
-      enable: { data: { totpURI: "not-a-uri", backupCodes: CODES }, error: null },
+      enable: {
+        data: { totpURI: "not-a-uri", backupCodes: CODES },
+        error: null,
+      },
     });
     render(
       <AccountTwoFactor
@@ -323,7 +331,9 @@ describe("downloading the backup codes", () => {
     const create = vi
       .spyOn(URL, "createObjectURL")
       .mockReturnValue("blob:codes");
-    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const revoke = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
     await enrolToBackupCodes();
 
     // jsdom logs "Not implemented: navigation" for the anchor click. That is
@@ -383,7 +393,10 @@ describe("managing an enabled account", () => {
 
   it("leaves the existing codes alone when regeneration is refused", async () => {
     const { client } = makeClient({
-      generateBackupCodes: { data: null, error: { message: "Wrong password." } },
+      generateBackupCodes: {
+        data: null,
+        error: { message: "Wrong password." },
+      },
     });
     const onChanged = vi.fn();
     render(
@@ -441,7 +454,9 @@ describe("managing an enabled account", () => {
     fireEvent.change(screen.getByLabelText("Confirm your password"), {
       target: { value: "nope" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Turn off two-factor" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Turn off two-factor" }),
+    );
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe("Couldn't turn two-factor off. Try again.");
@@ -478,7 +493,9 @@ describe("managing an enabled account", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
-    fireEvent.click(screen.getByRole("button", { name: "Turn off two-factor" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Turn off two-factor" }),
+    );
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     expect(enabledCard.disable).toHaveBeenCalledWith({ password: undefined });
   });

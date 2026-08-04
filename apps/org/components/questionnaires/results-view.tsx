@@ -191,7 +191,10 @@ function OrphanDisclosure({
   if (orphans.length === 0) return null;
   return (
     <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
-      <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+      <FileWarning
+        className="mt-0.5 h-5 w-5 shrink-0 text-warning"
+        aria-hidden
+      />
       <div className="flex flex-col gap-1 text-sm">
         <p className="font-semibold text-foreground">
           {orphans.length === 1
@@ -281,7 +284,11 @@ function AggregateChart({ aggregate }: { aggregate: QuestionAggregate }) {
     case "boolean":
       return (
         <div className="flex flex-col gap-2">
-          <BarRow label="Yes" count={aggregate.yes} percent={aggregate.percentYes} />
+          <BarRow
+            label="Yes"
+            count={aggregate.yes}
+            percent={aggregate.percentYes}
+          />
           <BarRow
             label="No"
             count={aggregate.no}
@@ -296,16 +303,18 @@ function AggregateChart({ aggregate }: { aggregate: QuestionAggregate }) {
           <Histogram buckets={aggregate.buckets} />
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>
-              {aggregate.minLabel ? `${aggregate.min} — ${aggregate.minLabel}` : aggregate.min}
+              {aggregate.minLabel
+                ? `${aggregate.min} — ${aggregate.minLabel}`
+                : aggregate.min}
             </span>
             <span className="font-medium text-foreground">
               Average{" "}
-              <span className="tabular-nums">
-                {aggregate.average ?? "—"}
-              </span>
+              <span className="tabular-nums">{aggregate.average ?? "—"}</span>
             </span>
             <span>
-              {aggregate.maxLabel ? `${aggregate.max} — ${aggregate.maxLabel}` : aggregate.max}
+              {aggregate.maxLabel
+                ? `${aggregate.max} — ${aggregate.maxLabel}`
+                : aggregate.max}
             </span>
           </div>
         </div>
@@ -321,7 +330,10 @@ function AggregateChart({ aggregate }: { aggregate: QuestionAggregate }) {
                 label={
                   <span className="flex items-center gap-1">
                     <span className="tabular-nums">{bucket.value}</span>
-                    <Star className="h-3.5 w-3.5 fill-current text-warning" aria-hidden />
+                    <Star
+                      className="h-3.5 w-3.5 fill-current text-warning"
+                      aria-hidden
+                    />
                   </span>
                 }
                 count={bucket.count}
@@ -483,9 +495,7 @@ function TextAnswers({ answers }: { answers: readonly string[] }) {
           className="self-start"
           onClick={() => setExpanded((e) => !e)}
         >
-          {expanded
-            ? "Show fewer"
-            : `View all ${answers.length} answers`}
+          {expanded ? "Show fewer" : `View all ${answers.length} answers`}
         </Button>
       ) : null}
     </div>
@@ -502,7 +512,8 @@ function optionLabelMap(questions: readonly Question[]): Map<string, string> {
     }
     if (q.kind === "multi_choice_grid" || q.kind === "checkbox_grid") {
       for (const row of q.rows) labels.set(`${q.id}:row:${row.id}`, row.label);
-      for (const col of q.columns) labels.set(`${q.id}:col:${col.value}`, col.label);
+      for (const col of q.columns)
+        labels.set(`${q.id}:col:${col.value}`, col.label);
     }
   }
   return labels;
@@ -552,7 +563,12 @@ function CsvExportButton({
 }) {
   function download() {
     const labels = optionLabelMap(questions);
-    const header = ["Recipient", "Status", "Completed", ...questions.map((q) => q.prompt)];
+    const header = [
+      "Recipient",
+      "Status",
+      "Completed",
+      ...questions.map((q) => q.prompt),
+    ];
     const lines = [header.map(csvCell).join(",")];
     for (const row of rows) {
       const cells = [
@@ -580,7 +596,12 @@ function CsvExportButton({
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={download} disabled={rows.length === 0}>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={download}
+      disabled={rows.length === 0}
+    >
       <Download aria-hidden />
       Export CSV
     </Button>

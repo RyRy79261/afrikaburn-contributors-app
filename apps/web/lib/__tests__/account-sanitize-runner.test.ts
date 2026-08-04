@@ -7,7 +7,9 @@ import {
 } from "@quagga/core";
 import { boundStrings, dbMock } from "@/test/db-mock";
 
-vi.mock("@/lib/db", async () => (await import("@/test/db-mock")).dbModuleMock());
+vi.mock("@/lib/db", async () =>
+  (await import("@/test/db-mock")).dbModuleMock(),
+);
 
 const stubs = vi.hoisted(() => ({
   guard: {
@@ -37,9 +39,8 @@ vi.mock("@/lib/email", () => ({
   },
 }));
 
-const { sanitizeAccount, sweepDueDeletions } = await import(
-  "../account-sanitize"
-);
+const { sanitizeAccount, sweepDueDeletions } =
+  await import("../account-sanitize");
 
 const USER = "cccccccc-0000-0000-0000-000000000001";
 const AUTH_ID = "auth-0000-0000-0000-000000000001";
@@ -63,15 +64,17 @@ function dueRequest(overrides: Record<string, unknown> = {}) {
  * in order. The transaction's writes each consume a queued value too, so the
  * defaults (an empty array) stand in for "nothing was released".
  */
-function queueErasure(input: {
-  user?: { email: string | null; authUserId: string } | null;
-  memberships?: number;
-  bios?: number;
-  releasedSuppliers?: unknown[];
-  vacatedWranglers?: unknown[];
-  orgMemberships?: unknown[];
-  revokedOrgRoles?: unknown[];
-} = {}) {
+function queueErasure(
+  input: {
+    user?: { email: string | null; authUserId: string } | null;
+    memberships?: number;
+    bios?: number;
+    releasedSuppliers?: unknown[];
+    vacatedWranglers?: unknown[];
+    orgMemberships?: unknown[];
+    revokedOrgRoles?: unknown[];
+  } = {},
+) {
   const user =
     input.user === undefined
       ? { email: "alice@example.com", authUserId: AUTH_ID }
@@ -241,9 +244,10 @@ describe("sanitizeAccount — the erasure itself", () => {
 
     await sanitizeAccount(USER, REQUEST, NOW);
 
-    const patch = dbMock
-      .writesTo(schema.burnerBios)[0]!
-      .arg("set") as Record<string, unknown>;
+    const patch = dbMock.writesTo(schema.burnerBios)[0]!.arg("set") as Record<
+      string,
+      unknown
+    >;
 
     // Named one at a time, because these are the columns whose survival IS the
     // POPIA failure: the hard-locked class (phone, both emergency contacts, SA

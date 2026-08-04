@@ -105,7 +105,9 @@ describe("authorisation", () => {
       acknowledged: true,
     });
 
-    expect(refusal(result)).toBe("Sign in as a registered supplier to do that.");
+    expect(refusal(result)).toBe(
+      "Sign in as a registered supplier to do that.",
+    );
     expect(db.queries).toEqual([]);
   });
 
@@ -150,7 +152,9 @@ describe("acknowledging", () => {
     );
 
     const insert = db.matching('insert into "supplier_document_acks"')[0]!;
-    expect(insert.sql).toContain('on conflict ("supplier_id","document_id") do nothing');
+    expect(insert.sql).toContain(
+      'on conflict ("supplier_id","document_id") do nothing',
+    );
     expect(insert.params).toEqual(["sup-1", DOC]);
   });
 
@@ -175,9 +179,9 @@ describe("acknowledging", () => {
       "execute:audit_events", // step completed
       "execute:audit_events", // the ack itself
     ]);
-    expect(db.matching('select "steps" from "supplier_onboarding"')[0]!.sql).toContain(
-      "for update",
-    );
+    expect(
+      db.matching('select "steps" from "supplier_onboarding"')[0]!.sql,
+    ).toContain("for update");
   });
 
   it("completes the bound step and audits it, alongside the document_ack row", async () => {
@@ -195,7 +199,9 @@ describe("acknowledging", () => {
     const audits = db.matching('insert into "audit_events"');
     expect(audits).toHaveLength(2);
     // One row per completed step…
-    expect(String(audits[0]!.params.at(-1))).toContain('"step":"agreement_signed"');
+    expect(String(audits[0]!.params.at(-1))).toContain(
+      '"step":"agreement_signed"',
+    );
     expect(String(audits[0]!.params.at(-1))).toContain('"via":"document_ack"');
     // …plus one carrying both lists and the edition year.
     const ack = JSON.parse(String(audits[1]!.params.at(-1)));
@@ -250,11 +256,16 @@ describe("withdrawing", () => {
   it("deletes the ack row scoped to THIS supplier, and reverts the step", async () => {
     db.rows("supplier_documents", [{ id: DOC }], [AGREEMENT]);
     db.rows("supplier_document_acks", []); // withdrawn, so none remain
-    db.rows("supplier_onboarding", [{ steps: { agreement_signed: "completed" } }]);
+    db.rows("supplier_onboarding", [
+      { steps: { agreement_signed: "completed" } },
+    ]);
     db.rows("audit_events", []);
 
     success(
-      await setDocumentAcknowledgement({ documentId: DOC, acknowledged: false }),
+      await setDocumentAcknowledgement({
+        documentId: DOC,
+        acknowledged: false,
+      }),
     );
 
     const del = db.matching('delete from "supplier_document_acks"')[0]!;
@@ -287,7 +298,10 @@ describe("withdrawing", () => {
     db.rows("audit_events", []);
 
     success(
-      await setDocumentAcknowledgement({ documentId: DOC, acknowledged: false }),
+      await setDocumentAcknowledgement({
+        documentId: DOC,
+        acknowledged: false,
+      }),
     );
 
     // One of two required documents acknowledged is not a completed step.

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  connectionHost,
-  isPoolerConnection,
-  planMigration,
-} from "../migrate";
+import { connectionHost, isPoolerConnection, planMigration } from "../migrate";
 
 const DIRECT =
   "postgres://user:pw@ep-cool-name-123456.us-east-2.aws.neon.tech/db?sslmode=require";
@@ -16,9 +12,9 @@ describe("isPoolerConnection", () => {
   });
 
   it("flags an explicit pgbouncer=true query flag", () => {
-    expect(
-      isPoolerConnection(`${DIRECT.split("?")[0]}?pgbouncer=true`),
-    ).toBe(true);
+    expect(isPoolerConnection(`${DIRECT.split("?")[0]}?pgbouncer=true`)).toBe(
+      true,
+    );
   });
 
   it("flags a pgbouncer host", () => {

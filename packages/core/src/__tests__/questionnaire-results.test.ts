@@ -289,7 +289,9 @@ describe("definition drift", () => {
         {
           ...DEF.pages[0],
           questions: [
-            ...(DEF.pages[0]?.kind === "questions" ? DEF.pages[0].questions : []),
+            ...(DEF.pages[0]?.kind === "questions"
+              ? DEF.pages[0].questions
+              : []),
             {
               id: "brand_new",
               kind: "short_text",
@@ -320,7 +322,9 @@ describe("backward compatibility — v1 responses aggregate", () => {
     expect(results.totalResponses).toBe(3);
     expect(results.orphans).toEqual([]);
 
-    const arrival = results.questions.find((q) => q.questionId === "arrival_day");
+    const arrival = results.questions.find(
+      (q) => q.questionId === "arrival_day",
+    );
     if (arrival?.chart !== "choice") throw new Error("expected choice");
     expect(arrival.options).toEqual([
       { value: "sunday", label: "Sunday", count: 2, percent: 66.7 },

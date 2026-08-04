@@ -86,9 +86,9 @@ describe("RoleSwatch", () => {
 
   it("adds the selection ring only when selected", () => {
     const { container, rerender } = render(<RoleSwatch color="olive" />);
-    expect((container.firstElementChild as HTMLElement).className).not.toContain(
-      "ring-2",
-    );
+    expect(
+      (container.firstElementChild as HTMLElement).className,
+    ).not.toContain("ring-2");
     // In a palette picker the ring is the ONLY signal of which colour is
     // chosen — the dot itself never changes.
     rerender(<RoleSwatch color="olive" selected />);

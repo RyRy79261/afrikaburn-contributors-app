@@ -13,7 +13,9 @@ import { consumeRateLimit, rateLimitIp } from "../rate-limit";
 const REAL_DATABASE_URL = process.env.DATABASE_URL;
 
 /** Headers, as a Next `Request` hands them over. */
-function headers(entries: Record<string, string>): { get(n: string): string | null } {
+function headers(entries: Record<string, string>): {
+  get(n: string): string | null;
+} {
   return { get: (name) => entries[name] ?? null };
 }
 
@@ -77,7 +79,11 @@ describe("consumeRateLimit", () => {
     // a database during a DB-less build would crash the build it is running in.
     delete process.env.DATABASE_URL;
     await expect(
-      consumeRateLimit({ key: "forgot_password:1.2.3.4", max: 3, windowSeconds: WINDOW }),
+      consumeRateLimit({
+        key: "forgot_password:1.2.3.4",
+        max: 3,
+        windowSeconds: WINDOW,
+      }),
     ).resolves.toEqual({ allowed: true, retryAfterSeconds: 0 });
     expect(execute).not.toHaveBeenCalled();
   });
@@ -114,7 +120,9 @@ describe("consumeRateLimit", () => {
   it("never returns a retry-after of 0 or less, even past the window's end", async () => {
     // A 0 tells the client to retry immediately, which is a hot loop against
     // the very endpoint being protected. `Math.max(1, ...)` is that floor.
-    execute.mockResolvedValueOnce(httpRows(9, NOW.getTime() - WINDOW * 1000 - 60_000));
+    execute.mockResolvedValueOnce(
+      httpRows(9, NOW.getTime() - WINDOW * 1000 - 60_000),
+    );
     const verdict = await consumeRateLimit({
       key: "k",
       max: 3,
@@ -175,7 +183,12 @@ describe("consumeRateLimit", () => {
     // a write and both concluding they are under the limit. A second round trip
     // would reintroduce that race.
     execute.mockResolvedValueOnce(httpRows(1, NOW.getTime()));
-    await consumeRateLimit({ key: "k", max: 3, windowSeconds: WINDOW, now: NOW });
+    await consumeRateLimit({
+      key: "k",
+      max: 3,
+      windowSeconds: WINDOW,
+      now: NOW,
+    });
     expect(execute).toHaveBeenCalledOnce();
   });
 });

@@ -153,7 +153,8 @@ describe("the composed shapes", () => {
     );
     const bars = [...container.querySelectorAll(".animate-pulse")];
     expect(bars.length).toBeGreaterThan(0);
-    for (const bar of bars) expect(bar.getAttribute("aria-hidden")).toBe("true");
+    for (const bar of bars)
+      expect(bar.getAttribute("aria-hidden")).toBe("true");
     // One announcement per boundary, not one per bar.
     expect(container.querySelectorAll(".sr-only")).toHaveLength(1);
   });

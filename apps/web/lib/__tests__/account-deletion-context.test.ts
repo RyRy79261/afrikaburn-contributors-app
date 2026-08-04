@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { dbMock } from "@/test/db-mock";
 import { cookieJar, resetNextMocks } from "@/test/next-mocks";
 
-vi.mock("@/lib/db", async () => (await import("@/test/db-mock")).dbModuleMock());
-vi.mock(
-  "next/headers",
-  async () => (await import("@/test/next-mocks")).nextHeadersMock(),
+vi.mock("@/lib/db", async () =>
+  (await import("@/test/db-mock")).dbModuleMock(),
+);
+vi.mock("next/headers", async () =>
+  (await import("@/test/next-mocks")).nextHeadersMock(),
 );
 
 /** The Better Auth reads live in @quagga/auth and need a live identity store;
@@ -187,7 +188,10 @@ describe("buildDeletionGuardContext — counting things accurately", () => {
   });
 
   it("counts the sign-in methods the identity provider reports", async () => {
-    linkedAccounts.value = [{ providerId: "credential" }, { providerId: "google" }];
+    linkedAccounts.value = [
+      { providerId: "credential" },
+      { providerId: "google" },
+    ];
     queueGuardContext({});
 
     expect((await buildDeletionGuardContext(USER)).signInMethodCount).toBe(2);
@@ -258,7 +262,9 @@ describe("buildDeletionView", () => {
     const view = await buildDeletionView(USER, new Date("2026-08-05"));
     expect(view.phase).toBe("none");
     expect(view.eligibility.ok).toBe(false);
-    expect(view.eligibility.blocks.map((b) => b.code)).toContain("sole_camp_lead");
+    expect(view.eligibility.blocks.map((b) => b.code)).toContain(
+      "sole_camp_lead",
+    );
   });
 });
 

@@ -147,7 +147,9 @@ describe("toAuthenticatedUser — the shape the god bootstrap reads", () => {
     const { getAuthenticatedUser } = await authModule();
 
     for (const value of [true]) {
-      getSession.mockResolvedValue({ user: { id: "auth-1", emailVerified: value } });
+      getSession.mockResolvedValue({
+        user: { id: "auth-1", emailVerified: value },
+      });
       const user = await getAuthenticatedUser();
       expect(user?.emailVerified).toBe(true);
     }
@@ -324,7 +326,9 @@ describe("changePassword", () => {
     const result = await changePassword({ ...INPUT, newPassword: "short" });
 
     expect(result).toMatchObject({ ok: false });
-    expect((result as { error: string }).error).not.toMatch(/better|auth\.api/i);
+    expect((result as { error: string }).error).not.toMatch(
+      /better|auth\.api/i,
+    );
     expect(changePasswordApi).not.toHaveBeenCalled();
   });
 
@@ -509,7 +513,10 @@ describe("resetPassword", () => {
   it("confirms a completed reset", async () => {
     resetPasswordApi.mockResolvedValue({});
     await expect(
-      resetPassword({ token: "tok", newPassword: "a-much-longer-passphrase-2027" }),
+      resetPassword({
+        token: "tok",
+        newPassword: "a-much-longer-passphrase-2027",
+      }),
     ).resolves.toEqual({
       ok: true,
       message: "Password reset. Sign in with your new password.",
@@ -518,7 +525,10 @@ describe("resetPassword", () => {
 
   it("rejects an empty token before calling the provider", async () => {
     await expect(
-      resetPassword({ token: "", newPassword: "a-much-longer-passphrase-2027" }),
+      resetPassword({
+        token: "",
+        newPassword: "a-much-longer-passphrase-2027",
+      }),
     ).rejects.toThrow();
     expect(resetPasswordApi).not.toHaveBeenCalled();
   });

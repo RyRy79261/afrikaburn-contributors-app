@@ -77,7 +77,9 @@ import suppliersDataRaw from "./data/suppliers.json" with { type: "json" };
 // trusting the JSON import's inferred `string` types.
 const suppliersData = {
   ...suppliersDataRaw,
-  suppliers: suppliersDataRaw.suppliers.map((row) => SupplierImportRow.parse(row)),
+  suppliers: suppliersDataRaw.suppliers.map((row) =>
+    SupplierImportRow.parse(row),
+  ),
 };
 
 /** First row of a `.returning()` result, or throw — every insert here is a
@@ -463,7 +465,12 @@ export async function seedReferenceData(db: Db): Promise<void> {
     let supplierCount = 0;
     for (const row of suppliersData.suppliers) {
       const supplier = await ensureSupplier(db, row);
-      await ensureSupplierOnboarding(db, supplier.id, edition.id, row.onboarding);
+      await ensureSupplierOnboarding(
+        db,
+        supplier.id,
+        edition.id,
+        row.onboarding,
+      );
       supplierCount++;
     }
     console.log(
@@ -568,7 +575,8 @@ async function ensureSupplier(
   },
 ) {
   const standing = row.standing ?? "good";
-  const category = row.category && row.category.length > 0 ? row.category : null;
+  const category =
+    row.category && row.category.length > 0 ? row.category : null;
   const returning = row.returning ?? null;
   // Dedupe on the NORMALISED name, not the exact one. The sheet is a human
   // export: a trailing space or a capitalisation change makes two rows that
@@ -579,7 +587,9 @@ async function ensureSupplier(
   const existing = await db
     .select()
     .from(schema.suppliers)
-    .where(sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${row.name}))`)
+    .where(
+      sql`lower(btrim(${schema.suppliers.name})) = lower(btrim(${row.name}))`,
+    )
     .limit(1);
   const existingRow = existing[0];
   // BOOTSTRAP, NOT SYNC — the principle stated at the top of this file, applied
@@ -669,7 +679,12 @@ async function ensureCampCategory(
           schema.campCategories.editionId,
           schema.campCategories.labelNormalized,
         ],
-        set: { label: input.label, emoji: input.emoji, sort: input.sort, updatedAt: new Date() },
+        set: {
+          label: input.label,
+          emoji: input.emoji,
+          sort: input.sort,
+          updatedAt: new Date(),
+        },
       })
       .returning(),
     `camp category ${input.label}`,

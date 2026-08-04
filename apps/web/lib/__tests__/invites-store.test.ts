@@ -188,7 +188,11 @@ describe("getInvitePreview", () => {
   });
 
   it("drops the inviter's name when their account has been sanitized or has no handle", async () => {
-    dbMock.queue([previewRow], [], [{ username: "alice", sanitizedAt: new Date() }]);
+    dbMock.queue(
+      [previewRow],
+      [],
+      [{ username: "alice", sanitizedAt: new Date() }],
+    );
     expect((await getInvitePreview(TOKEN, EDITION))?.inviterName).toBeNull();
 
     dbMock.reset();
@@ -231,7 +235,9 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
   });
 
   it("REFUSES an already-claimed token and an expired one, each with its own message", async () => {
-    queueRedemption({ invite: { usedAt: new Date(), usedByUserId: "someone" } });
+    queueRedemption({
+      invite: { usedAt: new Date(), usedByUserId: "someone" },
+    });
     expect(await redeemInvite(TOKEN, USER)).toEqual({
       ok: false,
       error:
@@ -305,7 +311,10 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
   });
 
   it("a lead_transfer demotes the sitting lead(s) and promotes an EXISTING member", async () => {
-    queueRedemption({ invite: { kind: "lead_transfer" }, viewerRole: "member" });
+    queueRedemption({
+      invite: { kind: "lead_transfer" },
+      viewerRole: "member",
+    });
     dbMock.queue(
       [{ id: INVITE_ID }],
       /* demote the current leads */ [],

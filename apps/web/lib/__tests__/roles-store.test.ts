@@ -104,7 +104,9 @@ const SAFETY_BARON = role({
  * test about role names has nothing to say about the officer catalog being
  * materialised. The seeding branch has its own tests above.
  */
-function queueRoles(roles: RoleFixture[] = [BASELINE, TEAM_LEAD, SAFETY_BARON]) {
+function queueRoles(
+  roles: RoleFixture[] = [BASELINE, TEAM_LEAD, SAFETY_BARON],
+) {
   const probe = roles.map((r) => ({
     id: r.id,
     kind: r.kind,
@@ -172,7 +174,11 @@ describe("ensureDefaultRoles", () => {
   it("writes nothing at all when both defaults and officers exist", async () => {
     dbMock.queue([
       { id: BASELINE_ID, kind: "baseline", officerKey: null },
-      { id: SAFETY_BARON_ID, kind: "officer", officerKey: "fire_safety_officer" },
+      {
+        id: SAFETY_BARON_ID,
+        kind: "officer",
+        officerKey: "fire_safety_officer",
+      },
     ]);
 
     await ensureDefaultRoles(GROUP);
@@ -240,9 +246,11 @@ describe("createRole / renameRole — one name per camp", () => {
     queueRoles([BASELINE, role({ sort: 9 })]);
     dbMock.queue([]);
 
-    expect(await createRole(GROUP, "  Bar   crew ", { color: "teal" })).toEqual({
-      ok: true,
-    });
+    expect(await createRole(GROUP, "  Bar   crew ", { color: "teal" })).toEqual(
+      {
+        ok: true,
+      },
+    );
     expect(dbMock.onlyQuery("insert").arg("values")).toMatchObject({
       groupId: GROUP,
       // Cleaned: trimmed and internal whitespace collapsed.
@@ -302,9 +310,12 @@ describe("createRole / renameRole — one name per camp", () => {
 describe("setRoleAppearance / setRolePermissions / removeRole", () => {
   it("REFUSES to restyle an officer role", async () => {
     queueRoles();
-    expect(await setRoleAppearance(GROUP, SAFETY_BARON_ID, { color: "teal" })).toEqual(
-      { ok: false, error: "Officer roles use the AfrikaBurn catalog styling." },
-    );
+    expect(
+      await setRoleAppearance(GROUP, SAFETY_BARON_ID, { color: "teal" }),
+    ).toEqual({
+      ok: false,
+      error: "Officer roles use the AfrikaBurn catalog styling.",
+    });
   });
 
   it("keeps the current colour and emoji when the patch omits them", async () => {
@@ -325,7 +336,9 @@ describe("setRoleAppearance / setRolePermissions / removeRole", () => {
     dbMock.queue([]);
 
     await setRoleAppearance(GROUP, CUSTOM_ID, { emoji: null });
-    expect(dbMock.onlyQuery("update").arg("set")).toMatchObject({ emoji: null });
+    expect(dbMock.onlyQuery("update").arg("set")).toMatchObject({
+      emoji: null,
+    });
   });
 
   it("LOCKS captain permissions to everything, whatever the caller passed", async () => {
@@ -397,10 +410,13 @@ describe("setMemberRoles — the escalation guard", () => {
     dbMock.queue([{ id: MEMBERSHIP }]);
     queueRoles([BASELINE, ELEVATING]);
 
-    expect(await setMemberRoles(GROUP, MEMBERSHIP, ["role-elevating"])).toEqual({
-      ok: false,
-      error: "Only a role manager can assign roles that manage roles or members.",
-    });
+    expect(await setMemberRoles(GROUP, MEMBERSHIP, ["role-elevating"])).toEqual(
+      {
+        ok: false,
+        error:
+          "Only a role manager can assign roles that manage roles or members.",
+      },
+    );
     expect(dbMock.transactions).toBe(0);
   });
 
@@ -437,9 +453,9 @@ describe("setMemberRoles — the escalation guard", () => {
       ]),
     ).toEqual({ ok: true });
 
-    const insert = dbMock.writesTo(schema.memberRoleAssignments).find(
-      (q) => q.kind === "insert",
-    );
+    const insert = dbMock
+      .writesTo(schema.memberRoleAssignments)
+      .find((q) => q.kind === "insert");
     expect(insert?.arg("values")).toEqual([
       {
         membershipId: MEMBERSHIP,
@@ -524,7 +540,8 @@ describe("assignOfficer — nothing is shared until the burner answers", () => {
 
     expect(await assignOfficer(GROUP, MEMBERSHIP, SAFETY_BARON_ID)).toEqual({
       ok: false,
-      error: "Only a role manager can assign roles that manage roles or members.",
+      error:
+        "Only a role manager can assign roles that manage roles or members.",
     });
     expect(dbMock.writesTo(schema.memberRoleAssignments)).toHaveLength(0);
   });
@@ -582,7 +599,10 @@ describe("respondToOfficer — the consent itself", () => {
       await respondToOfficer(USER, GROUP, SAFETY_BARON_ID, true, EDITION),
     ).toEqual({ ok: true });
 
-    const set = dbMock.onlyQuery("update").arg("set") as Record<string, unknown>;
+    const set = dbMock.onlyQuery("update").arg("set") as Record<
+      string,
+      unknown
+    >;
     expect(set.consentStatus).toBe("accepted");
     expect(set.orgVisible).toBe(true);
     // Consent to share a phone number with AfrikaBurn is consent for ONE burn.
@@ -640,9 +660,9 @@ describe("unassignOfficer", () => {
     // strip an officer from camp B.
     queueRoles();
 
-    expect(await unassignOfficer(GROUP, MEMBERSHIP, "role-from-camp-b")).toEqual(
-      { ok: false, error: "That officer role doesn't exist." },
-    );
+    expect(
+      await unassignOfficer(GROUP, MEMBERSHIP, "role-from-camp-b"),
+    ).toEqual({ ok: false, error: "That officer role doesn't exist." });
     expect(dbMock.queriesOfKind("delete")).toHaveLength(0);
   });
 
@@ -795,9 +815,9 @@ describe("getBaselineRoleId / getRoleAssignments / membershipIdsWithRoles", () =
       { membershipId: "ms-2" },
     ]);
 
-    expect(await membershipIdsWithRoles(GROUP, [TEAM_LEAD_ID, CUSTOM_ID])).toEqual(
-      [MEMBERSHIP, "ms-2"],
-    );
+    expect(
+      await membershipIdsWithRoles(GROUP, [TEAM_LEAD_ID, CUSTOM_ID]),
+    ).toEqual([MEMBERSHIP, "ms-2"]);
   });
 });
 
@@ -839,9 +859,7 @@ describe("getOfficerStatus", () => {
       { membershipId: MEMBERSHIP, consent: "pending", orgVisible: false },
     ]);
     expect(status.outstanding.applies).toBe(true);
-    expect(status.outstanding.outstanding).not.toContain(
-      "fire_safety_officer",
-    );
+    expect(status.outstanding.outstanding).not.toContain("fire_safety_officer");
   });
 
   it("is not applicable for a camp with no registration at all", async () => {

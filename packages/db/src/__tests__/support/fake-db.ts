@@ -170,9 +170,9 @@ export function createFakeDb(handler: OpHandler = () => []): FakeDbHandle {
       },
       then<TResult1 = unknown[], TResult2 = never>(
         onFulfilled?:
-          | ((rows: unknown[]) => TResult1 | PromiseLike<TResult1>)
-          | null,
-        onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+          ((rows: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
+        onRejected?:
+          ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ): Promise<TResult1 | TResult2> {
         return Promise.resolve()
           .then(() => handler(op))

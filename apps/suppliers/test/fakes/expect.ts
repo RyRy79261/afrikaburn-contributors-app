@@ -18,7 +18,9 @@ export function refusal(result: ActionLike): string {
 /** Assert the action succeeded, and hand back its message (if any). */
 export function success(result: ActionLike): string | undefined {
   if (!result.ok) {
-    throw new Error(`expected the action to succeed, but it refused: ${result.error}`);
+    throw new Error(
+      `expected the action to succeed, but it refused: ${result.error}`,
+    );
   }
   return result.message;
 }

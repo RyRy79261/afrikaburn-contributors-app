@@ -21,7 +21,14 @@ import { MarkdownView } from "../markdown-editor/markdown-view";
 // ASYNCHRONOUSLY — it reddens the run rather than any single test. Nothing below
 // asserts on geometry; these exist only so the scroll can be a no-op.
 const EMPTY_RECT = {
-  top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0, x: 0, y: 0,
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  width: 0,
+  height: 0,
+  x: 0,
+  y: 0,
   toJSON: () => ({}),
 } as DOMRect;
 for (const proto of [Range.prototype, Text.prototype]) {
@@ -100,14 +107,18 @@ describe("the toolbar", () => {
     // would turn the heading ON or OFF. The attribute missing entirely would
     // leave them guessing.
     expect(
-      screen.getByRole("button", { name: "Heading" }).getAttribute("aria-pressed"),
+      screen
+        .getByRole("button", { name: "Heading" })
+        .getAttribute("aria-pressed"),
     ).toBe("false");
     unmount();
 
     render(<MarkdownEditor value={"## Gate times"} />);
     await findEditable();
     expect(
-      screen.getByRole("button", { name: "Heading" }).getAttribute("aria-pressed"),
+      screen
+        .getByRole("button", { name: "Heading" })
+        .getAttribute("aria-pressed"),
     ).toBe("true");
   });
 
@@ -186,7 +197,7 @@ describe("an external value change", () => {
     rerender(<MarkdownEditor value="Second draft" onChange={onChange} />);
 
     await waitFor(() =>
-      expect((screen.getByRole("textbox").textContent ?? "")).toContain(
+      expect(screen.getByRole("textbox").textContent ?? "").toContain(
         "Second draft",
       ),
     );
@@ -206,16 +217,12 @@ describe("MarkdownView", () => {
       expect(container.querySelector("h2")?.textContent).toBe("Gate times"),
     );
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(
-      container.querySelector("[contenteditable='true']"),
-    ).toBeNull();
+    expect(container.querySelector("[contenteditable='true']")).toBeNull();
   });
 
   it("re-renders when the source markdown changes", async () => {
     const { container, rerender } = render(<MarkdownView value="Before" />);
-    await waitFor(() =>
-      expect(container.textContent).toContain("Before"),
-    );
+    await waitFor(() => expect(container.textContent).toContain("Before"));
 
     rerender(<MarkdownView value="After" />);
     await waitFor(() => expect(container.textContent).toContain("After"));

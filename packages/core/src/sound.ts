@@ -62,5 +62,8 @@ export function isNoAmplifiedSound(value: string | null | undefined): boolean {
   if (!value) return true;
   const text = value.toLowerCase();
   if (/\d/.test(text)) return false;
-  return /\b(no|none|acoustic|silent|zero)\b/.test(text) || text.includes("no amplif");
+  return (
+    /\b(no|none|acoustic|silent|zero)\b/.test(text) ||
+    text.includes("no amplif")
+  );
 }

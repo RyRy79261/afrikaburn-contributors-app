@@ -35,8 +35,9 @@ vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@quagga/auth/account", async () => {
   // `parseSetCookies` stays REAL — it is the thing `applyAuthCookies` is a
   // wrapper around, and mocking it would leave the wrapper asserting itself.
-  const actual =
-    await vi.importActual<typeof AuthAccount>("@quagga/auth/account");
+  const actual = await vi.importActual<typeof AuthAccount>(
+    "@quagga/auth/account",
+  );
   return { ...actual, ...shared };
 });
 vi.mock("@/lib/db", async () => {
@@ -179,7 +180,10 @@ describe("applyAuthCookies", () => {
       "set-cookie",
       "quagga.session_token=abc; Path=/; HttpOnly; SameSite=Lax",
     );
-    responseHeaders.append("set-cookie", "quagga.session_data=xyz; Path=/; Max-Age=300");
+    responseHeaders.append(
+      "set-cookie",
+      "quagga.session_data=xyz; Path=/; Max-Age=300",
+    );
 
     await applyAuthCookies(responseHeaders);
 

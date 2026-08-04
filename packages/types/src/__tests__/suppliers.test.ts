@@ -106,9 +106,9 @@ describe("supplier document input", () => {
   });
 
   it("trims the title, requires one, and caps it", () => {
-    expect(SupplierDocumentInput.parse({ ...base, title: "  Policy  " }).title).toBe(
-      "Policy",
-    );
+    expect(
+      SupplierDocumentInput.parse({ ...base, title: "  Policy  " }).title,
+    ).toBe("Policy");
     const blank = SupplierDocumentInput.safeParse({ ...base, title: "   " });
     expect(blank.success).toBe(false);
     expect(blank.error?.issues[0]?.message).toBe("Give the document a title.");
@@ -125,8 +125,8 @@ describe("supplier document input", () => {
     expect(
       SupplierDocumentInput.safeParse({ ...base, sort: 10000 }).success,
     ).toBe(false);
-    expect(SupplierDocumentInput.safeParse({ ...base, sort: 1.5 }).success).toBe(
-      false,
-    );
+    expect(
+      SupplierDocumentInput.safeParse({ ...base, sort: 1.5 }).success,
+    ).toBe(false);
   });
 });

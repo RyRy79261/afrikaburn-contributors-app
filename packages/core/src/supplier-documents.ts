@@ -134,7 +134,8 @@ export function deriveDocumentAckProgress(
 
 // --- Binding validation (org side) ----------------------------------------
 
-export type DocumentBindingResult = { ok: true } | { ok: false; reason: string };
+export type DocumentBindingResult =
+  { ok: true } | { ok: false; reason: string };
 
 /**
  * May a document bind to `stepKey`? Null (no binding) is always fine.
@@ -154,7 +155,8 @@ export function validateDocumentBinding(
   if (stepKey == null) return { ok: true };
 
   const step = supplierOnboardingStep(stepKey);
-  if (!step) return { ok: false, reason: `Unknown onboarding step: ${stepKey}` };
+  if (!step)
+    return { ok: false, reason: `Unknown onboarding step: ${stepKey}` };
 
   if (!isSelfServiceStep(step)) {
     return {
@@ -204,9 +206,7 @@ export function isStepSatisfiedByAcks(
   acks: readonly SupplierDocumentAck[],
   stepKey: SupplierOnboardingStepKey,
 ): boolean {
-  const bound = documents.filter(
-    (d) => d.stepKey === stepKey && d.requiredAck,
-  );
+  const bound = documents.filter((d) => d.stepKey === stepKey && d.requiredAck);
   if (bound.length === 0) return false;
   const ackedIds = new Set(acks.map((a) => a.documentId));
   return bound.every((d) => ackedIds.has(d.id));
@@ -276,7 +276,12 @@ export function applyDocumentAcksToSteps(
     const current = stepStatus(steps, stepKey);
 
     if (satisfied && current !== "completed") {
-      const result = applyStepTransition(steps, "supplier", stepKey, "completed");
+      const result = applyStepTransition(
+        steps,
+        "supplier",
+        stepKey,
+        "completed",
+      );
       if (result.ok) {
         steps = result.steps;
         completed.push(stepKey);

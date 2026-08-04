@@ -198,6 +198,8 @@ describe("REGRESSION: medical notes never appear in ANY public projection", () =
   it("stays private even with a corrupted flag map claiming medical public", () => {
     const corrupt: Record<string, boolean> = { medical: true };
     const view = publicBioView(FIELDS, corrupt, emptyBioExtras());
-    expect(JSON.stringify(view)).not.toContain("SECRET-penicillin-allergy-diabetic");
+    expect(JSON.stringify(view)).not.toContain(
+      "SECRET-penicillin-allergy-diabetic",
+    );
   });
 });

@@ -157,7 +157,11 @@ export const NO_DOMAIN_OWNERSHIP: DomainOwnership = Object.freeze({});
  * makes it impossible in memory too, rather than order-dependent).
  */
 export function buildDomainOwnership(
-  rows: readonly { domain: string; departmentId: string; departmentName: string }[],
+  rows: readonly {
+    domain: string;
+    departmentId: string;
+    departmentName: string;
+  }[],
 ): DomainOwnership {
   const out: Partial<Record<OrgDomain, DomainOwner>> = {};
   for (const row of rows) {

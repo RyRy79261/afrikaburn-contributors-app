@@ -20,7 +20,10 @@ export default function SystemLoading() {
             <Skeleton className="mb-6 h-4 w-full max-w-xl" />
             <div className="flex flex-col gap-5">
               {Array.from({ length: rows }).map((_, r) => (
-                <div key={r} className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                <div
+                  key={r}
+                  className="flex flex-col gap-2 sm:flex-row sm:gap-6"
+                >
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:w-56">
                     <Skeleton className="h-4 w-32" />
                     <Skeleton className="h-5 w-24 rounded-full" />

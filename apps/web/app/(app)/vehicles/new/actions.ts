@@ -53,7 +53,8 @@ export async function createVehicleRegistrationAction(
   if (!check.ok) {
     return {
       status: "error",
-      message: "A mutant vehicle already cruises under that name. Pick another.",
+      message:
+        "A mutant vehicle already cruises under that name. Pick another.",
     };
   }
   if (check.warnings.length > 0 && !input.confirmWarnings) {

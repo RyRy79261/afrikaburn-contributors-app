@@ -360,7 +360,8 @@ export const ORG_CAPABILITY_CONSEQUENCES: Record<OrgCapability, string> = {
   create: "add new records in this department's part of the console",
   read: "open and read this department's part of the console",
   update: "change existing records in this department's part of the console",
-  delete: "permanently destroy records in this department's part of the console",
+  delete:
+    "permanently destroy records in this department's part of the console",
   personal_information:
     "read people's names, email addresses, phone numbers, ID numbers, emergency contacts and medical notes in this department's part of the console",
 };

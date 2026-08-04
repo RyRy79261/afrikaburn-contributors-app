@@ -42,7 +42,10 @@ test.describe("org staff · supplier repository", () => {
     await expect(org.getByText(/standing set to suspended/i)).toBeVisible();
 
     // --- Add an org-internal note ---------------------------------------
-    await org.getByRole("row", { name }).getByRole("button", { name: /notes/i }).click();
+    await org
+      .getByRole("row", { name })
+      .getByRole("button", { name: /notes/i })
+      .click();
     const noteMarker = `Late delivery in 2026 ${Date.now().toString(36)}`;
     const notesDialog = org.getByRole("dialog");
     await notesDialog.getByRole("textbox").fill(noteMarker);
@@ -58,7 +61,10 @@ test.describe("org staff · supplier repository", () => {
       .click();
     // Only this supplier is expanded, so its first org-confirmed step's
     // "Confirm" is the only one on the page.
-    await org.getByRole("button", { name: /^confirm$/i }).first().click();
+    await org
+      .getByRole("button", { name: /^confirm$/i })
+      .first()
+      .click();
     await expect(org.getByText(/^confirmed\.?$/i)).toBeVisible();
     // The step now reads Completed and the onboarding tally moved off 0/7.
     await expect(org.getByText("Completed").first()).toBeVisible();

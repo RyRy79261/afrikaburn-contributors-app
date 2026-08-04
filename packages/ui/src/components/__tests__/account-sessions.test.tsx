@@ -114,7 +114,11 @@ describe("what a row shows", () => {
 
   it("badges this device and offers it no Revoke button", () => {
     renderSessions([
-      session({ token: "tok-current", current: true, label: "Chrome on macOS" }),
+      session({
+        token: "tok-current",
+        current: true,
+        label: "Chrome on macOS",
+      }),
       session(),
     ]);
 
@@ -129,7 +133,9 @@ describe("what a row shows", () => {
     // An empty array here means the read failed. "No active sessions" would be
     // a false all-clear on the one screen where that matters.
     expect(
-      screen.getByText(/the list is unavailable, not that nothing is signed in/),
+      screen.getByText(
+        /the list is unavailable, not that nothing is signed in/,
+      ),
     ).toBeDefined();
   });
 });
@@ -138,18 +144,25 @@ describe("sign out everywhere else", () => {
   it("is disabled when this device is the only session", () => {
     renderSessions([session({ token: "tok-current", current: true })]);
     expect(
-      (screen.getByRole("button", {
-        name: "Sign out everywhere else",
-      }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole("button", {
+          name: "Sign out everywhere else",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
   it("enables as soon as another device exists", () => {
-    renderSessions([session({ token: "tok-current", current: true }), session()]);
+    renderSessions([
+      session({ token: "tok-current", current: true }),
+      session(),
+    ]);
     expect(
-      (screen.getByRole("button", {
-        name: "Sign out everywhere else",
-      }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole("button", {
+          name: "Sign out everywhere else",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 
@@ -158,7 +171,9 @@ describe("sign out everywhere else", () => {
       session({ token: "tok-current", current: true }),
       session(),
     ]);
-    fireEvent.click(screen.getByRole("button", { name: "Sign out everywhere else" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign out everywhere else" }),
+    );
 
     expect(
       await screen.findByText("Every other device has been signed out."),
@@ -172,7 +187,9 @@ describe("sign out everywhere else", () => {
       .fn<RevokeRest>()
       .mockResolvedValue({ ok: false, error: "Your session expired." });
     const { onChanged } = renderSessions([session()], { onRevokeOthers });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out everywhere else" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign out everywhere else" }),
+    );
 
     expect(await screen.findByText("Your session expired.")).toBeDefined();
     // Re-reading the page after a failure would swap a real error for a stale
@@ -213,7 +230,9 @@ describe("revoking one session", () => {
     const { onChanged } = renderSessions([session()], { onRevoke });
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
 
-    expect(await screen.findByText("That session is already gone.")).toBeDefined();
+    expect(
+      await screen.findByText("That session is already gone."),
+    ).toBeDefined();
     expect(onChanged).not.toHaveBeenCalled();
   });
 });

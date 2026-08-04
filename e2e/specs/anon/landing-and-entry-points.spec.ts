@@ -50,7 +50,10 @@ test.describe("anonymous visitor — landing & auth entry points", () => {
     webPage,
   }) => {
     await webPage.goto("/");
-    await webPage.getByRole("link", { name: /^sign in$/i }).first().click();
+    await webPage
+      .getByRole("link", { name: /^sign in$/i })
+      .first()
+      .click();
     await expect(webPage).toHaveURL(/\/auth\/sign-in/);
 
     await expect(
@@ -86,7 +89,10 @@ test.describe("anonymous visitor — landing & auth entry points", () => {
     await webPage.getByRole("link", { name: /create an account/i }).click();
     await expect(webPage).toHaveURL(/\/auth\/sign-up/);
 
-    await webPage.getByRole("link", { name: /^sign in$/i }).first().click();
+    await webPage
+      .getByRole("link", { name: /^sign in$/i })
+      .first()
+      .click();
     await expect(webPage).toHaveURL(/\/auth\/sign-in/);
   });
 

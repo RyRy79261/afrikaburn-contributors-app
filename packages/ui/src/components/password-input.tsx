@@ -26,8 +26,10 @@ const BAR_COLOR: Record<PasswordStrengthScore, string> = {
   4: "bg-success",
 };
 
-export interface PasswordInputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+export interface PasswordInputProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "type"
+> {
   /** Hide the strength meter (e.g. on a sign-IN field where it is noise). */
   hideStrength?: boolean;
   /** Minimum length for the "too short" feedback (default 15). */
@@ -36,7 +38,16 @@ export interface PasswordInputProps
 
 const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
   (
-    { className, hideStrength = false, minLength = PASSWORD_MIN_LENGTH, id, value, defaultValue, onChange, ...props },
+    {
+      className,
+      hideStrength = false,
+      minLength = PASSWORD_MIN_LENGTH,
+      id,
+      value,
+      defaultValue,
+      onChange,
+      ...props
+    },
     ref,
   ) => {
     const [visible, setVisible] = React.useState(false);

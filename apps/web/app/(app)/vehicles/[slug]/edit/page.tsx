@@ -16,7 +16,10 @@ import {
   VehicleRegistrationForm,
   type VehicleFormInitialValues,
 } from "@/components/vehicles/vehicle-registration-form";
-import { VEHICLE_ACK_KEYS, type VehicleAckKey } from "@/app/(app)/vehicles/new/copy";
+import {
+  VEHICLE_ACK_KEYS,
+  type VehicleAckKey,
+} from "@/app/(app)/vehicles/new/copy";
 import { updateVehicleRegistrationAction } from "./actions";
 
 // /vehicles/[slug]/edit — re-open a Mutant Vehicle registration to edit and

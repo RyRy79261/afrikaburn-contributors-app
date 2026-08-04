@@ -27,7 +27,10 @@ export function ForgotPasswordForm() {
         redirectTo: "/auth/reset-password",
       });
       if (result.ok) {
-        setSent(result.message ?? "If that account exists, we've emailed it a reset link.");
+        setSent(
+          result.message ??
+            "If that account exists, we've emailed it a reset link.",
+        );
       } else {
         setError(result.error);
       }
@@ -89,7 +92,10 @@ export function ForgotPasswordForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Remembered it?{" "}
-        <Link href="/auth/sign-in" className="font-medium text-accent hover:underline">
+        <Link
+          href="/auth/sign-in"
+          className="font-medium text-accent hover:underline"
+        >
           Back to sign in
         </Link>
       </p>

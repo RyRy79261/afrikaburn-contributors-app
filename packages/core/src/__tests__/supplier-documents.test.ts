@@ -16,7 +16,9 @@ import type { SupplierOnboardingSteps } from "@quagga/types";
 
 const AT = new Date("2026-07-25T10:00:00.000Z");
 
-function doc(overrides: Partial<SupplierDocument> & { id: string }): SupplierDocument {
+function doc(
+  overrides: Partial<SupplierDocument> & { id: string },
+): SupplierDocument {
   return {
     title: `Document ${overrides.id}`,
     sourceType: "link",
@@ -110,18 +112,17 @@ describe("documentsForStep / requiredAckDocuments", () => {
   ];
 
   it("filters to a step, in catalog order", () => {
-    expect(documentsForStep(docs, "agreement_signed").map((d) => d.id)).toEqual([
-      "b",
-      "a",
-    ]);
+    expect(documentsForStep(docs, "agreement_signed").map((d) => d.id)).toEqual(
+      ["b", "a"],
+    );
   });
 
   it("filters to the acknowledgeable documents", () => {
-    expect(requiredAckDocuments(docs).map((d) => d.id).sort()).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(
+      requiredAckDocuments(docs)
+        .map((d) => d.id)
+        .sort(),
+    ).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -156,7 +157,9 @@ describe("validateDocumentBinding", () => {
     // Inventory and crew details need AfrikaBurn's review; an acknowledgement
     // can only ever produce `awaiting_confirmation`, never completion.
     expect(validateDocumentBinding("inventory_submitted", true).ok).toBe(false);
-    expect(validateDocumentBinding("crew_details_submitted", true).ok).toBe(false);
+    expect(validateDocumentBinding("crew_details_submitted", true).ok).toBe(
+      false,
+    );
   });
 
   it("REJECTS an inert binding on a document that needs no acknowledgement", () => {
@@ -184,11 +187,15 @@ describe("ack → step completion", () => {
   ];
 
   it("needs EVERY bound document acknowledged to satisfy a step", () => {
-    expect(isStepSatisfiedByAcks(agreementDocs, [ack("d1")], "agreement_signed")).toBe(
-      false,
-    );
     expect(
-      isStepSatisfiedByAcks(agreementDocs, [ack("d1"), ack("d2")], "agreement_signed"),
+      isStepSatisfiedByAcks(agreementDocs, [ack("d1")], "agreement_signed"),
+    ).toBe(false);
+    expect(
+      isStepSatisfiedByAcks(
+        agreementDocs,
+        [ack("d1"), ack("d2")],
+        "agreement_signed",
+      ),
     ).toBe(true);
   });
 
@@ -272,9 +279,12 @@ describe("ack → step completion", () => {
   it("re-opens a step whose last bound document was deleted", () => {
     const before: SupplierOnboardingSteps = { agreement_signed: "completed" };
     // The org deleted every document bound to the step: empty list now.
-    const result = applyDocumentAcksToSteps(before, [], [], [
-      "agreement_signed",
-    ]);
+    const result = applyDocumentAcksToSteps(
+      before,
+      [],
+      [],
+      ["agreement_signed"],
+    );
     expect(result.reverted).toEqual(["agreement_signed"]);
     expect(result.steps.agreement_signed).toBe("pending");
   });
@@ -298,9 +308,12 @@ describe("ack → step completion", () => {
     const remaining = [
       doc({ id: "d2", stepKey: "agreement_signed", requiredAck: true }),
     ];
-    const result = applyDocumentAcksToSteps(before, remaining, [ack("d2")], [
-      "agreement_signed",
-    ]);
+    const result = applyDocumentAcksToSteps(
+      before,
+      remaining,
+      [ack("d2")],
+      ["agreement_signed"],
+    );
     expect(result.completed).toEqual(["agreement_signed"]);
     expect(result.steps.agreement_signed).toBe("completed");
   });

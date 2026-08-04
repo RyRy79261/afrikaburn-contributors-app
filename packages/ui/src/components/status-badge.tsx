@@ -53,12 +53,13 @@ export interface StatusBadge_Props {
 }
 
 /** A registration-status pill wired to the variant + label maps. */
-export function StatusBadge({ status, children, className }: StatusBadge_Props) {
+export function StatusBadge({
+  status,
+  children,
+  className,
+}: StatusBadge_Props) {
   return (
-    <Badge
-      variant={REGISTRATION_STATUS_VARIANT[status]}
-      className={className}
-    >
+    <Badge variant={REGISTRATION_STATUS_VARIANT[status]} className={className}>
       {children ?? REGISTRATION_STATUS_LABEL[status]}
     </Badge>
   );

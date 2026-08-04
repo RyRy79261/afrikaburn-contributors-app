@@ -156,7 +156,10 @@ export function departmentRoleKey(
 }
 
 /** The key of a System-manager-created custom role. */
-export function customOrgRoleKey(name: string, taken: readonly string[]): string {
+export function customOrgRoleKey(
+  name: string,
+  taken: readonly string[],
+): string {
   const base = `custom.${departmentKeyFrom(name)}`;
   const used = new Set(taken);
   if (!used.has(base)) return base;

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createFakeDb, type FakeDbHandle, type RecordedOp } from "./support/fake-db";
+import {
+  createFakeDb,
+  type FakeDbHandle,
+  type RecordedOp,
+} from "./support/fake-db";
 
 // Both drivers are replaced by the recording fake in ./support/fake-db, so the
 // BRANCHES can be driven: which id space is resolved, whether an elapsed grace
@@ -52,18 +56,20 @@ interface Wiring {
  * overridden takes the happy path. Building the scenario as "the happy path,
  * except X" keeps each test's DIFFERENCE from working the only thing on screen.
  */
-function wire(answers: Partial<{
-  /** users row for the auth-id lookup */
-  userLookup: unknown[];
-  /** the deletion request itself */
-  request: unknown[];
-  /** rows the concurrency-guarded UPDATE matched */
-  updated: unknown[];
-  /** users row for the email lookup */
-  emailLookup: unknown[];
-  onInsert: (op: RecordedOp) => void;
-  onTransaction: () => void;
-}> = {}): Wiring {
+function wire(
+  answers: Partial<{
+    /** users row for the auth-id lookup */
+    userLookup: unknown[];
+    /** the deletion request itself */
+    request: unknown[];
+    /** rows the concurrency-guarded UPDATE matched */
+    updated: unknown[];
+    /** users row for the email lookup */
+    emailLookup: unknown[];
+    onInsert: (op: RecordedOp) => void;
+    onTransaction: () => void;
+  }> = {},
+): Wiring {
   const http = createFakeDb((op) => {
     if (op.kind === "insert") {
       answers.onInsert?.(op);
@@ -93,14 +99,19 @@ function wire(answers: Partial<{
       ...(pooled.db as object),
       transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
         answers.onTransaction?.();
-        return (pooled.db as { transaction(c: typeof cb): Promise<unknown> }).transaction(cb);
+        return (
+          pooled.db as { transaction(c: typeof cb): Promise<unknown> }
+        ).transaction(cb);
       },
     },
   };
 
   const poolEnd = vi.fn(async () => {});
   mocks.createHttpDb.mockReturnValue(http.db);
-  mocks.createPooledDb.mockReturnValue({ db: wrappedPooled.db, pool: { end: poolEnd } });
+  mocks.createPooledDb.mockReturnValue({
+    db: wrappedPooled.db,
+    pool: { end: poolEnd },
+  });
   return { http, pooled, poolEnd };
 }
 
@@ -124,7 +135,11 @@ describe("cancelPendingDeletion — resolving the caller's id", () => {
     // believed fixed, and was not — because the test asserted the hook was
     // wired, never that the wiring resolved a row.
     const { http } = wire();
-    await cancelPendingDeletion({ authUserId: AUTH_USER_ID, via: "sign_in", now: NOW });
+    await cancelPendingDeletion({
+      authUserId: AUTH_USER_ID,
+      via: "sign_in",
+      now: NOW,
+    });
 
     const first = http.ops[0];
     expect(first?.table).toBe("users");
@@ -135,7 +150,10 @@ describe("cancelPendingDeletion — resolving the caller's id", () => {
     // ...and the resolved uuid — not the auth id — is what the request lookup
     // is keyed on.
     const request = http.opsOn("account_deletion_requests", "select")[0];
-    expect(request?.where).toContainEqual({ column: "user_id", value: USER_ID });
+    expect(request?.where).toContainEqual({
+      column: "user_id",
+      value: USER_ID,
+    });
     expect(request?.where).not.toContainEqual({
       column: "user_id",
       value: AUTH_USER_ID,
@@ -172,7 +190,11 @@ describe("cancelPendingDeletion — resolving the caller's id", () => {
     delete process.env.DATABASE_URL;
     wire();
     await expect(
-      cancelPendingDeletion({ authUserId: AUTH_USER_ID, via: "sign_in", now: NOW }),
+      cancelPendingDeletion({
+        authUserId: AUTH_USER_ID,
+        via: "sign_in",
+        now: NOW,
+      }),
     ).resolves.toEqual({ cancelled: false, email: null });
     expect(mocks.createHttpDb).not.toHaveBeenCalled();
   });
@@ -184,7 +206,10 @@ describe("cancelPendingDeletion — the grace-period decision", () => {
     // half-deleted state: either the grace rescued you or it did not.
     const { pooled, poolEnd } = wire({
       request: [
-        { ...PENDING_IN_GRACE, graceEndsAt: new Date("2026-08-03T12:00:00.000Z") },
+        {
+          ...PENDING_IN_GRACE,
+          graceEndsAt: new Date("2026-08-03T12:00:00.000Z"),
+        },
       ],
     });
     await expect(
@@ -237,7 +262,10 @@ describe("cancelPendingDeletion — the cancellation itself", () => {
     await cancelPendingDeletion({ userId: USER_ID, via: "sign_in", now: NOW });
     const update = pooled.opsOn("account_deletion_requests", "update")[0];
     expect(update?.where).toContainEqual({ column: "id", value: REQUEST_ID });
-    expect(update?.where).toContainEqual({ column: "status", value: "pending" });
+    expect(update?.where).toContainEqual({
+      column: "status",
+      value: "pending",
+    });
     expect(update?.returning).toBe(true);
   });
 
@@ -260,7 +288,9 @@ describe("cancelPendingDeletion — the cancellation itself", () => {
     await cancelPendingDeletion({ userId: USER_ID, via: "sign_in", now: NOW });
     const audit = pooled.opsOn("audit_events", "insert")[0];
     expect(audit?.inTransaction).toBe(true);
-    expect(pooled.opsOn("account_deletion_requests", "update")[0]?.inTransaction).toBe(true);
+    expect(
+      pooled.opsOn("account_deletion_requests", "update")[0]?.inTransaction,
+    ).toBe(true);
     expect(audit?.values[0]).toMatchObject({
       actorId: USER_ID,
       subject: USER_ID,
@@ -304,7 +334,11 @@ describe("cancelPendingDeletion — the courtesy rows", () => {
     const { http } = wire();
     await cancelPendingDeletion({ userId: USER_ID, via: "sign_in", now: NOW });
     const row = http.opsOn("notifications", "insert")[0]?.values[0];
-    expect(row).toMatchObject({ userId: USER_ID, origin: "system", linkApp: "web" });
+    expect(row).toMatchObject({
+      userId: USER_ID,
+      origin: "system",
+      linkApp: "web",
+    });
     expect(row?.link).toBe("/account");
   });
 
@@ -316,7 +350,9 @@ describe("cancelPendingDeletion — the courtesy rows", () => {
       now: NOW,
       context: { ip: "198.51.100.7", userAgent: "Firefox/141.0" },
     });
-    expect(withContext.http.opsOn("security_events", "insert")[0]?.values[0]).toMatchObject({
+    expect(
+      withContext.http.opsOn("security_events", "insert")[0]?.values[0],
+    ).toMatchObject({
       kind: "deletion_cancelled",
       ip: "198.51.100.7",
       userAgent: "Firefox/141.0",
@@ -324,7 +360,9 @@ describe("cancelPendingDeletion — the courtesy rows", () => {
 
     const withoutContext = wire();
     await cancelPendingDeletion({ userId: USER_ID, via: "sign_in", now: NOW });
-    expect(withoutContext.http.opsOn("security_events", "insert")[0]?.values[0]).toMatchObject({
+    expect(
+      withoutContext.http.opsOn("security_events", "insert")[0]?.values[0],
+    ).toMatchObject({
       ip: null,
       userAgent: null,
     });
@@ -365,7 +403,11 @@ describe("cancelPendingDeletion — never breaks a sign-in", () => {
       throw new Error("neon: connection refused");
     });
     await expect(
-      cancelPendingDeletion({ authUserId: AUTH_USER_ID, via: "sign_in", now: NOW }),
+      cancelPendingDeletion({
+        authUserId: AUTH_USER_ID,
+        via: "sign_in",
+        now: NOW,
+      }),
     ).resolves.toEqual({ cancelled: false, email: null });
     expect(String(logged.mock.calls[0]?.[0])).toContain("[deletion]");
   });

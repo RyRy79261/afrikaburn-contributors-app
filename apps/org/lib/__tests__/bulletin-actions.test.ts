@@ -96,7 +96,12 @@ describe("saveBulletin", () => {
     // questionnaire, which is a different feature with a different consent.
     const result = await saveBulletin({
       ...COMPOSE,
-      audience: { kind: "project", groupId: "g", mode: "everyone", roleIds: [] },
+      audience: {
+        kind: "project",
+        groupId: "g",
+        mode: "everyone",
+        roleIds: [],
+      },
     });
 
     expect(result).toEqual({
@@ -137,7 +142,12 @@ describe("saveBulletin", () => {
     db = fakeDb();
     db.seed("editions", [EDITION]);
     db.seed("bulletins", [
-      { id: BULLETIN_ID, title: COMPOSE.title, audience: COMPOSE.audience, publishedAt: null },
+      {
+        id: BULLETIN_ID,
+        title: COMPOSE.title,
+        audience: COMPOSE.audience,
+        publishedAt: null,
+      },
     ]);
     await saveBulletin({ ...COMPOSE, id: BULLETIN_ID });
     expect(requireOrgSession).toHaveBeenLastCalledWith({
@@ -232,7 +242,10 @@ describe("saveBulletin", () => {
       {
         id: BULLETIN_ID,
         title: "Gate opens Sunday",
-        audience: { kind: "org_outbound", selectors: ["all_current_burners", "camp_leads"] },
+        audience: {
+          kind: "org_outbound",
+          selectors: ["all_current_burners", "camp_leads"],
+        },
         publishedAt: new Date("2026-11-01T00:00:00Z"),
       },
     ]);
@@ -240,7 +253,10 @@ describe("saveBulletin", () => {
     const result = await saveBulletin({
       ...COMPOSE,
       id: BULLETIN_ID,
-      audience: { kind: "org_outbound", selectors: ["camp_leads", "all_current_burners"] },
+      audience: {
+        kind: "org_outbound",
+        selectors: ["camp_leads", "all_current_burners"],
+      },
     });
 
     expect(result).toEqual({ ok: true, id: BULLETIN_ID });
@@ -276,7 +292,10 @@ describe("saveBulletin", () => {
       linkApp: string | null;
     }[];
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ userId: "staff-1", bulletinId: BULLETIN_ID });
+    expect(rows[0]).toMatchObject({
+      userId: "staff-1",
+      bulletinId: BULLETIN_ID,
+    });
     // linkApp stays NULL by design: /bulletins/<id> exists in all three apps and
     // each authorises the read from the recipient's own row, so the same
     // relative path resolves wherever they happen to read it.
@@ -350,7 +369,12 @@ describe("publishBulletin", () => {
       {
         id: BULLETIN_ID,
         title: "Gate opens Sunday",
-        audience: { kind: "project", groupId: "g", mode: "everyone", roleIds: [] },
+        audience: {
+          kind: "project",
+          groupId: "g",
+          mode: "everyone",
+          roleIds: [],
+        },
         editionId: EDITION.id,
         publishedAt: null,
       },

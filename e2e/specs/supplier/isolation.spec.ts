@@ -87,7 +87,9 @@ test.describe("supplier isolation law", () => {
     // Supplier A (this page) and supplier B (its own isolated context/session).
     const a = await registerSupplier(suppliersPage, { category: "Transport" });
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
 
     const bPage = await makeAppPage("suppliers");

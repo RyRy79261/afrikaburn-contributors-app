@@ -41,10 +41,7 @@ function secretiveEnv(): SystemEnv {
 }
 
 /** Every string this page would put on screen, flattened. */
-function renderedStrings(
-  env: SystemEnv,
-  probe: DatabaseProbe,
-): string[] {
+function renderedStrings(env: SystemEnv, probe: DatabaseProbe): string[] {
   const status = deriveSystemStatus(env, probe);
   const checks = [...status.health, ...status.security];
   return [
@@ -53,11 +50,7 @@ function renderedStrings(
   ];
 }
 
-function check(
-  env: SystemEnv,
-  probe: DatabaseProbe,
-  id: string,
-): SystemCheck {
+function check(env: SystemEnv, probe: DatabaseProbe, id: string): SystemCheck {
   const status = deriveSystemStatus(env, probe);
   const found = [...status.health, ...status.security].find((c) => c.id === id);
   expect(found, `no check with id ${id}`).toBeDefined();
@@ -102,7 +95,11 @@ describe("no secret is ever printed", () => {
     // path most likely to leak a connection string is the error path.
     const pooled = `postgres://u:${SECRET}@ep-x-pooler.eu-central-1.aws.neon.tech/db`;
     for (const env of [
-      { ...secretiveEnv(), DATABASE_URL_UNPOOLED: undefined, DATABASE_URL: pooled },
+      {
+        ...secretiveEnv(),
+        DATABASE_URL_UNPOOLED: undefined,
+        DATABASE_URL: pooled,
+      },
       { DATABASE_URL: pooled, VERCEL_ENV: "production" },
       { VERCEL_ENV: "production" }, // production with no database at all
     ]) {
@@ -136,9 +133,9 @@ describe("redactSecrets", () => {
   };
 
   it("replaces a whole connection string, credentials and all", () => {
-    expect(redactSecrets("failed on postgres://u:hunter2hunter2@host/db", env)).toBe(
-      "failed on [connection string redacted]",
-    );
+    expect(
+      redactSecrets("failed on postgres://u:hunter2hunter2@host/db", env),
+    ).toBe("failed on [connection string redacted]");
   });
 
   it("replaces a bare secret value with no URL around it", () => {
@@ -167,8 +164,11 @@ describe("health checks read the real configuration", () => {
       "degraded",
     );
     expect(
-      check({ DATABASE_URL: "postgres://u:p@h/d" }, { kind: "unreachable", message: "boom" }, "database")
-        .tone,
+      check(
+        { DATABASE_URL: "postgres://u:p@h/d" },
+        { kind: "unreachable", message: "boom" },
+        "database",
+      ).tone,
     ).toBe("attention");
   });
 
@@ -215,12 +215,15 @@ describe("health checks read the real configuration", () => {
   });
 
   it("calls a too-short encryption key out rather than calling it set", () => {
-    expect(check({ PGCRYPTO_KEY: "short" }, OK_PROBE, "encryption-key").value).toBe(
-      "Set but too short",
-    );
     expect(
-      check({ PGCRYPTO_KEY: "a-perfectly-long-key" }, OK_PROBE, "encryption-key")
-        .tone,
+      check({ PGCRYPTO_KEY: "short" }, OK_PROBE, "encryption-key").value,
+    ).toBe("Set but too short");
+    expect(
+      check(
+        { PGCRYPTO_KEY: "a-perfectly-long-key" },
+        OK_PROBE,
+        "encryption-key",
+      ).tone,
     ).toBe("ok");
   });
 });
@@ -246,7 +249,11 @@ describe("security checks explain WHY, not just what", () => {
     expect(overridden.value).toBe("Off — explicitly overridden");
     expect(overridden.tone).toBe("attention");
 
-    const on = check({ RESEND_API_KEY: "re_key" }, OK_PROBE, "email-verification");
+    const on = check(
+      { RESEND_API_KEY: "re_key" },
+      OK_PROBE,
+      "email-verification",
+    );
     expect(on.value).toBe("Required");
     expect(on.tone).toBe("ok");
   });
@@ -282,8 +289,11 @@ describe("security checks explain WHY, not just what", () => {
 
   it("flags cookies issued without the Secure flag", () => {
     expect(
-      check({ BETTER_AUTH_URL: "http://localhost:3001" }, OK_PROBE, "secure-cookies")
-        .tone,
+      check(
+        { BETTER_AUTH_URL: "http://localhost:3001" },
+        OK_PROBE,
+        "secure-cookies",
+      ).tone,
     ).toBe("attention");
     expect(
       check(

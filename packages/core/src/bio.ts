@@ -166,7 +166,12 @@ export const MEDICAL_AUDIENCE_NOTE =
 // that a handle is held. Everything the registry governs is bio data; identity
 // is not negotiable per-field.
 export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
-  { key: "legalName", label: "Legal name", locked: false, defaultPublic: false },
+  {
+    key: "legalName",
+    label: "Legal name",
+    locked: false,
+    defaultPublic: false,
+  },
   { key: "homeCity", label: "Home city", locked: false, defaultPublic: true },
   { key: "bio", label: "About you", locked: false, defaultPublic: true },
   { key: "skills", label: "Skills", locked: false, defaultPublic: true },
@@ -176,24 +181,50 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
     locked: false,
     defaultPublic: true,
   },
-  { key: "firstTime", label: "First-timer status", locked: false, defaultPublic: true },
-  { key: "contactEmail", label: "Contact email", locked: false, defaultPublic: false },
+  {
+    key: "firstTime",
+    label: "First-timer status",
+    locked: false,
+    defaultPublic: true,
+  },
+  {
+    key: "contactEmail",
+    label: "Contact email",
+    locked: false,
+    defaultPublic: false,
+  },
   // v3 additions — all self-promotional, default public, never hard-locked.
-  { key: "about", label: "Bio for the burns", locked: false, defaultPublic: true },
-  { key: "campHistory", label: "Camp history", locked: false, defaultPublic: true },
+  {
+    key: "about",
+    label: "Bio for the burns",
+    locked: false,
+    defaultPublic: true,
+  },
+  {
+    key: "campHistory",
+    label: "Camp history",
+    locked: false,
+    defaultPublic: true,
+  },
   {
     key: "volunteeringInterests",
     label: "Volunteering interests",
     locked: false,
     defaultPublic: true,
   },
-  { key: "ranger", label: "Ranger interests", locked: false, defaultPublic: true },
+  {
+    key: "ranger",
+    label: "Ranger interests",
+    locked: false,
+    defaultPublic: true,
+  },
   {
     key: "phone",
     label: "Phone number",
     locked: true,
     defaultPublic: false,
-    lockReason: "Always private — never shown in the directory or to other camps.",
+    lockReason:
+      "Always private — never shown in the directory or to other camps.",
   },
   {
     key: "onsiteContactName",
@@ -364,7 +395,10 @@ export function publicBioView(
  * Falls back to a neutral glyph so a nameless burner still renders.
  */
 export function initialsFromName(name: string | null | undefined): string {
-  const parts = (name ?? "").trim().split(/[\s_]+/).filter(Boolean);
+  const parts = (name ?? "")
+    .trim()
+    .split(/[\s_]+/)
+    .filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0] ?? "";
   const last = parts[parts.length - 1] ?? "";
@@ -432,7 +466,8 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
             id: "legalName",
             kind: "short_text",
             prompt: "Legal name",
-            helper: "Optional — used only where AfrikaBurn needs it for logistics.",
+            helper:
+              "Optional — used only where AfrikaBurn needs it for logistics.",
             maxLength: 120,
             required: false,
           },
@@ -456,7 +491,8 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
             id: "bio",
             kind: "long_text",
             prompt: "Tell us about yourself",
-            helper: "Who you are in the dust, what you love bringing to a burn.",
+            helper:
+              "Who you are in the dust, what you love bringing to a burn.",
             maxLength: 1500,
             required: false,
           },
@@ -474,7 +510,8 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         id: "history",
         kind: "questions",
         title: "Burn history",
-        subtitle: "So camps know who the veterans are and who's arriving fresh.",
+        subtitle:
+          "So camps know who the veterans are and who's arriving fresh.",
         questions: [
           {
             id: "firstTime",
@@ -496,13 +533,15 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         id: "contact",
         kind: "questions",
         title: "Contact",
-        subtitle: "Your phone stays locked private — used only for safety and logistics.",
+        subtitle:
+          "Your phone stays locked private — used only for safety and logistics.",
         questions: [
           {
             id: "contactEmail",
             kind: "email",
             prompt: "Contact email",
-            helper: "Optional — where camps reach you. Defaults to your sign-in email.",
+            helper:
+              "Optional — where camps reach you. Defaults to your sign-in email.",
             required: false,
           },
           {
@@ -563,7 +602,8 @@ export function buildBurnerBioQuestionnaire(): Questionnaire {
         id: "identity_documents",
         kind: "questions",
         title: "Identity document",
-        subtitle: "Always private + encrypted at rest. Used only for ticket and access allocation.",
+        subtitle:
+          "Always private + encrypted at rest. Used only for ticket and access allocation.",
         questions: [
           {
             id: "id.type",

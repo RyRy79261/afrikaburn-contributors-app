@@ -30,9 +30,8 @@ vi.mock("@/lib/db", async () => {
 });
 
 const { revalidatePath } = await import("next/cache");
-const { requireSupplierSession, resolveSupplierSession } = await import(
-  "@/lib/session"
-);
+const { requireSupplierSession, resolveSupplierSession } =
+  await import("@/lib/session");
 const {
   fetchRecentNotifications,
   markNotificationRead,

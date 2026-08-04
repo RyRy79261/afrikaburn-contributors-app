@@ -82,9 +82,7 @@ test.describe("camp lead — registration wizard", () => {
     await freshPage.goto(`/camps/${camp.slug}/registration`);
 
     // Section 1's value is restored (identity is the default-active section).
-    await expect(
-      freshPage.getByLabel(/^contact email/i),
-    ).toHaveValue(email);
+    await expect(freshPage.getByLabel(/^contact email/i)).toHaveValue(email);
     // …and a value typed in a DIFFERENT section is restored too.
     await goToSection(freshPage, /leave no trace/i);
     await expect(freshPage.getByLabel(/leave no trace plan/i)).toHaveValue(
@@ -108,22 +106,18 @@ test.describe("camp lead — registration wizard", () => {
     await expect(
       webPage.getByText(/submit opens once all six sections are complete/i),
     ).toBeVisible();
-    await expect(
-      webPage.getByText(/0 of 6 sections complete/i),
-    ).toBeVisible();
+    await expect(webPage.getByText(/0 of 6 sections complete/i)).toBeVisible();
     await expect(webPage.getByText(/still needed/i)).toBeVisible();
 
     // Complete ONE section (identity = description + contact email). The meter
     // advances to 1 of 6 — but the submit gate is STILL refused, because five
     // sections remain. Partial completeness never opens the action.
-    await webPage.getByLabel(/camp description/i).fill("A tea house on the playa.");
     await webPage
-      .getByLabel(/^contact email/i)
-      .fill("lead@example.com");
+      .getByLabel(/camp description/i)
+      .fill("A tea house on the playa.");
+    await webPage.getByLabel(/^contact email/i).fill("lead@example.com");
     await goToSection(webPage, /leave no trace/i); // navigate → commits section 1
-    await expect(
-      webPage.getByText(/1 of 6 sections complete/i),
-    ).toBeVisible();
+    await expect(webPage.getByText(/1 of 6 sections complete/i)).toBeVisible();
     await expect(submit).toBeDisabled();
   });
 });

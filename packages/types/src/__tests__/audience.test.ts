@@ -135,7 +135,9 @@ describe("activation + builder inputs", () => {
   it("refuses an activation with no edition and one with no audience", () => {
     const { editionId: _edition, ...noEdition } = base;
     const { audience: _audience, ...noAudience } = base;
-    expect(QuestionnaireActivationInput.safeParse(noEdition).success).toBe(false);
+    expect(QuestionnaireActivationInput.safeParse(noEdition).success).toBe(
+      false,
+    );
     expect(QuestionnaireActivationInput.safeParse(noAudience).success).toBe(
       false,
     );

@@ -65,8 +65,9 @@ describe("AccountShell", () => {
       "/account/security",
       "/account/delete",
     ]);
-    expect(screen.getByRole("navigation", { name: "Account sections" }))
-      .toBeDefined();
+    expect(
+      screen.getByRole("navigation", { name: "Account sections" }),
+    ).toBeDefined();
   });
 
   it("states the one-account promise by default and omits an absent footer", () => {
@@ -102,9 +103,7 @@ describe("AccountShell", () => {
     );
     expect(screen.getByText("Supplier portal")).toBeDefined();
     expect(screen.getByText("Signed in as alice@example.com")).toBeDefined();
-    expect(
-      screen.queryByText(/One AfrikaBurn account/),
-    ).toBeNull();
+    expect(screen.queryByText(/One AfrikaBurn account/)).toBeNull();
   });
 });
 
@@ -159,9 +158,7 @@ describe("AccountSecurityEvents", () => {
 describe("AccountCapabilityNotice", () => {
   it("renders NOTHING when there is nothing to say", () => {
     const { container } = render(
-      <AccountCapabilityNotice
-        verdict={{ label: null, message: "ignored" }}
-      />,
+      <AccountCapabilityNotice verdict={{ label: null, message: "ignored" }} />,
     );
     // The whole point of the null contract: a caller passes the verdict
     // unconditionally and never branches.
@@ -196,7 +193,9 @@ describe("AccountDeleteElsewhere", () => {
     const link = screen.getByRole("link", {
       name: /Delete on the participant app/,
     });
-    expect(link.getAttribute("href")).toBe("https://app.example/account/delete");
+    expect(link.getAttribute("href")).toBe(
+      "https://app.example/account/delete",
+    );
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noreferrer");
     // Only this app knows what it holds; saying nothing would let someone
@@ -306,7 +305,9 @@ describe("smoke: the chrome takes no router and no client hooks", () => {
       </AccountShell>,
     );
     expect(
-      screen.getByRole("link", { name: "Profile" }).getAttribute("aria-current"),
+      screen
+        .getByRole("link", { name: "Profile" })
+        .getAttribute("aria-current"),
     ).toBeNull();
     expect(onNothing).not.toHaveBeenCalled();
   });

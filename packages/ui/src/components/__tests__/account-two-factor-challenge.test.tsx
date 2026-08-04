@@ -43,9 +43,7 @@ const toBackup = () =>
 describe("totp mode", () => {
   it("strips non-digits and caps at six", () => {
     const { client } = makeClient();
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     const input = screen.getByLabelText("6-digit code") as HTMLInputElement;
 
     fireEvent.change(input, { target: { value: "12 34-56789" } });
@@ -54,9 +52,7 @@ describe("totp mode", () => {
 
   it("keeps Verify disabled until there are exactly six digits", () => {
     const { client } = makeClient();
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     const verify = screen.getByRole("button", {
       name: "Verify",
     }) as HTMLButtonElement;
@@ -117,9 +113,7 @@ describe("totp mode", () => {
 describe("backup mode", () => {
   it("keeps non-digits and enables Verify on any non-empty value", () => {
     const { client } = makeClient();
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     toBackup();
     const input = screen.getByLabelText("Backup code") as HTMLInputElement;
     const verify = screen.getByRole("button", {
@@ -155,9 +149,7 @@ describe("backup mode", () => {
 
   it("names the single-use rule when a backup code is refused", async () => {
     const { client } = makeClient({ backup: { data: null, error: {} } });
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     toBackup();
     fireEvent.change(screen.getByLabelText("Backup code"), {
       target: { value: "used-code" },
@@ -176,9 +168,7 @@ describe("backup mode", () => {
 describe("switching modes", () => {
   it("clears the code and the error, and swaps every mode-specific attribute", async () => {
     const { client } = makeClient({ totp: { data: null, error: {} } });
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("6-digit code"), {
       target: { value: "123456" },
     });
@@ -215,9 +205,7 @@ describe("switching modes", () => {
 describe("trust this device", () => {
   it("threads the choice into whichever verify call is made", async () => {
     const { client, verifyBackupCode } = makeClient();
-    render(
-      <AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />,
-    );
+    render(<AccountTwoFactorChallenge client={client} onVerified={vi.fn()} />);
     toBackup();
     fireEvent.click(screen.getByLabelText("Trust this device for 30 days"));
     fireEvent.change(screen.getByLabelText("Backup code"), {

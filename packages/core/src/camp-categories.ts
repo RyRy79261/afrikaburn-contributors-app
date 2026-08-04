@@ -72,7 +72,13 @@ export function categoryLabelConflicts(
 
 /** Successful validation carries the cleaned, storage-ready values. */
 export type ValidateCategoryResult =
-  | { ok: true; label: string; labelNormalized: string; emoji: string | null; sort: number | null }
+  | {
+      ok: true;
+      label: string;
+      labelNormalized: string;
+      emoji: string | null;
+      sort: number | null;
+    }
   | { ok: false; error: string };
 
 /**

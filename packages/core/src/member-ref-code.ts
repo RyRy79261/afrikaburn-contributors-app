@@ -32,10 +32,9 @@ export function deriveCampPrefix(name: string): string {
   const first = words[0];
   if (first === undefined) return "XXX";
   const rest = words.slice(1);
-  let code = (first.slice(0, 2) + rest.map((w) => w.slice(0, 1)).join("")).slice(
-    0,
-    4,
-  );
+  let code = (
+    first.slice(0, 2) + rest.map((w) => w.slice(0, 1)).join("")
+  ).slice(0, 4);
   if (code.length < 3) code = (code + first.slice(2)).slice(0, 4);
   while (code.length < 3) code += "X";
   return code;

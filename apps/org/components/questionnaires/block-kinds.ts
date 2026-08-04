@@ -73,26 +73,146 @@ export interface PaletteEntry {
 }
 
 export const PALETTE: readonly PaletteEntry[] = [
-  { kind: "info_block", label: "Info text", group: "content", icon: Type, short: "Info text" },
-  { kind: "image_block", label: "Image", group: "content", icon: ImageIcon, short: "Image" },
-  { kind: "short_text", label: "Short answer", group: "question", icon: TextCursorInput, short: "Short answer" },
-  { kind: "long_text", label: "Paragraph", group: "question", icon: AlignLeft, short: "Paragraph" },
-  { kind: "single_select", label: "Multiple choice", group: "question", icon: CircleDot, short: "Multiple choice" },
-  { kind: "multi_select", label: "Checkboxes", group: "question", icon: CheckSquare, short: "Checkboxes" },
-  { kind: "multi_choice_grid", label: "Multiple-choice grid", group: "question", icon: Grid3x3, short: "MC grid" },
-  { kind: "checkbox_grid", label: "Checkbox grid", group: "question", icon: LayoutGrid, short: "Checkbox grid" },
-  { kind: "dropdown", label: "Dropdown", group: "question", icon: ChevronDown, short: "Dropdown" },
-  { kind: "image_choice", label: "Image choices", group: "question", icon: Images, short: "Image choices" },
-  { kind: "linear_scale", label: "Linear scale", group: "question", icon: SlidersHorizontal, short: "Linear scale" },
-  { kind: "rating", label: "Rating", group: "question", icon: Star, short: "Rating" },
-  { kind: "boolean", label: "Yes / No", group: "question", icon: ToggleLeft, short: "Yes / No" },
-  { kind: "number", label: "Number", group: "question", icon: Hash, short: "Number" },
-  { kind: "date", label: "Date", group: "question", icon: Calendar, short: "Date" },
-  { kind: "time", label: "Time", group: "question", icon: Clock, short: "Time" },
-  { kind: "email", label: "Email", group: "question", icon: Mail, short: "Email" },
-  { kind: "phone", label: "Phone", group: "question", icon: Phone, short: "Phone" },
-  { kind: "file_link", label: "File link", group: "question", icon: Paperclip, short: "File link" },
-  { kind: "years", label: "Years attended", group: "question", icon: CalendarRange, short: "Years attended" },
+  {
+    kind: "info_block",
+    label: "Info text",
+    group: "content",
+    icon: Type,
+    short: "Info text",
+  },
+  {
+    kind: "image_block",
+    label: "Image",
+    group: "content",
+    icon: ImageIcon,
+    short: "Image",
+  },
+  {
+    kind: "short_text",
+    label: "Short answer",
+    group: "question",
+    icon: TextCursorInput,
+    short: "Short answer",
+  },
+  {
+    kind: "long_text",
+    label: "Paragraph",
+    group: "question",
+    icon: AlignLeft,
+    short: "Paragraph",
+  },
+  {
+    kind: "single_select",
+    label: "Multiple choice",
+    group: "question",
+    icon: CircleDot,
+    short: "Multiple choice",
+  },
+  {
+    kind: "multi_select",
+    label: "Checkboxes",
+    group: "question",
+    icon: CheckSquare,
+    short: "Checkboxes",
+  },
+  {
+    kind: "multi_choice_grid",
+    label: "Multiple-choice grid",
+    group: "question",
+    icon: Grid3x3,
+    short: "MC grid",
+  },
+  {
+    kind: "checkbox_grid",
+    label: "Checkbox grid",
+    group: "question",
+    icon: LayoutGrid,
+    short: "Checkbox grid",
+  },
+  {
+    kind: "dropdown",
+    label: "Dropdown",
+    group: "question",
+    icon: ChevronDown,
+    short: "Dropdown",
+  },
+  {
+    kind: "image_choice",
+    label: "Image choices",
+    group: "question",
+    icon: Images,
+    short: "Image choices",
+  },
+  {
+    kind: "linear_scale",
+    label: "Linear scale",
+    group: "question",
+    icon: SlidersHorizontal,
+    short: "Linear scale",
+  },
+  {
+    kind: "rating",
+    label: "Rating",
+    group: "question",
+    icon: Star,
+    short: "Rating",
+  },
+  {
+    kind: "boolean",
+    label: "Yes / No",
+    group: "question",
+    icon: ToggleLeft,
+    short: "Yes / No",
+  },
+  {
+    kind: "number",
+    label: "Number",
+    group: "question",
+    icon: Hash,
+    short: "Number",
+  },
+  {
+    kind: "date",
+    label: "Date",
+    group: "question",
+    icon: Calendar,
+    short: "Date",
+  },
+  {
+    kind: "time",
+    label: "Time",
+    group: "question",
+    icon: Clock,
+    short: "Time",
+  },
+  {
+    kind: "email",
+    label: "Email",
+    group: "question",
+    icon: Mail,
+    short: "Email",
+  },
+  {
+    kind: "phone",
+    label: "Phone",
+    group: "question",
+    icon: Phone,
+    short: "Phone",
+  },
+  {
+    kind: "file_link",
+    label: "File link",
+    group: "question",
+    icon: Paperclip,
+    short: "File link",
+  },
+  {
+    kind: "years",
+    label: "Years attended",
+    group: "question",
+    icon: CalendarRange,
+    short: "Years attended",
+  },
 ];
 
 export const PALETTE_BY_KIND = Object.fromEntries(
@@ -172,7 +292,13 @@ export function createBlock(kind: PaletteKind, id: string): PageBlock {
     case "image_block":
       return { id, kind: "image_block", url: "", alt: "" };
     case "short_text":
-      return { id, kind: "short_text", prompt: "", maxLength: 200, required: false };
+      return {
+        id,
+        kind: "short_text",
+        prompt: "",
+        maxLength: 200,
+        required: false,
+      };
     case "number":
       return {
         id,
@@ -183,7 +309,13 @@ export function createBlock(kind: PaletteKind, id: string): PageBlock {
         format: "number",
       };
     case "long_text":
-      return { id, kind: "long_text", prompt: "", maxLength: 2000, required: false };
+      return {
+        id,
+        kind: "long_text",
+        prompt: "",
+        maxLength: 2000,
+        required: false,
+      };
     case "single_select":
       return {
         id,
@@ -248,7 +380,14 @@ export function createBlock(kind: PaletteKind, id: string): PageBlock {
         required: false,
       };
     case "rating":
-      return { id, kind: "rating", prompt: "", steps: 5, glyph: "star", required: false };
+      return {
+        id,
+        kind: "rating",
+        prompt: "",
+        steps: 5,
+        glyph: "star",
+        required: false,
+      };
     case "boolean":
       return { id, kind: "boolean", prompt: "", required: false };
     case "date":

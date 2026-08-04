@@ -92,8 +92,6 @@ test.describe("camp lead — create & become lead", () => {
     // allowed on purpose (two camps really can have similar names).
     const confirmed = await confirmWarnedCreate(webPage);
     await webPage.goto(`/camps/${confirmed.slug}`);
-    await expect(
-      webPage.getByRole("heading", { name: near }),
-    ).toBeVisible();
+    await expect(webPage.getByRole("heading", { name: near })).toBeVisible();
   });
 });

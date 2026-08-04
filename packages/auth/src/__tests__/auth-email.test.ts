@@ -95,7 +95,11 @@ describe("with no email provider configured", () => {
     // let a sign-up flow tell someone to check an inbox nothing was sent to.
     const delivered = await sendAuthEmail(
       {},
-      { to: "alice@example.com", kind: "reset", url: "https://app.test/reset?token=abc" },
+      {
+        to: "alice@example.com",
+        kind: "reset",
+        url: "https://app.test/reset?token=abc",
+      },
     );
 
     expect(delivered).toBe(false);
@@ -109,7 +113,13 @@ describe("with no email provider configured", () => {
   });
 
   it("uses a caller's log prefix, and auth:email when none is given", async () => {
-    await sendSingleEmail({}, "alice@example.com", "Subject", "Body", "web:email");
+    await sendSingleEmail(
+      {},
+      "alice@example.com",
+      "Subject",
+      "Body",
+      "web:email",
+    );
     expect(logged("info")).toContain("[web:email:console]");
 
     await sendSingleEmail({}, "alice@example.com", "Subject", "Body");
@@ -215,7 +225,11 @@ describe("delivery via Resend", () => {
     };
 
     await expect(
-      sendAuthEmail(KEYED, { to: "alice@example.com", kind: "reset", url: "u" }),
+      sendAuthEmail(KEYED, {
+        to: "alice@example.com",
+        kind: "reset",
+        url: "u",
+      }),
     ).resolves.toBe(false);
     expect(logged("error")).toContain("Bad Gateway");
   });
@@ -224,7 +238,11 @@ describe("delivery via Resend", () => {
     fetchError = new Error("getaddrinfo ENOTFOUND api.resend.com");
 
     await expect(
-      sendAuthEmail(KEYED, { to: "alice@example.com", kind: "reset", url: "u" }),
+      sendAuthEmail(KEYED, {
+        to: "alice@example.com",
+        kind: "reset",
+        url: "u",
+      }),
     ).resolves.toBe(false);
     expect(logged("error")).toContain("ENOTFOUND");
   });
@@ -235,7 +253,11 @@ describe("delivery via Resend", () => {
     fetchError = "socket hang up";
 
     await expect(
-      sendAuthEmail(KEYED, { to: "alice@example.com", kind: "verify", url: "u" }),
+      sendAuthEmail(KEYED, {
+        to: "alice@example.com",
+        kind: "verify",
+        url: "u",
+      }),
     ).resolves.toBe(false);
     expect(logged("error")).toContain("socket hang up");
   });

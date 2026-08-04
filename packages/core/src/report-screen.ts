@@ -127,5 +127,7 @@ export function describeFlags(flags: readonly ReportFlag[]): string {
   };
   return `**Held for a person.** This report ${flags
     .map((flag) => labels[flag])
-    .join("; ")}. It has not been triaged by a routine, and nothing should act on it until somebody has read it.`;
+    .join(
+      "; ",
+    )}. It has not been triaged by a routine, and nothing should act on it until somebody has read it.`;
 }

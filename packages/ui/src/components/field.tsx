@@ -57,9 +57,7 @@ export function Field({
             </span>
           ) : null}
         </label>
-        {privacyToggle ? (
-          <div className="shrink-0">{privacyToggle}</div>
-        ) : null}
+        {privacyToggle ? <div className="shrink-0">{privacyToggle}</div> : null}
       </div>
       {children}
       {error ? (

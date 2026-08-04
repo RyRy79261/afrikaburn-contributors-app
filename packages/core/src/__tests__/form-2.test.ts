@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import {
-  FORM_2_COLUMNS,
-  FORM_2_FIELD_MAP,
-  mapForm2Answers,
-} from "../form-2";
+import { FORM_2_COLUMNS, FORM_2_FIELD_MAP, mapForm2Answers } from "../form-2";
 
 // Form 2's answers are mirrored into the registration row (roadmap M4-20),
 // because the sound answer is what `getOfficerStatus` derives a camp's required
@@ -117,8 +113,8 @@ describe("mapForm2Answers", () => {
   describe("population", () => {
     it("accepts a numeric string, because a number authored as text is still a number", () => {
       expect(
-        mapForm2Answers({ ...fullAnswers(), expected_population: "60" })
-          .columns.s4ExpectedPopulation,
+        mapForm2Answers({ ...fullAnswers(), expected_population: "60" }).columns
+          .s4ExpectedPopulation,
       ).toBe(60);
     });
 
@@ -135,8 +131,8 @@ describe("mapForm2Answers", () => {
 
     it("truncates a fractional count — 40.7 people is 40 people", () => {
       expect(
-        mapForm2Answers({ ...fullAnswers(), expected_population: 40.7 })
-          .columns.s4ExpectedPopulation,
+        mapForm2Answers({ ...fullAnswers(), expected_population: 40.7 }).columns
+          .s4ExpectedPopulation,
       ).toBe(40);
     });
   });

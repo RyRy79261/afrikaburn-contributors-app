@@ -169,7 +169,9 @@ export function FileUpload({
         batch: batch.length > 1 ? { index: i + 1, total: batch.length } : null,
       });
       try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
+        const safeName = file.name
+          .replace(/[^a-zA-Z0-9._-]+/g, "-")
+          .slice(0, 80);
         const blob = await upload(`${kind}/${safeName}`, file, {
           access: "public",
           handleUploadUrl,

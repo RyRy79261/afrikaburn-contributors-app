@@ -18,17 +18,20 @@ export const PLACEMENT_ZONES_2027: readonly PlacementZone[] = [
   {
     value: "Binnekring — front line (12ish)",
     label: "Binnekring — front line (12ish)",
-    blurb: "On the inner circle near the Clan. High-energy, high-footfall, loud.",
+    blurb:
+      "On the inner circle near the Clan. High-energy, high-footfall, loud.",
   },
   {
     value: "Binnekring — back line",
     label: "Binnekring — back line",
-    blurb: "Facing the Circle but a step quieter — good for family-friendly camps.",
+    blurb:
+      "Facing the Circle but a step quieter — good for family-friendly camps.",
   },
   {
     value: "Loud Zone (northwest binnekring)",
     label: "Loud Zone (northwest binnekring)",
-    blurb: "Where large sound rigs are grouped. Register as a sound camp for this.",
+    blurb:
+      "Where large sound rigs are grouped. Register as a sound camp for this.",
   },
   {
     value: "Mid-city (3ish–9ish roads)",
@@ -43,7 +46,8 @@ export const PLACEMENT_ZONES_2027: readonly PlacementZone[] = [
   {
     value: "Quiet Camping (behind the dunes)",
     label: "Quiet Camping (behind the dunes)",
-    blurb: "No generators or amplified sound at any time. For a proper night's sleep.",
+    blurb:
+      "No generators or amplified sound at any time. For a proper night's sleep.",
   },
   {
     value: "No preference — place us where it works",

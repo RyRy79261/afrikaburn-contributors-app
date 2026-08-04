@@ -184,7 +184,9 @@ describe("finishing a recording", () => {
       result.current.stop();
     });
 
-    await waitFor(() => expect(onTranscript).toHaveBeenCalledWith("the transcript"));
+    await waitFor(() =>
+      expect(onTranscript).toHaveBeenCalledWith("the transcript"),
+    );
     expect(result.current.state).toBe("idle");
     expect(result.current.error).toBeNull();
   });

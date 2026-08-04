@@ -49,7 +49,9 @@ describe("submit gate", () => {
   it("does NOT require the Form 2 sections", () => {
     // The exact shape of a real September applicant: everything they were asked
     // for, nothing they were not.
-    expect(isSubmittable(["identity", "lnt", "participation", "suppliers_commerce"])).toBe(true);
+    expect(
+      isSubmittable(["identity", "lnt", "participation", "suppliers_commerce"]),
+    ).toBe(true);
     // And the inverse — Form 2 alone submits nothing.
     expect(isSubmittable(FORM_2_SECTION_KEYS)).toBe(false);
   });
@@ -60,7 +62,12 @@ describe("submit gate", () => {
     // A camp that answered every Form 2 question but skipped one of Form 1's is
     // not submittable, however full the row looks.
     expect(
-      isSubmittable(["identity", "lnt", "participation", ...FORM_2_SECTION_KEYS]),
+      isSubmittable([
+        "identity",
+        "lnt",
+        "participation",
+        ...FORM_2_SECTION_KEYS,
+      ]),
     ).toBe(false);
   });
 

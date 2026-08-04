@@ -103,7 +103,10 @@ function projectionKeys(sql: string): (string | null)[] {
   let list: string;
   if (sql.startsWith("select ")) {
     const from = sql.indexOf(' from "');
-    list = from === -1 ? sql.slice("select ".length) : sql.slice("select ".length, from);
+    list =
+      from === -1
+        ? sql.slice("select ".length)
+        : sql.slice("select ".length, from);
   } else {
     const at = sql.lastIndexOf(" returning ");
     if (at === -1) return [];
@@ -217,7 +220,9 @@ export function installFakeDb(): FakeDb {
 /** The handle installed for the current test. */
 export function fakeDb(): FakeDb {
   if (!installed) {
-    throw new Error("no fake db installed — call installFakeDb() in beforeEach");
+    throw new Error(
+      "no fake db installed — call installFakeDb() in beforeEach",
+    );
   }
   return installed;
 }

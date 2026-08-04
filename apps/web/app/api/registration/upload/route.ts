@@ -74,10 +74,14 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
-    const blob = await put(`registration-layouts/${Date.now()}-${safeName}`, file, {
-      access: "public",
-      addRandomSuffix: true,
-    });
+    const blob = await put(
+      `registration-layouts/${Date.now()}-${safeName}`,
+      file,
+      {
+        access: "public",
+        addRandomSuffix: true,
+      },
+    );
     return NextResponse.json({ url: blob.url });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upload failed.";

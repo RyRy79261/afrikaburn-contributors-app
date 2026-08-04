@@ -11,9 +11,7 @@ import { AB_SUPPLIERS_SAMPLE_CSV as fixtureCsv } from "../__fixtures__/ab-suppli
 
 describe("parseCsv", () => {
   it("splits quoted fields, unescapes doubled quotes, and folds embedded newlines", () => {
-    const rows = parseCsv(
-      '"a","b""c","multi\nline"\n"d","e",""\n',
-    );
+    const rows = parseCsv('"a","b""c","multi\nline"\n"d","e",""\n');
     expect(rows).toEqual([
       ["a", 'b"c', "multi\nline"],
       ["d", "e", ""],
@@ -96,9 +94,7 @@ describe("parseSuppliersCsv v2 (real AB Suppliers List sample)", () => {
   it("maps the Status column into standing (real values present in the sheet)", () => {
     const dayStar = rows.find((r) => r.name === "Day Star stretch tents");
     expect(dayStar?.standing).toBe("adapting");
-    const poswa = rows.find(
-      (r) => r.name === "Poswa Logistics and Services",
-    );
+    const poswa = rows.find((r) => r.name === "Poswa Logistics and Services");
     expect(poswa?.standing).toBe("diligent_first_timer");
     expect(poswa?.returning).toBe("newbie");
     expect(poswa?.category).toBe("Transport");

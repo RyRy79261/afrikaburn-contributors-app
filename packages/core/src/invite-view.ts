@@ -28,10 +28,7 @@ import { canRedeemInvite, canRedeemInviteAs, type InviteLike } from "./invite";
 
 /** The four states `/join/[token]` draws, for every viewer. */
 export type InviteViewStatus =
-  | "valid"
-  | "already_used"
-  | "expired"
-  | "not_found";
+  "valid" | "already_used" | "expired" | "not_found";
 
 /**
  * What the primary call-to-action must do next.
@@ -182,7 +179,10 @@ export function wantsInviteResume(value: unknown): boolean {
 }
 
 /** "expires today" / "expires in 1 day" / "expires in 6 days" (frame copy). */
-export function inviteExpiryLabel(expiresAt: Date, now: Date = new Date()): string {
+export function inviteExpiryLabel(
+  expiresAt: Date,
+  now: Date = new Date(),
+): string {
   const days = Math.ceil((expiresAt.getTime() - now.getTime()) / 86_400_000);
   if (days <= 0) return "expires today";
   if (days === 1) return "expires in 1 day";

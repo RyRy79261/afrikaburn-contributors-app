@@ -58,7 +58,9 @@ export const SUPPLIER_ONBOARDING_STEP_KEYS = [
 ] as const;
 
 export const SupplierOnboardingStepKey = z.enum(SUPPLIER_ONBOARDING_STEP_KEYS);
-export type SupplierOnboardingStepKey = z.infer<typeof SupplierOnboardingStepKey>;
+export type SupplierOnboardingStepKey = z.infer<
+  typeof SupplierOnboardingStepKey
+>;
 
 /**
  * Per-step status stored in `supplier_onboarding.steps` (jsonb).

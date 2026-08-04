@@ -80,7 +80,9 @@ export function SupplierSignUpForm() {
     setNotice(null);
 
     if (!assessment.ok) {
-      setError(assessment.error ?? `Use at least ${PASSWORD_MIN_LENGTH} characters.`);
+      setError(
+        assessment.error ?? `Use at least ${PASSWORD_MIN_LENGTH} characters.`,
+      );
       return;
     }
     if (!acknowledged) {

@@ -32,9 +32,8 @@ vi.mock("@quagga/db", async () => {
   return { ...actual, consumeRateLimit };
 });
 
-const { requestPasswordReset, resetPassword } = await import(
-  "@/lib/actions/password"
-);
+const { requestPasswordReset, resetPassword } =
+  await import("@/lib/actions/password");
 
 const GOOD_PASSWORD = "a short sentence I remember";
 
@@ -94,7 +93,9 @@ describe("requestPasswordReset", () => {
     await requestPasswordReset({ email: "alice@example.com" });
 
     expect(consumeRateLimit).toHaveBeenCalledWith(
-      expect.objectContaining({ key: expect.stringContaining("forgot_password:") }),
+      expect.objectContaining({
+        key: expect.stringContaining("forgot_password:"),
+      }),
     );
   });
 
@@ -168,7 +169,9 @@ describe("resetPassword", () => {
     authApi.resetPassword.mockRejectedValue(new Error("INVALID_TOKEN"));
 
     expect(
-      refusal(await resetPassword({ token: "stale", newPassword: GOOD_PASSWORD })),
+      refusal(
+        await resetPassword({ token: "stale", newPassword: GOOD_PASSWORD }),
+      ),
     ).toBe(
       "That reset link has expired or has already been used. Request a new one.",
     );
@@ -176,7 +179,9 @@ describe("resetPassword", () => {
 
   it("confirms the reset and points at signing in again", async () => {
     expect(
-      success(await resetPassword({ token: "fresh", newPassword: GOOD_PASSWORD })),
+      success(
+        await resetPassword({ token: "fresh", newPassword: GOOD_PASSWORD }),
+      ),
     ).toBe("Password reset. Sign in with your new password.");
     expect(authApi.resetPassword).toHaveBeenCalledWith({
       body: { token: "fresh", newPassword: GOOD_PASSWORD },

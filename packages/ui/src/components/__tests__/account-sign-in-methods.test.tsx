@@ -17,9 +17,13 @@ import type { PasswordAssessment } from "../account-change-password";
 // the server would refuse.
 
 const assess = (password: string): PasswordAssessment =>
-  password.length >= 12 ? { ok: true, error: null } : { ok: false, error: "Too short." };
+  password.length >= 12
+    ? { ok: true, error: null }
+    : { ok: false, error: "Too short." };
 
-function renderMethods(over: Partial<React.ComponentProps<typeof AccountSignInMethods>> = {}) {
+function renderMethods(
+  over: Partial<React.ComponentProps<typeof AccountSignInMethods>> = {},
+) {
   const onChangePassword = vi.fn().mockResolvedValue({ ok: true });
   render(
     <AccountSignInMethods
@@ -59,7 +63,9 @@ describe("the password row", () => {
     expect(screen.getByText(/Added\s*14 Jul 2026/)).toBeDefined();
     // Saying "last changed" when we only stored "added" would be an invented
     // fact about someone's account security.
-    expect(screen.getByText(/We don’t record when it last changed/)).toBeDefined();
+    expect(
+      screen.getByText(/We don’t record when it last changed/),
+    ).toBeDefined();
   });
 
   it("falls back to the generic sentence when no date was stored", () => {
@@ -67,7 +73,9 @@ describe("the password row", () => {
     expect(
       screen.getByText("You sign in with your email address and a password."),
     ).toBeDefined();
-    expect(screen.queryByText(/We don’t record when it last changed/)).toBeNull();
+    expect(
+      screen.queryByText(/We don’t record when it last changed/),
+    ).toBeNull();
   });
 
   it("toggles the change form in and out, threading the injected policy through", () => {
@@ -120,7 +128,9 @@ describe("the last-method note", () => {
   it("says it plainly when this is the only way in", () => {
     renderMethods({ methodCount: 1 });
     expect(
-      screen.getByText(/This is your only way to sign in — it can't be removed/),
+      screen.getByText(
+        /This is your only way to sign in — it can't be removed/,
+      ),
     ).toBeDefined();
     // The capability notice is appended in BOTH states, because the reason
     // unlink is unavailable does not depend on how many methods there are.

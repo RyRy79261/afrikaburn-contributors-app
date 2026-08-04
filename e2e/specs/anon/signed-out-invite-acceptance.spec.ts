@@ -52,7 +52,9 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
     await expect(
       invitee.getByRole("heading", { name: camp.name }),
     ).toBeVisible();
-    await expect(invitee.getByText(/you['’]ve been invited to join/i)).toBeVisible();
+    await expect(
+      invitee.getByText(/you['’]ve been invited to join/i),
+    ).toBeVisible();
     // The inviter IS named, because the card shows their USERNAME — a public
     // handle by construction (unique, no privacy toggle: @quagga/core
     // `username.ts`). There is no flag to consult any more; what the card must
@@ -64,12 +66,16 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
     ).toBeVisible();
     await expect(invitee.getByText(/one-time invite/i)).toBeVisible();
     await expect(
-      invitee.getByRole("button", { name: new RegExp(`join ${camp.name}`, "i") }),
+      invitee.getByRole("button", {
+        name: new RegExp(`join ${camp.name}`, "i"),
+      }),
     ).toBeVisible();
 
     // Minimal signed-out chrome: "Sign in" is offered, the rest of the app's nav
     // is not (frame qhcHh's nav bar is brand + Sign in only).
-    await expect(invitee.getByRole("link", { name: /^sign in$/i })).toBeVisible();
+    await expect(
+      invitee.getByRole("link", { name: /^sign in$/i }),
+    ).toBeVisible();
     await expect(
       invitee.getByRole("link", { name: /^create camp$/i }),
     ).toHaveCount(0);
@@ -118,7 +124,9 @@ test.describe("anonymous visitor — signed-out invite acceptance", () => {
 
     // Everything AFTER the invite landing page is token-free: no `?token=`, no
     // callbackURL carrying it, nothing to leak via Referer, history or logs.
-    const afterLanding = urls.filter((u) => !u.includes(`/join/${invite.token}`));
+    const afterLanding = urls.filter(
+      (u) => !u.includes(`/join/${invite.token}`),
+    );
     for (const url of afterLanding) {
       expect(url, `${url} must not carry the invite token`).not.toContain(
         invite.token,

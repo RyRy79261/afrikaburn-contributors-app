@@ -116,7 +116,9 @@ export function AccountPasskeys({
     const { error: err } = await client.passkey.deletePasskey({ id });
     setBusyId(null);
     if (err) {
-      setError(clientErrorMessage(err, "Couldn't remove that passkey. Try again."));
+      setError(
+        clientErrorMessage(err, "Couldn't remove that passkey. Try again."),
+      );
       return;
     }
     onChanged?.();
@@ -128,12 +130,16 @@ export function AccountPasskeys({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2">
-              <Fingerprint className="h-4 w-4 text-muted-foreground" aria-hidden />
+              <Fingerprint
+                className="h-4 w-4 text-muted-foreground"
+                aria-hidden
+              />
               Passkeys
             </CardTitle>
             <CardDescription className="mt-1.5">
-              Sign in with your fingerprint, face or device PIN instead of typing
-              a password. One passkey works across all of AfrikaBurn&rsquo;s apps.
+              Sign in with your fingerprint, face or device PIN instead of
+              typing a password. One passkey works across all of
+              AfrikaBurn&rsquo;s apps.
             </CardDescription>
           </div>
           <Badge variant={passkeys.length > 0 ? "success" : "outline"}>
@@ -165,7 +171,9 @@ export function AccountPasskeys({
                         : pk.deviceType === "singleDevice"
                           ? "This device"
                           : "Passkey"}
-                      {pk.createdAt ? ` · added ${formatDate(pk.createdAt)}` : ""}
+                      {pk.createdAt
+                        ? ` · added ${formatDate(pk.createdAt)}`
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -249,8 +257,8 @@ export function AccountPasskeys({
             </div>
             {supported === false ? (
               <p className="text-xs text-muted-foreground">
-                This browser doesn&rsquo;t support passkeys. You can still sign in
-                with your password.
+                This browser doesn&rsquo;t support passkeys. You can still sign
+                in with your password.
               </p>
             ) : null}
           </div>
@@ -258,8 +266,8 @@ export function AccountPasskeys({
 
         <p className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
           A passkey is a faster way in, not your only one — your password stays
-          active, so losing a device never locks you out. Removing a passkey here
-          only affects sign-in on that device.
+          active, so losing a device never locks you out. Removing a passkey
+          here only affects sign-in on that device.
         </p>
       </CardContent>
     </Card>

@@ -79,7 +79,9 @@ describe("the cross-app link rule", () => {
   });
 
   it("keeps a link minted for this app", async () => {
-    db.rows("notifications", [row({ link: "/standing", linkApp: "suppliers" })]);
+    db.rows("notifications", [
+      row({ link: "/standing", linkApp: "suppliers" }),
+    ]);
 
     expect((await recentNotifications(USER))[0]!.link).toBe("/standing");
   });
@@ -126,13 +128,18 @@ describe("listNotificationGroups", () => {
 
     expect(db.queries[0]!.sql).toContain('"notifications"."user_id" = ');
     expect(db.queries[0]!.params).toContain(USER);
-    expect(db.queries[0]!.sql).toContain('order by "notifications"."created_at" desc');
+    expect(db.queries[0]!.sql).toContain(
+      'order by "notifications"."created_at" desc',
+    );
   });
 
   it("groups the projected views by day", async () => {
     db.rows("notifications", [
       row({ id: "n-1", createdAt: pgTimestamp(AT) }),
-      row({ id: "n-2", createdAt: pgTimestamp(new Date("2026-07-13T09:00:00Z")) }),
+      row({
+        id: "n-2",
+        createdAt: pgTimestamp(new Date("2026-07-13T09:00:00Z")),
+      }),
     ]);
 
     const groups = await listNotificationGroups(USER);

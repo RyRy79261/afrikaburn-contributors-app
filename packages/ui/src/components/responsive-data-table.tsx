@@ -114,12 +114,14 @@ export function projectColumnsToCard<T>(
   return projection;
 }
 
-const alignText: Record<NonNullable<ResponsiveColumn<unknown>["align"]>, string> =
-  {
-    left: "text-left",
-    right: "text-right",
-    center: "text-center",
-  };
+const alignText: Record<
+  NonNullable<ResponsiveColumn<unknown>["align"]>,
+  string
+> = {
+  left: "text-left",
+  right: "text-right",
+  center: "text-center",
+};
 
 export interface ResponsiveDataTableProps<T> {
   /** Column set, declared once, drives both layouts. */

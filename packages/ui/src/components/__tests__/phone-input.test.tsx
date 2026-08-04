@@ -12,7 +12,9 @@ import { PhoneInput } from "../phone-input";
 // MEASURED, NOT ASSUMED. Every literal below is a string this component
 // actually produced under jsdom, including the two that are surprising.
 
-function renderPhone(over: Partial<React.ComponentProps<typeof PhoneInput>> = {}) {
+function renderPhone(
+  over: Partial<React.ComponentProps<typeof PhoneInput>> = {},
+) {
   const onChange = vi.fn();
   const view = render(
     <PhoneInput value="" onChange={onChange} id="phone" {...over} />,
@@ -46,7 +48,9 @@ describe("the value contract", () => {
     // `v ?? ""` is the whole contract. A consumer writing `undefined` into a
     // hard-locked column is a data defect nothing downstream would catch.
     expect(onChange).toHaveBeenLastCalledWith("");
-    expect(onChange.mock.calls.every(([v]) => typeof v === "string")).toBe(true);
+    expect(onChange.mock.calls.every(([v]) => typeof v === "string")).toBe(
+      true,
+    );
   });
 
   it("renders a stored E.164 number back in readable international form", () => {

@@ -91,9 +91,7 @@ test.describe("new burner · privacy projection", () => {
     await webPage.goto(`/burners/${burnerId}`);
 
     // The profile loaded (public display name is the heading anchor).
-    await expect(
-      webPage.getByRole("heading", { name: bName }),
-    ).toBeVisible();
+    await expect(webPage.getByRole("heading", { name: bName })).toBeVisible();
 
     // PUBLIC fields are present.
     await expect(webPage.getByText(publicAbout)).toBeVisible();
@@ -109,9 +107,10 @@ test.describe("new burner · privacy projection", () => {
     expect(html).toContain(publicAbout); // control: the page really rendered
     const { medical, ...neverVisible } = sentinels;
     for (const [field, value] of Object.entries(neverVisible)) {
-      expect(html, `hard-locked/private "${field}" leaked into public HTML`).not.toContain(
-        value,
-      );
+      expect(
+        html,
+        `hard-locked/private "${field}" leaked into public HTML`,
+      ).not.toContain(value);
     }
 
     // MEDICAL: A leads the camp B joined, so A is the audience B consented to at

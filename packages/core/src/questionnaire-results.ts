@@ -137,9 +137,7 @@ function isBlank(value: unknown): boolean {
   if (Array.isArray(value)) return value.length === 0;
   // A grid answer ({ rowId: columnValue[] }) is blank when no row has a pick.
   if (typeof value === "object") {
-    return !Object.values(value).some(
-      (v) => Array.isArray(v) && v.length > 0,
-    );
+    return !Object.values(value).some((v) => Array.isArray(v) && v.length > 0);
   }
   return false;
 }
@@ -201,13 +199,23 @@ function aggregateOne(
       }
       const options: OptionTally[] = question.options.map((o) => {
         const count = counts.get(o.value) ?? 0;
-        return { value: o.value, label: o.label, count, percent: pct(count, denominator) };
+        return {
+          value: o.value,
+          label: o.label,
+          count,
+          percent: pct(count, denominator),
+        };
       });
       // Values not in the definition any more (option deleted after answers
       // came in) still get a row, labelled by their raw value.
       for (const [value, count] of counts) {
         if (question.options.some((o) => o.value === value)) continue;
-        options.push({ value, label: value, count, percent: pct(count, denominator) });
+        options.push({
+          value,
+          label: value,
+          count,
+          percent: pct(count, denominator),
+        });
       }
       const other: OtherTally[] = [...others.entries()]
         .map(([text, count]) => ({ text, count }))
@@ -257,7 +265,13 @@ function aggregateOne(
         question.steps,
         denominator,
       );
-      return { ...base, chart: "rating", steps: question.steps, buckets, average };
+      return {
+        ...base,
+        chart: "rating",
+        steps: question.steps,
+        buckets,
+        average,
+      };
     }
 
     case "date":
@@ -271,7 +285,11 @@ function aggregateOne(
       }
       const buckets = [...counts.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([value, count]) => ({ value, count, percent: pct(count, denominator) }));
+        .map(([value, count]) => ({
+          value,
+          count,
+          percent: pct(count, denominator),
+        }));
       return {
         ...base,
         chart: "timeline",
@@ -351,7 +369,9 @@ function numericHistogram(
     buckets.push({ value: v, count, percent: pct(count, denominator) });
   }
   // Out-of-range answers (a scale narrowed after collection) keep their bucket.
-  for (const [value, count] of [...counts.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [value, count] of [...counts.entries()].sort(
+    (a, b) => a[0] - b[0],
+  )) {
     if (value >= min && value <= max) continue;
     buckets.push({ value, count, percent: pct(count, denominator) });
   }

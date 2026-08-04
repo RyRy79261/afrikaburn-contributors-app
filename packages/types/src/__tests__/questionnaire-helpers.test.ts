@@ -41,10 +41,12 @@ describe("Other-answer encoding", () => {
     // if the prefix ever changed, this refusal would stop matching.
     const stored = toOtherAnswer("");
     expect(stored).toBe(OTHER_PREFIX);
-    expect(validateOne({ ...SINGLE_SELECT, allowOther: true }, stored)).toEqual({
-      ok: false,
-      error: "Tell us what your 'other' answer is",
-    });
+    expect(validateOne({ ...SINGLE_SELECT, allowOther: true }, stored)).toEqual(
+      {
+        ok: false,
+        error: "Tell us what your 'other' answer is",
+      },
+    );
   });
 });
 

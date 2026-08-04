@@ -27,7 +27,8 @@ export const VOLUNTEER_PORTFOLIOS = [
   { key: "volunteer_info_booth", label: "Volunteer & Info Booth" },
 ] as const;
 
-export type VolunteerPortfolioKey = (typeof VOLUNTEER_PORTFOLIOS)[number]["key"];
+export type VolunteerPortfolioKey =
+  (typeof VOLUNTEER_PORTFOLIOS)[number]["key"];
 
 const PORTFOLIO_KEY_SET: ReadonlySet<string> = new Set(
   VOLUNTEER_PORTFOLIOS.map((p) => p.key),

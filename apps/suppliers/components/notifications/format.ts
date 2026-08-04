@@ -28,7 +28,8 @@ export function relativeTime(at: Date, now: Date = new Date()): string {
     return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   }
   if (delta < 2 * DAY) return "Yesterday";
-  if (delta < 7 * DAY) return at.toLocaleDateString("en-GB", { weekday: "short" });
+  if (delta < 7 * DAY)
+    return at.toLocaleDateString("en-GB", { weekday: "short" });
   return at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 

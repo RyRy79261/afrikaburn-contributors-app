@@ -94,7 +94,9 @@ describe("branch resolution", () => {
   });
 
   it("routes to the branch target of the chosen option", () => {
-    expect(nextPageId(BRANCHING, "start", { camp_type: "sound" })).toBe("sound");
+    expect(nextPageId(BRANCHING, "start", { camp_type: "sound" })).toBe(
+      "sound",
+    );
     expect(nextPageId(BRANCHING, "start", { camp_type: "quiet" })).toBe("wrap");
   });
 
@@ -142,18 +144,38 @@ describe("branch resolution", () => {
               id: "first",
               kind: "single_select",
               prompt: "First",
-              options: [{ value: "x", label: "X", goTo: "b" }, { value: "y", label: "Y" }],
+              options: [
+                { value: "x", label: "X", goTo: "b" },
+                { value: "y", label: "Y" },
+              ],
             },
             {
               id: "second",
               kind: "single_select",
               prompt: "Second",
-              options: [{ value: "x", label: "X", goTo: "c" }, { value: "y", label: "Y" }],
+              options: [
+                { value: "x", label: "X", goTo: "c" },
+                { value: "y", label: "Y" },
+              ],
             },
           ],
         },
-        { id: "b", kind: "questions", title: "B", questions: [{ id: "qb", kind: "short_text", prompt: "B", maxLength: 20 }] },
-        { id: "c", kind: "questions", title: "C", questions: [{ id: "qc", kind: "short_text", prompt: "C", maxLength: 20 }] },
+        {
+          id: "b",
+          kind: "questions",
+          title: "B",
+          questions: [
+            { id: "qb", kind: "short_text", prompt: "B", maxLength: 20 },
+          ],
+        },
+        {
+          id: "c",
+          kind: "questions",
+          title: "C",
+          questions: [
+            { id: "qc", kind: "short_text", prompt: "C", maxLength: 20 },
+          ],
+        },
       ],
     });
     expect(nextPageId(q, "a", { first: "x", second: "x" })).toBe("c");
@@ -166,8 +188,24 @@ describe("branch resolution", () => {
     const looping = Questionnaire.parse({
       version: "1",
       pages: [
-        { id: "a", kind: "questions", title: "A", next: "b", questions: [{ id: "qa", kind: "short_text", prompt: "A", maxLength: 20 }] },
-        { id: "b", kind: "questions", title: "B", next: "a", questions: [{ id: "qb", kind: "short_text", prompt: "B", maxLength: 20 }] },
+        {
+          id: "a",
+          kind: "questions",
+          title: "A",
+          next: "b",
+          questions: [
+            { id: "qa", kind: "short_text", prompt: "A", maxLength: 20 },
+          ],
+        },
+        {
+          id: "b",
+          kind: "questions",
+          title: "B",
+          next: "a",
+          questions: [
+            { id: "qb", kind: "short_text", prompt: "B", maxLength: 20 },
+          ],
+        },
       ],
     });
     expect(resolvePath(looping, {})).toEqual(["a", "b"]);
@@ -176,7 +214,9 @@ describe("branch resolution", () => {
 
 describe("visible questions", () => {
   it("excludes questions in branched-past sections", () => {
-    const ids = visibleQuestions(BRANCHING, { camp_type: "quiet" }).map((q) => q.id);
+    const ids = visibleQuestions(BRANCHING, { camp_type: "quiet" }).map(
+      (q) => q.id,
+    );
     expect(ids).toEqual(["camp_type", "notes"]);
   });
 
@@ -219,8 +259,20 @@ describe("progress derivation", () => {
           kind: "questions",
           title: "A",
           questions: [
-            { id: "x", kind: "long_text", prompt: "X", maxLength: 50, required: false },
-            { id: "y", kind: "long_text", prompt: "Y", maxLength: 50, required: false },
+            {
+              id: "x",
+              kind: "long_text",
+              prompt: "X",
+              maxLength: 50,
+              required: false,
+            },
+            {
+              id: "y",
+              kind: "long_text",
+              prompt: "Y",
+              maxLength: 50,
+              required: false,
+            },
           ],
         },
       ],
@@ -246,7 +298,10 @@ describe("branch-aware submit validation", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.responses).toEqual({ camp_type: "quiet", notes: "See you there" });
+    expect(result.responses).toEqual({
+      camp_type: "quiet",
+      notes: "See you there",
+    });
     expect(result.progress.complete).toBe(true);
   });
 
@@ -310,7 +365,13 @@ describe("response validation — Builder v2 rules", () => {
             max: 5,
             required: false,
           },
-          { id: "stars", kind: "rating", prompt: "Stars", steps: 5, required: false },
+          {
+            id: "stars",
+            kind: "rating",
+            prompt: "Stars",
+            steps: 5,
+            required: false,
+          },
           { id: "at", kind: "time", prompt: "Time", required: false },
           { id: "plan", kind: "file_link", prompt: "Plan", required: false },
           {
@@ -403,7 +464,9 @@ describe("response validation — Builder v2 rules", () => {
   });
 
   it("applies the format presets", () => {
-    expect(errs({ email_field: "ren@example.com" }).email_field).toBeUndefined();
+    expect(
+      errs({ email_field: "ren@example.com" }).email_field,
+    ).toBeUndefined();
     expect(errs({ email_field: "not-an-email" }).email_field).toBeDefined();
     expect(errs({ crew_size: "12" }).crew_size).toBeUndefined();
     expect(errs({ crew_size: "1" }).crew_size).toBeDefined();

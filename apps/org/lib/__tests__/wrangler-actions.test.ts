@@ -210,12 +210,12 @@ describe("assignWrangler", () => {
 describe("unassignWrangler", () => {
   it("refuses a registration that no longer exists", async () => {
     db.seed("registrations", []);
-    await expect(
-      unassignWrangler({ registrationId: REG_ID }),
-    ).resolves.toEqual({
-      ok: false,
-      error: "That registration no longer exists.",
-    });
+    await expect(unassignWrangler({ registrationId: REG_ID })).resolves.toEqual(
+      {
+        ok: false,
+        error: "That registration no longer exists.",
+      },
+    );
   });
 
   it("refuses a camp that has no wrangler to remove", async () => {

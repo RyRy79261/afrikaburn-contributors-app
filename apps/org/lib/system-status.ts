@@ -182,10 +182,7 @@ function hostOf(connectionString: string | undefined): string | null {
 
 // --- Health: is the plumbing working? ---------------------------------------
 
-function databaseCheck(
-  env: SystemEnv,
-  probe: DatabaseProbe,
-): SystemCheck {
+function databaseCheck(env: SystemEnv, probe: DatabaseProbe): SystemCheck {
   const host = hostOf(env.DATABASE_URL ?? env.DATABASE_URL_UNPOOLED);
   const where = host ? ` Host: ${host}.` : "";
 
@@ -476,7 +473,10 @@ function emailVerificationCheck(env: SystemEnv): SystemCheck {
         "out of an app it could never get into. It switches on by itself the moment a key exists.",
     };
   }
-  if (!required && parseBoolEnv(env.BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION) === false) {
+  if (
+    !required &&
+    parseBoolEnv(env.BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION) === false
+  ) {
     return {
       ...base,
       value: "Off — explicitly overridden",

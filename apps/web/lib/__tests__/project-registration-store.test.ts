@@ -283,7 +283,11 @@ describe("getProjectRegistrationForEdit", () => {
 
     // An unstarted project is a draft, not an error — the edit page opens on an
     // empty form rather than a 404.
-    expect(ctx).toMatchObject({ status: "draft", editable: true, role: "lead" });
+    expect(ctx).toMatchObject({
+      status: "draft",
+      editable: true,
+      role: "lead",
+    });
     expect(ctx!.answers).toBeNull();
     expect(ctx!.group).toEqual({
       id: GROUP,

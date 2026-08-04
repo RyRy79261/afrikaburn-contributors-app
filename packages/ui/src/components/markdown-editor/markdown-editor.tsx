@@ -35,7 +35,12 @@ interface ToolbarButtonProps {
   children: React.ReactNode;
 }
 
-function ToolbarButton({ onClick, active, label, children }: ToolbarButtonProps) {
+function ToolbarButton({
+  onClick,
+  active,
+  label,
+  children,
+}: ToolbarButtonProps) {
   return (
     <button
       type="button"
@@ -62,12 +67,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href: url })
-      .run();
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
   return (
@@ -89,9 +89,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       <ToolbarButton
         label="Heading"
         active={editor.isActive("heading", { level: 2 })}
-        onClick={() =>
-          editor.chain().focus().toggleHeading({ level: 2 }).run()
-        }
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
       >
         <Heading2 className="h-4 w-4" aria-hidden />
       </ToolbarButton>
@@ -165,7 +163,9 @@ export function MarkdownEditor({
     },
     onUpdate: ({ editor: e }) => {
       onChange?.(
-        (e.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown(),
+        (
+          e.storage as unknown as { markdown: MarkdownStorage }
+        ).markdown.getMarkdown(),
       );
     },
   });

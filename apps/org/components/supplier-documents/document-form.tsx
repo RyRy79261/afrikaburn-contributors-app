@@ -214,8 +214,8 @@ export function DocumentForm({
               ariaLabel="Upload a document"
             />
             <p className="text-xs text-muted-foreground">
-              Suppliers get a{" "}
-              <strong className="font-medium">Download</strong> action for it.
+              Suppliers get a <strong className="font-medium">Download</strong>{" "}
+              action for it.
             </p>
           </div>
         ) : (

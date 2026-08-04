@@ -162,20 +162,21 @@ export const CB_GRID: CheckboxGridQuestion = {
 };
 
 /** Every question kind with an answer it accepts. */
-export const KIND_SAMPLES: readonly { question: Question; answer: unknown }[] = [
-  { question: SINGLE_SELECT, answer: "yes" },
-  { question: MULTI_SELECT, answer: ["build"] },
-  { question: SHORT_TEXT, answer: "Camp 404" },
-  { question: LONG_TEXT, answer: "Dust, lasers, and a very long drop." },
-  { question: DATE, answer: "2027-04-26" },
-  { question: BOOLEAN, answer: true },
-  { question: EMAIL, answer: "alice@example.com" },
-  { question: PHONE, answer: "+27 82 123 4567" },
-  { question: YEARS, answer: ["2019"] },
-  { question: LINEAR_SCALE, answer: 3 },
-  { question: RATING, answer: 4 },
-  { question: TIME, answer: "23:00" },
-  { question: FILE_LINK, answer: "https://example.com/layout.pdf" },
-  { question: MC_GRID, answer: { mon: ["am"], tue: ["pm"] } },
-  { question: CB_GRID, answer: { kitchen: ["am", "pm"] } },
-];
+export const KIND_SAMPLES: readonly { question: Question; answer: unknown }[] =
+  [
+    { question: SINGLE_SELECT, answer: "yes" },
+    { question: MULTI_SELECT, answer: ["build"] },
+    { question: SHORT_TEXT, answer: "Camp 404" },
+    { question: LONG_TEXT, answer: "Dust, lasers, and a very long drop." },
+    { question: DATE, answer: "2027-04-26" },
+    { question: BOOLEAN, answer: true },
+    { question: EMAIL, answer: "alice@example.com" },
+    { question: PHONE, answer: "+27 82 123 4567" },
+    { question: YEARS, answer: ["2019"] },
+    { question: LINEAR_SCALE, answer: 3 },
+    { question: RATING, answer: 4 },
+    { question: TIME, answer: "23:00" },
+    { question: FILE_LINK, answer: "https://example.com/layout.pdf" },
+    { question: MC_GRID, answer: { mon: ["am"], tue: ["pm"] } },
+    { question: CB_GRID, answer: { kitchen: ["am", "pm"] } },
+  ];

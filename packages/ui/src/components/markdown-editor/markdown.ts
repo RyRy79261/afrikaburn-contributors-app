@@ -31,6 +31,8 @@ export function markdownToHtml(markdown: string): string {
 /** Normalise markdown by parsing then re-serialising through the schema. */
 export function roundTripMarkdown(markdown: string): string {
   return withEditor(markdown, (editor) =>
-    (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown(),
+    (
+      editor.storage as unknown as { markdown: MarkdownStorage }
+    ).markdown.getMarkdown(),
   );
 }

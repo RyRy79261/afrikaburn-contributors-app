@@ -70,9 +70,7 @@ describe("the picker", () => {
 
   it("lists every option and reports the chosen value", async () => {
     const onValueChange = vi.fn();
-    render(
-      <AudienceSelect options={OPTIONS} onValueChange={onValueChange} />,
-    );
+    render(<AudienceSelect options={OPTIONS} onValueChange={onValueChange} />);
     const trigger = screen.getByRole("combobox");
     fireEvent.keyDown(trigger, { key: "Enter" });
 

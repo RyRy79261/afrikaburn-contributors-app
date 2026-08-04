@@ -36,14 +36,19 @@ function seedSource(): string {
 function templateQuestionIds(): string[] {
   const src = seedSource();
   const start = src.indexOf("const form2: Questionnaire =");
-  expect(start, "the Form-2 template should still be in seed.ts").toBeGreaterThan(-1);
+  expect(
+    start,
+    "the Form-2 template should still be in seed.ts",
+  ).toBeGreaterThan(-1);
   const end = src.indexOf("org-theme-camp-form-2", start);
   const block = src.slice(start, end);
-  return [...block.matchAll(/^\s*id: "([a-z0-9_]+)",$/gm)]
-    .map((m) => m[1]!)
-    // Page ids sit at the same nesting as question ids in the literal; the
-    // mirror only knows about questions, and the two page ids are not columns.
-    .filter((id) => id !== "size" && id !== "sound_placement");
+  return (
+    [...block.matchAll(/^\s*id: "([a-z0-9_]+)",$/gm)]
+      .map((m) => m[1]!)
+      // Page ids sit at the same nesting as question ids in the literal; the
+      // mirror only knows about questions, and the two page ids are not columns.
+      .filter((id) => id !== "size" && id !== "sound_placement")
+  );
 }
 
 describe("the Form 2 template and the mirror agree", () => {

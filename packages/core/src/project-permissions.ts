@@ -82,7 +82,8 @@ export function canManageQuestionnaireAudience(
   let mayBlock = false;
   const allowed = new Set<string>();
   for (const p of m.rolePermissions) {
-    const scope: ManageQuestionnairesScope | undefined = p.manage_questionnaires;
+    const scope: ManageQuestionnairesScope | undefined =
+      p.manage_questionnaires;
     if (!scope) continue;
     granted = true;
     if (scope.mayBlock) mayBlock = true;
@@ -143,5 +144,7 @@ export function roleGrantsElevatedPrivileges(
   permissions: ProjectPermissions,
 ): boolean {
   if (isPermissionsLockedKind(kind)) return true;
-  return permissions.manage_roles === true || permissions.manage_members === true;
+  return (
+    permissions.manage_roles === true || permissions.manage_members === true
+  );
 }

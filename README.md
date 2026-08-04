@@ -138,10 +138,10 @@ action cannot disagree.
 
 ## Repo at a glance
 
-|                          |                                   |                                 |                             |
-| ------------------------ | --------------------------------- | ------------------------------- | --------------------------- |
-| **125k** lines of TS/TSX | **44** tables · **29** migrations | **72** routes across 3 apps     | **51** shared UI components |
-| **2,662** unit tests     | **165** e2e tests · 8 personas    | **8** workspaces with coverage floors | **116** design frames |
+|                          |                                   |                                       |                             |
+| ------------------------ | --------------------------------- | ------------------------------------- | --------------------------- |
+| **125k** lines of TS/TSX | **44** tables · **29** migrations | **72** routes across 3 apps           | **51** shared UI components |
+| **2,662** unit tests     | **165** e2e tests · 8 personas    | **8** workspaces with coverage floors | **116** design frames       |
 
 Started 22 July 2026. Public repo, so: no real personal contact data, and no
 naming real businesses in negative demo states.

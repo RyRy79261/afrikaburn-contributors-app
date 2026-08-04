@@ -47,9 +47,7 @@ afterEach(() => {
 /** Every `to` field across every captured request, flattened. */
 function recipientsPerMessage(): string[][] {
   return captured.flatMap((c) => {
-    const body = c.body as
-      | { to: string[] }
-      | { to: string[] }[];
+    const body = c.body as { to: string[] } | { to: string[] }[];
     return Array.isArray(body) ? body.map((m) => m.to) : [body.to];
   });
 }
@@ -57,7 +55,10 @@ function recipientsPerMessage(): string[][] {
 describe("sendEmail never discloses one recipient to another", () => {
   it("puts exactly one address in every message, for any list size", async () => {
     const { sendEmail } = await import("../email");
-    const roster = Array.from({ length: 7 }, (_, i) => `burner${i}@example.com`);
+    const roster = Array.from(
+      { length: 7 },
+      (_, i) => `burner${i}@example.com`,
+    );
 
     const result = await sendEmail({
       to: roster,
@@ -89,7 +90,8 @@ describe("sendEmail never discloses one recipient to another", () => {
     });
 
     for (const call of captured) {
-      const body = call.body as Record<string, unknown>[] | Record<string, unknown>;
+      const body = call.body as
+        Record<string, unknown>[] | Record<string, unknown>;
       const messages = Array.isArray(body) ? body : [body];
       for (const message of messages) {
         const serialised = JSON.stringify(message);
@@ -186,7 +188,11 @@ describe("sendEmail never discloses one recipient to another", () => {
 describe("sendEmail — the rest of the contract", () => {
   it("reads the id from the single-message response shape", async () => {
     const { sendEmail } = await import("../email");
-    const result = await sendEmail({ to: "a@example.com", subject: "s", text: "t" });
+    const result = await sendEmail({
+      to: "a@example.com",
+      subject: "s",
+      text: "t",
+    });
     expect(result).toEqual({ ok: true, id: "msg_1", delivered: true });
   });
 
@@ -276,7 +282,11 @@ describe("sendEmail — the rest of the contract", () => {
       })),
     );
     const { sendEmail } = await import("../email");
-    const result = await sendEmail({ to: "a@example.com", subject: "s", text: "t" });
+    const result = await sendEmail({
+      to: "a@example.com",
+      subject: "s",
+      text: "t",
+    });
     expect(result).toEqual({
       ok: false,
       error: "Resend responded 422: domain not verified",

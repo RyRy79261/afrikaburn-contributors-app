@@ -25,9 +25,10 @@ import { withReauth } from "../reauth";
 
 const { sendAuthEmail, cancelPendingDeletion } = vi.hoisted(() => ({
   sendAuthEmail: vi.fn(async () => true),
-  cancelPendingDeletion: vi.fn(
-    async (): Promise<CancelDeletionResult> => ({ cancelled: false, email: null }),
-  ),
+  cancelPendingDeletion: vi.fn(async (): Promise<CancelDeletionResult> => ({
+    cancelled: false,
+    email: null,
+  })),
 }));
 
 vi.mock("../email", () => ({ sendAuthEmail }));
@@ -133,7 +134,10 @@ describe("the session-create hook keeps the sign-in promise", () => {
   it("mails the receipt only when a deletion was actually cancelled", async () => {
     const after = buildAuthOptions({}).databaseHooks.session.create.after;
 
-    cancelPendingDeletion.mockResolvedValue({ cancelled: true, email: "alice@example.com" });
+    cancelPendingDeletion.mockResolvedValue({
+      cancelled: true,
+      email: "alice@example.com",
+    });
     await after({ userId: "auth-user-1" });
     expect(sendAuthEmail).toHaveBeenCalledWith(expect.anything(), {
       to: "alice@example.com",
@@ -143,7 +147,10 @@ describe("the session-create hook keeps the sign-in promise", () => {
     // Nothing was rescued: an ordinary sign-in must not tell someone their
     // deletion was cancelled when they never requested one.
     vi.clearAllMocks();
-    cancelPendingDeletion.mockResolvedValue({ cancelled: false, email: "alice@example.com" });
+    cancelPendingDeletion.mockResolvedValue({
+      cancelled: false,
+      email: "alice@example.com",
+    });
     await after({ userId: "auth-user-1" });
     expect(sendAuthEmail).not.toHaveBeenCalled();
 
@@ -163,11 +170,21 @@ describe("buildAuthOptions assembles env-dependent blocks", () => {
     // Half-configured Google must not mount the provider: env-less boot
     // (AGENTS.md rule 4) is what keeps all three apps starting at all.
     expect(buildAuthOptions({}).socialProviders).toBeUndefined();
-    expect(buildAuthOptions({ GOOGLE_CLIENT_ID: "id" }).socialProviders).toBeUndefined();
-    expect(buildAuthOptions({ GOOGLE_CLIENT_SECRET: "s" }).socialProviders).toBeUndefined();
+    expect(
+      buildAuthOptions({ GOOGLE_CLIENT_ID: "id" }).socialProviders,
+    ).toBeUndefined();
+    expect(
+      buildAuthOptions({ GOOGLE_CLIENT_SECRET: "s" }).socialProviders,
+    ).toBeUndefined();
 
-    const options = buildAuthOptions({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "s" });
-    expect(options.socialProviders?.google).toEqual({ clientId: "id", clientSecret: "s" });
+    const options = buildAuthOptions({
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "s",
+    });
+    expect(options.socialProviders?.google).toEqual({
+      clientId: "id",
+      clientSecret: "s",
+    });
   });
 
   it("scopes cookies to the apex only when actually served under it", () => {
@@ -199,8 +216,9 @@ describe("buildAuthOptions assembles env-dependent blocks", () => {
     expect("useSecureCookies" in buildAuthOptions({}).advanced).toBe(false);
     expect(
       "useSecureCookies" in
-        buildAuthOptions({ BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev" })
-          .advanced,
+        buildAuthOptions({
+          BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+        }).advanced,
     ).toBe(false);
   });
 
@@ -212,7 +230,9 @@ describe("buildAuthOptions assembles env-dependent blocks", () => {
     }
     // Tuning reaches the assembled options rather than being resolved and
     // dropped on the floor.
-    expect(buildAuthOptions({ AUTH_RATE_LIMIT_MAX: "500" }).rateLimit.max).toBe(500);
+    expect(buildAuthOptions({ AUTH_RATE_LIMIT_MAX: "500" }).rateLimit.max).toBe(
+      500,
+    );
   });
 });
 

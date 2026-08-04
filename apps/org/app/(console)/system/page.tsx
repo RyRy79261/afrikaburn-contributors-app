@@ -103,9 +103,7 @@ export default async function SystemPage() {
               <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
               Not your console
             </CardTitle>
-            <CardDescription>
-              {runsDeploymentRefusal()}
-            </CardDescription>
+            <CardDescription>{runsDeploymentRefusal()}</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             Nothing here changes registrations, suppliers or camps — it is how
@@ -142,9 +140,7 @@ export default async function SystemPage() {
       (): OrgAccessRoster | null => null,
     ),
     // Same table, same controls, same reason it degrades rather than throws.
-    canManage
-      ? listAssignableOrgRoles().catch(() => [])
-      : Promise.resolve([]),
+    canManage ? listAssignableOrgRoles().catch(() => []) : Promise.resolve([]),
     // Counts only — the roles surface itself lives one click away. Degrades for
     // the same reason as everything else on this page.
     getOrgRolesOverview(session.orgGroupId).catch(
@@ -353,7 +349,9 @@ export default async function SystemPage() {
           <div>
             <Button asChild variant="secondary" size="sm">
               <Link href="/system/roles">
-                {canManage ? "Manage roles and departments" : "Read the roles model"}
+                {canManage
+                  ? "Manage roles and departments"
+                  : "Read the roles model"}
                 <ArrowRight aria-hidden />
               </Link>
             </Button>
@@ -377,8 +375,9 @@ export default async function SystemPage() {
             It is a record, not monitoring: there are deliberately no volume
             thresholds, no per-actor profiling and no alerting, because reading
             many members&rsquo; notes in one sitting is what safety work looks
-            like. It exists so that &ldquo;who saw my medical information?&rdquo;
-            has an honest answer and an incident can be reconstructed.
+            like. It exists so that &ldquo;who saw my medical
+            information?&rdquo; has an honest answer and an incident can be
+            reconstructed.
           </p>
           <div>
             <Button asChild variant="secondary" size="sm">

@@ -36,17 +36,14 @@ vi.mock("@quagga/db", async () => {
   };
 });
 
-vi.mock(
-  "next/headers",
-  async () => (await import("@/test/next-mocks")).nextHeadersMock(),
+vi.mock("next/headers", async () =>
+  (await import("@/test/next-mocks")).nextHeadersMock(),
 );
-vi.mock(
-  "next/cache",
-  async () => (await import("@/test/next-mocks")).nextCacheMock(),
+vi.mock("next/cache", async () =>
+  (await import("@/test/next-mocks")).nextCacheMock(),
 );
-vi.mock(
-  "@quagga/auth",
-  async () => (await import("@/test/auth-mock")).authModuleMock(),
+vi.mock("@quagga/auth", async () =>
+  (await import("@/test/auth-mock")).authModuleMock(),
 );
 
 const sent = vi.hoisted(() => ({ calls: [] as unknown[], fail: false }));
@@ -79,17 +76,15 @@ const {
 } = await import("../config");
 const { isCryptoConfigured, safeEncrypt } = await import("../crypto-guard");
 const { newToken, hashToken, tokensMatch } = await import("../account-tokens");
-const { generateProfileKeypair, fingerprintPublicKey } = await import(
-  "../keys"
-);
+const { generateProfileKeypair, fingerprintPublicKey } =
+  await import("../keys");
 const { setPendingInvite, readPendingInvite, clearPendingInvite } =
   await import("../pending-invite");
 const { withTransaction, requireDb, db } = await import("../db");
 const { getActiveEdition, getEditionLabel, FALLBACK_EDITION_LABEL } =
   await import("../edition");
-const { getAuthenticatedUser, getAuthenticatedUserOrRedirect } = await import(
-  "../auth"
-);
+const { getAuthenticatedUser, getAuthenticatedUserOrRedirect } =
+  await import("../auth");
 const { searchCampsAction } = await import("../camp-search-action");
 const { completeInviteJoin } = await import("../invite-flow");
 
@@ -195,9 +190,9 @@ describe("account-tokens", () => {
 describe("keys", () => {
   it("generates base64 that round-trips through Buffer", async () => {
     const pair = await generateProfileKeypair();
-    expect(
-      Buffer.from(pair.publicKeyB64, "base64").toString("base64"),
-    ).toBe(pair.publicKeyB64);
+    expect(Buffer.from(pair.publicKeyB64, "base64").toString("base64")).toBe(
+      pair.publicKeyB64,
+    );
     expect(pair.privateKeyB64).not.toBe(pair.publicKeyB64);
   });
 
@@ -281,9 +276,9 @@ describe("db — the transactional seam", () => {
 
   it("hands the callback a working handle and CLOSES THE POOL afterwards", async () => {
     const result = await withTransaction(async (tx) => {
-      await (tx as unknown as { insert: (t: unknown) => Promise<unknown> }).insert(
-        {},
-      );
+      await (
+        tx as unknown as { insert: (t: unknown) => Promise<unknown> }
+      ).insert({});
       return "committed";
     });
 
@@ -436,7 +431,12 @@ describe("searchCampsAction", () => {
 });
 
 describe("completeInviteJoin", () => {
-  const user = { id: USER, authUserId: "auth-1", email: "alice@example.com", username: "alice" };
+  const user = {
+    id: USER,
+    authUserId: "auth-1",
+    email: "alice@example.com",
+    username: "alice",
+  };
 
   it("returns the redeem refusal unchanged and sends no welcome mail", async () => {
     dbMock.queue(/* getInvitePreview */ [], /* redeemInvite lookup */ []);

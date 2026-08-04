@@ -97,7 +97,10 @@ describe("createCategory", () => {
       [{ id: "cat-new" }],
     ]);
 
-    const result = await createCategory({ editionId: EDITION_ID, label: "food" });
+    const result = await createCategory({
+      editionId: EDITION_ID,
+      label: "food",
+    });
 
     expect(result).toMatchObject({ ok: false });
     expect((result as { error: string }).error).not.toMatch(/constraint/i);
@@ -187,9 +190,10 @@ describe("updateCategory", () => {
 describe("deleteCategory", () => {
   it("refuses a category that no longer exists", async () => {
     db.seed("camp_categories", [[]]);
-    await expect(
-      deleteCategory({ categoryId: CATEGORY_ID }),
-    ).resolves.toEqual({ ok: false, error: "That category no longer exists." });
+    await expect(deleteCategory({ categoryId: CATEGORY_ID })).resolves.toEqual({
+      ok: false,
+      error: "That category no longer exists.",
+    });
     expect(db.recorded("delete", "camp_categories")).toHaveLength(0);
   });
 

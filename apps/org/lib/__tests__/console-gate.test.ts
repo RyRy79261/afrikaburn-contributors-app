@@ -312,7 +312,10 @@ describe("GOD_EMAILS bootstrap", () => {
 
     const state = await resolveOrgSession();
 
-    expect(state).toMatchObject({ kind: "forbidden", godEmailUnverified: true });
+    expect(state).toMatchObject({
+      kind: "forbidden",
+      godEmailUnverified: true,
+    });
     expect(db.recorded("insert", "memberships")).toHaveLength(0);
     expect(db.recorded("insert", "audit_events")).toHaveLength(0);
   });
@@ -320,10 +323,7 @@ describe("GOD_EMAILS bootstrap", () => {
   it("does not re-write or re-audit an account that is already god", async () => {
     process.env.GOD_EMAILS = "alice@example.com";
     seedSession({ membershipRole: "god" });
-    db.seed("memberships", [
-      [{ role: "god" }],
-      [{ id: "mem-1", role: "god" }],
-    ]);
+    db.seed("memberships", [[{ role: "god" }], [{ id: "mem-1", role: "god" }]]);
 
     const state = await resolveOrgSession();
 
@@ -340,9 +340,9 @@ describe("GOD_EMAILS bootstrap", () => {
 
     const state = await resolveOrgSession();
     expect(state).toMatchObject({ kind: "forbidden" });
-    expect(
-      (state as { godEmailUnverified?: boolean }).godEmailUnverified,
-    ).toBe(false);
+    expect((state as { godEmailUnverified?: boolean }).godEmailUnverified).toBe(
+      false,
+    );
   });
 });
 

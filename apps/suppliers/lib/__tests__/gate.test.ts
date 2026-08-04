@@ -65,17 +65,20 @@ describe("guardPortal", () => {
     ["unauthenticated", { kind: "unauthenticated" }],
     ["not_ready", { kind: "not_ready", user: { id: "auth-1" } }],
     ["unlinked", { kind: "unlinked", user: { id: "auth-1" }, dbUserId: "u1" }],
-  ])("refuses a %s caller with a gate node, not a session", async (_, state) => {
-    resolveSupplierSession.mockResolvedValue(state);
+  ])(
+    "refuses a %s caller with a gate node, not a session",
+    async (_, state) => {
+      resolveSupplierSession.mockResolvedValue(state);
 
-    const guard = await guardPortal();
+      const guard = await guardPortal();
 
-    expect(guard.ok).toBe(false);
-    if (guard.ok) throw new Error("unreachable — asserted above");
-    expect(guard.node).toBeTruthy();
-    // No session leaks out alongside the refusal.
-    expect(guard).not.toHaveProperty("session");
-  });
+      expect(guard.ok).toBe(false);
+      if (guard.ok) throw new Error("unreachable — asserted above");
+      expect(guard.node).toBeTruthy();
+      // No session leaks out alongside the refusal.
+      expect(guard).not.toHaveProperty("session");
+    },
+  );
 
   it("hands back a GateScreen element, not some other node", async () => {
     resolveSupplierSession.mockResolvedValue({ kind: "unauthenticated" });

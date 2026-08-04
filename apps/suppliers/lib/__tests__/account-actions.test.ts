@@ -46,10 +46,10 @@ vi.mock("@/lib/account", () => ({
 const { sendSingleEmail } = await import("@quagga/auth");
 const { recordSecurityEvent } = await import("@quagga/auth/account");
 const { insertNotifications } = await import("@/lib/notifications");
-const { requirePortalAccount, applyAuthCookies } = await import("@/lib/account");
-const { changePassword, revokeSession, revokeOtherSessions } = await import(
-  "@/lib/actions/account"
-);
+const { requirePortalAccount, applyAuthCookies } =
+  await import("@/lib/account");
+const { changePassword, revokeSession, revokeOtherSessions } =
+  await import("@/lib/actions/account");
 
 const ACCOUNT = { id: "user-alice", email: "alice@example.com" };
 const GOOD_PASSWORD = "a short sentence I remember";
@@ -114,7 +114,9 @@ describe("changePassword", () => {
     // upstream reason reaching the user (a credential oracle), and a
     // "your password was changed" notice for a change that did not occur.
     authApi.changePassword.mockRejectedValue(
-      new Error("Invalid password for user 91a3 (better-auth: INVALID_PASSWORD)"),
+      new Error(
+        "Invalid password for user 91a3 (better-auth: INVALID_PASSWORD)",
+      ),
     );
 
     const message = refusal(

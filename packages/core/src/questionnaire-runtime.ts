@@ -196,7 +196,11 @@ export function validateSubmission(
   questionnaire: Questionnaire,
   raw: unknown,
 ):
-  | { ok: true; responses: QuestionnaireResponses; progress: QuestionnaireProgress }
+  | {
+      ok: true;
+      responses: QuestionnaireResponses;
+      progress: QuestionnaireProgress;
+    }
   | { ok: false; errors: Record<string, string> } {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     return { ok: false, errors: { _root: "Malformed response payload" } };

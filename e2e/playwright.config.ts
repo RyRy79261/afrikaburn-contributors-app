@@ -22,7 +22,11 @@ export default defineConfig({
   // and `testMatch` still limits collection to `*.spec.ts` / `*.test.ts`, so
   // helper modules (e.g. `specs/**/support.ts`) are never run as tests.
   testDir: ".",
-  testIgnore: ["**/node_modules/**", "**/test-results/**", "**/playwright-report/**"],
+  testIgnore: [
+    "**/node_modules/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+  ],
   // Each spec creates its own accounts/data, so specs are fully parallel-safe.
   fullyParallel: true,
   // A stray `test.only` must fail CI, never silently narrow the run.

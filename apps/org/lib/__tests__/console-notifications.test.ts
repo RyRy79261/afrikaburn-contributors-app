@@ -187,7 +187,13 @@ describe("insertNotifications", () => {
 
   it("defaults the optional columns rather than dropping them from the INSERT", async () => {
     await insertNotifications(getDb(), [
-      { userId: "user-1", kind: "security", title: "Hello", body: null, link: null },
+      {
+        userId: "user-1",
+        kind: "security",
+        title: "Hello",
+        body: null,
+        link: null,
+      },
     ]);
 
     const [row] = db.inserted("notifications") as Record<string, unknown>[];
@@ -269,9 +275,10 @@ describe("marking read — own inbox only", () => {
 
   it("refuses when the session is gone rather than writing unscoped", async () => {
     requireOrgSession.mockRejectedValue(new Error("Not authorised."));
-    await expect(
-      markAllNotificationsRead(),
-    ).resolves.toEqual({ ok: false, error: "Not authorised." });
+    await expect(markAllNotificationsRead()).resolves.toEqual({
+      ok: false,
+      error: "Not authorised.",
+    });
     expect(db.recorded("update", "notifications")).toHaveLength(0);
   });
 

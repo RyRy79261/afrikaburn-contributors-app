@@ -49,9 +49,8 @@ vi.mock("@/lib/db", async () => {
 
 const { getAuthenticatedUser } = await import("@/lib/auth");
 const { requireSupplierSession } = await import("@/lib/session");
-const { registerSupplier, updateSupplierProfile } = await import(
-  "@/lib/actions/register"
-);
+const { registerSupplier, updateSupplierProfile } =
+  await import("@/lib/actions/register");
 
 const SIGNED_IN: AuthenticatedUser = {
   id: "auth-alice",
@@ -394,7 +393,9 @@ describe("updateSupplierProfile", () => {
 
     const result = await updateSupplierProfile({ name: "Karoo Tents" });
 
-    expect(refusal(result)).toBe("Sign in as a registered supplier to do that.");
+    expect(refusal(result)).toBe(
+      "Sign in as a registered supplier to do that.",
+    );
     expect(db.queries).toEqual([]);
   });
 });

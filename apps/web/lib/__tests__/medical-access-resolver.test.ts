@@ -1,16 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { encrypt } from "@quagga/db/crypto";
 import { dbMock } from "@/test/db-mock";
-import {
-  afterTasks,
-  flushAfterTasks,
-  resetNextMocks,
-} from "@/test/next-mocks";
+import { afterTasks, flushAfterTasks, resetNextMocks } from "@/test/next-mocks";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
-vi.mock(
-  "next/server",
-  async () => (await import("@/test/next-mocks")).nextServerMock(),
+vi.mock("next/server", async () =>
+  (await import("@/test/next-mocks")).nextServerMock(),
 );
 
 // The resolver decrypts, so the process needs a key. Set before the first

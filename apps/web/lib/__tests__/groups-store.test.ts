@@ -84,9 +84,9 @@ describe("listDirectory — free camps are undiscoverable to strangers", () => {
     // not listed at all for someone who is not in it.
     queueDirectory({ groups: [group()], memberships: [] });
 
-    expect(await listDirectory({ editionId: EDITION, viewerId: VIEWER })).toEqual(
-      [],
-    );
+    expect(
+      await listDirectory({ editionId: EDITION, viewerId: VIEWER }),
+    ).toEqual([]);
   });
 
   it("shows the same camp to one of its own members, with their role", async () => {
@@ -182,9 +182,9 @@ describe("listDirectory — free camps are undiscoverable to strangers", () => {
   it("queries nothing extra for a signed-out visitor and skips the empty-group reads", async () => {
     queueDirectory({ groups: [] });
 
-    expect(
-      await listDirectory({ editionId: EDITION, viewerId: null }),
-    ).toEqual([]);
+    expect(await listDirectory({ editionId: EDITION, viewerId: null })).toEqual(
+      [],
+    );
     // No registration, count or category query when there are no groups.
     expect(dbMock.queries).toHaveLength(1);
   });
@@ -263,7 +263,10 @@ describe("searchCampDirectory — the SECOND copy of the same rule", () => {
       nameNormalized: `dust bunnies ${i}`,
     }));
 
-    dbMock.queue(many, many.map((g) => ({ groupId: g.id })));
+    dbMock.queue(
+      many,
+      many.map((g) => ({ groupId: g.id })),
+    );
     const results = await searchCampDirectory("dust", EDITION, null);
     expect(results).toHaveLength(10);
     expect(results[0]!.name).toBe("Dust Bunnies 00");
@@ -299,13 +302,15 @@ describe("checkCampName", () => {
 
 describe("prepareCampCreate", () => {
   it("REFUSES a name under two characters before any query runs", async () => {
-    expect(await prepareCampCreate({
-      creatorId: VIEWER,
-      name: " M ",
-      kind: "theme_camp",
-      description: null,
-      joinability: "open",
-    })).toEqual({ ok: false, error: "Give your camp a name." });
+    expect(
+      await prepareCampCreate({
+        creatorId: VIEWER,
+        name: " M ",
+        kind: "theme_camp",
+        description: null,
+        joinability: "open",
+      }),
+    ).toEqual({ ok: false, error: "Give your camp a name." });
     expect(dbMock.queries).toHaveLength(0);
   });
 
@@ -326,13 +331,15 @@ describe("prepareCampCreate", () => {
   it("REFUSES a name that already exists in the same kind", async () => {
     dbMock.queue([{ name: "Mad Hatters" }]);
 
-    expect(await prepareCampCreate({
-      creatorId: VIEWER,
-      name: "Mad Hatters",
-      kind: "theme_camp",
-      description: null,
-      joinability: "open",
-    })).toEqual({
+    expect(
+      await prepareCampCreate({
+        creatorId: VIEWER,
+        name: "Mad Hatters",
+        kind: "theme_camp",
+        description: null,
+        joinability: "open",
+      }),
+    ).toEqual({
       ok: false,
       error: "A camp of this kind already uses that name. Pick another.",
     });
@@ -575,12 +582,22 @@ describe("getViewerRole / listMyCamps", () => {
 
   it("listMyCamps drops the org group from a burner's own camp list", async () => {
     dbMock.queue([
-      { name: "Mad Hatters", slug: "mad-hatters", role: "lead", kind: "theme_camp" },
+      {
+        name: "Mad Hatters",
+        slug: "mad-hatters",
+        role: "lead",
+        kind: "theme_camp",
+      },
       { name: "AfrikaBurn", slug: "afrikaburn", role: "god", kind: "org" },
     ]);
 
     expect(await listMyCamps(VIEWER)).toEqual([
-      { name: "Mad Hatters", slug: "mad-hatters", role: "lead", kind: "theme_camp" },
+      {
+        name: "Mad Hatters",
+        slug: "mad-hatters",
+        role: "lead",
+        kind: "theme_camp",
+      },
     ]);
   });
 });
@@ -796,7 +813,12 @@ describe("getPublicBurnerProfile", () => {
 
     const profile = await getPublicBurnerProfile(VIEWER, EDITION);
     expect(profile?.camps).toEqual([
-      { name: "Camp 404", slug: "camp-404", kind: "theme_camp", role: "member" },
+      {
+        name: "Camp 404",
+        slug: "camp-404",
+        kind: "theme_camp",
+        role: "member",
+      },
     ]);
     // No bio row: every field defaults rather than throwing.
     expect(profile?.campHistory).toEqual([]);

@@ -8,18 +8,17 @@ import { hashToken } from "../account-tokens";
 
 // The seams. `next/navigation` stays REAL: `unstable_rethrow` recognising a
 // Next control-flow error is one of the behaviours under test.
-vi.mock("@/lib/db", async () => (await import("@/test/db-mock")).dbModuleMock());
-vi.mock(
-  "@quagga/auth",
-  async () => (await import("@/test/auth-mock")).authModuleMock(),
+vi.mock("@/lib/db", async () =>
+  (await import("@/test/db-mock")).dbModuleMock(),
 );
-vi.mock(
-  "next/headers",
-  async () => (await import("@/test/next-mocks")).nextHeadersMock(),
+vi.mock("@quagga/auth", async () =>
+  (await import("@/test/auth-mock")).authModuleMock(),
 );
-vi.mock(
-  "next/cache",
-  async () => (await import("@/test/next-mocks")).nextCacheMock(),
+vi.mock("next/headers", async () =>
+  (await import("@/test/next-mocks")).nextHeadersMock(),
+);
+vi.mock("next/cache", async () =>
+  (await import("@/test/next-mocks")).nextCacheMock(),
 );
 
 const stubs = vi.hoisted(() => ({
@@ -359,10 +358,12 @@ describe("requestEmailChange", () => {
   });
 
   it("REFUSES a change to the address already on the account", async () => {
-    expect(await requestEmailChange({ newEmail: "ALICE@example.com" })).toEqual({
-      ok: false,
-      error: "That's already your sign-in email.",
-    });
+    expect(await requestEmailChange({ newEmail: "ALICE@example.com" })).toEqual(
+      {
+        ok: false,
+        error: "That's already your sign-in email.",
+      },
+    );
     expect(dbMock.transactions).toBe(0);
   });
 
@@ -630,9 +631,7 @@ describe("requestAccountDeletion", () => {
   it("REFUSES when a guard blocks, and schedules nothing", async () => {
     stubs.linkedAccounts = [{ providerId: "google" }];
     stubs.guardContext = {
-      ledProjects: [
-        { groupId: "g1", name: "Mad Hatters", leadCount: 1 },
-      ],
+      ledProjects: [{ groupId: "g1", name: "Mad Hatters", leadCount: 1 }],
       isOrgGod: false,
       orgGodCount: 0,
       signInMethodCount: 1,

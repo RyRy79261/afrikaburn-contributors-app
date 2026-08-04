@@ -62,7 +62,9 @@ beforeEach(() => {
 describe("every action refuses when the anchor refuses", () => {
   it("surfaces the thrown refusal as a result instead of letting it escape", async () => {
     requireSystemManager.mockRejectedValue(
-      new Error("Only a System manager may manage departments, roles or who holds them."),
+      new Error(
+        "Only a System manager may manage departments, roles or who holds them.",
+      ),
     );
 
     const results = await Promise.all([
@@ -190,10 +192,8 @@ describe("renameDepartment", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    const values = db.recorded("update", "org_departments")[0]?.values as Record<
-      string,
-      unknown
-    >;
+    const values = db.recorded("update", "org_departments")[0]
+      ?.values as Record<string, unknown>;
     expect(values).toMatchObject({
       name: "Safety and ops",
       description: null,
@@ -221,9 +221,9 @@ describe("deleteDepartment", () => {
       { id: DEPT_ID, name: "Safety", kind: "custom" },
     ]);
 
-    await expect(
-      deleteDepartment({ departmentId: DEPT_ID }),
-    ).resolves.toEqual({ ok: true });
+    await expect(deleteDepartment({ departmentId: DEPT_ID })).resolves.toEqual({
+      ok: true,
+    });
     expect(db.recorded("delete", "org_departments")).toHaveLength(1);
     expect(db.inserted("audit_events")).toMatchObject({
       action: "org.department.delete",
@@ -233,9 +233,10 @@ describe("deleteDepartment", () => {
 
   it("refuses one that is already gone", async () => {
     db.seed("org_departments", []);
-    await expect(
-      deleteDepartment({ departmentId: DEPT_ID }),
-    ).resolves.toEqual({ ok: false, error: "That department is already gone." });
+    await expect(deleteDepartment({ departmentId: DEPT_ID })).resolves.toEqual({
+      ok: false,
+      error: "That department is already gone.",
+    });
   });
 });
 
@@ -285,7 +286,9 @@ describe("setDepartmentDomains — a permissions change wearing an org-chart cos
     }[];
     expect(inserted).toEqual([{ domain: "bulletins", departmentId: DEPT_ID }]);
     // The old rows were dropped first — the set is authoritative.
-    expect(db.recorded("delete", "org_department_domains").length).toBeGreaterThan(0);
+    expect(
+      db.recorded("delete", "org_department_domains").length,
+    ).toBeGreaterThan(0);
   });
 
   it("clears every domain when the set is empty, and inserts nothing", async () => {

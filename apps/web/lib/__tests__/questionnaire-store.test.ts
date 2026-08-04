@@ -123,7 +123,9 @@ describe("isProjectDefinitionKey", () => {
     // The builder lists definitions by this predicate. A loose match would show
     // one camp another camp's questionnaires.
     expect(isProjectDefinitionKey(`proj:${GROUP}:abc123`, GROUP)).toBe(true);
-    expect(isProjectDefinitionKey(`proj:other-group:abc123`, GROUP)).toBe(false);
+    expect(isProjectDefinitionKey(`proj:other-group:abc123`, GROUP)).toBe(
+      false,
+    );
     expect(isProjectDefinitionKey("burner-bio", GROUP)).toBe(false);
     // A key that merely CONTAINS the group id is not a key that belongs to it.
     expect(isProjectDefinitionKey(`x:proj:${GROUP}:a`, GROUP)).toBe(false);
@@ -168,7 +170,10 @@ describe("createAndActivateProjectQuestionnaire", () => {
   }
 
   it("writes definition, activation and required actions in ONE transaction", async () => {
-    queueCreate([{ userId: "u1", role: "lead" }, { userId: "u2", role: "member" }]);
+    queueCreate([
+      { userId: "u1", role: "lead" },
+      { userId: "u2", role: "member" },
+    ]);
     dbMock.queue(
       /* required actions insert */ [],
       /* group name for the inbox row */ [{ name: "Mad Hatters" }],
@@ -183,7 +188,10 @@ describe("createAndActivateProjectQuestionnaire", () => {
     // A failure after the definition leaves an orphan; a failure after the
     // activation leaves a questionnaire nobody is gated to answer — one that
     // silently reaches no one.
-    for (const t of ["questionnaireDefinitions", "questionnaireActivations"] as const) {
+    for (const t of [
+      "questionnaireDefinitions",
+      "questionnaireActivations",
+    ] as const) {
       expect(dbMock.writesTo(schema[t])[0]!.tx).toBe(true);
     }
     expect(dbMock.writesTo(schema.requiredActions)[0]!.tx).toBe(true);
@@ -232,7 +240,11 @@ describe("createAndActivateProjectQuestionnaire", () => {
 
   it("writes the inbox row even when email cannot be delivered", async () => {
     queueCreate([{ userId: "u1", role: "lead" }]);
-    dbMock.queue([], [{ name: "Mad Hatters" }], /* users */ [{ id: "u1", email: null }]);
+    dbMock.queue(
+      [],
+      [{ name: "Mad Hatters" }],
+      /* users */ [{ id: "u1", email: null }],
+    );
 
     const result = await create();
 
@@ -243,14 +255,24 @@ describe("createAndActivateProjectQuestionnaire", () => {
     const [, rows] = insertNotifications.mock.calls[0]!;
     expect(rows).toHaveLength(1);
     // A CAMP sent this, not AfrikaBurn — that distinction is what `origin` is for.
-    expect(rows[0]).toMatchObject({ userId: "u1", origin: "camp", linkApp: "web" });
+    expect(rows[0]).toMatchObject({
+      userId: "u1",
+      origin: "camp",
+      linkApp: "web",
+    });
     expect(result.emailDelivered).toBe(false);
   });
 
   it("still reports success when the inbox write throws", async () => {
     queueCreate([{ userId: "u1", role: "lead" }]);
-    dbMock.queue([], [{ name: "Mad Hatters" }], [{ id: "u1", email: "a@example.test" }]);
-    insertNotifications.mockRejectedValue(new Error("notifications table gone"));
+    dbMock.queue(
+      [],
+      [{ name: "Mad Hatters" }],
+      [{ id: "u1", email: "a@example.test" }],
+    );
+    insertNotifications.mockRejectedValue(
+      new Error("notifications table gone"),
+    );
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await create();
@@ -286,7 +308,11 @@ describe("createAndActivateProjectQuestionnaire", () => {
 
   it("says it is optional when the questionnaire does not block", async () => {
     queueCreate([{ userId: "u1", role: "lead" }]);
-    dbMock.queue([], [{ name: "Mad Hatters" }], [{ id: "u1", email: "a@example.test" }]);
+    dbMock.queue(
+      [],
+      [{ name: "Mad Hatters" }],
+      [{ id: "u1", email: "a@example.test" }],
+    );
 
     await create({ blocking: false });
 
@@ -303,7 +329,9 @@ describe("getActivation", () => {
   it("prefers the snapshot definition over the live one", async () => {
     const live: Questionnaire = {
       ...DEFINITION,
-      pages: [{ id: "p1", kind: "questions", title: "Later edit", questions: [] }],
+      pages: [
+        { id: "p1", kind: "questions", title: "Later edit", questions: [] },
+      ],
     };
     dbMock.queue([activationRow({ liveDefinition: live })]);
 
@@ -323,7 +351,9 @@ describe("getActivation", () => {
       ...DEFINITION,
       pages: [{ id: "p1", kind: "questions", title: "Live", questions: [] }],
     };
-    dbMock.queue([activationRow({ snapshotDefinition: null, liveDefinition: live })]);
+    dbMock.queue([
+      activationRow({ snapshotDefinition: null, liveDefinition: live }),
+    ]);
 
     expect((await getActivation(ACTIVATION))!.definition).toEqual(live);
   });
@@ -375,10 +405,28 @@ describe("getActivationResults", () => {
     dbMock.queue(
       [activationRow()],
       [
-        { userId: "u2", status: "pending", completedAt: null, username: "zeta", sanitizedAt: null },
-        { userId: "u1", status: "completed", completedAt: new Date(FROZEN_NOW), username: "alpha", sanitizedAt: null },
+        {
+          userId: "u2",
+          status: "pending",
+          completedAt: null,
+          username: "zeta",
+          sanitizedAt: null,
+        },
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: new Date(FROZEN_NOW),
+          username: "alpha",
+          sanitizedAt: null,
+        },
       ],
-      [{ userId: "u1", responses: { arrival: "Tuesday" }, activationId: ACTIVATION }],
+      [
+        {
+          userId: "u1",
+          responses: { arrival: "Tuesday" },
+          activationId: ACTIVATION,
+        },
+      ],
     );
 
     const results = await getActivationResults(ACTIVATION, EDITION_2026);
@@ -427,7 +475,15 @@ describe("getActivationResults", () => {
   it("binds the ACTIVATION'S edition, not the caller's", async () => {
     dbMock.queue(
       [activationRow({ editionId: EDITION_2026 })],
-      [{ userId: "u1", status: "completed", completedAt: null, username: "a", sanitizedAt: null }],
+      [
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: null,
+          username: "a",
+          sanitizedAt: null,
+        },
+      ],
       [],
     );
 
@@ -443,8 +499,22 @@ describe("getActivationResults", () => {
   it("does NOT filter answers by activation id", async () => {
     dbMock.queue(
       [activationRow()],
-      [{ userId: "u1", status: "completed", completedAt: null, username: "a", sanitizedAt: null }],
-      [{ userId: "u1", responses: { arrival: "Wed" }, activationId: "a-later-send" }],
+      [
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: null,
+          username: "a",
+          sanitizedAt: null,
+        },
+      ],
+      [
+        {
+          userId: "u1",
+          responses: { arrival: "Wed" },
+          activationId: "a-later-send",
+        },
+      ],
     );
 
     const results = await getActivationResults(ACTIVATION, EDITION_2026);
@@ -509,7 +579,11 @@ describe("getFillView", () => {
   });
 
   it("falls back to the active edition for a pre-feature activation", async () => {
-    dbMock.queue([activationRow({ editionId: null })], [{ status: "pending" }], []);
+    dbMock.queue(
+      [activationRow({ editionId: null })],
+      [{ status: "pending" }],
+      [],
+    );
 
     const view = await getFillView(ACTIVATION, "u1");
 
@@ -541,7 +615,12 @@ describe("listPendingQuestionnaires", () => {
   it("lists a participant-facing pending action", async () => {
     dbMock.queue([action()]);
     expect(await listPendingQuestionnaires("u1")).toEqual([
-      { activationId: ACTIVATION, title: "Build week plan", blocking: false, dueAt: null },
+      {
+        activationId: ACTIVATION,
+        title: "Build week plan",
+        blocking: false,
+        dueAt: null,
+      },
     ]);
   });
 
@@ -637,7 +716,10 @@ describe("submitResponse", () => {
 
     const conflict = dbMock
       .writesTo(schema.questionnaireResponses)[0]!
-      .arg("onConflictDoUpdate") as { targetWhere?: unknown; target: unknown[] };
+      .arg("onConflictDoUpdate") as {
+      targetWhere?: unknown;
+      target: unknown[];
+    };
 
     // Postgres will not use a PARTIAL index to resolve ON CONFLICT unless the
     // statement repeats its predicate. Without this the insert fails outright —
@@ -652,9 +734,11 @@ describe("submitResponse", () => {
 
     expect(await submit()).toEqual({ ok: true });
     expect(
-      (dbMock.writesTo(schema.questionnaireResponses)[0]!.arg("values") as {
-        editionId: string;
-      }).editionId,
+      (
+        dbMock.writesTo(schema.questionnaireResponses)[0]!.arg("values") as {
+          editionId: string;
+        }
+      ).editionId,
     ).toBe(EDITION_2026);
   });
 

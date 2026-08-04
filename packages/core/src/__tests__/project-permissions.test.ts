@@ -150,7 +150,9 @@ describe("canManageQuestionnaireAudience — scope enforced server-side", () => 
 describe("captain lock", () => {
   it("captain permissions are forced to all, regardless of input", () => {
     expect(isPermissionsLockedKind("captain")).toBe(true);
-    const stripped = enforceKindPermissions("captain", { view_member_details: false });
+    const stripped = enforceKindPermissions("captain", {
+      view_member_details: false,
+    });
     expect(stripped).toEqual(allProjectPermissions());
   });
 
@@ -168,14 +170,22 @@ describe("roleGrantsElevatedPrivileges — escalation guard for assignment", () 
   });
 
   it("any kind carrying manage_roles or manage_members is elevating", () => {
-    expect(roleGrantsElevatedPrivileges("custom", { manage_roles: true })).toBe(true);
-    expect(roleGrantsElevatedPrivileges("default", { manage_members: true })).toBe(true);
+    expect(roleGrantsElevatedPrivileges("custom", { manage_roles: true })).toBe(
+      true,
+    );
+    expect(
+      roleGrantsElevatedPrivileges("default", { manage_members: true }),
+    ).toBe(true);
   });
 
   it("roles with only weaker grants are NOT elevating", () => {
     expect(roleGrantsElevatedPrivileges("custom", {})).toBe(false);
-    expect(roleGrantsElevatedPrivileges("custom", { assign_roles: true })).toBe(false);
-    expect(roleGrantsElevatedPrivileges("custom", { view_member_details: true })).toBe(false);
+    expect(roleGrantsElevatedPrivileges("custom", { assign_roles: true })).toBe(
+      false,
+    );
+    expect(
+      roleGrantsElevatedPrivileges("custom", { view_member_details: true }),
+    ).toBe(false);
     expect(
       roleGrantsElevatedPrivileges("custom", {
         manage_questionnaires: { audienceRoles: "all", mayBlock: true },

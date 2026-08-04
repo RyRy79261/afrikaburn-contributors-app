@@ -92,7 +92,12 @@ describe("audienceLabel", () => {
     );
     expect(audienceLabel({ kind: "org_suppliers" })).toBe("Suppliers");
     expect(
-      audienceLabel({ kind: "project", groupId: "g", mode: "everyone", roleIds: [] }),
+      audienceLabel({
+        kind: "project",
+        groupId: "g",
+        mode: "everyone",
+        roleIds: [],
+      }),
     ).toBe("Project members");
   });
 

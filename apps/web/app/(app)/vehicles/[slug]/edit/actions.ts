@@ -54,7 +54,10 @@ export async function updateVehicleRegistrationAction(
     edition.id,
   );
   if (!ctx) {
-    return { status: "error", message: "That mutant vehicle no longer exists." };
+    return {
+      status: "error",
+      message: "That mutant vehicle no longer exists.",
+    };
   }
   if (!ctx.role || !PROJECT_ADMIN_ROLES.includes(ctx.role)) {
     return {

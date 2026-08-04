@@ -39,17 +39,23 @@ test.describe("supplier onboarding lifecycle", () => {
     await expect(agreement.getByText(/^to do$/i)).toBeVisible();
 
     await agreement.getByRole("checkbox").check();
-    await agreement.getByRole("button", { name: /sign the agreement/i }).click();
+    await agreement
+      .getByRole("button", { name: /sign the agreement/i })
+      .click();
 
     await expect(
       agreement.getByText(/you['’]ve acknowledged the supplier agreement/i),
     ).toBeVisible();
     // Registration form (1) + agreement (2) = 2/7 done.
-    await expect(suppliersPage.getByText(/2 of 7 steps complete/i)).toBeVisible();
+    await expect(
+      suppliersPage.getByText(/2 of 7 steps complete/i),
+    ).toBeVisible();
 
     // And it is reversible (org_may_revoke → the supplier can undo their own ack).
     await agreement.getByRole("button", { name: /^undo$/i }).click();
-    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
+    await expect(
+      suppliersPage.getByText(/1 of 7 steps complete/i),
+    ).toBeVisible();
   });
 
   test("a supplier submits inventory and crew for review, then withdraws crew", async ({
@@ -79,7 +85,9 @@ test.describe("supplier onboarding lifecycle", () => {
     ).toBeVisible();
 
     // Submitting is NOT completing: neither review step counts toward "done".
-    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
+    await expect(
+      suppliersPage.getByText(/1 of 7 steps complete/i),
+    ).toBeVisible();
 
     // Withdrawing returns the step to a submittable state.
     await crew.getByRole("button", { name: /withdraw submission/i }).click();
@@ -99,7 +107,9 @@ test.describe("supplier onboarding lifecycle", () => {
       "Registration fee received",
     ]) {
       const card = stepCard(suppliersPage, title);
-      await expect(card.getByText(/awaiting afrikaburn/i).first()).toBeVisible();
+      await expect(
+        card.getByText(/awaiting afrikaburn/i).first(),
+      ).toBeVisible();
       // The boundary: a supplier can NEVER drive these — the card has no button
       // to try. (The server also throws on a forged transition — see report.)
       await expect(card.getByRole("button")).toHaveCount(0);

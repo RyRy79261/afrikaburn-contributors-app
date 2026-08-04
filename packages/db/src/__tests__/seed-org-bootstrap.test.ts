@@ -68,7 +68,9 @@ describe("ensureSeededOrgRoles", () => {
     const seeded = run(SEEDED_ALREADY);
     await expect(ensureSeededOrgRoles(seeded.db)).resolves.toBe(0);
     // Still attempted both — absence is what it restores, so it must always look.
-    expect(seeded.fake.opsOn("org_roles")).toHaveLength(SEEDED_ORG_ROLES.length);
+    expect(seeded.fake.opsOn("org_roles")).toHaveLength(
+      SEEDED_ORG_ROLES.length,
+    );
   });
 
   it("counts a PARTIAL restore, not all-or-nothing", async () => {
@@ -102,7 +104,9 @@ describe("ensureSeededOrgDepartments", () => {
     const filed = fresh.fake
       .opsOn("org_department_domains")
       .map((op) => op.values[0]?.domain);
-    expect(filed).toEqual(SEEDED_ORG_DEPARTMENTS.flatMap((d) => [...d.domains]));
+    expect(filed).toEqual(
+      SEEDED_ORG_DEPARTMENTS.flatMap((d) => [...d.domains]),
+    );
   });
 
   it("still ensures the lead/member role pair on a department that already exists", async () => {

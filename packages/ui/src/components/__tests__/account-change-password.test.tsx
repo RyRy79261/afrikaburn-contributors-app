@@ -19,11 +19,10 @@ import { Toaster, toast } from "../toast";
 
 /** Stand-in for @quagga/core's assessPassword, with a spy on the call. */
 function policy(minLength = 12) {
-  return vi.fn(
-    (password: string): PasswordAssessment =>
-      password.length >= minLength
-        ? { ok: true, error: null }
-        : { ok: false, error: `Use at least ${minLength} characters.` },
+  return vi.fn((password: string): PasswordAssessment =>
+    password.length >= minLength
+      ? { ok: true, error: null }
+      : { ok: false, error: `Use at least ${minLength} characters.` },
   );
 }
 
@@ -86,7 +85,9 @@ describe("the injected policy", () => {
     // call were dropped, the button would enable and the server would refuse.
     expect(submitButton().disabled).toBe(true);
 
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     expect(submitButton().disabled).toBe(false);
   });
 
@@ -152,7 +153,9 @@ describe("submitting", () => {
   it("sends exactly what was typed, and revokes other sessions by default", async () => {
     const { onSubmit } = renderForm();
     fireEvent.change(currentField(), { target: { value: "old-password" } });
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     fireEvent.click(submitButton());
 
     await waitFor(() =>
@@ -169,7 +172,9 @@ describe("submitting", () => {
   it("passes false once the switch is turned off", async () => {
     const { onSubmit } = renderForm();
     fireEvent.change(currentField(), { target: { value: "old-password" } });
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     fireEvent.click(screen.getByLabelText("Sign out my other devices"));
     fireEvent.click(submitButton());
 
@@ -188,10 +193,14 @@ describe("submitting", () => {
       .mockResolvedValue({ ok: true, message: "Password changed everywhere." });
     renderForm({ onSubmit, onDone, onChanged });
     fireEvent.change(currentField(), { target: { value: "old-password" } });
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     fireEvent.click(submitButton());
 
-    expect(await screen.findByText("Password changed everywhere.")).toBeDefined();
+    expect(
+      await screen.findByText("Password changed everywhere."),
+    ).toBeDefined();
     // Leaving a used password in the DOM is a needless exposure on a shared
     // screen.
     await waitFor(() => expect(currentField().value).toBe(""));
@@ -203,20 +212,25 @@ describe("submitting", () => {
   it("uses its own confirmation when the server sends none", async () => {
     renderForm();
     fireEvent.change(currentField(), { target: { value: "old-password" } });
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     fireEvent.click(submitButton());
 
     expect(await screen.findByText("Password changed.")).toBeDefined();
   });
 
   it("keeps both fields populated when the server refuses", async () => {
-    const onSubmit = vi
-      .fn<SubmitFn>()
-      .mockResolvedValue({ ok: false, error: "Your current password is wrong." });
+    const onSubmit = vi.fn<SubmitFn>().mockResolvedValue({
+      ok: false,
+      error: "Your current password is wrong.",
+    });
     const onChanged = vi.fn();
     renderForm({ onSubmit, onChanged });
     fireEvent.change(currentField(), { target: { value: "wrong-password" } });
-    fireEvent.change(newField(), { target: { value: "a long enough passphrase" } });
+    fireEvent.change(newField(), {
+      target: { value: "a long enough passphrase" },
+    });
     fireEvent.click(submitButton());
 
     const alert = await screen.findByRole("alert");

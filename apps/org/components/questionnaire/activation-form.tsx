@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Check, Loader2, Send, ShieldCheck, Users } from "lucide-react";
+import {
+  Building2,
+  Check,
+  Loader2,
+  Send,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import {
   ORG_OUTBOUND_SELECTORS,
   ORG_OUTBOUND_SELECTOR_LABELS,

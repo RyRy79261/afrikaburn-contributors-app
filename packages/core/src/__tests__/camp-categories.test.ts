@@ -56,9 +56,12 @@ describe("categoryLabelConflicts", () => {
   ];
 
   it("flags a normalized-equal label as a conflict", () => {
-    expect(categoryLabelConflicts("food and drink".replace(" and ", " & "), existing)).toBe(
-      true,
-    );
+    expect(
+      categoryLabelConflicts(
+        "food and drink".replace(" and ", " & "),
+        existing,
+      ),
+    ).toBe(true);
     expect(categoryLabelConflicts("  BAR ", existing)).toBe(true);
   });
 
@@ -141,7 +144,9 @@ describe("countCategoryUsage", () => {
 
 describe("categorySelectionExceedsSuggested", () => {
   it("flags only counts above the suggested max", () => {
-    expect(categorySelectionExceedsSuggested(CATEGORY_SUGGESTED_MAX)).toBe(false);
+    expect(categorySelectionExceedsSuggested(CATEGORY_SUGGESTED_MAX)).toBe(
+      false,
+    );
     expect(categorySelectionExceedsSuggested(CATEGORY_SUGGESTED_MAX + 1)).toBe(
       true,
     );

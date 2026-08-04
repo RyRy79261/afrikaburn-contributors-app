@@ -155,9 +155,9 @@ export function CancelDeletionButton() {
   const [refreshing, startRefresh] = React.useTransition();
 
   async function cancel() {
-    const result = await new Promise<Awaited<
-      ReturnType<typeof cancelAccountDeletion>
-    >>((resolve) => {
+    const result = await new Promise<
+      Awaited<ReturnType<typeof cancelAccountDeletion>>
+    >((resolve) => {
       startCancel(async () => resolve(await cancelAccountDeletion()));
     });
 

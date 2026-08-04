@@ -31,13 +31,11 @@ export type SupplierStepActor = "supplier" | "org";
  * - `org_confirms`  — org confirms outright; the supplier cannot touch it.
  */
 export type SupplierStepConfirmation =
-  | "auto"
-  | "org_may_revoke"
-  | "org_reviews"
-  | "org_confirms";
+  "auto" | "org_may_revoke" | "org_reviews" | "org_confirms";
 
 /** How the supplier side may interact with a step (drives UI + transitions). */
-export type SupplierStepFlow = "self_service" | "org_reviewed" | "org_confirmed";
+export type SupplierStepFlow =
+  "self_service" | "org_reviewed" | "org_confirmed";
 
 export interface SupplierOnboardingStep {
   key: SupplierOnboardingStepKey;
@@ -125,8 +123,10 @@ export const SUPPLIER_ONBOARDING_STEPS: readonly SupplierOnboardingStep[] = [
 /** Total number of onboarding steps (the `/7` denominator). */
 export const SUPPLIER_ONBOARDING_STEP_COUNT = SUPPLIER_ONBOARDING_STEPS.length;
 
-const STEP_BY_KEY: ReadonlyMap<SupplierOnboardingStepKey, SupplierOnboardingStep> =
-  new Map(SUPPLIER_ONBOARDING_STEPS.map((s) => [s.key, s]));
+const STEP_BY_KEY: ReadonlyMap<
+  SupplierOnboardingStepKey,
+  SupplierOnboardingStep
+> = new Map(SUPPLIER_ONBOARDING_STEPS.map((s) => [s.key, s]));
 
 /** Catalog entry for a key, or undefined for an unknown key. */
 export function supplierOnboardingStep(
@@ -234,9 +234,7 @@ export interface StepTransition {
   to: SupplierOnboardingStepStatus;
 }
 
-export type StepTransitionResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type StepTransitionResult = { ok: true } | { ok: false; reason: string };
 
 /**
  * Validate a single step-state transition against the self-service vs
@@ -255,7 +253,9 @@ export type StepTransitionResult =
  *     - supplier: nothing at all
  *     - org:      pending ↔ completed
  */
-export function validateStepTransition(t: StepTransition): StepTransitionResult {
+export function validateStepTransition(
+  t: StepTransition,
+): StepTransitionResult {
   const step = STEP_BY_KEY.get(t.stepKey);
   if (!step) return { ok: false, reason: `Unknown step: ${t.stepKey}` };
   if (t.from === t.to) {
@@ -309,8 +309,7 @@ export function validateStepTransition(t: StepTransition): StepTransitionResult 
 }
 
 export type ApplyStepTransitionResult =
-  | { ok: true; steps: SupplierOnboardingSteps }
-  | { ok: false; reason: string };
+  { ok: true; steps: SupplierOnboardingSteps } | { ok: false; reason: string };
 
 /**
  * Validate + apply a supplier/org action to a stored step map, returning a NEW

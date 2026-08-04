@@ -73,12 +73,13 @@ describe("getBio — the owner's own projection", () => {
   });
 
   it("reports the FULL idType triad: sa_id, passport, and neither", async () => {
-    const cases: Array<[Record<string, unknown>, string | null, string | null]> =
-      [
-        [{ saIdEncrypted: encrypt("8001015009087") }, "sa_id", "8001015009087"],
-        [{ passportEncrypted: encrypt("A12345678") }, "passport", "A12345678"],
-        [{}, null, null],
-      ];
+    const cases: Array<
+      [Record<string, unknown>, string | null, string | null]
+    > = [
+      [{ saIdEncrypted: encrypt("8001015009087") }, "sa_id", "8001015009087"],
+      [{ passportEncrypted: encrypt("A12345678") }, "passport", "A12345678"],
+      [{}, null, null],
+    ];
 
     for (const [row, expectedType, expectedNumber] of cases) {
       dbMock.reset();
@@ -444,8 +445,9 @@ describe("saveBio", () => {
       final: false,
     });
 
-    const values = dbMock.writesTo(schema.burnerBios)[0]!.arg("values") as
-      Record<string, unknown>;
+    const values = dbMock
+      .writesTo(schema.burnerBios)[0]!
+      .arg("values") as Record<string, unknown>;
     expect(values).not.toHaveProperty("about");
     expect(values).not.toHaveProperty("campHistory");
   });
@@ -586,7 +588,10 @@ describe("savePrivacyFlags", () => {
     dbMock.queue([]);
     await savePrivacyFlags(USER, EDITION, { homeCity: true });
 
-    const set = dbMock.onlyQuery("update").arg("set") as Record<string, unknown>;
+    const set = dbMock.onlyQuery("update").arg("set") as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(set).sort()).toEqual(["privacyFlags", "updatedAt"]);
     // Hard-locked fields are forced private however the caller flagged them.
     expect((set.privacyFlags as Record<string, boolean>).phone).toBe(false);

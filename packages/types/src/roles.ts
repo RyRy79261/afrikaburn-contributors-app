@@ -329,5 +329,9 @@ export const OFFICER_KEYS = OfficerKey.options;
  * (sharing contact details with the org) or DECLINE. Non-officer role
  * assignments are always `accepted` (no consent moment).
  */
-export const RoleAssignmentConsent = z.enum(["pending", "accepted", "declined"]);
+export const RoleAssignmentConsent = z.enum([
+  "pending",
+  "accepted",
+  "declined",
+]);
 export type RoleAssignmentConsent = z.infer<typeof RoleAssignmentConsent>;
