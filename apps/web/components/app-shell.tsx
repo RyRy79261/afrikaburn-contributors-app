@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Flame } from "lucide-react";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
+import {
+  githubConfigured,
+  transcriptionConfigured,
+} from "@quagga/core/report-server";
 import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getEditionLabel } from "@/lib/edition";
@@ -127,7 +131,9 @@ export async function AppShell({
           somebody the endpoint would refuse is worse than not offering it. It
           stays for a GATED viewer — being held by the gate is a thing worth
           reporting, and frequently the reason somebody is reporting. */}
-      {user && <ReportLauncher />}
+      {user && githubConfigured() && (
+        <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+      )}
     </div>
   );
 }

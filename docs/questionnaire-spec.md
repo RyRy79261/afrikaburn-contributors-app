@@ -1,31 +1,34 @@
 # Questionnaire Builder & Notification Gates — Feature Spec
 
-*Ryan, 24 Jul 2026. The Camp 404 "captain questionnaire builder" pattern, generalized to
+_Ryan, 24 Jul 2026. The Camp 404 "captain questionnaire builder" pattern, generalized to
 two authoring levels with audience targeting. The engine (definitions / activations /
 responses / required_actions) already exists in the spine — this adds the builder UI,
-audience resolution, custom project roles, and the gate/notification loop.*
+audience resolution, custom project roles, and the gate/notification loop._
 
 ## Authoring levels & audiences
 
 **1. Org level — internal** (authored in the Organiser Console by org_staff/god):
+
 - Audience: **org members**. Appears ONLY in the org console (a pending questionnaire
   gate inside the console, never in the participant app).
 
 **2. Org level — outbound** (authored in the Organiser Console):
+
 - Audience selector, one or more of:
-  | Key | Resolves to |
-  |---|---|
-  | `all_current_burners` | every burner with a Burner Bio for the active edition |
-  | `camp_leads` | leads/admins of any theme_camp group |
-  | `registered_camp_leads` | leads/admins of camps with an **approved** registration this edition |
-  | `mv_leads` | leads/admins of mutant_vehicle groups |
-  | `mv_grant_requesters` | MV groups whose current-edition registration has `grants_interest = true` |
-  | `art_leads` | leads/admins of artwork groups |
-  | `art_grant_requesters` | artwork groups with `grants_interest = true` this edition |
+  | Key                     | Resolves to                                                               |
+  | ----------------------- | ------------------------------------------------------------------------- |
+  | `all_current_burners`   | every burner with a Burner Bio for the active edition                     |
+  | `camp_leads`            | leads/admins of any theme_camp group                                      |
+  | `registered_camp_leads` | leads/admins of camps with an **approved** registration this edition      |
+  | `mv_leads`              | leads/admins of mutant_vehicle groups                                     |
+  | `mv_grant_requesters`   | MV groups whose current-edition registration has `grants_interest = true` |
+  | `art_leads`             | leads/admins of artwork groups                                            |
+  | `art_grant_requesters`  | artwork groups with `grants_interest = true` this edition                 |
 - Delivered in the participant app (gate + notification). Grant-requester audiences
   resolve to empty sets until MV/art registration flows ship — that's fine.
 
 **3. Project level** (authored by a project's lead/admin from its dashboard):
+
 - Audience: the project's own members, selectable by **custom project roles**
   (or "everyone in this project").
 
@@ -38,7 +41,7 @@ audience resolution, custom project roles, and the gate/notification loop.*
 - A member can hold **multiple** custom roles (many-to-many).
 - Schema: `project_roles` (group_id, name, is_default, sort) unique(group_id, name-normalized);
   `member_role_assignments` (membership_id × project_role_id).
-- UI split (Ryan, 24 Jul — definition vs assignment are different activities):
+- UI split — definition and assignment are different activities:
   **role/officer DEFINITION lives on its own dedicated screen** —
   `/camps/[slug]/settings/roles` ("Camp Settings · Roles & Officers"), a full page,
   set-and-forget: create/edit roles with the complete privilege panel, color/emoji,
@@ -52,7 +55,7 @@ audience resolution, custom project roles, and the gate/notification loop.*
   only the frequent operations: role chips on member rows + a quick assign
   multi-select per member + a "Manage roles →" link to the settings screen.
 
-### Roles v2 — permissions, color, emoji (Ryan, 24 Jul)
+### Roles v2 — permissions, colour, emoji
 
 Roles carry **rights**, an **emoji icon**, and a **color**:
 
@@ -60,57 +63,57 @@ Roles carry **rights**, an **emoji icon**, and a **color**:
   ramp — teal, teal-deep, apricot, peach, sage, olive, rust, neutral — token-mapped at
   render so both themes stay legible; **not** freeform hex), `emoji` (single emoji,
   optional, validated), `permissions` (jsonb array of permission keys).
-- **Privileges (Ryan, 24 Jul — creating a role means setting these).** `permissions`
+- **Privileges — creating a role means setting these.** `permissions`
   is a jsonb OBJECT (keys + config), not a bare list:
-  | Privilege | Config | Grants |
-  |---|---|---|
-  | `view_member_details` | — | See private camp-held member info: ref codes, member emails, join dates, full member list detail. Without it: names, avatars, role chips only. |
-  | `manage_questionnaires` | `{ audience_roles: "all" \| [role ids], may_block: bool }` | Create/edit/send project questionnaires and view their responses — but only targeting the configured role audiences, and blocking sends only if `may_block`. |
-  | `assign_roles` | — | Assign/unassign *existing* roles to members. |
-  | `manage_roles` | — | Create/edit/delete role definitions (implies `assign_roles`). |
-  | `manage_members` | — | Create/revoke invites. |
-  **Inviolable line:** no camp privilege ever overrides a burner's own privacy flags or
-  the hard-locked bio fields (phone, emergency contacts, ID) — `view_member_details`
-  gates *camp-held* data only, never bio privacy.
-  Defaults: Captain 🎩 apricot = all privileges (questionnaires: all audiences,
-  may_block); Team lead 🔧 teal = manage_questionnaires scoped to Burn-member
-  audiences, no blocking + view_member_details; Burner 🔥 sage = none.
+  | Privilege                                                                             | Config                                                     | Grants                                                                                                                                                       |
+  | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | `view_member_details`                                                                 | —                                                          | See private camp-held member info: ref codes, member emails, join dates, full member list detail. Without it: names, avatars, role chips only.               |
+  | `manage_questionnaires`                                                               | `{ audience_roles: "all" \| [role ids], may_block: bool }` | Create/edit/send project questionnaires and view their responses — but only targeting the configured role audiences, and blocking sends only if `may_block`. |
+  | `assign_roles`                                                                        | —                                                          | Assign/unassign _existing_ roles to members.                                                                                                                 |
+  | `manage_roles`                                                                        | —                                                          | Create/edit/delete role definitions (implies `assign_roles`).                                                                                                |
+  | `manage_members`                                                                      | —                                                          | Create/revoke invites.                                                                                                                                       |
+  | **Inviolable line:** no camp privilege ever overrides a burner's own privacy flags or |
+  | the hard-locked bio fields (phone, emergency contacts, ID) — `view_member_details`    |
+  | gates _camp-held_ data only, never bio privacy.                                       |
+  | Defaults: Captain 🎩 apricot = all privileges (questionnaires: all audiences,         |
+  | may_block); Team lead 🔧 teal = manage_questionnaires scoped to Burn-member           |
+  | audiences, no blocking + view_member_details; Burner 🔥 sage = none.                  |
 - **Structural roles are the permission backstop**: `lead`/`admin` implicitly hold every
   project permission and this cannot be revoked — so no permission edit can ever strand
   a camp (no self-lockout class of bugs, by construction). Custom-role permissions are
-  *grants on top* for plain members.
+  _grants on top_ for plain members.
 - **Defaults (seeded, fully editable/deletable like any role)**: Captain 🎩 apricot —
   all three permissions · Team lead 🔧 teal — manage_questionnaires · Burn member 🔥
   sage — no permissions.
 
 **CRUD semantics:**
 
-| Op | Rule |
-|---|---|
-| Create | lead/admin or `manage_roles` holder; name unique-normalized per project; cap 20 roles/project |
-| Read | every member sees names/colors/emoji on member rows; permission details visible to role managers |
-| Update | rename is id-stable (assignments survive); recolor/re-emoji free; permission changes effective immediately |
-| Assign/unassign | `manage_roles` (or lead/admin); members may hold multiple roles |
-| Delete | **custom roles only** — confirm-with-count cascade ("11 members hold this role — remove it from them?"); assignments removed, memberships untouched. Default roles cannot be deleted (see kinds below) |
-| Escalation | a `manage_roles` holder can grant any project permission incl. to themselves — accepted semantics at camp scale (role managers are trusted); leads can always revoke the role itself |
+| Op              | Rule                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create          | lead/admin or `manage_roles` holder; name unique-normalized per project; cap 20 roles/project                                                                                                          |
+| Read            | every member sees names/colors/emoji on member rows; permission details visible to role managers                                                                                                       |
+| Update          | rename is id-stable (assignments survive); recolor/re-emoji free; permission changes effective immediately                                                                                             |
+| Assign/unassign | `manage_roles` (or lead/admin); members may hold multiple roles                                                                                                                                        |
+| Delete          | **custom roles only** — confirm-with-count cascade ("11 members hold this role — remove it from them?"); assignments removed, memberships untouched. Default roles cannot be deleted (see kinds below) |
+| Escalation      | a `manage_roles` holder can grant any project permission incl. to themselves — accepted semantics at camp scale (role managers are trusted); leads can always revoke the role itself                   |
 
-### Role kinds — default roles are permanent, aliasable fixtures (Ryan, 24 Jul)
+### Role kinds — default roles are permanent, aliasable fixtures
 
 `project_roles.kind ∈ captain | baseline | default | custom`:
 
-| Kind | Seeded as | Rename | Icon/color | Permissions | Delete | Assignment |
-|---|---|---|---|---|---|---|
-| `captain` | Captain 🎩 | ✅ (alias) | ✅ | ❌ **locked to all** — UI shows disabled toggles + "Captains can do everything — that's what makes them captains" | ❌ | normal |
-| `baseline` | **Burner** 🔥 | ✅ (alias — a camp may call its people anything; the DESIGN shows the default "Burner" with a rename affordance, not a pre-aliased example) | ✅ | ✅ editable (a camp may grant everyone something) | ❌ | **implicit — every member of the camp holds it, always**; cannot be unassigned. Not stored per member: derived (baseline = all members), so it can never drift |
-| `default` | Team lead 🔧 | ✅ | ✅ | ✅ | ❌ | normal |
-| `custom` | — | ✅ | ✅ | ✅ | ✅ (cascade) | normal |
+| Kind       | Seeded as     | Rename                                                                                                                                      | Icon/color | Permissions                                                                                                       | Delete       | Assignment                                                                                                                                                     |
+| ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `captain`  | Captain 🎩    | ✅ (alias)                                                                                                                                  | ✅         | ❌ **locked to all** — UI shows disabled toggles + "Captains can do everything — that's what makes them captains" | ❌           | normal                                                                                                                                                         |
+| `baseline` | **Burner** 🔥 | ✅ (alias — a camp may call its people anything; the DESIGN shows the default "Burner" with a rename affordance, not a pre-aliased example) | ✅         | ✅ editable (a camp may grant everyone something)                                                                 | ❌           | **implicit — every member of the camp holds it, always**; cannot be unassigned. Not stored per member: derived (baseline = all members), so it can never drift |
+| `default`  | Team lead 🔧  | ✅                                                                                                                                          | ✅         | ✅                                                                                                                | ❌           | normal                                                                                                                                                         |
+| `custom`   | —             | ✅                                                                                                                                          | ✅         | ✅                                                                                                                | ✅ (cascade) | normal                                                                                                                                                         |
 
 Consequences: the "everyone in this project" questionnaire audience IS the baseline
 role (one concept, not two); audience scoping that includes the baseline role means
 "may target the whole camp". Aliases display everywhere (chips, audiences, completion
 tables) — the kind stays stable underneath.
 
-### Officer roles — org-defined, condition-triggered (Ryan, 24 Jul; corpus-grounded)
+### Officer roles — org-defined, condition-triggered
 
 AB already instructs camps to appoint specific responsible people (Quaggapedia receipts):
 "Nominate a safety officer to manage the safety aspects of your camp"
@@ -123,25 +126,25 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
 - **`officer` kind**: org-defined catalog (per edition), each with a **stable key**
   (org targeting anchor), seeded display name/emoji/color (camps may alias — the key
   never changes), and a **trigger condition** over the camp's registration data:
-  | Key | Seeded as | Trigger |
-  |---|---|---|
-  | `lnt_officer` | LNT Lead ♻️ | always **required** (upgrades Finlay's contact-only LNT lead into an assignable role — deliberate supersession of the "no app role" rule; non-member contact fields remain as fallback) |
-  | `safety_officer` | Safety Officer ⛑️ | always recommended |
-  | `fire_safety_officer` | Safety Baron 🔥 | **always required** for registered camps (Ryan, 24 Jul: fire shows up at every registered camp eventually — unconditional, no trigger needed) |
-  | `sound_officer` | Sound Officer 🔊 | **required** when sound level ≥ 2 |
-  | `safety_monitor` | Safety Monitor 🛡️ | recommended (STAR: "multiple and visible") |
+  | Key                   | Seeded as         | Trigger                                                                                                                                                                                 |
+  | --------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `lnt_officer`         | LNT Lead ♻️       | always **required** (upgrades Finlay's contact-only LNT lead into an assignable role — deliberate supersession of the "no app role" rule; non-member contact fields remain as fallback) |
+  | `safety_officer`      | Safety Officer ⛑️ | always recommended                                                                                                                                                                      |
+  | `fire_safety_officer` | Safety Baron 🔥   | **always required** for registered camps (fire shows up at every registered camp eventually — unconditional, no trigger needed)                                                         |
+  | `sound_officer`       | Sound Officer 🔊  | **required** when sound level ≥ 2                                                                                                                                                       |
+  | `safety_monitor`      | Safety Monitor 🛡️ | recommended (STAR: "multiple and visible")                                                                                                                                              |
 - **Trigger mechanics**: when a camp's registration matches a trigger, the officer role
-  appears in the camp's role system tagged *required* or *recommended*. Requirement is
+  appears in the camp's role system tagged _required_ or _recommended_. Requirement is
   **soft-enforced**: the registration review (org side) and the camp dashboard show
   "Sound Officer — not yet assigned" as a completeness flag; approval gating on it is
   an org decision later, not hard-coded now.
-- **Outstanding-officers indicator (Ryan, 24 Jul):** for REGISTERED camps (or camps
+- **Outstanding-officers indicator.** for REGISTERED camps (or camps
   with a registration in flight), the "Officers" section header on the settings page
   carries a count badge of unassigned REQUIRED officers — e.g. "2 of 3 assigned" /
   "1 outstanding" — rendered **red (destructive)** while any remain, flipping to sage
   when complete. The same badge echoes on the camp dashboard's settings link. Free
   camps: no badge, no requirement counts (officers optional).
-- **Assignment is deferrable by design (Ryan, 24 Jul):** you often can't say who an
+- **Assignment is deferrable by design.** you often can't say who an
   officer will be when creating a camp — or even when submitting registration. Officer
   slots therefore NEVER block camp creation, registration submission, or approval;
   "not yet assigned" is a normal, long-lived state managed later from Camp Settings.
@@ -152,7 +155,7 @@ care of separating waste" (camping); "Safety Monitors on duty, multiple and visi
   registered Sound Officers"** resolves to every member assigned `sound_officer` in a
   registered camp, regardless of camp-level aliases. This is the payoff: org can brief
   exactly the responsible people across all camps.
-- **Officers are ALSO registrations (Ryan, 24 Jul):** assigning an officer is an
+- **Officers are ALSO registrations.** assigning an officer is an
   **officer registration with the Org** — the org gains access to that officer's
   contact details (name, email, phone) for the function. Because phone is otherwise
   hard-locked private, **acceptance is a consent moment**: the member must accept the
@@ -188,7 +191,7 @@ any member holding `manage_questionnaires`** (authz predicate + tests updated to
   when unset).
 - Submitting responses (existing `questionnaire_responses` store, JSONB by field id)
   flips the required_action to completed.
-- **Blocking status must be explicit everywhere (Ryan, 24 Jul):** every surface that
+- **Blocking status must be explicit everywhere.** every surface that
   shows a questionnaire — pending cards, list rows, the fill page itself, the author's
   builder/activation views — carries a clear badge: **"Required — blocks the app until
   done"** (destructive/warning treatment) vs **"Optional"** (muted). A blocking
@@ -216,7 +219,7 @@ any member holding `manage_questionnaires`** (authz predicate + tests updated to
 - Privacy: responses visible only to the authoring level (org sends → org console;
   project sends → that project's leads/admins). Never cross-project. Bio privacy rules
   unaffected.
-- Fewer-forms test applies to *us*: the builder itself must warn authors ("Every
+- Fewer-forms test applies to _us_: the builder itself must warn authors ("Every
   question you add is a question someone in the desert has to answer") — small copy
   touch, real principle.
 - Schema additions (this feature only): `project_roles`, `member_role_assignments`,
@@ -233,38 +236,41 @@ any member holding `manage_questionnaires`** (authz predicate + tests updated to
 4. "Questionnaire Gate — fill view · Dark" (member answering a blocking questionnaire; runner + "this unlocks your dashboard" framing)
 5. Members card variant with role chips + role management popover (can be an added state on the Camp Dashboard frame or a small dedicated frame)
 
-## Builder v2 — Google Forms parity (Ryan, 24 Jul 2026; researched)
+## Builder v2 — Google Forms parity
 
 Target: the input/structure feature set of Google Forms, minus what our platform makes
 irrelevant. The current builder (5 field kinds, flat single page) grows to:
 
 ### Content & structure blocks
-| Block | Notes |
-|---|---|
-| **Section / page break** | Each section = a page in the runner (title + description); progress indicator across pages |
-| **Info text block** | Standalone title+body text, no answer — "just there for information" |
-| **Image block** | Standalone image (Vercel Blob upload) + optional images attached to a question or to individual choice options |
-| Video block | EXCLUDED for now — no-connectivity culture + weight; revisit only on demand |
+
+| Block                    | Notes                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| **Section / page break** | Each section = a page in the runner (title + description); progress indicator across pages                     |
+| **Info text block**      | Standalone title+body text, no answer — "just there for information"                                           |
+| **Image block**          | Standalone image (Vercel Blob upload) + optional images attached to a question or to individual choice options |
+| Video block              | EXCLUDED for now — no-connectivity culture + weight; revisit only on demand                                    |
 
 ### Question types (target set)
-| Type | Status | Notes |
-|---|---|---|
-| Short answer | ✅ have (`short_text`) | gains validation rules |
-| Paragraph | ✅ have (`long_text`) | gains length limits |
-| Multiple choice (radio) | ✅ have (`single_select`) | gains "Other…" free-text option + option images |
-| Checkboxes (multi) | ✅ have (`multi_select`) | gains "Other…", min/max selections |
-| Dropdown | NEW render variant of single_select (long option lists) |
-| Yes/No | ✅ have (`boolean`) | kept (our addition; Forms models it as MC) |
-| Linear scale | NEW — min/max 0–10 with end labels |
-| Rating | NEW — 3–10 steps, star/heart/number glyph |
-| Multiple-choice grid | NEW — rows × columns, single per row |
-| Checkbox grid | NEW — rows × columns, multi per row |
-| Date | NEW | edition-aware defaults (e.g. build-week picker variant) |
-| Time | NEW |
-| Number | NEW (Forms does this via validation; first-class for us) |
-| File upload | NEW — Vercel Blob, type/size/count limits |
+
+| Type                    | Status                                                   | Notes                                                   |
+| ----------------------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| Short answer            | ✅ have (`short_text`)                                   | gains validation rules                                  |
+| Paragraph               | ✅ have (`long_text`)                                    | gains length limits                                     |
+| Multiple choice (radio) | ✅ have (`single_select`)                                | gains "Other…" free-text option + option images         |
+| Checkboxes (multi)      | ✅ have (`multi_select`)                                 | gains "Other…", min/max selections                      |
+| Dropdown                | NEW render variant of single_select (long option lists)  |
+| Yes/No                  | ✅ have (`boolean`)                                      | kept (our addition; Forms models it as MC)              |
+| Linear scale            | NEW — min/max 0–10 with end labels                       |
+| Rating                  | NEW — 3–10 steps, star/heart/number glyph                |
+| Multiple-choice grid    | NEW — rows × columns, single per row                     |
+| Checkbox grid           | NEW — rows × columns, multi per row                      |
+| Date                    | NEW                                                      | edition-aware defaults (e.g. build-week picker variant) |
+| Time                    | NEW                                                      |
+| Number                  | NEW (Forms does this via validation; first-class for us) |
+| File upload             | NEW — Vercel Blob, type/size/count limits                |
 
 ### Logic & validation
+
 - Required per question (have) · **response validation** on text/number (length, regex,
   numeric range, email/url presets) · **"Other" option** on choice questions ·
   min/max selection counts on checkboxes · **branching**: "go to section based on
@@ -272,22 +278,26 @@ irrelevant. The current builder (5 field kinds, flat single page) grows to:
   (minor, last).
 
 ### Respondent (runner) UX
+
 Multi-page navigation with progress bar · per-page validation · draft autosave (have)
 · author-set **confirmation message** on submit · **edit-after-submit** toggle ·
 author **preview mode** before sending.
 
 ### Author/admin features
+
 Duplicate questionnaire as template · manual close/reopen (close exists) + due_at
 (have) · **response summary view with per-question charts** (choice counts as bars,
 scale histograms — dataviz per our chart standards) · **CSV export** of responses ·
 per-question response breakdown alongside the existing per-user table.
 
 ### Explicitly EXCLUDED (platform makes them irrelevant or Ryan cut them)
+
 Email collection/receipts/notify-by-email lists (accounts + gates + Resend cover it) ·
 quiz mode, points, answer keys · collaborator sharing (org/camp roles cover it) ·
 themes (brand is fixed) · prefilled-link generation · add-ons/scripts · embedding.
 
 ### Sequencing
+
 Implementation queues behind Roles v2 (same code surfaces). Design pass required:
 builder v2 (block palette, section/page rails, branching UI, validation editors),
 runner multi-page states, and the response-summary charts view.

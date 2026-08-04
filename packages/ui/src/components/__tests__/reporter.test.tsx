@@ -206,6 +206,26 @@ describe("ReportDialog", () => {
     expect(field.value).toBe("Third one this morning.");
   });
 
+  it("hides the microphone when the server cannot transcribe", () => {
+    // jsdom reports unsupported anyway, so assert the SENTENCE differs: a
+    // deployment with no GROQ_API_KEY must not offer a control that records
+    // somebody's voice and then 503s, and must say which reason applies.
+    // A browser that CAN record, so the only reason left is the server's.
+    vi.stubGlobal("MediaRecorder", class {});
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn() },
+      configurable: true,
+    });
+
+    render(
+      <ReportDialog open onOpenChange={() => {}} dictationEnabled={false} />,
+    );
+    expect(screen.queryByRole("button", { name: /dictate/i })).toBeNull();
+    expect(
+      screen.getByText(/isn't switched on for this deployment/i),
+    ).toBeDefined();
+  });
+
   it("says typing is the same job when the browser cannot record", () => {
     render(<ReportDialog open onOpenChange={() => {}} />);
     // jsdom has no MediaRecorder: `unsupported` is a state, not an error.

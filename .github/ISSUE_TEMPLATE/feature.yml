@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Before writing much: a lot of this product is already planned in
-        `docs/execution-roadmap.md`, and it may already be on there with a
+        `docs/roadmap.md`, and it may already be on there with a
         reason it hasn't happened yet. Worth a look — but if you're not sure,
         file it anyway. A duplicate costs a minute; a good idea nobody mentioned
         costs a season.

@@ -1,6 +1,6 @@
 import "server-only";
 
-// Resend integration (build-spec §Stack; mvp-proposal: "Resend from day one").
+// Resend integration (build-spec §Stack — Resend from day one).
 //
 // BYTE-IDENTICAL TWIN of apps/web/lib/email.ts. Keep them in lockstep — the
 // multi-recipient disclosure fixed here existed in both copies at once, which is

@@ -1,3 +1,7 @@
+import {
+  githubConfigured,
+  transcriptionConfigured,
+} from "@quagga/core/report-server";
 import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 
 import { resolveSupplierSession } from "@/lib/session";
@@ -27,7 +31,9 @@ export default async function PortalLayout({
     return (
       <>
         <GateScreen state={state} />
-        {state.kind !== "unauthenticated" && <ReportLauncher />}
+        {state.kind !== "unauthenticated" && githubConfigured() && (
+          <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+        )}
       </>
     );
   }
@@ -41,7 +47,9 @@ export default async function PortalLayout({
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
         {children}
       </div>
-      <ReportLauncher />
+      {githubConfigured() && (
+        <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+      )}
     </div>
   );
 }

@@ -1014,8 +1014,8 @@ card re-triggered the documented non-settling +50px y bias (11 phantom
 V-OVERFLOW/OVERLAP defects that two consecutive audit runs reproduced
 identically). Copy-to-scratch audited 0 findings immediately; original deleted,
 copy moved back to the original x/y and renamed. Callers updated:
-`apps/web/components/onboarding/bio-flow.tsx`, `docs/page-build-plan.md`,
-`docs/design-gap-register.md` (m3).
+`apps/web/components/onboarding/bio-flow.tsx`, `docs/component-spec.md`,
+`docs/component-spec.md` (m3).
 
 ### What did NOT trigger the bias
 Pure `Update` of text/name, and `Copy` of an existing in-frame subtree (the new
@@ -1042,8 +1042,8 @@ earlier session. Check `batch_get` before trusting a frame id quoted in a task.
 - Node ids inside them moved too: Confirm Overlay `mfJhv` → `UPol9`; its "Who"
   text `xPit0` → `T6n33z`. Callers updated: `apps/org/components/accounts-table.tsx`,
   `apps/org/components/account-actions.tsx`, `apps/org/app/(console)/accounts/page.tsx`,
-  `packages/ui/src/components/responsive-data-table.tsx`, `docs/page-build-plan.md`,
-  `docs/design-gap-register.md`, `docs/build-spec.md`.
+  `packages/ui/src/components/responsive-data-table.tsx`, `docs/component-spec.md`,
+  `docs/component-spec.md`, `docs/build-spec.md`.
 
 ### New variables
 `ab-rust` #C24438 and `ab-neutral` #ADB6B3 — the two curated role-palette keys that had

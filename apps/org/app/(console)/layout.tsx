@@ -1,3 +1,7 @@
+import {
+  githubConfigured,
+  transcriptionConfigured,
+} from "@quagga/core/report-server";
 import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 
 import { resolveOrgSession } from "@/lib/session";
@@ -33,7 +37,9 @@ export default async function ConsoleLayout({
     return (
       <>
         <GateScreen state={state} />
-        {state.kind !== "unauthenticated" && <ReportLauncher />}
+        {state.kind !== "unauthenticated" && githubConfigured() && (
+          <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+        )}
       </>
     );
   }
@@ -54,7 +60,9 @@ export default async function ConsoleLayout({
         />
         {/* Same reasoning as the gate above: a questionnaire that will not
             submit is a bug somebody has no other way to tell us about. */}
-        <ReportLauncher />
+        {githubConfigured() && (
+          <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+        )}
       </>
     );
   }
@@ -65,7 +73,9 @@ export default async function ConsoleLayout({
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
         {children}
       </div>
-      <ReportLauncher />
+      {githubConfigured() && (
+        <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+      )}
     </div>
   );
 }

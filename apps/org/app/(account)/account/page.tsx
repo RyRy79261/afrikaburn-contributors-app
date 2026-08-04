@@ -22,6 +22,10 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { resolveConsoleAccount, listLinkedAccounts } from "@/lib/account";
 import { resolveOrgSession } from "@/lib/session";
 import { NotConfiguredBanner } from "@/components/not-configured-banner";
+import {
+  githubConfigured,
+  transcriptionConfigured,
+} from "@quagga/core/report-server";
 import { ReportSettingsCard } from "@quagga/ui/components/report-settings-card";
 import { AccountShell } from "@/components/account/account-shell";
 import { SignInMethods } from "@/components/account/account-clients";
@@ -184,7 +188,10 @@ export default async function OrgAccountPage() {
       {/* Last card on the page, as drawn. The corner pill is how a report gets
           filed; this is where somebody who wants to know what one SENDS can
           read it without starting one. */}
-      <ReportSettingsCard />
+      <ReportSettingsCard
+        filingEnabled={githubConfigured()}
+        dictationEnabled={transcriptionConfigured()}
+      />
     </AccountShell>
   );
 }

@@ -30,7 +30,7 @@ secret to be handed. Screens that need data render an honest "not configured"
 state instead of crashing, which is deliberate — it means a designer or
 front-end contributor can run the real app on day one and see real layouts.
 
-When you *do* want real data locally:
+When you _do_ want real data locally:
 
 ```bash
 pnpm e2e:local                    # brings up Postgres, migrates, seeds, runs everything
@@ -77,7 +77,7 @@ opens in [Pencil](https://pen.dev), and it lives in git like everything else.
 
 **One person edits it at a time.** This is not a preference, and the reason is
 worth knowing: the file is 173,000 lines of JSON describing one deeply nested
-node tree. Git *can* merge that line by line — which is the danger, not the
+node tree. Git _can_ merge that line by line — which is the danger, not the
 safeguard. Two designers' edits merged line-wise produce structurally valid JSON
 that is semantically wrong: duplicated node ids, a frame holding children from
 two different versions, one edit's geometry against the other's content. Pencil
@@ -266,7 +266,7 @@ CI — need their approval specifically, because those are the places where a
 mistake is expensive or cannot be undone. Migrations in particular run against
 the live database on the next deploy.
 
-Expect questions about *why*, not just *what*. The comments in this codebase
+Expect questions about _why_, not just _what_. The comments in this codebase
 carry a lot of history — most of them exist because something went wrong once —
 and a change that removes a guard will be asked what the guard was for. That is
 not suspicion of you; it is how the reasoning survives people leaving.

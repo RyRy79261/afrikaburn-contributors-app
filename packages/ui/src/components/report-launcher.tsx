@@ -52,7 +52,19 @@ const CHOICES: ReadonlyArray<{
   },
 ];
 
-export function ReportLauncher({ className }: { className?: string }) {
+export interface ReportLauncherProps {
+  className?: string;
+  /**
+   * False when the deployment has no `GROQ_API_KEY`. Threaded to the dialog so
+   * the microphone is hidden rather than offered and then refused.
+   */
+  dictationEnabled?: boolean;
+}
+
+export function ReportLauncher({
+  className,
+  dictationEnabled = true,
+}: ReportLauncherProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [type, setType] = React.useState<ReportType>("bug");
@@ -126,6 +138,7 @@ export function ReportLauncher({ className }: { className?: string }) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         initialType={type}
+        dictationEnabled={dictationEnabled}
       />
     </>
   );

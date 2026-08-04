@@ -9,9 +9,9 @@ skip line and exits 0, so the build still succeeds. This is the order of operati
 for the first real deployment.
 
 **There is no manual data step any more.** The same deploy runner also **bootstraps
-the reference data** — it seeds only when it finds `editions` empty _(Ryan, 27 Jul
-2026: the first real deployment came up with a perfect schema, working Google sign-in
-and no active edition, so every DB-backed page fell through to "Preview mode" — which
+the reference data** — it seeds only when it finds `editions` empty _(the
+first real deployment came up with a perfect schema, working Google sign-in and no
+active edition, so every DB-backed page fell through to "Preview mode" — which
 reads as a configuration problem when the configuration was correct. Seeding was a
 manual step nothing told you about, and the person who needed to run it could not:
 the connection string is a secret they cannot copy out of Vercel.)_
@@ -52,7 +52,7 @@ by a person.
 
 ### What the seed does and does not contain
 
-**Binding principle (Ryan, 26 Jul 2026): seeds contain ONLY org-owned
+**Binding principle: seeds contain ONLY org-owned
 reference/catalog data. Every burner, camp, membership, registration and
 questionnaire response — in every environment, including the kickoff demo — is
 created live through the app.**
@@ -121,12 +121,12 @@ reporter files is authored by whoever owns the token**, from words somebody else
 typed. The issue body says so on every issue, and the label carries the same
 warning, but the GitHub account on it is yours.
 
-| Variable            | Effect when unset                                                                                                                                                                  |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITHUB_TOKEN`      | The reporter returns 503 and files nothing. Fine-grained PAT, **Issues: read and write**, scoped to the repository named by `GITHUB_REPO` (or the default below) and nothing else. |
-| `GITHUB_REPO`       | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`.                                                                                                                 |
-| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost.                                                     |
-| `GROQ_API_KEY`      | Dictation is unavailable; the reporter is typing-only. Used for Whisper transcription only.                                                                                        |
+| Variable            | Effect when unset                                                                                                                                                                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`      | The reporter is not offered at all: no corner button, and the Account page says reporting is switched off rather than taking a report it cannot file. Fine-grained PAT, **Issues: read and write**, scoped to the repository named by `GITHUB_REPO` (or the default below) and nothing else. |
+| `GITHUB_REPO`       | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`.                                                                                                                                                                                                                           |
+| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost.                                                                                                                                                               |
+| `GROQ_API_KEY`      | The microphone is hidden and the reporter is typing-only. Used for Whisper transcription only.                                                                                                                                                                                               |
 
 Two things follow from the reporter being public-facing:
 
