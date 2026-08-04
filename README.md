@@ -293,21 +293,22 @@ terms — there is no CLA to sign.
 
 `docs/build-spec.md` wins for engineering; `AGENTS.md` wins for process.
 
-| Doc                                                                        | What it holds                                                                        |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [`docs/build-spec.md`](docs/build-spec.md)                                 | The engineering contract: schema, routes, org ranks, the System panel, seed law      |
-| [`docs/deploy.md`](docs/deploy.md)                                         | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test           |
-| [`docs/triage.md`](docs/triage.md)                                         | The issue queue: the label taxonomy, the triage routine, and handling in-app reports |
-| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md)         | Auth, account management, the medical-notes consent model, ID retention              |
-| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)                 | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI      |
-| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)                 | The questionnaire engine — definitions, activations, audiences, blocking flows       |
-| [`docs/notifications-spec.md`](docs/notifications-spec.md)                 | Notifications and bulletins                                                          |
-| [`docs/supplier-spec.md`](docs/supplier-spec.md)                           | Supplier repository, vetting, onboarding                                             |
-| [`docs/component-spec.md`](docs/component-spec.md)                         | The component system, and the page → canvas-frame index                              |
-| [`docs/synthesis.md`](docs/synthesis.md) · [`roadmap.md`](docs/roadmap.md) | Correlated requirements from the source briefs, and the release sequence             |
-| [`docs/architecture.md`](docs/architecture.md)                             | System, packages, request path and data model — with diagrams                        |
-| [`docs/flows.md`](docs/flows.md)                                           | The user journeys: onboarding, registration + review, questionnaires, suppliers      |
-| [`docs/sources/`](docs/sources/)                                           | **Verbatim primary sources — never edit.** See below                                 |
+| Doc                                                                        | What it holds                                                                                |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [`docs/build-spec.md`](docs/build-spec.md)                                 | The engineering contract: schema, routes, org ranks, the System panel, seed law              |
+| [`docs/deploy.md`](docs/deploy.md)                                         | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test                   |
+| [`docs/triage.md`](docs/triage.md)                                         | The issue queue: the label taxonomy, the triage routine, and handling in-app reports         |
+| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md)         | Auth, account management, the medical-notes consent model, ID retention                      |
+| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)                 | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI              |
+| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)                 | The questionnaire engine — definitions, activations, audiences, blocking flows               |
+| [`docs/notifications-spec.md`](docs/notifications-spec.md)                 | Notifications and bulletins                                                                  |
+| [`docs/supplier-spec.md`](docs/supplier-spec.md)                           | Supplier repository, vetting, onboarding                                                     |
+| [`docs/component-spec.md`](docs/component-spec.md)                         | The component system, and the page → canvas-frame index                                      |
+| [`docs/synthesis.md`](docs/synthesis.md) · [`roadmap.md`](docs/roadmap.md) | Correlated requirements from the source briefs, and the release sequence                     |
+| [`docs/technical-spec.md`](docs/technical-spec.md)                         | Section-by-section technical answer to the App Spec — what is built, and what each gap takes |
+| [`docs/architecture.md`](docs/architecture.md)                             | System, packages, request path and data model — with diagrams                                |
+| [`docs/flows.md`](docs/flows.md)                                           | The user journeys: onboarding, registration + review, questionnaires, suppliers              |
+| [`docs/sources/`](docs/sources/)                                           | **Verbatim primary sources — never edit.** See below                                         |
 
 ### `docs/sources/` — primary source material
 
