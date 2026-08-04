@@ -455,8 +455,42 @@ jobs:
       #
       # `always()` so the numbers are visible on the run that breached a floor,
       # which is when they matter most.
+      #
+      # UPDATED IN PLACE, ON PURPOSE. The action finds its previous comment by
+      # name and edits it, so each report keeps ONE anchored position in the
+      # conversation rather than jumping to the bottom on every push and
+      # interleaving with review threads. Five reports that move every run are
+      # five things to find again.
+      #
+      # Whether a table is current is answered by the table, not by where it
+      # sits: the action stamps the run and the commit in its footer — "#154
+      # for commit c69b1fb" — so it is a glance rather than an inference from a
+      # timestamp.
+      #
+      # This replaced a delete-then-post step, which did put the newest report
+      # at the bottom, but scattered it among the reviews and left a window
+      # where a run cancelled between the delete and the post removed a comment
+      # without replacing it. This repository cancels superseded runs
+      # constantly.
+      #
+      # FORKS GET THE FLOORS, NOT THE COMMENT.
+      #
+      # A `pull_request` from a fork runs with a READ-ONLY token, whatever this
+      # job asks for — so both comment steps would fail and show a red
+      # `coverage` shard on the pull request of somebody contributing for the
+      # first time. This repository asks for outside help in CONTRIBUTING.md;
+      # greeting that with a failing check nobody can fix is the wrong first
+      # impression.
+      #
+      # The floors above still run and still fail on a real breach, because
+      # they need no token. Only the reporting is skipped, and the numbers stay
+      # readable in the job summary.
+
       - name: Report coverage on the pull request
-        if: always() && steps.scope.outputs.in-scope == 'true' && github.event_name == 'pull_request'
+        if: >-
+          always() && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && steps.scope.outputs.in-scope == 'true'
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
           name: ${{ matrix.label }}
