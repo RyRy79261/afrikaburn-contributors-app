@@ -424,6 +424,24 @@ jobs:
       #
       # `always()` so the numbers are visible on the run that breached a floor,
       # which is when they matter most.
+      #
+      # UPDATED IN PLACE, ON PURPOSE. The action finds its previous comment by
+      # name and edits it, so each report keeps ONE anchored position in the
+      # conversation rather than jumping to the bottom on every push and
+      # interleaving with review threads. Five reports that move every run are
+      # five things to find again.
+      #
+      # Whether a table is current is answered by the table, not by where it
+      # sits: the action stamps the run and the commit in its footer — "#154
+      # for commit c69b1fb" — so it is a glance rather than an inference from a
+      # timestamp.
+      #
+      # This replaced a delete-then-post step, which did put the newest report
+      # at the bottom, but scattered it among the reviews and left a window
+      # where a run cancelled between the delete and the post removed a comment
+      # without replacing it. This repository cancels superseded runs
+      # constantly.
+      #
       # FORKS GET THE FLOORS, NOT THE COMMENT.
       #
       # A `pull_request` from a fork runs with a READ-ONLY token, whatever this
@@ -436,34 +454,6 @@ jobs:
       # The floors above still run and still fail on a real breach, because
       # they need no token. Only the reporting is skipped, and the numbers stay
       # readable in the job summary.
-
-      # CLEAR THE PREVIOUS ONE FIRST.
-      #
-      # The report action finds its old comment by name and EDITS it. The edit
-      # is correct, but GitHub pins a comment at the position it was created,
-      # so after a few pushes the numbers are current and sitting an hour up
-      # the page behind a "Load more…" fold, marked only with a small "edited".
-      # Push a fix to coverage and nothing appears to happen.
-      #
-      # Deleting first makes the action create a new one, so every run leaves
-      # an up-to-date comment at the BOTTOM of the conversation, where the
-      # person who just pushed is looking.
-      - name: Clear the previous coverage comment
-        if: >-
-          always() && github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${{ github.repository }}/issues/${{ github.event.number }}/comments" \
-            --paginate --jq '.[]
-              | select(.user.login == "github-actions[bot]")
-              | select(.body | contains("Coverage Report for ${{ matrix.workspace }}"))
-              | .id' \
-          | while read -r id; do
-              echo "removing superseded comment $id"
-              gh api -X DELETE "repos/${{ github.repository }}/issues/comments/$id"
-            done
 
       - name: Report coverage on the pull request
         if: >-
