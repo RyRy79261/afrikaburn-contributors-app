@@ -397,7 +397,11 @@ jobs:
             label: "@quagga/types"
             directory: packages/types
     steps:
+      # `fetch-depth: 0` — the scope check below diffs against the base branch,
+      # which a shallow clone does not have.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -410,11 +414,38 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # ONLY REPORT WHAT THE BRANCH ACTUALLY TOUCHED.
+      #
+      # Five unchanged coverage tables on every pull request is noise, and noise
+      # is how a real drop gets scrolled past. A workspace is in scope when its
+      # own directory changed, or when the thing that decides the floors did.
+      #
+      # Plain `git diff`, not a third-party action: one less thing with write
+      # access to pull requests, and the rule stays readable.
+      - name: Is this workspace in scope?
+        id: scope
+        run: |
+          base="origin/${{ github.base_ref || 'main' }}"
+          git fetch --depth=1 origin "${{ github.base_ref || 'main' }}" >/dev/null 2>&1 || true
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "in-scope=true" >> "$GITHUB_OUTPUT"
+            echo "Not a pull request — running."
+          elif ! git diff --quiet "$base"...HEAD -- \
+                 "${{ matrix.directory }}" .github/workflows/ci.yml; then
+            echo "in-scope=true" >> "$GITHUB_OUTPUT"
+            echo "${{ matrix.directory }} changed on this branch — running."
+          else
+            echo "in-scope=false" >> "$GITHUB_OUTPUT"
+            echo "${{ matrix.directory }} is untouched on this branch — skipping."
+          fi
+
       - name: Install dependencies
+        if: steps.scope.outputs.in-scope == 'true'
         run: pnpm install --no-frozen-lockfile
 
       # Fails the shard when any floor in that workspace is breached.
       - name: Run coverage against the floors
+        if: steps.scope.outputs.in-scope == 'true'
         run: pnpm --filter ${{ matrix.workspace }} test:coverage
 
       # PINNED TO A COMMIT, NOT A TAG. `@v2` is mutable — whoever owns the
@@ -459,6 +490,7 @@ jobs:
         if: >-
           always() && github.event_name == 'pull_request'
           && github.event.pull_request.head.repo.full_name == github.repository
+          && steps.scope.outputs.in-scope == 'true'
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
           name: ${{ matrix.label }}
