@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { neonConfig, Pool } from "@neondatabase/serverless";
 
+// THE 5-SECOND DEFAULT IS NOT ENOUGH FOR THIS FILE, and the reason is the
+// `freshIndex()` below rather than anything the tests do.
+//
+// `vi.resetModules()` means the first case pays a COLD import of ../index —
+// drizzle-orm, @neondatabase/serverless, ws, and the ~2,000-line schema — and
+// that cost lands on whichever test runs first rather than being amortised.
+// Locally the whole file is 1.1 s with 48 ms of imports; on a GitHub runner
+// with a cold filesystem cache the first case measured 5,061 ms against the
+// 5,000 ms default and failed the gate (run 30939100814, 4 Aug 2026), while
+// the same suite passed under `test:coverage` in the same push. A limit a
+// slower runner crosses at random is a flake, not a gate.
+//
+// Scoped to this file on purpose. Raising `testTimeout` in vitest.config.ts
+// would hide a genuine hang in every other db suite.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 // index.ts keeps a PROCESS-WIDE local read pool in module state, so every case
 // here re-imports the module fresh. Without that, "the pool is reused" and "a
 // fresh env picks a different driver" would fight each other depending on order.
