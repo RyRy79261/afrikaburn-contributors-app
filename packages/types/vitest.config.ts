@@ -8,16 +8,21 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "json"],
       reportOnFailure: true,
-      // Count every source file, not only the ones a test imports.
+      // Count every source file, not only the ones a test imports. Nothing is
+      // excluded beyond the tests themselves: src/index.ts is a pure barrel
+      // re-export, but v8 reports it as 0/0 on all four metrics, so leaving it
+      // in neither helps nor hurts and keeps this glob honest.
       include: ["src/**/*.ts"],
       exclude: ["**/__tests__/**", "**/*.d.ts"],
       // A ratchet, not a target. Raise these as coverage improves; never lower
       // one to make a build pass — the drop is the signal.
+      // Measured at 100/100/100/100 (Aug 2026); floors sit ~3 points under so
+      // ordinary refactoring has room without the gate going soft.
       thresholds: {
-        lines: 43,
-        statements: 39,
-        functions: 9,
-        branches: 4,
+        lines: 97,
+        statements: 97,
+        functions: 97,
+        branches: 97,
       },
     },
   },
