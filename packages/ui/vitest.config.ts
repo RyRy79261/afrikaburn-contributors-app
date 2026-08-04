@@ -17,15 +17,28 @@ export default defineConfig({
       // A ratchet, not a target. Raise it as coverage improves; never lower it
       // to make a build pass — the drop is the signal.
       //
-      // About half this package is dark to vitest: components are also rendered
-      // by the browser in the e2e personas, which contribute nothing here. What
-      // the floor is good for is the direction of travel — a new component
-      // without a DOM test drops the number, which is the correct signal.
+      // NOTHING IS EXCLUDED beyond tests and type declarations, deliberately.
+      // Narrowing `include` to the files a test happens to reach would shrink
+      // the denominator rather than measure anything, and this package contains
+      // no file in the legitimate "executing it proves nothing" category — no
+      // barrel (package.json exports point at source files directly), no
+      // generated code, no bare schema literal. The one config-literal file,
+      // components/markdown-editor/extensions.ts, is already at 100% because
+      // markdown.ts imports it, so removing it would only cost denominator.
+      //
+      // Measured 2026-08-04, whole package: statements 91.92 (967/1052),
+      // branches 87.59 (819/935), functions 86.33 (278/322), lines 92.65
+      // (908/980). Floors sit ~3 points under that so ordinary work has room.
+      //
+      // Still dark on purpose, and cheap to see in the report: accordion.tsx and
+      // tabs.tsx are Radix re-exports whose forwardRefs only merge a className
+      // (v8 records zero branches in either), and client-error-capture.tsx is a
+      // one-line effect wrapper around lib/client-errors.ts, which is at 96%.
       thresholds: {
-        lines: 36,
-        statements: 35,
-        functions: 33,
-        branches: 32,
+        lines: 89,
+        statements: 88,
+        functions: 83,
+        branches: 84,
       },
     },
     setupFiles: ["./vitest.setup.ts"],
