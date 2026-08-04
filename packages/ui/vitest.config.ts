@@ -7,6 +7,24 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
+
+    // 5 SECONDS IS NOT A HANG DETECTOR FOR A JSDOM SUITE ON A 2-CORE RUNNER.
+    //
+    // Measured on run 30939995495 (4 Aug 2026): phone-input's typing case timed
+    // out at the 5,000 ms default in the `ci` job — while the SAME suite passed
+    // in its own `coverage · @quagga/ui` shard in the same push. That asymmetry
+    // is the whole diagnosis: the coverage matrix gives each workspace a runner
+    // to itself, and `ci` runs `turbo run test` across all eight at once. Under
+    // that contention a case that renders a React tree ten times (one
+    // fireEvent.change per typed character, through react-phone-number-input)
+    // legitimately crosses five seconds.
+    //
+    // For scale: this suite spends 28 s in tests and 43 s in environment setup
+    // locally, and 81 s / 102 s on the runner. A limit inside that noise fails
+    // at random, and a gate that fails at random is a gate people learn to
+    // re-run rather than read.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary", "json"],
