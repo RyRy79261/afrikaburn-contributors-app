@@ -338,10 +338,32 @@ jobs:
   # One shard per workspace, so a breach names the workspace in the checks list
   # rather than making somebody open a log to find out which one moved.
   #
-  # READ THE APP NUMBERS CORRECTLY. `apps/*` count `lib/**` only — server
-  # actions, queries and stores. Their routes and components are covered by the
-  # Playwright personas, so a low percentage here is a statement about unit
-  # tests, not about whether the app is tested.
+  # WHY THE THREE APPS ARE NOT IN THIS MATRIX.
+  #
+  # Vitest measures only what runs inside the vitest process. The persona suite
+  # drives real browsers against `next dev` / `next start` in separate
+  # processes with no instrumentation, so all 165 e2e tests contribute ZERO to
+  # any number here. Measured, not assumed — the share of each workspace that
+  # NO unit test touches at all:
+  #
+  #   core  4%    auth 0%    types 0%  |  ui 52%   db 36%
+  #   web  96%    suppliers 91%           org 85%
+  #
+  # A ratchet is worth having when the number moves for the right reason. Add
+  # an untested component to `ui` and the percentage drops — correct signal.
+  # Add an untested query to `apps/org` and it barely moves, because 85% of
+  # that workspace is already dark to vitest by design: pages, RSC and server
+  # actions are tested through the browser, not through vitest.
+  #
+  # So the apps get no floor and no report. Their gate is the e2e matrix above,
+  # which already blocks the merge. A 3% badge on `apps/web` would not measure
+  # quality — it would measure how much of the app happens to have a unit test,
+  # and invite somebody to "fix" it with tests nobody needs.
+  #
+  # To make an app number mean "tested", collect V8 coverage from the Next
+  # server during the e2e run (`NODE_V8_COVERAGE` on the app process, flushed
+  # on clean shutdown, source-mapped back through `.next`) and merge it with
+  # this. That is a real piece of work, and it is the only honest route to it.
   #
   # It does NOT gate `CI pass`. The floors already fail the job; making the
   # merge gate depend on a comment-posting step as well would let a flaky
@@ -360,21 +382,20 @@ jobs:
       matrix:
         include:
           - workspace: "@quagga/core"
+            label: "@quagga/core"
             directory: packages/core
           - workspace: "@quagga/ui"
+            label: "@quagga/ui"
             directory: packages/ui
           - workspace: "@quagga/auth"
+            label: "@quagga/auth"
             directory: packages/auth
           - workspace: "@quagga/db"
+            label: "@quagga/db"
             directory: packages/db
           - workspace: "@quagga/types"
+            label: "@quagga/types"
             directory: packages/types
-          - workspace: "@quagga/web"
-            directory: apps/web
-          - workspace: "@quagga/org"
-            directory: apps/org
-          - workspace: "@quagga/suppliers"
-            directory: apps/suppliers
     steps:
       - uses: actions/checkout@v4
 
@@ -407,7 +428,7 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
-          name: ${{ matrix.workspace }}
+          name: ${{ matrix.label }}
           working-directory: ${{ matrix.directory }}
           file-coverage-mode: changes
 
