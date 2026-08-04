@@ -48,18 +48,20 @@ export default defineConfig({
       // one to make a build pass — the drop is the signal, and lowering the
       // floor deletes it.
       //
-      // The globals sit a few points under what was measured when they were
-      // written (87.3 / 86.7 / 87.8 / 80.0), following the packages/core
-      // convention, so ordinary work has room without the gate going quiet.
-      // `questionnaire-store.ts` and `project-registration-store.ts` are the
-      // two files still at zero and are what the headroom is mostly made of —
-      // they are deliberately IN the include, so their gap counts against
-      // these numbers rather than being hidden by narrowing the scope.
+      // The globals sit a few points under a MEASURED run (97.71 lines / 96.81
+      // statements / 96.93 functions / 90.89 branches), following the
+      // packages/core convention, so ordinary work has room without the gate
+      // going quiet.
+      //
+      // `questionnaire-store.ts` and `project-registration-store.ts` were the
+      // two files at zero when these floors were first written, and were what
+      // the old headroom was made of. Both are now covered, which is where most
+      // of the ten-point jump came from.
       thresholds: {
-        lines: 84,
-        statements: 84,
-        functions: 85,
-        branches: 77,
+        lines: 94,
+        statements: 93,
+        functions: 93,
+        branches: 87,
 
         // THE TWO FILES THAT DECIDE WHO SEES A MEDICAL NOTE AND WHAT GETS
         // ERASED — held at what they achieve today, per-file, the way
