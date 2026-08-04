@@ -329,6 +329,56 @@ jobs:
   # SKIPPED when an upstream job fails, and a skipped required check does not
   # block a merge — the gate would pass by not running, which is precisely
   # backwards.
+  # COVERAGE, AS A RATCHET RATHER THAN A NUMBER ON A BADGE.
+  #
+  # The floors live in `packages/core/vitest.config.ts`, not here, so they are
+  # enforced identically by `pnpm test:coverage` on a laptop and by this job.
+  # Ported from RyRy79261/intake-tracker, which runs the same shape.
+  #
+  # `@quagga/core` and nothing else, deliberately: it holds every authz,
+  # privacy, consent and entitlement predicate the three apps read, it is pure
+  # (no database, no network), and a regression in it is invisible until it is a
+  # privacy incident. The per-file floors on the safety core sit at 100%.
+  #
+  # It does NOT gate `CI pass`. The floors already fail the job; making the
+  # merge gate depend on a coverage report as well would mean a flaky comment
+  # step could block a green branch. The number is advisory, the floors are not.
+  coverage:
+    name: coverage · @quagga/core
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # Fails the job when any global or per-file floor is breached.
+      - name: Run coverage against the floors
+        run: pnpm test:coverage
+
+      # Posts/updates one comment with the table. `always()` so the numbers are
+      # still visible on the run that broke a floor — that is when they matter.
+      - name: Report coverage on the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: packages/core
+          file-coverage-mode: changes
+
   ci-pass:
     name: CI pass
     if: always()
