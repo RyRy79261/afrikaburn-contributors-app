@@ -110,7 +110,18 @@ export {
   type MigrationPlan,
 } from "./migration-plan";
 
-async function main(): Promise<void> {
+/**
+ * The whole deploy-time run: plan, lock, migrate, bootstrap-or-repair.
+ *
+ * EXPORTED ONLY SO IT CAN BE DRIVEN BY A TEST. Nothing imports it — the build
+ * still invokes this module as a script (see `invokedDirectly` at the bottom),
+ * and `@quagga/db`'s index deliberately does not re-export it. The pure
+ * planners moved to `./migration-plan` for the same reason: what a test can
+ * reach, it can check. What it cannot reach here is the advisory lock's
+ * SEMANTICS — that two concurrent builders actually serialise — which needs two
+ * live Postgres sessions and is out of scope for a unit suite.
+ */
+export async function runDeployMigrations(): Promise<void> {
   const plan = planMigration();
 
   if (plan.kind === "skip") {
@@ -262,7 +273,7 @@ const invokedDirectly =
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
-  main().catch((err) => {
+  runDeployMigrations().catch((err) => {
     console.error("[migrate] failed:", err);
     process.exitCode = 1;
   });
