@@ -23,7 +23,9 @@ export function RegistrationsChart({ points }: { points: SeriesPoint[] }) {
     x: i * step,
     y: PAD_TOP + plotH - (p.count / max) * plotH,
   }));
-  const line = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const line = coords
+    .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(" ");
   const area = `${coords[0]!.x},${H} ${line} ${coords[coords.length - 1]!.x},${H}`;
   const total = points.reduce((sum, p) => sum + p.count, 0);
   const span = `${points[0]!.label} – ${points[points.length - 1]!.label}`;

@@ -318,7 +318,13 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
       attendedYears: ["2019", "2023", "2024", "2026"],
     });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.responses.attendedYears).toEqual(["2019", "2023", "2024", "2026"]);
+    if (r.ok)
+      expect(r.responses.attendedYears).toEqual([
+        "2019",
+        "2023",
+        "2024",
+        "2026",
+      ]);
   });
 
   it("rejects 2020 and 2021 — no burn was held", () => {
@@ -355,7 +361,15 @@ describe("attended-years validation (2020/21 rejection + range)", () => {
 describe("parseAttendedYears", () => {
   it("keeps valid years, drops invalid, dedupes and sorts ascending", () => {
     expect(
-      parseAttendedYears(["2024", "2019", "2019", "2020", "1990", "2027", "2026"]),
+      parseAttendedYears([
+        "2024",
+        "2019",
+        "2019",
+        "2020",
+        "1990",
+        "2027",
+        "2026",
+      ]),
     ).toEqual([2019, 2024, 2026]);
   });
 

@@ -27,11 +27,15 @@ test.describe("supplier self-registration", () => {
     // heading proves the supplier row + onboarding seed actually persisted — not
     // merely that the form submitted.
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
 
     // Registration form is step 1 and is auto-completed by registering: 1/7.
-    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
+    await expect(
+      suppliersPage.getByText(/1 of 7 steps complete/i),
+    ).toBeVisible();
     const regCard = suppliersPage
       .getByRole("listitem")
       .filter({ hasText: "Registration form" });
@@ -60,12 +64,8 @@ test.describe("supplier self-registration", () => {
 
     // Exactly one password field, and never a "confirm password" (NIST SP
     // 800-63B-4 forbids the confirm-twice pattern — docs/accounts-security-spec.md).
-    await expect(
-      suppliersPage.getByLabel(/^Password/),
-    ).toBeVisible();
-    await expect(
-      suppliersPage.getByLabel(/confirm password/i),
-    ).toHaveCount(0);
+    await expect(suppliersPage.getByLabel(/^Password/)).toBeVisible();
+    await expect(suppliersPage.getByLabel(/confirm password/i)).toHaveCount(0);
 
     // The create-account button stays disabled until every required field AND the
     // acknowledgement are satisfied — the acknowledgement is a real gate, not
@@ -100,7 +100,9 @@ test.describe("supplier self-registration", () => {
       category: "Transport",
     });
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
 
     await signOut(suppliersPage);
@@ -108,8 +110,12 @@ test.describe("supplier self-registration", () => {
     // (callbackURL) with the persisted 1/7 progress intact.
     await signInAs(suppliersPage, account, "suppliers");
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
-    await expect(suppliersPage.getByText(/1 of 7 steps complete/i)).toBeVisible();
+    await expect(
+      suppliersPage.getByText(/1 of 7 steps complete/i),
+    ).toBeVisible();
   });
 });

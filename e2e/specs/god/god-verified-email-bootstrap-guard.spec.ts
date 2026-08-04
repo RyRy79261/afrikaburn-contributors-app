@@ -74,9 +74,7 @@ test.describe("god verified-email bootstrap guard", () => {
     // same selectors as apps/web/components/auth/auth-form.tsx; mail-off path so
     // sign-up auto-signs-in.
     await webPage.goto("/auth/sign-up");
-    await expect(
-      webPage.getByLabel("Email", { exact: true }),
-    ).toBeVisible();
+    await expect(webPage.getByLabel("Email", { exact: true })).toBeVisible();
     await webPage.getByLabel("Email", { exact: true }).fill(email);
     await webPage.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await webPage.getByRole("button", { name: "Create account" }).click();

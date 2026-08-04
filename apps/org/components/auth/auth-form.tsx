@@ -167,8 +167,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           {isSignUp ? "Create your console account" : "Organiser sign-in"}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Restricted to AfrikaBurn org staff. Access is granted by your role, not
-          by signing in.
+          Restricted to AfrikaBurn org staff. Access is granted by your role,
+          not by signing in.
         </p>
       </div>
 

@@ -4,8 +4,11 @@ import {
   Skeleton,
   SkeletonCard,
   SkeletonCardGrid,
+  SkeletonField,
+  SkeletonForm,
   SkeletonRegion,
   SkeletonRow,
+  SkeletonStats,
   SkeletonTable,
   SkeletonText,
 } from "../skeleton";
@@ -99,5 +102,60 @@ describe("shape primitives", () => {
     const grid = container.firstElementChild as HTMLElement;
     expect(grid.className).toBe("grid gap-4 sm:grid-cols-2 lg:grid-cols-3");
     expect(grid.children).toHaveLength(2);
+  });
+});
+
+describe("the composed shapes", () => {
+  // The kit's whole justification is that a boundary shows the DESTINATION's
+  // shape, so the counts ARE the behaviour: a stats strip that renders three
+  // tiles in front of a four-tile dashboard makes the page jump on arrival.
+
+  it("SkeletonStats renders one tile per stat, four by default", () => {
+    const { container, rerender } = render(<SkeletonStats />);
+    // 4 tiles × (label bar + value bar).
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(8);
+
+    rerender(<SkeletonStats count={3} />);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(6);
+  });
+
+  it("SkeletonCardGrid defaults to six cards of two lines each", () => {
+    const { container } = render(<SkeletonCardGrid />);
+    // 6 cards × (1 title bar + 2 text bars).
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(18);
+    expect(container.firstElementChild?.children).toHaveLength(6);
+  });
+
+  it("SkeletonField renders a label bar above an input bar", () => {
+    const { container } = render(<SkeletonField />);
+    const bars = [...container.querySelectorAll(".animate-pulse")];
+    expect(bars).toHaveLength(2);
+    // Short label, full-width control — the shape of every field in the apps.
+    expect(bars[0]?.className).toContain("w-28");
+    expect(bars[1]?.className).toContain("w-full");
+  });
+
+  it("SkeletonForm renders its fields plus one submit-button placeholder", () => {
+    const { container, rerender } = render(<SkeletonForm />);
+    // 4 fields × 2 bars + 1 button bar.
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(9);
+
+    rerender(<SkeletonForm fields={2} />);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(5);
+  });
+
+  it("keeps every pulse block out of the accessibility tree", () => {
+    const { container } = render(
+      <SkeletonRegion>
+        <SkeletonStats count={2} />
+        <SkeletonForm fields={2} />
+      </SkeletonRegion>,
+    );
+    const bars = [...container.querySelectorAll(".animate-pulse")];
+    expect(bars.length).toBeGreaterThan(0);
+    for (const bar of bars)
+      expect(bar.getAttribute("aria-hidden")).toBe("true");
+    // One announcement per boundary, not one per bar.
+    expect(container.querySelectorAll(".sr-only")).toHaveLength(1);
   });
 });

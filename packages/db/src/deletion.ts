@@ -16,10 +16,7 @@
 // separate strings told them to do was irreversibly erased on day 14.
 
 import { and, desc, eq } from "drizzle-orm";
-import {
-  canCancelDeletion,
-  deletionCancelledNotification,
-} from "@quagga/core";
+import { canCancelDeletion, deletionCancelledNotification } from "@quagga/core";
 import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 

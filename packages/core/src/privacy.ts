@@ -71,7 +71,9 @@ export const ALWAYS_PRIVATE_FIELDS = [
 
 export type AlwaysPrivateField = (typeof ALWAYS_PRIVATE_FIELDS)[number];
 
-const HARD_LOCKED_SET: ReadonlySet<string> = new Set(HARD_LOCKED_PRIVATE_FIELDS);
+const HARD_LOCKED_SET: ReadonlySet<string> = new Set(
+  HARD_LOCKED_PRIVATE_FIELDS,
+);
 const SAFETY_VISIBLE_SET: ReadonlySet<string> = new Set(SAFETY_VISIBLE_FIELDS);
 const ALWAYS_PRIVATE_SET: ReadonlySet<string> = new Set(ALWAYS_PRIVATE_FIELDS);
 

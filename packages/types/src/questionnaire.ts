@@ -365,7 +365,10 @@ export const ImageBlock = z.object({
 });
 export type ImageBlock = z.infer<typeof ImageBlock>;
 
-export const ContentBlock = z.discriminatedUnion("kind", [InfoBlock, ImageBlock]);
+export const ContentBlock = z.discriminatedUnion("kind", [
+  InfoBlock,
+  ImageBlock,
+]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 
 /** Anything that can sit in a page's block list — a question or a content
@@ -609,8 +612,7 @@ export function validateOne(
       if (typeof raw !== "string")
         return { ok: false, error: "Expected a choice" };
       if (isOtherAnswer(raw)) {
-        if (!q.allowOther)
-          return { ok: false, error: "Not a valid option" };
+        if (!q.allowOther) return { ok: false, error: "Not a valid option" };
         if (otherAnswerText(raw).trim() === "")
           return { ok: false, error: "Tell us what your 'other' answer is" };
         return { ok: true, value: raw };
@@ -653,7 +655,10 @@ export function validateOne(
       if (typeof raw === "boolean" || !Number.isInteger(n))
         return { ok: false, error: "Pick a value on the scale" };
       if (n < q.min || n > q.max)
-        return { ok: false, error: `Pick a value between ${q.min} and ${q.max}` };
+        return {
+          ok: false,
+          error: `Pick a value between ${q.min} and ${q.max}`,
+        };
       return { ok: true, value: n };
     }
     case "rating": {
@@ -667,14 +672,17 @@ export function validateOne(
     case "time": {
       if (typeof raw !== "string")
         return { ok: false, error: "Expected a time" };
-      if (!TIME_RE.test(raw))
-        return { ok: false, error: "Use 24-hour hh:mm" };
+      if (!TIME_RE.test(raw)) return { ok: false, error: "Use 24-hour hh:mm" };
       return { ok: true, value: raw };
     }
     case "file_link": {
-      if (typeof raw !== "string") return { ok: false, error: "Expected a link" };
+      if (typeof raw !== "string")
+        return { ok: false, error: "Expected a link" };
       if (!URL_RE.test(raw.trim()))
-        return { ok: false, error: "Enter a link starting with http:// or https://" };
+        return {
+          ok: false,
+          error: "Enter a link starting with http:// or https://",
+        };
       return { ok: true, value: raw.trim() };
     }
     case "multi_choice_grid":

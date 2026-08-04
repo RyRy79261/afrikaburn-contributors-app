@@ -55,7 +55,10 @@ export function QuiltBand({
               points="15,0 20,5 15,10 10,5"
               fill="var(--color-ab-apricot)"
             />
-            <polygon points="25,0 30,5 25,10 20,5" fill="var(--color-ab-sage)" />
+            <polygon
+              points="25,0 30,5 25,10 20,5"
+              fill="var(--color-ab-sage)"
+            />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill={`url(#${patternId})`} />

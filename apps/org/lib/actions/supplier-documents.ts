@@ -42,7 +42,9 @@ import { runAction, type ActionResult } from "./result";
  * not be rolled back over an inbox write. Unclaimed listings (no linked account)
  * have nobody to notify.
  */
-async function notifyReopened(reopened: readonly ReopenedStep[]): Promise<void> {
+async function notifyReopened(
+  reopened: readonly ReopenedStep[],
+): Promise<void> {
   const rows = reopened
     .filter((r): r is ReopenedStep & { userId: string } => r.userId !== null)
     .map((r) => ({
@@ -126,12 +128,7 @@ export async function createSupplierDocument(
       // in the same transaction, is what stops the console reporting them as
       // signed for a document they have never seen.
       reopened = (
-        await reconcileEditionSupplierSteps(
-          tx,
-          editionId,
-          [],
-          session.dbUserId,
-        )
+        await reconcileEditionSupplierSteps(tx, editionId, [], session.dbUserId)
       ).reopened;
     });
 
@@ -337,9 +334,9 @@ export async function listSupplierDocuments(
 ): Promise<OrgSupplierDocumentRow[]> {
   // A read: every rank sees the document list (it is org content, not a person).
   await requireOrgSession({
-      capability: "read",
-      domain: "supplier_documents",
-    });
+    capability: "read",
+    domain: "supplier_documents",
+  });
   const db = getDb();
   const rows = await db
     .select({

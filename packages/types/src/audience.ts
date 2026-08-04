@@ -95,14 +95,16 @@ export const OrgOfficerAudience = z.object({
 export type OrgOfficerAudience = z.infer<typeof OrgOfficerAudience>;
 
 /** Human labels for officer audience selectors ("All registered X"). */
-export const OFFICER_AUDIENCE_LABELS: Record<z.infer<typeof OfficerKey>, string> =
-  {
-    lnt_officer: "All registered LNT Leads",
-    safety_officer: "All registered Safety Officers",
-    fire_safety_officer: "All registered Safety Barons",
-    sound_officer: "All registered Sound Officers",
-    safety_monitor: "All registered Safety Monitors",
-  };
+export const OFFICER_AUDIENCE_LABELS: Record<
+  z.infer<typeof OfficerKey>,
+  string
+> = {
+  lnt_officer: "All registered LNT Leads",
+  safety_officer: "All registered Safety Officers",
+  fire_safety_officer: "All registered Safety Barons",
+  sound_officer: "All registered Sound Officers",
+  safety_monitor: "All registered Safety Monitors",
+};
 
 /**
  * Org SUPPLIERS audience (notifications-spec §"Audiences"; design frame `U8CqE`

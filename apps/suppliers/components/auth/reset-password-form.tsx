@@ -27,8 +27,8 @@ function MissingToken() {
           This link isn&rsquo;t usable
         </h1>
         <p className="text-sm text-muted-foreground">
-          Reset links carry a single-use token. This one arrived without one — it
-          may have been truncated by your email client, or already used.
+          Reset links carry a single-use token. This one arrived without one —
+          it may have been truncated by your email client, or already used.
         </p>
       </div>
       <Button asChild>
@@ -70,7 +70,9 @@ function ResetForm({ token }: { token: string }) {
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           Set a new password
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">Choose a new password</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Choose a new password
+        </h1>
         <p className="text-sm text-muted-foreground">
           Almost done — pick something long and memorable. This link works once.
         </p>
@@ -104,8 +106,8 @@ function ResetForm({ token }: { token: string }) {
       </Button>
 
       <p className="text-xs text-muted-foreground">
-        This signs you out everywhere — you&rsquo;ll re-enter your new password on
-        each device.
+        This signs you out everywhere — you&rsquo;ll re-enter your new password
+        on each device.
       </p>
     </form>
   );

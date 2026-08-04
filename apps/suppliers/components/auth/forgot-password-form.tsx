@@ -27,7 +27,10 @@ export function ForgotPasswordForm() {
         redirectTo: "/auth/reset-password",
       });
       if (result.ok) {
-        setSent(result.message ?? "If that account exists, we've emailed it a reset link.");
+        setSent(
+          result.message ??
+            "If that account exists, we've emailed it a reset link.",
+        );
       } else {
         setError(result.error);
       }
@@ -41,7 +44,9 @@ export function ForgotPasswordForm() {
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             Check your inbox
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Reset link sent</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Reset link sent
+          </h1>
         </div>
         <p className="text-sm text-muted-foreground">{sent}</p>
         <Button variant="outline" asChild>
@@ -57,7 +62,9 @@ export function ForgotPasswordForm() {
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           Account recovery
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">Forgot your password?</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Forgot your password?
+        </h1>
         <p className="text-sm text-muted-foreground">
           Enter your account email and we&rsquo;ll send a single-use reset link.
         </p>
@@ -89,7 +96,10 @@ export function ForgotPasswordForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Remembered it?{" "}
-        <Link href="/signin" className="font-medium text-primary underline-offset-4 hover:underline">
+        <Link
+          href="/signin"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
           Back to sign in
         </Link>
       </p>

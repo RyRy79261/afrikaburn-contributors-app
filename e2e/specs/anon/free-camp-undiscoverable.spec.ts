@@ -29,9 +29,7 @@ test.describe("anonymous visitor — free camps are undiscoverable", () => {
     // The MEMBER (lead) DOES find it by name — proves the camp exists and is
     // name-matchable, so the stranger's miss below is the filter, not a typo.
     await webPage.goto(`/directory?q=${encodeURIComponent(camp.name)}`);
-    await expect(
-      webPage.getByRole("link", { name: camp.name }),
-    ).toBeVisible();
+    await expect(webPage.getByRole("link", { name: camp.name })).toBeVisible();
 
     // The STRANGER (fresh context, no session) searching the SAME name finds
     // nothing — the server excludes free camps from non-member results.
@@ -79,8 +77,6 @@ test.describe("anonymous visitor — free camps are undiscoverable", () => {
       `/camps/definitely-not-a-real-camp-${Date.now().toString(36)}`,
     );
     await expect(anon.getByText(/^members \(/i)).toHaveCount(0);
-    await expect(
-      anon.getByRole("link", { name: /invite/i }),
-    ).toHaveCount(0);
+    await expect(anon.getByRole("link", { name: /invite/i })).toHaveCount(0);
   });
 });

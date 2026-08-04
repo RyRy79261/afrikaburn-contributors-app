@@ -491,8 +491,8 @@ function AgreementStep({ step }: { step: StepData }) {
           ) : (
             <>
               I agree to the AfrikaBurn Supplier Agreement as the Supplier Team
-              has provided it to me, and I understand my deposit is refunded only
-              on full compliance with it.
+              has provided it to me, and I understand my deposit is refunded
+              only on full compliance with it.
             </>
           )}
         </span>

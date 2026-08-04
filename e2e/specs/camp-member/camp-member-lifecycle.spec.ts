@@ -53,9 +53,7 @@ test.describe("camp member — lifecycle", () => {
     await expect(memberPage.getByText(leadName)).toBeVisible();
     await expect(memberPage.getByText(memberName)).toBeVisible();
     await expect(memberPage.getByText("Lead", { exact: true })).toBeVisible();
-    await expect(
-      memberPage.getByText("Member", { exact: true }),
-    ).toBeVisible();
+    await expect(memberPage.getByText("Member", { exact: true })).toBeVisible();
   });
 
   test("the member's dashboard is read-only — no lead-only management surfaces render", async ({
@@ -120,20 +118,24 @@ test.describe("camp member — lifecycle", () => {
 
     // The lead sends a one-question, NON-blocking questionnaire to everyone.
     const title = uniqueName("Build-week shift preferences");
-    const prompt = uniqueName("Which build days can you make it? (camp-member-e2e)");
+    const prompt = uniqueName(
+      "Which build days can you make it? (camp-member-e2e)",
+    );
     const answer = "Wednesday and Thursday.";
-    const { activationId } = await authorCampQuestionnaire(leadPage, camp.slug, {
-      title,
-      prompt,
-      blocking: false,
-    });
+    const { activationId } = await authorCampQuestionnaire(
+      leadPage,
+      camp.slug,
+      {
+        title,
+        prompt,
+        blocking: false,
+      },
+    );
 
     // The member sees it as a pending questionnaire on their dashboard and opens
     // it via the card's "Answer" action.
     await memberPage.goto(`/camps/${camp.slug}`);
-    await expect(
-      memberPage.getByText(/pending questionnaires/i),
-    ).toBeVisible();
+    await expect(memberPage.getByText(/pending questionnaires/i)).toBeVisible();
     await expect(memberPage.getByText(title)).toBeVisible();
     await memberPage.getByRole("link", { name: /^answer$/i }).click();
     await memberPage.waitForURL(`**/questionnaires/${activationId}`);
@@ -151,9 +153,7 @@ test.describe("camp member — lifecycle", () => {
     // Re-opening shows the terminal "already submitted" state — the response
     // persisted server-side, not just in the client.
     await memberPage.goto(`/questionnaires/${activationId}`);
-    await expect(
-      memberPage.getByText(/already submitted/i),
-    ).toBeVisible();
+    await expect(memberPage.getByText(/already submitted/i)).toBeVisible();
 
     // And the lead's results view aggregates it: 1 of 2 recipients complete
     // (audience "everyone" = lead + member; only the member answered).

@@ -186,7 +186,9 @@ describe("LOCKOUT SCENARIO 2: the sole System manager cannot be removed or demot
     // The WHERE reuses the role just proved not to be `god`, so even a race
     // cannot turn this into a god deletion.
     const body = functionBody(accounts, "setOrgStaffRole");
-    expect(body).toContain('eq(schema.memberships.role, existing?.role ?? "org_staff")');
+    expect(body).toContain(
+      'eq(schema.memberships.role, existing?.role ?? "org_staff")',
+    );
   });
 
   it("nobody can change their own access, including a System manager", () => {
@@ -225,7 +227,9 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
     expect(guard).toContain("isSystemManager(state.actor)");
     expect(guard).toContain("throw new Error");
     // `isSystemManager` reads `rank`, which comes from `memberships.role`.
-    expect(source("lib/session.ts")).toContain("orgRankFromRole(membership?.role)");
+    expect(source("lib/session.ts")).toContain(
+      "orgRankFromRole(membership?.role)",
+    );
   });
 
   it("the roles PAGE decides `canManage` from the anchor, not a capability", () => {
@@ -233,13 +237,15 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
     // Reading the model is the system panel's own capability; CHANGING it is
     // the anchor, and `canManage` is the only thing the client component is
     // told. A capability here would be grantable, which is the whole hazard.
-    expect(page).toContain('runsDeployment(session.actor)');
+    expect(page).toContain("runsDeployment(session.actor)");
     expect(page).toContain("const canManage = isSystemManager(session.actor)");
     expect(page).toContain("canManage={canManage}");
     // A refusal, not a notFound(): hiding teaches nobody the rule. (The words
     // appear in the page's own comment explaining exactly that, so the check is
     // for the IMPORT — you cannot call what you never brought in.)
-    expect(page).not.toMatch(/import[\s\S]*notFound[\s\S]*from "next\/navigation"/);
+    expect(page).not.toMatch(
+      /import[\s\S]*notFound[\s\S]*from "next\/navigation"/,
+    );
   });
 
   it("the people a deletion would strip are not fetched for a mere reader", () => {
@@ -249,7 +255,9 @@ describe("LOCKOUT SCENARIO 3: only a System manager manages departments, roles a
     // skips the values (a skipped value still ships in the RSC payload).
     const page = source("app/(console)/system/roles/page.tsx");
     expect(page).toContain("canManage");
-    expect(page).toContain("getOrgRoleImpacts(session.orgGroupId, session.actor)");
+    expect(page).toContain(
+      "getOrgRoleImpacts(session.orgGroupId, session.actor)",
+    );
     expect(page).toContain("Promise.resolve(null)");
     // …and the query refuses on its own, before the select, so a page that
     // forgot the gate leaks nothing (queries.ts `getOrgRoleImpacts`).
@@ -359,7 +367,9 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
       "orgCanInDomain(state.actor, options.capability, options.domain)",
     );
     // …and the domain is MANDATORY in the type, so a guard cannot omit it.
-    expect(session).toMatch(/capability: OrgCapability;[\s\S]{0,1200}domain: OrgDomain;/);
+    expect(session).toMatch(
+      /capability: OrgCapability;[\s\S]{0,1200}domain: OrgDomain;/,
+    );
 
     const suppliersLead: OrgActor = {
       rank: "org_staff",
@@ -373,7 +383,8 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
           departmentId: SUPPLIERS,
           permissions: {
             read: true,
-            create: true, update: true,
+            create: true,
+            update: true,
             delete: true,
             personal_information: true,
           },
@@ -386,7 +397,9 @@ describe("LOCKOUT SCENARIO 4: fail closed — no roles means nothing but the doo
     expect(orgCanInDomain(suppliersLead, "delete", "supplier_documents")).toBe(
       true,
     );
-    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(false);
+    expect(orgCanInDomain(suppliersLead, "delete", "registrations")).toBe(
+      false,
+    );
     expect(orgCanInDomain(suppliersLead, "delete", "bulletins")).toBe(false);
     expect(orgCanInDomain(suppliersLead, "delete", null)).toBe(false);
     expect(orgCanIn(suppliersLead, "delete", CAMPS)).toBe(false);

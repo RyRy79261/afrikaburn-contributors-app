@@ -32,17 +32,19 @@ either fixed or whitelisted-with-reason.
 
 **3. Fix by property, verify by measurement.** Standard cures (history says these
 cover nearly everything):
+
 - auto-width text in a fill column → `textGrowth: fixed-width` + `width: fill_container`
 - fixed desktop widths (tracks, charts, tables) in narrow cards → `fill_container`
 - space_between rows whose two fit-content sides can't fit → stack vertical, or make
   one side `fill_container`
 - a fixed-width sibling starving a column (QR, chart, image) → stack the row vertical
 - never `Move()`; restructure by Insert-new + disable/Delete-old
-Re-run `audit.py <frameId>` after fixing. The finding must be GONE from the output —
-"looks fixed" doesn't count.
+  Re-run `audit.py <frameId>` after fixing. The finding must be GONE from the output —
+  "looks fixed" doesn't count.
 
 **4. Targeted visual pass — only after step 3 is clean.** Math can't see everything:
 missing image fills, contrast, misaligned intent, wrong copy. Rules:
+
 - screenshot **sections** (cards), never whole frames taller than ~1100px
 - you must be able to READ the text in the screenshot; if not, zoom deeper
 - freshly-edited nodes render blank/stale — that's cache lag, not a defect; verify
@@ -51,6 +53,7 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
   verify in situ via the parent
 
 **5. Cross-frame invariants** (run `--all` when touching shared things):
+
 - library components must never contain annotation text (the CHECKED/EMPTY/SELECTED
   tags caused ~60 defects across 20 frames before being disabled at source)
 - content edits go to BOTH of a desktop/mobile pair
@@ -71,7 +74,7 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
 - **A brand-new frame does not settle.** Freshly created nodes come back from
   `snapshot_layout` with a uniform **+50px y bias** (and `space_between` children
   pinned to the container's right edge), and `get_screenshot` / `export_nodes`
-  render them blank — so audit.py reports *hundreds* of phantom V-OVERFLOW and
+  render them blank — so audit.py reports _hundreds_ of phantom V-OVERFLOW and
   OVERLAP defects on a frame that is actually fine. Waiting, resizing, toggling
   layout/theme, Move, forcing a `batch_design` error, screenshotting and
   exporting all fail to clear it.
@@ -83,7 +86,7 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
   existing frame genuinely corrupts that frame's layout in this app (an in-place
   rebuild of one card left it rendering as an empty coloured box — not a
   measurement artefact, a real corruption). The "Insert-new + disable/Delete-old"
-  advice above is for swapping a *leaf*; when a container needs restructuring,
+  advice above is for swapping a _leaf_; when a container needs restructuring,
   rebuild the whole frame and swap it in via the Copy trick.
 - **The canvas is not saved by the MCP tools.** Everything an agent draws lives in
   the Pen app's memory until the app itself writes the file. `git status` showing

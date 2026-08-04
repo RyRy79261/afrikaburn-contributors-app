@@ -44,14 +44,18 @@ describe("canBootstrapGod (regression: verified-email gate)", () => {
   const list = parseGodEmails("dusty.prototype@example.com, playa@example.com");
 
   it("grants only when the email is BOTH listed and verified", () => {
-    expect(canBootstrapGod("dusty.prototype@example.com", true, list)).toBe(true);
+    expect(canBootstrapGod("dusty.prototype@example.com", true, list)).toBe(
+      true,
+    );
     expect(canBootstrapGod("Playa@Example.com", true, list)).toBe(true);
   });
 
   it("refuses a listed but UNVERIFIED email — the elevation exploit", () => {
     // The core of the fix: a matching but unverified address (attacker-asserted
     // OIDC claim, unverified email-change, self-service sign-up) must NOT elevate.
-    expect(canBootstrapGod("dusty.prototype@example.com", false, list)).toBe(false);
+    expect(canBootstrapGod("dusty.prototype@example.com", false, list)).toBe(
+      false,
+    );
     expect(canBootstrapGod("playa@example.com", false, list)).toBe(false);
   });
 

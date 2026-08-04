@@ -32,9 +32,7 @@ test.describe("officer roles cannot be aliased by the camp", () => {
 
     // Officer rows render the FIXED org catalog names (not a camp alias). The
     // badge text is "<emoji><name>", so we match the name as a substring.
-    await expect(
-      webPage.getByText(OFFICER_NAMES.lnt).first(),
-    ).toBeVisible();
+    await expect(webPage.getByText(OFFICER_NAMES.lnt).first()).toBeVisible();
     await expect(
       webPage.getByText(OFFICER_NAMES.fireBaron).first(),
     ).toBeVisible();
@@ -47,9 +45,7 @@ test.describe("officer roles cannot be aliased by the camp", () => {
     // (Radix unmounts closed panels, so with only this row open these are the
     // only role editors in the DOM — a count of zero is a real absence.)
     await expandRow(webPage, new RegExp(OFFICER_NAMES.lnt));
-    await expect(
-      webPage.getByRole("textbox", { name: "Name" }),
-    ).toHaveCount(0);
+    await expect(webPage.getByRole("textbox", { name: "Name" })).toHaveCount(0);
     await expect(
       webPage.getByRole("button", { name: /delete role/i }),
     ).toHaveCount(0);

@@ -42,9 +42,7 @@ test.describe("sole god cannot self-delete", () => {
     await expect(
       webGod.getByRole("heading", { name: /sort this out first/i }),
     ).toBeVisible();
-    await expect(
-      webGod.getByText(/only god administrator/i),
-    ).toBeVisible();
+    await expect(webGod.getByText(/only god administrator/i)).toBeVisible();
 
     // And the request control is disabled, reflecting the block client-side.
     const submit = webGod.getByRole("button", { name: /request deletion/i });
@@ -75,8 +73,6 @@ test.describe("sole god cannot self-delete", () => {
     // The account is NOT scheduled for deletion: no grace-period banner appears
     // (the guard aborted before any deletion request was written).
     await webGod.goto("/account/delete");
-    await expect(
-      webGod.getByText(/scheduled for deletion/i),
-    ).toHaveCount(0);
+    await expect(webGod.getByText(/scheduled for deletion/i)).toHaveCount(0);
   });
 });

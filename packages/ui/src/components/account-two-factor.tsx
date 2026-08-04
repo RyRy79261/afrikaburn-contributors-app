@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import QRCode from "react-qr-code";
-import { ShieldCheck, ShieldQuestion, Copy, Download, Check } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldQuestion,
+  Copy,
+  Download,
+  Check,
+} from "lucide-react";
 import { Badge } from "./badge";
 import { Button } from "./button";
 import {
@@ -112,9 +118,7 @@ export function AccountTwoFactor({
       setError(
         clientErrorMessage(
           err,
-          requiresPassword
-            ? "That password didn't match. Try again."
-            : GENERIC,
+          requiresPassword ? "That password didn't match. Try again." : GENERIC,
         ),
       );
       return;
@@ -132,7 +136,10 @@ export function AccountTwoFactor({
     setPending(false);
     if (err) {
       setError(
-        clientErrorMessage(err, "That code didn't match. Check the app and try again."),
+        clientErrorMessage(
+          err,
+          "That code didn't match. Check the app and try again.",
+        ),
       );
       return;
     }
@@ -216,7 +223,10 @@ export function AccountTwoFactor({
     setPending(false);
     if (err || !data) {
       setError(
-        clientErrorMessage(err, "Couldn't generate new backup codes. Try again."),
+        clientErrorMessage(
+          err,
+          "Couldn't generate new backup codes. Try again.",
+        ),
       );
       return;
     }
@@ -264,8 +274,8 @@ export function AccountTwoFactor({
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
               Add a second step at sign-in. You&rsquo;ll scan a QR code with an
-              authenticator app (Google Authenticator, Aegis, 1Password…) and get
-              backup codes to keep somewhere safe.
+              authenticator app (Google Authenticator, Aegis, 1Password…) and
+              get backup codes to keep somewhere safe.
             </p>
             <div>
               <Button
@@ -283,7 +293,11 @@ export function AccountTwoFactor({
 
         {/* ---- Enrolment: password (if needed) then QR. ---- */}
         {!enabled && open && !totpUri && step === "verify" ? (
-          <form onSubmit={beginEnrol} className="flex flex-col gap-4" noValidate>
+          <form
+            onSubmit={beginEnrol}
+            className="flex flex-col gap-4"
+            noValidate
+          >
             {requiresPassword ? (
               <Field
                 label="Confirm your password"
@@ -399,9 +413,7 @@ export function AccountTwoFactor({
         {open && step === "backup" ? (
           <div className="flex flex-col gap-3">
             <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-              <p className="text-sm font-medium">
-                Save your backup codes now
-              </p>
+              <p className="text-sm font-medium">Save your backup codes now</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Each works once. They&rsquo;re your way in if you lose your
                 authenticator — we can&rsquo;t show them again.
@@ -458,8 +470,8 @@ export function AccountTwoFactor({
         {enabled && !open ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              Two-factor is on. You&rsquo;ll enter a code from your authenticator
-              app each time you sign in on a new device.
+              Two-factor is on. You&rsquo;ll enter a code from your
+              authenticator app each time you sign in on a new device.
             </p>
             {managing === null ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -487,9 +499,14 @@ export function AccountTwoFactor({
             ) : null}
 
             {managing === "disable" ? (
-              <form onSubmit={disable} className="flex flex-col gap-3" noValidate>
+              <form
+                onSubmit={disable}
+                className="flex flex-col gap-3"
+                noValidate
+              >
                 <p className="text-sm text-muted-foreground">
-                  Turning two-factor off makes your account easier to break into.
+                  Turning two-factor off makes your account easier to break
+                  into.
                 </p>
                 {requiresPassword ? (
                   <Field label="Confirm your password" htmlFor="tfa-disable-pw">
@@ -505,7 +522,10 @@ export function AccountTwoFactor({
                   </Field>
                 ) : null}
                 {error ? (
-                  <p role="alert" className="text-sm font-medium text-destructive">
+                  <p
+                    role="alert"
+                    className="text-sm font-medium text-destructive"
+                  >
                     {error}
                   </p>
                 ) : null}
@@ -559,7 +579,10 @@ export function AccountTwoFactor({
                   </Field>
                 ) : null}
                 {error ? (
-                  <p role="alert" className="text-sm font-medium text-destructive">
+                  <p
+                    role="alert"
+                    className="text-sm font-medium text-destructive"
+                  >
                     {error}
                   </p>
                 ) : null}

@@ -11,8 +11,10 @@ import { cn } from "../lib/utils";
 // client parent) to show the ✕, or use <DismissiblePinnedBulletinBanner> which
 // wraps this with the local dismissed state.
 
-export interface PinnedBulletinBannerProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface PinnedBulletinBannerProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   /** Bulletin title / summary line (wraps freely). */
   title: React.ReactNode;
   /** Destination for the "Read →" link (the standalone bulletin page). */

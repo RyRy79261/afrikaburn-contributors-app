@@ -181,7 +181,10 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
               via: "sign_in",
             });
             if (cancelled && email) {
-              await sendAuthEmail(env, { to: email, kind: "deletion-cancelled" });
+              await sendAuthEmail(env, {
+                to: email,
+                kind: "deletion-cancelled",
+              });
             }
           },
         },

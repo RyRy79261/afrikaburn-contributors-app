@@ -37,7 +37,12 @@ async function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
       work,
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`${label} did not answer within ${PROBE_TIMEOUT_MS}ms.`)),
+          () =>
+            reject(
+              new Error(
+                `${label} did not answer within ${PROBE_TIMEOUT_MS}ms.`,
+              ),
+            ),
           PROBE_TIMEOUT_MS,
         );
       }),

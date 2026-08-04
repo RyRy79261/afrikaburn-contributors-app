@@ -78,14 +78,14 @@ export default async function OrgAccountDeletePage() {
               <li>
                 Your {holdings.roleCount} org{" "}
                 {holdings.roleCount === 1 ? "role" : "roles"}{" "}
-                {holdings.roleCount === 1 ? "is" : "are"} released. Anything only
-                you could do needs someone else assigned to it first.
+                {holdings.roleCount === 1 ? "is" : "are"} released. Anything
+                only you could do needs someone else assigned to it first.
               </li>
             ) : null}
             <li>
-              Any camp you were wrangling is left unassigned — the camp keeps its
-              registration, but nobody is shepherding it until a reviewer picks
-              it up.
+              Any camp you were wrangling is left unassigned — the camp keeps
+              its registration, but nobody is shepherding it until a reviewer
+              picks it up.
             </li>
             <li>
               Decisions you made stay in the audit trail. They are a record of
@@ -108,8 +108,8 @@ export default async function OrgAccountDeletePage() {
             A deployment with no System manager cannot be repaired from any
             screen — the console is deliberately not allowed to grant that rank,
             so the only way back would be an environment change and a fresh
-            sign-up. Make somebody else a System manager first, then come back to
-            this.
+            sign-up. Make somebody else a System manager first, then come back
+            to this.
           </p>
         </div>
       ) : null}

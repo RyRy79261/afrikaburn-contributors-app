@@ -168,9 +168,7 @@ export function maskEmail(email: string): string {
 }
 
 /** Password changed from a signed-in session. */
-export function passwordChangedEmail(input: {
-  when: Date;
-}): SecurityEmail {
+export function passwordChangedEmail(input: { when: Date }): SecurityEmail {
   return {
     kind: "password_changed",
     subject: "Your AfrikaBurn password was changed",
@@ -260,7 +258,9 @@ export function newDeviceSignInEmail(input: {
   approximateLocation?: string | null;
   when: Date;
 }): SecurityEmail {
-  const where = input.approximateLocation ? ` near ${input.approximateLocation}` : "";
+  const where = input.approximateLocation
+    ? ` near ${input.approximateLocation}`
+    : "";
   return {
     kind: "new_device_sign_in",
     subject: "New sign-in to your AfrikaBurn account",

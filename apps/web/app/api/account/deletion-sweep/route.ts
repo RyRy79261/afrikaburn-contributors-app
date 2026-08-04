@@ -112,7 +112,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(DISABLED_RESPONSE, { status: 503 });
   }
   if (!authorisedToSweep(request)) {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Unauthorised" },
+      { status: 401 },
+    );
   }
   return runSweep();
 }

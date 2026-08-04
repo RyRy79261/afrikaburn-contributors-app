@@ -83,9 +83,7 @@ export default async function RolesPage() {
               <Lock className="h-4 w-4 text-muted-foreground" aria-hidden />
               Not your screen
             </CardTitle>
-            <CardDescription>
-              {runsDeploymentRefusal()}
-            </CardDescription>
+            <CardDescription>{runsDeploymentRefusal()}</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             Only a {ORG_RANK_LABELS.god.toLowerCase()} can create departments,

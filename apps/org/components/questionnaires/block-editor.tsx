@@ -208,9 +208,7 @@ export function BlockEditor({
   const entry = PALETTE_BY_KIND[paletteKind];
   const Icon = entry.icon;
   const mine = blockIssues(issues, pageIndex, blockIndex);
-  const ownIssues = mine.filter(
-    (i) => !/options(\[|\.)\d/.test(i.path),
-  );
+  const ownIssues = mine.filter((i) => !/options(\[|\.)\d/.test(i.path));
 
   return (
     <Card
@@ -746,7 +744,10 @@ function ChoiceBody({
             <Select
               value={block.display ?? "radio"}
               onValueChange={(v) =>
-                onChange({ ...block, display: v as "radio" | "dropdown" | "image_grid" })
+                onChange({
+                  ...block,
+                  display: v as "radio" | "dropdown" | "image_grid",
+                })
               }
             >
               <SelectTrigger aria-label="Choice display">
@@ -1090,9 +1091,7 @@ function GridBody({
         {single
           ? "Respondents pick one column per row."
           : "Respondents can pick any number of columns per row."}{" "}
-        {block.required
-          ? "Every row must be answered."
-          : "Rows are optional."}
+        {block.required ? "Every row must be answered." : "Rows are optional."}
       </p>
     </div>
   );

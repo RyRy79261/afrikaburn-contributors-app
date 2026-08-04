@@ -76,7 +76,9 @@ export function passwordStrength(
   min: number = PASSWORD_MIN_LENGTH,
 ): PasswordStrength {
   const length = password.length;
-  const percent = Math.round((Math.min(length, STRENGTH_FULL_AT) / STRENGTH_FULL_AT) * 100);
+  const percent = Math.round(
+    (Math.min(length, STRENGTH_FULL_AT) / STRENGTH_FULL_AT) * 100,
+  );
 
   if (length === 0) {
     return { length, meetsMin: false, score: 0, label: "", percent: 0 };

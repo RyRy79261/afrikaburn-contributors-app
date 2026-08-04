@@ -187,10 +187,8 @@ export function collectEnvironment(extra: EnvField[] = []): EnvField[] {
 
   // Clamped to the schema's caps so a long user-agent string can never be the
   // reason a report is refused.
-  return [...fields, ...extra]
-    .slice(0, REPORT_ENV_FIELDS_MAX)
-    .map((field) => ({
-      label: clamp(field.label, 60),
-      value: clamp(field.value, REPORT_ENV_VALUE_MAX),
-    }));
+  return [...fields, ...extra].slice(0, REPORT_ENV_FIELDS_MAX).map((field) => ({
+    label: clamp(field.label, 60),
+    value: clamp(field.value, REPORT_ENV_VALUE_MAX),
+  }));
 }

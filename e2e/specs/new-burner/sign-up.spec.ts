@@ -11,7 +11,11 @@
 import { test, expect } from "../../fixtures";
 import { signUpBurner } from "../../personas/factories";
 import { requiresEmailVerification } from "../../lib/env";
-import { TEST_PASSWORD, TOO_SHORT_PASSWORD, uniqueEmail } from "../../lib/identity";
+import {
+  TEST_PASSWORD,
+  TOO_SHORT_PASSWORD,
+  uniqueEmail,
+} from "../../lib/identity";
 import { appAlerts } from "../../lib/dom";
 
 test.describe("new burner · sign-up", () => {
@@ -38,7 +42,9 @@ test.describe("new burner · sign-up", () => {
     const email = uniqueEmail("shortpw");
     await webPage.goto("/auth/sign-up");
     await webPage.getByLabel("Email", { exact: true }).fill(email);
-    await webPage.getByLabel("Password", { exact: true }).fill(TOO_SHORT_PASSWORD);
+    await webPage
+      .getByLabel("Password", { exact: true })
+      .fill(TOO_SHORT_PASSWORD);
     await webPage.getByRole("button", { name: "Create account" }).click();
 
     // The policy floor is surfaced, and no account is minted: we stay on sign-up

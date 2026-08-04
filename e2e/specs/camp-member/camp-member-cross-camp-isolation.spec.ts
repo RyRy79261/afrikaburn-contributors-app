@@ -42,14 +42,18 @@ test.describe("camp member — cross-camp isolation", () => {
 
     // Camp A — the persona's own camp.
     await signUpBurner(leadAPage, { onboard: true });
-    const campA = await createCamp(leadAPage, { name: uniqueName("Dust Bunnies A") });
+    const campA = await createCamp(leadAPage, {
+      name: uniqueName("Dust Bunnies A"),
+    });
     const inviteA = await inviteToCamp(leadAPage, campA.slug, "member");
     await signUpBurner(memberPage, { onboard: true });
     await joinByInvite(memberPage, inviteA.url);
 
     // Camp B — a different tenant, with data worth protecting.
     await signUpBurner(leadBPage, { onboard: true });
-    const campB = await createCamp(leadBPage, { name: uniqueName("Long Drop Inn B") });
+    const campB = await createCamp(leadBPage, {
+      name: uniqueName("Long Drop Inn B"),
+    });
     await submitRegistration(leadBPage, campB.slug);
     const qB = await authorCampQuestionnaire(leadBPage, campB.slug, {
       title: uniqueName("B-only shift plan"),
@@ -67,21 +71,34 @@ test.describe("camp member — cross-camp isolation", () => {
     // member isn't in it → notFound. Guard: camps/[slug]/page.tsx
     // `!camp.registered && !camp.viewerRole → notFound()`. This is also the
     // "cannot reach a free camp you're not a member of" law.
-    await expectServerNotFound(memberPage, `/camps/${campB.slug}`, [campB.name]);
+    await expectServerNotFound(memberPage, `/camps/${campB.slug}`, [
+      campB.name,
+    ]);
 
     // B's registration: the member is refused before any registration data loads.
     // Guard: registration/page.tsx role check → redirect to B's dashboard →
     // which itself 404s the non-member.
-    await expectServerNotFound(memberPage, `/camps/${campB.slug}/registration`, [campB.name]);
+    await expectServerNotFound(
+      memberPage,
+      `/camps/${campB.slug}/registration`,
+      [campB.name],
+    );
 
     // B's questionnaire management: getMemberPermissions(B, member) is null →
     // notFound. Guard: questionnaires/page.tsx `if (!canManage) notFound()`.
-    await expectServerNotFound(memberPage, `/camps/${campB.slug}/questionnaires`, [campB.name]);
+    await expectServerNotFound(
+      memberPage,
+      `/camps/${campB.slug}/questionnaires`,
+      [campB.name],
+    );
 
     // B's questionnaire FILL page: the member was never in B's audience, so no
     // required_actions row exists → getFillView returns null → notFound. Guard:
     // questionnaire-store.getFillView (targeting scope).
-    await expectServerNotFound(memberPage, `/questionnaires/${qB.activationId}`);
+    await expectServerNotFound(
+      memberPage,
+      `/questionnaires/${qB.activationId}`,
+    );
   });
 
   test("a stranger free camp is undiscoverable and unreachable to a member of another camp", async ({
@@ -111,7 +128,9 @@ test.describe("camp member — cross-camp isolation", () => {
 
     // Opening the stranger free camp directly by slug → 404 (not a redirect to a
     // teaser, not a members-list) even though signed in.
-    await expectServerNotFound(memberPage, `/camps/${secret.slug}`, [secret.name]);
+    await expectServerNotFound(memberPage, `/camps/${secret.slug}`, [
+      secret.name,
+    ]);
   });
 
   test("a member cannot see a camp-mate's hard-locked private bio fields on their profile", async ({

@@ -71,10 +71,7 @@ describe("deleting a DEPARTMENT", () => {
     ]);
     const suppliers = byDepartment.get("suppliers");
     expect(suppliers?.people).toBe(2);
-    expect(suppliers?.labels).toEqual([
-      "alice@example.com",
-      "ren@example.com",
-    ]);
+    expect(suppliers?.labels).toEqual(["alice@example.com", "ren@example.com"]);
     // Another department's holders are untouched by this deletion.
     expect(suppliers?.labels).not.toContain("jabu@example.com");
   });
@@ -101,8 +98,8 @@ describe("deleting a DEPARTMENT", () => {
       row("zoe", "suppliers.lead", "suppliers"),
       row("alice", "suppliers.lead", "suppliers"),
     ];
-    expect(computeOrgRoleImpacts(rows).byDepartment.get("suppliers")?.labels).toEqual(
-      ["alice@example.com", "zoe@example.com"],
-    );
+    expect(
+      computeOrgRoleImpacts(rows).byDepartment.get("suppliers")?.labels,
+    ).toEqual(["alice@example.com", "zoe@example.com"]);
   });
 });

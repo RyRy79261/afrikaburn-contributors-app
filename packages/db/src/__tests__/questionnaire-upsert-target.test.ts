@@ -31,7 +31,10 @@ const UPSERT_SITES = [
 ];
 
 function read(relative: string): string {
-  return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+  return readFileSync(
+    fileURLToPath(new URL(relative, import.meta.url)),
+    "utf8",
+  );
 }
 
 /**

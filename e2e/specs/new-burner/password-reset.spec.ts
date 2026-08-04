@@ -47,7 +47,9 @@ test.describe("new burner · password reset (real email round trip)", () => {
     await webPage.getByRole("button", { name: "Create account" }).click();
     // If verification is on, clear it so the account can hold a session first.
     if (requiresEmailVerification()) {
-      const verifyLink = await mailbox.waitForLink(/verify|verification|token/i);
+      const verifyLink = await mailbox.waitForLink(
+        /verify|verification|token/i,
+      );
       await webPage.goto(verifyLink);
     }
 
@@ -58,9 +60,10 @@ test.describe("new burner · password reset (real email round trip)", () => {
 
     // Receive the REAL email and follow its single-use link. The forgot form sets
     // redirectTo=/auth/reset-password, so the token arrives on that route.
-    const resetLink = await mailbox.waitForLink(/reset-password|token=/i, ({
-      subject,
-    }) => /reset|password/i.test(subject));
+    const resetLink = await mailbox.waitForLink(
+      /reset-password|token=/i,
+      ({ subject }) => /reset|password/i.test(subject),
+    );
     await webPage.goto(resetLink);
     await expect(
       webPage.getByRole("heading", { name: /choose a new password/i }),

@@ -95,8 +95,14 @@ describe("officer exception is the only path exposing phone", () => {
   });
 
   it("officerContactVisibleToOrg is the sole gate that exposes contact", () => {
-    expect(officerContactVisibleToOrg({ isOfficer: true, consent: "accepted" })).toBe(true);
-    expect(officerContactVisibleToOrg({ isOfficer: true, consent: "pending" })).toBe(false);
-    expect(officerContactVisibleToOrg({ isOfficer: false, consent: "accepted" })).toBe(false);
+    expect(
+      officerContactVisibleToOrg({ isOfficer: true, consent: "accepted" }),
+    ).toBe(true);
+    expect(
+      officerContactVisibleToOrg({ isOfficer: true, consent: "pending" }),
+    ).toBe(false);
+    expect(
+      officerContactVisibleToOrg({ isOfficer: false, consent: "accepted" }),
+    ).toBe(false);
   });
 });

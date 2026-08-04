@@ -29,7 +29,9 @@ test.describe("anonymous visitor — supplier portal refuses", () => {
 
     // The onboarding checklist itself never rendered.
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toHaveCount(0);
   });
 
@@ -49,9 +51,7 @@ test.describe("anonymous visitor — supplier portal refuses", () => {
     // The refusal is scoped to the portal, not the whole app: an anon can still
     // reach the sign-in and sign-up screens to become a supplier.
     await suppliersPage.goto("/signin");
-    await expect(
-      suppliersPage.getByLabel(/^Email/),
-    ).toBeVisible();
+    await expect(suppliersPage.getByLabel(/^Email/)).toBeVisible();
 
     await suppliersPage.goto("/signup");
     await expect(suppliersPage.getByLabel(/business name/i)).toBeVisible();

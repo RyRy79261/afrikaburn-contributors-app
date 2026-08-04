@@ -114,7 +114,58 @@ describe("parseSetCookies", () => {
     expect(parsed.map((c) => c.name)).toEqual(["good"]);
   });
 
+  it("skips a line that is all attributes and no cookie", () => {
+    // A header beginning with `;` splits to an empty first segment, which is
+    // the `!first` guard. Reachable through a real Headers — it keeps the
+    // value verbatim — so the guard is live code, not defensive decoration.
+    const parsed = parseSetCookies(
+      headersWith(";Path=/; HttpOnly", "good=1; Path=/"),
+    );
+    expect(parsed.map((c) => c.name)).toEqual(["good"]);
+  });
+
   it("returns nothing for a response that set no cookies", () => {
     expect(parseSetCookies(new Headers())).toEqual([]);
+  });
+
+  // --- Malformed attributes, which the tests above never fed it -----------
+  //
+  // The rotated session cookie is handed straight to Next's cookie store. A NaN
+  // maxAge or an Invalid Date expires is how that cookie silently fails to set
+  // — which reintroduces the exact bug this file was written for, on the input
+  // path nobody was exercising. An attribute we cannot parse is DROPPED; the
+  // cookie itself is never lost with it.
+
+  it("omits a Max-Age that is not a number rather than writing NaN", () => {
+    const [cookie] = parseSetCookies(
+      headersWith("quagga.session_token=t; Path=/; Max-Age=forever"),
+    );
+    expect(cookie?.value).toBe("t");
+    expect(cookie?.options.maxAge).toBeUndefined();
+  });
+
+  it("omits an unparseable Expires rather than writing an Invalid Date", () => {
+    const [cookie] = parseSetCookies(
+      headersWith("quagga.session_token=t; Path=/; Expires=next Tuesday"),
+    );
+    expect(cookie?.value).toBe("t");
+    expect(cookie?.options.expires).toBeUndefined();
+  });
+
+  it("omits a SameSite value the cookie store would refuse", () => {
+    // Next's cookie store takes lax | strict | none. Passing "Whenever"
+    // through would throw where the cookie is APPLIED — a page away from the
+    // response that produced it.
+    const [cookie] = parseSetCookies(
+      headersWith("quagga.session_token=t; SameSite=Whenever"),
+    );
+    expect(cookie?.options.sameSite).toBeUndefined();
+  });
+
+  it("returns [] for a Headers-like object with no getSetCookie", () => {
+    // Some fetch-Response polyfills and test doubles lack it. Reaching for it
+    // blindly would throw on a path that runs AFTER a password has changed.
+    const headerish = { get: () => null } as unknown as Headers;
+    expect(parseSetCookies(headerish)).toEqual([]);
   });
 });

@@ -31,9 +31,7 @@ test.describe("anonymous visitor — public directory", () => {
   }) => {
     await webPage.goto("/directory");
     // The Input renders as a plain textbox (no type="search"); match by its label.
-    await expect(
-      webPage.getByLabel(/search the directory/i),
-    ).toBeVisible();
+    await expect(webPage.getByLabel(/search the directory/i)).toBeVisible();
     await expect(
       webPage.getByRole("link", { name: /create a camp/i }),
     ).toBeVisible();
@@ -48,9 +46,9 @@ test.describe("anonymous visitor — public directory", () => {
     await expect(
       webPage.getByRole("link", { name: /^sign in$/i }).first(),
     ).toBeVisible();
-    await expect(
-      webPage.getByRole("link", { name: /^account$/i }),
-    ).toHaveCount(0);
+    await expect(webPage.getByRole("link", { name: /^account$/i })).toHaveCount(
+      0,
+    );
   });
 
   test("a nonsense search term is handled without leaking anything or erroring", async ({

@@ -297,12 +297,12 @@ export const users = pgTable(
     // `username.ts` (never duplicated in SQL or in a form).
     username: text("username"),
     // Set when the account has been SANITIZED after a completed deletion request
-  // (docs/accounts-security-spec.md §Deletion — the "Lost Cat" precedent). The
-  // row survives so memberships, questionnaire responses, and audit events keep
-  // referential integrity, but every personal field is erased and the identity
-  // renders as the "Departed Burner" stub. A non-null value is also the tombstone
-  // that stops a sanitized account being silently re-animated by a later sign-in
-  // (@quagga/core `isSanitized` / `assertNotSanitized`).
+    // (docs/accounts-security-spec.md §Deletion — the "Lost Cat" precedent). The
+    // row survives so memberships, questionnaire responses, and audit events keep
+    // referential integrity, but every personal field is erased and the identity
+    // renders as the "Departed Burner" stub. A non-null value is also the tombstone
+    // that stops a sanitized account being silently re-animated by a later sign-in
+    // (@quagga/core `isSanitized` / `assertNotSanitized`).
     sanitizedAt: timestamp("sanitized_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -407,7 +407,9 @@ export const account = pgTable(
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", { mode: "date" }),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      mode: "date",
+    }),
     refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
       mode: "date",
     }),
@@ -1204,7 +1206,9 @@ export const wranglerAssignments = pgTable(
     assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    assignedAt: timestamp("assigned_at", { mode: "date" }).notNull().defaultNow(),
+    assignedAt: timestamp("assigned_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -1511,7 +1515,9 @@ export const suppliers = pgTable(
     standing: supplierStandingEnum("standing").notNull().default("good"),
     // Optional account link (email overlap). Nullable — most imported rows have
     // no signed-in supplier yet.
-    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     importedAt: timestamp("imported_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -1547,10 +1553,9 @@ export const supplierOnboarding = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (so) => ({
-    supplierEditionUniq: uniqueIndex("supplier_onboarding_supplier_edition_idx").on(
-      so.supplierId,
-      so.editionId,
-    ),
+    supplierEditionUniq: uniqueIndex(
+      "supplier_onboarding_supplier_edition_idx",
+    ).on(so.supplierId, so.editionId),
     editionIdx: index("supplier_onboarding_edition_idx").on(so.editionId),
   }),
 );

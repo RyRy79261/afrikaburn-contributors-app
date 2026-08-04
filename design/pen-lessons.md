@@ -1,6 +1,7 @@
 # Pen format lessons
 
 ## Bridge / tooling
+
 - The penctl.py bridge script referenced in the prompt did NOT exist in the scratchpad.
   The `mcp__pencil__*` tools are available directly via ToolSearch (`select:mcp__pencil__get_editor_state,...`).
   Just use the MCP tools directly — no bridge needed.
@@ -8,6 +9,7 @@
   demands a file path, there isn't one; reference the node id + verify visually inline.
 
 ## participant-identity batch polish pass (h3ak0 / C313E / qhcHh)
+
 - On arrival, the three frames already had almost all critic fixes applied (a prior agent
   had done the work): identity block, carded signing key, account card, 13px helper text,
   gap=16 form card, trimmed Join blurb. ALWAYS re-read the actual frame state before
@@ -28,6 +30,7 @@ NOTE: I hit the SAME crash — the original ~570-line pen-lessons.md was wiped; 
 recreated the short version above; I'm appending here rather than overwriting it.
 
 ### h3ak0 step-2 card (ZpiB2)
+
 - **Years attended**: replaced the `nn6iK` select with a multi-select CHIP GRID `hkH4t`
   (vertical gap8; 2 rows `uBZxi`/`j30xH` × 10 = 2007–2026). Each chip = frame width
   fill_container, height 40, cornerRadius8, vertical-centered. SELECTED (2019/2023/2024/2026)
@@ -45,6 +48,7 @@ recreated the short version above; I'm appending here rather than overwriting it
   compact copy of the phone control). All hard-locked. Frame height → fit_content.
 
 ### C313E Bio Card (zxDzQ) — mirrored the model
+
 - Years row V-text → horizontal chip row `dxtfn` of the 4 selected years (soft-teal read-only
   pills: fill #2D769626, text $primary w700, radius8, pad[3,9]).
 - Phone kept "+27 82 ••• ••47" (country code). Split Emergency into on-site (qUtJy →
@@ -52,6 +56,7 @@ recreated the short version above; I'm appending here rather than overwriting it
   lock icon + `mLUBB` "ALWAYS PRIVATE" badge (Profile uses badges for locked; Onboarding the switch).
 
 ### 🐛 PRIVACY-TOGGLE OVERFLOW — root cause + fix
+
 Compact toggles override the K86ztM/tvgss root to width:fit_content + disable inner Text, BUT
 the switch's inner "Row" (K86ztM→`A40wYB`, tvgss→`AfBCM`) stays width:fill_container +
 space_between. fit_content root + fill_container Row = circular sizing → Row falls back large →
@@ -64,6 +69,7 @@ warnings; right-aligns inside the card. `Update(refId,{descendants:{...}})` retr
 LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this per-instance hack.
 
 ### Bridge / multi-agent lessons
+
 - **export_nodes outputDir = PLAIN WSL path** (`/tmp/.../exports`, NO `/Ubuntu` prefix). A
   `/Ubuntu/...` outputDir → `\\wsl.localhost\Ubuntu\Ubuntu\...` → "mkdir … Access is denied".
   (filePath KEEPS `/Ubuntu`.) In-session `mcp__pencil__export_nodes` uses the same plain path.
@@ -78,6 +84,7 @@ LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this p
   got applied by two agents (idempotent). Always batch_get your subtree right before final export.
 
 ## ORG PAGES batch (Gate / Overview / Registrations) — CRITICAL TOOLING BUG THIS SESSION
+
 - get_screenshot is BROKEN for any node created in the current session: it renders the
   frame's own FILL correctly but shows NO children (text, refs, nested frames render
   blank/white). PRE-EXISTING frames (RGcNS, hjTQN, jlLBa, etc.) screenshot perfectly.
@@ -93,6 +100,7 @@ LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this p
   only clips horizontally then), so even a real offset can't hide content.
 
 ## IMAGE-BY-PATH WORKS (verified)
+
 - Image fill via url relative to the .pen file renders correctly:
   fill:{type:"image", url:"./brand/afrikaburn-logo-banner-282.png", mode:"fit"}
   (stored/normalized to "brand/afrikaburn-logo-banner-282.png" — still resolves).
@@ -112,6 +120,7 @@ LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this p
   Copy("a1BjK",...) for a clean full-width band.
 
 ## Component-instance gotchas
+
 - Do NOT Replace() a descendant INSIDE a component instance and then Insert children into
   the returned node — it corrupts the instance (renders white/blank and can blank the whole
   parent frame). Prefer property overrides via descendants, or add extra structure as a
@@ -131,6 +140,7 @@ LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this p
   every batch — ignore, the node is disabled and won't render.
 
 ## Missing components (used closest fallback, per COMPONENT RULE — did NOT add to library)
+
 - No KPI/metric-card component: built Overview count cards as plain $card frames
   (label+value+sub, height 164) with status Badge instances inside the Registrations card.
 - No audit/activity-row component: built recent-activity rows as plain frames
@@ -138,6 +148,7 @@ LIBRARY GAP: add a real compact/inline Switch variant so pages don't need this p
 - No segmented-control component: used Tabs (j61wQ4) for the new/returning "toggle".
 
 ## My frames (org apricot accent)
+
 - Gate — org wall · Org Dark = T7siQ9
 - Overview — / · Org Dark = obd4x
 - Registrations — /registrations · Org Dark = StJXH
@@ -159,6 +170,7 @@ hint "Assign wrangler" (affordance can be disabled "R1"). Registered-vs-free-cam
 self-selection in registration/org stays as designed.
 
 ## ORG Review + Accounts batch (Review /registrations/[id] + Accounts /accounts) — render bug reconfirmed
+
 - **RENDER-CACHE BUG (Inserted vs Copied) — DEFINITIVELY ISOLATED THIS SESSION.** get_screenshot/export_nodes render freshly `Insert()`-ed frames/text as fully BLANK WHITE, but `Copy()`-ed component instances render PERFECTLY and immediately (a Copy of gUwkA payment block rendered with its override; a sibling Inserted card rendered pure white). The copied Header (Copy of B2EoSK) always rendered; the Inserted section cards did not. batch_get + snapshot_layout returned 100% correct structure/sizes throughout.
 - **RESOLUTION: wait ~5 min of REAL wall-clock with ZERO doc edits, then export ONCE.** After a 300s quiet sleep (no batch_design, only reads) a single export_nodes rendered BOTH full pages flawlessly. Shorter waits (60–150s) with interleaved read calls did NOT clear it. Reads (batch_get/snapshot/export) seem fine but give it a solid uninterrupted window. Don't burn 3 review cycles fighting blank exports — verify structure via batch_get, then do the long-quiet export.
 - Header pattern (reused from prior org agent, works great): `Copy("B2EoSK", page, {descendants:{"PRnZW/p9ddJ":{fill:"$muted-foreground",fontWeight:"600"}, "PRnZW/<target>":{fill:"$accent",fontWeight:"700"}}})`. B2EoSK already bundles the full-1280 edge-to-edge quilt band (E1OIM, 3 path children viewBox[0,0,1280,10]) + AppShell Apricot jgbtP with the real logo image already swapped in (LmFjj→image frame) and S8mXNg/dwrhE disabled. Nav ids inside AppShell: p9ddJ=Overview, yxXDq=Registrations, VuubM=Suppliers, qwxuE=Payments, VU2a3=Accounts. Copy's `descendants` keys DO resolve nested-in-ref paths like "PRnZW/VU2a3".
@@ -172,11 +184,14 @@ self-selection in registration/org stays as designed.
 - Emails rendered in JetBrains Mono 13 (matches the doc's technical-string convention, e.g. payment refs).
 
 ## My frames (org apricot accent)
+
 - Review — /registrations/[id] · Org Dark = PRDdG (x=22020, y=0)
 - Accounts — /accounts · Org Dark = CJs0P (x=23520, y=0)
 
 ## POLISH PASS org-console-2 (PRDdG Review + CJs0P Accounts) — 2026-07-24
+
 All critic fixes applied and verified.
+
 - PRDdG: DELETED payment ref R9H9G (payments purge); built replacement "Assign Wrangler"
   card jah1O in Action Rail F0ItxR (plain $card frame, disabled R1 affordance: kicker
   "AFTER APPROVAL" + title + body + disabled $muted button "user-plus/Assign wrangler"
@@ -207,6 +222,7 @@ registration contexts.
 ## PARTICIPANT frames batch: Burner Profile + Vehicle Reg + Art Reg + RGcNS edits (2026-07-24)
 
 ### My new frames (participant teal accent) + RGcNS edits
+
 - Burner Profile — /burners/[handle] · Dark = **mm31G** (public third-party view)
 - Mutant Vehicle Registration — /vehicles/new · Dark = **S8ZcWf**
 - Art Project Registration — /artworks/new · Dark = **d3pOJI**
@@ -214,6 +230,7 @@ registration contexts.
 - Export PNGs: /tmp/.../scratchpad/exports/{mm31G,S8ZcWf,d3pOJI,RGcNS}.png (plain-WSL outputDir, returns \\wsl.localhost paths).
 
 ### RGcNS payment purge + addendum (Task 1)
+
 - DELETED the whole Payment section **FJ0OR** (heading bgQMD "PAYMENT" + block RDvjy).
   It was the last child of Content EEeYH (vertical gap28) so the flexbox gap closed itself —
   no manual regap needed. Verified rendered: section gone, layout clean.
@@ -229,6 +246,7 @@ registration contexts.
   NOT added to the Burner Profile (mm31G) — third-party view stays public-only.
 
 ### DIALECT SCAFFOLD for participant frames (teal) — the recipe I used
+
 - page frame: width 1280, layout vertical, **alignItems:"center"**, clip:true, fill $background,
   theme {mode:"dark"}. Header/footer = fill_container (span 1280); content = fixed width
   (1024 for profile, **768 for forms**) so alignItems centers it. Page height OMITTED =
@@ -245,6 +263,7 @@ registration contexts.
   fills bypass the child-render lag). Confirmed in exports of mm31G/d3pOJI.
 
 ### Reusable form helpers (redefine per batch — batch scopes don't share vars)
+
 - `card(parent,num,title,desc)`: $card frame radius12 pad24 gap16 + shadow; head = numbered
   teal circle badge (22px, #2D769626, $primary number) + title (16/700) + optional desc.
 - `field(parent,label,ph,help)` = ref **UIcOu** width fill_container, descendants
@@ -264,6 +283,7 @@ registration contexts.
   stroke $input, lucide "image-plus" + "Add photo/image". (No upload component exists.)
 
 ### RENDER LAG reconfirmed AGAIN (concurrent org workflow active)
+
 - Freshly Insert()-ed nodes render BLANK in BOTH get_screenshot AND export_nodes while
   another agent edits the shared doc; UPDATES/DELETES to existing nodes paint immediately
   (RGcNS footer edit + payment deletion rendered fine; the new ref box + section 3-5 of the
@@ -277,7 +297,9 @@ registration contexts.
   get_screenshot on the same path kept working throughout.
 
 ## Suppliers + Payments + Registration-Feedback batch (2026-07-24)
+
 Frames: Suppliers = iQEpd (x=29220), Payments = SdI2t (x=30720), Registration Feedback = P0Tcl (x=32220).
+
 - ORG HEADER via Copy("B2EoSK", frame, {descendants:{"PRnZW/<navid>":{fill:"$accent",fontWeight:"700"}, "PRnZW/p9ddJ":{fill:"$muted-foreground",fontWeight:"600"}}}). Nav ids CONFIRMED: p9ddJ=Overview(base-active), yxXDq=Registrations, VuubM=Suppliers, qwxuE=Payments, VU2a3=Accounts. B2EoSK bundles full-1280 quilt band + AppShell Apricot with real logo already swapped in. Renders immediately (Copy).
 - PARTICIPANT HEADER via Copy("X9x2T", frame, {descendants:{"QUdor":{enabled:false}, "zaqlm":{type:"frame",width:197,height:28,fill:{type:"image",url:"brand/afrikaburn-logo-banner-282.png",mode:"fit"}}}}). X9x2T is RBIDd's App Header (quilt band VDU03 full-width + brand tEs1L + nav cOGek + edition banner, Space Mono). Its brand was a lucide flame (QUdor) + "Contributors" text (zaqlm) — swapped to the real logo per Ryan's mandatory header spec. Image-by-path confirmed working again (logo rendered in export).
 - Custom tables (no generic table component; XqVPe is registration-specific): frame fill $card radius8 stroke border clip → Header Row (fill $muted, padding[11,20]) + rows (padding[12,20], strokeWidth {bottom:1}, last row 0). Cells = frames with fixed width (fill_container for the flex column). Vetting select in-cell = Copy("nn6iK", cell, {width:"fill_container", descendants:{"O71i4":{enabled:false},"qx9UC":{enabled:false},"b7Bq8":{content:"Listed",fill:$muted-foreground}}}) — disabling label+StateTag leaves just the Control which fills the cell.
@@ -290,11 +312,13 @@ Frames: Suppliers = iQEpd (x=29220), Payments = SdI2t (x=30720), Registration Fe
 - RENDER-CACHE LAG RECONFIRMED: Copy'd headers (B2EoSK/X9x2T) rendered instantly in export; all freshly-Inserted body content (tables, section cards, banners) rendered BLANK even after edits stopped. batch_get confirmed 100% correct structure/overrides. A longer fully-quiet window (5min+, zero edits) is needed to paint new nodes; I was forced to finalize before it fully cleared.
 
 ## PAYMENTS TENSION (flagged for Ryan/QA)
+
 My dispatched task explicitly required building /payments with a live reconcile/waive table (QP-2027-MAH-001 reconciled, KKB-004 pending, C44-002 waived), which sits against the earlier "PAYMENTS PURGE" note (registration is free; park /payments). I built the table as dispatched but framed it to reconcile both: header note "References only — AfrikaBurn collects, we track." + sub "Registration is free. These references cover shared logistics AfrikaBurn invoices directly — no payment is ever processed here." If the purge stance is firm, this page should instead be parked.
 
 ## FINAL QA PASS (whole document) — 2026-07-24
 
 ### Frame inventory — COMPLETE, nothing missing/duplicated
+
 All expected pages present exactly once: auth u87N7, landing L82AQr, directory u7RSIJ,
 create-camp g5Uqfw, onboarding h3ak0, profile C313E, join qhcHh, camp dashboard RGcNS
 (pre-existing), registration wizard RBIDd (pre-existing), registration feedback P0Tcl,
@@ -305,30 +329,35 @@ EXTRAS (legit, not dupes): 3 participant pages mm31G/S8ZcWf/d3pOJI; 3 Camp Plot 
 (800x600 @ 0,0, "Frame", no children — pre-existing debris, left alone).
 
 ### Auth retrofit (task #5) was ALREADY DONE by a prior agent — re-read before fixing!
+
 u87N7 already has: full-width edge-to-edge quilt band gqSjC (3 diamond paths KkNEM/h9Y8eI/
 zenzj, each viewBox[0,0,1280,10] width 1280 x:0) AND the real AfrikaBurn logo (czSmC, image
 fill afrikaburn-logo-banner-282.png, 282×40) inside the auth card EEPpt above "WELCOME,
 BURNER". Verified via screenshot. No change needed.
 
 ### The ONE mechanical fix I made: logo consistency on directory + create-camp
+
 Directory (CODJ8) and Create-camp (lCJWI) were the ONLY participant AppShell pages still
 showing the default l99dum "QUAGGA PORTAL" text wordmark instead of the real logo. Every
 other participant page (C313E/h3ak0/qhcHh/mm31G/S8ZcWf/d3pOJI) + all org pages use the real
 logo. Fixed both to match C313E's proven override via Update(inst,{descendants:{...}}):
-  C1y2Qr:{type:"frame",name:"Logo",width:180,height:28,layout:"none",fill:{type:"image",
-    enabled:true,mode:"fit",url:"brand/afrikaburn-logo-banner-282.png"}}  (replace diamond Mark)
-  PO6BC:{enabled:false}  (kill wordmark text)
-  + keep existing nav-active color overrides (must re-list them in the same Update — descendants
-    replace, so include ALL: R31TIN/T9YLN active $primary + vYaMu muted).
-The logo rendered IMMEDIATELY in both (frame image-fills bypass the render-cache lag). Verified.
+C1y2Qr:{type:"frame",name:"Logo",width:180,height:28,layout:"none",fill:{type:"image",
+enabled:true,mode:"fit",url:"brand/afrikaburn-logo-banner-282.png"}} (replace diamond Mark)
+PO6BC:{enabled:false} (kill wordmark text)
+
+- keep existing nav-active color overrides (must re-list them in the same Update — descendants
+  replace, so include ALL: R31TIN/T9YLN active $primary + vYaMu muted).
+  The logo rendered IMMEDIATELY in both (frame image-fills bypass the render-cache lag). Verified.
 
 ### Full-width band check — ALL new pages PASS
+
 directory/create-camp have NO separate quilt-edge child; they rely on the AppShell l99dum's
 internal band, which DOES render full-width 1280 edge-to-edge (zoomed CODJ8 screenshot
 confirms). The snapshot "width:655 partially clipped" on sKVum/cPAV4 is the by-design diamond
 path clip, NOT a half-width band. Do not "fix" it.
 
 ### snapshot_layout problems = ALL PHANTOM (confirmed via screenshots)
+
 Every frame that rendered fully in a screenshot showed ZERO visible clipping/overflow despite
 hundreds of "partially/fully clipped" snapshot flags. Two phantom sources reconfirmed: (1)
 QuiltBand diamond paths clipped by their band's clip:true (by design, every band); (2) the
@@ -336,6 +365,7 @@ QuiltBand diamond paths clipped by their band's clip:true (by design, every band
 exist. Trust screenshots over snapshot_layout for these frames.
 
 ### RENDER-CACHE LAG still active (concurrent editing ongoing this session)
+
 export_nodes fails with "you are probably referencing the wrong .pen file" (concurrent-write
 lock) — other agents are editing NOW. Consequently the Suppliers/Payments/Feedback batch
 (iQEpd, SdI2t, P0Tcl) render header-only with BLANK bodies, and d3pOJI's lower sections
@@ -346,6 +376,7 @@ paint them; not achievable while concurrency persists. get_screenshot (inline) w
 throughout; export_nodes to a file did not this session.
 
 ### Remaining item reported (not fixed — custom header, borderline structural)
+
 Landing L82AQr custom Nav Bar (z8r7q) still shows "◆ QUAGGA PORTAL" wordmark rather than the
 real logo. Defensible as a marketing lockup; left for owner decision. If unifying, swap its
 brand element to the logo image frame like the AppShell fix above.
@@ -361,6 +392,7 @@ camp-internal) are unaffected.
 ## QUESTIONNAIRE FEATURE — 5 new frames (2026-07-24)
 
 ### My frames
+
 - Org Questionnaires — /questionnaires · Org Dark = **JY7dF** (list + completion bars)
 - Org Questionnaire Builder — /questionnaires/new · Org Dark = **sCEHP** (2-col: field editor + activation rail)
 - Camp Questionnaires — /camps/[slug]/questionnaires · Dark = **Hameq** (teal lead view + member completion)
@@ -369,6 +401,7 @@ camp-internal) are unaffected.
 - ALL pass snapshot_layout problemsOnly = "No layout problems". Exports at /tmp/.../scratchpad/exports/{id}.png.
 
 ### Ryan's blocking/optional addendum (folded in — enforce on any future questionnaire surface)
+
 - Every questionnaire surface must EXPLICITLY state blocking vs optional. Badge per list item:
   "REQUIRED · BLOCKS UNTIL DONE" = fill #C2443826 + $destructive text (also stroke the card $destructive);
   "OPTIONAL" = transparent fill + $border stroke + $muted-foreground text.
@@ -377,6 +410,7 @@ camp-internal) are unaffected.
 - Builder blocking toggle explainer: "Blocking questionnaires stop people using the app until they answer. Use sparingly."
 
 ### Tooling / dialect notes from this batch
+
 - **NO render lag this session** — doc was quiet, so BOTH Copy'd headers (B2EoSK org, X9x2T participant)
   AND all freshly-Inserted body content rendered perfectly & immediately in export_nodes (scale 1). The
   render-cache bug only bites during concurrent multi-agent editing.
@@ -404,6 +438,7 @@ camp-internal) are unaffected.
   so nothing reads falsely-active and relied on a CONSOLE / QUESTIONNAIRES breadcrumb kicker instead.
 
 ### Roles v2 addendum (2026-07-24, Ryan) — applied to Hameq + H7aIdg
+
 - Project roles now carry COLOR (curated 8-key palette, NOT freeform) + EMOJI + PERMISSIONS. Palette→hex:
   teal #2D7696 · teal-deep #235C75 · apricot #F4B672 · peach #FFBC7D · sage #B6D090 · olive #7D9953 ·
   rust #B23A2E · neutral #ADB6B3. Defaults: Captain 🎩 apricot (all 3 perms) · Team lead 🔧 teal
@@ -431,6 +466,7 @@ camp-internal) are unaffected.
   clip flag disappears). Use clip:false on tall card-study frames when the phantom clip flag won't clear.
 
 ### Roles v2 addenda 3/4/5 (2026-07-24) — privilege panel, role kinds, officers (H7aIdg + sCEHP + Hameq)
+
 - The roles panel on H7aIdg went through 3 more addenda; final shape = a full ROLE-MANAGEMENT panel (400px,
   right column of a 2-col study). Sections top→bottom: Head; "DEFAULT ROLES" label; Captain (locked);
   Team lead (editable, expanded); Hatters (baseline); "OFFICERS" label; LNT Lead / Sound Officer / Safety
@@ -459,10 +495,12 @@ camp-internal) are unaffected.
   index via Move(id,parent,index). Emoji goes straight into the label content string (renders in color).
 
 ## BURNER BIO v3 — Onboarding h3ak0 + Profile C313E + third-party mm31G (2026-07-24)
+
 Added build-spec §"Burner Bio v3 additions": about, camp_history (linked+freetext), volunteering_interests,
 ranger section. Verified via batch_get (exact order+content) + snapshot_layout problemsOnly = "No layout problems".
 
 ### h3ak0 (Onboarding) — new step 3, RENDERED CLEAN (append-only, no Move)
+
 - **ProgressSteps QWDKT remap 4→5** (Welcome · Your details · Burns & volunteering · Privacy · Done), step 3 CURRENT.
   6-step wizard (steps 5,6 = fzm5F/FEiBV disabled). One Update("HEjt7",{descendants}): QcFr5→"STEP 3 OF 5";
   M9Yuoh(step2)→complete: effect:[]+children:[check icon]; e9vHJ→w600; c55XR+R59Xg→$primary; R9LoOh(step3)→current:
@@ -479,6 +517,7 @@ ranger section. Verified via batch_get (exact order+content) + snapshot_layout p
 - h3ak0 EXPORTED PERFECTLY first quiet export (all-append, zero Move).
 
 ### C313E + mm31G — used Move() → STUBBORN WHOLE-FRAME RENDER LAG
+
 - C313E: appended read-only card g457WM (header+Edit; ABOUT paragraph; CAMPS linked+freetext; VOLUNTEERING
   Rangers/Kitchen chips; RANGERS apricot "Curious about ranger shifts" badge) then Move(g457WM,"M4XkZW",3).
 - mm31G: appended freetext camp row Q4tPcH into yxmte; About card NOY0h (Move→2); Volunteering U1GW0F (Move→5);
@@ -496,17 +535,23 @@ ranger section. Verified via batch_get (exact order+content) + snapshot_layout p
   Curly ’ en-dash – and ↗ render fine in content strings.
 
 ## SUPPLIER PORTAL + Org Suppliers v2 batch (2026-07-24)
+
 ### My frames
+
 - Supplier Onboarding — /onboarding · Supplier Dark = **Q4fye** (7-step onboarding, sage accent)
 - Supplier Standing — /standing · Supplier Dark = **R4wvO** (GOOD standing, no notes visible)
 - Org Suppliers v2 = **iQEpd** (REWORKED IN PLACE — new table supplier·n/7·standing·notes + expanded Desert Ablutions row)
+
 ### Supplier portal header = sage-tinted jgbtP instance (NOT a new component)
+
 - Copy("uKKTQ", hdr) full-1280 quilt band (3 paths S1q7IP/FvdPb/wvIue) + instance jgbtP with descendants:
   S8mXNg:{enabled:false}, dwrhE:{enabled:false}, LmFjj:→logo image frame,
   d7pry:{fill:"$ab-sage"} (Console Tag frame) + **S3S6ZX**:{content:"SUPPLIERS",fill:"#17191B"} (tag text — dark on sage),
   p9ddJ/yxXDq = nav "Onboarding"/"Standing" (active one → fill $ab-sage w700), VuubM+VU2a3 disabled.
   Sage #B6D090 as the bright accent reads well on dark bg (same as $success). Tints: sage #B6D09026, warn #F4B67226, dest #C2443826.
+
 ### iQEpd rework (payments-purge-clean, NO source/vetting anywhere)
+
 - Killed old table l4zIlQ (had SOURCE/VETTING cols + AB-sheet badges). Updated GY6LF sub + b5Vobe count to drop
   "AB sheet / added manually" language. New table: SUPPLIER(fill)·ONBOARDING n/7(mini progress bar, warning-highlight
   when n<5 with INCOMPLETE tag)·STANDING(inline nn6iK select, value colored Good=sage/Watch=warn/Suspended=dest)·
@@ -516,66 +561,82 @@ ranger section. Verified via batch_get (exact order+content) + snapshot_layout p
   f8Vlv apricot buttons on steps 3/6/7, sage "Reviewed" tag on 4/5) + right 372px Notes Drawer (timeline entries with
   🔴/🟢/⚪ emoji markers [render fine as $foreground text] + kind label + body + author·time; add-note form = kind pills +
   t8imVt textarea + f8Vlv "Add note"). org-confirm button = Copy("f8Vlv",{padding:[7,13],descendants:{MK2Fb:{content,fontSize:12.5}}}).
+
 ### 🐛 Delete("id/id") self-slash-path DELETES the node (dZRKJ/dZRKJ removed dZRKJ). Bad self-referential slash paths
-  are destructive — a leftover from a mistaken Delete. Verify with batch_get after any odd Delete.
+
+are destructive — a leftover from a mistaken Delete. Verify with batch_get after any odd Delete.
+
 ### Render lag: iQEpd (updated existing texts + Copy'd header) painted header/heading/toolbar; new Inserted table BLANK.
-  Q4fye (brand-new frame) exported FULLY blank (only $background fill). Documented lag — structure authoritative
-  (snapshot iQEpd = "No layout problems"; Q4fye/R4wvO only phantom +50 clip). One export attempt, moved on per instructions.
+
+Q4fye (brand-new frame) exported FULLY blank (only $background fill). Documented lag — structure authoritative
+(snapshot iQEpd = "No layout problems"; Q4fye/R4wvO only phantom +50 clip). One export attempt, moved on per instructions.
 
 ## ORG STATUS BOARD + CATEGORIES + Directory filters batch (2026-07-24)
+
 ### 🔴 CRITICAL TOOLING: batch_get / snapshot_layout IGNORE `ids` AND `depth` THIS SESSION.
-  Every call returns the WHOLE document at a FIXED shallow depth: document root → its child
-  frames (level 1) → their DIRECT children (level 2, ids shown) → everything at level 3+ collapsed
-  to `"children":"..."`. Passing ids:["KaJNo"] depth:7 fields:[...] changed NOTHING — same whole-doc
-  dump, KaJNo still collapsed. Verified across 5 calls incl. a component id (jlLBa didn't even appear;
-  reusable components are NOT in the dump at all). CONSEQUENCE: you can read/target ONLY root frames
-  and their DIRECT children (page → Header/Body/Content/Footer). You CANNOT get IDs of any pre-existing
-  node below that (grid cells, cards, card-internal text). You can only get deep IDs for nodes YOU create
-  (Insert/Copy return them). export_html has data-pencil-NAME only, NO ids. This blocked "camp cards gain
-  category emoji chips" on the Directory — the existing camp-card frame IDs are unreachable. If a future
-  task needs to edit pre-existing deep nodes and this bug is still live, flag it; the only workaround is
-  rebuilding that subtree from a level-2 parent you CAN target (destructive; needs Delete of children you
-  also can't target → effectively impossible without the bug being fixed).
+
+Every call returns the WHOLE document at a FIXED shallow depth: document root → its child
+frames (level 1) → their DIRECT children (level 2, ids shown) → everything at level 3+ collapsed
+to `"children":"..."`. Passing ids:["KaJNo"] depth:7 fields:[...] changed NOTHING — same whole-doc
+dump, KaJNo still collapsed. Verified across 5 calls incl. a component id (jlLBa didn't even appear;
+reusable components are NOT in the dump at all). CONSEQUENCE: you can read/target ONLY root frames
+and their DIRECT children (page → Header/Body/Content/Footer). You CANNOT get IDs of any pre-existing
+node below that (grid cells, cards, card-internal text). You can only get deep IDs for nodes YOU create
+(Insert/Copy return them). export_html has data-pencil-NAME only, NO ids. This blocked "camp cards gain
+category emoji chips" on the Directory — the existing camp-card frame IDs are unreachable. If a future
+task needs to edit pre-existing deep nodes and this bug is still live, flag it; the only workaround is
+rebuilding that subtree from a level-2 parent you CAN target (destructive; needs Delete of children you
+also can't target → effectively impossible without the bug being fixed).
+
 ### Frames built (org apricot; participant teal)
-  - Org Status Board — / · Org Dark = **RTfFF** (new console landing). Header = Copy("B2EoSK", {descendants:
-    {"PRnZW/qwxuE":{enabled:false}}}) — Overview stays base-active, Payments nav killed. Content mZLqH.
-    Screenshot rendered FULLY & immediately (headline tiles + funnel + line chart). Right column
-    (officer/questionnaire/supplier, built one batch later) + activity feed = render-lag blank in that shot
-    but snapshot problemsOnly=NONE (no collapse) → structurally sound.
-  - Org Camp Categories — /categories · Org Dark = **g4CzsM** (12-row CRUD list iH24L + Add-category card).
-    Header Copy B2EoSK with p9ddJ(Overview)→muted (no Categories nav item; used CONSOLE/CATEGORIES kicker).
-    Body render-lagged blank (batch just committed). Phantom +50 clip flag on content jlaWl persists with
-    clip:false too (page frames keep the phantom; harmless — height is fit_content so nothing truly clips).
-  - Directory rework = **u7RSIJ** body KaJNo: Inserted "Category Filters" row **oelnB** (cat chips: All camps,
-    🧸 Family-friendly ACTIVE, 🍲 Food&drink, 🍹 Bar, 🔊 Music&sound, 🎨 Art&making, +7 more; second row
-    FROM REGISTRATION: Family-friendly/Quiet/Sound camp outline chips) then Move(oelnB,"KaJNo",2) to sit
-    below search / above the registered-camps grid. Move poisoned KaJNo render → can't visually re-verify
-    placement (KaJNo children also unreadable per the bug); Move returned OK, snapshot problemsOnly on
-    u7RSIJ = clean (no new problems). PER-CARD emoji chips NOT applied — card IDs unreachable (see bug).
+
+- Org Status Board — / · Org Dark = **RTfFF** (new console landing). Header = Copy("B2EoSK", {descendants:
+  {"PRnZW/qwxuE":{enabled:false}}}) — Overview stays base-active, Payments nav killed. Content mZLqH.
+  Screenshot rendered FULLY & immediately (headline tiles + funnel + line chart). Right column
+  (officer/questionnaire/supplier, built one batch later) + activity feed = render-lag blank in that shot
+  but snapshot problemsOnly=NONE (no collapse) → structurally sound.
+- Org Camp Categories — /categories · Org Dark = **g4CzsM** (12-row CRUD list iH24L + Add-category card).
+  Header Copy B2EoSK with p9ddJ(Overview)→muted (no Categories nav item; used CONSOLE/CATEGORIES kicker).
+  Body render-lagged blank (batch just committed). Phantom +50 clip flag on content jlaWl persists with
+  clip:false too (page frames keep the phantom; harmless — height is fit_content so nothing truly clips).
+- Directory rework = **u7RSIJ** body KaJNo: Inserted "Category Filters" row **oelnB** (cat chips: All camps,
+  🧸 Family-friendly ACTIVE, 🍲 Food&drink, 🍹 Bar, 🔊 Music&sound, 🎨 Art&making, +7 more; second row
+  FROM REGISTRATION: Family-friendly/Quiet/Sound camp outline chips) then Move(oelnB,"KaJNo",2) to sit
+  below search / above the registered-camps grid. Move poisoned KaJNo render → can't visually re-verify
+  placement (KaJNo children also unreadable per the bug); Move returned OK, snapshot problemsOnly on
+  u7RSIJ = clean (no new problems). PER-CARD emoji chips NOT applied — card IDs unreachable (see bug).
+
 ### Chart dialect (dataviz, brand-restrained, all rendered clean in RTfFF screenshot)
-  - Stat tile: $card radius12, tiny accent dot + muted kicker + 34px/800 value + colored sub. 4 across, gap16.
-  - Horizontal funnel/bar: row = fixed 132 label + FIXED 540 track ($muted, clip) with inner Fill fixed px
-    (scale maxVal→540) + fill_container right-aligned count. Fixed track width = exact proportional px, no circular sizing.
-  - Line chart WORKS as 3 nodes in a FIXED-width layout:none Plot (width 700 h150): gridline rects (width 700 h1
-    $border) + Area path (fill "#2D769622") + Line path (stroke $primary 2.5, fill "#00000000") both viewBox
-    [0,0,700,150] same geometry, + 5 ellipse dots (x/y px, stroke $card 2 for the surface ring). X-labels row
-    width 700 space_between below. Single-node paths position fine — the "line charts are hard" caveat only bites
-    when you need per-point layout; precomputed geometry sidesteps it.
-  - Progress/coverage: FIXED track, sage Fill px over a $destructive-tint track bg (#C2443826) = officered vs outstanding.
-  - Stacked distribution: horizontal frame gap2 (2px surface gap per dataviz), fixed-px segments, end segments
-    get asymmetric cornerRadius [5,2,2,5]/[2,5,5,2].
-  - Emoji in chips render full-color as their OWN text node with $foreground fill: 🧸🍲🍹🔊🎭🛠️🎨🌿🎲🌙🤫🌈 all fine in structure.
+
+- Stat tile: $card radius12, tiny accent dot + muted kicker + 34px/800 value + colored sub. 4 across, gap16.
+- Horizontal funnel/bar: row = fixed 132 label + FIXED 540 track ($muted, clip) with inner Fill fixed px
+  (scale maxVal→540) + fill_container right-aligned count. Fixed track width = exact proportional px, no circular sizing.
+- Line chart WORKS as 3 nodes in a FIXED-width layout:none Plot (width 700 h150): gridline rects (width 700 h1
+  $border) + Area path (fill "#2D769622") + Line path (stroke $primary 2.5, fill "#00000000") both viewBox
+  [0,0,700,150] same geometry, + 5 ellipse dots (x/y px, stroke $card 2 for the surface ring). X-labels row
+  width 700 space_between below. Single-node paths position fine — the "line charts are hard" caveat only bites
+  when you need per-point layout; precomputed geometry sidesteps it.
+- Progress/coverage: FIXED track, sage Fill px over a $destructive-tint track bg (#C2443826) = officered vs outstanding.
+- Stacked distribution: horizontal frame gap2 (2px surface gap per dataviz), fixed-px segments, end segments
+  get asymmetric cornerRadius [5,2,2,5]/[2,5,5,2].
+- Emoji in chips render full-color as their OWN text node with $foreground fill: 🧸🍲🍹🔊🎭🛠️🎨🌿🎲🌙🤫🌈 all fine in structure.
 
 ## BUILDER v2 — Google Forms parity · 3 NEW frames (2026-07-24)
+
 ### My frames
+
 - Org Builder v2 — sections & blocks · Org Dark = **AssNH** (3-pane: block palette rail + sectioned canvas + validation/branching right rail)
 - Runner v2 — multi-page fill · Dark (participant) = **uj2yF** (page 2/3: progress w/ section names, info block, linear scale, rating stars, MC w/ image options, Back/Next, "Saved just now")
 - Questionnaire Results v2 — summary charts · Org Dark = **Mjiqz** (completion stat + CSV export + Summary/Individual toggle; choice horizontal bars, linear-scale vertical histogram, text sampled-answers list)
 - All three PASS snapshot_layout problemsOnly (only the phantom +50 "partially clipped" on Body — frame height fit_content = correct). Did NOT modify the existing builder sCEHP.
+
 ### Reused patterns
+
 - Org header: `Copy("SdPCy", frame, {name:"Header"})` — SdPCy is sCEHP's Header (full-1280 quilt band St7Wv 3 paths + AppShell jgbtP apricot with logo already swapped, p9ddJ Overview muted). Copies + renders immediately.
 - Participant header: `Copy("X9x2T", frame, {name:"Header", descendants:{QUdor:{enabled:false}, zaqlm:{type:"frame",width:190,height:27,layout:"none",fill:{type:"image",mode:"fit",url:"brand/afrikaburn-logo-banner-282.png"}}}})`.
+
 ### Dialect gotchas hit this batch
+
 - **icon nodes reject `stroke`/`strokeWidth`** (only `fill`). For an "empty" lucide star use `fill:"$input"` (grey), not an outline stroke.
 - **text nodes reject `padding`** (schema error, rolls back). Use a wrapping frame or rely on flex alignItems for baseline offset.
 - Custom toggle (track frame 34x20 radius999 + 16px knob, justifyContent end/start by on/off) reused for Required/Blocking — sidesteps the compact-Switch overflow bug.
@@ -585,6 +646,7 @@ ranger section. Verified via batch_get (exact order+content) + snapshot_layout p
 - RENDER LAG reconfirmed: Copy'd headers paint immediately; all freshly-Inserted body content renders BLANK in get_screenshot (one attempt each, moved on). snapshot_layout + batch_design id-maps are authoritative.
 
 ## CANVAS REORG into presentation domain bands (2026-07-24)
+
 Repositioned all 38 top-level frames into 5 horizontal domain bands (x/y only, via Update — no Move).
 Added 5 standalone section-title text nodes (Montserrat 800, fontSize 64, uppercase, $muted-foreground),
 each at x=0, y=(band framesY - 120), aligned to the first frame of its band. Title ids: COMPONENT
@@ -594,6 +656,7 @@ CONCEPTS / ARCHIVE=Xe1pm. Horizontal step = frame width + 260 gap; band framesY 
 4408, Band1 h3ak0 2744, Band2 PRDdG 1842, Band3 Q4fye 1850, Band4 CwVWw 1955).
 
 ### Final band map (band → frame names in order)
+
 - Band 0 COMPONENT LIBRARIES (y=200): ABOHr (Component Library — Participant), kv6ot (Component Library — Composites & Shells)
 - Band 1 PARTICIPANT APP (y=5260): u87N7 (Auth), L82AQr (Landing), h3ak0 (Onboarding), C313E (Profile),
   mm31G (Burner Profile), u7RSIJ (Directory), g5Uqfw (Create a camp), qhcHh (Join a camp), RGcNS (Camp
@@ -625,12 +688,16 @@ mobile sage. Libraries, card studies, and the archive band are exempt. When crea
 any NEW page frame from now on, create its mobile pair in the same session.
 
 ## ACCOUNTS-SECURITY auth batch (Supplier signup/signin + Forgot-password) — 2026-07-24
+
 ### My frames
+
 - Supplier Sign-up — /signup · Supplier Dark = **K3zNk** (Band 3 Supplier, x=3080, y=11160) — rendered PERFECT (quiet doc)
 - Supplier Sign-in — /signin · Supplier Dark = **OX6KJ** (Band 3, x=4620, y=11160)
 - Forgot Password — request & reset · Dark = **Gf1iJ** (Band 1 Participant end, x=27460, y=5260)
 - All structurally verified via batch_get + snapshot problemsOnly (K3zNk clean; OX6KJ/Gf1iJ only the phantom +50/+60 "partially clipped" flag — height already fit_content; identical to K3zNk which is clean, so phantom). K3zNk screenshot confirmed the shared patterns; OX6KJ/Gf1iJ were newer and stayed in render-lag (header/band only) — non-blocking.
+
 ### Patterns
+
 - Supplier auth header = Copy("v8TdCa", page, {descendants:{"O44Ho/p9ddJ":{fill:"$muted-foreground",fontWeight:"600"},"O44Ho/yxXDq":{fill:"$muted-foreground",fontWeight:"600"}}}). v8TdCa = Q4fye's Header (quilt band z4IE9 + AppShell Supplier O44Ho, sage SUPPLIERS tag + logo already swapped). Muting both nav items = correct signed-out state.
 - Participant auth header = Copy("gqSjC", page) full-width quilt band + a 240x34 logo image frame (brand/afrikaburn-logo-banner-282.png) inside the region (mirrors u87N7 EEPpt treatment, no AppShell nav — recovery applies to all apps).
 - Auth card = 440w, $card, radius12, pad32, gap16-18, outer shadow #00000033. Region = vertical alignItems center, top padding pushes card down.
@@ -650,25 +717,27 @@ H7aIdg card study (exempt). Three unlisted new Account pages (SjInE/G35eq/Q3pQj6
 concurrent workflow into THIS band) were included per "every remaining page frame".
 
 ### New frames (name = id @ x, paired-to desktop)
-- Sign up / Sign in — HCt1i @ 1400  ← u87N7
-- Landing — R8zPnr @ 2940  ← L82AQr
-- Profile — SdcDN @ 6020  ← C313E
-- Burner Profile — lYUEe @ 7560  ← mm31G
-- Create a camp — Evh1t @ 10640  ← g5Uqfw
-- Join a camp — MttcT @ 12180  ← qhcHh
-- Camp Settings · Roles & Officers — TIrbC @ 15260  ← ZyKzw
-- Camp Questionnaires — YOdgW @ 16800  ← Hameq
-- Runner v2 — M6JCN @ 19880  ← uj2yF
-- Registration Wizard — XAJSe @ 21420  ← RBIDd
-- Registration Feedback — QzpU6 @ 22960  ← P0Tcl
-- Mutant Vehicle Registration — Qq5u0 @ 24500  ← S8ZcWf
-- Art Project Registration — H2DP4 @ 26040  ← d3pOJI
-- Forgot Password — s2PAS @ 28860  ← Gf1iJ
-- Account · Manage — U6ixd @ 30400  ← SjInE
-- Account · Security — JbB35 @ 31940  ← G35eq
-- Account · Delete — Ur0rS @ 33480  ← Q3pQj6
+
+- Sign up / Sign in — HCt1i @ 1400 ← u87N7
+- Landing — R8zPnr @ 2940 ← L82AQr
+- Profile — SdcDN @ 6020 ← C313E
+- Burner Profile — lYUEe @ 7560 ← mm31G
+- Create a camp — Evh1t @ 10640 ← g5Uqfw
+- Join a camp — MttcT @ 12180 ← qhcHh
+- Camp Settings · Roles & Officers — TIrbC @ 15260 ← ZyKzw
+- Camp Questionnaires — YOdgW @ 16800 ← Hameq
+- Runner v2 — M6JCN @ 19880 ← uj2yF
+- Registration Wizard — XAJSe @ 21420 ← RBIDd
+- Registration Feedback — QzpU6 @ 22960 ← P0Tcl
+- Mutant Vehicle Registration — Qq5u0 @ 24500 ← S8ZcWf
+- Art Project Registration — H2DP4 @ 26040 ← d3pOJI
+- Forgot Password — s2PAS @ 28860 ← Gf1iJ
+- Account · Manage — U6ixd @ 30400 ← SjInE
+- Account · Security — JbB35 @ 31940 ← G35eq
+- Account · Delete — Ur0rS @ 33480 ← Q3pQj6
 
 ### Patterns reused (this batch's recipe — very fast, mostly Copy)
+
 - **Slim signed-in header** = `Copy("rZXLb", root, {name:"Header"})`. rZXLb (from the EQW5G pilot) =
   vertical [QuiltBand `a30rO` (layout:none, clip, height10, 3 full-1280 diamond paths teal/apricot/sage,
   opacity 0.9) + Bar (space_between, padding[12,16]) → 140px logo image frame + 32px `$secondary` avatar
@@ -694,6 +763,7 @@ concurrent workflow into THIS band) were included per "every remaining page fram
   Curated 8-key swatch palette + 🎩🔧🔥♻️🔊🧙 emoji (own $foreground text node) all reused from Roles v2.
 
 ### 🐛 Copied `space_between` rows OVERLAP at 360 (found via export, fixed)
+
 Desktop key/value rows (Profile Bio Card `faHfK`) are horizontal `space_between` with a `fit_content` left
 column whose VALUE text is `textGrowth:"auto"` (single-line, never wraps) + a right badge. At 1280 fine; at
 360 the long values ("Hidden — someone at the burn", phone, "ALWAYS PRIVATE") overrun and sit UNDER the
@@ -705,6 +775,7 @@ row into 360, always wrap the value + fill_container the left column, and spot-c
 verification alone misses text-overrun overlaps).
 
 ### Tooling notes
+
 - Phantom "+50px partially clipped" on the fit-content body persists on MOST new pages even with explicit
   `height:"fit_content"` (Auth HCt1i + both Vehicle/Art came back fully clean; the rest flag it — ignorable,
   content is intact). Same +50 offset bug as every prior batch.
@@ -715,6 +786,7 @@ verification alone misses text-overrun overlaps).
   catch the Bio-Card overlap above.
 
 ### Overlaps recorded for the task-#10 re-spacing pass
+
 Desktops sit 1540 apart; a 360 mobile at desktop.x+1400 spans to desktop.x+1760, so EVERY pair overlaps its
 right-neighbour desktop by ~220px (same as the 4 pilot pairs already did). Built in place as instructed; did
 NOT reposition any neighbour. Only Account · Delete (Ur0rS @ 33480) has clear space to its right.
@@ -729,7 +801,8 @@ gap = 120). Anchor u87N7 kept at x=0. Walked left→right in prior visual order;
 Reposition-only via `Update(id,{x})` — NO Move. 41 frames actually moved (u87N7 + HCt1i were already
 correct at 0 / 1400).
 
-### New column map (desktop id @ x  ·  mobile id @ x)
+### New column map (desktop id @ x · mobile id @ x)
+
 - u87N7 @ 0 · HCt1i @ 1400
 - L82AQr @ 2020 · R8zPnr @ 3420
 - h3ak0 @ 4040 · Z2300W @ 5440
@@ -754,6 +827,7 @@ correct at 0 / 1400).
 - Q3pQj6 @ 41684 · Ur0rS @ 43084
 
 ### Verification
+
 - snapshot_layout maxDepth=0 confirms **ZERO horizontal overlaps** across all 43 band frames: every
   consecutive gap is exactly 120 (desktop→own mobile) or 260 (mobile→next desktop, and both
   card-study gutters). Band now spans x=0..43444.
@@ -770,22 +844,24 @@ Anchor = T7siQ9 kept at x=0. Reposition-only via Update(id,{x}); no Move; y unto
 title S7sfj (x=0,y=8540) left alone. Only the SUPPLIER band (y=11160) was worked concurrently
 by another agent — not touched here.
 
-### Column map (desktop id @ new x  ·  mobile id @ x = desktop.x+1400)
-- T7siQ9 @ 0        · E5Oip  @ 1400   (Gate — org wall)
-- RTfFF  @ 2020     · w6X0wA @ 3420   (Org Status Board)
-- StJXH  @ 4040     · NkPRL  @ 5440   (Registrations)
-- PRDdG  @ 6060     · t4Ji4  @ 7460   (Review)
-- CJs0P  @ 8080     · y1idvL @ 9480   (Accounts)
-- iQEpd  @ 10100    · hSNjO  @ 11500  (Suppliers)
-- g4CzsM @ 12120    · X8RHa  @ 13520  (Org Camp Categories)
-- JY7dF  @ 14140    · XY8yO  @ 15540  (Org Questionnaires)
-- sCEHP  @ 16160    · ELUfI  @ 17560  (Questionnaire Builder)
-- AssNH  @ 18180    · ZBw8O  @ 19580  (Builder v2)
-- Mjiqz  @ 20200    · nRtO7  @ 21600  (Results v2)
-- obd4x  @ 22220    · pKW7z  @ 23620  (Overview)
-- U7929T @ 24240    · D6IGel @ 25640  (Org Supplier Sign-up Management)
+### Column map (desktop id @ new x · mobile id @ x = desktop.x+1400)
+
+- T7siQ9 @ 0 · E5Oip @ 1400 (Gate — org wall)
+- RTfFF @ 2020 · w6X0wA @ 3420 (Org Status Board)
+- StJXH @ 4040 · NkPRL @ 5440 (Registrations)
+- PRDdG @ 6060 · t4Ji4 @ 7460 (Review)
+- CJs0P @ 8080 · y1idvL @ 9480 (Accounts)
+- iQEpd @ 10100 · hSNjO @ 11500 (Suppliers)
+- g4CzsM @ 12120 · X8RHa @ 13520 (Org Camp Categories)
+- JY7dF @ 14140 · XY8yO @ 15540 (Org Questionnaires)
+- sCEHP @ 16160 · ELUfI @ 17560 (Questionnaire Builder)
+- AssNH @ 18180 · ZBw8O @ 19580 (Builder v2)
+- Mjiqz @ 20200 · nRtO7 @ 21600 (Results v2)
+- obd4x @ 22220 · pKW7z @ 23620 (Overview)
+- U7929T @ 24240 · D6IGel @ 25640 (Org Supplier Sign-up Management)
 
 ### Verification — ZERO horizontal overlaps
+
 snapshot_layout maxDepth=0 confirms every consecutive gap in the band is exactly 120
 (desktop→own mobile) or 260 (mobile→next desktop). Band spans x=0..26000. All 13 mobiles
 present at desktop.x+1400, same y=8660. Each mobile passes snapshot_layout problemsOnly
@@ -793,6 +869,7 @@ present at desktop.x+1400, same y=8660. Each mobile passes snapshot_layout probl
 slim header + stacked-table pattern; doc was quiet enough that the render-lag bug didn't bite.
 
 ### Reusable slim ORG mobile header = **t5SRc** (built in X8RHa, Copy'd into the other 12)
+
 Header (vertical, fill_container) = Copy("pUEFw") mobile quilt band (full-1280 3-path band,
 clip, height10) + Bar (space_between, padding[12,16], fill $card, strokeWidth{bottom:1}) →
 [140×20 logo image frame (brand/afrikaburn-logo-banner-282.png)] + Right(gap9) → [apricot
@@ -803,8 +880,10 @@ frame Copy remaps all descendant ids, renders instantly. Slim header keeps NO na
 convention); apricot accent preserved. Gate (E5Oip) uses a logo-only centered variant (no tag/avatar).
 
 ### Recipe: Copy the desktop Content, stack columns, override fixed widths
+
 Most org pages Copy wholesale: `Copy("<ContentId>", page, {width:"fill_container", padding:[20,16],
 descendants:{...}})`. Overrides applied:
+
 - Horizontal multi-col groups → `{layout:"vertical", gap:16}` (RTfFF g0Hs3v, obd4x X1QOzU,
   PRDdG lSbeB, sCEHP cfIhy, AssNH wRL7a). Their fixed-width side columns → `{width:"fill_container"}`
   (iZn50 380, OWCvS 360, F0ItxR 380, J6oLEB 322, SYZQL 214, ks27x 540).
@@ -815,6 +894,7 @@ descendants:{...}})`. Overrides applied:
   `layout:"vertical"` and disable the 3 dot texts (XvQLA/Yu5Lw/Ykn8O); H1 s3oA5 fontSize 28→22.
 
 ### Wide data tables → stacked card-per-row (reuses REAL data, no invention)
+
 For the 3 real tables (Accounts agNHi, Suppliers e773Yw, Documents g1hWC0) I Copy the table frame
 and pass a PROGRAMMATICALLY-BUILT descendants map (built with JS for-loops in batch_design before
 the Copy — Copy remaps original ids): disable the Header Row; set each data Row (or its Summary
@@ -827,6 +907,7 @@ Verified visually on y1idvL Accounts — reads great. Registrations (StJXH) uses
 Camp 404 UNDER REVIEW, Karoo Kombuis CHANGES REQUESTED, Dust Bunnies DRAFT, Long Drop Inn SUBMITTED).
 
 ### Fixed-width charts don't compress — dropped on mobile
+
 RTfFF Status Board Left Column (hDasu = registration funnel 540-track + line chart 700-plot,
 both precomputed-geometry fixed-width, mobile-hostile) → disabled on mobile. Kept the 4 KPI
 tiles (stacked) + Right Column coverage cards (officer/questionnaire/supplier, fill_container —
@@ -834,6 +915,7 @@ their tracks fit 328, snapshot confirms no clipping) + Recent activity. Honest K
 mobile dashboard; noted the funnel/line-chart omission.
 
 ### Quirks
+
 - Harmless "fill_container not inside flexbox" warnings on copied descendants (Tk86T, VsQNk,
   m6TDcu, EkMfM, P6Eg3, G8jqv0) — same ignorable class as prior batches; every affected frame
   passes snapshot_layout problemsOnly = "No layout problems".
@@ -848,6 +930,7 @@ Ran the mobile-360 + re-spacing campaign on the SUPPLIER PORTAL band (y=11160). 
 for every supplier PAGE frame. Di3Zv (Supplier Documents 1024 card study) is EXEMPT — no mobile.
 
 ### Supplier band column map (desktop id @ x · mobile id @ x) — 2020 pitch, anchor Q4fye@0
+
 - Q4fye (Supplier Onboarding) @ 0 · **lm3jO** @ 1400
 - R4wvO (Supplier Standing) @ 2020 · **TXyLN** @ 3420
 - K3zNk (Supplier Sign-up) @ 4040 · **h83pUG** @ 5440
@@ -858,6 +941,7 @@ for every supplier PAGE frame. Di3Zv (Supplier Documents 1024 card study) is EXE
   260 (mobile→next desktop, and the card-study gutter). All new mobiles snapshot problemsOnly = clean.
 
 ### Mobile build recipe (sage supplier accent preserved)
+
 - **Slim supplier header** (built fresh per frame, not the desktop AppShell — nav too wide at 360):
   vertical [Copy of the desktop's quilt band z4IE9/ufAGC/ki2sw/M5gXGD (fill_container, 3 full-1280
   diamond paths) + Bar (space_between, padding[12,16]) → 140x20 logo image frame
@@ -883,6 +967,7 @@ for every supplier PAGE frame. Di3Zv (Supplier Documents 1024 card study) is EXE
   content painted immediately; no render lag this session (doc quiet). No export needed — structure authoritative.
 
 ### ⚠️ ISSUE — lm3jO (onboarding mobile) overflows DOWN into the CONCEPTS/ARCHIVE band
+
 The onboarding mobile is 3938px tall (7 full step cards + docs panel stacked full-width at 360). At y=11160
 its bottom = y15098, but the CONCEPTS/ARCHIVE band sits at y=13660 — so lm3jO (x1400-1760) vertically
 overlaps the Camp-Plot archive frame CwVWw (x1540-1900) by ~220px wide × ~1438px tall. This is a BAND-SPACING
@@ -908,6 +993,7 @@ Full-frame get_screenshot of anything taller than ~1100px is a THUMBNAIL — tex
 **Binding QA protocol:** for any frame taller than ~1100px, enumerate its Body's card/section children via batch_get and screenshot EACH section node individually. Frame-level screenshots are not acceptable evidence of correctness. Also: translucent-fill nodes (e.g. #C2443812 blocker cards) screenshotted in isolation composite on white and look ghostly/unreadable — that is an artifact, not a defect; verify those in situ on the parent.
 
 Recurring mobile defect patterns found in the account area (all now fixed there):
+
 - Auto-growth (non-wrapping) text in a fill_container column beside a fixed right element (date, badge, button) → overflows underneath it. Fix: textGrowth fixed-width + width fill_container on the text.
 - A fixed-width element (150px QR) beside a fill column inside nested paddings starves the column to ~30px → one-letter-per-line. Fix: stack the row vertical on mobile.
 - space_between heads with buttons ("Sign out everywhere") starve the title column. Fix: stack CardHead vertical on mobile.
@@ -922,6 +1008,7 @@ Eyes (mine and agents') missed text-level jank twice. The authoritative QA metho
 3. `audit2.py` joins them: flags H/V-overflow of child vs parent box and sibling overlaps (any overlap in auto-layout parents; text-text overlaps in free layouts). Skips ≤12px quilt diamonds, disabled nodes, archive frames.
 
 GOTCHAS:
+
 - **snapshot_layout reports disabled nodes' stale as-if-enabled geometry** — both source-disabled and instance-override-disabled (descendants {X:{enabled:false}}). These are GHOSTS: verify visually once, then whitelist the shadow id in audit2.py DISABLED. Current whitelist covers the component annotation tags (below), AppShell wordmark PO6BC, switch label cols iaJYv/OJ2yq, supplier-nav VuubM/VU2a3, surplus tabs/pagination shadows, field help Tk86T.
 - snapshot_layout ignores nodeId scoping in this bridge version — always dump root to a FILE via penctl, never inline (851KB).
 
@@ -941,6 +1028,7 @@ whitelisting — whitelist.json is only for verified-intentional design (with re
 ## ORG BULLETINS + NOTIFICATIONS batch (26 Jul) — 6 frames + a big Copy gotcha
 
 ### 🐛 Copy/Update `descendants` keys MUST be node IDs, not NAMES — name keys SILENTLY fail
+
 Copying a component instance with `descendants:{"Title":{content:...},"Kind Icon":{icon:...}}`
 (keyed by the node's display NAME) applied NOTHING and threw NO error — every instance rendered
 its component DEFAULT. Only ID-keyed overrides worked (button labels via `MK2Fb`, Field via
@@ -951,11 +1039,13 @@ they are not for Copy/Update. ALWAYS resolve real internal IDs first. Get them f
 `instanceId/childId` paths — cross-reference those child IDs against the component's `export_html`
 name-tree (export_html shows names, snapshot shows the id paths; join them). Then
 `Update(instanceId,{descendants:{"<childId>":{content:...}}})` retrofits a placed instance.
+
 - export_html reads the MODEL (resolves ID overrides, ignores render-cache lag) — it is the
   authoritative way to verify content when get_screenshot/export_nodes are blank. grep it for your
   override strings AND for the component DEFAULT strings (defaults still present = your override failed).
 
 ### Notifications library component internal IDs (join of snapshot + export_html)
+
 - **Notification Item · Unread H9bn7**: Kind Icon=`K2sZC3`, Title=`s2v7X`, Meta=`VfAvU`, Unread Dot under `RasEP`.
 - **Notification Item · Read IDy9A**: Kind Icon=`iMIcT`, Title=`s5MAr4`, Meta=`HekHd`.
 - **Bulletin Card fulVI**: Emoji=`o1D9hA`, BULLETIN kicker=`qddZ0`, Pin icon=`imQG5`, Title=`k6BiD2`,
@@ -972,6 +1062,7 @@ name-tree (export_html shows names, snapshot shows the id paths; join them). The
   fill_container track. NO raw hex — tint panels = `$muted` fill + colored `strokeWidth:{left:3}`.
 
 ### Org header for these pages
+
 `Copy("zGh0i", page, {width:"fill_container"})` — zGh0i = U7929T's Header (quilt band + AppShell
 Apricot jgbtP, now WITH the notifications Bell + unread badge "3" baked in; Payments nav GONE, so
 nav = Overview/Registrations/Suppliers/Accounts). ⚠️ zGh0i is a SUPPLIERS page header, so its ACTIVE
@@ -983,6 +1074,7 @@ after copying, find the new instance id (snapshot: `<newInst>/p9ddJ`) and
 original path, but only set the muted slot's text — hence the two-step activation.)
 
 ### My frames (org apricot; y=8660; 2020 pitch, all render-lag blank in body but export_html-verified)
+
 - Org Bulletins — /bulletins = **QqnNq** (x=26260) · mobile **laWqH** (x=27660)
 - Org Bulletin Compose — /bulletins/new = **U8CqE** (x=28280) · mobile **zW1uE** (x=29680)
 - Org Notifications — /notifications = **xRjgy** (x=30300) · mobile **Cb5MV** (x=31700)
@@ -1006,8 +1098,9 @@ screenshots nor immediate snapshots can convict a freshly built node.
 ## Username / identity-document reconcile (27 Jul 2026)
 
 ### Frame ids changed by the Copy trick
+
 - Onboarding desktop `h3ak0` → **`iCQgd`** (x=4040, y=5260)
-- Onboarding mobile  `Z2300W` → **`srY69`** (x=5440, y=5260)
+- Onboarding mobile `Z2300W` → **`srY69`** (x=5440, y=5260)
 
 Both needed the swap: appending the new "Identity document" field to the step-2
 card re-triggered the documented non-settling +50px y bias (11 phantom
@@ -1018,12 +1111,14 @@ copy moved back to the original x/y and renamed. Callers updated:
 `docs/component-spec.md` (m3).
 
 ### What did NOT trigger the bias
+
 Pure `Update` of text/name, and `Copy` of an existing in-frame subtree (the new
 Engineer row cloned from the Org-staff row in `CJs0P` / `y1idvL`) both audited
-clean with no swap needed. The bias so far only shows up for *freshly Inserted*
+clean with no swap needed. The bias so far only shows up for _freshly Inserted_
 subtrees.
 
 ### Stale-id note
+
 `Z5frU`/`k4gUF` (Org Member Detail) and `JIznY`/`YXdDv` (Join Confirm) no longer
 exist — they are now `P6mXrX`/`lYlbW` and `l9JKDo`/`UIzmF`, already rebuilt by an
 earlier session. Check `batch_get` before trusting a frame id quoted in a task.
@@ -1031,12 +1126,14 @@ earlier session. Check `batch_get` before trusting a frame id quoted in a task.
 ## System panel + roles/departments frames (27 Jul 2026) — the design-before-build exception, paid off
 
 ### Frames created
+
 - Org System Panel — /system · Org Dark = **bNbLs** (x=36360, y=8660)
 - Org System Panel — mobile 360 · Dark = **qhCyJ** (x=37760, y=8660)
 - Org Roles & Departments — /system/roles · Org Dark = **IXwNt** (x=38380, y=8660)
 - Org Roles & Departments — mobile 360 · Dark = **gsiE0** (x=39780, y=8660)
 
 ### Frame ids that CHANGED (Copy trick, after restructuring the Accounts table)
+
 - `CJs0P` → **`uj1wp`** (Accounts desktop, x=8080, y=8660)
 - `y1idvL` → **`Ctdgd`** (Accounts mobile, x=9480, y=8660)
 - Node ids inside them moved too: Confirm Overlay `mfJhv` → `UPol9`; its "Who"
@@ -1046,11 +1143,13 @@ earlier session. Check `batch_get` before trusting a frame id quoted in a task.
   `docs/component-spec.md`, `docs/build-spec.md`.
 
 ### New variables
+
 `ab-rust` #C24438 and `ab-neutral` #ADB6B3 — the two curated role-palette keys that had
 no token. Solid role swatches must use `$ab-*`; the audit flags raw 6-digit hex. Chip
 tints stay 8-digit alpha (`#7D995322` fill / `#7D995399` stroke) which the audit accepts.
 
 ### AppShell nav: a descendant REPLACEMENT adds nav items honestly
+
 `jgbtP` only has four nav slots (p9ddJ Overview / yxXDq Registrations / VuubM Suppliers /
 VU2a3 Accounts) but the shipped console bar has ten. Rather than renaming Suppliers into
 "System" (a lie), replace the last slot with a frame of its own texts — a full inline
@@ -1060,27 +1159,30 @@ Verified rendering. `Copy("NxjX7", page, {descendants:{…}})` (P6mXrX's Header)
 desktop org header; `Copy("R2JA4", page)` (lYlbW's Header) is the slim mobile one.
 
 ### Mobile-360 recipe reconfirmed, with one new trap
+
 Copy the desktop Content and pass a programmatically-built `descendants` map keyed by the
 DESKTOP ids (Copy remaps them). Overrides used: check rows → `layout:"vertical"`; table
 header row → `enabled:false`; each table row → vertical + cells `fill_container`; dialog
 columns → vertical; dialog footers with three buttons → vertical.
+
 - **A four-item horizontal Name Row cannot be fixed by an override.** `[swatch, name,
-  Permanent badge, "N people hold it"]` overflows at 360 whichever way you stack it, and
+Permanent badge, "N people hold it"]` overflows at 360 whichever way you stack it, and
   `layout:"vertical"` puts the swatch on its own line. Fix at SOURCE: group it as
   `[Title Row(swatch+name)] [Meta Row(badge+holders)]`, then the mobile override
   `Name Row → vertical` yields two clean lines. Restructured with Insert-new +
   Delete-old-LEAF (the sanctioned pattern) — no container deletes, no Move.
 - Auto-width text beside a fit-content sibling still overruns silently; `textGrowth:
-  "fixed-width"` + `width:"fill_container"` on the trailing text is the cure (dept chips,
+"fixed-width"` + `width:"fill_container"` on the trailing text is the cure (dept chips,
   "· permanent, dies with the department", the trailing half of a link sentence).
 - `TOUCH-TARGET` warnings: plain ghost-button frames need `padding:[15,13]` at 360 to
   clear 44px; `[12,11]` only reaches 39px. Component-ref buttons were not flagged.
 
 ### Gotchas
+
 - A `batch_design` error does **not** always roll back. The batch that failed on
   `Update("rmPage", …)` (string literal instead of the variable) left its created frame
   behind as orphan debris at the scratch position — found later by `snapshot_layout
-  maxDepth:0` as `nb3iV` and deleted. Always re-snapshot the root after a failed batch.
+maxDepth:0` as `nb3iV` and deleted. Always re-snapshot the root after a failed batch.
 - The Copy trick worked every time and audited truthfully on the first run; the scratch
   build position used was x=0, y=21000.
 - Ctdgd grew to 4457px and its bottom (13117) crossed into the SUPPLIER band, so per the

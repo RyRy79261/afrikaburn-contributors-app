@@ -64,7 +64,9 @@ test.describe("new burner · account management", () => {
     // Change the password with "sign out my other devices" left ON (default).
     await webPage.goto("/account");
     await webPage.getByRole("button", { name: "Change", exact: true }).click();
-    await webPage.getByLabel("Current password", { exact: true }).fill(TEST_PASSWORD);
+    await webPage
+      .getByLabel("Current password", { exact: true })
+      .fill(TEST_PASSWORD);
     await webPage.getByLabel(/new password/i).fill(NEW_PASSWORD);
     // The switch defaults to revoking others; assert that so a default flip can't
     // silently weaken this test.
@@ -144,18 +146,12 @@ test.describe("new burner · account management", () => {
     ).toBeVisible();
 
     // Re-auth with the password, then request deletion.
-    await webPage
-      .getByLabel(/confirm your password/i)
-      .fill(TEST_PASSWORD);
-    await webPage
-      .getByRole("button", { name: /request deletion/i })
-      .click();
+    await webPage.getByLabel(/confirm your password/i).fill(TEST_PASSWORD);
+    await webPage.getByRole("button", { name: /request deletion/i }).click();
 
     // The account is now SCHEDULED — the honest grace banner appears with days
     // remaining and a restore control. Nothing has been erased yet.
-    await expect(
-      webPage.getByText(/scheduled for deletion/i),
-    ).toBeVisible();
+    await expect(webPage.getByText(/scheduled for deletion/i)).toBeVisible();
     await expect(webPage.getByText(/left to change your mind/i)).toBeVisible();
 
     // Restore within grace: "Keep my account" cancels the deletion.
@@ -179,15 +175,11 @@ test.describe("new burner · account management", () => {
     ).toHaveCount(0);
 
     // The banner clears IN PLACE, without a reload...
-    await expect(
-      webPage.getByText(/scheduled for deletion/i),
-    ).toHaveCount(0);
+    await expect(webPage.getByText(/scheduled for deletion/i)).toHaveCount(0);
 
     // ...and is still gone on a fresh server render.
     await webPage.goto("/account/delete");
-    await expect(
-      webPage.getByText(/scheduled for deletion/i),
-    ).toHaveCount(0);
+    await expect(webPage.getByText(/scheduled for deletion/i)).toHaveCount(0);
     // And the account is still usable (session intact, profile renders).
     await webPage.goto("/profile");
     await expect(

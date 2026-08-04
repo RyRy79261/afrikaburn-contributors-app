@@ -9,7 +9,11 @@
 
 import { test, expect } from "../../fixtures";
 import type { Page } from "@playwright/test";
-import { signUpBurner, createCamp, submitRegistration } from "../../personas/factories";
+import {
+  signUpBurner,
+  createCamp,
+  submitRegistration,
+} from "../../personas/factories";
 import { uniqueUsername } from "../../lib/identity";
 import { OFFICER_NAMES, assignOfficer } from "./support";
 
@@ -54,7 +58,9 @@ test.describe("required-officer counts", () => {
       webPage.getByRole("button", { name: new RegExp(OFFICER_NAMES.lnt) }),
     ).toContainText(/required/i);
     await expect(
-      webPage.getByRole("button", { name: new RegExp(OFFICER_NAMES.fireBaron) }),
+      webPage.getByRole("button", {
+        name: new RegExp(OFFICER_NAMES.fireBaron),
+      }),
     ).toContainText(/required/i);
 
     const before = await outstandingCount(webPage);

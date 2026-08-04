@@ -13,8 +13,10 @@ import { readRate } from "../lib/bulletin";
 // Fewer-forms / never-payments laws are upstream concerns (a bulletin is only
 // title + body + audience + optional pin); this component just displays them.
 
-export interface BulletinCardProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface BulletinCardProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   title: React.ReactNode;
   /** Body preview (2-line clamped). Pass an already-plain/safe string. */
   preview?: React.ReactNode;
@@ -66,7 +68,9 @@ export function BulletinCard({
         </h3>
 
         {preview ? (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{preview}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {preview}
+          </p>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">

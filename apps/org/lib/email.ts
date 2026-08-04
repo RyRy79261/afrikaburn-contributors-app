@@ -104,10 +104,7 @@ export async function sendEmail(
 }
 
 /** One Resend HTTP call. Shared by the single and batch paths. */
-async function post(
-  endpoint: string,
-  body: unknown,
-): Promise<SendEmailResult> {
+async function post(endpoint: string, body: unknown): Promise<SendEmailResult> {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {

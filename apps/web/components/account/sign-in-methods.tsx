@@ -31,7 +31,9 @@ export function SignInMethods(props: SignInMethodsProps) {
     <AccountSignInMethods
       {...props}
       securityHref="/account/security"
-      unlinkNotice={capabilityPendingMessage(unlinkCap) || unlinkCap.userMessage || ""}
+      unlinkNotice={
+        capabilityPendingMessage(unlinkCap) || unlinkCap.userMessage || ""
+      }
       passwordMinLength={PASSWORD_MIN_LENGTH}
       assessPassword={assessPassword}
       onChangePassword={changePassword}

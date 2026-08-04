@@ -11,8 +11,10 @@ import {
 // dismissed it renders nothing (dismissal is view-local; persisting it across
 // sessions is the caller's concern).
 
-export interface DismissiblePinnedBulletinBannerProps
-  extends Omit<PinnedBulletinBannerProps, "onDismiss"> {
+export interface DismissiblePinnedBulletinBannerProps extends Omit<
+  PinnedBulletinBannerProps,
+  "onDismiss"
+> {
   /** Fired after the banner is dismissed (e.g. to persist the choice). */
   onDismiss?: () => void;
 }

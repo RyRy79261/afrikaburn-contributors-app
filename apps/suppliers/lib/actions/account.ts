@@ -33,8 +33,7 @@ import { applyAuthCookies, requirePortalAccount } from "@/lib/account";
 // is worse than none — it trains people to ignore the real one.
 
 export type AccountActionResult =
-  | { ok: true; message?: string }
-  | { ok: false; error: string };
+  { ok: true; message?: string } | { ok: false; error: string };
 
 async function run(
   fn: () => Promise<{ message?: string } | void>,

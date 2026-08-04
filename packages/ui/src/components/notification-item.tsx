@@ -43,8 +43,10 @@ export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
   bulletin: Megaphone, // 📣 org broadcast
 };
 
-export interface NotificationItemProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface NotificationItemProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   kind: NotificationKind;
   /** Title copy (wraps freely). */
   title: React.ReactNode;
@@ -109,7 +111,9 @@ export function NotificationItem({
         <p
           className={cn(
             "text-sm leading-snug",
-            read ? "font-normal text-muted-foreground" : "font-medium text-foreground",
+            read
+              ? "font-normal text-muted-foreground"
+              : "font-medium text-foreground",
           )}
         >
           {title}

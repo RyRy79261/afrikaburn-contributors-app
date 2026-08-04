@@ -342,7 +342,9 @@ export async function saveBio(input: {
   ): string | null {
     const next = safeEncrypt(incoming);
     if (next !== null) return next;
-    return decryptField(stored).state === "unreadable" ? (stored ?? null) : null;
+    return decryptField(stored).state === "unreadable"
+      ? (stored ?? null)
+      : null;
   }
 
   const saIdEncrypted =

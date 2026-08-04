@@ -126,7 +126,9 @@ test.describe("new burner · Burner Bio", () => {
     await webPage.getByRole("button", { name: "Save & continue" }).click(); // → burns
     await webPage.getByRole("button", { name: "Save & continue" }).click(); // → privacy
     await expect(webPage.getByText(/locked private/i).first()).toBeVisible();
-    await expect(webPage.getByRole("switch", { name: /phone/i })).toHaveCount(0);
+    await expect(webPage.getByRole("switch", { name: /phone/i })).toHaveCount(
+      0,
+    );
     await expect(
       webPage.getByRole("switch", { name: /home city/i }),
     ).toHaveCount(1);

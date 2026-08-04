@@ -52,8 +52,7 @@ async function requirePermission(
   slug: string,
   permission: ProjectPermissionKey,
 ): Promise<
-  | { ok: true; groupId: string; userId: string }
-  | { ok: false; error: string }
+  { ok: true; groupId: string; userId: string } | { ok: false; error: string }
 > {
   const user = await requireCampUser();
   const groupId = await groupIdForSlug(slug);
@@ -71,8 +70,7 @@ const CreateInviteInput = z.object({
 });
 
 export type CreateInviteResult =
-  | { ok: true; invite: InviteRow }
-  | { ok: false; error: string };
+  { ok: true; invite: InviteRow } | { ok: false; error: string };
 
 /** Mint a one-time invite (lead/admin only). */
 export async function createInviteAction(
@@ -89,7 +87,10 @@ export async function createInviteAction(
   }
   // A lead-transfer is a lead-only action (an admin can't hand over the lead).
   if (parsed.data.kind === "lead_transfer" && role !== "lead") {
-    return { ok: false, error: "Only the current lead can transfer the lead role." };
+    return {
+      ok: false,
+      error: "Only the current lead can transfer the lead role.",
+    };
   }
   const invite = await createInvite({
     groupId,
@@ -175,7 +176,11 @@ export async function renameRoleAction(
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const gate = await requirePermission(parsed.data.slug, "manage_roles");
   if (!gate.ok) return gate;
-  const result = await renameRole(gate.groupId, parsed.data.roleId, parsed.data.name);
+  const result = await renameRole(
+    gate.groupId,
+    parsed.data.roleId,
+    parsed.data.name,
+  );
   if (result.ok) revalidateRolePaths(parsed.data.slug);
   return result;
 }

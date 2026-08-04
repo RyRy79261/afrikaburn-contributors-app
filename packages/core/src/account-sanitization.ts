@@ -136,7 +136,9 @@ export type BurnerBioSanitizationPatch = Record<SanitizedBioNullField, null> & {
  * than preserved: the flags describe fields that no longer hold anything, and an
  * inherited `{ bio: true }` on a stub is meaningless noise.
  */
-export function buildBioSanitizationPatch(at: Date): BurnerBioSanitizationPatch {
+export function buildBioSanitizationPatch(
+  at: Date,
+): BurnerBioSanitizationPatch {
   const nulls = Object.fromEntries(
     SANITIZED_BIO_NULL_FIELDS.map((f) => [f, null]),
   ) as Record<SanitizedBioNullField, null>;
@@ -270,9 +272,7 @@ export function buildSanitizationPlan(input: {
 }
 
 /** True when a `users` row has already been sanitized. */
-export function isSanitized(user: {
-  sanitizedAt?: Date | null;
-}): boolean {
+export function isSanitized(user: { sanitizedAt?: Date | null }): boolean {
   return user.sanitizedAt != null;
 }
 

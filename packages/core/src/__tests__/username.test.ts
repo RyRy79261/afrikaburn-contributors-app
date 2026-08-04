@@ -43,7 +43,9 @@ describe("validateUsername — shape", () => {
   it("enforces the length bounds", () => {
     expect(validateUsername("a".repeat(USERNAME_MIN_LENGTH)).ok).toBe(true);
     expect(validateUsername("a".repeat(USERNAME_MAX_LENGTH)).ok).toBe(true);
-    expect(validateUsername("a".repeat(USERNAME_MAX_LENGTH + 1)).ok).toBe(false);
+    expect(validateUsername("a".repeat(USERNAME_MAX_LENGTH + 1)).ok).toBe(
+      false,
+    );
     expect(validateUsername("ab").ok).toBe(false);
   });
 
@@ -150,7 +152,8 @@ describe("validateUsername — reserved list", () => {
   it("every reserved entry is itself lower-cased and unique", () => {
     // A reserved entry with capitals would silently never match, because the
     // lookup normalizes. A duplicate is dead weight that hides a typo.
-    for (const name of RESERVED_USERNAMES) expect(name).toBe(name.toLowerCase());
+    for (const name of RESERVED_USERNAMES)
+      expect(name).toBe(name.toLowerCase());
     expect(new Set(RESERVED_USERNAMES).size).toBe(RESERVED_USERNAMES.length);
   });
 });
@@ -169,7 +172,14 @@ describe("validateUsername — error messages are for humans", () => {
   });
 
   it("never dumps a regex or a character class at the user", () => {
-    for (const bad of ["ab", "1dusty", "dusty_", "du__sty", "dusty!", "admin"]) {
+    for (const bad of [
+      "ab",
+      "1dusty",
+      "dusty_",
+      "du__sty",
+      "dusty!",
+      "admin",
+    ]) {
       const message = errorOf(bad);
       expect(message, bad).not.toMatch(/[\^$\\]|\[a-z|{2,|regex/i);
       expect(message.endsWith("."), bad).toBe(true);

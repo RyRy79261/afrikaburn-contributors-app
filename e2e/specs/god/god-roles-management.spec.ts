@@ -81,7 +81,9 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     await expect(
       editor.getByRole("button", { name: /delete role/i }),
     ).toHaveCount(0);
-    await expect(editor.getByText(new RegExp(`permanent: ${name}`, "i"))).toBeVisible();
+    await expect(
+      editor.getByText(new RegExp(`permanent: ${name}`, "i")),
+    ).toBeVisible();
 
     // The checklist speaks in consequences, not in permission keys — this is the
     // screen where someone decides what a colleague can destroy.

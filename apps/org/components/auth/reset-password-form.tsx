@@ -27,8 +27,8 @@ function MissingToken() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">This link isn&rsquo;t usable</h1>
         <p className="text-sm text-muted-foreground">
-          Reset links carry a single-use token. This one arrived without one — it
-          may have been truncated by your email client, or already used.
+          Reset links carry a single-use token. This one arrived without one —
+          it may have been truncated by your email client, or already used.
         </p>
       </div>
       <Button asChild>
@@ -104,8 +104,8 @@ function ResetForm({ token }: { token: string }) {
       </Button>
 
       <p className="text-xs text-muted-foreground">
-        This signs you out everywhere — you&rsquo;ll re-enter your new password on
-        each device.
+        This signs you out everywhere — you&rsquo;ll re-enter your new password
+        on each device.
       </p>
     </form>
   );

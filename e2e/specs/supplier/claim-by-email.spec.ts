@@ -86,7 +86,9 @@ test.describe("supplier claim-by-email", () => {
     // First authenticated portal load claims the accountless row by overlap.
     await suppliersPage.goto("/onboarding");
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
     // Attached to the org's row: its NAME shows, the typed one does not identify us.
     await expect(suppliersPage.getByText(claimedName).first()).toBeVisible();
@@ -120,7 +122,9 @@ test.describe("supplier claim-by-email", () => {
     await register.click();
 
     await expect(
-      suppliersPage.getByRole("heading", { name: /your onboarding checklist/i }),
+      suppliersPage.getByRole("heading", {
+        name: /your onboarding checklist/i,
+      }),
     ).toBeVisible();
     await expect(suppliersPage.getByText(typedName).first()).toBeVisible();
     // A fresh row starts in Good standing.

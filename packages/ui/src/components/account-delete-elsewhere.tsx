@@ -53,8 +53,8 @@ export function AccountDeleteElsewhere({
           There is one AfrikaBurn account behind all three apps, and deleting it
           deletes it everywhere. The request is made on the participant app,
           which is where the checks, the grace period and the erasure all live —
-          keeping them in one place is what stops a deletion going through with a
-          check missed.
+          keeping them in one place is what stops a deletion going through with
+          a check missed.
         </p>
 
         <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm">

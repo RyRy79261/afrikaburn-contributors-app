@@ -44,9 +44,9 @@ describe("camp name dedupe integration", () => {
     const d = decideCampName("Madd Hatterz", existing);
     expect(d.kind).toBe("warn");
     if (d.kind === "warn") expect(d.similar).toContain("Mad Hatters");
-    expect(trigramSimilarity("Madd Hatterz", "Mad Hatters")).toBeGreaterThanOrEqual(
-      SIMILARITY_WARN_THRESHOLD,
-    );
+    expect(
+      trigramSimilarity("Madd Hatterz", "Mad Hatters"),
+    ).toBeGreaterThanOrEqual(SIMILARITY_WARN_THRESHOLD);
   });
 
   it("passes a clearly distinct name", () => {

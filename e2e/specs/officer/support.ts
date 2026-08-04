@@ -92,7 +92,9 @@ export interface OfficerActor {
 }
 
 /** Sign up + onboard a burner and give them a bio phone (a would-be officer). */
-export async function onboardOfficerWithPhone(page: Page): Promise<OfficerActor> {
+export async function onboardOfficerWithPhone(
+  page: Page,
+): Promise<OfficerActor> {
   const username = uniqueUsername("officer");
   const account = await signUpBurner(page, { onboard: true, username });
   const { marker } = await setBioPhone(page);

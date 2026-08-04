@@ -70,7 +70,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const body = (await request.json().catch(() => null)) as HandleUploadBody | null;
+  const body = (await request
+    .json()
+    .catch(() => null)) as HandleUploadBody | null;
   if (!body) {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }

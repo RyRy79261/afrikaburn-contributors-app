@@ -58,7 +58,9 @@ export function RecentActivity({ rows }: { rows: ActivityRow[] }) {
                     aria-hidden
                   />
                   <span className="truncate">
-                    <span className="font-medium">{actorName(row.actorEmail)}</span>{" "}
+                    <span className="font-medium">
+                      {actorName(row.actorEmail)}
+                    </span>{" "}
                     <span className="text-muted-foreground">
                       {activityLabel(row.action)}
                     </span>

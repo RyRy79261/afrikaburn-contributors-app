@@ -81,13 +81,23 @@ describe("nextSupplierSequence", () => {
 
   it("ignores other years", () => {
     expect(
-      nextSupplierSequence(2027, ["SUP-2026-9999", "SUP-2028-5000", "SUP-2027-0002"]),
+      nextSupplierSequence(2027, [
+        "SUP-2026-9999",
+        "SUP-2028-5000",
+        "SUP-2027-0002",
+      ]),
     ).toBe(3);
   });
 
   it("skips nulls and unparseable legacy values rather than stalling issuance", () => {
     expect(
-      nextSupplierSequence(2027, [null, undefined, "", "legacy-code", "SUP-2027-0005"]),
+      nextSupplierSequence(2027, [
+        null,
+        undefined,
+        "",
+        "legacy-code",
+        "SUP-2027-0005",
+      ]),
     ).toBe(6);
   });
 });
@@ -154,7 +164,9 @@ describe("contactNamesAddress — the supplier claim boundary", () => {
 
   it("is safe on empty, null and address-free contacts", () => {
     expect(contactNamesAddress(null, "a@b.com")).toBe(false);
-    expect(contactNamesAddress("phone only 082 555 0147", "a@b.com")).toBe(false);
+    expect(contactNamesAddress("phone only 082 555 0147", "a@b.com")).toBe(
+      false,
+    );
     expect(contactNamesAddress("a@b.com", "   ")).toBe(false);
   });
 });

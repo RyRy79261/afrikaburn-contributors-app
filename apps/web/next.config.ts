@@ -11,7 +11,12 @@ const repoRoot = path.join(appDir, "..", "..");
 
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@quagga/ui", "@quagga/types", "@quagga/core", "@quagga/db"],
+  transpilePackages: [
+    "@quagga/ui",
+    "@quagga/types",
+    "@quagga/core",
+    "@quagga/db",
+  ],
   turbopack: { root: repoRoot },
   headers: securityHeaders,
 };

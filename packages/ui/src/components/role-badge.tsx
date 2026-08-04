@@ -44,7 +44,10 @@ export function RoleSwatch({
         selected && "ring-2 ring-ring ring-offset-1 ring-offset-background",
         className,
       )}
-      style={{ backgroundColor: ROLE_COLOR_HEX[color], borderColor: "rgba(0,0,0,0.2)" }}
+      style={{
+        backgroundColor: ROLE_COLOR_HEX[color],
+        borderColor: "rgba(0,0,0,0.2)",
+      }}
       aria-hidden
     />
   );

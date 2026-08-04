@@ -185,8 +185,9 @@ export function RolesManager({
   const [editing, setEditing] = useState<OrgRoleView | null>(null);
   const [creatingRole, setCreatingRole] = useState(false);
   const [newDepartment, setNewDepartment] = useState("");
-  const [confirmDeleteDepartment, setConfirmDeleteDepartment] =
-    useState<OrgRolesOverview["departments"][number] | null>(null);
+  const [confirmDeleteDepartment, setConfirmDeleteDepartment] = useState<
+    OrgRolesOverview["departments"][number] | null
+  >(null);
   const [confirmDeleteRole, setConfirmDeleteRole] =
     useState<OrgRoleView | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<{
@@ -249,7 +250,10 @@ export function RolesManager({
     <>
       {!canManage && (
         <p className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm">
-          <Eye className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Eye
+            className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
           <span className="text-foreground">
             You are reading this deployment&rsquo;s permission model, which is
             part of the system panel. Changing it belongs to a{" "}
@@ -378,10 +382,10 @@ export function RolesManager({
                 aria-hidden
               />
               <span className="text-card-foreground">
-                No department owns{" "}
-                {listDomainLabels(overview.unownedDomains)}. Only org-wide roles
-                reach {overview.unownedDomains.length === 1 ? "it" : "those"} —
-                a department-scoped role sees no personal information there and
+                No department owns {listDomainLabels(overview.unownedDomains)}.
+                Only org-wide roles reach{" "}
+                {overview.unownedDomains.length === 1 ? "it" : "those"} — a
+                department-scoped role sees no personal information there and
                 deletes nothing there.
               </span>
             </p>
@@ -469,7 +473,10 @@ export function RolesManager({
                   </div>
                   {canManage && isPermanentDepartment(d) && (
                     <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                      <Lock className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <Lock
+                        className="mt-px h-3.5 w-3.5 shrink-0"
+                        aria-hidden
+                      />
                       <span>{permanentDepartmentReason(d.name)}</span>
                     </p>
                   )}
@@ -901,7 +908,8 @@ function RoleRow({
             </Badge>
           )}
           <span className="text-xs font-normal text-muted-foreground">
-            {role.holders} {role.holders === 1 ? "person holds it" : "people hold it"}
+            {role.holders}{" "}
+            {role.holders === 1 ? "person holds it" : "people hold it"}
           </span>
         </span>
         {/* `org_staff` NAMED, not defaulted: this row describes a ROLE, not a
@@ -1126,7 +1134,9 @@ function RoleEditor({
               id="role-name"
               value={draft.name}
               disabled={pending}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, name: e.target.value }))
+              }
             />
           </Field>
 
@@ -1228,7 +1238,9 @@ function RoleEditor({
                   }
                 />
                 <span className="flex flex-col gap-0.5">
-                  <span className="font-medium">{ORG_CAPABILITY_LABELS[c]}</span>
+                  <span className="font-medium">
+                    {ORG_CAPABILITY_LABELS[c]}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {ORG_CAPABILITY_DESCRIPTIONS[c]}
                   </span>
@@ -1261,9 +1273,9 @@ function RoleEditor({
             ))}
             <p className="text-xs text-muted-foreground">
               Managing accounts, roles and departments is deliberately not on
-              this list: it belongs to the{" "}
-              {ORG_RANK_LABELS.god.toLowerCase()} and cannot be granted away.
-              That is what makes everything above safe to edit.
+              this list: it belongs to the {ORG_RANK_LABELS.god.toLowerCase()}{" "}
+              and cannot be granted away. That is what makes everything above
+              safe to edit.
             </p>
           </fieldset>
 

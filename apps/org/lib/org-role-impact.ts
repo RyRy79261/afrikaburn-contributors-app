@@ -52,7 +52,10 @@ function impactOf(
   rows: readonly AssignmentRow[],
   doomed: (row: AssignmentRow) => boolean,
 ): DeletionImpact {
-  const rolesByUser = new Map<string, { label: string; kept: number; lost: number }>();
+  const rolesByUser = new Map<
+    string,
+    { label: string; kept: number; lost: number }
+  >();
   for (const row of rows) {
     const entry = rolesByUser.get(row.userId) ?? {
       label: row.label,
@@ -93,9 +96,7 @@ export function computeOrgRoleImpacts(rows: readonly AssignmentRow[]): {
   }
 
   const departmentIds = new Set(
-    rows
-      .map((r) => r.departmentId)
-      .filter((id): id is string => id !== null),
+    rows.map((r) => r.departmentId).filter((id): id is string => id !== null),
   );
   for (const departmentId of departmentIds) {
     byDepartment.set(

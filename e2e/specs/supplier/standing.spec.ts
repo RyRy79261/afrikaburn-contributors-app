@@ -34,18 +34,14 @@ test.describe("supplier standing visibility", () => {
       suppliersPage.getByText(/you['’]re in good standing with afrikaburn/i),
     ).toBeVisible();
     // The legend marks the supplier's current band.
-    await expect(
-      suppliersPage.getByText(/you['’]re here/i),
-    ).toBeVisible();
+    await expect(suppliersPage.getByText(/you['’]re here/i)).toBeVisible();
 
     // The privacy promise is always on this page (the #56 law made visible).
     await expect(
       suppliersPage.getByText(/private notes stay private/i),
     ).toBeVisible();
     await expect(
-      suppliersPage.getByText(
-        /those notes are for the supplier team only/i,
-      ),
+      suppliersPage.getByText(/those notes are for the supplier team only/i),
     ).toBeVisible();
   });
 

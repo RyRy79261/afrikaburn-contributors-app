@@ -85,7 +85,11 @@ describe("installClientErrorCapture", () => {
   it("records the path but never the query string", () => {
     // Query strings on this product carry invite codes and search terms, and
     // this value is published.
-    window.history.replaceState({}, "", "/camps/karoo-kombuis?invite=SECRET123");
+    window.history.replaceState(
+      {},
+      "",
+      "/camps/karoo-kombuis?invite=SECRET123",
+    );
     console.error("something broke");
     const [entry] = recentClientErrors();
     expect(entry?.route).toBe("/camps/karoo-kombuis");

@@ -113,14 +113,19 @@ export function Wizard({
   }
 
   return (
-    <nav aria-label="Registration progress" className={cn("space-y-3", className)}>
+    <nav
+      aria-label="Registration progress"
+      className={cn("space-y-3", className)}
+    >
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <ol className="space-y-1">
         {derived.map((s) => {
           const inner = (
             <>
               <StepMarker index={s.index} state={s.state} />
-              <span className={cn("text-sm leading-snug", LABEL_STYLES[s.state])}>
+              <span
+                className={cn("text-sm leading-snug", LABEL_STYLES[s.state])}
+              >
                 {s.label}
               </span>
             </>

@@ -104,9 +104,9 @@ function NoRolesScreen({ session }: { session: OrgSession }) {
         {held.length === 0 ? (
           <>
             Roles are what decide which parts of the console open — reviewing
-            registrations, vetting suppliers, seeing members&apos; details. Until
-            one is assigned there is genuinely nothing here for you, which is why
-            this page is empty rather than pretending otherwise.
+            registrations, vetting suppliers, seeing members&apos; details.
+            Until one is assigned there is genuinely nothing here for you, which
+            is why this page is empty rather than pretending otherwise.
           </>
         ) : (
           <>

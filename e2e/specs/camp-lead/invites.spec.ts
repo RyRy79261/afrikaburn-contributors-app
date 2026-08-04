@@ -47,9 +47,7 @@ test.describe("camp lead — invites", () => {
     await leadPage.goto(`/camps/${camp.slug}`);
     await expect(leadPage.getByText(leadName)).toBeVisible();
     await expect(leadPage.getByText(memberName)).toBeVisible();
-    await expect(
-      leadPage.getByText("Member", { exact: true }),
-    ).toBeVisible();
+    await expect(leadPage.getByText("Member", { exact: true })).toBeVisible();
 
     // One-time enforcement: a DIFFERENT, onboarded stranger opening the same
     // link hits the spent card with NO redeem action. This is the server's

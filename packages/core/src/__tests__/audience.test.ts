@@ -105,7 +105,10 @@ describe("resolveAudience — org outbound selectors", () => {
       selectors: ["all_current_burners"],
     };
     // staleBurner is on a different edition and must be excluded.
-    expect(resolveAudience(spec, baseCtx())).toEqual(["campRegLead", "orgMember"]);
+    expect(resolveAudience(spec, baseCtx())).toEqual([
+      "campRegLead",
+      "orgMember",
+    ]);
   });
 
   it("camp_leads = leads/admins of every theme_camp", () => {
@@ -133,7 +136,10 @@ describe("resolveAudience — org outbound selectors", () => {
   });
 
   it("mv_leads = leads/admins of mutant_vehicle groups", () => {
-    const spec: AudienceSpec = { kind: "org_outbound", selectors: ["mv_leads"] };
+    const spec: AudienceSpec = {
+      kind: "org_outbound",
+      selectors: ["mv_leads"],
+    };
     expect(resolveAudience(spec, baseCtx())).toEqual(["mvLead"]);
   });
 
@@ -192,7 +198,10 @@ describe("resolveAudience — org outbound selectors", () => {
 describe("resolveAudience — org suppliers", () => {
   it("returns every account-linked supplier, sorted + de-duplicated", () => {
     const spec: AudienceSpec = { kind: "org_suppliers" };
-    expect(resolveAudience(spec, baseCtx())).toEqual(["supplierA", "supplierB"]);
+    expect(resolveAudience(spec, baseCtx())).toEqual([
+      "supplierA",
+      "supplierB",
+    ]);
   });
 
   it("resolves to nobody when no supplier has claimed an account", () => {
@@ -260,10 +269,19 @@ describe("resolveAudience — project", () => {
   it("roles = members holding any wanted custom role, deduped", () => {
     const ctx = baseCtx();
     ctx.roleAssignments = [
-      { membershipId: "m:campRegLead:g-camp-registered", projectRoleId: "r-captain" },
-      { membershipId: "m:campRegMember:g-camp-registered", projectRoleId: "r-teamlead" },
+      {
+        membershipId: "m:campRegLead:g-camp-registered",
+        projectRoleId: "r-captain",
+      },
+      {
+        membershipId: "m:campRegMember:g-camp-registered",
+        projectRoleId: "r-teamlead",
+      },
       // multi-role member: campRegLead also a team lead — must not duplicate.
-      { membershipId: "m:campRegLead:g-camp-registered", projectRoleId: "r-teamlead" },
+      {
+        membershipId: "m:campRegLead:g-camp-registered",
+        projectRoleId: "r-teamlead",
+      },
       // assignment for a different group's membership — must be ignored.
       { membershipId: "m:mvLead:g-mv", projectRoleId: "r-captain" },
     ];
@@ -273,7 +291,10 @@ describe("resolveAudience — project", () => {
       mode: "roles",
       roleIds: ["r-captain", "r-teamlead"],
     };
-    expect(resolveAudience(spec, ctx)).toEqual(["campRegLead", "campRegMember"]);
+    expect(resolveAudience(spec, ctx)).toEqual([
+      "campRegLead",
+      "campRegMember",
+    ]);
   });
 
   it("roles mode with empty roleIds resolves to nobody", () => {
@@ -289,7 +310,10 @@ describe("resolveAudience — project", () => {
   it("only wanted roles count — an unlisted role is excluded", () => {
     const ctx = baseCtx();
     ctx.roleAssignments = [
-      { membershipId: "m:campRegMember:g-camp-registered", projectRoleId: "r-other" },
+      {
+        membershipId: "m:campRegMember:g-camp-registered",
+        projectRoleId: "r-other",
+      },
     ];
     const spec: AudienceSpec = {
       kind: "project",
@@ -305,7 +329,12 @@ describe("resolveAudience — baseline derivation", () => {
   it("targeting the baseline role resolves to the whole camp (derived, not stored)", () => {
     const ctx = baseCtx();
     ctx.projectRoles = [
-      { id: "r-baseline", groupId: CAMP_REG, kind: "baseline", officerKey: null },
+      {
+        id: "r-baseline",
+        groupId: CAMP_REG,
+        kind: "baseline",
+        officerKey: null,
+      },
       { id: "r-captain", groupId: CAMP_REG, kind: "captain", officerKey: null },
     ];
     // No roleAssignments for baseline exist — it must still be everyone.
@@ -328,10 +357,25 @@ describe("resolveAudience — org officer", () => {
     const ctx = baseCtx();
     ctx.projectRoles = [
       // Sound Officer role materialised in the REGISTERED camp…
-      { id: "so-reg", groupId: CAMP_REG, kind: "officer", officerKey: "sound_officer" },
+      {
+        id: "so-reg",
+        groupId: CAMP_REG,
+        kind: "officer",
+        officerKey: "sound_officer",
+      },
       // …and in the UNREGISTERED (draft) camp — must never resolve.
-      { id: "so-unreg", groupId: CAMP_UNREG, kind: "officer", officerKey: "sound_officer" },
-      { id: "lnt-reg", groupId: CAMP_REG, kind: "officer", officerKey: "lnt_officer" },
+      {
+        id: "so-unreg",
+        groupId: CAMP_UNREG,
+        kind: "officer",
+        officerKey: "sound_officer",
+      },
+      {
+        id: "lnt-reg",
+        groupId: CAMP_REG,
+        kind: "officer",
+        officerKey: "lnt_officer",
+      },
     ];
     ctx.roleAssignments = [
       // accepted sound officer in the registered camp → resolves

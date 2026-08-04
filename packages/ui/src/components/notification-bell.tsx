@@ -7,8 +7,7 @@ import { cn } from "../lib/utils";
 // stateless: it renders the `count` it is given and delegates opening the
 // notification surface to the parent's `onClick`. No hooks → server-safe.
 
-export interface NotificationBellProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface NotificationBellProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Unread count; 0 (or negative) hides the badge. */
   count?: number;
   /** Cap the displayed number ("99+" past this). Default 99. */

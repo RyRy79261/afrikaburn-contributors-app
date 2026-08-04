@@ -65,11 +65,11 @@ export default async function SupplierAccountDeletePage() {
                 claims it again.
               </li>
               <li>
-                It is re-claimed the same way you claimed it: whoever verifies an
-                email address that the listing&rsquo;s contact details name can
-                take it over. If that address was yours, it stays on the business
-                record after your account is erased — so deleting your account
-                does not stop the listing being claimed with it.
+                It is re-claimed the same way you claimed it: whoever verifies
+                an email address that the listing&rsquo;s contact details name
+                can take it over. If that address was yours, it stays on the
+                business record after your account is erased — so deleting your
+                account does not stop the listing being claimed with it.
               </li>
             </ul>
           ) : (

@@ -41,12 +41,13 @@ export function relativeTime(at: Date, now: Date = new Date()): string {
  * `questionnaire` is deliberately absent: it has two possible senders, so it is
  * answered from the row's `origin` instead — see `sourceLabel`.
  */
-const ALWAYS_ORG_SOURCED: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
-  "bulletin",
-  "registration",
-  "wrangler",
-  "supplier",
-]);
+const ALWAYS_ORG_SOURCED: ReadonlySet<NotificationKind> =
+  new Set<NotificationKind>([
+    "bulletin",
+    "registration",
+    "wrangler",
+    "supplier",
+  ]);
 
 /**
  * Source label for the meta line, or null when there isn't an honest one.
@@ -108,7 +109,9 @@ export function isBlockingNotification(input: {
   kind: NotificationKind;
   title: string;
 }): boolean {
-  return input.kind === "questionnaire" && input.title.includes(BLOCKING_MARKER);
+  return (
+    input.kind === "questionnaire" && input.title.includes(BLOCKING_MARKER)
+  );
 }
 
 // --- Row projection ------------------------------------------------------

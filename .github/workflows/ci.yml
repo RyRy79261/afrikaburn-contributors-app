@@ -338,37 +338,38 @@ jobs:
   # One shard per workspace, so a breach names the workspace in the checks list
   # rather than making somebody open a log to find out which one moved.
   #
-  # WHY THE THREE APPS ARE NOT IN THIS MATRIX.
+  # WHAT AN APP'S PERCENTAGE MEASURES, AND WHAT IT DOES NOT.
   #
   # Vitest measures only what runs inside the vitest process. The persona suite
   # drives real browsers against `next dev` / `next start` in separate
   # processes with no instrumentation, so all 165 e2e tests contribute ZERO to
-  # any number here. Measured, not assumed — the share of each workspace that
-  # NO unit test touches at all:
+  # any number here.
   #
-  #   core  4%    auth 0%    types 0%  |  ui 52%   db 36%
-  #   web  96%    suppliers 91%           org 85%
+  # That is why the three apps scope `coverage.include` to `lib/**` — the
+  # server actions, stores and helpers. `app/**` and `components/**` are route
+  # components the personas render, and counting them produced a ~3% figure
+  # that described the test runner rather than the code. We reported that
+  # number once, in July 2026, and threw it away: it invited somebody to "fix"
+  # it with unit tests nobody needed, and it hid real drops inside noise.
   #
-  # A ratchet is worth having when the number moves for the right reason. Add
-  # an untested component to `ui` and the percentage drops — correct signal.
-  # Add an untested query to `apps/org` and it barely moves, because 85% of
-  # that workspace is already dark to vitest by design: pages, RSC and server
-  # actions are tested through the browser, not through vitest.
+  # Scoped to `lib/`, the figure answers a question worth asking — how much of
+  # the server logic has a test — and it moves for the right reason: a new
+  # untested server action drops it. Read every app row as "of its server
+  # logic", which is what the matrix label says.
   #
-  # So the apps get no floor and no report. Their gate is the e2e matrix above,
-  # which already blocks the merge. A 3% badge on `apps/web` would not measure
-  # quality — it would measure how much of the app happens to have a unit test,
-  # and invite somebody to "fix" it with tests nobody needs.
+  # Still uncounted, and deliberately so: pages, RSC, and client components.
+  # Their gate is the e2e matrix above. To give THOSE a number you would have
+  # to collect V8 coverage from the Next server during the e2e run
+  # (`NODE_V8_COVERAGE` on the app process, flushed on clean shutdown,
+  # source-mapped back through `.next`). That is real work and nobody has
+  # decided it is worth it.
   #
-  # To make an app number mean "tested", collect V8 coverage from the Next
-  # server during the e2e run (`NODE_V8_COVERAGE` on the app process, flushed
-  # on clean shutdown, source-mapped back through `.next`) and merge it with
-  # this. That is a real piece of work, and it is the only honest route to it.
-  #
-  # It does NOT gate `CI pass`. The floors already fail the job; making the
-  # merge gate depend on a comment-posting step as well would let a flaky
-  # third-party action block a green branch. The number is advisory; the floors
-  # are not.
+  # THIS GATES THE MERGE, since 4 Aug 2026. Before that a breached floor
+  # reddened its own shard while `CI pass` — the one required check — stayed
+  # green, so every floor in the repo was decoration. The original reason for
+  # keeping it out was that a flaky comment-posting action should not block a
+  # green branch; that is handled where it belongs, on the comment step itself
+  # (`continue-on-error`), rather than by exempting the floors.
   coverage:
     name: coverage · ${{ matrix.workspace }}
     runs-on: ubuntu-latest
@@ -396,6 +397,18 @@ jobs:
           - workspace: "@quagga/types"
             label: "@quagga/types"
             directory: packages/types
+          # The three apps measure `lib/` only — the label carries that, because
+          # the comment is read out of context and "@quagga/web 87%" would
+          # otherwise be read as the whole app.
+          - workspace: "@quagga/web"
+            label: "@quagga/web (lib/ — server logic)"
+            directory: apps/web
+          - workspace: "@quagga/org"
+            label: "@quagga/org (lib/ — server logic)"
+            directory: apps/org
+          - workspace: "@quagga/suppliers"
+            label: "@quagga/suppliers (lib/ — server logic)"
+            directory: apps/suppliers
     steps:
       # `fetch-depth: 0` — the scope check below diffs against the base branch,
       # which a shallow clone does not have.
@@ -491,6 +504,11 @@ jobs:
           always() && github.event_name == 'pull_request'
           && github.event.pull_request.head.repo.full_name == github.repository
           && steps.scope.outputs.in-scope == 'true'
+        # REPORTING NEVER FAILS THE SHARD. `coverage` is in `CI pass`'s needs
+        # list, so this job blocks the merge — and a third-party action having
+        # a bad afternoon must not be what stops a branch with green floors.
+        # The floors step above is the one allowed to fail here.
+        continue-on-error: true
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
           name: ${{ matrix.label }}
@@ -500,7 +518,7 @@ jobs:
   ci-pass:
     name: CI pass
     if: always()
-    needs: [commitlint, ci, e2e]
+    needs: [commitlint, ci, e2e, coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Check every job passed
@@ -508,6 +526,7 @@ jobs:
           echo "commit conventions : ${{ needs.commitlint.result }}"
           echo "lint/typecheck/... : ${{ needs.ci.result }}"
           echo "e2e (all shards)   : ${{ needs.e2e.result }}"
+          echo "coverage floors    : ${{ needs.coverage.result }}"
           echo
 
           # UNCONDITIONAL — these run on every event and must succeed.
@@ -515,7 +534,9 @@ jobs:
           # `needs.e2e.result` covers the WHOLE matrix: with fail-fast disabled
           # every shard runs, and the aggregate is `failure` if any single one
           # failed. That is the property that makes this maintenance-free.
-          for job in "ci:${{ needs.ci.result }}" "e2e:${{ needs.e2e.result }}"; do
+          # `coverage` works the same way, and a shard that skipped itself as
+          # out of scope still reports `success`.
+          for job in "ci:${{ needs.ci.result }}" "e2e:${{ needs.e2e.result }}" "coverage:${{ needs.coverage.result }}"; do
             name="${job%%:*}"; result="${job#*:}"
             if [ "$result" != "success" ]; then
               echo "::error::$name did not pass (result: $result)"

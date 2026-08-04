@@ -52,9 +52,9 @@ test.describe("camp member — server-side refusals (own camp)", () => {
     await expect(
       memberPage.getByRole("heading", { name: /registration/i }),
     ).toHaveCount(0);
-    await expect(
-      memberPage.getByText(/theme camp registration/i),
-    ).toHaveCount(0);
+    await expect(memberPage.getByText(/theme camp registration/i)).toHaveCount(
+      0,
+    );
     // ...and therefore the submit/resubmit control is unreachable.
     await expect(
       memberPage.getByRole("button", { name: /submit registration/i }),
@@ -95,9 +95,9 @@ test.describe("camp member — server-side refusals (own camp)", () => {
     // means the member's server-rendered payload contains no `/join/` token at
     // all. Asserting the token's ABSENCE from the delivered HTML is a server-side
     // check (the data was never sent), not a hidden-button check.
-    await expect(
-      memberPage.locator("code", { hasText: "/join/" }),
-    ).toHaveCount(0);
+    await expect(memberPage.locator("code", { hasText: "/join/" })).toHaveCount(
+      0,
+    );
     await expect(
       memberPage.getByRole("button", { name: /new member invite/i }),
     ).toHaveCount(0);

@@ -489,7 +489,8 @@ export async function updateOrgRole(
           ),
         )
         .limit(1);
-      if (clash[0]) throw new Error(`There is already a role called "${name}".`);
+      if (clash[0])
+        throw new Error(`There is already a role called "${name}".`);
 
       const departmentId = canRescopeOrgRole(role)
         ? (input.departmentId ?? null)
@@ -665,4 +666,3 @@ export async function setAccountOrgRoles(
 // the case that would otherwise leave the whole org team able to sign in and do
 // nothing. A console button for it would be a second, manual path to the same
 // invariant, and the one that gets forgotten. See packages/db/src/migrate.ts.)
-

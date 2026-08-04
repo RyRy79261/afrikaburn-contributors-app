@@ -32,8 +32,7 @@ export interface SessionView {
 }
 
 export type SessionActionResult =
-  | { ok: true; message?: string }
-  | { ok: false; error: string };
+  { ok: true; message?: string } | { ok: false; error: string };
 
 function relative(iso: string | null): string {
   if (!iso) return "Last seen unknown";

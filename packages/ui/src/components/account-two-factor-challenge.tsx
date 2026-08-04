@@ -76,7 +76,10 @@ export function AccountTwoFactorChallenge({
         </p>
       </div>
 
-      <Field label={totp ? "6-digit code" : "Backup code"} htmlFor="tfa-challenge">
+      <Field
+        label={totp ? "6-digit code" : "Backup code"}
+        htmlFor="tfa-challenge"
+      >
         <Input
           id="tfa-challenge"
           inputMode={totp ? "numeric" : "text"}

@@ -17,10 +17,7 @@ import {
 import { getInvitePreview, previewAsInviteLike } from "@/lib/invites-store";
 import { getViewerRole } from "@/lib/groups-store";
 import { completeInviteJoin } from "@/lib/invite-flow";
-import {
-  clearPendingInvite,
-  setPendingInvite,
-} from "@/lib/pending-invite";
+import { clearPendingInvite, setPendingInvite } from "@/lib/pending-invite";
 
 const AcceptInput = z.object({
   token: z.string().refine(isWellFormedInviteToken, "Not an invite token."),

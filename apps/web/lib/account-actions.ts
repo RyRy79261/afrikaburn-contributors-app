@@ -138,7 +138,12 @@ async function notifySecurity(
 ): Promise<void> {
   try {
     await insertNotifications(db(), [
-      { userId, ...payload, origin: "system" as const, linkApp: "web" as const },
+      {
+        userId,
+        ...payload,
+        origin: "system" as const,
+        linkApp: "web" as const,
+      },
     ]);
   } catch {
     // A failed inbox write must not roll back a completed security change.
@@ -892,9 +897,7 @@ export async function requestAccountDeletion(
       // sign-in now cancels (see @quagga/auth's session-create hook).
       const typed = (input.confirmEmail ?? "").trim().toLowerCase();
       if (!typed) {
-        throw new Error(
-          "Type your account email address to confirm.",
-        );
+        throw new Error("Type your account email address to confirm.");
       }
       if (typed !== user.email.toLowerCase()) {
         throw new Error(

@@ -1,10 +1,7 @@
 "use client";
 
 import { Flame } from "lucide-react";
-import type {
-  Questionnaire,
-  QuestionnaireResponses,
-} from "@quagga/types";
+import type { Questionnaire, QuestionnaireResponses } from "@quagga/types";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { SignOutButton } from "@/components/sign-out-button";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";

@@ -7,7 +7,11 @@
 // Pure logic only — no I/O. Assignment/consent state and org-visibility are
 // modelled here so the store can persist them and tests can prove the rules.
 
-import type { OfficerKey, RoleAssignmentConsent, RoleColor } from "@quagga/types";
+import type {
+  OfficerKey,
+  RoleAssignmentConsent,
+  RoleColor,
+} from "@quagga/types";
 import { SOUND_SCALE_VALUES, isNoAmplifiedSound } from "./sound";
 
 /** One catalog entry: the fixed org-facing identity of an officer role. */
@@ -25,10 +29,25 @@ export interface OfficerCatalogEntry {
  */
 export const OFFICER_CATALOG: readonly OfficerCatalogEntry[] = [
   { key: "lnt_officer", name: "LNT Lead", emoji: "♻️", color: "sage" },
-  { key: "safety_officer", name: "Safety Officer", emoji: "⛑️", color: "apricot" },
-  { key: "fire_safety_officer", name: "Safety Baron", emoji: "🔥", color: "rust" },
+  {
+    key: "safety_officer",
+    name: "Safety Officer",
+    emoji: "⛑️",
+    color: "apricot",
+  },
+  {
+    key: "fire_safety_officer",
+    name: "Safety Baron",
+    emoji: "🔥",
+    color: "rust",
+  },
   { key: "sound_officer", name: "Sound Officer", emoji: "🔊", color: "teal" },
-  { key: "safety_monitor", name: "Safety Monitor", emoji: "🛡️", color: "olive" },
+  {
+    key: "safety_monitor",
+    name: "Safety Monitor",
+    emoji: "🛡️",
+    color: "olive",
+  },
 ];
 
 const CATALOG_BY_KEY: ReadonlyMap<OfficerKey, OfficerCatalogEntry> = new Map(
@@ -131,7 +150,12 @@ export function outstandingOfficers(input: {
   assignedKeys: Iterable<OfficerKey>;
 }): OutstandingOfficers {
   if (!input.isRegisteredOrInFlight) {
-    return { outstanding: [], requiredCount: 0, assignedCount: 0, applies: false };
+    return {
+      outstanding: [],
+      requiredCount: 0,
+      assignedCount: 0,
+      applies: false,
+    };
   }
   const required = requiredOfficerKeys(input.triggers);
   const assigned = new Set(input.assignedKeys);

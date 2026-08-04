@@ -14,7 +14,11 @@ import {
 } from "../officers";
 import type { OfficerKey } from "@quagga/types";
 
-const NO_FIRE = { hasGenerators: false, hasOpenFlame: false, hasFuelStorage: false };
+const NO_FIRE = {
+  hasGenerators: false,
+  hasOpenFlame: false,
+  hasFuelStorage: false,
+};
 
 function triggers(partial: Partial<OfficerTriggerInput>): OfficerTriggerInput {
   return { soundLevel: 0, ...NO_FIRE, ...partial };
@@ -29,7 +33,9 @@ describe("OFFICER_CATALOG", () => {
       "sound_officer",
       "safety_monitor",
     ]);
-    expect(officerCatalogEntry("fire_safety_officer")?.name).toBe("Safety Baron");
+    expect(officerCatalogEntry("fire_safety_officer")?.name).toBe(
+      "Safety Baron",
+    );
     expect(officerCatalogEntry("lnt_officer")?.emoji).toBe("♻️");
   });
 });
@@ -53,31 +59,37 @@ describe("officer trigger matrix", () => {
   });
 
   it("sound officer required at level >= 2, recommended below", () => {
-    expect(officerRequirements(triggers({ soundLevel: 1 })).get("sound_officer")).toBe(
-      "recommended",
-    );
-    expect(officerRequirements(triggers({ soundLevel: 2 })).get("sound_officer")).toBe(
-      "required",
-    );
-    expect(officerRequirements(triggers({ soundLevel: 4 })).get("sound_officer")).toBe(
-      "required",
-    );
+    expect(
+      officerRequirements(triggers({ soundLevel: 1 })).get("sound_officer"),
+    ).toBe("recommended");
+    expect(
+      officerRequirements(triggers({ soundLevel: 2 })).get("sound_officer"),
+    ).toBe("required");
+    expect(
+      officerRequirements(triggers({ soundLevel: 4 })).get("sound_officer"),
+    ).toBe("required");
   });
 
   it("fire safety officer is always required for registered camps (Ryan, 24 Jul)", () => {
     // Unconditional — fire shows up at every registered camp eventually,
     // regardless of what the registration declares.
+    expect(officerRequirements(triggers({})).get("fire_safety_officer")).toBe(
+      "required",
+    );
     expect(
-      officerRequirements(triggers({})).get("fire_safety_officer"),
+      officerRequirements(triggers({ hasGenerators: true })).get(
+        "fire_safety_officer",
+      ),
     ).toBe("required");
     expect(
-      officerRequirements(triggers({ hasGenerators: true })).get("fire_safety_officer"),
+      officerRequirements(triggers({ hasOpenFlame: true })).get(
+        "fire_safety_officer",
+      ),
     ).toBe("required");
     expect(
-      officerRequirements(triggers({ hasOpenFlame: true })).get("fire_safety_officer"),
-    ).toBe("required");
-    expect(
-      officerRequirements(triggers({ hasFuelStorage: true })).get("fire_safety_officer"),
+      officerRequirements(triggers({ hasFuelStorage: true })).get(
+        "fire_safety_officer",
+      ),
     ).toBe("required");
   });
 
@@ -86,7 +98,9 @@ describe("officer trigger matrix", () => {
       ["fire_safety_officer", "lnt_officer"].sort(),
     );
     expect(
-      requiredOfficerKeys(triggers({ soundLevel: 3, hasGenerators: true })).sort(),
+      requiredOfficerKeys(
+        triggers({ soundLevel: 3, hasGenerators: true }),
+      ).sort(),
     ).toEqual(["fire_safety_officer", "lnt_officer", "sound_officer"].sort());
   });
 });

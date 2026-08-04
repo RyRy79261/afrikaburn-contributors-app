@@ -131,7 +131,10 @@ const RegistrationValuesSchema = z.object({
   s3ParticipationPlan: nullableText(8000),
   s3OperatingHours: z.array(OperatingHours).max(4).default([]),
   s3ScheduleDetail: nullableText(8000),
-  s3GiftingFood: z.boolean().nullish().transform((v) => v ?? null),
+  s3GiftingFood: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
   s4ExpectedPopulation: nullableInt(1_000_000),
   s4FirstArrivalDate: nullableText(40),
   s4WorkAccessPasses: nullableInt(100_000),
@@ -144,10 +147,16 @@ const RegistrationValuesSchema = z.object({
   s5NeighbourRequest: nullableText(500),
   s5FamilyFriendly: nullableText(500),
   s6SuppliersNote: nullableText(4000),
-  s6PaidPerformers: z.boolean().nullish().transform((v) => v ?? null),
+  s6PaidPerformers: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
   s6FeeStructure: nullableText(8000),
   s6ExpectedBudgetZar: nullableInt(1_000_000_000),
-  s6PlugAndPlayAck: z.boolean().nullish().transform((v) => v ?? null),
+  s6PlugAndPlayAck: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
   supplierIds: z.array(z.string().uuid()).max(100).default([]),
 });
 

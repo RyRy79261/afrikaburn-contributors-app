@@ -20,7 +20,12 @@ interface FieldProps {
  * boolean) — the fill view still handles any kind the engine defines so seeded
  * definitions render too.
  */
-export function QuestionField({ question, value, error, onChange }: FieldProps) {
+export function QuestionField({
+  question,
+  value,
+  error,
+  onChange,
+}: FieldProps) {
   const describedBy = error
     ? `${question.id}-error`
     : question.helper
@@ -222,7 +227,11 @@ function Control({
       for (let n = question.min; n <= question.max; n++) steps.push(n);
       return (
         <div className="flex flex-col gap-1.5">
-          <div role="radiogroup" aria-describedby={describedBy} className="flex flex-wrap gap-2">
+          <div
+            role="radiogroup"
+            aria-describedby={describedBy}
+            className="flex flex-wrap gap-2"
+          >
             {steps.map((n) => (
               <button
                 key={n}
@@ -255,7 +264,11 @@ function Control({
       const current = typeof value === "number" ? value : 0;
       const steps = Array.from({ length: question.steps }, (_, i) => i + 1);
       return (
-        <div role="radiogroup" aria-describedby={describedBy} className="flex flex-wrap gap-1">
+        <div
+          role="radiogroup"
+          aria-describedby={describedBy}
+          className="flex flex-wrap gap-1"
+        >
           {steps.map((n) => (
             <button
               key={n}
@@ -302,12 +315,19 @@ function Control({
       };
       return (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm" aria-describedby={describedBy}>
+          <table
+            className="w-full border-collapse text-sm"
+            aria-describedby={describedBy}
+          >
             <thead>
               <tr>
                 <td className="p-2" />
                 {question.columns.map((column) => (
-                  <th key={column.value} scope="col" className="p-2 text-center text-xs font-medium text-muted-foreground">
+                  <th
+                    key={column.value}
+                    scope="col"
+                    className="p-2 text-center text-xs font-medium text-muted-foreground"
+                  >
                     {column.label}
                   </th>
                 ))}
@@ -318,7 +338,10 @@ function Control({
                 const picks = answer[row.id] ?? [];
                 return (
                   <tr key={row.id} className="border-t border-border">
-                    <th scope="row" className="p-2 text-left text-sm font-normal text-foreground">
+                    <th
+                      scope="row"
+                      className="p-2 text-left text-sm font-normal text-foreground"
+                    >
                       {row.label}
                     </th>
                     {question.columns.map((column) => {
@@ -339,7 +362,9 @@ function Control({
                                 : "border-input bg-background hover:bg-muted",
                             )}
                           >
-                            {on && <Check className="h-3.5 w-3.5" aria-hidden />}
+                            {on && (
+                              <Check className="h-3.5 w-3.5" aria-hidden />
+                            )}
                           </button>
                         </td>
                       );
@@ -359,9 +384,7 @@ function Control({
       return (
         <Input
           id={question.id}
-          value={
-            Array.isArray(value) ? value.join(", ") : ""
-          }
+          value={Array.isArray(value) ? value.join(", ") : ""}
           placeholder="e.g. 2024, 2025"
           aria-describedby={describedBy}
           onChange={(e) =>

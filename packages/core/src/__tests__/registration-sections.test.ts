@@ -21,7 +21,8 @@ function fullData(): RegistrationSectionData {
     s2LntLeadPhone: "+27 82 000 0000",
     s2LntLeadEmail: "lnt@example.com",
 
-    s3ParticipationPlan: "Morning rooibos service and an afternoon shade lounge.",
+    s3ParticipationPlan:
+      "Morning rooibos service and an afternoon shade lounge.",
     s3OperatingHours: ["morning", "day"],
     s3GiftingFood: true,
 
@@ -35,7 +36,8 @@ function fullData(): RegistrationSectionData {
     s5FamilyFriendly: "Yes",
 
     s6PaidPerformers: false,
-    s6FeeStructure: "Members contribute R500 each toward shared infrastructure.",
+    s6FeeStructure:
+      "Members contribute R500 each toward shared infrastructure.",
     s6PlugAndPlayAck: true,
   };
 }
@@ -56,7 +58,9 @@ describe("per-section completeness predicates", () => {
   });
 
   it("identity requires name, description, and contact email", () => {
-    expect(isSectionComplete("identity", { ...fullData(), campName: "  " })).toBe(false);
+    expect(
+      isSectionComplete("identity", { ...fullData(), campName: "  " }),
+    ).toBe(false);
     expect(
       isSectionComplete("identity", { ...fullData(), s1ContactEmail: null }),
     ).toBe(false);
@@ -66,7 +70,10 @@ describe("per-section completeness predicates", () => {
   });
 
   it("identity fails when the description blows the 60-word limit", () => {
-    const longDescription = Array.from({ length: 61 }, (_, i) => `word${i}`).join(" ");
+    const longDescription = Array.from(
+      { length: 61 },
+      (_, i) => `word${i}`,
+    ).join(" ");
     expect(
       isSectionComplete("identity", {
         ...fullData(),
@@ -76,26 +83,42 @@ describe("per-section completeness predicates", () => {
   });
 
   it("lnt requires the plan and all three LNT-lead contact fields", () => {
-    expect(isSectionComplete("lnt", { ...fullData(), s2LntLeadPhone: "" })).toBe(false);
-    expect(isSectionComplete("lnt", { ...fullData(), s2LntPlan: null })).toBe(false);
+    expect(
+      isSectionComplete("lnt", { ...fullData(), s2LntLeadPhone: "" }),
+    ).toBe(false);
+    expect(isSectionComplete("lnt", { ...fullData(), s2LntPlan: null })).toBe(
+      false,
+    );
   });
 
   it("participation needs a plan, at least one operating-hours slot, and a gifting answer", () => {
     expect(
-      isSectionComplete("participation", { ...fullData(), s3OperatingHours: [] }),
+      isSectionComplete("participation", {
+        ...fullData(),
+        s3OperatingHours: [],
+      }),
     ).toBe(false);
     expect(
-      isSectionComplete("participation", { ...fullData(), s3GiftingFood: null }),
+      isSectionComplete("participation", {
+        ...fullData(),
+        s3GiftingFood: null,
+      }),
     ).toBe(false);
     // false is a real answer, not "unanswered".
     expect(
-      isSectionComplete("participation", { ...fullData(), s3GiftingFood: false }),
+      isSectionComplete("participation", {
+        ...fullData(),
+        s3GiftingFood: false,
+      }),
     ).toBe(true);
   });
 
   it("size_logistics requires a positive population, arrival date, and dimensions", () => {
     expect(
-      isSectionComplete("size_logistics", { ...fullData(), s4ExpectedPopulation: 0 }),
+      isSectionComplete("size_logistics", {
+        ...fullData(),
+        s4ExpectedPopulation: 0,
+      }),
     ).toBe(false);
     expect(
       isSectionComplete("size_logistics", {
@@ -104,7 +127,10 @@ describe("per-section completeness predicates", () => {
       }),
     ).toBe(false);
     expect(
-      isSectionComplete("size_logistics", { ...fullData(), s4AreaDimensions: "" }),
+      isSectionComplete("size_logistics", {
+        ...fullData(),
+        s4AreaDimensions: "",
+      }),
     ).toBe(false);
   });
 

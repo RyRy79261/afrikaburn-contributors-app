@@ -36,7 +36,10 @@ export function canRedeemInvite(
   if (invite.usedAt !== null || invite.usedByUserId !== null) {
     return { ok: false, reason: "already_used" };
   }
-  if (invite.expiresAt !== null && invite.expiresAt.getTime() <= now.getTime()) {
+  if (
+    invite.expiresAt !== null &&
+    invite.expiresAt.getTime() <= now.getTime()
+  ) {
     return { ok: false, reason: "expired" };
   }
   return OK;

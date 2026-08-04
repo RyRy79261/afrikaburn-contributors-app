@@ -127,7 +127,9 @@ export function supplierPickerEligibility(input: {
  */
 export function filterPickerEligible<
   T extends { standing: SupplierStanding; isOnboarded: boolean },
->(suppliers: readonly T[]): Array<T & { eligibility: SupplierPickerEligibility }> {
+>(
+  suppliers: readonly T[],
+): Array<T & { eligibility: SupplierPickerEligibility }> {
   const out: Array<T & { eligibility: SupplierPickerEligibility }> = [];
   for (const s of suppliers) {
     const eligibility = supplierPickerEligibility({

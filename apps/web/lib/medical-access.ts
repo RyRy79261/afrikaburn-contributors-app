@@ -197,7 +197,10 @@ async function buildMedicalAccessContext(
         .from(schema.orgDepartmentDomains)
         .innerJoin(
           schema.orgDepartments,
-          eq(schema.orgDepartments.id, schema.orgDepartmentDomains.departmentId),
+          eq(
+            schema.orgDepartments.id,
+            schema.orgDepartmentDomains.departmentId,
+          ),
         ),
     ]);
     actorOrgPersonalInformation = canReadPersonalInformationIn(

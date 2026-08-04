@@ -53,7 +53,10 @@ export async function orgAddSupplier(
   opts: { name: string; contact?: string; services?: string },
 ): Promise<void> {
   await orgPage.goto("/suppliers");
-  await orgPage.getByRole("button", { name: /add supplier/i }).first().click();
+  await orgPage
+    .getByRole("button", { name: /add supplier/i })
+    .first()
+    .click();
   const dialog = orgPage.getByRole("dialog");
   await dialog.getByLabel(/^name/i).fill(opts.name);
   if (opts.services) await dialog.getByLabel(/^services/i).fill(opts.services);

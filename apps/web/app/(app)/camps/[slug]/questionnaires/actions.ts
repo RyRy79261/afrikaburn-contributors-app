@@ -48,7 +48,10 @@ export async function createQuestionnaireAction(
 ): Promise<CreateQuestionnaireResult> {
   const parsed = CreateInput.safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, error: "Please complete the questionnaire before sending." };
+    return {
+      ok: false,
+      error: "Please complete the questionnaire before sending.",
+    };
   }
   const { slug, title, description, definition, mode, roleIds, blocking } =
     parsed.data;
@@ -86,7 +89,8 @@ export async function createQuestionnaireAction(
   ) {
     return {
       ok: false,
-      error: "You can't send to that audience — check your questionnaire permissions.",
+      error:
+        "You can't send to that audience — check your questionnaire permissions.",
     };
   }
 
@@ -96,7 +100,8 @@ export async function createQuestionnaireAction(
   let dueAt: Date | null = null;
   if (parsed.data.dueAt) {
     const t = Date.parse(parsed.data.dueAt);
-    if (Number.isNaN(t)) return { ok: false, error: "That due date isn't valid." };
+    if (Number.isNaN(t))
+      return { ok: false, error: "That due date isn't valid." };
     dueAt = new Date(t);
   }
 

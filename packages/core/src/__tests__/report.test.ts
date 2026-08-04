@@ -135,7 +135,10 @@ describe("assembleIssue", () => {
     const { body } = assembleIssue({
       ...base,
       description: "it just breaks when i hit save",
-      structured: { title: "Save fails on the roster", summary: "Saving errors." },
+      structured: {
+        title: "Save fails on the roster",
+        summary: "Saving errors.",
+      },
     });
     expect(body).toContain("The report as filed");
     expect(body).toContain("it just breaks when i hit save");

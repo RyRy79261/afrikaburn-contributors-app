@@ -7,3 +7,12 @@ build
 coverage
 pnpm-lock.yaml
 packages/db/migrations
+
+# VERBATIM PRIMARY SOURCES — never reformatted, never edited.
+#
+# `docs/sources/` mirrors AfrikaBurn's own published pages and the original
+# scope documents, and the specs cite them as ground truth. Prettier is not a
+# harmless pass over them: `pnpm format` rewrote all 664 files on 4 Aug 2026,
+# turning `*emphasis*` into `_emphasis_` and reflowing every table, which makes
+# a citation impossible to check against what was actually published.
+docs/sources/

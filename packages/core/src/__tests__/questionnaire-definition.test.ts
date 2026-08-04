@@ -88,7 +88,9 @@ describe("backward compatibility — v1 definitions", () => {
   });
 
   it("accepts the multi-page intro+questions (Burner Bio) shape", () => {
-    expect(isValidQuestionnaireDefinition(V1_MULTIPAGE_QUESTIONNAIRE)).toBe(true);
+    expect(isValidQuestionnaireDefinition(V1_MULTIPAGE_QUESTIONNAIRE)).toBe(
+      true,
+    );
   });
 
   // MIGRATION SAFETY. Builder v2 is a jsonb EXTENSION — no migration, no
@@ -462,10 +464,12 @@ describe("validation-rule consistency", () => {
       version: "1",
       pages: [{ id: "p", kind: "questions", title: "P", questions: [q] }],
     });
-    expect(codes(wrap({ ...base, minSelections: 2, maxSelections: 1 }))).toContain(
+    expect(
+      codes(wrap({ ...base, minSelections: 2, maxSelections: 1 })),
+    ).toContain("invalid_range");
+    expect(codes(wrap({ ...base, minSelections: 5 }))).toContain(
       "invalid_range",
     );
-    expect(codes(wrap({ ...base, minSelections: 5 }))).toContain("invalid_range");
     expect(codes(wrap({ ...base, maxSelections: 2 }))).toEqual([]);
   });
 
@@ -480,8 +484,18 @@ describe("validation-rule consistency", () => {
             title: "Everything",
             shuffleQuestions: true,
             questions: [
-              { id: "b1", kind: "info_block", heading: "Heads up", body: "Read this." },
-              { id: "b2", kind: "image_block", url: "https://x.test/a.png", alt: "A" },
+              {
+                id: "b1",
+                kind: "info_block",
+                heading: "Heads up",
+                body: "Read this.",
+              },
+              {
+                id: "b2",
+                kind: "image_block",
+                url: "https://x.test/a.png",
+                alt: "A",
+              },
               { id: "q1", kind: "short_text", prompt: "Name", maxLength: 80 },
               { id: "q2", kind: "long_text", prompt: "Story", maxLength: 900 },
               {
@@ -504,12 +518,34 @@ describe("validation-rule consistency", () => {
                 minSelections: 1,
                 maxSelections: 2,
                 options: [
-                  { value: "a", label: "A", imageUrl: "https://x.test/a.png", imageAlt: "A" },
-                  { value: "b", label: "B", imageUrl: "https://x.test/b.png", imageAlt: "B" },
+                  {
+                    value: "a",
+                    label: "A",
+                    imageUrl: "https://x.test/a.png",
+                    imageAlt: "A",
+                  },
+                  {
+                    value: "b",
+                    label: "B",
+                    imageUrl: "https://x.test/b.png",
+                    imageAlt: "B",
+                  },
                 ],
               },
-              { id: "q5", kind: "linear_scale", prompt: "Scale", min: 1, max: 10 },
-              { id: "q6", kind: "rating", prompt: "Stars", steps: 5, glyph: "star" },
+              {
+                id: "q5",
+                kind: "linear_scale",
+                prompt: "Scale",
+                min: 1,
+                max: 10,
+              },
+              {
+                id: "q6",
+                kind: "rating",
+                prompt: "Stars",
+                steps: 5,
+                glyph: "star",
+              },
               { id: "q7", kind: "date", prompt: "When" },
               { id: "q8", kind: "time", prompt: "What time" },
               { id: "q9", kind: "file_link", prompt: "Link to your plan" },

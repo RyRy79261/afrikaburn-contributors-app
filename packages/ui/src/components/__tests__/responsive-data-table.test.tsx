@@ -101,7 +101,11 @@ describe("projectColumnsToCard", () => {
 describe("ResponsiveDataTable", () => {
   it("renders a real <table> with a header per column (plus mobileHidden)", () => {
     render(
-      <ResponsiveDataTable columns={columns} data={rows} getRowKey={(r) => r.id} />,
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+      />,
     );
     const table = screen.getByRole("table");
     // Column headers present in the desktop table (Access is sr-only text).
@@ -117,7 +121,11 @@ describe("ResponsiveDataTable", () => {
 
   it("renders the mobile card list using column headers as pair labels", () => {
     render(
-      <ResponsiveDataTable columns={columns} data={rows} getRowKey={(r) => r.id} />,
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+      />,
     );
     const cards = screen.getByRole("list");
     // Pair column: label (header) + value both appear in the card region.
@@ -130,7 +138,11 @@ describe("ResponsiveDataTable", () => {
 
   it("omits mobileHidden columns from the card list entirely", () => {
     render(
-      <ResponsiveDataTable columns={columns} data={rows} getRowKey={(r) => r.id} />,
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+      />,
     );
     const cards = screen.getByRole("list");
     // "Submitted" header/value must not appear anywhere in the card region.
@@ -169,7 +181,11 @@ describe("ResponsiveDataTable", () => {
 
   it("does not render expand toggles when renderExpanded is absent", () => {
     render(
-      <ResponsiveDataTable columns={columns} data={rows} getRowKey={(r) => r.id} />,
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+      />,
     );
     expect(screen.queryByRole("button", { name: /expand row/i })).toBeNull();
   });

@@ -114,7 +114,9 @@ export function DocumentsTable({
         sort: patch.sort ?? doc.sort,
       });
       if (!result.ok) {
-        toast.error("Could not save that change", { description: result.error });
+        toast.error("Could not save that change", {
+          description: result.error,
+        });
         return;
       }
       toast.success(successMessage);
@@ -389,8 +391,8 @@ export function DocumentsTable({
           <DialogHeader>
             <DialogTitle>Edit document</DialogTitle>
             <DialogDescription>
-              Changes apply to every supplier onboarding for this edition. Adding
-              a requirement legitimately re-opens the step it binds to.
+              Changes apply to every supplier onboarding for this edition.
+              Adding a requirement legitimately re-opens the step it binds to.
             </DialogDescription>
           </DialogHeader>
           {editing ? (

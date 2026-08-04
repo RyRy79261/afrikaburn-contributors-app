@@ -255,7 +255,12 @@ describe("applyStepTransition", () => {
   });
 
   it("refuses a supplier self-confirming an org step, leaving state unchanged", () => {
-    const res = applyStepTransition(null, "supplier", "deposit_paid", "completed");
+    const res = applyStepTransition(
+      null,
+      "supplier",
+      "deposit_paid",
+      "completed",
+    );
     expect(res.ok).toBe(false);
   });
 

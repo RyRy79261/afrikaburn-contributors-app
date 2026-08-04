@@ -35,11 +35,7 @@ import { saveQuestionnaireDefinition } from "@/lib/questionnaires/actions";
 // The trimmed builder field kinds (questionnaire-spec: text, textarea, select,
 // multi-select, yes_no/consent). Each maps to an engine Question kind.
 type BuilderKind =
-  | "short_text"
-  | "long_text"
-  | "single_select"
-  | "multi_select"
-  | "boolean";
+  "short_text" | "long_text" | "single_select" | "multi_select" | "boolean";
 
 const KIND_LABELS: Record<BuilderKind, string> = {
   short_text: "Short text",
@@ -94,9 +90,17 @@ export function questionToField(q: Question): BuilderField {
   };
   switch (q.kind) {
     case "single_select":
-      return { ...base, kind: "single_select", options: q.options.map((o) => o.label) };
+      return {
+        ...base,
+        kind: "single_select",
+        options: q.options.map((o) => o.label),
+      };
     case "multi_select":
-      return { ...base, kind: "multi_select", options: q.options.map((o) => o.label) };
+      return {
+        ...base,
+        kind: "multi_select",
+        options: q.options.map((o) => o.label),
+      };
     case "long_text":
       return { ...base, kind: "long_text", options: [] };
     case "boolean":
@@ -283,7 +287,9 @@ export function QuestionnaireBuilder({
         definition,
       });
       if (result.ok) {
-        toast.success(initial ? "Questionnaire updated." : "Questionnaire saved.");
+        toast.success(
+          initial ? "Questionnaire updated." : "Questionnaire saved.",
+        );
         router.push(`/questionnaires/${result.key}/activate`);
         router.refresh();
       } else {
