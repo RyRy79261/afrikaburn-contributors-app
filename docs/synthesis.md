@@ -1,31 +1,31 @@
 # Requirements Synthesis — AfrikaBurn Contributors App
 
-*Correlated from all source documents. Plain-text/markdown extractions live in
+_Correlated from all source documents. Plain-text/markdown extractions live in
 [`docs/sources/`](sources/); original PDFs/docx at the repo root. The `AfrikaBurn App/`
 folder is a byte-identical duplicate of the root documents (verified by checksum) and can
-be deleted.*
+be deleted._
 
 ## Source inventory
 
-| Document | Author | Maturity | What it covers |
-|---|---|---|---|
-| Master Brief (3pp) | Finlay Kettlewell | Preliminary | Problem, user families, workflow map (V1/V2/V3), cross-cutting concerns, priority questions |
-| Scope: Container Transport (5pp) | Finlay | **Detailed** (V1) | Entities, 12-state lifecycle, storage/routes/pricing, convoys & slots, booking wizard, confirmed rules |
-| Scope: Theme Camp Registration (5pp) | Finlay | **Detailed** (V1) | All Google Form fields (6 sections), registration states, review workflow, design opportunities |
-| Scope: Water / Ice / Gas (2pp each) | Finlay | Preliminary (V2) | User stories both sides; processes largely unknown |
-| Discovery Meeting Agenda | Finlay | — | Meeting plan; confirms V1 = Registration + Containers; AB side still unknown |
-| **Quagga Portal App Platform** ([source](sources/quagga-portal-platform.md)) | Graham | **Ideation only** — potential ideas, nothing concrete; treat as a survey of concerns, not a spec | Camp-internal topics: onboarding, camper DB, shifts, budgets, fees, WAPs, tickets, layout design, villages, compliance, creative projects |
-| Ryan's direction (chat, 22 Jul 2026) | Ryan | Directive | **Assume zero on-site connectivity for all operations**; QR-signature attestation for offline proof of interaction with lazy sync; app must tolerate running offline for extended periods. **The Quagga doc is to be read as topics, not features.** |
-| **Quaggapedia corpus** ([index](sources/quaggapedia/INDEX.md)) | AfrikaBurn (official event wiki) | 68 pages + 21 files, mirrored 22 Jul 2026 | Ground truth: Supplier Depot procedure, SOOP sound levels & zone rules, WAPs, Quicket ticketing, DMV/MV licensing, LNT/MOOP, fire & generator rules, event/sound maps, STAR camp-onboarding guideline |
+| Document                                                                     | Author                           | Maturity                                                                                         | What it covers                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Master Brief (3pp)                                                           | Finlay Kettlewell                | Preliminary                                                                                      | Problem, user families, workflow map (V1/V2/V3), cross-cutting concerns, priority questions                                                                                                                                                          |
+| Scope: Container Transport (5pp)                                             | Finlay                           | **Detailed** (V1)                                                                                | Entities, 12-state lifecycle, storage/routes/pricing, convoys & slots, booking wizard, confirmed rules                                                                                                                                               |
+| Scope: Theme Camp Registration (5pp)                                         | Finlay                           | **Detailed** (V1)                                                                                | All Google Form fields (6 sections), registration states, review workflow, design opportunities                                                                                                                                                      |
+| Scope: Water / Ice / Gas (2pp each)                                          | Finlay                           | Preliminary (V2)                                                                                 | User stories both sides; processes largely unknown                                                                                                                                                                                                   |
+| Discovery Meeting Agenda                                                     | Finlay                           | —                                                                                                | Meeting plan; confirms V1 = Registration + Containers; AB side still unknown                                                                                                                                                                         |
+| **Quagga Portal App Platform** ([source](sources/quagga-portal-platform.md)) | Graham                           | **Ideation only** — potential ideas, nothing concrete; treat as a survey of concerns, not a spec | Camp-internal topics: onboarding, camper DB, shifts, budgets, fees, WAPs, tickets, layout design, villages, compliance, creative projects                                                                                                            |
+| Ryan's direction                                                             | Ryan                             | Directive                                                                                        | **Assume zero on-site connectivity for all operations**; QR-signature attestation for offline proof of interaction with lazy sync; app must tolerate running offline for extended periods. **The Quagga doc is to be read as topics, not features.** |
+| **Quaggapedia corpus** ([index](sources/quaggapedia/INDEX.md))               | AfrikaBurn (official event wiki) | 68 pages + 21 files, mirrored 22 Jul 2026                                                        | Ground truth: Supplier Depot procedure, SOOP sound levels & zone rules, WAPs, Quicket ticketing, DMV/MV licensing, LNT/MOOP, fire & generator rules, event/sound maps, STAR camp-onboarding guideline                                                |
 
 **How to read Graham's Quagga doc (working-group agreement, per Ryan):** it is an
 ideation scope written without engineering feasibility in view — potential ideas, nothing
-concrete. Its value is as a map of the *concerns* camps have (people, money, shifts,
+concrete. Its value is as a map of the _concerns_ camps have (people, money, shifts,
 space, tickets, compliance) — not as a feature list to implement. Critically, its
 default mechanism — more mandatory forms, acknowledgements, and tracking — runs
-*against* the core problem this platform exists to solve: **participants already don't
+_against_ the core problem this platform exists to solve: **participants already don't
 complete the forms that exist.** Anything drawn from this topic map must clear a high
-bar: it ships only if it *reduces* net administrative burden. Finlay's documents remain
+bar: it ships only if it _reduces_ net administrative burden. Finlay's documents remain
 the concrete scope, and Finlay is the active scoping contact.
 
 Cross-document detail confirming the link between the two authors' worlds: Finlay's
@@ -34,7 +34,7 @@ budget structure the Quagga doc is built on.
 
 ## The core product principle: fewer forms, not more
 
-The founding observation (Ryan, 22 Jul 2026): **the problem is that people don't fill
+The founding observation: **the problem is that people don't fill
 out forms — so the platform must never answer a problem by adding one.** This is the
 test every feature passes or fails:
 
@@ -44,7 +44,7 @@ test every feature passes or fails:
 - Aggregates over rosters: report a number instead of collecting a list wherever the consumer only needs the number.
 - Progressive disclosure: extra detail only when a trigger actually fires (e.g. compliance review), not from everyone up front.
 
-This principle also settles several tensions below in favour of the *minimal* option by
+This principle also settles several tensions below in favour of the _minimal_ option by
 default, with the richer option needing explicit AB justification.
 
 ## Two documents, two altitudes
@@ -57,7 +57,7 @@ very different levels of rigour:
 
 The layers meet at four joints, and those joints are the architectural spine:
 
-1. **The annual submission.** Quagga §14's registration/placement submission is a superset of Finlay's registration scope (adds camper list, budget, build/strike plans, safety docs, layout) — a superset the fewer-forms principle says we do *not* build by default; Finlay's field list, itself mapped from the real form, is the baseline. The state machines are near-identical (Draft → Submitted → Under Review → Changes Requested → Approved/Declined, with Quagga adding Placement Allocated → Final Layout Approved), which is good independent confirmation of the workflow shape.
+1. **The annual submission.** Quagga §14's registration/placement submission is a superset of Finlay's registration scope (adds camper list, budget, build/strike plans, safety docs, layout) — a superset the fewer-forms principle says we do _not_ build by default; Finlay's field list, itself mapped from the real form, is the baseline. The state machines are near-identical (Draft → Submitted → Under Review → Changes Requested → Approved/Declined, with Quagga adding Placement Allocated → Final Layout Approved), which is good independent confirmation of the workflow shape.
 2. **Previous-year duplication.** Both docs independently make year-to-year carry-forward a core requirement. Confirms the persistent-entity vs per-edition-record split as the foundation.
 3. **WAPs.** Finlay: registration captures the WAP request count. Quagga: full internal allocation tool, with AB retaining final approval. Compatible — camp allocates internally, portal submits the list.
 4. **Placement.** Finlay flags it as an open question; Quagga specifies a full layout designer, erf-fit testing, and a wrangler ⇄ camp negotiation loop. Both agree the final decision is AB's.
@@ -69,37 +69,39 @@ Layer B topics graduate individually if they pass the fewer-forms test.
 Quagga is also the only document proposing a product name: **Quagga Portal** (after
 Quaggafontein storage — a nice fit with the container-world vocabulary).
 
-## Tensions to surface at kickoff
+## Where the two visions differed, and what we chose
 
-| Topic | Finlay docs | Quagga topic map | Working default (fewer-forms principle applied) |
-|---|---|---|---|
-| People data given to AB | Confirmed rule: only lead / alt contact / LNT lead tracked; "population is just a number" | §16 mandates a **full camper list** (with IDs) in every placement submission | **Default: Finlay's minimal rule wins.** Collecting per-camper identity data multiplies the form burden ~40× per camp and makes the platform a POPIA honeypot. Only revisit if AB states a concrete need it acts on, and then via progressive disclosure (compliance triggers), not blanket collection. |
-| Ticketing | Confirmed rule: "Registration and ticketing are completely separate" | Ticket allocation tracking incl. "submit camper details to the event ticketing system" | Keep them separate. No ticket features unless AB/Quicket ever offers an integration worth having (the Quagga doc itself concedes it shouldn't issue tickets). |
-| Payments | Yoco for camp → AB logistics fees | Payment gateway for camper → camp treasury (dues, instalments, refunds) | **Camp dues/treasuries are out, permanently** — the platform never holds funds. Even AB-side fees start as *status tracking* (booking references + reconciliation); integrated checkout only if AB wants it, via an SA-based provider that accepts international Visa/Mastercard. |
-| First release size | Two workflows, deep | Sixteen "Phase 1 modules" | Finlay's V1 + the shared spine, full stop. Topics stay topics until demand-validated. See [`roadmap.md`](roadmap.md). |
-| Offline | On-site flows routed through the single wifi box | "Offline event functionality" parked in Phase 3 | **Superseded by Ryan's directive**: assume no on-site connectivity at all; offline + QR attestation is a foundational design constraint (see below). |
+| Topic                   | Finlay docs                                                                               | Quagga topic map                                                                       | Working default (fewer-forms principle applied)                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| People data given to AB | Confirmed rule: only lead / alt contact / LNT lead tracked; "population is just a number" | §16 mandates a **full camper list** (with IDs) in every placement submission           | **Default: Finlay's minimal rule wins.** Collecting per-camper identity data multiplies the form burden ~40× per camp and makes the platform a POPIA honeypot. Only revisit if AB states a concrete need it acts on, and then via progressive disclosure (compliance triggers), not blanket collection. |
+| Ticketing               | Confirmed rule: "Registration and ticketing are completely separate"                      | Ticket allocation tracking incl. "submit camper details to the event ticketing system" | Keep them separate. No ticket features unless AB/Quicket ever offers an integration worth having (the Quagga doc itself concedes it shouldn't issue tickets).                                                                                                                                           |
+| Payments                | Yoco for camp → AB logistics fees                                                         | Payment gateway for camper → camp treasury (dues, instalments, refunds)                | **Camp dues/treasuries are out, permanently** — the platform never holds funds. Even AB-side fees start as _status tracking_ (booking references + reconciliation); integrated checkout only if AB wants it, via an SA-based provider that accepts international Visa/Mastercard.                       |
+| First release size      | Two workflows, deep                                                                       | Sixteen "Phase 1 modules"                                                              | Finlay's V1 + the shared spine, full stop. Topics stay topics until demand-validated. See [`roadmap.md`](roadmap.md).                                                                                                                                                                                   |
+| Offline                 | On-site flows routed through the single wifi box                                          | "Offline event functionality" parked in Phase 3                                        | **Superseded by Ryan's directive**: assume no on-site connectivity at all; offline + QR attestation is a foundational design constraint (see below).                                                                                                                                                    |
 
-## Participant & entitlement model (Ryan, 22 Jul 2026)
+## Participant & entitlement model
 
 The base unit is the **participant**, not the camp:
 
-- **Every user is an AfrikaBurn participant.** Onboarding = a **Burner Bio** (self-serve profile, Camp 404's `burner_profiles` pattern), with **privacy controls on sensitive aspects** — user-owned identity, *not* an admin-managed camper database.
+- **Every user is an AfrikaBurn participant.** Onboarding = a **Burner Bio** (self-serve profile, Camp 404's `burner_profiles` pattern), with **privacy controls on sensitive aspects** — user-owned identity, _not_ an admin-managed camper database.
 - **Years are the root namespace for data.** The Burner Bio carries across editions (confirm-and-carry, per the fewer-forms principle); everything else a participant does — camp membership, roles, bookings — is data assigned alongside the bio for the currently-active burn.
 - **Participants either join a project or free-camp.** Joining a theme camp (or, later, an artwork / mutant vehicle — implying a browsable project registry) puts them inside that organisational structure. Free campers remain plain participants and simply don't get the organisational features.
 - **Camps are self-registered, never pre-created by AB.** Any participant can create a camp and gather members immediately — internal operations work from day one.
-- **Approval is an attribute, not a gate to existence.** Completing the annual registration (Finlay's 7-state workflow) and getting approved flips the camp's per-edition status from *free camp* to *registered theme camp*. That status is what carries **entitlements**: applying for placement, applying for art grants, booking containers, ordering water/ice/gas. Wanting a spot ("we'd like the camping forest") never implies allocation or entitlement — AB allocates.
+- **Approval is an attribute, not a gate to existence.** Completing the annual registration (Finlay's 7-state workflow) and getting approved flips the camp's per-edition status from _free camp_ to _registered theme camp_. That status is what carries **entitlements**: applying for placement, applying for art grants, booking containers, ordering water/ice/gas. Wanting a spot ("we'd like the camping forest") never implies allocation or entitlement — AB allocates.
 - **The questionnaire system is reused from Camp 404** wholesale: bespoke code questionnaires (Burner Bio) + the builder for camp-authored ones, dispatched via activations and gated via `required_actions`.
 - **Terminology:** user = **burner**. A **camper** is a burner who is a member of a camp. A **group** is anything joinable — the AfrikaBurn **org**, theme camps, art projects, mutant vehicle teams; a **project** is any non-org group (the kind that registers and earns entitlements).
 - **Multi-membership is allowed** (unlikely but legal): one burner can simultaneously be in the org, a theme camp, an art project, and an MV team — Facebook-groups semantics, with context switching in the UI. Memberships are plain many-to-many rows with roles.
 - **Admin tiers:** **god admin** (system-wide maximum privileges — bootstrapped by the first sign-in, i.e. Ryan, via a GOD_EMAILS-style mechanism per Camp 404) → **org roles** (AfrikaBurn staff: coordinator, reviewer, wrangler — held as memberships in the org group, not a stored `is_staff` flag) → **group roles** (lead/admin) → member → burner.
-- **Visibility follows registration (Ryan, 22 Jul 2026):** registered groups (any kind — camp, artwork, MV) are **public and indexable** in a group directory; unregistered groups may stay private. No bespoke privacy gates yet — but the schema reserves a per-group visibility/privacy setting so finer controls can be added later without migration pain.
-- **Joinability is a directory attribute:** a group is either *accepting new members* (open join) or *invite-only*; invites reuse Camp 404's one-time invite-link pattern.
+- **Visibility follows registration.** registered groups (any kind — camp, artwork, MV) are **public and indexable** in a group directory; unregistered groups may stay private. No bespoke privacy gates yet — but the schema reserves a per-group visibility/privacy setting so finer controls can be added later without migration pain.
+- **Joinability is a directory attribute:** a group is either _accepting new members_ (open join) or _invite-only_; invites reuse Camp 404's one-time invite-link pattern.
 - **Wranglers are assigned, not ambient:** a wrangler (org role) is a "babysitter for theme camps" — assigned to specific registered camps per edition, checking milestone progress, with a **wrangler board** showing per-camp progress (registration status, bookings, later real milestones).
-- **Suppliers are a distinct user kind (Ryan, 22 Jul 2026):** external service providers hired by camps (tent builds, electricity). All suppliers must register via a **dedicated procedure and login URL** — not the normal burner sign-up (email overlap with a burner profile links the accounts). Camp-facing need now: a **supplier repository** camps declare from during registration (replacing Finlay's free-text suppliers field), with org-side vetting status and feedback. The supplier-side deep workflow (AB's onboarding steps, meetings, deposits) is deliberately **a separate sub-project** (`apps/suppliers` portal).
-- **Requests are questionnaires; fulfillment is attestations (Ryan, 22 Jul 2026):** when a camp needs something — water delivery sign-up, a supplier service, an extra allocation — it files a **request built on the questionnaire spine**. Requests land in a queue owned by an **org-level person** (coordinator) or a **specific supplier**, who works them; where the fulfilment happens on site (a delivery, a handover), it closes with a **QR attestation**. One pattern covers water sign-up, gas orders, ice allocations, and supplier bookings without bespoke plumbing per workflow.
-- **Explicitly out of the platform (Ryan, 22 Jul 2026):** **ticketing** (stays entirely with Quicket — we only ever *note* status, never touch tickets) and **placement maps** (no structured geo data exists; the map is a PDF that arrives late and the layout changes every year — nothing reliable to build against yet).
+- **Suppliers are a distinct user kind.** external service providers hired by camps (tent builds, electricity). All suppliers must register via a **dedicated procedure and login URL** — not the normal burner sign-up (email overlap with a burner profile links the accounts). Camp-facing need now: a **supplier repository** camps declare from during registration (replacing Finlay's free-text suppliers field), with org-side vetting status and feedback. The supplier-side deep workflow (AB's onboarding steps, meetings, deposits) is deliberately **a separate sub-project** (`apps/suppliers` portal).
+- **Requests are questionnaires; fulfillment is attestations.** when a camp needs something — water delivery sign-up, a supplier service, an extra allocation — it files a **request built on the questionnaire spine**. Requests land in a queue owned by an **org-level person** (coordinator) or a **specific supplier**, who works them; where the fulfilment happens on site (a delivery, a handover), it closes with a **QR attestation**. One pattern covers water sign-up, gas orders, ice allocations, and supplier bookings without bespoke plumbing per workflow.
+- **Explicitly out of the platform.** **ticketing** (stays entirely with Quicket — we only ever _note_ status, never touch tickets) and **placement maps** (no structured geo data exists; the map is a PDF that arrives late and the layout changes every year — nothing reliable to build against yet).
 
-### The real two-form registration process (afrikaburn.org Theme Camps Guide, fetched 24 Jul 2026 → [`sources/theme-camps-guide.md`](sources/theme-camps-guide.md))
+### The real two-form registration process
+
+_Source: [`sources/theme-camps-guide.md`](sources/theme-camps-guide.md)._
 
 AB's actual process is **two forms released at different times**, which our single
 six-section wizard currently conflates:
@@ -120,17 +122,14 @@ sound, and the layout upload migrate to a Form-2 questionnaire template.
 **Timeline implication:** for AfrikaBurn 2027, Form 1 opens ~**September 2026** — that
 is the real R1 deadline, roughly six weeks after kickoff.
 
-### Decisions locked 24 Jul 2026 (Ryan)
+### Locked decisions
 
 - **No camp payments for registration — ever.** AfrikaBurn never receives payments from theme camps for registering. Registration is free; payment references/blocks must not appear anywhere in registration flows, the camp dashboard, or the org review screen. (Money only ever relates to future logistics service apps — containers etc. — and even those are reference-tracking, not processing.)
 - **Registered vs free camp is a self-selected choice** surfaced in the registration flow and org section (kept as-is for now). Org flow beyond that: registrations are approved by AB's theme-camp leads team, and approved camps are then **assigned to a wrangler**, who is the ongoing manager/check-in contact. Exact mechanics unknown — discovery question; the wrangler-assignment affordance belongs on the org review screen post-approval (R1, matches the existing `wrangler_assignments` schema).
-- **Third-party profile view**: burners need a way to view *someone else's* profile — public fields only, privacy flags strictly enforced, hard-locked fields never shown.
+- **Third-party profile view**: burners need a way to view _someone else's_ profile — public fields only, privacy flags strictly enforced, hard-locked fields never shown.
 - **Mutant vehicle + art project registration pages are in scope now** (un-parking part of "Creative Project Mode"): grounded in the Quaggapedia corpus — MV registration mirrors the real DMV process (pre-register before travelling, mutation description, SOOP sound level, flame effects needing prior contact + on-site test, night-driving lighting, e-bikes >400W count, on-site licensing at the Testing Station); art project registration draws on the participate/ARTeria/fire-safety pages (placement footprint, burn intent + fire safety, power, build/strike plan, grants interest).
 
-### Decisions locked 23 Jul 2026 (Ryan)
-
-- **Kickoff: 28 July 2026** — working group + possibly 1–2 AB org people. Product name stays neutral; MVP live at a URL beforehand.
-- **Repo is public**, licensed ~~MIT~~ **FSL-1.1-ALv2** *(changed 27 Jul 2026 — Functional Source License, converting to Apache 2.0 two years after each release; see `LICENSE`)*; history rewritten clean (originals preserved on a local archive branch only).
+- **Repo is public**, licensed **FSL-1.1-ALv2** _(Functional Source License, converting to Apache 2.0 two years after each release; see `LICENSE`)_; history rewritten clean (originals preserved on a local archive branch only).
 - **Containers are a separate app** — only the biggest camps use them; the standard app shows a hint tile. Finlay's container scope = that app's spec. Water likewise separate. Driver manifest: disabled, pending need.
 - **The org/admin side is its own app** (`apps/org`, separate deployment) — account elevation, review dashboards, allocations, wrangler roles. No org business inside the participant app; no seeded staff — god (Ryan) elevates accounts live.
 - **Attestations: low priority.** MVP only generates a reproducible keypair stored on the user profile (never user-managed); QR flows arrive with the logistics apps.
@@ -143,28 +142,28 @@ is the real R1 deadline, roughly six weeks after kickoff.
 - **Seed camps: real Mad Hatters + Camp 404**, plus fictional filler. Email via **Resend from day one**. Infra on Ryan's Vercel/Neon; namespace `@quagga/`; no Storybook/pencil tooling; vitest on core logic; palette drawn from AfrikaBurn's sites, minimal, non-corporate.
 - **Contribution policy:** working group only for now; deliberately restricted — no drive-by AI-assisted contributors.
 
-| Family | Roles | Notes |
-|---|---|---|
-| Burners | Everyone — Burner Bio onboarding; zero or more group memberships | Free campers = burners without a camp; "camper" = burner + camp membership; capabilities derive from memberships (Camp 404 stance) |
-| Camp-side admin | Camp creator/lead, Alternative contact | Memberships with roles on a self-registered project |
-| Org (AfrikaBurn) | God admin (system-wide; first user bootstraps), Container coordinator, Registration reviewer, Theme-camp wrangler / placement coordinator | Org is a group; staff roles are org memberships. Exact AB functional roles still unknown — discovery question |
-| Contractors (work for AB) | Container truck driver, Water delivery driver | Fulfil AB logistics; lightweight token access + printable fallbacks |
-| **Suppliers (work for camps)** | Tent/structure builders, electricians, stretch-tent providers, etc. | **Separate registration procedure and login URL** (planned `apps/suppliers` portal in the monorepo); may also hold a burner account — linked by email. Camps declare suppliers from a **supplier repository**; org tracks vetting status and collects feedback. AB's full supplier onboarding (steps, meetings, deposits) is its own sub-project. |
-| On-site handover roles | Container collection person | Not a full account; magic link/PIN + device key for attestations |
-| Deferred (topic map) | Graham's admin-managed camper DB (ID/passport records), Village leads, Organisation compliance reviewer | Distinct from participant self-serve profiles; only with validated demand + fewer-forms test passed |
+| Family                         | Roles                                                                                                                                     | Notes                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Burners                        | Everyone — Burner Bio onboarding; zero or more group memberships                                                                          | Free campers = burners without a camp; "camper" = burner + camp membership; capabilities derive from memberships (Camp 404 stance)                                                                                                                                                                                                                |
+| Camp-side admin                | Camp creator/lead, Alternative contact                                                                                                    | Memberships with roles on a self-registered project                                                                                                                                                                                                                                                                                               |
+| Org (AfrikaBurn)               | God admin (system-wide; first user bootstraps), Container coordinator, Registration reviewer, Theme-camp wrangler / placement coordinator | Org is a group; staff roles are org memberships. Exact AB functional roles still unknown — discovery question                                                                                                                                                                                                                                     |
+| Contractors (work for AB)      | Container truck driver, Water delivery driver                                                                                             | Fulfil AB logistics; lightweight token access + printable fallbacks                                                                                                                                                                                                                                                                               |
+| **Suppliers (work for camps)** | Tent/structure builders, electricians, stretch-tent providers, etc.                                                                       | **Separate registration procedure and login URL** (planned `apps/suppliers` portal in the monorepo); may also hold a burner account — linked by email. Camps declare suppliers from a **supplier repository**; org tracks vetting status and collects feedback. AB's full supplier onboarding (steps, meetings, deposits) is its own sub-project. |
+| On-site handover roles         | Container collection person                                                                                                               | Not a full account; magic link/PIN + device key for attestations                                                                                                                                                                                                                                                                                  |
+| Deferred (topic map)           | Graham's admin-managed camper DB (ID/passport records), Village leads, Organisation compliance reviewer                                   | Distinct from participant self-serve profiles; only with validated demand + fewer-forms test passed                                                                                                                                                                                                                                               |
 
-## The offline constraint & QR attestation (Ryan's directive — supersedes prior on-site flows)
+## The offline constraint & QR attestation
 
 **Assumption: any operation that needs to happen on site will have no connectivity.**
 The "walk to the wifi box" flows in Finlay's docs are replaced by this model:
 
 - The app runs offline for extended periods (PWA + local store + pre-event "pack for site" sync of the user's slice: bookings, manifests, camp lists, relevant public keys).
-- Any on-site interaction that needs *proof* becomes an **attestation**: a two-party QR signature handshake.
+- Any on-site interaction that needs _proof_ becomes an **attestation**: a two-party QR signature handshake.
   - Each device enrols a keypair at login (private key never leaves the device); public keys are registered server-side and distributed in the pre-event sync bundle.
   - Party A displays a QR encoding a compact signed payload (attestation type, subject IDs, edition, nonce, A's key ID, A's signature).
   - Party B scans it offline, verifies A's signature against the pre-synced public key, countersigns, and stores the double-signed record locally (optionally showing a receipt QR back to A so both hold proof).
   - When either device regains connectivity — the wifi box, or back in town after the event — queued attestations **lazy-sync**; the server verifies both signatures and applies the resulting state transitions.
-- Attestations are append-only *evidence*; server state is derived from them, so sync is idempotent and order-tolerant. Offline timestamps are treated as claims, not proofs — the signatures prove *that* the interaction happened between *these* parties; nonces prevent replay.
+- Attestations are append-only _evidence_; server state is derived from them, so sync is idempotent and order-tolerant. Offline timestamps are treated as claims, not proofs — the signatures prove _that_ the interaction happened between _these_ parties; nonces prevent replay.
 
 This one primitive covers both layers: container delivery/collection sign-off (driver ⇄
 collection person), ice ticket redemption, gas handover, and — camp-internally — shift
@@ -176,19 +175,19 @@ projects.
 
 1. **Offline-first on site** — as above. Hard constraint, foundational.
 2. **Mobile-first** — on-site is phone-only; pre-event may be desktop.
-3. **Payments** — three working rules (Ryan, 22 Jul 2026): (a) **the platform never holds funds** — if a gateway is integrated, money settles directly to AfrikaBurn's merchant account; (b) **no camp fees / camp treasuries, ever** — the only money in scope is AB-side logistics fees; (c) the MVP does **payment-status tracking**, not payment processing — whether AB even wants in-app checkout (vs keeping Quicket/EFT and reconciling references) is a discovery question. If integrated later, the provider must be **SA-based but accept international Visa/Mastercard**; candidates to evaluate: Paystack, Peach Payments, PayFast. (Finlay's docs assume Yoco, which is domestically focused — treat that as an assumption to revisit, not a decision.)
+3. **Payments** — three working rules: (a) **the platform never holds funds** — if a gateway is integrated, money settles directly to AfrikaBurn's merchant account; (b) **no camp fees / camp treasuries, ever** — the only money in scope is AB-side logistics fees; (c) the MVP does **payment-status tracking**, not payment processing — whether AB even wants in-app checkout (vs keeping Quicket/EFT and reconciling references) is a discovery question. If integrated later, the provider must be **SA-based but accept international Visa/Mastercard**; candidates to evaluate: Paystack, Peach Payments, PayFast. (Finlay's docs assume Yoco, which is domestically focused — treat that as an assumption to revisit, not a decision.)
 4. **Auth** — email/Google OAuth full accounts; magic link/PIN for handover roles; Quagga adds MFA for privileged roles.
-5. **POPIA** — applies to what we do hold (contacts, phones, financial figures); Camp 404's pgcrypto pattern applies. Staying on the minimal-data default keeps this surface small — a strong reason *not* to build the camper-identity database from the topic map.
+5. **POPIA** — applies to what we do hold (contacts, phones, financial figures); Camp 404's pgcrypto pattern applies. Staying on the minimal-data default keeps this surface small — a strong reason _not_ to build the camper-identity database from the topic map.
 6. **Year-to-year continuity** — duplication of submissions, camper data, budgets, layouts; expiry flags for annually-reconfirmed items (safety certs, insurance, arrival dates).
 7. **Notifications** — in-app + email; Quagga floats WhatsApp/SMS (consent + cost — defer).
 8. **Scale** — ~120 registered camps, ~100 artworks; with every participant onboarding a Burner Bio, the user base trends toward event scale (thousands) — self-serve and low-touch by design, so it's an auth/storage question rather than an admin burden.
-9. **Anti-plug-and-play stance** — "genuine participation easier, administrative abuse harder" is the one part of the Quagga doc worth adopting as a value. Done right it is *not* more forms for everyone: it's progressive disclosure — triggers (>20 participants, >R100k dues, turnkey-looking services) prompt extra questions from the few camps they apply to, if AB confirms it wants this at all.
+9. **Anti-plug-and-play stance** — "genuine participation easier, administrative abuse harder" is the one part of the Quagga doc worth adopting as a value. Done right it is _not_ more forms for everyone: it's progressive disclosure — triggers (>20 participants, >R100k dues, turnkey-looking services) prompt extra questions from the few camps they apply to, if AB confirms it wants this at all.
 
 ## Consolidated open questions
 
-### Closed or narrowed by the Quaggapedia corpus (22 Jul 2026)
+### Closed or narrowed by the Quaggapedia corpus
 
-- **Suppliers — procedure now documented** (`sources/quaggapedia/supplier-depot.md`): only registered creative projects may use suppliers; each project gets a unique non-shareable **Supplier Code**; all supplier operations run through the **Supplier Depot ("The Yard")**; 7-step registration (form → agreement + deposit → inventory sheet → crew IDs/tickets → compulsory briefing → registration fee → compliance = deposit refund); 2026 deadline was Fri 28 March (~1 month pre-event); plug-and-play servicing forfeits deposits. *Still needed from AB: deposit/fee amounts and the Supplier Agreement text.*
+- **Suppliers — procedure now documented** (`sources/quaggapedia/supplier-depot.md`): only registered creative projects may use suppliers; each project gets a unique non-shareable **Supplier Code**; all supplier operations run through the **Supplier Depot ("The Yard")**; 7-step registration (form → agreement + deposit → inventory sheet → crew IDs/tickets → compulsory briefing → registration fee → compliance = deposit refund); 2026 deadline was Fri 28 March (~1 month pre-event); plug-and-play servicing forfeits deposits. _Still needed from AB: deposit/fee amounts and the Supplier Agreement text._
 - **Sound — answered**: the official **SOOP scale is 3 levels** (1 = normal car stereo; 2 = amplified "like a taxi", restricted areas; 3 = club/stadium, loud zones only, speakers away from Binnekring), plus zone/time rules (quiet camping areas, general camping midnight–11am ban, Binnekring 2am cut-off Mon–Thu, louder zone 7am, hard midnight-Sunday stop). ⚠️ Finlay's registration example "Level 2 — car stereo" mislabels the official scale — car stereo is Level 1. Sound camps register as such for placement. Sound maps exist as images.
 - **WAPs — answered**: free passes allocated to **crew leads of registered creative projects**, who allocate onward; needed alongside a ticket; early-arrival window Wed–Sun before gates; includes E-Toll until the Sunday.
 - **Tickets — answered**: **Quicket confirmed** as vendor; categories (General, Subsidised, Pensioner, Anathi, Kids free ≤13, Minor 14–17); one-edit and transfer rules; name must match ID. Supports the "registration ≠ ticketing" rule.
@@ -197,9 +196,10 @@ projects.
 - **LNT / fire / generators — concrete registration-form fields**: designated LNT officer, greywater/evaporation plan, no-glass acknowledgement, 2-hour communal clean-up commitment + LNT sign-off ("Green" on the MOOP map), fire-extinguisher counts (~1×4.5kg DCP per 8×8m, min 2 per 50m²), camp "Safety Baron", brazier-only fires, generator hours + **fuel-litre logging for carbon reporting**, camp fees allowed only open-book/no-profit.
 - **Placement layout conventions**: Binnekring (inner ring) / Buitekring (outer), clock radials "1-ish"–"11-ish", concentric roads renamed yearly to theme; reserved marked areas for registered projects; ARTeria is arrival reception for camps/artists. **No structured geo data exists** — maps are per-year images/PDFs; "erf" is internal AB vocabulary, absent from the public wiki.
 - **Entitlements confirmed from the corpus**: registered projects get reserved placement, WAP allocation, supplier codes, and (historically) limited on-site non-potable water extraction.
-- **Water — resolved (Ryan, 22 Jul 2026)**: there is no general water delivery; **registered theme camps sign up in advance with AB's registered water supplier**, submitting their placement map as part of the sign-up. Supplier reliability is a known pain point. This makes water delivery exactly what our model predicts: a registered-camp entitlement fulfilled by a supplier — a natural fit for the request-queue pattern below. Remaining questions: who the supplier is, pricing, and the sign-up mechanics.
+- **Water — resolved.** there is no general water delivery; **registered theme camps sign up in advance with AB's registered water supplier**, submitting their placement map as part of the sign-up. Supplier reliability is a known pain point. This makes water delivery exactly what our model predicts: a registered-camp entitlement fulfilled by a supplier — a natural fit for the request-queue pattern below. Remaining questions: who the supplier is, pricing, and the sign-up mechanics.
 
 **For AfrikaBurn (discovery meeting)**
+
 - Scope of identity: theme camps only, or all registered projects (~220)? Do artworks/MVs register and use logistics? (Both authors independently anticipate the broader answer — Finlay's V3, Quagga's Creative Project Mode.)
 - Does AB have a concrete, acted-upon need for full camper lists in submissions (Quagga §16 claims so), or do minimal contacts (Finlay's confirmed rule, our default) suffice? POPIA posture and form burden both depend on it.
 - Placement: in-app or external? Is mapping/erf data available in any structured form?
@@ -212,13 +212,14 @@ projects.
 - **Suppliers (narrowed)**: deposit + registration-fee amounts, the Supplier Agreement text, vetting criteria, and whether camp feedback on suppliers is visible to other camps or AB-only. (The procedure itself is now documented — see the Quaggapedia block above.)
 
 **For the working group (us)**
-- ~~Which vision leads the MVP?~~ Settled: Finlay's V1 + shared spine is the build; Graham's doc is ideation only (Ryan, 22 Jul 2026). Finlay is the active scoping contact.
-- ~~Does AB pre-create camps?~~ Settled: no — participants self-register camps; approval is a per-edition attribute (Ryan, 22 Jul 2026).
-- ~~Project-join mechanics~~ Settled: per-group joinability attribute — *accepting new members* (open) or *invite-only* (Camp 404 one-time invite links) (Ryan, 22 Jul 2026).
+
+- ~~Which vision leads the MVP?~~ Settled: Finlay's V1 + shared spine is the build; Graham's doc is ideation only. Finlay is the active scoping contact.
+- ~~Does AB pre-create camps?~~ Settled: no — participants self-register camps; approval is a per-edition attribute.
+- ~~Project-join mechanics~~ Settled: per-group joinability attribute — _accepting new members_ (open) or _invite-only_ (Camp 404 one-time invite links).
 - Privacy details for unregistered/private groups are explicitly **up in the air** — schema reserves the setting; no gates built until it's a real problem.
 - What exactly does the Burner Bio ask, and which aspects are private vs visible to camp leads / AB? (Fewer-forms test applies to the bio itself.)
 - Product name: adopt "Quagga Portal"?
-- How to keep Graham's *concerns* represented at kickoff without re-opening his feature list — the fewer-forms test is the neutral filter.
+- How to keep Graham's _concerns_ represented at kickoff without re-opening his feature list — the fewer-forms test is the neutral filter.
 
 ## Gaps & discrepancies
 
@@ -229,7 +230,9 @@ projects.
 5. **Layout tool scope**: the Quagga doc's layout designer (two tools: camp layout + under-Bedouin tent packing, with collision/safety warnings and auto-arrange) is by far the largest single engineering item in either vision — effectively a small CAD app. It must not be allowed to block earlier releases.
 6. **WhatsApp/SMS notifications** (Quagga §6) carry integration cost and consent requirements — deferred pending real demand.
 
-### Answered from the afrikaburn.org corpus (726 pages mirrored 24 Jul 2026 → [`sources/afrikaburn-org/INDEX.md`](sources/afrikaburn-org/INDEX.md))
+### Answered from the afrikaburn.org corpus
+
+_726 pages mirrored to [`sources/afrikaburn-org/`](sources/afrikaburn-org/INDEX.md)._
 
 - **"Burner Bio" is AfrikaBurn's own official term** — "in order to register any project, or apply for a Grant — and for that matter in order to buy tickets — you'd first need to register a Burner Bio." External validation of the platform's participant-first architecture AND its vocabulary, independently converged.
 - **AB's registration tooling is fragmented across ≥4 systems** (formland.afrikaburn.com for theme camps + spark grants; tribe.afrikaburn.com + tim.afrikaburn.com "The Information Machine" for art; standalone Google Forms for art + MVs) — the consolidation case for this platform, now concrete. AB also already runs a **Community Project Directory** (tribe: browse + join-a-project) — direct precedent for our directory + joinability model.

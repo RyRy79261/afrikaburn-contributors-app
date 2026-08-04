@@ -9,9 +9,9 @@ skip line and exits 0, so the build still succeeds. This is the order of operati
 for the first real deployment.
 
 **There is no manual data step any more.** The same deploy runner also **bootstraps
-the reference data** — it seeds only when it finds `editions` empty _(Ryan, 27 Jul
-2026: the first real deployment came up with a perfect schema, working Google sign-in
-and no active edition, so every DB-backed page fell through to "Preview mode" — which
+the reference data** — it seeds only when it finds `editions` empty _(the
+first real deployment came up with a perfect schema, working Google sign-in and no
+active edition, so every DB-backed page fell through to "Preview mode" — which
 reads as a configuration problem when the configuration was correct. Seeding was a
 manual step nothing told you about, and the person who needed to run it could not:
 the connection string is a secret they cannot copy out of Vercel.)_
@@ -52,7 +52,7 @@ by a person.
 
 ### What the seed does and does not contain
 
-**Binding principle (Ryan, 26 Jul 2026): seeds contain ONLY org-owned
+**Binding principle: seeds contain ONLY org-owned
 reference/catalog data. Every burner, camp, membership, registration and
 questionnaire response — in every environment, including the kickoff demo — is
 created live through the app.**

@@ -8,10 +8,7 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
 ## Hard constraints
 
 1. **Migrations are generated offline, committed append-only, and applied by the
-   build at deploy time.** _(Corrected 27 Jul 2026. This constraint used to read "no
-   migration step in the build", which was true only while no database existed. Now
-   that one does, deploy-time migration is the law — see AGENTS.md §1, the fuller
-   statement.)_ `db:generate` produces the file offline from `schema.ts`; every app's
+   build at deploy time** (AGENTS.md §1 states this at length). `db:generate` produces the file offline from `schema.ts`; every app's
    `build` then runs `db:migrate:deploy` before `next build`. That runner takes a
    Postgres session advisory lock on the **unpooled** connection (`DATABASE_URL_UNPOOLED`)
    so three concurrent Vercel builds serialise, and it **aborts rather than falling
@@ -25,15 +22,15 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
 4. Apps must **boot without env/DB** to a landing page (graceful "not configured" state); DB-backed routes may error clearly but must not crash the build.
 5. Schema below is **frozen** — feature agents do not add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
 6. TypeScript strict; Zod validation at every boundary; no `any` in committed code. Vitest for core logic. CI gate: `pnpm turbo run lint typecheck test build`.
-   6b. **Prefer prebuilt components over hand-rolling (Ryan, 24 Jul 2026).** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
-7. UI: **"Tankwa Night" hybrid, approved 23 Jul 2026 — brand colours sampled from afrikaburn.org Elementor kit.** Dark-mode-first app shell dressed in AfrikaBurn's real brand colours; light supported via a `.light` class on `<html>`.
+   6b. **Prefer prebuilt components over hand-rolling.** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
+7. UI: **"Tankwa Night"** — brand colours sampled from the afrikaburn.org Elementor kit. Dark-mode-first app shell dressed in AfrikaBurn's real brand colours; light supported via a `.light` class on `<html>`.
    - **Brand ramp** (raw, usable directly as e.g. `text-ab-teal`): teal `#2D7696`, teal-deep `#235C75`, apricot `#F4B672`, peach `#FFBC7D`, sage `#B6D090`, olive `#7D9953`, charcoal `#333333`, warm white `#FFFAF2`.
    - **Dark semantic tokens (default):** background `#17191B`, foreground `#F4F0E8`, card/popover `#1F2326`, muted `#262B2F`, muted-foreground `#ADB6B3`, border/input `#323A3F`, primary `#2D7696` (fg `#F4F0E8`), secondary `#26333B` (fg `#DCE8ED`), accent `#F4B672` (fg `#17191B`), ring `#2D7696`, destructive `#C24438` (fg `#F4F0E8`), success `#B6D090` (fg `#17191B`), warning `#F4B672` (fg `#17191B`). `--radius` `0.5rem`.
    - **Light (`.light`):** background `#FFFAF2`, foreground `#333333`, card/popover `#FFFFFF`, muted `#F1E9DB`, muted-foreground `#6E6558`, border/input `#E5DBC9`, primary `#2D7696` (fg `#FFFAF2`), secondary `#EAF0F3` (fg `#235C75`), accent `#F4B672` (fg `#333333`), ring `#2D7696`, destructive `#B23A2E`, success `#7D9953` (fg `#1F2A12`), warning `#D98A2B` (fg `#332006`) — dark foregrounds on the mid-tone fills because white text fails WCAG AA on them.
    - **`.org-accent` skin** (org app applies it on `<html>` alongside the theme): primary → `#F4B672` (fg `#17191B`), ring → `#F4B672`; in `.light.org-accent` primary → `#D98A2B` (fg `#332006`, dark for AA) — so the console's interactive colour is apricot, the participant app's teal.
    - **Status mapping:** approved → success (sage), changes_requested → warning (apricot), rejected → destructive, submitted/under_review → primary (teal), draft → muted/outline.
    - **Typography:** Montserrat via `next/font/google` (weights 500/600/700/800, `--font-brand`, display swap). Body 500; `@layer base` treats `h1,h2` as 800 UPPERCASE (`letter-spacing 0.01em`) and `h3` as 700.
-   - **Identity motif:** `QuiltBand` — a repeating band of brand-triad diamonds on each app-shell header top edge, spanning the **full page width edge-to-edge** (Ryan, 24 Jul 2026), plus landing/auth dividers. **The real AfrikaBurn logo and San-hand emblem are approved for use** (assets in `design/brand/`): nav carries the 282×40 wordmark banner; favicons may adopt the emblem (current original diamond favicons remain until swapped). Photography of identifiable people stays forbidden.
+   - **Identity motif:** `QuiltBand` — a repeating band of brand-triad diamonds on each app-shell header top edge, spanning the **full page width edge-to-edge**, plus landing/auth dividers. **The real AfrikaBurn logo and San-hand emblem are approved for use** (assets in `design/brand/`): nav carries the 282×40 wordmark banner; favicons may adopt the emblem (current original diamond favicons remain until swapped). Photography of identifiable people stays forbidden.
    - Non-corporate, warm, no lorem ipsum anywhere — realistic copy.
 
 ## Monorepo layout
@@ -80,8 +77,7 @@ without ever printing a value.
   3–20 chars, unique on `lower(username)`. It deliberately does NOT live on
   `burner_bios.display_name`: bios are per-edition, so a handle there would let one
   person hold a different name every year and "unique" would mean nothing. It is an
-  **alias, not an identity anchor** (Ryan, 27 Jul 2026: _"the playa name is kinda
-  cringe… its optional and should be treated like an alias, not a root identity"_).
+  **an alias, not an identity anchor** — optional, and never a root identity.
   All rules live once in `@quagga/core` `username.ts` — charset, the reserved list
   (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the neutral
   `UNNAMED_BURNER` fallback, which is **never** a legal name and **never** an email
@@ -134,10 +130,9 @@ key fingerprint display).
 
 Auth gate: only an ORG RANK (god / org_staff / engineer) may enter; everyone else sees a
 polite wall. **Clearing that gate is the DOOR, not the rights** (org roles v1, migration
-0018 — Ryan, 27 Jul 2026: _"system admins can simply have a roles management section and
-create n sign these things instead of needing to hardcode them? With some set permanent
-ones, like team leads and team members for each department domain, these cant be removed
-but they can have the rights edited"_).
+0018). Roles are created and assigned by a System manager rather than hardcoded, with a
+permanent LEAD and MEMBER role per department that cannot be deleted but whose rights are
+editable.
 
 What an account may do is the union of the ORG ROLES assigned to it, resolved by the ONE
 resolver in `@quagga/core` `org-permissions` (`orgCan` / `orgCanIn`), which both the gate
@@ -147,9 +142,9 @@ deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental 
 - **`org_departments`** — created by a System manager, never hardcoded (the org still
   cannot say how many there are). Creating one SEEDS its permanent LEAD and MEMBER roles;
   deleting it cascades them away.
-- **`org_department_domains`** (migration 0019) — WHAT each department owns. Ryan,
-  27 Jul 2026: _"supplier leads would be able to read the PII of anything supply-related."_
-  The operative word is RELATED, so a department owns DOMAIN KEYS — subject areas — rather
+- **`org_department_domains`** (migration 0019) — WHAT each department owns. A supplier
+  lead may read the personal information of anything supply-RELATED, and the operative
+  word is _related_: a department owns DOMAIN KEYS — subject areas — rather
   than tagged rows, and an entity's department is whichever department owns the domain it
   lives in. `domain` is the PRIMARY KEY, so exactly one department owns each; claiming one
   takes it. The domain LIST is hardcoded in `@quagga/core` `org-domains` because it is a
@@ -158,7 +153,7 @@ deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental 
   DEPARTMENTS remain data. A domain nobody owns is reachable only by an org-wide role.
 - **`org_roles`** — `key`, label, `kind`, colour, a `permissions` JSONB object over the
   capability vocabulary, and an optional `department_id`. `kind = system` is seeded,
-  UNDELETABLE and RIGHTS-EDITABLE (Ryan's "set permanent ones"); `kind = custom` is a
+  UNDELETABLE and RIGHTS-EDITABLE; `kind = custom` is a
   System manager's own, fully editable and deletable. Only `custom` deletes — exactly
   `UNDELETABLE_ROLE_KINDS` on the camp side.
 - **`org_role_assignments`** — membership × role; a person holds zero or more.
@@ -177,16 +172,13 @@ not law:
 | `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅                     |
 | `read_system` — the System panel (`/system`)   | ✅                 | ❌                 | ✅                     |
 
-**A System manager may edit any of those ticks** — with ONE ceiling, added 27 Jul 2026
+**A System manager may edit any of those ticks** — with ONE ceiling
 with the tier correction below: the `engineer` RANK never resolves
 `read_personal_information` or `delete`, whatever role it is given
 (`ENGINEER_RANK_CARVE_OUTS`). Every other tick is data, and every edit is audited
 (`org.role.update` records before/after).
 
-**The ranks are cumulative in REACH, not in DEPTH** (Ryan, 27 Jul 2026: _"you got org staff
-and then whatever departments they're in. You can have an engineer who is still also org
-staff but they're a step up and then sys admin or gods are still org but they're above
-that"_). All three are org; what differs is how many departments their grants apply in:
+**The ranks are cumulative in REACH, not in DEPTH.** All three are org; what differs is how many departments their grants apply in:
 
 | rank        | reach                                                       | depth                                            |
 | ----------- | ----------------------------------------------------------- | ------------------------------------------------ |
@@ -233,7 +225,7 @@ owns nothing makes every role scoped to it grant nothing, and the console says s
 **TWO capabilities are department-scoped** (`DEPARTMENT_SCOPED_CAPABILITIES`):
 
 - **`delete`** — destruction, scoped first, and the one that cannot be undone.
-- **`read_personal_information`** — scoped 27 Jul 2026, and the reason this change exists.
+- **`read_personal_information`** — the reason this permission is scoped at all.
   A Suppliers lead reads supply-related contact details and is REFUSED a theme camp's
   members. While it was global, a department lead read everyone's — silently, in an RSC
   payload, with no refusal anywhere to notice.
@@ -277,10 +269,10 @@ actions: approve / request changes / reject — approve flips the entitlement pr
 `/suppliers` (imported list, vetting status editing, manual add) · `/categories` (the
 per-edition camp-category taxonomy — readable by every rank, CRUD by the System manager
 alone) · `/system` (below). There is NO
-/payments section (Ryan, 24 Jul: "we don't do payments") — the payments table and
+/payments section — the payments table and
 PaymentDetailsBlock survive only for future logistics apps.
 
-## The System panel — `/system` (Ryan, 27 Jul 2026)
+## The System panel — `/system`
 
 > "There should probably be a System management panel for IT staff and System manager
 > teams to manage certain IT specific settings, security controls, and god level account
@@ -359,7 +351,7 @@ string cannot come with it. `GOD_EMAILS` is reported as a **count**: those are p
 email addresses and an engineer never receives one. A unit test seeds every credential env
 var with a marker and asserts no marker survives into any rendered string.
 
-**The frame exception is PAID OFF (27 Jul 2026).** This page shipped ahead of its frame —
+**The frame exception is paid off.** This page shipped ahead of its frame —
 a recorded exception to design-before-build — and the frames were drawn afterwards to
 document what shipped rather than to redesign it:
 
@@ -378,7 +370,7 @@ Do not reopen this exception for the next surface.
 
 ## Seeds (`packages/db/src/seed.ts`, runnable script, idempotent)
 
-**Law (Ryan, 26 Jul 2026): seeds contain ONLY org-owned reference/catalog data. Every
+**Law: seeds contain ONLY org-owned reference/catalog data. Every
 burner, camp, membership, registration and questionnaire response — in every
 environment, including the kickoff demo — is created live through the app.** There are
 no seeded accounts. This supersedes the earlier seed set (Mad Hatters, Camp 404, six
@@ -420,7 +412,7 @@ Storybook · carry-forward between editions (single seeded edition).
 _(pen.dev **is** used — `design/ab-initial-app.pen` is the design source of truth. It
 was on this list when the list meant "no design tooling"; that changed.)_
 
-## Burner Bio v3 additions (Ryan, 24 Jul 2026 — corpus-grounded)
+## Burner Bio v3 additions
 
 - **`about`** — free-text bio "for the burns" (soft cap ~150 words, word counter), privacy-flaggable, default public.
 - **`camp_history`** — repeatable entries of camps the burner has been part of, each either **linked** (type-ahead reference to a platform group) or **free text** (unlisted free camps, camps at other burns worldwide); optional event name (default AfrikaBurn) and years. Default public. Expect heavy free-text use.
@@ -429,7 +421,7 @@ was on this list when the list meant "no design tooling"; that changed.)_
 - **Future org audiences** (cheap resolver additions, note only): `ranger_curious`, `volunteers_interested:<portfolio>` — the whole point of asking is that org can later questionnaire exactly these people.
 - Schema: appended migration; all new fields nullable; privacy flags extended (none hard-locked — this is all self-promotional data); onboarding gains a "Your burns & volunteering" step before the privacy step; profile + third-party public view render whatever is public.
 
-## Camp categories ("theme topics") — org-defined directory taxonomy (Ryan, 24 Jul)
+## Camp categories ("theme topics") — org-defined directory taxonomy
 
 - **Org CRUD** on a per-edition category catalog (name, emoji optional, sort); camps
   pick theirs (multi-select, suggest ≤4) on the camp profile/registration; the
@@ -443,7 +435,7 @@ was on this list when the list meant "no design tooling"; that changed.)_
   registration data — categories complement rather than duplicate them; the directory
   may ALSO filter on those registration-derived facts, e.g. family-friendly comes free.)
 
-## Org stats dashboard — the console landing page (Ryan, 24 Jul)
+## Org stats dashboard — the console landing page
 
 Replace the org overview with a proper **status board for running the burn** (current
 edition): registered burners in the app (+ bios completed), camps by registration
@@ -456,7 +448,7 @@ weeks). Charts follow the dataviz standards (load the dataviz skill before autho
 any chart). This page IS the org landing — glanceable, no scrolling required for the
 headline numbers.
 
-## Notifications & bulletins (Ryan, 25 Jul 2026 — see docs/notifications-spec.md)
+## Notifications & bulletins
 
 - Schema additions (append-only migrations as always): `bulletins` (edition_id,
   title, body_md, audience [same enum as questionnaire audiences], created_by,
@@ -474,7 +466,7 @@ headline numbers.
 - Law: bulletins are informational only (no data collection — fewer-forms);
   notifications never leak hard-locked fields; no payment notifications exist.
 
-## Platform/database separation — RESOLVED (27 Jul 2026)
+## Platform/database separation
 
 The question was whether the database and accounts should move to a separate owning
 "platform" unit. **They did not need to.** `packages/db` is the single owner of schema
@@ -488,7 +480,7 @@ else imports the client and types. The research trail is in
 the executed plan in
 `docs/auth-platform-spec.md`.
 
-## Status board KPI row (Ryan, 25 Jul 2026)
+## Status board KPI row
 
 The four headline cards are: BURNERS (total + bios complete %), CAMPS (total +
 registered/free split), MUTANT VEHICLES (total + registered/in-review), ARTWORKS

@@ -18,7 +18,7 @@ There is no staging environment. Three things follow, and none of them are optio
    step in between that would catch it. See rule 1 under Hard engineering rules.
 3. **You are working in someone else's repository.** Branch, open a pull request, and
    let the maintainer review — never commit to `main`. (Branch protection is not yet
-   switched on at the time of writing, so nothing *stops* you. That makes the rule
+   switched on at the time of writing, so nothing _stops_ you. That makes the rule
    more important, not less.)
 
 If you find a security or privacy problem, report it privately — `SECURITY.md`.
@@ -68,8 +68,8 @@ browser.
 Four traps that already cost real time:
 
 - **A long-lived `next dev` keeps a stale module graph.** Delete a file that
-  something imports and the running server serves 500s *while `turbo build`
-  stays green* — once producing 104 phantom E2E failures that read exactly like
+  something imports and the running server serves 500s _while `turbo build`
+  stays green_ — once producing 104 phantom E2E failures that read exactly like
   product bugs. `e2e:local` always restarts dev and aborts on
   `Module not found`. If you are running dev by hand, restart it after deleting
   or moving a module.
@@ -84,7 +84,7 @@ Four traps that already cost real time:
   a comment. If you are running many build cycles, `df -h` occasionally.
 - **Clean up git worktrees.** Agent runs that use `isolation: "worktree"` leave
   full checkouts behind; ten of them were once sitting at 2.3 GB. `git worktree
-  list`, then `git worktree remove` what has finished.
+list`, then `git worktree remove` what has finished.
 
 ## Hard engineering rules
 
@@ -99,7 +99,7 @@ Four traps that already cost real time:
    machine against production — the build is the only thing that applies them.
    **The UNPOOLED endpoint is mandatory and ENFORCED, not merely preferred**: the
    runner reads `DATABASE_URL_UNPOOLED` (Neon's direct endpoint) first, and it
-   *aborts the build* rather than silently falling back to a pooled URL — because
+   _aborts the build_ rather than silently falling back to a pooled URL — because
    session advisory locks do not hold on Neon's PgBouncer (transaction-pooling)
    endpoint, which is what Neon's Vercel integration puts in `DATABASE_URL` by default.
    Specifically it fails hard if the resolved host is a `-pooler`/`pgbouncer` endpoint
@@ -109,20 +109,20 @@ Four traps that already cost real time:
    must set **both** `DATABASE_URL` (pooled, for the app) and `DATABASE_URL_UNPOOLED`
    (direct, for the migrator). Non-production, non-pooler fallback still works (with a
    loud warning) for local dev / Neon Local.
-   *(Ryan, 26 Jul 2026: this replaces the earlier "no migration step in any build,
-   ever", which over-hardened the real constraint — don't migrate in the very first
-   build, before any DB existed. Now that a DB exists, deploy-time migration is the law.
-   Amended same day: fallback-to-pooled is a hard failure, not a warning.)*
+   _(This replaces an earlier "no migration step in any build, ever", which
+   over-hardened the real constraint: don't migrate in the very first build, before
+   any DB exists. Now that one does, deploy-time migration is the law.
+   Amended same day: fallback-to-pooled is a hard failure, not a warning.)_
 2. **Migrations are append-only.** Never edit or regenerate an existing migration;
    `packages/db/src/schema.ts` is the single source of truth.
 3. **Pins that must not move**: `better-auth` = **1.6.25 exactly** (a DIRECT dependency of
    `@quagga/auth`; verified React 19 / Next 16 / zod 4 / drizzle-orm 0.45.x compatible);
-   `@radix-ui/react-slot` ~1.2.4 (newer breaks typecheck/build). *(Ryan, 26 Jul 2026: the
-   old `better-auth = 1.4.18` pin lived in `pnpm.overrides` ONLY because better-auth was a
-   transitive dep of managed Neon Auth and had to match Neon's internal version. Self-hosting
+   `@radix-ui/react-slot` ~1.2.4 (newer breaks typecheck/build). _(The old `better-auth = 1.4.18` pin
+   lived in `pnpm.overrides` ONLY because better-auth was a transitive dep of managed
+   Neon Auth and had to match Neon's internal version. Self-hosting
    (docs/auth-platform-spec.md) makes better-auth a first-class direct dependency, so the pin now
    lives as the exact version in `packages/auth/package.json` and the override was removed. 1.5+
-   also unlocks versioned-secret rotation and the OAuth-provider path.)* **Never auto-bump
+   also unlocks versioned-secret rotation and the OAuth-provider path.)_ **Never auto-bump
    better-auth**: it has a track record of high-severity auth advisories (GHSA-vp58-j275-797x,
    GHSA-8jhw-6pjj-8723) and we now own the CVE-patch watch — a critical CVE is the one reason to
    move the pin, done deliberately with the gate re-greened, not via Renovate/Dependabot.
@@ -141,7 +141,7 @@ Four traps that already cost real time:
 
 - **The platform never holds or processes money.** Registration is free — AfrikaBurn
   never charges theme camps. No payment UI in any registration context. Payment
-  *reference tracking* exists only for future logistics apps. Camp-internal member ref
+  _reference tracking_ exists only for future logistics apps. Camp-internal member ref
   codes (`MAH-M017`) are allowed — they're the camp's own EFT reconciliation.
 - **Fewer forms, not more.** Every field must earn its place; derive over ask; carry
   forward by default; progressive disclosure over blanket collection.
@@ -174,12 +174,11 @@ Four traps that already cost real time:
     volume thresholds, per-actor profiling or alerting on top of it — reading many
     members' notes in one sitting is ordinary safety work, and flagging it reports
     normal care as an incident while teaching staff the tool watches them.
-    *(Ryan, 26 Jul 2026 — an enumeration detector was built and removed for exactly
-    this reason.)* The authz predicate is
+    _(An enumeration detector was built and removed for exactly this reason.)_ The authz predicate is
     `canViewMedicalNotes` (`@quagga/core` `medical-access.ts`), enforced server-side.
-    *(Ryan, 26 Jul 2026: "if you disclose it, aren't you consenting to that audience
-    to hold that data?" — this replaces both the earlier hard-lock and the
-    short-lived break-glass/reason-prompt design.)*
+    _(Disclosing a note to an audience is what consents to that audience holding it.
+    This replaces both the earlier hard-lock and the short-lived
+    break-glass/reason-prompt design.)_
   - Free camps are undiscoverable to strangers (directory, profiles, type-aheads all
     enforce this).
 - **Structural roles (`lead`/`admin`) hold every project permission irrevocably** — the
@@ -206,9 +205,9 @@ Four traps that already cost real time:
   templates). Every burner,
   camp, membership, registration and questionnaire response — in **every** environment,
   including the kickoff demo — is created live through the app. No seeded accounts, ever.
-  An empty directory / registrations queue on a fresh DB is the *correct* first-boot
+  An empty directory / registrations queue on a fresh DB is the _correct_ first-boot
   state; fix it with honest empty-state copy, never with a seeded row.
-  *(Ryan, 26 Jul 2026. See `packages/db/src/seed.ts` header + `docs/deploy.md`.)*
+  _(See `packages/db/src/seed.ts` header + `docs/deploy.md`.)_
 
 ## Verification (how to be right, not just confident)
 
@@ -219,8 +218,8 @@ one passed a confident review first:
 - A migration verified against a live database — inserts, both uniqueness rules, the
   cascade — that still broke **every questionnaire write in the product**. The
   verification never ran an `ON CONFLICT` upsert, which is how the app actually
-  writes. *Proving a constraint behaves is not proving the queries that depend on it
-  still run.*
+  writes. _Proving a constraint behaves is not proving the queries that depend on it
+  still run._
 - A one-line "safety" addition to a session read that tripled a spec's CI failure
   rate. Ten runs on each side of the change found it; reasoning about it did not.
 - `.pen` files documented as "encrypted" in three files, taken from a tool's own
@@ -330,7 +329,7 @@ gh pr create                                   # the template's sections are loa
 - **Commit subjects are Conventional Commits with a workspace scope**, and this is
   ENFORCED — a `commit-msg` hook locally, and a CI job that lints both the PR title
   and every commit in the range. `fix(web,org): deletion guards counted deleted
-  accounts as live`. Lowercase, imperative, no full stop, ≤72 chars, scope from the
+accounts as live`. Lowercase, imperative, no full stop, ≤72 chars, scope from the
   workspace list. Prose subjects are rejected. Full rules: `CONTRIBUTING.md`.
 - **The PR template's Database and Risk sections are load-bearing.** The product is
   deployed; "no schema changes" is a real and useful answer, and leaving it blank is

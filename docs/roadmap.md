@@ -86,11 +86,11 @@ justified. Listed roughly by how plausibly they'd graduate._
 - **Working budget** — value depends on whether treasurers actually want a tool or a spreadsheet; manual EFT/cash recording only, no dues gateway (payment-intermediary compliance surface).
 - **Compliance / anti-plug-and-play review** — worth adopting as a _value_; implement as progressive disclosure triggered for the few camps that match (>20 participants, >R100k dues, turnkey services), only if AB confirms it acts on this.
 - **Supplier portal (`apps/suppliers`)** — the supplier-side deep workflow: AB's onboarding steps, meetings, deposit tracking, vetting workflow. Explicitly a separate sub-project in the monorepo, built once AB's actual procedure is known (blocker table). The camp-facing repository (R1) doesn't wait for it.
-- **Placement & layout tooling** — **explicitly deferred (Ryan, 22 Jul 2026)**: no structured geo data exists, the official map is a PDF that arrives late, and the layout changes every year — nothing reliable to build against. Staff-assigned codes/locations on camp profiles (R1) cover what other workflows need. The layout designer / erf-fit ideas stay parked until AB's map process changes.
+- **Placement & layout tooling** — **explicitly deferred**: no structured geo data exists, the official map is a PDF that arrives late, and the layout changes every year — nothing reliable to build against. Staff-assigned codes/locations on camp profiles (R1) cover what other workflows need. The layout designer / erf-fit ideas stay parked until AB's map process changes.
 - **Collectives** (formerly "villages" — a camp of camps, e.g. Mad Hatters) — shared shifts/budgets/lists across member camps; a questionable feature until real demand shows (the Mad Hatters connection makes this worth _asking about_ at kickoff).
 - **Creative Project Mode** (artworks/MVs) — unlocked by AB's scope answer; cheap if the `projects` generalisation held from R0.
 - **Distant**: WhatsApp/SMS notifications, AI assists (budget/scheduling), supplier/asset tracking.
-- **Out, permanently (Ryan, 22 Jul 2026)**: **ticketing** — it stays entirely with Quicket; the platform records status at most and never issues, transfers, or integrates tickets.
+- **Out, permanently**: **ticketing** — it stays entirely with Quicket; the platform records status at most and never issues, transfers, or integrates tickets.
 
 ## What we need from others to keep this moving
 
@@ -106,7 +106,7 @@ justified. Listed roughly by how plausibly they'd graduate._
 | Supplier deposit/fee amounts, Supplier Agreement text, vetting criteria (procedure itself now documented — see `docs/sources/quaggapedia/supplier-depot.md`) | Supplier portal; repository vetting fields | AB            |
 | Confirm current water process (public wiki documents no delivery service; Finlay's scope says Quicket-based delivery exists — one is stale)                  | R3 water workflow                          | AB            |
 
-### Platform-as-backend: public API + MCP server _(Ryan's idea, 24 Jul 2026 — after the design pass)_
+### Platform-as-backend: public API + MCP server
 
 Make the platform a formal backend others can build on: a public API + an MCP server as
 their own app/project in the monorepo. Camp-specific apps (e.g. Camp 404) authenticate

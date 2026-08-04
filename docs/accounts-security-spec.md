@@ -1,9 +1,8 @@
 # Account Management & Security — Feature Spec
 
-*Ryan, 24 Jul 2026; auth section rewritten 27 Jul 2026 to describe what we actually
-run. Full account-management suite across all three apps, plus the supplier portal's
-sign-up and org-managed supplier documents. Grounded in NIST SP 800-63B-4 (Jul 2025)
-and OWASP auth guidance.*
+_What we actually run: the account-management suite across all three apps, the
+supplier portal's sign-up, and org-managed supplier documents. Grounded in NIST
+SP 800-63B-4 and OWASP authentication guidance._
 
 ---
 
@@ -30,20 +29,20 @@ The machine-readable authority is `AUTH_CAPABILITIES` in
 `packages/core/src/auth-capabilities.ts`; `assertCapability()` is the fail-closed
 gate. Every key in it is currently `supported`.
 
-| Capability | Backed by |
-| --- | --- |
-| Password change | `auth.api.changePassword` |
-| Password reset (request + reset) | `auth.api.requestPasswordReset` / `resetPassword`; a reset ends every session |
-| Email verification | `auth.api.sendVerificationEmail` / `verifyEmail` |
-| Session list | `auth.api.listSessions` (database sessions) |
-| Session revoke (one / others / all) | `auth.api.revokeSession` / `revokeSessions` / `revokeOtherSessions` |
-| Linked sign-in methods | `auth.api.listUserAccounts` + `accountInfo` |
-| Unlink sign-in method | `auth.api.unlinkAccount` — our own guard still refuses unlinking the last method. **NOT WIRED YET (27 Jul 2026):** nothing in the app calls it, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.unlinkAccount.pending`). |
-| Email change | `auth.api.changeEmail`, with our 48h revocation window and POPIA state machine on top. **NOT WIRED YET (27 Jul 2026):** the three server actions have no caller and the confirm/revoke links have no route, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.emailChange.pending`). Organisers change an address from the console meanwhile. |
-| **2FA / TOTP** | the `twoFactor` plugin (migration 0015) — enable → scan → verify; plugin lockout at 10 fails / 15 min |
-| **Backup codes** | inside the `twoFactor` plugin, stored **encrypted**; ten single-use codes shown once, regenerable |
-| **Passkeys** | `@better-auth/passkey` (migration 0015), `rpID` scoped to the apex so one passkey works across all three apps |
-| Account deletion | ours: 14-day grace + sweeper, which sanitizes app rows **and** hard-deletes the Better Auth identity |
+| Capability                          | Backed by                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Password change                     | `auth.api.changePassword`                                                                                                                                                                                                                                                                                                                                                |
+| Password reset (request + reset)    | `auth.api.requestPasswordReset` / `resetPassword`; a reset ends every session                                                                                                                                                                                                                                                                                            |
+| Email verification                  | `auth.api.sendVerificationEmail` / `verifyEmail`                                                                                                                                                                                                                                                                                                                         |
+| Session list                        | `auth.api.listSessions` (database sessions)                                                                                                                                                                                                                                                                                                                              |
+| Session revoke (one / others / all) | `auth.api.revokeSession` / `revokeSessions` / `revokeOtherSessions`                                                                                                                                                                                                                                                                                                      |
+| Linked sign-in methods              | `auth.api.listUserAccounts` + `accountInfo`                                                                                                                                                                                                                                                                                                                              |
+| Unlink sign-in method               | `auth.api.unlinkAccount` — our own guard still refuses unlinking the last method. **NOT WIRED YET (27 Jul 2026):** nothing in the app calls it, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.unlinkAccount.pending`).                                                                                                                    |
+| Email change                        | `auth.api.changeEmail`, with our 48h revocation window and POPIA state machine on top. **NOT WIRED YET (27 Jul 2026):** the three server actions have no caller and the confirm/revoke links have no route, so the control ships disabled with an honest explanation (`AUTH_CAPABILITIES.emailChange.pending`). Organisers change an address from the console meanwhile. |
+| **2FA / TOTP**                      | the `twoFactor` plugin (migration 0015) — enable → scan → verify; plugin lockout at 10 fails / 15 min                                                                                                                                                                                                                                                                    |
+| **Backup codes**                    | inside the `twoFactor` plugin, stored **encrypted**; ten single-use codes shown once, regenerable                                                                                                                                                                                                                                                                        |
+| **Passkeys**                        | `@better-auth/passkey` (migration 0015), `rpID` scoped to the apex so one passkey works across all three apps                                                                                                                                                                                                                                                            |
+| Account deletion                    | ours: 14-day grace + sweeper, which sanitizes app rows **and** hard-deletes the Better Auth identity                                                                                                                                                                                                                                                                     |
 
 Two things that gate on **delivery**, not on capability: password-reset mail and the
 email-change confirmation both need `RESEND_API_KEY`. Without a mail provider,
@@ -108,12 +107,12 @@ password or a 2FA backup code.
   final confirm. Calm, honest, not dark-patterned — but not accidental either.
 - **Forgot password**: request page + reset page (both apps' auth areas).
 
-## Supplier portal sign-up (currently missing — sign-in only exists)
+## Supplier portal sign-up
 
-Proper registration screen: business name, contact person, email, ONE password field
-(show toggle, 15+ chars, strength feedback), service category select, rules
-acknowledgement checkbox ("I've read the supplier basics"), then email verification →
-lands in onboarding. Sign-in screen redesigned to match. No opt-in checkbox litter.
+`/signup` and the redesigned `/signin` both ship. Registration takes business name,
+contact person, email, ONE password field (show toggle, 15+ chars, strength feedback),
+service category, and a rules acknowledgement — then email verification, then
+onboarding. No opt-in checkbox litter.
 
 ## Supplier documents — org-controlled (the "supplier sign-up management" section)
 
@@ -146,7 +145,7 @@ ordinal to derive a sequence from. Format `SUP-{YYYY}-{NNNN}` is deterministic
 (`@quagga/core formatSupplierCode`); only sequence allocation touches the database,
 and `suppliers.code UNIQUE` is the arbiter of the allocation race.
 
-## ID document — lawful purpose + bounded retention (Ryan, 26 Jul 2026)
+## ID document — lawful purpose + bounded retention
 
 SA ID / passport on `burner_bios` are collected for **one documented purpose:
 on-site identity verification against the ticket at the gate** — confirming the
@@ -174,13 +173,13 @@ for the owner on read, and dropped rather than stored plaintext when no key is
 configured. The `medical_notes` column stays `text`, so this needed **no
 migration** — only the write/read code in `apps/web/lib/bio-store.ts`.
 
-## Medical notes — consent at the point of entry (Ryan, 26 Jul 2026)
+## Medical notes — consent at the point of entry
 
 Medical notes are **never public**, but they are **visible** to the audience the
 burner disclosed them to. Ryan's correction, which supersedes the short-lived
-break-glass design of the same day: *"These would be similar to how burn currently
+break-glass design of the same day: _"These would be similar to how burn currently
 manages medical data — if you disclose it, aren't you consenting to that audience
-to hold that data?"* AfrikaBurn already runs this on paper: you write your medical
+to hold that data?"_ AfrikaBurn already runs this on paper: you write your medical
 info on a form knowing the safety team and your camp hold it. **The disclosure is
 the consent.** A reason prompt adds friction at exactly the wrong moment — an
 emergency — without adding protection, so there is none.
@@ -190,9 +189,9 @@ passport stay `HARD_LOCKED_PRIVATE_FIELDS` with **no access path of any kind** �
 unchanged. Nothing here weakened them.
 
 **The consent control is the field's own label.** `MEDICAL_AUDIENCE_NOTE`
-(`@quagga/core` `bio.ts`) is the single string that states the audience — *"Your
+(`@quagga/core` `bio.ts`) is the single string that states the audience — _"Your
 camp leads and AfrikaBurn's safety team can see this. It's here so someone can help
-you if something goes wrong on site."* It is rendered wherever medical is captured
+you if something goes wrong on site."_ It is rendered wherever medical is captured
 or edited: the onboarding bio flow, the profile editor (same `BioFlow` component),
 the privacy-review lock reason (`BIO_PRIVACY_FIELDS` → `medical.lockReason`), and
 the code questionnaire definition's helper. Because that label is now the
@@ -201,13 +200,14 @@ doing so, the consent basis is gone.
 
 **Who may see it** (pure predicate `canViewMedicalNotes` in `@quagga/core`
 `medical-access.ts`, fail-closed):
+
 - the owner (their own notes);
 - **org staff** (`org_staff` / `god`) — AfrikaBurn's safety/ops tier, any burner.
   **The `engineer` rank is deliberately NOT in this set** and must never be added: it is
   the console's IT rank, it holds no care duty that would need the notes, and the org
   capability matrix (`@quagga/core` `org-permissions`) refuses it personal information
   unconditionally;
-- a **camp lead/admin** — but only for a member of a camp *they* lead. A lead of
+- a **camp lead/admin** — but only for a member of a camp _they_ lead. A lead of
   camp A is refused for a member of camp B (the lead-camp id set must intersect the
   subject's camp ids). Custom project roles do NOT grant it — structural leads only.
 
@@ -223,17 +223,17 @@ people down a roster, or a CSV — is a different risk from purposeful access, s
 roster query deliberately never selects the notes.
 
 **Authorise, then select.** Both detail resolvers run the access predicate
-*before* the query that would read the column, and pass the answer in:
+_before_ the query that would read the column, and pass the answer in:
 `resolveMedicalNotesForViewer` checks `canViewMedicalNotes` and only then reads
 `burner_bios`, and `getRosterMemberDetail` takes an explicit
 `includeMedicalNotes` flag that its caller derives from the same predicate. On a
 refusal the ciphertext is never loaded, so there is no plaintext in render scope
 for a later careless edit — a debug dump, a widened props object — to ship in an
-RSC payload. Deciding *after* the decrypt would leave correctness resting on a
+RSC payload. Deciding _after_ the decrypt would leave correctness resting on a
 conditional in the JSX.
 
-The org roster briefly rendered a *"Medical notes on file" / "No medical notes"*
-signpost per row. **That is gone** (26 Jul 2026), because it was the same leak in
+The org roster briefly rendered a _"Medical notes on file" / "No medical notes"_
+signpost per row. **That is gone**, because it was the same leak in
 miniature: whether a NAMED person has declared a health condition is itself
 special-category-adjacent under POPIA s26, and a column of it hands a reviewer a
 complete census of who has disclosed — obtained in one server-rendered page load,
@@ -246,7 +246,7 @@ bulk scan the detail-view-only rule exists to prevent. AGENTS.md:108-111 already
 
 The cost is real and was weighed: without the signpost, staff who want to know
 whether a camp has disclosures must open member pages. That is the intended
-friction — each of those opens is authorized and *recorded*, which the signpost was
+friction — each of those opens is authorized and _recorded_, which the signpost was
 not. **If Ryan rules the other way**, the amendment belongs in AGENTS.md:109 first
 ("the notes themselves are never listed; a has/has-not signpost is"), and the
 signpost read should then write its own audit row; it must not reappear as a silent
@@ -267,17 +267,17 @@ event and is not audited; an empty field discloses nothing and is not audited.
 **The audit FAILS OPEN, and that is deliberate — so the reader is the control.**
 Because the insert runs in `after()`, the notes are already rendered and streamed
 before the row is attempted, and a failed insert is swallowed to `console.error`: a
-dropped serverless instance, a DB blip or a constraint failure yields a *silent,
-unlogged disclosure*. Fail-open is the right call for this path: an emergency medic
+dropped serverless instance, a DB blip or a constraint failure yields a _silent,
+unlogged disclosure_. Fail-open is the right call for this path: an emergency medic
 read must never be blocked by an audit write.
 
-**The trail is a record, not monitoring.** Its job is to answer *"who saw my medical
-information?"* if a burner asks, and to let a real incident be reconstructed. That is
+**The trail is a record, not monitoring.** Its job is to answer _"who saw my medical
+information?"_ if a burner asks, and to let a real incident be reconstructed. That is
 all it is for.
 
 There is deliberately **no volume threshold, no per-actor profiling and no alerting**,
 and none should be added. An earlier build shipped an enumeration detector that flagged
-any account reading 8+ distinct burners' notes in an hour. It was removed on 26 Jul 2026
+any account reading 8+ distinct burners' notes in an hour. It was removed
 because the premise was wrong: **reading a lot of medical notes in one sitting is what
 the job looks like.** A safety lead working out what to prepare for on site goes through
 every member of a camp in one pass. Flagging that reports ordinary care as an incident,
@@ -295,7 +295,7 @@ What exists now:
   table and the full activity list. It shows **who looked at whose notes, never the
   notes**; reading the trail is not a disclosure, so it writes no audit row of its own.
   **The medical panel needs `read_personal_information` IN THE `audit` DOMAIN**
-  (27 Jul 2026), so an `engineer` is refused it by their rank's carve-out and a
+  so an `engineer` is refused it by their rank's carve-out and a
   department-scoped lead is refused it unless their department owns the audit log — the
   log spans every camp, so a grant over one department is not a grant over a
   console-wide census. Either way `bio.medical.view` rows are filtered out of their
@@ -334,85 +334,35 @@ is personal data, so `security_events` is one of the sanitization **purged**
 tables (erased with the account, POPIA erasure). New-device sign-in alerts remain
 unwired (no device-fingerprint record); the active-session list is the check.
 
-## Rollout — done
+## Where these rules live
 
-1. ~~Design pass~~ — frames drawn and reviewed.
-2. ~~Implementation~~ — Better Auth plugin wiring, shared account components, supplier
-   docs schema + UIs, notification emails and the test suite all landed.
-3. ~~Phase 2: passkeys~~ — shipped with 2FA in migration 0015, not deferred.
+Schema: migrations **0011** (supplier documents, deletion and email-change requests,
+`users.sanitized_at`), **0013** (Better Auth tables, brought in-house), **0014**
+(`security_events`, `section_review_replies`), **0015** (2FA, backup codes,
+passkeys). Rules: `@quagga/core` (`auth-capabilities`, `account-security`,
+`account-sanitization`, `id-retention`, `medical-access`). Presentation:
+`@quagga/ui` account components, one set shared by all three apps.
 
-## Build status (updated 27 Jul 2026)
+Four structural decisions hold across that surface:
 
-**Landed — schema + backend + core logic:**
+1. **The account routes sit OUTSIDE each app's own gate**, in their own route group.
+   The console gate refuses anyone without an org role; the portal gate refuses anyone
+   whose email has not claimed a listing. Both are right for what they guard and wrong
+   for somebody's own password — an ex-organiser with a live session on a lost laptop
+   is exactly who needs this surface. The only requirement is a signed-in identity,
+   and every read is scoped to it by Better Auth.
+2. **Deletion has one implementation, on `apps/web`.** The other two carry a Delete tab
+   that states what THAT app loses and deep-links across. A second entry point would be
+   a second place to forget the eligibility guards and the grace period.
+3. **Email change is offered on `apps/web` only**, for the same reason; elsewhere the
+   control is present, disabled, and explains itself.
+4. **The sweeper never runs unauthenticated and never in a build** —
+   `POST /api/account/deletion-sweep` refuses without `ACCOUNT_SWEEP_SECRET`.
 
-- Migration **0013**: the Better Auth tables, brought in-house off managed Neon Auth.
-- Migration **0015**: `two_factor` + `user.two_factor_enabled` + `passkey`. This is
-  what turned 2FA, backup codes and passkeys from deferred into shipped.
+Two seams are open and deliberate:
 
-- Migration **0011** (append-only): `supplier_documents`, `supplier_document_acks`,
-  `account_deletion_requests`, `email_change_requests`, `suppliers.code`,
-  `users.sanitized_at`. Partial unique indexes keep exactly one *pending* deletion
-  and one *pending* email-change per user, while allowing a burner who cancels to
-  request again.
-- Migration **0014** (append-only): `security_events` (the real security-events
-  log the feed reads) + `section_review_replies` (camp-side replies under a section
-  review). No column change was needed to encrypt medical notes — `medical_notes`
-  was already `text`, so the encryption landed in code only.
-- `@quagga/core`: `auth-capabilities`, `account-security` (password policy,
-  enumeration-safe messaging, deletion grace state machine, email-change state
-  machine, the three guards), `account-sanitization` (the Lost Cat plan),
-  `security-notifications` (inbox + Resend bodies), `supplier-code`,
-  `supplier-documents`.
-- `apps/web`: `lib/account.ts` (sessions, linked methods, guard context),
-  `lib/account-actions.ts` (password change/reset, session revoke, email-change
-  request/confirm/revoke, deletion request/cancel), `lib/account-sanitize.ts` (the
-  sanitizer + sweeper), `lib/account-tokens.ts`, and the
-  `POST /api/account/deletion-sweep` trigger (refuses to run without
-  `ACCOUNT_SWEEP_SECRET` — it never runs unauthenticated, and never in a build).
-- `apps/suppliers`: Documents panel wired live (the `supplier-documents-panel` seam
-  is closed), ack action with step reconciliation, supplier-code issuance on
-  self-registration.
-- `apps/org`: supplier-document CRUD server actions (org-gated, audited) +
-  `listSupplierDocuments` with ack counts.
-
-**Closed since the 25 Jul snapshot:**
-
-- `/account`, `/account/security`, `/account/delete` ship in **all three apps**
-  (roadmap M4-21). The whole suite is shared: the read side in
-  `@quagga/auth/account` (sessions, passkeys, linked methods, 2FA flag, the
-  `security_events` log) and the presentation in `@quagga/ui`
-  (`account-shell`, `account-sessions`, `account-sign-in-methods`,
-  `account-change-password`, `account-security-events`, `account-capability-notice`,
-  `account-delete-elsewhere`, plus the pre-existing `account-two-factor`,
-  `account-passkeys` and `account-two-factor-challenge`). Each app supplies only its
-  own auth client, server actions and paths.
-- **The account routes deliberately sit OUTSIDE each app's own gate**, in their own
-  route group. The console gate refuses anyone without an org role and replaces the
-  console entirely when a blocking questionnaire is pending; the portal gate refuses
-  anyone whose email has not claimed a supplier listing. Both are right for what they
-  guard and wrong for somebody's own password — an ex-organiser with a live session on
-  a lost laptop, or a supplier who was never matched to a listing, is exactly who needs
-  this surface. The only requirement is a live signed-in identity
-  (`resolveAccountUser`), and every read is scoped to it by Better Auth itself.
-- **Deletion has ONE implementation and it stays on `apps/web`.** The other two carry a
-  Delete tab that explains itself, states what THAT app loses (org access and roles; a
-  claimed supplier listing released back to unclaimed), and deep-links to the
-  participant app. A second entry point would be a second place for the eligibility
-  guards and the grace period to be forgotten.
-- The org **`/suppliers/signup-management`** console page is live.
-- The supplier portal's **`/signup`** and redesigned **`/signin`** both exist.
-- **2FA / backup codes / passkeys** — shipped (migration 0015). No longer blocked on
-  anything.
-
-**Open seams (still true, deliberate):**
-
-- **New-device sign-in notification** builder exists but is not wired: it needs a
-  per-account record of seen device fingerprints to avoid firing on every session,
-  and that column does not exist yet. It fires on nothing rather than on everything.
-- **Email change is offered on `apps/web` only.** The other two name the sign-in
-  address and carry the same disabled control with the capability's own explanation.
-  Like deletion, it is a token-and-grace-period flow with one implementation; unlike
-  deletion, its control is disabled everywhere, so there is nothing to hand over to
-  yet.
-- **The ID-retention purge job** is unwired: only the pure rule and its tests exist
-  (see §ID document below).
+- **New-device sign-in notification** — the builder exists, unwired. It needs a record
+  of seen device fingerprints or it fires on every session. It fires on nothing rather
+  than on everything.
+- **The ID-retention purge job** is unwired: the pure rule and its tests exist, the
+  scheduler does not.
