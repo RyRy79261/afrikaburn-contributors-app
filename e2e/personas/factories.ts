@@ -204,6 +204,15 @@ export async function signInAs(
   await expect(page).not.toHaveURL(
     new RegExp(`${signInPath(app).replace(/\//g, "\\/")}`),
   );
+  // WAIT FOR THE LANDING PAGE TO SETTLE. The assertion above passes the instant
+  // the URL stops being the sign-in route — which is while the post-sign-in
+  // navigation is still in flight. Sixteen specs call `page.goto(...)` on the
+  // very next line, and that goto races ours: Playwright aborts the caller's
+  // navigation in favour of the one already running and reports
+  // `net::ERR_ABORTED at .../profile`, or the blunter "Navigation to /profile is
+  // interrupted by another navigation to /directory". It reads as the app
+  // failing to serve a page it serves perfectly well.
+  await page.waitForLoadState("load");
 }
 
 /** End the current session (web/org header sign-out; supplier equivalent). */
