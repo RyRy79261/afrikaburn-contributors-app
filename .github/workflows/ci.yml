@@ -424,6 +424,19 @@ jobs:
       #
       # `always()` so the numbers are visible on the run that breached a floor,
       # which is when they matter most.
+      # FORKS GET THE FLOORS, NOT THE COMMENT.
+      #
+      # A `pull_request` from a fork runs with a READ-ONLY token, whatever this
+      # job asks for — so both comment steps would fail and show a red
+      # `coverage` shard on the pull request of somebody contributing for the
+      # first time. This repository asks for outside help in CONTRIBUTING.md;
+      # greeting that with a failing check nobody can fix is the wrong first
+      # impression.
+      #
+      # The floors above still run and still fail on a real breach, because
+      # they need no token. Only the reporting is skipped, and the numbers stay
+      # readable in the job summary.
+
       # CLEAR THE PREVIOUS ONE FIRST.
       #
       # The report action finds its old comment by name and EDITS it. The edit
@@ -436,7 +449,9 @@ jobs:
       # an up-to-date comment at the BOTTOM of the conversation, where the
       # person who just pushed is looking.
       - name: Clear the previous coverage comment
-        if: always() && github.event_name == 'pull_request'
+        if: >-
+          always() && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -451,7 +466,9 @@ jobs:
             done
 
       - name: Report coverage on the pull request
-        if: always() && github.event_name == 'pull_request'
+        if: >-
+          always() && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
           name: ${{ matrix.label }}
