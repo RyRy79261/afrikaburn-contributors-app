@@ -5,7 +5,11 @@ import {
   type SupplierOnboardingStepView,
 } from "@quagga/core";
 import type { SupplierOnboardingStepStatus } from "@quagga/types";
-import { buildStepCardModel, supplierCodeChipValue } from "../onboarding-view";
+import {
+  buildStepCardModel,
+  stepEyebrow,
+  supplierCodeChipValue,
+} from "../onboarding-view";
 
 function view(
   key: Parameters<typeof supplierOnboardingStep>[0],
@@ -17,11 +21,27 @@ function view(
 }
 
 describe("buildStepCardModel", () => {
-  it("covers every catalog step without throwing", () => {
+  it("gives every catalog step a flow that matches who may act on it", () => {
+    // REPLACES an earlier case that asserted only `toBeDefined()` and a
+    // non-zero length — which cannot fail for any reason worth catching, since
+    // every branch of `buildStepCardModel` returns both fields. This asserts
+    // the actual invariant instead: the flow is derived from the step's
+    // `completedBy`/`confirmation` metadata, and `supplierActionable` must
+    // agree with it. A new step whose metadata falls through the classifiers
+    // fails here rather than rendering a card with no buttons and no
+    // explanation.
     for (const step of SUPPLIER_ONBOARDING_STEPS) {
       const model = buildStepCardModel({ step, status: "pending" });
-      expect(model.flow).toBeDefined();
-      expect(model.statusLabel.length).toBeGreaterThan(0);
+
+      expect(model.flow).toBe(
+        step.confirmation === "org_confirms"
+          ? "org_confirmed"
+          : step.confirmation === "org_reviews"
+            ? "org_reviewed"
+            : "self_service",
+      );
+      expect(model.supplierActionable).toBe(model.flow !== "org_confirmed");
+      expect(Boolean(model.primaryAction)).toBe(model.flow !== "org_confirmed");
     }
   });
 
@@ -115,6 +135,64 @@ describe("supplierCodeChipValue", () => {
     // fake identifier on a chip that suppliers quote off-platform.
     for (const empty of [null, undefined, "", " ", "\t\n"]) {
       expect(supplierCodeChipValue(empty)).toBeNull();
+    }
+  });
+});
+
+// The card eyebrow ("Step 3 · Org confirms", canvas Q4fye). It encodes the
+// who-completes / who-confirms model so a supplier sees, at a glance, who
+// drives each step — which is the difference between "I'm waiting on
+// AfrikaBurn" and "AfrikaBurn is waiting on me".
+//
+// `stepEyebrow` is a switch with NO default. Adding a fifth confirmation type
+// to the core catalog makes it fall through and return `undefined`, rendering
+// "Step 3 · undefined" on a card. TypeScript catches that only while the union
+// is exhaustive; the last case here catches it at runtime for a catalog that
+// grows.
+describe("stepEyebrow", () => {
+  function eyebrowFor(key: Parameters<typeof supplierOnboardingStep>[0]) {
+    const step = supplierOnboardingStep(key);
+    if (!step) throw new Error(`no step ${key}`);
+    return stepEyebrow(step);
+  }
+
+  it("reads 'You complete · Auto-confirmed' for an auto step", () => {
+    expect(eyebrowFor("registration_form")).toBe(
+      "Step 1 · You complete · Auto-confirmed",
+    );
+  });
+
+  it("reads 'You confirm · Org may revoke' for a revocable self-service step", () => {
+    // The supplier marks it done themselves, and AfrikaBurn can take it back —
+    // the deposit refund hangs off adherence to the agreement.
+    expect(eyebrowFor("agreement_signed")).toBe(
+      "Step 2 · You confirm · Org may revoke",
+    );
+  });
+
+  it("reads 'You submit · Org reviews' for an org-reviewed step", () => {
+    expect(eyebrowFor("inventory_submitted")).toBe(
+      "Step 4 · You submit · Org reviews",
+    );
+  });
+
+  it("reads 'Org confirms' for a step the supplier cannot touch", () => {
+    expect(eyebrowFor("deposit_paid")).toBe("Step 3 · Org confirms");
+  });
+
+  it("prefixes every eyebrow with the step's own order number", () => {
+    for (const step of SUPPLIER_ONBOARDING_STEPS) {
+      expect(stepEyebrow(step)).toMatch(new RegExp(`^Step ${step.order} · `));
+    }
+  });
+
+  it("gives every catalog step a non-empty who-clause", () => {
+    // A new confirmation type fails loudly HERE rather than rendering
+    // "Step 3 · undefined" to a supplier.
+    for (const step of SUPPLIER_ONBOARDING_STEPS) {
+      const who = stepEyebrow(step).split(" · ").slice(1).join(" · ");
+      expect(who).not.toBe("");
+      expect(who).not.toContain("undefined");
     }
   });
 });
