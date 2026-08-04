@@ -424,6 +424,32 @@ jobs:
       #
       # `always()` so the numbers are visible on the run that breached a floor,
       # which is when they matter most.
+      # CLEAR THE PREVIOUS ONE FIRST.
+      #
+      # The report action finds its old comment by name and EDITS it. The edit
+      # is correct, but GitHub pins a comment at the position it was created,
+      # so after a few pushes the numbers are current and sitting an hour up
+      # the page behind a "Load more…" fold, marked only with a small "edited".
+      # Push a fix to coverage and nothing appears to happen.
+      #
+      # Deleting first makes the action create a new one, so every run leaves
+      # an up-to-date comment at the BOTTOM of the conversation, where the
+      # person who just pushed is looking.
+      - name: Clear the previous coverage comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/issues/${{ github.event.number }}/comments" \
+            --paginate --jq '.[]
+              | select(.user.login == "github-actions[bot]")
+              | select(.body | contains("Coverage Report for ${{ matrix.workspace }}"))
+              | .id' \
+          | while read -r id; do
+              echo "removing superseded comment $id"
+              gh api -X DELETE "repos/${{ github.repository }}/issues/comments/$id"
+            done
+
       - name: Report coverage on the pull request
         if: always() && github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2

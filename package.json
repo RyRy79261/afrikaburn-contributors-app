@@ -3,7 +3,7 @@
   "private": true,
   "license": "FSL-1.1-ALv2",
   "version": "0.0.0",
-  "description": "AfrikaBurn Contributors App \u2014 participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
+  "description": "AfrikaBurn Contributors App — participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -21,6 +21,7 @@
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "husky": "^9.1.7",
+    "monocart-coverage-reports": "^2.12.12",
     "prettier": "^3.8.3",
     "tsx": "^4.23.5",
     "turbo": "^2.9.14",
