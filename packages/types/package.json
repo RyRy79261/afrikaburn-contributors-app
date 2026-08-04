@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"

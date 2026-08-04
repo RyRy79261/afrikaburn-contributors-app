@@ -331,24 +331,50 @@ jobs:
   # backwards.
   # COVERAGE, AS A RATCHET RATHER THAN A NUMBER ON A BADGE.
   #
-  # The floors live in `packages/core/vitest.config.ts`, not here, so they are
-  # enforced identically by `pnpm test:coverage` on a laptop and by this job.
-  # Ported from RyRy79261/intake-tracker, which runs the same shape.
+  # The floors live in each workspace's `vitest.config.ts`, not here, so they
+  # are enforced identically by `pnpm test:coverage` on a laptop and by this
+  # job. Ported from RyRy79261/intake-tracker, which runs the same shape.
   #
-  # `@quagga/core` and nothing else, deliberately: it holds every authz,
-  # privacy, consent and entitlement predicate the three apps read, it is pure
-  # (no database, no network), and a regression in it is invisible until it is a
-  # privacy incident. The per-file floors on the safety core sit at 100%.
+  # One shard per workspace, so a breach names the workspace in the checks list
+  # rather than making somebody open a log to find out which one moved.
+  #
+  # READ THE APP NUMBERS CORRECTLY. `apps/*` count `lib/**` only — server
+  # actions, queries and stores. Their routes and components are covered by the
+  # Playwright personas, so a low percentage here is a statement about unit
+  # tests, not about whether the app is tested.
   #
   # It does NOT gate `CI pass`. The floors already fail the job; making the
-  # merge gate depend on a coverage report as well would mean a flaky comment
-  # step could block a green branch. The number is advisory, the floors are not.
+  # merge gate depend on a comment-posting step as well would let a flaky
+  # third-party action block a green branch. The number is advisory; the floors
+  # are not.
   coverage:
-    name: coverage · @quagga/core
+    name: coverage · ${{ matrix.workspace }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+    strategy:
+      # Every workspace reports even when one breaches — a partial picture is
+      # less useful than the whole one.
+      fail-fast: false
+      matrix:
+        include:
+          - workspace: "@quagga/core"
+            directory: packages/core
+          - workspace: "@quagga/ui"
+            directory: packages/ui
+          - workspace: "@quagga/auth"
+            directory: packages/auth
+          - workspace: "@quagga/db"
+            directory: packages/db
+          - workspace: "@quagga/types"
+            directory: packages/types
+          - workspace: "@quagga/web"
+            directory: apps/web
+          - workspace: "@quagga/org"
+            directory: apps/org
+          - workspace: "@quagga/suppliers"
+            directory: apps/suppliers
     steps:
       - uses: actions/checkout@v4
 
@@ -366,17 +392,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # Fails the job when any global or per-file floor is breached.
+      # Fails the shard when any floor in that workspace is breached.
       - name: Run coverage against the floors
-        run: pnpm test:coverage
+        run: pnpm --filter ${{ matrix.workspace }} test:coverage
 
-      # Posts/updates one comment with the table. `always()` so the numbers are
-      # still visible on the run that broke a floor — that is when they matter.
+      # PINNED TO A COMMIT, NOT A TAG. `@v2` is mutable — whoever owns the
+      # action can repoint it at any commit, and this step holds
+      # `pull-requests: write` on a public repository. The comment records the
+      # human-readable version so dependency automation can still bump it.
+      #
+      # `always()` so the numbers are visible on the run that breached a floor,
+      # which is when they matter most.
       - name: Report coverage on the pull request
         if: always() && github.event_name == 'pull_request'
-        uses: davelosert/vitest-coverage-report-action@v2
+        uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
         with:
-          working-directory: packages/core
+          name: ${{ matrix.workspace }}
+          working-directory: ${{ matrix.directory }}
           file-coverage-mode: changes
 
   ci-pass:
