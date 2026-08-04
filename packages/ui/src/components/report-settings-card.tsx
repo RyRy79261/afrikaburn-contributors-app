@@ -9,10 +9,11 @@
 // here, collapsed, reachable without filing anything.
 
 import * as React from "react";
-import { Bug, Info, Lightbulb } from "lucide-react";
+import { Bug, Info, Lightbulb, PlugZap } from "lucide-react";
 
 import type { ReportType } from "@quagga/core";
 
+import { cn } from "../lib/utils";
 import {
   Card,
   CardContent,
@@ -23,7 +24,22 @@ import {
 import { ReportDialog } from "./report-dialog";
 import { ReportDiagnosticsPanel } from "./report-diagnostics";
 
-export function ReportSettingsCard() {
+export interface ReportSettingsCardProps {
+  /**
+   * False when the deployment has no `GITHUB_TOKEN`. The two buttons are
+   * replaced by a plain statement: there is nowhere for a report to go, and
+   * the honest place to say so is the page somebody opens to ask why there is
+   * no Report button in the corner.
+   */
+  filingEnabled?: boolean;
+  /** False when the deployment has no `GROQ_API_KEY`. */
+  dictationEnabled?: boolean;
+}
+
+export function ReportSettingsCard({
+  filingEnabled = true,
+  dictationEnabled = true,
+}: ReportSettingsCardProps = {}) {
   const [open, setOpen] = React.useState(false);
   const [type, setType] = React.useState<ReportType>("bug");
 
@@ -37,12 +53,35 @@ export function ReportSettingsCard() {
       <CardHeader>
         <CardTitle>Bugs and feature requests</CardTitle>
         <CardDescription>
-          Report from any screen with the button in the bottom-left corner — or
-          start one here.
+          {filingEnabled
+            ? "Report from any screen with the button in the bottom-left corner — or start one here."
+            : "How reports work here, and what one would send."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        {!filingEnabled && (
+          <p className="flex gap-2.5 rounded-md bg-muted/40 p-3 text-xs leading-relaxed text-foreground">
+            <PlugZap
+              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <span>
+              <span className="font-semibold">
+                Reporting isn&rsquo;t switched on for this deployment.
+              </span>{" "}
+              Nothing can be filed from here yet, which is why there is no
+              Report button in the corner. Everything below still describes what
+              a report would attach once it is.
+            </span>
+          </p>
+        )}
+
+        <div
+          className={cn(
+            "flex flex-col gap-3 sm:flex-row",
+            !filingEnabled && "hidden",
+          )}
+        >
           {(
             [
               {
@@ -95,7 +134,12 @@ export function ReportSettingsCard() {
         </p>
       </CardContent>
 
-      <ReportDialog open={open} onOpenChange={setOpen} initialType={type} />
+      <ReportDialog
+        open={open}
+        onOpenChange={setOpen}
+        initialType={type}
+        dictationEnabled={dictationEnabled}
+      />
     </Card>
   );
 }

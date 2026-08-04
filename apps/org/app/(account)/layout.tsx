@@ -2,6 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Flame } from "lucide-react";
 
+import {
+  githubConfigured,
+  transcriptionConfigured,
+} from "@quagga/core/report-server";
 import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -89,7 +93,9 @@ export default async function AccountLayout({
       {/* Signed in is the only requirement here, and the only one the reporter
           has either — an account with no console role or no listing can still
           file. */}
-      <ReportLauncher />
+      {githubConfigured() && (
+        <ReportLauncher dictationEnabled={transcriptionConfigured()} />
+      )}
     </div>
   );
 }

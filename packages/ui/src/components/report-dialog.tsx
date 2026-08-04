@@ -56,6 +56,13 @@ export interface ReportDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Which choice opened it. The person can still switch inside. */
   initialType?: ReportType;
+  /**
+   * False when the deployment has no `GROQ_API_KEY`. The microphone is hidden
+   * rather than offered — `transcribe.ts` asks for exactly this, and a control
+   * that records somebody's voice and then 503s is worse than no control.
+   * Defaults true: only a caller that knows the server's answer should say no.
+   */
+  dictationEnabled?: boolean;
 }
 
 interface TypeChoice {
@@ -171,6 +178,7 @@ export function ReportDialog({
   open,
   onOpenChange,
   initialType = "bug",
+  dictationEnabled = true,
 }: ReportDialogProps) {
   const [type, setType] = React.useState<ReportType>(initialType);
   const [description, setDescription] = React.useState("");
@@ -216,6 +224,9 @@ export function ReportDialog({
     },
   });
 
+  // Both halves have to be true: the browser can record, AND the server can
+  // turn a recording into text.
+  const canDictate = dictation.supported && dictationEnabled;
   const recording =
     dictation.state === "recording" || dictation.state === "requesting";
   const transcribing = dictation.state === "transcribing";
@@ -320,7 +331,7 @@ export function ReportDialog({
                   >
                     {isBug ? "What happened?" : "What would help?"}
                   </label>
-                  {dictation.supported && (
+                  {canDictate && (
                     <Button
                       type="button"
                       variant="outline"
@@ -374,7 +385,7 @@ export function ReportDialog({
                 </p>
 
                 {/* Said before the microphone is used, not after. */}
-                {dictation.supported ? (
+                {canDictate ? (
                   <p className="flex gap-2 text-[11px] leading-relaxed text-muted-foreground">
                     {recording ? (
                       <Mic
@@ -394,8 +405,9 @@ export function ReportDialog({
                   <p className="flex gap-2 text-[11px] leading-relaxed text-muted-foreground">
                     <MicOff className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
                     <span>
-                      Dictation isn&rsquo;t available in this browser. Typing
-                      does exactly the same job.
+                      {dictation.supported
+                        ? "Dictation isn't switched on for this deployment. Typing does exactly the same job."
+                        : "Dictation isn't available in this browser. Typing does exactly the same job."}
                     </span>
                   </p>
                 )}

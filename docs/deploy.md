@@ -121,12 +121,12 @@ reporter files is authored by whoever owns the token**, from words somebody else
 typed. The issue body says so on every issue, and the label carries the same
 warning, but the GitHub account on it is yours.
 
-| Variable            | Effect when unset                                                                                                                                                                  |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITHUB_TOKEN`      | The reporter returns 503 and files nothing. Fine-grained PAT, **Issues: read and write**, scoped to the repository named by `GITHUB_REPO` (or the default below) and nothing else. |
-| `GITHUB_REPO`       | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`.                                                                                                                 |
-| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost.                                                     |
-| `GROQ_API_KEY`      | Dictation is unavailable; the reporter is typing-only. Used for Whisper transcription only.                                                                                        |
+| Variable            | Effect when unset                                                                                                                                                                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`      | The reporter is not offered at all: no corner button, and the Account page says reporting is switched off rather than taking a report it cannot file. Fine-grained PAT, **Issues: read and write**, scoped to the repository named by `GITHUB_REPO` (or the default below) and nothing else. |
+| `GITHUB_REPO`       | Defaults to `RyRy79261/afrikaburn-contributors-app`. `owner/repo`.                                                                                                                                                                                                                           |
+| `ANTHROPIC_API_KEY` | Reports are filed from a plain template instead of being restructured into title / steps / expected / actual. Nothing is lost.                                                                                                                                                               |
+| `GROQ_API_KEY`      | The microphone is hidden and the reporter is typing-only. Used for Whisper transcription only.                                                                                                                                                                                               |
 
 Two things follow from the reporter being public-facing:
 
