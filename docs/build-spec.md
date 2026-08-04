@@ -73,21 +73,24 @@ without ever printing a value.
 
 - `users` — auth join (`auth_user_id`), email, created_at, `sanitized_at` tombstone,
   and **`username`** (migration 0016). Minimal; no role columns.
-  **The username is the burner's one public handle** — account-level, **optional**,
-  3–20 chars, unique on `lower(username)`. It deliberately does NOT live on
-  `burner_bios.display_name`: bios are per-edition, so a handle there would let one
-  person hold a different name every year and "unique" would mean nothing. It is an
-  **an alias, not an identity anchor** — optional, and never a root identity.
-  All rules live once in `@quagga/core` `username.ts` — charset, the reserved list
-  (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the neutral
-  `UNNAMED_BURNER` fallback, which is **never** a legal name and **never** an email
-  (both are private by default; either as a fallback would be a privacy incident).
+
+  **The username is the burner's one public handle**: account-level, optional, 3–20
+  chars, unique on `lower(username)`. It is an alias, never a root identity. It does
+  NOT live on `burner_bios.display_name` — bios are per-edition, so a handle there
+  would let one person hold a different name every year and "unique" would mean
+  nothing. All rules live once in `@quagga/core` `username.ts`: charset, the reserved
+  list (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the
+  neutral `UNNAMED_BURNER` fallback — which is never a legal name and never an email,
+  since both are private by default and either as a fallback would be a privacy
+  incident.
+
   Consequently **`isBioComplete` keys on `burner_bios.completed_at`** — the burner
   reached the end of the flow and saved — not on any name. Completion is an act, not
   a filled field; nothing inside the bio is mandatory. _(Marked PROVISIONAL at its
-  definition: the alternative, if a real anchor is ever wanted, is the legal name,
-  since the ID/passport exist to match a person to their ticket. Do not invent a
-  third field.)_
+  definition: if a real identity anchor is ever wanted, it is the legal name, since
+  the ID/passport exist to match a person to their ticket. Do not invent a third
+  field.)_
+
 - `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are _hard-locked_ with no access path; **medical is _safety-visible_** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
 - `profile_keys` — user_id, public_key, encrypted_private_key, created_at. Generated server-side at onboarding; used for nothing yet except future QR attestations.
 - `groups` — kind enum (`org|theme_camp|artwork|mutant_vehicle`), name, `name_normalized` (unique per kind, case/space/punct-insensitive), description (60-word limit for camps), joinability enum (`open|invite_only`), `visibility` reserved column (default `default`), created_by. Exactly one seeded `org` row ("AfrikaBurn").
@@ -239,16 +242,15 @@ need not nest. Any check shaped like `rank >= org_staff` is wrong in both direct
 `orgCan`.
 
 **Personal information is enforced at the QUERY, PER DOMAIN, never in the JSX.** Every org
-query that returns a person resolves `canReadPersonalInformationIn(actor, domain)` BEFORE
-its select (the `canViewMedicalNotes` pattern), NAMING the part of the console it serves —
-`accounts` for the accounts screen and the org-access roster, `registrations` for a camp's
-members and officers, `suppliers` for supplier notes, `questionnaires` for results, `audit`
-for the trail and the medical-access log. The domain argument is the enforcement, so the
-predicate takes no default and the un-domained `canReadPersonalInformationAnywhere` is for
-affordances only — a regression test refuses it in any server read model. A refused
-caller's payload never contains medical notes,
-phone numbers, emergency contacts, ID/passport, legal names or email addresses — not even
-as an unrendered field. Two consequences worth stating: the accounts search matches on
+query returning a person resolves `canReadPersonalInformationIn(actor, domain)` before its
+select, naming the part of the console it serves: `accounts`, `registrations`, `suppliers`,
+`questionnaires`, `audit`.
+
+The domain argument _is_ the enforcement, so the predicate takes no default, and the
+un-domained `canReadPersonalInformationAnywhere` is for affordances only — a regression test
+refuses it in any server read model. A refused caller's payload contains no medical notes,
+phone numbers, emergency contacts, ID/passport, legal names or email addresses, not even as
+an unrendered field. Two consequences worth stating: the accounts search matches on
 username only for such a caller (an email match would be a lookup oracle), and the
 medical-access audit panel is withheld whole, because a `bio.medical.view` row only exists
 when its subject HAS notes, making the list a census of who has disclosed. Questionnaire
