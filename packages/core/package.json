@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"

@@ -14,13 +14,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.6.25",
     "@quagga/auth": "workspace:*",
     "@quagga/core": "workspace:*",
     "@quagga/db": "workspace:*",
     "@quagga/types": "workspace:*",
     "@quagga/ui": "workspace:*",
     "@vercel/blob": "^2.4.0",
-    "@better-auth/passkey": "1.6.25",
     "better-auth": "1.6.25",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",
@@ -37,6 +37,7 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.4.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",

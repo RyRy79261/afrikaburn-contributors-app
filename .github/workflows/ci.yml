@@ -329,6 +329,142 @@ jobs:
   # SKIPPED when an upstream job fails, and a skipped required check does not
   # block a merge — the gate would pass by not running, which is precisely
   # backwards.
+  # COVERAGE, AS A RATCHET RATHER THAN A NUMBER ON A BADGE.
+  #
+  # The floors live in each workspace's `vitest.config.ts`, not here, so they
+  # are enforced identically by `pnpm test:coverage` on a laptop and by this
+  # job. Ported from RyRy79261/intake-tracker, which runs the same shape.
+  #
+  # One shard per workspace, so a breach names the workspace in the checks list
+  # rather than making somebody open a log to find out which one moved.
+  #
+  # WHY THE THREE APPS ARE NOT IN THIS MATRIX.
+  #
+  # Vitest measures only what runs inside the vitest process. The persona suite
+  # drives real browsers against `next dev` / `next start` in separate
+  # processes with no instrumentation, so all 165 e2e tests contribute ZERO to
+  # any number here. Measured, not assumed — the share of each workspace that
+  # NO unit test touches at all:
+  #
+  #   core  4%    auth 0%    types 0%  |  ui 52%   db 36%
+  #   web  96%    suppliers 91%           org 85%
+  #
+  # A ratchet is worth having when the number moves for the right reason. Add
+  # an untested component to `ui` and the percentage drops — correct signal.
+  # Add an untested query to `apps/org` and it barely moves, because 85% of
+  # that workspace is already dark to vitest by design: pages, RSC and server
+  # actions are tested through the browser, not through vitest.
+  #
+  # So the apps get no floor and no report. Their gate is the e2e matrix above,
+  # which already blocks the merge. A 3% badge on `apps/web` would not measure
+  # quality — it would measure how much of the app happens to have a unit test,
+  # and invite somebody to "fix" it with tests nobody needs.
+  #
+  # To make an app number mean "tested", collect V8 coverage from the Next
+  # server during the e2e run (`NODE_V8_COVERAGE` on the app process, flushed
+  # on clean shutdown, source-mapped back through `.next`) and merge it with
+  # this. That is a real piece of work, and it is the only honest route to it.
+  #
+  # It does NOT gate `CI pass`. The floors already fail the job; making the
+  # merge gate depend on a comment-posting step as well would let a flaky
+  # third-party action block a green branch. The number is advisory; the floors
+  # are not.
+  coverage:
+    name: coverage · ${{ matrix.workspace }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      # Every workspace reports even when one breaches — a partial picture is
+      # less useful than the whole one.
+      fail-fast: false
+      matrix:
+        include:
+          - workspace: "@quagga/core"
+            label: "@quagga/core"
+            directory: packages/core
+          - workspace: "@quagga/ui"
+            label: "@quagga/ui"
+            directory: packages/ui
+          - workspace: "@quagga/auth"
+            label: "@quagga/auth"
+            directory: packages/auth
+          - workspace: "@quagga/db"
+            label: "@quagga/db"
+            directory: packages/db
+          - workspace: "@quagga/types"
+            label: "@quagga/types"
+            directory: packages/types
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      # Fails the shard when any floor in that workspace is breached.
+      - name: Run coverage against the floors
+        run: pnpm --filter ${{ matrix.workspace }} test:coverage
+
+      # PINNED TO A COMMIT, NOT A TAG. `@v2` is mutable — whoever owns the
+      # action can repoint it at any commit, and this step holds
+      # `pull-requests: write` on a public repository. The comment records the
+      # human-readable version so dependency automation can still bump it.
+      #
+      # `always()` so the numbers are visible on the run that breached a floor,
+      # which is when they matter most.
+      #
+      # UPDATED IN PLACE, ON PURPOSE. The action finds its previous comment by
+      # name and edits it, so each report keeps ONE anchored position in the
+      # conversation rather than jumping to the bottom on every push and
+      # interleaving with review threads. Five reports that move every run are
+      # five things to find again.
+      #
+      # Whether a table is current is answered by the table, not by where it
+      # sits: the action stamps the run and the commit in its footer — "#154
+      # for commit c69b1fb" — so it is a glance rather than an inference from a
+      # timestamp.
+      #
+      # This replaced a delete-then-post step, which did put the newest report
+      # at the bottom, but scattered it among the reviews and left a window
+      # where a run cancelled between the delete and the post removed a comment
+      # without replacing it. This repository cancels superseded runs
+      # constantly.
+      #
+      # FORKS GET THE FLOORS, NOT THE COMMENT.
+      #
+      # A `pull_request` from a fork runs with a READ-ONLY token, whatever this
+      # job asks for — so both comment steps would fail and show a red
+      # `coverage` shard on the pull request of somebody contributing for the
+      # first time. This repository asks for outside help in CONTRIBUTING.md;
+      # greeting that with a failing check nobody can fix is the wrong first
+      # impression.
+      #
+      # The floors above still run and still fail on a real breach, because
+      # they need no token. Only the reporting is skipped, and the numbers stay
+      # readable in the job summary.
+
+      - name: Report coverage on the pull request
+        if: >-
+          always() && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
+        with:
+          name: ${{ matrix.label }}
+          working-directory: ${{ matrix.directory }}
+          file-coverage-mode: changes
+
   ci-pass:
     name: CI pass
     if: always()

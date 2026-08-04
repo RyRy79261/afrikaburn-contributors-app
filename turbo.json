@@ -1,10 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": [
-    "**/.env.*local",
-    ".env"
-  ],
+  "globalDependencies": ["**/.env.*local", ".env"],
   "globalEnv": [
     "NODE_ENV",
     "DATABASE_URL",
@@ -24,9 +21,7 @@
   ],
   "tasks": {
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
+      "dependsOn": ["^build"],
       // EXCLUSIONS ARE LOAD-BEARING. `.next/**` as an output means turbo tars
       // the whole directory into .turbo/cache on every task hash and writes it
       // back on every restore, so anything unbounded under .next multiplies by
@@ -55,20 +50,18 @@
       "persistent": true
     },
     "lint": {
-      "dependsOn": [
-        "^build"
-      ],
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": [
-        "^build",
-        "build"
-      ],
+      "dependsOn": ["^build", "build"],
       "outputs": []
     },
     "test": {
       "outputs": []
+    },
+    "test:coverage": {
+      "outputs": ["coverage/**"]
     },
     "db:generate": {
       "cache": false
