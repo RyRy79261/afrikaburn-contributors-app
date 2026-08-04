@@ -1,6 +1,6 @@
 # Build Spec — the engineering contract
 
-Engineering addendum to [`mvp-proposal.md`](mvp-proposal.md). Where they conflict, this
+The engineering contract. Where any other document conflicts with it, this
 file wins; where this file and `AGENTS.md` conflict, this one wins for engineering and
 `AGENTS.md` wins for process. Camp 404 (github.com/ryry79261/camp-404) is the
 conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries.
@@ -8,10 +8,10 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
 ## Hard constraints
 
 1. **Migrations are generated offline, committed append-only, and applied by the
-   build at deploy time.** *(Corrected 27 Jul 2026. This constraint used to read "no
+   build at deploy time.** _(Corrected 27 Jul 2026. This constraint used to read "no
    migration step in the build", which was true only while no database existed. Now
    that one does, deploy-time migration is the law — see AGENTS.md §1, the fuller
-   statement.)* `db:generate` produces the file offline from `schema.ts`; every app's
+   statement.)_ `db:generate` produces the file offline from `schema.ts`; every app's
    `build` then runs `db:migrate:deploy` before `next build`. That runner takes a
    Postgres session advisory lock on the **unpooled** connection (`DATABASE_URL_UNPOOLED`)
    so three concurrent Vercel builds serialise, and it **aborts rather than falling
@@ -25,7 +25,7 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
 4. Apps must **boot without env/DB** to a landing page (graceful "not configured" state); DB-backed routes may error clearly but must not crash the build.
 5. Schema below is **frozen** — feature agents do not add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
 6. TypeScript strict; Zod validation at every boundary; no `any` in committed code. Vitest for core logic. CI gate: `pnpm turbo run lint typecheck test build`.
-6b. **Prefer prebuilt components over hand-rolling (Ryan, 24 Jul 2026).** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
+   6b. **Prefer prebuilt components over hand-rolling (Ryan, 24 Jul 2026).** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
 7. UI: **"Tankwa Night" hybrid, approved 23 Jul 2026 — brand colours sampled from afrikaburn.org Elementor kit.** Dark-mode-first app shell dressed in AfrikaBurn's real brand colours; light supported via a `.light` class on `<html>`.
    - **Brand ramp** (raw, usable directly as e.g. `text-ab-teal`): teal `#2D7696`, teal-deep `#235C75`, apricot `#F4B672`, peach `#FFBC7D`, sage `#B6D090`, olive `#7D9953`, charcoal `#333333`, warm white `#FFFAF2`.
    - **Dark semantic tokens (default):** background `#17191B`, foreground `#F4F0E8`, card/popover `#1F2326`, muted `#262B2F`, muted-foreground `#ADB6B3`, border/input `#323A3F`, primary `#2D7696` (fg `#F4F0E8`), secondary `#26333B` (fg `#DCE8ED`), accent `#F4B672` (fg `#17191B`), ring `#2D7696`, destructive `#C24438` (fg `#F4F0E8`), success `#B6D090` (fg `#17191B`), warning `#F4B672` (fg `#17191B`). `--radius` `0.5rem`.
@@ -53,7 +53,7 @@ packages/
 e2e/      Playwright persona suite (@quagga/e2e) — run by `pnpm e2e:local`, never by the unit gate
 ```
 
-**Local stack.** `docker-compose.local.yml` runs Postgres 16 plus *two* Neon proxies
+**Local stack.** `docker-compose.local.yml` runs Postgres 16 plus _two_ Neon proxies
 (SQL-over-HTTP and WebSocket) because `@neondatabase/serverless` uses both protocols
 and no single proxy implements them. `NEON_LOCAL_PROXY=1` points both drivers at it.
 `pnpm e2e:local` brings that up from cold, migrates, seeds, boots all three apps and
@@ -80,22 +80,22 @@ without ever printing a value.
   3–20 chars, unique on `lower(username)`. It deliberately does NOT live on
   `burner_bios.display_name`: bios are per-edition, so a handle there would let one
   person hold a different name every year and "unique" would mean nothing. It is an
-  **alias, not an identity anchor** (Ryan, 27 Jul 2026: *"the playa name is kinda
-  cringe… its optional and should be treated like an alias, not a root identity"*).
+  **alias, not an identity anchor** (Ryan, 27 Jul 2026: _"the playa name is kinda
+  cringe… its optional and should be treated like an alias, not a root identity"_).
   All rules live once in `@quagga/core` `username.ts` — charset, the reserved list
   (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the neutral
   `UNNAMED_BURNER` fallback, which is **never** a legal name and **never** an email
   (both are private by default; either as a fallback would be a privacy incident).
   Consequently **`isBioComplete` keys on `burner_bios.completed_at`** — the burner
   reached the end of the flow and saved — not on any name. Completion is an act, not
-  a filled field; nothing inside the bio is mandatory. *(Marked PROVISIONAL at its
+  a filled field; nothing inside the bio is mandatory. _(Marked PROVISIONAL at its
   definition: the alternative, if a real anchor is ever wanted, is the legal name,
   since the ID/passport exist to match a person to their ticket. Do not invent a
-  third field.)*
-- `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are *hard-locked* with no access path; **medical is *safety-visible*** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
+  third field.)_
+- `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are _hard-locked_ with no access path; **medical is _safety-visible_** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
 - `profile_keys` — user_id, public_key, encrypted_private_key, created_at. Generated server-side at onboarding; used for nothing yet except future QR attestations.
 - `groups` — kind enum (`org|theme_camp|artwork|mutant_vehicle`), name, `name_normalized` (unique per kind, case/space/punct-insensitive), description (60-word limit for camps), joinability enum (`open|invite_only`), `visibility` reserved column (default `default`), created_by. Exactly one seeded `org` row ("AfrikaBurn").
-- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group, and on it the enum is **the console DOOR, not the rights** (see apps/org routes). **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label) — and is the anti-lockout ANCHOR. *(Migration 0017's free-text `department` label + `department_lead` flag were DROPPED by 0018: departments are rows now, and two department vocabularies would be the parallel source of truth org roles v1 exists to remove.)*
+- `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group, and on it the enum is **the console DOOR, not the rights** (see apps/org routes). **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label) — and is the anti-lockout ANCHOR. _(Migration 0017's free-text `department` label + `department_lead` flag were DROPPED by 0018: departments are rows now, and two department vocabularies would be the parallel source of truth org roles v1 exists to remove.)_
 - `org_departments` — org departments as DATA (0018): `key` (stable slug), name, normalized name, description, sort. Created by a System manager; creating one seeds its permanent LEAD + MEMBER roles, deleting one cascades them away.
 - `org_roles` — the org mirror of `project_roles` (0018): `key`, nullable `department_id` (cascade), name + normalized name, `kind` (`system` = seeded/undeletable/rights-editable, `custom` = fully the System manager's), curated `color`, `permissions` jsonb over the org capability vocabulary, sort. Unique on `key` and on normalized name.
 - `org_role_assignments` — membership × role, composite PK (0018), mirroring `member_role_assignments`. Cascades off the membership, so removing console access releases every role with it.
@@ -106,8 +106,8 @@ without ever printing a value.
 - `questionnaire_definitions`, `questionnaire_responses`, `questionnaire_activations`, `required_actions` — ported 1:1 from Camp 404's pattern (keys map to code-side registry; Burner Bio dispatches through this).
 - `suppliers` — name, `code` (`SUP-2027-0416`, stored not derived), services, contact,
   website, category, `returning`, `standing` enum (`good|watch|suspended`), optional
-  `user_id` account link, imported_at. *(`vetting_status` and `source` were killed per
-  `docs/supplier-spec.md` and no longer exist — do not reintroduce them.)*
+  `user_id` account link, imported_at. _(`vetting_status` and `source` were killed per
+  `docs/supplier-spec.md` and no longer exist — do not reintroduce them.)_
 - `supplier_declarations` — registration_id × supplier_id, note.
 - `payments` — subject_type + subject_id (polymorphic by string key), amount_cents nullable, currency default ZAR, reference (human-readable, e.g. `QP-2027-MAH-001`), status enum (`pending|reconciled|waived`), details jsonb, recorded_by. **No processing, ever.**
 - `audit_events` — actor_id, action, subject, meta jsonb. Written on: elevation, approval/rejection, payment reconciliation.
@@ -134,10 +134,10 @@ key fingerprint display).
 
 Auth gate: only an ORG RANK (god / org_staff / engineer) may enter; everyone else sees a
 polite wall. **Clearing that gate is the DOOR, not the rights** (org roles v1, migration
-0018 — Ryan, 27 Jul 2026: *"system admins can simply have a roles management section and
+0018 — Ryan, 27 Jul 2026: _"system admins can simply have a roles management section and
 create n sign these things instead of needing to hardcode them? With some set permanent
 ones, like team leads and team members for each department domain, these cant be removed
-but they can have the rights edited"*).
+but they can have the rights edited"_).
 
 What an account may do is the union of the ORG ROLES assigned to it, resolved by the ONE
 resolver in `@quagga/core` `org-permissions` (`orgCan` / `orgCanIn`), which both the gate
@@ -148,7 +148,7 @@ deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental 
   cannot say how many there are). Creating one SEEDS its permanent LEAD and MEMBER roles;
   deleting it cascades them away.
 - **`org_department_domains`** (migration 0019) — WHAT each department owns. Ryan,
-  27 Jul 2026: *"supplier leads would be able to read the PII of anything supply-related."*
+  27 Jul 2026: _"supplier leads would be able to read the PII of anything supply-related."_
   The operative word is RELATED, so a department owns DOMAIN KEYS — subject areas — rather
   than tagged rows, and an entity's department is whichever department owns the domain it
   lives in. `domain` is the PRIMARY KEY, so exactly one department owns each; claiming one
@@ -167,15 +167,15 @@ The two seeded system roles carry EXACTLY the rights the hardcoded ranks carried
 change of mechanism was not also a change of access — but they are now DEFAULTS OF A ROW,
 not law:
 
-| capability | Engineer (seeded) | Org staff (seeded) | System manager (`god`) |
-| --- | --- | --- | --- |
-| `read` — the whole console | ✅ | ✅ | ✅ |
-| `read_personal_information` | ❌ | ✅ | ✅ |
-| `write` — reviews, standings, bulletins, sends | ✅ | ✅ | ✅ |
-| `delete` — destructive removals | ❌ | ✅ | ✅ |
-| `manage_camp_categories` | ❌ | ❌ | ✅ |
-| `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅ |
-| `read_system` — the System panel (`/system`) | ✅ | ❌ | ✅ |
+| capability                                     | Engineer (seeded)  | Org staff (seeded) | System manager (`god`) |
+| ---------------------------------------------- | ------------------ | ------------------ | ---------------------- |
+| `read` — the whole console                     | ✅                 | ✅                 | ✅                     |
+| `read_personal_information`                    | ❌                 | ✅                 | ✅                     |
+| `write` — reviews, standings, bulletins, sends | ✅                 | ✅                 | ✅                     |
+| `delete` — destructive removals                | ❌                 | ✅                 | ✅                     |
+| `manage_camp_categories`                       | ❌                 | ❌                 | ✅                     |
+| `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅                     |
+| `read_system` — the System panel (`/system`)   | ✅                 | ❌                 | ✅                     |
 
 **A System manager may edit any of those ticks** — with ONE ceiling, added 27 Jul 2026
 with the tier correction below: the `engineer` RANK never resolves
@@ -183,16 +183,16 @@ with the tier correction below: the `engineer` RANK never resolves
 (`ENGINEER_RANK_CARVE_OUTS`). Every other tick is data, and every edit is audited
 (`org.role.update` records before/after).
 
-**The ranks are cumulative in REACH, not in DEPTH** (Ryan, 27 Jul 2026: *"you got org staff
+**The ranks are cumulative in REACH, not in DEPTH** (Ryan, 27 Jul 2026: _"you got org staff
 and then whatever departments they're in. You can have an engineer who is still also org
 staff but they're a step up and then sys admin or gods are still org but they're above
-that"*). All three are org; what differs is how many departments their grants apply in:
+that"_). All three are org; what differs is how many departments their grants apply in:
 
-| rank | reach | depth |
-| --- | --- | --- |
-| `org_staff` | the departments whose roles they hold (org-wide roles: all) | whatever their roles grant |
-| `engineer` | EVERY department, always — they run the system | **never** personal information, **never** delete |
-| `god` | everything | everything, whatever any row says |
+| rank        | reach                                                       | depth                                            |
+| ----------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| `org_staff` | the departments whose roles they hold (org-wide roles: all) | whatever their roles grant                       |
+| `engineer`  | EVERY department, always — they run the system              | **never** personal information, **never** delete |
+| `god`       | everything                                                  | everything, whatever any row says                |
 
 So the engineer tier is **not a superset of org_staff**: broader in reach, deliberately
 narrower in depth. Given identical roles, an org_staff account can read a phone number and
@@ -293,25 +293,25 @@ file to read. Four sections:
 
 - **System health** — probed while the page renders, not read back off config ("the
   variable is set" and "the service answers" are different claims): a real timed database
-  round trip; the migration verdict from `planMigration`, *the same function the build
-  calls*, including the exact sentence a deploy would fail with; whether reference data has
+  round trip; the migration verdict from `planMigration`, _the same function the build
+  calls_, including the exact sentence a deploy would fail with; whether reference data has
   ever been seeded; auth secret, Resend, blob and `PGCRYPTO_KEY` presence.
-- **Security controls** — what the auth stack is *actually* enforcing, derived from
+- **Security controls** — what the auth stack is _actually_ enforcing, derived from
   @quagga/auth's own resolvers so the page can never report a rule the stack is not
   applying: email verification and **why** (derived from `RESEND_API_KEY`, never a switch
   someone forgot), the `AUTH_RATE_LIMIT_*` ceiling, 2FA/passkey availability and passkey
-  scope, session lifetime *including the cookie-cache caveat on revocation*, SSO cookie
+  scope, session lifetime _including the cookie-cache caveat on revocation_, SSO cookie
   scoping, the Secure-cookie flag, Google, and the password policy.
 - **Org access** — who holds console access, at what rank, in whose department, with the
   existing elevate/demote confirmation flow for a System manager, and a warning when only
   one System manager exists (core already refuses to let the last one self-delete; said
-  here, it is something the org can act on *before* it matters).
+  here, it is something the org can act on _before_ it matters).
 - **Roles and departments** — a count, and the way in to `/system/roles`.
 - **A link to `/audit`**, the existing trail.
 
 ### `/system/roles` — the permission model itself
 
-Editing what a role may do *is* "god level account management", so it lives in this panel
+Editing what a role may do _is_ "god level account management", so it lives in this panel
 rather than on the nav bar. **Two gates, deliberately different**: READING it needs
 `read_system` (an engineer may look — the permission model is this deployment's
 configuration, the same class of fact as the auth settings beside it), while CHANGING
@@ -324,8 +324,8 @@ queried at all** unless the viewer is a System manager.
 Three screens, and each is built around stating a consequence rather than a permission
 key — someone here is deciding what a colleague can destroy:
 
-- **Departments** — create, rename, delete. Deleting names *every* role that dies with it
-  (the seeded lead/member pair AND any custom role scoped to it), names *every person* who
+- **Departments** — create, rename, delete. Deleting names _every_ role that dies with it
+  (the seeded lead/member pair AND any custom role scoped to it), names _every person_ who
   loses one, and counts the ones who would be left holding nothing at all ("they will keep
   console access and find it empty"). Nobody is stripped silently.
 - **Roles** — org-wide first, then grouped by department. A permanent role renders with no
@@ -354,7 +354,7 @@ a scope with nothing behind it renders as "in Safety only — which owns no part
 console, so this reaches nothing" rather than as access.
 
 **It never prints a secret** — only whether one is set, and what follows. The single
-deliberate exception is a database *hostname*, parsed out so a password in the connection
+deliberate exception is a database _hostname_, parsed out so a password in the connection
 string cannot come with it. `GOD_EMAILS` is reported as a **count**: those are people's
 email addresses and an engineer never receives one. A unit test seeds every credential env
 var with a marker and asserts no marker survives into any rendered string.
@@ -363,10 +363,10 @@ var with a marker and asserts no marker survives into any rendered string.
 a recorded exception to design-before-build — and the frames were drawn afterwards to
 document what shipped rather than to redesign it:
 
-| Screen | Desktop frame | Mobile 360 frame |
-|---|---|---|
-| `/system` | `bNbLs` | `qhCyJ` |
-| `/system/roles` | `IXwNt` | `gsiE0` |
+| Screen          | Desktop frame | Mobile 360 frame |
+| --------------- | ------------- | ---------------- |
+| `/system`       | `bNbLs`       | `qhCyJ`          |
+| `/system/roles` | `IXwNt`       | `gsiE0`          |
 
 Both are assembled from the existing console vocabulary (PageHeading, Card, the
 ResponsiveDataTable accounts table, the accounts panel's confirm-overlay dialog). `bNbLs`
@@ -417,8 +417,8 @@ Containers (hint tile only) · attestation QR flows (only `profile_keys` generat
 payment processing/checkout · water/ice/gas · placement maps · PWA/offline · Inngest ·
 Storybook · carry-forward between editions (single seeded edition).
 
-*(pen.dev **is** used — `design/ab-initial-app.pen` is the design source of truth. It
-was on this list when the list meant "no design tooling"; that changed.)*
+_(pen.dev **is** used — `design/ab-initial-app.pen` is the design source of truth. It
+was on this list when the list meant "no design tooling"; that changed.)_
 
 ## Burner Bio v3 additions (Ryan, 24 Jul 2026 — corpus-grounded)
 
@@ -485,7 +485,7 @@ separate deployable.
 
 Still binding: **no per-app migration tooling.** `packages/db` migrates, everything
 else imports the client and types. The research trail is in
-`docs/platform-architecture-spec.md` (superseded) and the executed plan in
+the executed plan in
 `docs/auth-platform-spec.md`.
 
 ## Status board KPI row (Ryan, 25 Jul 2026)

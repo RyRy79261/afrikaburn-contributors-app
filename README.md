@@ -22,10 +22,10 @@ competing product from it in the meantime.
 Three apps in one Turborepo, each its own Vercel project against one shared database
 (see [`docs/deploy.md`](docs/deploy.md)):
 
-| App              | Port | Accent  | Who it's for                                                            |
-| ---------------- | ---- | ------- | ----------------------------------------------------------------------- |
-| `apps/web`       | 3000 | teal    | Burners — bio onboarding, camp directory, camps, invites, registration  |
-| `apps/org`       | 3001 | apricot | AfrikaBurn staff — review queue, accounts, suppliers, audit, `/system`  |
+| App              | Port | Accent  | Who it's for                                                              |
+| ---------------- | ---- | ------- | ------------------------------------------------------------------------- |
+| `apps/web`       | 3000 | teal    | Burners — bio onboarding, camp directory, camps, invites, registration    |
+| `apps/org`       | 3001 | apricot | AfrikaBurn staff — review queue, accounts, suppliers, audit, `/system`    |
 | `apps/suppliers` | 3002 | sage    | Camp suppliers — self-registration, onboarding steps, documents, standing |
 
 Shared packages under the `@quagga/` namespace:
@@ -187,15 +187,15 @@ capability matrix in `packages/core/src/org-permissions.ts` — the gate, every 
 action and every piece of UI read the same table, so a hidden button and a refused
 action cannot disagree.
 
-| capability                    | engineer | org_staff | System manager (`god`) |
-| ----------------------------- | -------- | --------- | ---------------------- |
-| `read` — the whole console    | ✅       | ✅        | ✅                     |
-| `read_personal_information`   | ❌       | ✅        | ✅                     |
-| `write` — reviews, standings  | ✅       | ✅        | ✅                     |
-| `delete` — destructive removals | ❌     | ✅        | ✅                     |
-| `manage_camp_categories`      | ❌       | ❌        | ✅                     |
-| `manage_accounts`             | ❌       | ❌        | ✅                     |
-| `read_system` — `/system`     | ✅       | ❌        | ✅                     |
+| capability                      | engineer | org_staff | System manager (`god`) |
+| ------------------------------- | -------- | --------- | ---------------------- |
+| `read` — the whole console      | ✅       | ✅        | ✅                     |
+| `read_personal_information`     | ❌       | ✅        | ✅                     |
+| `write` — reviews, standings    | ✅       | ✅        | ✅                     |
+| `delete` — destructive removals | ❌       | ✅        | ✅                     |
+| `manage_camp_categories`        | ❌       | ❌        | ✅                     |
+| `manage_accounts`               | ❌       | ❌        | ✅                     |
+| `read_system` — `/system`       | ✅       | ❌        | ✅                     |
 
 **These are jobs, not a ladder.** `read_system` goes to engineer and not org_staff;
 `read_personal_information` and `delete` go the other way. Any check shaped like
@@ -238,15 +238,15 @@ work is front-end, design and wording.
 without a database, so there is no `.env` to beg for), where things live, the
 commit convention, and the workflow for designers editing the Pencil canvas.
 
-| I want to… | Go here |
-| --- | --- |
-| Report something broken **while using the app** | The in-app reporter — it files the issue for you (see below) |
-| Report something broken | [Open an issue](../../issues/new/choose) → *Something is broken* |
-| Suggest a design or UX change | [Open an issue](../../issues/new/choose) → *Design change* |
-| Fix wording in the app | [Open an issue](../../issues/new/choose) → *Wording fix* |
-| Propose a feature | [Open an issue](../../issues/new/choose) → *Feature or change request* |
-| Report a **security or privacy** problem | **Privately** — [`SECURITY.md`](SECURITY.md). Never a public issue. |
-| Write some code | [`CONTRIBUTING.md`](CONTRIBUTING.md), then pick up an issue and say so on it |
+| I want to…                                      | Go here                                                                      |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Report something broken **while using the app** | The in-app reporter — it files the issue for you (see below)                 |
+| Report something broken                         | [Open an issue](../../issues/new/choose) → _Something is broken_             |
+| Suggest a design or UX change                   | [Open an issue](../../issues/new/choose) → _Design change_                   |
+| Fix wording in the app                          | [Open an issue](../../issues/new/choose) → _Wording fix_                     |
+| Propose a feature                               | [Open an issue](../../issues/new/choose) → _Feature or change request_       |
+| Report a **security or privacy** problem        | **Privately** — [`SECURITY.md`](SECURITY.md). Never a public issue.          |
+| Write some code                                 | [`CONTRIBUTING.md`](CONTRIBUTING.md), then pick up an issue and say so on it |
 
 Two things to know before you start:
 
@@ -293,20 +293,21 @@ terms — there is no CLA to sign.
 
 `docs/build-spec.md` wins for engineering; `AGENTS.md` wins for process.
 
-| Doc                                                                | What it holds                                                                       |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| [`docs/build-spec.md`](docs/build-spec.md)                         | The engineering contract: schema, routes, org ranks, the System panel, seed law     |
-| [`docs/deploy.md`](docs/deploy.md)                                 | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test          |
-| [`docs/triage.md`](docs/triage.md)                                 | The issue queue: the label taxonomy, the triage routine, and handling in-app reports |
-| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md) | Auth, account management, the medical-notes consent model, ID retention             |
-| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)         | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI     |
-| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)         | The questionnaire engine — definitions, activations, audiences, blocking flows      |
-| [`docs/notifications-spec.md`](docs/notifications-spec.md)         | Notifications and bulletins                                                          |
-| [`docs/supplier-spec.md`](docs/supplier-spec.md)                   | Supplier repository, vetting, onboarding                                             |
-| [`docs/design-brief.md`](docs/design-brief.md) · [`component-spec.md`](docs/component-spec.md) · [`page-build-plan.md`](docs/page-build-plan.md) | The design system and page inventory |
-| [`docs/synthesis.md`](docs/synthesis.md) · [`mvp-proposal.md`](docs/mvp-proposal.md) · [`roadmap.md`](docs/roadmap.md) · [`execution-roadmap.md`](docs/execution-roadmap.md) | Planning artifacts — see the historical-record banners at the top of each |
-| [`docs/platform-architecture-spec.md`](docs/platform-architecture-spec.md) | **Superseded** — kept for the research trail only                            |
-| [`docs/sources/`](docs/sources/)                                   | **Verbatim primary sources — never edit.** See below                                |
+| Doc                                                                        | What it holds                                                                        |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`docs/build-spec.md`](docs/build-spec.md)                                 | The engineering contract: schema, routes, org ranks, the System panel, seed law      |
+| [`docs/deploy.md`](docs/deploy.md)                                         | First-deployment runbook — Neon, Vercel × 3, env vars, the live smoke test           |
+| [`docs/triage.md`](docs/triage.md)                                         | The issue queue: the label taxonomy, the triage routine, and handling in-app reports |
+| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md)         | Auth, account management, the medical-notes consent model, ID retention              |
+| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)                 | The self-hosted Better Auth plan of record (executed) — threat model, POPIA, CI      |
+| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md)                 | The questionnaire engine — definitions, activations, audiences, blocking flows       |
+| [`docs/notifications-spec.md`](docs/notifications-spec.md)                 | Notifications and bulletins                                                          |
+| [`docs/supplier-spec.md`](docs/supplier-spec.md)                           | Supplier repository, vetting, onboarding                                             |
+| [`docs/component-spec.md`](docs/component-spec.md)                         | The component system, and the page → canvas-frame index                              |
+| [`docs/synthesis.md`](docs/synthesis.md) · [`roadmap.md`](docs/roadmap.md) | Correlated requirements from the source briefs, and the release sequence             |
+| [`docs/architecture.md`](docs/architecture.md)                             | System, packages, request path and data model — with diagrams                        |
+| [`docs/flows.md`](docs/flows.md)                                           | The user journeys: onboarding, registration + review, questionnaires, suppliers      |
+| [`docs/sources/`](docs/sources/)                                           | **Verbatim primary sources — never edit.** See below                                 |
 
 ### `docs/sources/` — primary source material
 

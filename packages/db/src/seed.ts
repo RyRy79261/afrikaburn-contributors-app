@@ -18,7 +18,7 @@
  * ### Seeded (org-owned reference/catalog data)
  *   - edition AfrikaBurn 2027 (2027-04-26 → 2027-05-02, active)
  *   - the org group "AfrikaBurn" itself (no memberships — staff elevate live via
- *     GOD_EMAILS, the mvp-proposal's own demo beat)
+ *     GOD_EMAILS — the kickoff demo beat)
  *   - the two seeded ORG ROLES (Org staff, Engineer) carrying the rights those
  *     ranks held before they became data. Insert-if-missing, so a System
  *     manager's own edits to them survive every later deploy. No departments and
@@ -249,7 +249,7 @@ export async function seedReferenceData(db: Db): Promise<void> {
 
     // --- Org group -------------------------------------------------------------
     // The org entity itself is reference data. No memberships seeded on purpose —
-    // per mvp-proposal, staff elevate live via GOD_EMAILS at the kickoff meeting,
+    // staff elevate live via GOD_EMAILS at the kickoff meeting,
     // and `createdByUserId` stays null because no seeded person exists to own it.
     const orgGroup = await ensureGroup(db, {
       kind: "org",

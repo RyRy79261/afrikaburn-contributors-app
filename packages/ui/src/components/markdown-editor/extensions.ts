@@ -3,7 +3,7 @@ import { Markdown } from "tiptap-markdown";
 import type { Extensions } from "@tiptap/core";
 
 // Shared Tiptap extension set for the bulletin-compose editor and the read-only
-// MarkdownView. Vendored per docs/platform-architecture-spec.md ("Markdown
+// MarkdownView. Vendored ("Markdown
 // editor decision": minimal-tiptap-style, tiptap-markdown for markdown in/out,
 // React 19-compatible). Kept deliberately minimal to the bulletin needs:
 // headings, bold, italic, links, bullet/ordered lists (StarterKit bundles all

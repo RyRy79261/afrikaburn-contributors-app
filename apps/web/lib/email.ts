@@ -1,6 +1,6 @@
 import "server-only";
 
-// Resend integration (build-spec §Stack; mvp-proposal: "Resend from day one").
+// Resend integration (build-spec §Stack — Resend from day one).
 // The MVP sends via Resend's HTTP API when RESEND_API_KEY is set, and otherwise
 // LOGS the message to the console — so auth/notification flows are observable in
 // development and the app boots and runs env-lessly.
