@@ -157,6 +157,23 @@ describe("createProjectRegistration", () => {
     expect(values.completedSections).toEqual([]);
   });
 
+  it("stores a declined grant interest as false, not as unanswered", async () => {
+    // `grantsInterest ?? null` and `grantsInterest || null` look
+    // interchangeable and are not: the column is `boolean | null`, so `false`
+    // survives `??` and becomes NULL under `||`. That is the difference between
+    // a project that said "no thanks" to a grant and one that was never asked —
+    // and the org console reads those two states differently.
+    await createProjectRegistration(
+      input({ columns: { ...COLUMNS, grantsInterest: false } }),
+    );
+
+    const values = dbMock
+      .writesTo(schema.registrations)[0]!
+      .arg("values") as Record<string, unknown>;
+    expect(values.grantsInterest).toBe(false);
+    expect(values.grantsInterest).not.toBeNull();
+  });
+
   it("saves a draft as draft, with no submittedAt and no completedAt", async () => {
     await createProjectRegistration(input({ submit: false }));
 

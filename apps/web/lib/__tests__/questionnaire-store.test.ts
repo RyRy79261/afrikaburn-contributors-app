@@ -306,6 +306,29 @@ describe("createAndActivateProjectQuestionnaire", () => {
     expect(payload.text).toContain("blocks the app");
   });
 
+  it("reports emailDelivered false when the provider accepted but did not deliver", async () => {
+    // `result.ok && result.delivered` — BOTH halves matter, and only the
+    // conjunction distinguishes "Resend took it" from "a person will see it".
+    // With no Resend key the sender returns ok-but-undelivered (it logs to the
+    // console instead), which is the current production state. Reporting that
+    // as delivered would tell an author their camp had been emailed when the
+    // mail went nowhere.
+    queueCreate([{ userId: "u1", role: "lead" }]);
+    dbMock.queue(
+      [],
+      [{ name: "Mad Hatters" }],
+      [{ id: "u1", email: "a@example.test" }],
+    );
+    sendEmail.mockResolvedValue({ ok: true, delivered: false });
+
+    const result = await create();
+
+    expect(result.emailDelivered).toBe(false);
+    // The activation itself still succeeded — delivery is best-effort.
+    expect(result.activationId).toBe(ACTIVATION);
+    expect(result.sent).toBe(1);
+  });
+
   it("says it is optional when the questionnaire does not block", async () => {
     queueCreate([{ userId: "u1", role: "lead" }]);
     dbMock.queue(
