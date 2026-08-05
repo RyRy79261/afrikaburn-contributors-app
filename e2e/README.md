@@ -251,6 +251,17 @@ unnoticed until the suite was first executed.
   for anything typed into the Username box, and remember handles are unique
   ACROSS THE WHOLE DATABASE — a collision surfaces as "That username is already
   taken" inside whatever factory happened to run second.
+- **`toHaveCount(0)` right after `toHaveURL` proves nothing.** `toHaveURL`
+  resolves the instant the URL changes — before the destination has painted — so
+  the next assertion's first poll can land on an empty document, see zero, and
+  pass. Four assertions across three specs did exactly this, and one of them
+  (`camp-member-forbidden`) had been green for months on a page it never
+  actually looked at; it went red only when the dashboard rendered fast enough
+  to be there, and read as a flake. **Assert something PRESENT before asserting
+  anything absent** — a member-only control, the empty state, the 404's own
+  copy. It also caught a false claim: a comment asserting the page "actually
+  rendered (not a 404 masquerading as absence)" was checking that an error
+  message was _absent_, which is equally true of a blank page.
 - **`.click()` is not "the request finished".** It resolves when the event is
   dispatched. Navigating straight afterwards raced the sign-up POST and the
   session cookie did not exist yet, so the gate bounced to sign-in and ~100

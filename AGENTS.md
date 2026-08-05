@@ -239,6 +239,19 @@ So, in this repo:
 - **A test that cannot fail proves nothing.** After writing a regression test, break
   the thing on purpose and watch it go red. Several tests here say so in a comment
   because that check found them vacuous.
+- **A test that passes for the wrong reason is worse than no test**, because it is
+  counted. Two shapes have already shipped here, and neither is visible in a coverage
+  report — both files reported high coverage while the behaviour was unpinned:
+  - **Asserting an absence against a page that has not rendered.** `toHaveURL`
+    resolves before the destination paints, so `toHaveCount(0)` after it is satisfied
+    by an empty document. Assert something PRESENT first (`e2e/README.md`
+    §"Selector traps").
+  - **A fixture whose values are outside the domain vocabulary.** A status-board test
+    seeded officer assignments with `officerKey: "safety"` and `"lnt"` — neither is in
+    the `OfficerKey` enum — so no seeded row ever matched a required slot and the whole
+    assignment path was inert. Deleting the consent filter entirely left all 54 tests
+    green. **Seed values from the enum, and check the fixture moves the number**: seed
+    the opposite case and watch the assertion change.
 - **Report what happened.** If a step was skipped, say so. If something is unverified,
   say which part. "Verified" is a strong word here and it gets read literally.
 
