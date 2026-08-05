@@ -225,8 +225,26 @@ are load-bearing rather than ceremonial, because of what this product is:
   should be said out loud.
 - **Risk** — what breaks if this is wrong and how anyone would notice.
 
-Keep the body's _Summary_ in plain prose. The convention is about the title and
+Keep the body's _Overview_ in plain prose. The convention is about the title and
 the structure; it is not an instruction to write like a machine.
+
+### Short body, long appendix
+
+Every section above the fold wants a few lines. Not because brevity is a virtue
+in itself, but because the sections that matter most here are the easiest to
+skim past: a reviewer scrolling through four paragraphs of design reasoning to
+find out whether there is a migration is a reviewer who eventually stops
+looking.
+
+So the template ends with a collapsed **Supplementary context** block, and it
+has no length limit at all. The reasoning, the approaches you rejected, the long
+quote from the spec, the transcript — put them there rather than cutting them.
+It is the same information, one click away, and the six lines a reviewer must
+read stay six lines.
+
+Two sections people leave blank that should not be: **Database** and **Expected
+follow-ups**. "None." is a real answer to both, and it means something different
+from silence — it says you checked.
 
 ## Before you push
 

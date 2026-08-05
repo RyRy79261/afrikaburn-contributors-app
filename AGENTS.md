@@ -273,6 +273,15 @@ So, in this repo:
   regression tests before pushing. This has caught real majors every time it ran.
 - **Orchestration reports**: structured-output reports are pure JSON fields — never
   embed XML-ish tags inside strings (a known repeated failure mode).
+- **Write the pull request short, and put the long version in the fold.** The
+  template's sections want a few lines each; it ends with a collapsed
+  **Supplementary context** block that has no length limit. Reasoning, rejected
+  approaches, the long quote from the spec go THERE — not cut, moved. This is a
+  standing failure mode of agent-written PRs specifically: a thorough description
+  of the work buries **Database** and **Risk**, which are the two things the
+  reviewer of a deployed product actually needs, and the volume reads as
+  confidence rather than as the padding it is. `None.` under Database and
+  Expected follow-ups is a real answer and says you checked.
 - **Issues are labelled, and two labels change how you read one.** The taxonomy and
   the triage routine are `docs/triage.md`. `needs-triage` means nobody has reviewed
   it — the stated `type:` may be wrong. `source: in-app` means the in-app reporter
