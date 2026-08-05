@@ -49,9 +49,24 @@ test.describe("camp member — server-side refusals (own camp)", () => {
     // .includes(context.role)) redirect('/camps/[slug]')`. The member lands back
     // on the dashboard (200), and the wizard is never served.
     await expect(memberPage).toHaveURL(new RegExp(`/camps/${slug}$`));
+
+    // ANCHOR ON SOMETHING PRESENT BEFORE ASSERTING ABSENCES, and it has to be
+    // something only a MEMBER sees on the dashboard.
+    //
+    // `toHaveURL` resolves the instant the URL changes, which is before the
+    // destination has rendered — so a bare `toHaveCount(0)` after it is
+    // satisfied by an empty document and passes without testing anything. This
+    // test did exactly that: it passed on the race for as long as it existed,
+    // and failed (run 30951056432) only when the dashboard rendered fast enough
+    // to be there on the first poll.
     await expect(
-      memberPage.getByRole("heading", { name: /registration/i }),
-    ).toHaveCount(0);
+      memberPage.getByRole("button", { name: /leave camp/i }),
+    ).toBeVisible();
+
+    // NOT `getByRole("heading", { name: /registration/i })` — a member's own
+    // dashboard legitimately carries a read-only "Registration" status card, so
+    // that assertion was false whenever it was evaluated against a rendered
+    // page. What distinguishes the WORKSPACE is the eyebrow above its header.
     await expect(memberPage.getByText(/theme camp registration/i)).toHaveCount(
       0,
     );

@@ -36,10 +36,13 @@ test.describe("anonymous visitor — free camps are undiscoverable", () => {
     const anon = await makeAppPage("web");
     await anon.goto(`/directory?q=${encodeURIComponent(camp.name)}`);
     await expect(anon).toHaveURL(/\/directory/); // still public, not bounced
-    await expect(anon.getByText(camp.name)).toHaveCount(0);
+    // The empty state is asserted FIRST, deliberately. It proves the directory
+    // rendered and returned nothing; only then does "the camp name is absent"
+    // mean the camp was withheld rather than that the page had not painted.
     await expect(
       anon.getByText(/no camps match your filters|no registered camps yet/i),
     ).toBeVisible();
+    await expect(anon.getByText(camp.name)).toHaveCount(0);
   });
 
   test("opening a free camp's page by direct slug refuses a stranger server-side", async ({
@@ -61,6 +64,13 @@ test.describe("anonymous visitor — free camps are undiscoverable", () => {
     const anon = await makeAppPage("web");
     await anon.goto(`/camps/${camp.slug}`);
     await expect(anon).toHaveURL(/\/auth\/sign-in/);
+    // The sign-in page is RENDERED before the absence below is asserted.
+    // `toHaveURL` resolves the moment the URL changes, so a bare
+    // `toHaveCount(0)` after it is satisfied by an empty document — it would
+    // pass just as happily if the camp name were about to appear.
+    await expect(
+      anon.getByRole("button", { name: /sign in/i }).first(),
+    ).toBeVisible();
     await expect(anon.getByRole("heading", { name: camp.name })).toHaveCount(0);
   });
 
@@ -76,6 +86,11 @@ test.describe("anonymous visitor — free camps are undiscoverable", () => {
     await anon.goto(
       `/camps/definitely-not-a-real-camp-${Date.now().toString(36)}`,
     );
+    // Wait for the 404 to actually be on screen first. Without this, both
+    // absences below are asserted against a document that may not have rendered
+    // yet, and "no camp chrome" is trivially true of a blank page — the test
+    // would keep passing even if the 404 route started leaking a dashboard.
+    await expect(anon.getByText(/couldn['’]t find that camp/i)).toBeVisible();
     await expect(anon.getByText(/^members \(/i)).toHaveCount(0);
     await expect(anon.getByRole("link", { name: /invite/i })).toHaveCount(0);
   });

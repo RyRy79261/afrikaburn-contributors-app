@@ -155,7 +155,15 @@ test.describe("camp member — cross-camp isolation", () => {
     await memberPage.goto(`/camps/${camp.slug}`);
     await memberPage.getByRole("link", { name: leadName }).first().click();
     await expect(memberPage).toHaveURL(/\/burners\/[0-9a-f-]{36}/i);
-    // The profile actually rendered (it's not a 404 masquerading as absence).
+    // THE PROFILE ACTUALLY RENDERED — asserted positively, because the absence
+    // of an error message cannot establish presence. `toHaveURL` resolves
+    // before the destination paints, so `expect(getByText(/we couldn't find/i))
+    // .toHaveCount(0)` — what this used to say — is equally true of a blank
+    // document. Every "the value is not on the page" assertion below is only
+    // worth anything once something IS.
+    await expect(
+      memberPage.getByRole("heading", { name: leadName }),
+    ).toBeVisible();
     await expect(memberPage.getByText(/we couldn['’]t find/i)).toHaveCount(0);
 
     // The hard-locked values are NEVER selected server-side (getPublicBurnerProfile

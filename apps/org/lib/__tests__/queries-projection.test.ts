@@ -997,9 +997,25 @@ describe("getStatusBoard", () => {
       ],
     ]);
     db.seed("member_role_assignments", [
-      { groupId: "group-1", officerKey: "safety", consent: "accepted" },
-      // A declined slot does NOT count as filled.
-      { groupId: "group-1", officerKey: "lnt", consent: "declined" },
+      // THE KEYS MUST BE REAL ONES. These read "safety" and "lnt" until 4 Aug
+      // 2026, and neither is in the OfficerKey enum (`safety_officer`,
+      // `lnt_officer`, `fire_safety_officer`, `sound_officer`,
+      // `safety_monitor`). An unrecognised key matches no required slot, so the
+      // whole assignment path contributed nothing and this test reported the
+      // same officer numbers it would with the feature deleted — verified by
+      // seeding every key as accepted and watching `outstandingSlots` not move.
+      // The keys also have to be REQUIRED ones to move the number. A theme camp
+      // always requires `lnt_officer` and `fire_safety_officer`;
+      // `safety_officer` is only *recommended*, so assigning it proves nothing.
+      { groupId: "group-1", officerKey: "lnt_officer", consent: "accepted" },
+      // A declined slot does NOT count as filled — this is the assertion that
+      // stops the org console telling placement a camp has its Safety Baron
+      // when that person said no.
+      {
+        groupId: "group-1",
+        officerKey: "fire_safety_officer",
+        consent: "declined",
+      },
       // Neither does an assignment with no officer key at all.
       { groupId: "group-1", officerKey: null, consent: "accepted" },
     ]);
@@ -1022,12 +1038,38 @@ describe("getStatusBoard", () => {
     expect(board.funnel.total).toBe(2);
     // Only the in-flight camps count towards officer coverage; the draft is out.
     expect(board.officerCoverage.applicableCamps).toBe(1);
+    // THE CONSENT FILTER, asserted rather than merely seeded.
+    //
+    // The three `member_role_assignments` rows above model accepted, declined
+    // and key-less slots, and until now nothing checked the result: a mutation
+    // making `row.consent !== "pending" && row.consent !== "accepted"` always
+    // false — so a DECLINED officer counts as filled — left this whole file
+    // green. That is the org console telling placement a camp has its safety
+    // and LNT officers when one of them said no.
+    //
+    // ONE outstanding: `lnt_officer` is accepted and therefore filled;
+    // `fire_safety_officer` was declined and so is still open. If declined
+    // counted, this would be 0 — which is exactly the mutation that used to
+    // survive.
+    expect(board.officerCoverage.outstandingSlots).toBe(1);
+    expect(board.officerCoverage.fullyOfficered).toBe(0);
+    expect(board.officerCoverage.campsWithGaps).toBe(1);
     expect(board.wranglerCoverage.eligibleCamps).toBe(2);
     expect(board.wranglerCoverage.assigned).toBe(1);
     expect(board.wranglerCoverage.unassigned).toBe(1);
     expect(board.supplierStandings.good).toBe(1);
     expect(board.supplierStandings.suspended).toBe(1);
     expect(board.questionnaires.sends).toHaveLength(1);
+    // Two required actions carry `act-1`; the third carries no activation at all
+    // and must be dropped. Asserting the COUNT is what pins that — the length
+    // check above stays 1 either way, so inverting `if (!a.activationId)
+    // continue` (which would attach nothing to act-1 and file the orphan under
+    // an `undefined` key) went unnoticed before this line.
+    expect(board.questionnaires.sends[0]).toMatchObject({
+      activationId: "act-1",
+      sent: 2,
+      completed: 0,
+    });
   });
 
   it("does not query required actions when no activation is open", async () => {
