@@ -99,6 +99,29 @@ describe("issue forms", () => {
     }
   });
 
+  it("keeps the bug form's confirmations required", () => {
+    // The bug form is the one filed from inside an authenticated session, so it
+    // is the one that can carry somebody else's medical note or a live
+    // password-reset token out of a URL. Nothing sanitizes this path: a report
+    // filed through the app goes via `report-sanitize.ts`, and a form does not.
+    // The checkboxes are the whole of the defence, so removing one — or quietly
+    // dropping `required` — has to fail rather than merely look tidier.
+    //
+    // Structural on purpose. Asserting the WORDING would fail on a reword and
+    // pass on a warning that had been edited down to nothing, which is the
+    // wrong way round.
+    const source = readFileSync(join(FORM_DIR, "bug.yml"), "utf8");
+    // A `required: true` DIRECTLY under a `- label:` — a checkbox option. Not
+    // the `required: true` under a `validations:`, of which this form has
+    // several; counting those instead would let both checkboxes be deleted
+    // while the test stayed green.
+    const required = source.match(/^ *- label: .*\n *required: true$/gm) ?? [];
+    expect(
+      required.length,
+      "bug.yml should keep both required confirmations before posting",
+    ).toBeGreaterThanOrEqual(2);
+  });
+
   it("never lets a form set priority: — that is triage's alone", () => {
     // Not a convention, a boundary: a reporter who can state their own
     // priority states it in the line a triager reads first. See report.ts.

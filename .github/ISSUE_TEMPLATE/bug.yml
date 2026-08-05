@@ -61,9 +61,14 @@ body:
     attributes:
       label: What was the page address?
       description: |
-        The bit after the domain is plenty. Worth the ten seconds: the screen you
-        were on and the screen that actually broke are often not the same one, and
-        this is the fastest way to tell them apart.
+        The bit after the domain is plenty, and **stop at the `?`**. Some of our
+        links carry a sign-in or password-reset token in that query string, and
+        this repository is public — pasting one here hands your account to
+        whoever reads it first. `/auth/reset-password` tells us everything
+        `/auth/reset-password?token=…` would.
+
+        Worth the ten seconds otherwise: the screen you were on and the screen
+        that actually broke are often not the same one.
       placeholder: /camps/dusty-boots/registration
     validations:
       required: false
@@ -86,6 +91,11 @@ body:
       description: |
         Only if you already know how to get one — skip this without a second
         thought if you don't. Paste it raw; it gets formatted for you.
+
+        **Take out anything that looks like a key**: a long random string, a
+        `token=` or `session=`, an `Authorization:` header. Nothing here is
+        filtered before it goes public — unlike a report filed from inside the
+        app, this form publishes exactly what you paste.
       render: text
     validations:
       required: false
@@ -97,7 +107,10 @@ body:
       description: |
         This repository is public, and anyone can read it. A bug on this product
         is usually reported from a screen with other people's phone numbers,
-        emergency contacts or medical notes on it.
+        emergency contacts or medical notes on it — and the links that bring you
+        here sometimes carry a token that is as good as your password.
       options:
         - label: I've checked that nothing above shows somebody else's personal details
+          required: true
+        - label: I've checked that nothing above contains a token, key or password — including inside a link
           required: true
