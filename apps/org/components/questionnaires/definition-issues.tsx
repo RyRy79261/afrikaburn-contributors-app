@@ -80,13 +80,6 @@ export function optionIssues(
   });
 }
 
-/** Issues that name no place we can render against (root/shape problems). */
-export function unplacedIssues(
-  issues: readonly DefinitionIssue[],
-): DefinitionIssue[] {
-  return issues.filter((i) => issueLocation(i).pageIndex === null);
-}
-
 /** "Section 2 · Question 1 · Option 3" for the summary list. */
 export function issueBreadcrumb(
   issue: DefinitionIssue,

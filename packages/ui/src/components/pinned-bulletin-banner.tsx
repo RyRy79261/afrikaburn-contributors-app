@@ -7,9 +7,8 @@ import { cn } from "../lib/utils";
 // Landing). A single wrapping line + a "Read →" link to the full bulletin page.
 //
 // Server-component-safe by default: with no `onDismiss` it renders no event
-// handler and holds no state. Dismissal is opt-in — pass `onDismiss` (from a
-// client parent) to show the ✕, or use <DismissiblePinnedBulletinBanner> which
-// wraps this with the local dismissed state.
+// handler and holds no state. Dismissal is opt-in — pass `onDismiss` from a
+// client parent to show the ✕ and own the dismissed state there.
 
 export interface PinnedBulletinBannerProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,
