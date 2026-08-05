@@ -6,6 +6,7 @@ import {
   SkeletonCardGrid,
   SkeletonField,
   SkeletonForm,
+  SkeletonHeading,
   SkeletonRegion,
   SkeletonRow,
   SkeletonText,
@@ -77,6 +78,25 @@ describe("shape primitives", () => {
   it("SkeletonRow renders one flexible column plus its trailing metadata", () => {
     const { container } = render(<SkeletonRow columns={4} />);
     expect(container.querySelectorAll(".animate-pulse")).toHaveLength(4);
+  });
+
+  // `eyebrow` and `description` are opt-OUT: apps/web/app/(app)/loading.tsx
+  // renders <SkeletonHeading eyebrow={false} />, so the flags are load-bearing
+  // for the shape a real boundary shows. Both defaulted to rendering and had no
+  // test, which is how a heading placeholder silently stops matching its page.
+  it("SkeletonHeading renders eyebrow and description by default, and drops each on request", () => {
+    const { container, rerender } = render(<SkeletonHeading />);
+    // eyebrow + title + description.
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(3);
+
+    rerender(<SkeletonHeading eyebrow={false} />);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(2);
+
+    rerender(<SkeletonHeading eyebrow={false} description={false} />);
+    const bars = [...container.querySelectorAll(".animate-pulse")];
+    // The title bar is the one part that is never optional.
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.className).toContain("h-7");
   });
 
   it("SkeletonCard renders a title bar plus the requested body lines", () => {
