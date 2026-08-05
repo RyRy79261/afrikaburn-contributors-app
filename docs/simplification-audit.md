@@ -11,6 +11,14 @@ _not_ worth changing is as useful as the list of what is.
 
 Rough total: **~5,191 lines** that could be deleted or deduplicated.
 
+> **Status.** The dead-code batch (12 findings, listed under "Where to start" step 1)
+> has been applied — see the commit following this document. Everything else in this
+> file is still a proposal. One dead-code finding was deliberately **not** applied:
+> `canManageProjectRoles` (`packages/core/src/questionnaire-authz.ts:100`) has no
+> caller, but it carries a dedicated test encoding a real authorization rule, and
+> deleting a tested authz predicate to save 20 lines is a bad trade. It is left in
+> place on purpose.
+
 | Category             | Findings |
 | -------------------- | -------- |
 | Redundancy           | 37       |

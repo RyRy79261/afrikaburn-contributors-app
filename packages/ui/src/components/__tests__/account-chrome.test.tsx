@@ -5,7 +5,6 @@ import { AccountShell } from "../account-shell";
 import { AccountSecurityEvents } from "../account-security-events";
 import { AccountCapabilityNotice } from "../account-capability-notice";
 import { AccountDeleteElsewhere } from "../account-delete-elsewhere";
-import { GateScreen } from "../gate-screen";
 import { QuiltBand } from "../quilt-band";
 
 // The chrome around the account suite. Individually small, and two of them
@@ -216,35 +215,6 @@ describe("AccountDeleteElsewhere", () => {
     expect(
       screen.getByRole("link", { name: /Delete on app\.quagga/ }),
     ).toBeDefined();
-  });
-});
-
-describe("GateScreen", () => {
-  it("renders only the slots it was given", () => {
-    const { container } = render(
-      <GateScreen>
-        <p>Fill this in before continuing.</p>
-      </GateScreen>,
-    );
-    expect(screen.getByText("Fill this in before continuing.")).toBeDefined();
-    // A blocking gate is fill + sign-out only; empty wrappers would add
-    // spacing to a layout that is deliberately spare.
-    expect(container.querySelectorAll("main > div")).toHaveLength(0);
-  });
-
-  it("renders the logo, eyebrow and sign-out when they are supplied", () => {
-    render(
-      <GateScreen
-        logo={<span>QUAGGA</span>}
-        eyebrow="AfrikaBurn Organiser Console"
-        signOut={<button type="button">Sign out</button>}
-      >
-        <p>body</p>
-      </GateScreen>,
-    );
-    expect(screen.getByText("QUAGGA")).toBeDefined();
-    expect(screen.getByText("AfrikaBurn Organiser Console")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeDefined();
   });
 });
 

@@ -45,8 +45,6 @@
 //   - ORG DEPARTMENTS + ORG ROLES as data: SEEDED_ORG_ROLES (the migrated
 //     engineer/org_staff rights), departmentRoleRows (a department's permanent
 //     LEAD + MEMBER pair), kind guards, name/key normalizers (./org-roles)
-//   - medical audit READ side (the fail-open path's compensating control):
-//     summarizeMedicalAccess, detectMedicalEnumeration — distinct-subject
 //   - payment references: generatePaymentReference, deriveSubjectCode
 //     (./payment-reference)
 //   - camp-scoped member ref codes: deriveCampPrefix, disambiguateCampPrefix,
@@ -58,8 +56,9 @@
 //     name — validateUsername (3–20, letter-initial, [a-z0-9_], no edge/double
 //     underscore, reserved list), normalizeUsername (the case-insensitive
 //     uniqueness key), publicMemberName (THE display fallback) (./username)
-//   - questionnaire engine: code-side registry + gating helpers
-//     (firstBlockingAction, getCodeQuestionnaire) (./questionnaire-engine)
+//   - questionnaire engine: gating helpers (BURNER_BIO_ACTION_KEY,
+//     firstBlockingAction, isParticipantFacingActivation)
+//     (./questionnaire-engine)
 //   - questionnaire Builder v2 definition validation: structural integrity
 //     beyond Zod — unique ids, option values, forward-only branch targets
 //     (loops/dead-ends rejected), reachability, min/max consistency

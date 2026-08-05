@@ -81,11 +81,6 @@ export const CAMP_ACTIONS = [
 ] as const;
 export type CampAction = (typeof CAMP_ACTIONS)[number];
 
-/** Whether the camp may reopen a withdrawn registration back into a draft. */
-export function canCampReopen(from: RegistrationStatus): boolean {
-  return canTransitionRegistration(from, "draft");
-}
-
 /** Whether the camp may submit/resubmit from the current status. Both `submit`
  * (from draft) and `resubmit` (from changes_requested) target `submitted`. The
  * all-six-complete gate is enforced separately (`isSubmittable`). */
