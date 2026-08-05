@@ -1,6 +1,6 @@
 name: Something is broken
 description: A screen, flow or control that does the wrong thing
-labels: ["bug"]
+labels: ["type: bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
@@ -56,14 +56,48 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: address
+    attributes:
+      label: What was the page address?
+      description: |
+        The bit after the domain is plenty. Worth the ten seconds: the screen you
+        were on and the screen that actually broke are often not the same one, and
+        this is the fastest way to tell them apart.
+      placeholder: /camps/dusty-boots/registration
+    validations:
+      required: false
+
   - type: textarea
     id: extras
     attributes:
       label: Screenshot, or anything else
       description: |
-        Screenshots are welcome and usually enough. If you have a browser
-        console error, paste it — but don't worry if you don't know how to get one.
+        Screenshots are welcome and usually enough.
 
         **Please blank out anyone's personal details** before uploading.
     validations:
       required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console error
+      description: |
+        Only if you already know how to get one — skip this without a second
+        thought if you don't. Paste it raw; it gets formatted for you.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: personal-data
+    attributes:
+      label: Before you post
+      description: |
+        This repository is public, and anyone can read it. A bug on this product
+        is usually reported from a screen with other people's phone numbers,
+        emergency contacts or medical notes on it.
+      options:
+        - label: I've checked that nothing above shows somebody else's personal details
+          required: true

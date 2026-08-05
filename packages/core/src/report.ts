@@ -174,6 +174,21 @@ export const GITHUB_LABELS: readonly GithubLabel[] = [
     color: "fef2c0",
     description: "Refactor, deps, tooling, tests",
   },
+  // The last two are filed from `.github/ISSUE_TEMPLATE/`, never by the
+  // reporter — the in-app flow only knows "bug" and "feature". They are here
+  // rather than in the form because a label a form applies and this list has
+  // never heard of is silently dropped by GitHub, which is how `copy` and
+  // `design` spent their first months landing issues with no labels at all.
+  {
+    name: "type: copy",
+    color: "bfd4f2",
+    description: "Wording in the product — wrong, unclear, or overpromising",
+  },
+  {
+    name: "type: design",
+    color: "d876e3",
+    description: "How a screen looks, reads or behaves",
+  },
 
   // status: — workflow state
   {
