@@ -1,5 +1,13 @@
 # UI Component Spec — composable primitives before pages
 
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | N/A — implementation detail; a UI component inventory is not directly derived from App Spec requirements |
+| **Owner / Updated** | Ryan, 2026-08-05 |
+
 _Ryan, 25 Jul 2026. Derived from the design canvas via the `design/qa` audit tooling
 (component census: 62 reusable components in `ABOHr` + `kv6ot`, usage-ranked). Build
 the primitives once in `@quagga/ui`, then assemble pages. §6b prefer-prebuilt is law:

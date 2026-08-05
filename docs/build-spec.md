@@ -1,7 +1,17 @@
 # Build Spec — the engineering contract
 
-The engineering contract. Where any other document conflicts with it, this
-file wins; where this file and `AGENTS.md` conflict, this one wins for engineering and
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*` (the engineering contract implements requirements scattered across many App Spec sections; not individually audited here) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
+The engineering contract. The **App Specification** (external, authoritative —
+see [`README.md`](README.md)) governs what the product should do; where any
+other document in this repo conflicts with this file, this file wins; where
+this file and `AGENTS.md` conflict, this one wins for engineering and
 `AGENTS.md` wins for process. Camp 404 (github.com/ryry79261/camp-404) is the
 conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries.
 

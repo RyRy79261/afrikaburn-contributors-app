@@ -1,5 +1,13 @@
 # Auth & Security Spec — self-hosted Better Auth
 
+| Field | Value |
+|---|---|
+| **Category** | Security |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | Partial — `SEC-*` (most content — Better Auth architecture, threat model, POPIA runbooks — is engineering detail with no App Spec counterpart) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 Better Auth **1.6.25**, self-hosted in `packages/auth`, mounted per app at
 `/api/auth/[...all]`. One account pool, auth tables owned by `packages/db`
 (migration 0013), 2FA/TOTP and passkeys since 0015, DB-backed rate limiting.

@@ -1,5 +1,13 @@
 # Account Management & Security — Feature Spec
 
+| Field | Value |
+|---|---|
+| **Category** | Security |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | Partial — `SEC-*`, `CDB-002` (as-built account/security feature spec; POPIA specifics for App Spec §19 and the ID-handling parts of §4) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 _What we actually run: the account-management suite across all three apps, the
 supplier portal's sign-up, and org-managed supplier documents. Grounded in NIST
 SP 800-63B-4 and OWASP authentication guidance._

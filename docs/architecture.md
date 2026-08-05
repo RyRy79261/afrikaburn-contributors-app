@@ -1,8 +1,17 @@
 # Architecture
 
+| Field | Value |
+|---|---|
+| **Category** | Architecture |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | Partial — `SEC-*`, `CORE-*` (cross-cutting system reference; most content has no direct App Spec counterpart) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 Three Next apps, one Postgres, one account pool. This describes what is deployed
 today. Where it conflicts with [`build-spec.md`](build-spec.md), the build spec
-wins — it is the engineering contract; this is the map.
+wins — it is the engineering contract; this is the map. (Full precedence chain,
+App Specification included: [`README.md`](README.md).)
 
 ## System
 

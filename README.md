@@ -190,25 +190,25 @@ Two rules that catch people out:
   [`AGENTS.md`](AGENTS.md) §Privacy classes.
 
 > **Read [`AGENTS.md`](AGENTS.md) before changing anything.** This README is
-> orientation; AGENTS.md is law, and [`docs/build-spec.md`](docs/build-spec.md)
-> wins for engineering.
+> orientation; AGENTS.md is law, [`docs/build-spec.md`](docs/build-spec.md) wins
+> for engineering, and the **App Specification** (below) sits above all of it —
+> see [`docs/README.md`](docs/README.md) for the full precedence chain.
 
 ## Documentation
 
-| Doc                                                                                                                                                              | What it holds                                                                                                |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [`docs/architecture.md`](docs/architecture.md)                                                                                                                   | System, packages, request path, data model — with diagrams                                                   |
-| [`docs/flows.md`](docs/flows.md)                                                                                                                                 | The journeys: onboarding, registration + review, questionnaires, suppliers                                   |
-| [`docs/technical-spec.md`](docs/technical-spec.md)                                                                                                               | Section-by-section answer to the product App Spec: what is built, what each gap takes                        |
-| [`docs/build-spec.md`](docs/build-spec.md)                                                                                                                       | The engineering contract — schema, routes, org ranks, seed law                                               |
-| [`docs/deploy.md`](docs/deploy.md)                                                                                                                               | Deployment runbook — Neon, Vercel × 3, env vars, the smoke test                                              |
-| [`docs/accounts-security-spec.md`](docs/accounts-security-spec.md)                                                                                               | Accounts, the medical-notes consent model, ID retention                                                      |
-| [`docs/auth-platform-spec.md`](docs/auth-platform-spec.md)                                                                                                       | Auth architecture, POPIA duties, incident runbooks, threat model                                             |
-| [`docs/questionnaire-spec.md`](docs/questionnaire-spec.md) · [`notifications-spec.md`](docs/notifications-spec.md) · [`supplier-spec.md`](docs/supplier-spec.md) | The feature engines                                                                                          |
-| [`docs/component-spec.md`](docs/component-spec.md)                                                                                                               | The component system, and the page → canvas-frame index                                                      |
-| [`docs/triage.md`](docs/triage.md)                                                                                                                               | The issue queue: labels, the triage routine, reading an in-app report                                        |
-| [`docs/synthesis.md`](docs/synthesis.md) · [`roadmap.md`](docs/roadmap.md)                                                                                       | Correlated requirements from the source briefs, and the release sequence                                     |
-| [`docs/sources/`](docs/sources/)                                                                                                                                 | **Verbatim primary sources — never edit.** AfrikaBurn's own published pages and the original scope documents |
+The product's source of truth is the **App Specification** — an external,
+Requirement-ID-tagged document (Superhuman, mirrored to a Coda change record):
+
+> https://docs.superhuman.com/d/AB-Theme-Camp-Development_dQ_I7n93cZT/App-Specification_suoUXVqN#_lue9jm34
+
+Everything under `docs/` is downstream engineering documentation of *how, and
+whether,* that spec gets built. **[`docs/README.md`](docs/README.md) is the full
+index and rulebook** — every doc's category and Requirement-ID coverage, the
+language/status conventions every doc follows, and the protocol for updating
+this repo's docs when the App Spec changes. Start there.
+
+[`docs/sources/`](docs/sources/) holds **verbatim primary sources — never
+edit**: AfrikaBurn's own published pages and the original scope documents.
 
 **Design** lives in `design/ab-initial-app.pen`, edited only through the Pencil
 MCP tools. Read [`design/pen-lessons.md`](design/pen-lessons.md) before touching
