@@ -9,10 +9,7 @@
   "exports": {
     "./styles.css": "./src/styles/globals.css",
     "./components/*": "./src/components/*.tsx",
-    "./lib/utils": "./src/lib/utils.ts",
-    "./lib/client-errors": "./src/lib/client-errors.ts",
-    "./lib/report-client": "./src/lib/report-client.ts",
-    "./lib/use-dictation": "./src/lib/use-dictation.ts"
+    "./lib/utils": "./src/lib/utils.ts"
   },
   "scripts": {
     "lint": "eslint .",
