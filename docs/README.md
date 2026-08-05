@@ -226,6 +226,12 @@ it tags:
 A trailing note in parentheses is fine for a divergence that doesn't reduce to a
 single glyph (see `technical-spec.md` §4, §8, §14 for real examples).
 
+**A range must not straddle an id with a different status.** `CDB-040–CDB-043`
+inside the ✅ bucket is only correct if `041`, `042` and `043` all genuinely
+belong there too — if one of them doesn't, enumerate around it
+(`CDB-040, CDB-041, CDB-043`) rather than widening the range and hoping the
+gap is obvious from the neighbouring bucket.
+
 ### The regeneration protocol
 
 What happens when the App Spec changes — the strict, repeatable procedure this
