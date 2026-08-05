@@ -1,5 +1,13 @@
 # Documentation index and conventions
 
+| Field | Value |
+|---|---|
+| **Category** | Operational |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | N/A — operational, not spec-derived |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 This file is the index and the rulebook for everything under `docs/`. If you are
 about to read, write, or update a doc in this folder, start here.
 
@@ -194,7 +202,7 @@ glyph, matching the App Spec's own convention of bolding the ID before the text
 it tags:
 
 ```markdown
-**Requirement IDs:** ✅ CDB-037, CDB-040–CDB-043 · 🚧 CDB-042 · ❌ CDB-029, CDB-030 · ⚠️ CDB-001–CDB-024 *(App Spec §4)*
+**Requirement IDs:** ✅ CDB-037, CDB-040, CDB-041, CDB-043 · 🚧 CDB-042 · ❌ CDB-029, CDB-030 · ⚠️ CDB-001–CDB-024 *(App Spec §4)*
 ```
 
 A trailing note in parentheses is fine for a divergence that doesn't reduce to a
@@ -215,7 +223,9 @@ whole convention exists to support:
    and identifies which `PREFIX-NNN` IDs are affected.
 4. **Find every citing location**: `grep -rn "<ID>" docs/` — the header-level
    `Requirement IDs` field and any inline citations both use the literal ID
-   string, so this is exhaustive by construction.
+   string, so this is exhaustive by construction. Also search for the relevant
+   wildcard prefix (e.g., `ONBOARD-*` if the ID is `ONBOARD-042`) to catch
+   docs that cite the prefix range rather than individual IDs.
 5. **A removed ID** is never deleted from a citing doc — struck through in
    place with `(Removed — see Change Record <date>)`, mirroring the App Spec's
    own convention for the same reason: so an old reference resolves to an

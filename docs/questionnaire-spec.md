@@ -4,7 +4,7 @@
 |---|---|
 | **Category** | Engineering Spec |
 | **Doc status** | Active |
-| **Normative language** | Descriptive only |
+| **Normative language** | Descriptive only — engineering-invented mechanism; the App Spec has no dedicated "questionnaire" section to derive normative requirements from |
 | **Requirement IDs** | Partial — `ONBOARD-*`, `REG-*`, `SEC-*` (engineering-invented mechanism; the App Spec has no dedicated "questionnaire" section) |
 | **Owner / Updated** | Ryan, 2026-08-05 |
 

@@ -5,7 +5,7 @@
 | **Category** | Engineering Spec |
 | **Doc status** | Active |
 | **Normative language** | Descriptive only |
-| **Requirement IDs** | N/A — no dedicated App Spec section; implements communication needs implied across §6, §9 and §14 rather than a named requirement set |
+| **Requirement IDs** | N/A — no dedicated App Spec section; implements communication needs that are implied by §6, §9 and §14 rather than a named requirement set |
 | **Owner / Updated** | Ryan, 2026-08-05 |
 
 _Ryan, 25 Jul 2026. Every account gets an in-app notification stream; the org gets a

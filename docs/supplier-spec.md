@@ -4,7 +4,7 @@
 |---|---|
 | **Category** | Engineering Spec |
 | **Doc status** | Active |
-| **Normative language** | Descriptive only |
+| **Normative language** | Descriptive only — the deep supplier onboarding and standing workflow has no App Spec counterpart to derive normative requirements from |
 | **Requirement IDs** | Partial — `PNP-005`, `REG-011` (supplier declarations in registration; the deep onboarding/standing workflow has no App Spec counterpart) |
 | **Owner / Updated** | Ryan, 2026-08-05 |
 

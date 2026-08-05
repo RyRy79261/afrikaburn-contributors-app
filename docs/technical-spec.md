@@ -110,7 +110,7 @@ discovered late.
 
 ## 4. Camper database and camp list ⚠️
 
-**Requirement IDs:** ✅ CDB-027, CDB-031, CDB-032, CDB-037, CDB-038, CDB-040, CDB-043 · 🚧 CDB-042 · ❌ CDB-025, CDB-026, CDB-028, CDB-029, CDB-030, CDB-034, CDB-035, CDB-036 · ⚠️ CDB-001–CDB-024 (captured via self-owned Burner Bio, not admin-managed records — see below) *(App Spec §4; CDB-039 "masked ID/passport numbers" not individually assessed — encryption exists, a distinct masked-display treatment is not confirmed)*
+**Requirement IDs:** ✅ CDB-027, CDB-031, CDB-032, CDB-037, CDB-038, CDB-040, CDB-041, CDB-043 · 🚧 CDB-039, CDB-042 · ❌ CDB-025, CDB-026, CDB-028, CDB-029, CDB-030, CDB-033, CDB-034, CDB-035, CDB-036 · ⚠️ CDB-001–CDB-024 (captured via self-owned Burner Bio, not admin-managed records — see below) *(App Spec §4)*
 
 **This is the section where the build and the spec genuinely differ, and the
 difference is not an oversight.**
@@ -439,7 +439,7 @@ documents is written but not scheduled**.
 
 ## 20. First development release ⚠️
 
-**Requirement IDs:** ✅ RELEASE-001, RELEASE-002, RELEASE-012 · 🚧 RELEASE-003, RELEASE-008, RELEASE-009, RELEASE-021, RELEASE-022, RELEASE-033 · ⚠️ RELEASE-004 · ❌ RELEASE-005–RELEASE-007, RELEASE-010, RELEASE-011, RELEASE-013–RELEASE-020, RELEASE-023–RELEASE-032, RELEASE-034 *(App Spec §20 — written before the current build existed; several Phase-1 items are done out of order, and Phase 1's two heaviest items, RELEASE-014/RELEASE-016, remain blocked on the same missing map data as §11–§13)*
+**Requirement IDs:** ✅ RELEASE-001, RELEASE-002, RELEASE-012 · 🚧 RELEASE-003, RELEASE-008, RELEASE-009, RELEASE-021, RELEASE-022, RELEASE-033 · ⚠️ RELEASE-004, RELEASE-014, RELEASE-016 · ❌ RELEASE-005–RELEASE-007, RELEASE-010, RELEASE-011, RELEASE-013, RELEASE-015, RELEASE-017–RELEASE-020, RELEASE-023–RELEASE-032, RELEASE-034 *(App Spec §20 — written before the current build existed; several Phase-1 items are done out of order, and Phase 1's two heaviest items, RELEASE-014/RELEASE-016, remain blocked on the same missing map data as §11–§13)*
 
 The App Spec's Phase 1 was written before the current build existed, and reads
 oddly against it now: several Phase 1 items are done, while Phase 1 also
