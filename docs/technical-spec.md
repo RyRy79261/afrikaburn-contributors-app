@@ -8,9 +8,9 @@
 | **Requirement IDs** | Exhaustive — full 1:1 section mirror of the App Specification. Every section below cites the `PREFIX-NNN` IDs it addresses |
 | **Owner / Updated** | Repo maintainers, 2026-08-05 |
 
-Companion to the **[App Specification](https://docs.superhuman.com/d/AB-Theme-Camp-Development_dQ_I7n93cZT/App-Specification_suoUXVqN#_lue9jm34)**
-— the authoritative, Requirement-ID-tagged source of truth for what the product
-should do (see [`docs/README.md`](README.md) for the full precedence chain).
+Companion to the **App Specification** — the authoritative, Requirement-ID-tagged
+source of truth for what the product should do; its link and the full
+precedence chain are in [`docs/README.md`](README.md#direction-of-information-travel).
 That document says what the product should do; this one says what is built,
 how, and what each unbuilt part would actually take. Section numbers match the
 App Spec so the two can be read side by side, and each section below cites the
@@ -182,7 +182,7 @@ Two technical notes for planning:
   templates and consent records; SMS costs money per message. Both are
   integrations with their own approval timelines, not settings.
 
-## 7. Working budget ❌
+## 7. Working budget 🚧
 
 **Requirement IDs:** 🚧 BUDGET-001 (one number captured — the expected budget declared at registration) · ❌ BUDGET-002–BUDGET-062 *(App Spec §7 — everything beyond that one field is unbuilt)*
 
@@ -408,7 +408,7 @@ for creative projects roughly free, provided it is built on the shared spine.
 
 ## 19. Permissions and security ✅
 
-**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-019, SEC-020, SEC-023 · ❌ SEC-003, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023)*
+**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-019, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*
 
 Built, and beyond the App Spec's list.
 

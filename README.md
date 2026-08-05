@@ -197,15 +197,12 @@ Two rules that catch people out:
 ## Documentation
 
 The product's source of truth is the **App Specification** — an external,
-Requirement-ID-tagged document (Superhuman, mirrored to a Coda change record):
-
-> https://docs.superhuman.com/d/AB-Theme-Camp-Development_dQ_I7n93cZT/App-Specification_suoUXVqN#_lue9jm34
-
-Everything under `docs/` is downstream engineering documentation of *how, and
-whether,* that spec gets built. **[`docs/README.md`](docs/README.md) is the full
-index and rulebook** — every doc's category and Requirement-ID coverage, the
-language/status conventions every doc follows, and the protocol for updating
-this repo's docs when the App Spec changes. Start there.
+Requirement-ID-tagged document (Superhuman, mirrored to a Coda change record).
+**[`docs/README.md`](docs/README.md#direction-of-information-travel) carries
+the link** and is also the full index and rulebook for everything under
+`docs/`: every doc's category and Requirement-ID coverage, the language/status
+conventions every doc follows, and the protocol for updating this repo's docs
+when the App Spec changes. Start there.
 
 [`docs/sources/`](docs/sources/) holds **verbatim primary sources — never
 edit**: AfrikaBurn's own published pages and the original scope documents.

@@ -22,7 +22,7 @@ should do. It lives outside this repository, on Superhuman, mirrored to a Coda
 change record:
 
 > **App Specification (authoritative):**
-> https://docs.superhuman.com/d/AB-Theme-Camp-Development_dQ_I7n93cZT/App-Specification_suoUXVqN#_lue9jm34
+> https://docs.superhuman.com/d/AB-Theme-Camp-Development_dQ_I7n93cZT/App-Specification_suoUXVqN
 
 Everything in this repository — every file below, the code, the tests — is
 **downstream** of that document. That has one immediate consequence and one
@@ -43,9 +43,11 @@ common misunderstanding to avoid:
   which document governs.)
 
 Underneath that top tier, four existing precedence rules already govern this
-repo and are restated here as the one place they're spelled out in full — the
-other four locations (`AGENTS.md` ×2, [`build-spec.md`](build-spec.md),
-`README.md`) point back to this paragraph rather than re-explaining it:
+repo and are restated here as the one place they're spelled out in full. Five
+other locations echo it: `AGENTS.md` (×2), [`build-spec.md`](build-spec.md) and
+`README.md` restate the rule in full and link here — reasonable for a reader
+landing there cold — while [`architecture.md`](architecture.md) links here
+without restating it:
 
 1. **The App Specification** (above) governs what the product should do.
 2. **[`build-spec.md`](build-spec.md)** wins for engineering — schema, routes,
@@ -59,6 +61,7 @@ other four locations (`AGENTS.md` ×2, [`build-spec.md`](build-spec.md),
 
 | Doc | Category | Doc status | Requirement-ID coverage |
 |---|---|---|---|
+| `README.md` *(this file)* | Operational | Active | N/A — index and conventions, not spec-derived |
 | [`technical-spec.md`](technical-spec.md) | Product | Active | **Exhaustive** — full 1:1 section mirror of the App Spec |
 | [`architecture.md`](architecture.md) | Architecture | Active | Partial — `SEC-*`, `CORE-*` |
 | [`build-spec.md`](build-spec.md) | Engineering Spec | Active | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*` |
@@ -91,16 +94,20 @@ sequencing).
 > [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174) when, and only when, they
 > appear in all capitals, as shown here.
 
-That is the standard BCP 14 boilerplate, and it applies to every doc in this
-folder whose header marks **Normative language: RFC 2119 / RFC 8174 applies**
-(the engineering contract and the `*-spec.md` feature docs). Lowercase
-`must`/`may`/`should` stay ordinary English everywhere, including in those same
-docs — capitalisation is what invokes the RFC meaning, nothing else does.
+That is the standard BCP 14 boilerplate. Whether it applies to a given doc is
+whatever that doc's own header says under **Normative language** — check the
+header, not a list here. (An earlier version of this section named the docs on
+each side; a hand-maintained roster of doc names, duplicating a field that
+already exists in every file, is guaranteed to go stale the moment a doc is
+added or re-marked — the index above is kept current, this prose no longer
+tries to be.) Lowercase `must`/`may`/`should` stay ordinary English everywhere,
+including in docs marked RFC 2119 applies — capitalisation is what invokes the
+RFC meaning, nothing else does.
 
-Docs marked **Normative language: Descriptive only** (`flows.md`, `synthesis.md`,
-`roadmap.md`, `deploy.md`, `triage.md`, `technical-spec.md`) report what exists
-or what's planned; they don't impose requirements, so this convention doesn't
-apply to them even where they happen to contain the word "must."
+Docs marked **Normative language: Descriptive only** report what exists or
+what's planned; they don't impose requirements, so this convention doesn't
+apply to them even where they happen to contain the word "must." See the index
+above for which docs are currently marked which way.
 
 ### The status-symbol legend
 
@@ -113,6 +120,17 @@ copied from where it was first defined in [`technical-spec.md`](technical-spec.m
 | 🚧 | **Partial** — some of it works; the rest is named nearby |
 | ❌ | **Not built** — no code, no database tables |
 | ⚠️ | **Blocked** — cannot be built yet, and the blocker is not code |
+
+**A section heading's glyph is a summary, not the last word.** In
+`technical-spec.md`, a `##` heading glyph states the section's overall call;
+the `**Requirement IDs:**` line beneath it is the authoritative, per-id
+breakdown, and the two may legitimately differ in altitude rather than agree —
+§8 and §10 head ⚠️ *blocked* while every id they cite is ❌ *not built*, because
+the platform's non-negotiable policy stance (never run a payment gateway;
+Quicket stays the system of record) isn't quite the same claim as "the code
+doesn't exist," even though the practical effect is the same. Where a heading
+and its own citation line flatly disagree rather than differ in altitude,
+that's a bug, not a difference of perspective — fix the heading.
 
 **One collision to know about, not fix:** [`build-spec.md`](build-spec.md)'s org
 capability-matrix table and [`questionnaire-spec.md`](questionnaire-spec.md)'s
