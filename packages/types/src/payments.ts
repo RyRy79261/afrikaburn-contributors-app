@@ -21,6 +21,3 @@ export const PaymentSubjectType = z.enum([
   "membership",
 ]);
 export type PaymentSubjectType = z.infer<typeof PaymentSubjectType>;
-
-/** Default currency for payment references. */
-export const DEFAULT_CURRENCY = "ZAR";

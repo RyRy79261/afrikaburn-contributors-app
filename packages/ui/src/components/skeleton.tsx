@@ -149,55 +149,6 @@ export function SkeletonRow({
   );
 }
 
-/** A card wrapping N `SkeletonRow`s — the shape of every table surface. */
-export function SkeletonTable({
-  rows = 5,
-  columns = 3,
-  className,
-}: {
-  rows?: number;
-  columns?: number;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-border bg-card/40 p-5",
-        className,
-      )}
-    >
-      <div className="flex flex-col gap-4">
-        {Array.from({ length: rows }).map((_, i) => (
-          <SkeletonRow key={i} columns={columns} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The KPI / summary strip several dashboards open with. */
-export function SkeletonStats({
-  count = 4,
-  className,
-}: {
-  count?: number;
-  className?: string;
-}) {
-  return (
-    <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-4", className)}>
-      {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card/40 p-5"
-        >
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-8 w-16" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** A grid of cards — directories, catalogues, feature rows. */
 export function SkeletonCardGrid({
   cards = 6,

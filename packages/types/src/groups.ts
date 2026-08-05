@@ -15,13 +15,6 @@ export const GroupKind = z.enum([
 ]);
 export type GroupKind = z.infer<typeof GroupKind>;
 
-/** The non-org kinds — those that register and earn entitlements. */
-export const PROJECT_KINDS: readonly GroupKind[] = [
-  "theme_camp",
-  "artwork",
-  "mutant_vehicle",
-];
-
 /** Whether a group is a registrable project (anything that isn't the org). */
 export function isProjectKind(kind: GroupKind): boolean {
   return kind !== "org";
