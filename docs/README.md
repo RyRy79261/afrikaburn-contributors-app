@@ -139,7 +139,7 @@ right, yes or no" — a different, older, local meaning that predates this
 convention. Those specific pre-existing tables are left as they are (per the
 restructure's "don't change content unnecessarily" rule); just don't assume ✅/❌
 means "built" in a table clearly answering a yes/no permissions question. New
-tables should avoid reusing these four glyphs for plain booleans, to stop the
+tables SHOULD avoid reusing these four glyphs for plain booleans, to stop the
 collision from spreading.
 
 ## The standardised metadata header block
@@ -226,7 +226,7 @@ it tags:
 A trailing note in parentheses is fine for a divergence that doesn't reduce to a
 single glyph (see `technical-spec.md` §4, §8, §14 for real examples).
 
-**A range must not straddle an id with a different status.** `CDB-040–CDB-043`
+**A range MUST NOT straddle an id with a different status.** `CDB-040–CDB-043`
 inside the ✅ bucket is only correct if `041`, `042` and `043` all genuinely
 belong there too — if one of them doesn't, enumerate around it
 (`CDB-040, CDB-041, CDB-043`) rather than widening the range and hoping the
