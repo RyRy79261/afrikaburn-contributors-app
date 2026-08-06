@@ -1,5 +1,13 @@
 # Notifications & Bulletins — Feature Spec
 
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | N/A — no dedicated App Spec section; implements communication needs that are implied by §6, §9 and §14 rather than a named requirement set |
+| **Owner / Updated** | Ryan, 2026-08-05 |
+
 _Ryan, 25 Jul 2026. Every account gets an in-app notification stream; the org gets a
 bulletin system to broadcast to audiences. "Your camp has been approved", "Wrangler
 assigned", "Attention: ticket resale window opens" — personal events and broadcasts,

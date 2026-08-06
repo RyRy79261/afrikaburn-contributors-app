@@ -1,5 +1,13 @@
 # Account Management & Security — Feature Spec
 
+| Field | Value |
+|---|---|
+| **Category** | Security |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | Partial — `SEC-*`, `CDB-002` (as-built account/security feature spec; POPIA specifics for App Spec §19 and the ID-handling parts of §4) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 _What we actually run: the account-management suite across all three apps, the
 supplier portal's sign-up, and org-managed supplier documents. Grounded in NIST
 SP 800-63B-4 and OWASP authentication guidance._
@@ -20,7 +28,7 @@ provider's fixed-subset limitation, and it is why every capability below is a re
 server call rather than a deferral. The migration and its reasoning are in
 [`auth-platform-spec.md`](auth-platform-spec.md); it has been executed.
 
-`better-auth` must **never** be auto-bumped — it has a track record of high-severity
+`better-auth` MUST NOT be auto-bumped — it has a track record of high-severity
 auth advisories and we now own the CVE-patch watch (AGENTS.md §3).
 
 ### Capability matrix — every one of these is supported
@@ -50,7 +58,7 @@ verification is derived OFF and those flows present as honestly unavailable — 
 capability is supported, the delivery is not configured. `/system` in the org console
 reports which of the two is the case.
 
-**The rule this preserves: nothing in the codebase may fake an unsupported
+**The rule this preserves: code MUST NOT fake an unsupported
 capability.** A surface for an unavailable capability renders an honest "not available
 yet" state and its action fails closed — never a silent no-op that looks like success,
 and never a "your X changed" notification for a change that did not happen. Today
@@ -64,6 +72,12 @@ password or a 2FA backup code.
 ---
 
 ## Security principles (the law for every auth surface)
+
+**UNRESOLVED (flagged 2026-08-06):** this heading asserts unconditional "law" status for
+everything below, but two items here — **Email change** and the new-device sign-in
+notification under **Sessions** — are marked `NOT WIRED YET` in the capability matrix
+above. The heading and the capability matrix disagree; resolve which one is right before
+treating either as settled.
 
 - **Passwords**: minimum 15 characters (single-factor), accept ≥64; **no composition
   rules, no forced rotation, no confirm-twice** — one password field with a
@@ -91,7 +105,7 @@ password or a 2FA backup code.
   (cancelable by simply signing in) → then **sanitization, not row deletion** (the Camp
   404 "Lost Cat" precedent): personal fields erased/anonymized to a stub so memberships,
   responses, and audit history keep referential integrity; POPIA erasure satisfied.
-  Constraints: a sole camp lead must transfer leadership first (guided); a supplier
+  Constraints: a sole camp lead MUST transfer leadership first (guided); a supplier
   account with in-flight onboarding warns the org. Org god accounts cannot self-delete
   while they are the only god.
 
@@ -119,7 +133,10 @@ onboarding. No opt-in checkbox litter.
 - **Org console → Supplier sign-up management**: CRUD the per-edition list of documents
   and links suppliers must read/download — title, source (external URL or uploaded file
   via Blob), `required_ack` flag, sort order, optional binding to an onboarding step
-  (e.g. the Supplier Agreement doc binds to `agreement_signed`).
+  (e.g. the Supplier Agreement doc binds to `agreement_signed`). **UNRESOLVED (flagged
+  2026-08-06):** "must read/download" stays lowercase deliberately — enforcement is a
+  self-reported `required_ack` checkbox, not anything the system can verify, so this
+  cannot honestly be capitalized to MUST until (or unless) that changes.
 - **Supplier portal**: a Documents panel on the onboarding page — read/download links;
   `required_ack` docs carry an acknowledgement checkbox whose state feeds the bound
   onboarding step.
@@ -127,9 +144,9 @@ onboarding. No opt-in checkbox litter.
   nullable, sort) + `supplier_document_acks` (supplier_id × document_id, acked_at).
   **Landed in migration 0011.**
 - **Binding rule (enforced in `@quagga/core` `validateDocumentBinding`):** a document
-  may only bind to a step the supplier completes THEMSELVES. Binding to an
+  MUST bind only to a step the supplier completes THEMSELVES. Binding to an
   org-confirmed step (deposit, briefing, registration fee) or an org-reviewed step
-  (inventory, crew) is rejected — a supplier ticking a checkbox must never be able
+  (inventory, crew) is rejected — a supplier ticking a checkbox MUST NOT be able
   to confirm that money arrived or that they attended a briefing. Reconciliation
   (`applyDocumentAcksToSteps`) re-applies the same guard at apply time, and works in
   both directions: withdrawing an acknowledgement reverts the bound step, and adding
@@ -203,12 +220,12 @@ doing so, the consent basis is gone.
 
 - the owner (their own notes);
 - **org staff** (`org_staff` / `god`) — AfrikaBurn's safety/ops tier, any burner.
-  **The `engineer` rank is deliberately NOT in this set** and must never be added: it is
+  **The `engineer` rank is deliberately NOT in this set** and MUST NOT be added: it is
   the console's IT rank, it holds no care duty that would need the notes, and the org
   capability matrix (`@quagga/core` `org-permissions`) refuses it personal information
   unconditionally;
 - a **camp lead/admin** — but only for a member of a camp _they_ lead. A lead of
-  camp A is refused for a member of camp B (the lead-camp id set must intersect the
+  camp A is refused for a member of camp B (the lead-camp id set MUST intersect the
   subject's camp ids). Custom project roles do NOT grant it — structural leads only.
 
 Server-side authz is the boundary; UI hiding never is. The predicates are the same
@@ -249,7 +266,7 @@ whether a camp has disclosures must open member pages. That is the intended
 friction — each of those opens is authorized and _recorded_, which the signpost was
 not. **If Ryan rules the other way**, the amendment belongs in AGENTS.md:109 first
 ("the notes themselves are never listed; a has/has-not signpost is"), and the
-signpost read should then write its own audit row; it must not reappear as a silent
+signpost read SHOULD then write its own audit row; it MUST NOT reappear as a silent
 divergence from the stated law.
 
 **Encrypted at rest.** Unchanged: AES-256-GCM on write, decrypted on read, dropped
@@ -260,7 +277,7 @@ rather than stored plaintext when no key is configured, erased on account deleti
 non-empty notes it writes an `audit_events` row: `action = "bio.medical.view"`,
 actor, subject, `meta.basis` (`self` / `org_staff` / `camp_lead`), timestamp. The
 write happens in Next's `after()` — **off the critical path**, so the audit can
-never block or slow the read (an emergency read must not wait on a log row), and a
+never block or slow the read (an emergency read MUST NOT wait on a log row), and a
 failed insert is logged, not surfaced. Reading your own notes is not an access
 event and is not audited; an empty field discloses nothing and is not audited.
 
@@ -269,14 +286,14 @@ Because the insert runs in `after()`, the notes are already rendered and streame
 before the row is attempted, and a failed insert is swallowed to `console.error`: a
 dropped serverless instance, a DB blip or a constraint failure yields a _silent,
 unlogged disclosure_. Fail-open is the right call for this path: an emergency medic
-read must never be blocked by an audit write.
+read MUST NOT be blocked by an audit write.
 
 **The trail is a record, not monitoring.** Its job is to answer _"who saw my medical
 information?"_ if a burner asks, and to let a real incident be reconstructed. That is
 all it is for.
 
 There is deliberately **no volume threshold, no per-actor profiling and no alerting**,
-and none should be added. An earlier build shipped an enumeration detector that flagged
+and none SHOULD be added. An earlier build shipped an enumeration detector that flagged
 any account reading 8+ distinct burners' notes in an hour. It was removed
 because the premise was wrong: **reading a lot of medical notes in one sitting is what
 the job looks like.** A safety lead working out what to prepare for on site goes through

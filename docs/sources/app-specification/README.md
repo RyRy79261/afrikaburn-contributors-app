@@ -1,0 +1,1 @@
+Copied from https://docs.superhuman.com/d/_dQ_I7n93cZT/App-Specification_suoUXVqN as of 06/08/2026
