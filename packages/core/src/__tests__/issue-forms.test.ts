@@ -111,14 +111,22 @@ describe("issue forms", () => {
     // pass on a warning that had been edited down to nothing, which is the
     // wrong way round.
     const source = readFileSync(join(FORM_DIR, "bug.yml"), "utf8");
-    // A `required: true` DIRECTLY under a `- label:` — a checkbox option. Not
-    // the `required: true` under a `validations:`, of which this form has
-    // several; counting those instead would let both checkboxes be deleted
-    // while the test stayed green.
-    const required = source.match(/^ *- label: .*\n *required: true$/gm) ?? [];
+    // Two narrowings, each of which an earlier version of this test got wrong:
+    //
+    //   · a `required: true` DIRECTLY under a `- label:` is a checkbox option.
+    //     The ones under a `validations:` are not, and this form has several —
+    //     counting those left the test green with both confirmations deleted.
+    //   · counting file-wide proves only that SOME group has two, so deleting
+    //     these two and adding a required checkbox elsewhere would also pass.
+    //     Scope to the group by id, and let a rename fail rather than vanish.
+    const block =
+      source
+        .split(/\n(?= {2}- type: )/)
+        .find((section) => /^ {4}id: personal-data$/m.test(section)) ?? "";
+    const required = block.match(/^ *- label: .*\n *required: true$/gm) ?? [];
     expect(
       required.length,
-      "bug.yml should keep both required confirmations before posting",
+      "bug.yml's `personal-data` group should keep both required confirmations",
     ).toBeGreaterThanOrEqual(2);
   });
 
