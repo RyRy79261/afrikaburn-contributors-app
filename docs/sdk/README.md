@@ -4,9 +4,12 @@ A proposal for `@afrikaburn/sdk`: a published npm package that lets third-party 
 talk to the Quagga Portal backend, where **the API key's rights decide which of the SDK's
 methods work**.
 
-**Status: proposal, not a commitment.** Nothing here is built. `docs/sdk/06-review.md`
-contains a review that argues this should not be built yet, and it is worth reading before
-the rest.
+**Status: specification. Nothing here is built.** The consumer is
+[Camp 404](https://github.com/ryry79261/camp-404) and other apps outside this monorepo.
+
+`06-review.md` contains a review arguing this was too early. **That question is closed** —
+the maintainer has since named the consumer and asked for it. The review is kept for its
+technical findings, which stand; its scheduling verdict does not.
 
 ## Read in this order
 
@@ -19,6 +22,16 @@ the rest.
 | [`04-backend-work-required.md`](04-backend-work-required.md)                 | The HTTP API, the API-key system, and the ordered implementation plan — **none of this exists today** |
 | [`05-publishing-and-licensing.md`](05-publishing-and-licensing.md)           | Package layout, build, the Apache-2.0 licence boundary and how CI enforces it                         |
 | [`06-review.md`](06-review.md)                                               | Three independent reviews: pragmatism, adversarial security, completeness                             |
+| [**`delegation/`**](delegation/README.md)                                    | **How an outside app acts for a logged-in burner** — supersedes `04` §4.3.12                          |
+
+## Delegation
+
+The hard problem is not what a key may do; it is proving the **burner is actually there**
+when an app outside this repo acts for them. `04-backend-work-required.md` §4.3.12 took a
+bare `subjectUserId` and was found to be an impersonation primitive over every burner
+(`06-review.md`, C1). [`delegation/`](delegation/README.md) replaces it with a relay ticket
+that points at the burner's live session row, and covers the audit, security measures,
+auditing procedures, doc/process edits and the Camp 404 retrofit.
 
 ## The one-paragraph version
 
