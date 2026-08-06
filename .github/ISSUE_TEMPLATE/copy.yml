@@ -1,6 +1,6 @@
 name: Wording fix
 description: Text in the app that's wrong, unclear, or says something we can't back up
-labels: ["copy"]
+labels: ["type: copy", "needs-triage"]
 body:
   - type: markdown
     attributes:
