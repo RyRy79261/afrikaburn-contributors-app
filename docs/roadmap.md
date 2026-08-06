@@ -1,5 +1,13 @@
 # Roadmap
 
+| Field | Value |
+|---|---|
+| **Category** | Planning |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | Partial — `RELEASE-*` (App Spec §20) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 _The committed track is built from Finlay's grounded scope documents plus Ryan's offline
 directive. The Quagga Portal doc contributes a **topic map** — a survey of camp-life
 concerns — from which candidate directions graduate only with validated demand and a

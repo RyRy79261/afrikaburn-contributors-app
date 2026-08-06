@@ -1,5 +1,13 @@
 # Questionnaire Builder & Notification Gates — Feature Spec
 
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only — engineering-invented mechanism; the App Spec has no dedicated "questionnaire" section to derive normative requirements from |
+| **Requirement IDs** | Partial — `ONBOARD-*`, `REG-*`, `SEC-*` (engineering-invented mechanism; the App Spec has no dedicated "questionnaire" section) |
+| **Owner / Updated** | Ryan, 2026-08-05 |
+
 _Ryan, 24 Jul 2026. The Camp 404 "captain questionnaire builder" pattern, generalized to
 two authoring levels with audience targeting. The engine (definitions / activations /
 responses / required_actions) already exists in the spine — this adds the builder UI,

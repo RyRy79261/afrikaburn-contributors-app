@@ -1,5 +1,13 @@
 # The issue queue
 
+| Field | Value |
+|---|---|
+| **Category** | Operational |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | N/A — operational, not spec-derived |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 How an issue is labelled, who does the labelling, and what changes when the
 issue was filed by the in-app reporter rather than typed into GitHub by a
 person.
