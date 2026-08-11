@@ -80,7 +80,7 @@ Every individual requirement bullet in this document carries a stable ID in the 
 
 Rules:
 
-- **Prefix per section.** Each numbered section (2–21) has one fixed prefix, listed below. Section 1's prefix (`PURPOSE`) covers the one substantive bullet list under "Development Direction"; the rest of Section 1 is narrative and untagged.
+- **Prefix per section.** Each numbered section (2–21), including lettered subsections (e.g. 4a), has one fixed prefix, listed below. Section 1's prefix (`PURPOSE`) covers the one substantive bullet list under "Development Direction"; the rest of Section 1 is narrative and untagged.
 - **Append-only, never renumbered.** A new requirement added to a section always takes the next unused number for that prefix. Existing IDs are never renumbered or reused, even after removals, so a reference made today stays valid.
 - **Removed, not deleted.** A requirement that no longer applies is struck through in place (`~~text~~`) and annotated `(Removed — see Change Record <date>)`. The ID itself keeps its row in the [Requirement Index](app-specification/requirement-index.md), marked `Removed`, so old references resolve to an explanation instead of a silent gap.
 - **Scope.** Only substantive specification bullets (fields, capabilities, objects, categories, workflow states) are tagged. Document-structure links, the status-label legend, cross-reference lists, and section-level "Context" commentary bullets are not requirements and are left untagged.
@@ -276,13 +276,14 @@ Ordinary campers must never be able to view another camper’s identity number, 
 
 ❌ **Status:** Not implemented
 📋 **Context:** Proposed directly in Superhuman as a camper-facing directory and communication feature; nothing is built yet. Formalized from prose into grouped requirements on 2026-08-10. Original status marker was "New", which isn't part of the doc's status legend — mapped to "Not implemented" since nothing exists in the MVP.
+⚠️ **Open ambiguity:** Whether camper-controlled visibility/contact permissions (COMM-017–COMM-019) constrain directory listing (COMM-001–COMM-002) and cross-camp Village discovery (COMM-020) isn't stated. Flagged inline below pending detail; not yet resolved via a decision record.
 
 The platform should provide a camper directory and communication tool so campers can discover, contact and coordinate with each other directly.
 
 Camper directory and discovery should include:
 
-- **COMM-001** A visual dashboard displaying every camper as a photo tile
-- **COMM-002** Each tile showing the camper's name, home location, and camp (and Village, if applicable)
+- **COMM-001** A visual dashboard displaying every camper as a photo tile _(⚠️ ambiguity — see COMM-017–COMM-020)_
+- **COMM-002** Each tile showing the camper's name, home location, and camp (and Village, if applicable) _(⚠️ ambiguity — see COMM-017–COMM-020)_
 - **COMM-003** Selecting a tile opens the camper's shared profile
 
 Camper profile content may include:
@@ -309,13 +310,13 @@ Community and group formation should include:
 
 Privacy and permissions must include:
 
-- **COMM-017** Camper-controlled visibility over what profile information is shared
-- **COMM-018** Camper-controlled ability to be contacted at all
-- **COMM-019** Permission changes available at any time, across all shared information
+- **COMM-017** Camper-controlled visibility over what profile information is shared _(⚠️ ambiguity — see COMM-001, COMM-002, COMM-020)_
+- **COMM-018** Camper-controlled ability to be contacted at all _(⚠️ ambiguity — see COMM-001, COMM-002, COMM-020)_
+- **COMM-019** Permission changes available at any time, across all shared information _(⚠️ ambiguity — see COMM-001, COMM-002, COMM-020)_
 
 Village integration should include:
 
-- **COMM-020** Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village
+- **COMM-020** Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village _(⚠️ ambiguity — see COMM-001, COMM-002, COMM-017–COMM-019)_
 
 ---
 

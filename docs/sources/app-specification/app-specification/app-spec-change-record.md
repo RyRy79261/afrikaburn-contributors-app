@@ -15,6 +15,8 @@ Parent page: [App Specification](../app-specification.md)
 | 10/08/2026 | Pulled new "4a. Camper Communications" section from Superhuman (untagged narrative idea, no requirement IDs yet) |
 | 10/08/2026 | Cleaned up spelling/grammar in "4a. Camper Communications" (meaning unchanged) |
 | 10/08/2026 | Formalized "4a. Camper Communications" into grouped requirements with new `COMM` prefix (COMM-001–020); added to Requirement Index |
+| 11/08/2026 | Corrected Requirement ID Conventions prefix rule to cover lettered subsections (e.g. 4a), per PR #25 review |
+| 11/08/2026 | Flagged unresolved visibility/permission ambiguity between COMM-001, COMM-002, COMM-017–COMM-019, and COMM-020 with inline cross-references; no decision recorded, detail to follow later |
 
 ## 2026-07-29 - Kick-off Alignment Updates
 Owner: Beyers Nel
@@ -196,3 +198,22 @@ Related: [app-specification.md](../app-specification.md#4a-camper-communications
 ### Impact
 - Affected features: Section 4a now has citable requirement IDs.
 - Affected tooling: Requirement Index total updated to 584.
+
+## 2026-08-11 - PR #25 Review Follow-Ups: Prefix Rule Fix and Ambiguity Cross-References
+Owner: Beyers Nel
+Type: spec-change
+Status: active
+Related: [app-specification.md](../app-specification.md#4a-camper-communications), [requirement-index.md](./requirement-index.md)
+
+### What changed
+- Corrected the "Prefix per section" rule in [Requirement ID Conventions](../app-specification.md#requirement-id-conventions) to explicitly cover lettered subsections (e.g. `4a`), which the wording didn't account for when `COMM` was added.
+- Added inline `(⚠️ ambiguity — see COMM-NNN)` cross-references to COMM-001, COMM-002, COMM-017, COMM-018, COMM-019, and COMM-020, plus a summary note under Section 4a's Context, flagging that camper-controlled visibility/contact permissions (COMM-017–019) and cross-camp Village discovery (COMM-020) don't yet state whether they constrain directory listing (COMM-001–002).
+- Updated the Requirement Index "Last Changed" date to 2026-08-11 for the six flagged IDs.
+
+### Why it changed
+- Addressing valid findings from the CodeRabbit review on PR #25: the prefix rule was inconsistent with its own new usage, and the directory-vs-permissions requirements as written don't state which one wins.
+
+### Impact
+- Affected features: none — no new capability or behavior specified, only a conventions-doc correction and inline pointers marking where detail is still needed.
+- Not addressed: the review's requests for a full profile-data lifecycle contract (COMM-004–007) and a bounded external-integration contract (COMM-009–010) were assessed as out of scope for this spec's current level of detail (no other section defines either) and are intentionally left as-is.
+- Follow-up: the flagged ambiguity needs its actual resolution (does opt-out override directory/Village listing, and how) filled in later; this change only marks where that answer belongs.

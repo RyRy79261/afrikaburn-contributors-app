@@ -121,8 +121,8 @@ Generated index of every requirement ID defined in the App Specification. See [R
 
 | ID | Requirement | Last Changed |
 | --- | --- | --- |
-| COMM-001 | A visual dashboard displaying every camper as a photo tile | 2026-08-10 |
-| COMM-002 | Each tile showing the camper's name, home location, and camp (and Village, if applicable) | 2026-08-10 |
+| COMM-001 | A visual dashboard displaying every camper as a photo tile | 2026-08-11 |
+| COMM-002 | Each tile showing the camper's name, home location, and camp (and Village, if applicable) | 2026-08-11 |
 | COMM-003 | Selecting a tile opens the camper's shared profile | 2026-08-10 |
 | COMM-004 | Burner-specific profile details | 2026-08-10 |
 | COMM-005 | Everyday/personal details | 2026-08-10 |
@@ -137,10 +137,10 @@ Generated index of every requirement ID defined in the App Specification. See [R
 | COMM-014 | Forming groups around functions | 2026-08-10 |
 | COMM-015 | Forming groups around friend groups | 2026-08-10 |
 | COMM-016 | Supporting group formation before and after the Burn | 2026-08-10 |
-| COMM-017 | Camper-controlled visibility over what profile information is shared | 2026-08-10 |
-| COMM-018 | Camper-controlled ability to be contacted at all | 2026-08-10 |
-| COMM-019 | Permission changes available at any time, across all shared information | 2026-08-10 |
-| COMM-020 | Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village | 2026-08-10 |
+| COMM-017 | Camper-controlled visibility over what profile information is shared | 2026-08-11 |
+| COMM-018 | Camper-controlled ability to be contacted at all | 2026-08-11 |
+| COMM-019 | Permission changes available at any time, across all shared information | 2026-08-11 |
+| COMM-020 | Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village | 2026-08-11 |
 
 ## 5. Camper Statistics ❌
 
