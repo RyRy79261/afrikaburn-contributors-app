@@ -2,6 +2,8 @@
 
 Parent page: [App Specification](../app-specification.md)
 
+> **Keep entries to the point.** State what changed, why, and what it affects — skip narration of how the change was made (sync mechanics, tooling steps, export artifacts). Mechanics that need recording belong in the sync manifest or tooling notes, not here.
+
 | Date | Description of Change |
 | --- | --- |
 | 29/07/2026 | Initial Spec provided |
@@ -10,6 +12,9 @@ Parent page: [App Specification](../app-specification.md)
 | 29/07/2026 | Spec-wide implementation weaving: per-feature status labels (implemented / in progress / not implemented / at risk) embedded in every major feature section |
 | 29/07/2026 | Drafted pending decision records for every at-risk section (Decisions 007–013) |
 | 05/08/2026 | Introduced requirement ID system: every specification bullet tagged with a stable `PREFIX-NNN` ID; added Requirement ID Conventions section and companion Requirement Index |
+| 10/08/2026 | Pulled new "4a. Camper Communications" section from Superhuman (untagged narrative idea, no requirement IDs yet) |
+| 10/08/2026 | Cleaned up spelling/grammar in "4a. Camper Communications" (meaning unchanged) |
+| 10/08/2026 | Formalized "4a. Camper Communications" into grouped requirements with new `COMM` prefix (COMM-001–020); added to Requirement Index |
 
 ## 2026-07-29 - Kick-off Alignment Updates
 Owner: Beyers Nel
@@ -140,3 +145,54 @@ Related: [app-specification.md](../app-specification.md), [requirement-index.md]
 - Expected outcome: any future reference to a requirement (in task assignment, decisions, or code) can cite a `PREFIX-NNN` ID that stays valid indefinitely, and the Requirement Index makes drift (additions/removals) visible without reading the full spec.
 - Drift risk addressed: previously, inserting, removing, or reordering a bullet was indistinguishable from a passive rewrite unless someone diffed the whole document.
 - Follow-up checks: as sections are revised, confirm new bullets get the next sequential ID for that section's prefix (never inserted mid-sequence) and that removed requirements are struck through with a Change Record reference rather than deleted outright.
+
+## 2026-08-10 - Pulled New "Camper Communications" Section from Superhuman
+Owner: Beyers Nel
+Type: spec-change
+Status: active
+Related: [app-specification.md](../app-specification.md#4a-camper-communications)
+
+### What changed
+- Added new section "4a. Camper Communications" between Section 4 (Camper Database and Camp List) and Section 5 (Camper Statistics): a proposed camper directory/profile feature (photo tiles, self-managed shared profile, in-app contact/messaging, per-camper sharing permissions, Village-level camper discovery). Pulled verbatim from Superhuman, no other section changed.
+
+### Why it changed
+- New content authored directly in Superhuman; pulled into the spec so it doesn't sit undiscovered outside the source of truth.
+
+### Impact
+- Affected features: Section 4 area gains an adjacent, not-yet-scoped idea. No requirement IDs assigned yet (pure narrative, no bulleted items) and no task owner assigned.
+
+### Validation / Gap Analysis
+- Follow-up: the section's status marker (`✅ New`) doesn't match the doc's status legend (Implemented/In progress/Not implemented/At risk) — needs the author to clarify intended status. Also needs a decision on whether this becomes a formal numbered section with its own requirement prefix.
+
+## 2026-08-10 - Copyedited "Camper Communications" Section
+Owner: Beyers Nel
+Type: spec-change
+Status: active
+Related: [app-specification.md](../app-specification.md#4a-camper-communications)
+
+### What changed
+- Fixed spelling and grammar in the "4a. Camper Communications" section (source text had typos from an informal draft). Meaning is unchanged.
+
+### Why it changed
+- The section was pulled verbatim from source; readability needed a pass before it's usable as a spec reference.
+
+### Impact
+- Affected features: none — wording only, no requirement change.
+
+## 2026-08-10 - Formalized "Camper Communications" into Grouped Requirements
+Owner: Beyers Nel
+Type: spec-change
+Status: active
+Related: [app-specification.md](../app-specification.md#4a-camper-communications), [requirement-index.md](./requirement-index.md)
+
+### What changed
+- Rewrote "4a. Camper Communications" from prose into six thematic groups (directory & discovery, profile content, communication & contact, group formation, privacy & permissions, Village integration), each with a bolded `COMM-NNN` ID — 20 requirements total (COMM-001–020).
+- Added `COMM` to the Prefix reference table and added the section to the [Requirement Index](./requirement-index.md) (total tracked requirements: 564 → 584).
+- Changed the section's status marker from `✅ New` (not a legend value) to `❌ Not implemented`, since nothing is built — resolves the mismatch flagged in the 2026-08-10 pull entry above.
+
+### Why it changed
+- Every other section uses tagged, grouped requirements rather than free narrative; formalizing makes this section referenceable from tasks, decisions, and code like the rest of the spec.
+
+### Impact
+- Affected features: Section 4a now has citable requirement IDs.
+- Affected tooling: Requirement Index total updated to 584.

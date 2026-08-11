@@ -9,7 +9,7 @@ Generated index of every requirement ID defined in the App Specification. See [R
 - **Last changed** is blank until a requirement is edited after 2026-08-05; changes should be logged here and in the Change Record.
 - Rows are never deleted. A removed requirement is struck through with a `Removed` status and a Change Record reference.
 
-**Total requirements tracked: 564**
+**Total requirements tracked: 584**
 
 ---
 
@@ -116,6 +116,31 @@ Generated index of every requirement ID defined in the App Specification. See [R
 | CDB-041 | Secure access controls | — |
 | CDB-042 | Defined data-retention periods | — |
 | CDB-043 | POPIA-compliant consent and processing | — |
+
+## 4a. Camper Communications ❌
+
+| ID | Requirement | Last Changed |
+| --- | --- | --- |
+| COMM-001 | A visual dashboard displaying every camper as a photo tile | 2026-08-10 |
+| COMM-002 | Each tile showing the camper's name, home location, and camp (and Village, if applicable) | 2026-08-10 |
+| COMM-003 | Selecting a tile opens the camper's shared profile | 2026-08-10 |
+| COMM-004 | Burner-specific profile details | 2026-08-10 |
+| COMM-005 | Everyday/personal details | 2026-08-10 |
+| COMM-006 | Skills | 2026-08-10 |
+| COMM-007 | A short bio and home location | 2026-08-10 |
+| COMM-008 | In-app messaging between campers | 2026-08-10 |
+| COMM-009 | Calling via WhatsApp or another communication platform of choice | 2026-08-10 |
+| COMM-010 | Inviting a group to a video call (Google Meet, Zoom, or another platform) from the directory | 2026-08-10 |
+| COMM-011 | Scheduling meetings | 2026-08-10 |
+| COMM-012 | Sending group communications and announcements | 2026-08-10 |
+| COMM-013 | Forming groups around shifts | 2026-08-10 |
+| COMM-014 | Forming groups around functions | 2026-08-10 |
+| COMM-015 | Forming groups around friend groups | 2026-08-10 |
+| COMM-016 | Supporting group formation before and after the Burn | 2026-08-10 |
+| COMM-017 | Camper-controlled visibility over what profile information is shared | 2026-08-10 |
+| COMM-018 | Camper-controlled ability to be contacted at all | 2026-08-10 |
+| COMM-019 | Permission changes available at any time, across all shared information | 2026-08-10 |
+| COMM-020 | Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village | 2026-08-10 |
 
 ## 5. Camper Statistics ❌
 

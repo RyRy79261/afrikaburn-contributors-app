@@ -94,6 +94,7 @@ Prefix reference:
 | CORE | 2. Core Modules Required for Every Camp |
 | ONBOARD | 3. Camper Onboarding |
 | CDB | 4. Camper Database and Camp List |
+| COMM | 4a. Camper Communications |
 | STATS | 5. Camper Statistics |
 | SHIFT | 6. Shift Management |
 | BUDGET | 7. Working Budget and Financial Tracking |
@@ -268,6 +269,53 @@ Sensitive identity information must be protected through:
 - **CDB-043** POPIA-compliant consent and processing
 
 Ordinary campers must never be able to view another camper’s identity number, passport number, payment information or private administrative notes.
+
+---
+
+# 4a. Camper Communications ❌
+
+❌ **Status:** Not implemented
+📋 **Context:** Proposed directly in Superhuman as a camper-facing directory and communication feature; nothing is built yet. Formalized from prose into grouped requirements on 2026-08-10. Original status marker was "New", which isn't part of the doc's status legend — mapped to "Not implemented" since nothing exists in the MVP.
+
+The platform should provide a camper directory and communication tool so campers can discover, contact and coordinate with each other directly.
+
+Camper directory and discovery should include:
+
+- **COMM-001** A visual dashboard displaying every camper as a photo tile
+- **COMM-002** Each tile showing the camper's name, home location, and camp (and Village, if applicable)
+- **COMM-003** Selecting a tile opens the camper's shared profile
+
+Camper profile content may include:
+
+- **COMM-004** Burner-specific profile details
+- **COMM-005** Everyday/personal details
+- **COMM-006** Skills
+- **COMM-007** A short bio and home location
+
+Communication and contact should include:
+
+- **COMM-008** In-app messaging between campers
+- **COMM-009** Calling via WhatsApp or another communication platform of choice
+- **COMM-010** Inviting a group to a video call (Google Meet, Zoom, or another platform) from the directory
+- **COMM-011** Scheduling meetings
+- **COMM-012** Sending group communications and announcements
+
+Community and group formation should include:
+
+- **COMM-013** Forming groups around shifts
+- **COMM-014** Forming groups around functions
+- **COMM-015** Forming groups around friend groups
+- **COMM-016** Supporting group formation before and after the Burn
+
+Privacy and permissions must include:
+
+- **COMM-017** Camper-controlled visibility over what profile information is shared
+- **COMM-018** Camper-controlled ability to be contacted at all
+- **COMM-019** Permission changes available at any time, across all shared information
+
+Village integration should include:
+
+- **COMM-020** Cross-camp camper visibility within a Village, so campers can discover and contact members of other camps in the same Village
 
 ---
 
