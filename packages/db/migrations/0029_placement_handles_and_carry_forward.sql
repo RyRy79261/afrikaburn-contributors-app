@@ -23,12 +23,33 @@
 --
 -- Timestamps rather than dates because "closes 23:59" and "closes 09:00" are
 -- different promises and the announcement will say which.
+--
+-- `timestamptz`, NOT `timestamp`, and this is the one place in the schema where
+-- the distinction is load-bearing. A bare `timestamp` carries no zone, so the
+-- driver hands it back interpreted in the Node process's local timezone — and
+-- the reminder job then does UTC calendar arithmetic against it. On any runner
+-- not set to UTC, "closes 2027-09-30 23:59" becomes a different instant, and a
+-- deadline that moves depending on where the process runs is not a deadline.
+-- Every other column here is a record of something that happened; these two are
+-- a promise that gets compared against `now`.
+--
+-- The rest of the schema's `timestamp` convention is deliberately untouched —
+-- converting it wholesale is a separate migration and not this change's job.
 ALTER TABLE "editions"
-  ADD COLUMN IF NOT EXISTS "registration_opens_at" timestamp;
+  ADD COLUMN IF NOT EXISTS "registration_opens_at" timestamptz;
 --> statement-breakpoint
 
 ALTER TABLE "editions"
-  ADD COLUMN IF NOT EXISTS "registration_closes_at" timestamp;
+  ADD COLUMN IF NOT EXISTS "registration_closes_at" timestamptz;
+--> statement-breakpoint
+
+-- CONVERGENCE for any database that applied an earlier draft of this migration
+-- (a preview branch), where these columns landed as bare `timestamp`. A no-op on
+-- a fresh database, and safe regardless: both columns are NULL everywhere, since
+-- no edition has had a registration window set.
+ALTER TABLE "editions"
+  ALTER COLUMN "registration_opens_at" TYPE timestamptz,
+  ALTER COLUMN "registration_closes_at" TYPE timestamptz;
 --> statement-breakpoint
 
 -- ## 2. Staff-assigned camp code + erf
@@ -62,6 +83,15 @@ ALTER TABLE "registrations"
 -- Per-edition rather than global because codes are REUSED: the same camp keeps
 -- MAH year after year, and a camp that sits out 2028 must not find its own code
 -- taken by its own history in 2029.
+--
+-- NOT `CONCURRENTLY`, deliberately. A plain unique index build takes a lock that
+-- blocks writes to `registrations` while it runs, and review flagged that.
+-- `CONCURRENTLY` cannot run inside a transaction and the migrator wraps every
+-- migration in one, so adopting it means special-casing the runner. Against this
+-- table it would buy nothing measurable: `registrations` holds one row per camp
+-- per edition — AfrikaBurn places a few hundred camps — so the build is a
+-- sub-second lock on a table with three digits of rows. Revisit if that ever
+-- stops being true.
 CREATE UNIQUE INDEX IF NOT EXISTS "registrations_edition_camp_code_idx"
   ON "registrations" ("edition_id", "camp_code")
   WHERE "camp_code" IS NOT NULL;

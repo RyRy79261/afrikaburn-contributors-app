@@ -603,8 +603,21 @@ export const editions = pgTable("editions", {
   //
   // Timestamps rather than dates: "closes at 23:59 on the 30th" and "closes at
   // 09:00 on the 30th" are different promises, and the poster will say which.
-  registrationOpensAt: timestamp("registration_opens_at", { mode: "date" }),
-  registrationClosesAt: timestamp("registration_closes_at", { mode: "date" }),
+  //
+  // `withTimezone` — the ONE place in this schema where it matters. A bare
+  // `timestamp` carries no zone, so the driver returns it interpreted in the
+  // Node process's local timezone, and the reminder job does UTC calendar
+  // arithmetic against it. On a runner not set to UTC the deadline silently
+  // moves. Every other column here records something that happened; these two
+  // are a promise compared against `now`.
+  registrationOpensAt: timestamp("registration_opens_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
+  registrationClosesAt: timestamp("registration_closes_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
 
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
