@@ -1,4 +1,6 @@
+import { Download } from "lucide-react";
 import { Card, CardContent } from "@quagga/ui/components/card";
+import { Button } from "@quagga/ui/components/button";
 import { guardConsole } from "@/lib/gate";
 import { getActiveEdition, getRegistrationRows } from "@/lib/queries";
 import {
@@ -75,6 +77,28 @@ export default async function RegistrationsPage({
         title="Registration pipeline"
         description="Every camp, artwork, and mutant vehicle registration for the active edition. Filter by status, sound level, and whether the group registered in a prior year."
       />
+
+      {/* The placement export (roadmap R1). A plain link, not a button with a
+          fetch behind it: the route sets Content-Disposition and the browser
+          downloads it. The file always contains the whole edition, never the
+          current filter — placement works from the full list, and a spreadsheet
+          silently missing the camps someone had filtered out is the kind of
+          thing nobody notices until a camp has nowhere to go. */}
+      {edition ? (
+        <div className="mb-4">
+          <Button asChild variant="outline" size="sm">
+            <a href="/api/registrations/export" download>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Export for placement (CSV)
+            </a>
+          </Button>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Every submitted, in-review and approved camp for {edition.name}.
+            Contains no phone numbers, ID numbers, emergency contacts or medical
+            notes.
+          </p>
+        </div>
+      ) : null}
 
       <RegistrationFilters
         status={statusFilter}
