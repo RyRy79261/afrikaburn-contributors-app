@@ -119,22 +119,34 @@ async function runReminders(now: Date): Promise<NextResponse> {
     });
   }
 
-  // IDEMPOTENCE. Vercel Cron is at-least-once and a retry after a partial
-  // failure is normal. The marker is read before sending and written in the same
-  // transaction as the notifications, so a second invocation on the same day
-  // finds it and stops.
+  // IDEMPOTENCE, ENFORCED BY THE DATABASE. Cron delivery is at-least-once and a
+  // retry after a partial failure is normal, so "read the marker, then send"
+  // is not enough: two concurrent invocations both pass that read and every camp
+  // lead hears it twice.
+  //
+  // So the marker is CLAIMED rather than checked. The partial unique index from
+  // migration 0030 makes this insert the arbiter — whoever lands it is the
+  // sender, and the loser gets no row back and stops before writing a single
+  // notification. Check and claim are one operation.
   const marker = reminderMarkerSubject(edition.id, milestone);
-  const [alreadySent] = await db()
-    .select({ id: schema.auditEvents.id })
-    .from(schema.auditEvents)
-    .where(
-      and(
-        eq(schema.auditEvents.action, REMINDER_AUDIT_ACTION),
-        eq(schema.auditEvents.subject, marker),
-      ),
-    )
-    .limit(1);
-  if (alreadySent) {
+  const claim = await db()
+    .insert(schema.auditEvents)
+    .values({
+      action: REMINDER_AUDIT_ACTION,
+      subject: marker,
+      meta: { milestone, claimedAt: new Date().toISOString() },
+    })
+    // `where` is the INDEX PREDICATE, which is what lets Postgres match the
+    // partial unique index from migration 0030 as the arbiter. Without it there
+    // is no unique constraint covering (action, subject) and the conflict clause
+    // would have nothing to infer.
+    .onConflictDoNothing({
+      target: [schema.auditEvents.action, schema.auditEvents.subject],
+      where: eq(schema.auditEvents.action, REMINDER_AUDIT_ACTION),
+    })
+    .returning({ id: schema.auditEvents.id });
+
+  if (claim.length === 0) {
     return NextResponse.json<RunSummary>({
       ok: true,
       job: "registration.deadline_reminders",
@@ -142,6 +154,7 @@ async function runReminders(now: Date): Promise<NextResponse> {
       milestone,
     });
   }
+  const markerId = claim[0]!.id;
 
   const camps = await db()
     .select({
@@ -161,14 +174,12 @@ async function runReminders(now: Date): Promise<NextResponse> {
     );
 
   if (camps.length === 0) {
-    // Still marked, so a retry does not re-scan and re-decide.
-    await withTransaction(async (tx) => {
-      await tx.insert(schema.auditEvents).values({
-        action: REMINDER_AUDIT_ACTION,
-        subject: marker,
-        meta: { milestone, camps: 0, notified: 0 },
-      });
-    });
+    // The marker is already claimed above, so a retry does not re-scan and
+    // re-decide. Just record what the run found.
+    await db()
+      .update(schema.auditEvents)
+      .set({ meta: { milestone, camps: 0, notified: 0 } })
+      .where(eq(schema.auditEvents.id, markerId));
     return NextResponse.json<RunSummary>({
       ok: true,
       job: "registration.deadline_reminders",
@@ -240,15 +251,18 @@ async function runReminders(now: Date): Promise<NextResponse> {
     if (notificationRows.length > 0) {
       await tx.insert(schema.notifications).values(notificationRows);
     }
-    await tx.insert(schema.auditEvents).values({
-      action: REMINDER_AUDIT_ACTION,
-      subject: marker,
-      meta: {
-        milestone,
-        camps: camps.length,
-        notified: notificationRows.length,
-      },
-    });
+    // The marker row already exists — it was the claim. Fill in what the run
+    // actually did, rather than inserting a second row for the same send.
+    await tx
+      .update(schema.auditEvents)
+      .set({
+        meta: {
+          milestone,
+          camps: camps.length,
+          notified: notificationRows.length,
+        },
+      })
+      .where(eq(schema.auditEvents.id, markerId));
   });
 
   // Email is best-effort and AFTER the commit: a mail failure must not roll back

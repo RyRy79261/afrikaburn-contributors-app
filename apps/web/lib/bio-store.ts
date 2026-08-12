@@ -543,8 +543,9 @@ export async function getKeyFingerprint(
  * pre-fill rather than a completed bio: the onboarding page redirects to the
  * profile only when `completedAt` is set, so a returning burner still walks the
  * whole flow and still presses the final button. Which fields survive the
- * rollover is @quagga/core `buildBioCarryForward` — notably NOT the ID document,
- * whose retention is deliberately bounded to one edition.
+ * rollover is @quagga/core `buildBioCarryForward`: everything except
+ * `firstTime`, an edition-relative claim. The ID document DOES carry — an SA ID
+ * number does not change, and the field stays editable for a renewed passport.
  */
 export async function getBioForOnboarding(
   userId: string,

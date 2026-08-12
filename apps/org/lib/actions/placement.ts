@@ -4,12 +4,15 @@ import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
-import { parsePlacementAssignment } from "@quagga/core";
+import {
+  parsePlacementAssignment,
+  type PlacementAssignment,
+} from "@quagga/core";
 
 import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
-import { runAction, type ActionResult } from "./result";
+import { runActionWith, type ActionResultOf } from "./result";
 
 // Staff-assigned camp code + erf (roadmap R1: "Staff-assigned ERFs + camp codes
 // on profiles — unblocks container booking without any placement tool").
@@ -42,8 +45,8 @@ const AssignInput = z.object({
  */
 export async function assignPlacement(
   raw: z.input<typeof AssignInput>,
-): Promise<ActionResult> {
-  return runAction(async () => {
+): Promise<ActionResultOf<PlacementAssignment>> {
+  return runActionWith(async () => {
     const session = await requireOrgSession({
       capability: "update",
       domain: "registrations",
@@ -123,5 +126,9 @@ export async function assignPlacement(
 
     revalidatePath(`/registrations/${registration.id}`);
     revalidatePath("/registrations");
+
+    // Hand the STORED form back. The panel adopts it, so the field cannot keep
+    // showing `mah-1` after `MAH1` was written — and the Save button settles.
+    return { campCode, erf };
   });
 }

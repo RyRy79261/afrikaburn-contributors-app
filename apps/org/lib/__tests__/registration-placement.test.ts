@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fakeDb, type FakeDb } from "./support/fake-db";
 
 /**
- * The two console-side reads behind the R1 review-screen additions.
+ * The two console-side reads behind the R1 review-screen additions. Neither
+ * touches `payments` — registration is free (AGENTS.md §Product laws).
  *
  * The distinction worth protecting here is the one in `getReviewComparison`:
  * "nothing changed" and "we can no longer tell what changed" are different
@@ -33,15 +34,11 @@ beforeEach(() => {
 });
 
 describe("getPlacementContext", () => {
-  it("returns the current assignment and the payment row", async () => {
+  it("returns the current assignment", async () => {
     db.seed("registrations", [
       [{ campCode: "MAH", erf: "K12" }], // this registration
       [], // taken codes in the edition
     ]);
-    db.seed("payments", [
-      [{ reference: "QP-2027-MAH-001", status: "reconciled" }],
-    ]);
-
     const context = await getPlacementContext({
       registrationId: REG_ID,
       editionId: EDITION_ID,
@@ -50,10 +47,6 @@ describe("getPlacementContext", () => {
 
     expect(context.campCode).toBe("MAH");
     expect(context.erf).toBe("K12");
-    expect(context.payment).toEqual({
-      reference: "QP-2027-MAH-001",
-      status: "reconciled",
-    });
   });
 
   it("suggests a code that avoids this edition's taken ones", async () => {
@@ -64,7 +57,6 @@ describe("getPlacementContext", () => {
       [{ campCode: null, erf: null }],
       [{ campCode: "MAH" }, { campCode: "MAHA" }],
     ]);
-    db.seed("payments", [[]]);
 
     const context = await getPlacementContext({
       registrationId: REG_ID,
@@ -75,17 +67,14 @@ describe("getPlacementContext", () => {
     expect(context.suggestedCode).toBe("MAHB");
   });
 
-  it("reports no payment before one is recorded", async () => {
+  it("reports an unassigned camp as unassigned", async () => {
     db.seed("registrations", [[{ campCode: null, erf: null }], []]);
-    db.seed("payments", [[]]);
 
     const context = await getPlacementContext({
       registrationId: REG_ID,
       editionId: EDITION_ID,
       campName: "Mad Hatters",
     });
-
-    expect(context.payment).toBeNull();
     expect(context.campCode).toBeNull();
   });
 });

@@ -52,7 +52,6 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { PlacementPanel } from "@/components/registration/placement-panel";
-import { PaymentPanel } from "@/components/registration/payment-panel";
 import { CarryForwardComparison } from "@/components/registration/carry-forward-comparison";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
@@ -235,45 +234,30 @@ export default async function RegistrationDetailPage({
           />
         ) : null
       }
+      // NO PAYMENT CARD HERE, and there must never be one. Registration is free
+      // — AfrikaBurn does not charge theme camps — and the product law is
+      // explicit that payment UI appears in no registration context (AGENTS.md
+      // §Product laws; docs/synthesis.md names this screen specifically). An
+      // earlier revision of this branch added one; review caught it.
       railExtras={
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Placement</CardTitle>
-              <CardDescription>
-                The camp code and erf AfrikaBurn assigns. Container booking and
-                on-site logistics read these; nothing here draws a map.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PlacementPanel
-                registrationId={registration.id}
-                campCode={placement.campCode}
-                erf={placement.erf}
-                suggestedCode={placement.suggestedCode}
-                canAssign={decisionRefusal === null}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Payment</CardTitle>
-              <CardDescription>
-                A reference and a tick. AfrikaBurn collects through its own
-                channels — this app never handles funds.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PaymentPanel
-                registrationId={registration.id}
-                reference={placement.payment?.reference ?? null}
-                status={placement.payment?.status ?? null}
-                canRecord={decisionRefusal === null}
-              />
-            </CardContent>
-          </Card>
-        </>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Placement</CardTitle>
+            <CardDescription>
+              The camp code and erf AfrikaBurn assigns. Container booking and
+              on-site logistics read these; nothing here draws a map.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PlacementPanel
+              registrationId={registration.id}
+              campCode={placement.campCode}
+              erf={placement.erf}
+              suggestedCode={placement.suggestedCode}
+              canAssign={decisionRefusal === null}
+            />
+          </CardContent>
+        </Card>
       }
     />
   );

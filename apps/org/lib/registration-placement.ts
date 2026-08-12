@@ -6,25 +6,25 @@ import {
   suggestCampCode,
   type FieldChange,
 } from "@quagga/core";
-import type { PaymentStatus } from "@quagga/types";
-
 import { getDb, schema } from "./db";
 
 // Console-side reads for the two R1 additions to the review screen: the
-// staff-assigned placement handles (with their payment row) and the year-on-year
-// comparison. Kept out of `queries.ts` — which is already two thousand lines —
-// and out of the actions, which write.
+// staff-assigned placement handles and the year-on-year comparison. Kept out of
+// `queries.ts` — which is already two thousand lines — and out of the actions,
+// which write.
+//
+// NOTHING HERE READS `payments`. Registration is free (AGENTS.md §Product laws),
+// so a registration has no payment to show and this screen must never grow one.
 
 export interface PlacementContext {
   campCode: string | null;
   erf: string | null;
   /** A code derived from the camp name, avoiding this edition's taken codes. */
   suggestedCode: string;
-  payment: { reference: string; status: PaymentStatus } | null;
 }
 
 /**
- * Everything the placement + payment rail cards need for one registration.
+ * Everything the placement rail card needs for one registration.
  *
  * The suggestion is computed against the codes ALREADY TAKEN this edition, so
  * the pre-filled value in the form is one that will actually save. Computing it
@@ -60,25 +60,11 @@ export async function getPlacementContext(input: {
     .map((r) => r.campCode)
     .filter((c): c is string => c !== null);
 
-  const [payment] = await db
-    .select({
-      reference: schema.payments.reference,
-      status: schema.payments.status,
-    })
-    .from(schema.payments)
-    .where(
-      and(
-        eq(schema.payments.subjectType, "registration"),
-        eq(schema.payments.subjectId, input.registrationId),
-      ),
-    )
-    .limit(1);
 
   return {
     campCode: row?.campCode ?? null,
     erf: row?.erf ?? null,
     suggestedCode: suggestCampCode(input.campName, taken),
-    payment: payment ?? null,
   };
 }
 

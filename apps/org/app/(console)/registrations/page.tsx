@@ -93,9 +93,9 @@ export default async function RegistrationsPage({
             </a>
           </Button>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Every submitted, in-review and approved camp for {edition.name}.
-            Contains no phone numbers, ID numbers, emergency contacts or medical
-            notes.
+            Every submitted, in-review, changes-requested and approved camp for{" "}
+            {edition.name}. Carries the camp&apos;s own contact email, and no
+            phone numbers, ID numbers, emergency contacts or medical notes.
           </p>
         </div>
       ) : null}

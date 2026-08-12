@@ -53,7 +53,8 @@ pnpm turbo run lint typecheck test build   # THE gate — must be green before a
 pnpm e2e:local                             # the OTHER gate — real DB, real browser
 pnpm e2e:local specs/new-burner            # ...or one persona
 pnpm --filter @quagga/web dev              # or org / suppliers
-pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (offline)
+# NO db:generate — it emits a migration that breaks production. Hand-author
+# migrations instead; see rule 1 under Hard engineering rules.
 ```
 
 **The unit gate does not run a single browser.** `turbo run … test` lints and

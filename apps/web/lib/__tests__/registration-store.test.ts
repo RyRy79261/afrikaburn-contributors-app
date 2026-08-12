@@ -564,9 +564,9 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   it("seeds a fresh draft from last year's Form 1 answers", async () => {
     dbMock.queue(
       [source()], // findCarryForwardSource
-      [], // getRegistration — nothing this year yet
       [prior()], // the prior row
-      [], // insert
+      [], // inside the transaction: nothing for this edition yet
+      [{ id: REGISTRATION }], // the insert's returning()
     );
 
     const result = await carryForwardRegistration({
@@ -587,7 +587,7 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   });
 
   it("leaves every Form 2 answer empty — placement and layout are new each year", async () => {
-    dbMock.queue([source()], [], [prior()], []);
+    dbMock.queue([source()], [prior()], [], [{ id: REGISTRATION }]);
 
     await carryForwardRegistration({
       group: { id: GROUP, name: "Mad Hatters" },
@@ -623,9 +623,9 @@ describe("carryForwardRegistration — previous-year duplication", () => {
     // it.
     dbMock.queue(
       [source()],
-      [],
       [prior({ s1ContactEmail: "leads@madhatters.example" })],
       [],
+      [{ id: REGISTRATION }],
     );
 
     await carryForwardRegistration({
@@ -642,7 +642,12 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   });
 
   it("clears progress on an existing draft it carries into", async () => {
-    dbMock.queue([source()], [registration({ s2LntPlan: null })], [prior()], []);
+    dbMock.queue(
+      [source()],
+      [prior()],
+      [registration({ s2LntPlan: null })],
+      [{ id: REGISTRATION }],
+    );
 
     await carryForwardRegistration({
       group: { id: GROUP, name: "Mad Hatters" },
@@ -660,6 +665,7 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   it("fills only what this year's draft has left blank", async () => {
     dbMock.queue(
       [source()],
+      [prior()],
       // This year the camp already wrote its own participation plan.
       [
         registration({
@@ -667,8 +673,7 @@ describe("carryForwardRegistration — previous-year duplication", () => {
           s2LntPlan: null,
         }),
       ],
-      [prior()],
-      [],
+      [{ id: REGISTRATION }],
     );
 
     const result = await carryForwardRegistration({
@@ -690,7 +695,11 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   });
 
   it("refuses once the registration is with a reviewer", async () => {
-    dbMock.queue([source()], [registration({ status: "under_review" })]);
+    dbMock.queue(
+      [source()],
+      [prior()],
+      [registration({ status: "under_review" })],
+    );
 
     const result = await carryForwardRegistration({
       group: { id: GROUP, name: "Mad Hatters" },
@@ -702,6 +711,64 @@ describe("carryForwardRegistration — previous-year duplication", () => {
       ok: false,
       error: "This registration is locked while AfrikaBurn reviews it.",
     });
+  });
+
+  it("declines rather than clobbering when an autosave wins the race", async () => {
+    // The regression: the row was read, the patch decided against it, and the
+    // update issued unconditionally. An autosave landing in that window would
+    // have its freshly-typed text replaced by last year's, and its
+    // completed_sections reset to []. The UPDATE now re-asserts the two facts
+    // the patch rested on, so a lost race writes nothing.
+    dbMock.queue(
+      [source()],
+      [prior()],
+      [registration({ s2LntPlan: null })],
+      /* the compare-and-set matched no row */ [],
+    );
+
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/reload and try again/);
+  });
+
+  it("declines when another writer created this edition's draft first", async () => {
+    dbMock.queue(
+      [source()],
+      [prior()],
+      [], // nothing when we looked…
+      [], // …but the insert hit the (group, edition) unique index
+    );
+
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/reload and try again/);
+  });
+
+  it("refuses to carry forward twice", async () => {
+    dbMock.queue(
+      [source()],
+      [prior()],
+      [registration({ carriedForwardAt: new Date("2026-08-12") })],
+    );
+
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/already been brought across/);
   });
 
   it("refuses a first-time camp with nothing to carry", async () => {
@@ -720,6 +787,7 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   it("refuses when every carryable field is already answered", async () => {
     dbMock.queue(
       [source()],
+      [prior()],
       [
         // Every Form 1 field the prior row could fill is already answered.
         // Form 2 fields are irrelevant here — they never carry.
@@ -728,7 +796,6 @@ describe("carryForwardRegistration — previous-year duplication", () => {
           s3ParticipationPlan: "Already written.",
         }),
       ],
-      [prior()],
     );
 
     const result = await carryForwardRegistration({

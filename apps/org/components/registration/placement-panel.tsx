@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@quagga/ui/components/button";
 import { Input } from "@quagga/ui/components/input";
@@ -50,6 +50,13 @@ export function PlacementPanel({
   const blocked = !canAssign;
   const dirty = codeDraft !== (campCode ?? "") || erfDraft !== (erf ?? "");
 
+  // Adopt the persisted values when the row changes underneath us (another
+  // reviewer's save, or our own after `router.refresh()`).
+  useEffect(() => {
+    setCodeDraft(campCode ?? "");
+    setErfDraft(erf ?? "");
+  }, [campCode, erf]);
+
   function save() {
     startTransition(async () => {
       const result = await assignPlacement({
@@ -61,6 +68,11 @@ export function PlacementPanel({
         toast.error(result.error);
         return;
       }
+      // ADOPT THE STORED FORM. The action normalizes (`mah-1` becomes `MAH1`),
+      // and leaving the typed text on screen would show a value that was never
+      // saved while `dirty` stayed true against no remaining change.
+      setCodeDraft(result.campCode ?? "");
+      setErfDraft(result.erf ?? "");
       toast.success("Placement details saved.");
       router.refresh();
     });

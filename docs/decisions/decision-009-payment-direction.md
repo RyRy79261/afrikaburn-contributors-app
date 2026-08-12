@@ -66,8 +66,21 @@ later ticket.
   requirements that assume a gateway are not implemented and will not be.
 - **Roadmap R1** drops "Payment collection decision with AB" from the blocker
   table — it is no longer blocked, it is decided.
-- **Code**: the `payments` table existed and was entirely unused. R1 wires it —
-  `recordRegistrationPayment` in `apps/org/lib/actions/payments.ts`, surfaced as
-  the Payment card on the registration review screen.
+- **Code**: **nothing was wired, and that is correct.** The `payments` table
+  stays unused, because the other half of this decision is that
+  **registration is free** — AfrikaBurn does not charge theme camps at all, so a
+  registration has nothing to mark paid.
+
+  An earlier revision of PR #26 put a paid checkbox on the org registration
+  review screen. That violated a stated product law (`AGENTS.md` §Product laws:
+  "No payment UI in any registration context"; `docs/synthesis.md` names this
+  screen specifically) and was removed. What survives is
+  `@quagga/core` `payment-tracking.ts` — the pure status rule, no UI, no writes —
+  which is exactly what "payment _reference tracking_ exists only for future
+  logistics apps" permits.
+
+  **Where the checkbox belongs** is a future logistics surface — containers,
+  water, ice, gas — where AfrikaBurn genuinely does invoice. None of those apps
+  exist yet, so the module waits for the first one.
 - **AfrikaBurn still owes us** the fee amounts and which channel they want
   referenced. That is a content question now, not an architecture one.

@@ -1798,6 +1798,18 @@ export const auditEvents = pgTable(
     // backwards, but the matching order lets `ORDER BY … LIMIT` stop at n).
     subjectIdx: index("audit_events_subject_idx").on(a.subject),
     createdAtIdx: index("audit_events_created_at_idx").on(a.createdAt.desc()),
+    // Migration 0030. PARTIAL, and scoped to the one action on purpose: this
+    // table is append-only and (action, subject) is deliberately NOT unique in
+    // general — a camp can be approved, reopened and approved again, and every
+    // row must survive. The deadline-reminder job is the exception: it CLAIMS
+    // this marker with a conflict-safe insert so its idempotency is enforced by
+    // the database rather than by a check-then-write that two concurrent cron
+    // deliveries both pass.
+    deadlineReminderMarker: uniqueIndex(
+      "audit_events_deadline_reminder_marker_idx",
+    )
+      .on(a.action, a.subject)
+      .where(sql`${a.action} = 'registration.deadline_reminder'`),
   }),
 );
 

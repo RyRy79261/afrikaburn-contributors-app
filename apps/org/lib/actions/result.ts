@@ -16,3 +16,26 @@ export async function runAction(
     return { ok: false, error };
   }
 }
+
+/** A result that carries data back to the caller on success. */
+export type ActionResultOf<T> = ({ ok: true } & T) | { ok: false; error: string };
+
+/**
+ * `runAction` for an action whose caller needs the values that were actually
+ * written — the normalized form, not the text that was typed.
+ *
+ * Without this a form keeps whatever the user entered while the database holds
+ * something else, so the field shows a value that was never stored and the Save
+ * button stays enabled against no remaining change.
+ */
+export async function runActionWith<T>(
+  fn: () => Promise<T>,
+): Promise<ActionResultOf<T>> {
+  try {
+    return { ok: true, ...(await fn()) };
+  } catch (err) {
+    const error =
+      err instanceof Error ? err.message : "Something went wrong. Try again.";
+    return { ok: false, error };
+  }
+}

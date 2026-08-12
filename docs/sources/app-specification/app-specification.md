@@ -521,9 +521,11 @@ The system must allow the camp to move from proposed figures to actual figures w
 > What exists instead, and is shipped:
 >
 > - **Unique codes identifying who a payment is for** — `payments.reference` (`QP-2027-MAH-001`) for an AfrikaBurn-side fee, and `memberships.ref_code` (`MAH-M017`) so a camp can reconcile its own EFTs against its own bank account.
-> - **A checkbox marking someone paid** — three reversible states (awaiting payment / paid / waived) on the registration review screen.
+> - **A record that it arrived** — three reversible states (awaiting payment / paid / waived) as a pure rule in `@quagga/core`.
 >
-> AfrikaBurn collects through its existing channels; this app records that the money arrived. What AfrikaBurn still owes us is the fee **amounts**, which is a content question, not an architecture one.
+> AfrikaBurn collects through its existing channels; this app records that the money arrived.
+>
+> **None of this applies to registration, which is free.** AfrikaBurn does not charge theme camps, so `PAY-*` has no registration surface and payment UI appears in no registration context. The status record is reserved for a future logistics app (containers, water, ice, gas), where AB genuinely invoices. What AfrikaBurn still owes us is those fee **amounts**, which is a content question, not an architecture one.
 
 The system should include a payment gateway for:
 
@@ -852,7 +854,7 @@ The platform should track:
 # 15. Previous-Year Submissions 🚧
 
 🚧 **Status:** In progress
-📋 **Context:** Edition-scoped foundation exists; duplication/carry-forward and comparison UX are not yet implemented.
+📋 **Context:** ~~Edition-scoped foundation exists; duplication/carry-forward and comparison UX are not yet implemented.~~ **Superseded 12 Aug 2026:** duplication/carry-forward and the comparison UX ARE now implemented — a returning camp opens a pre-filled draft and the reviewer gets a field-by-field diff (`@quagga/core` `registration-carry-forward`), and the Burner Bio rolls over the same way (`bio-carry-forward`). Still "in progress" rather than implemented because the rollover is deliberately partial: only Form 1 answers pre-fill, nothing is marked complete, and everything Form 2 asks starts empty each year. See the note under §14 for the full rule.
 
 The system must store previous registration and placement submissions.
 
