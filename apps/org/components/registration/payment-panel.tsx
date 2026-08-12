@@ -30,19 +30,23 @@ export function PaymentPanel({
   registrationId,
   reference,
   status,
-  refusal,
+  canRecord,
 }: {
   registrationId: string;
   /** Null until the first status is recorded and the reference is minted. */
   reference: string | null;
   status: PaymentStatus | null;
-  /** Why this viewer may not record, or null when they may. */
-  refusal: string | null;
+  /**
+   * Whether this viewer may record a status. A boolean rather than the refusal
+   * prose: the rail states the department sentence ONCE, in the Decision or
+   * Wrangler card — see the note in `placement-panel.tsx`.
+   */
+  canRecord: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const blocked = Boolean(refusal);
+  const blocked = !canRecord;
   const current = status ?? "pending";
   const paid = current === "reconciled";
 
@@ -86,7 +90,9 @@ export function PaymentPanel({
       </div>
 
       {blocked ? (
-        <p className="text-xs text-muted-foreground">{refusal}</p>
+        <p className="text-xs text-muted-foreground">
+          Recording payment needs the same access as deciding this registration.
+        </p>
       ) : (
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 text-sm">

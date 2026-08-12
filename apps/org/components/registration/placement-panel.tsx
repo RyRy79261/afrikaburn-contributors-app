@@ -17,29 +17,37 @@ import { assignPlacement } from "@/lib/actions/placement";
  * process).
  *
  * DISABLED AND EXPLAINED rather than hidden when the viewer lacks the
- * capability, matching the wrangler panel beside it.
+ * capability — but the CAPABILITY SENTENCE ITSELF IS NOT REPEATED HERE.
+ *
+ * This panel takes a boolean, not the refusal prose, and that is deliberate. The
+ * rail already prints the department refusal once, in whichever card is showing
+ * it: the Decision card while the registration is undecided, the Wrangler card
+ * once it is approved. Passing the same paragraph into every card is how a rail
+ * becomes something nobody reads — `assign-wrangler.tsx` and `suppliers-table.tsx`
+ * both say so ("the reason is stated ONCE"), and a strict-mode e2e assertion
+ * caught the third copy before a person had to.
  */
 export function PlacementPanel({
   registrationId,
   campCode,
   erf,
   suggestedCode,
-  refusal,
+  canAssign,
 }: {
   registrationId: string;
   campCode: string | null;
   erf: string | null;
   /** A code derived from the camp name, offered when none is set yet. */
   suggestedCode: string;
-  /** Why this viewer may not assign, or null when they may. */
-  refusal: string | null;
+  /** Whether this viewer may assign. The WHY is stated once elsewhere in the rail. */
+  canAssign: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [codeDraft, setCodeDraft] = useState(campCode ?? "");
   const [erfDraft, setErfDraft] = useState(erf ?? "");
 
-  const blocked = Boolean(refusal);
+  const blocked = !canAssign;
   const dirty = codeDraft !== (campCode ?? "") || erfDraft !== (erf ?? "");
 
   function save() {
@@ -106,7 +114,8 @@ export function PlacementPanel({
 
       {blocked ? (
         <p id="placement-refusal" className="text-xs text-muted-foreground">
-          {refusal}
+          Assigning placement needs the same access as deciding this
+          registration.
         </p>
       ) : (
         <Button size="sm" onClick={save} disabled={pending || !dirty}>

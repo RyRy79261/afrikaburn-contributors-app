@@ -251,7 +251,7 @@ export default async function RegistrationDetailPage({
                 campCode={placement.campCode}
                 erf={placement.erf}
                 suggestedCode={placement.suggestedCode}
-                refusal={decisionRefusal}
+                canAssign={decisionRefusal === null}
               />
             </CardContent>
           </Card>
@@ -269,7 +269,7 @@ export default async function RegistrationDetailPage({
                 registrationId={registration.id}
                 reference={placement.payment?.reference ?? null}
                 status={placement.payment?.status ?? null}
-                refusal={decisionRefusal}
+                canRecord={decisionRefusal === null}
               />
             </CardContent>
           </Card>
