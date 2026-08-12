@@ -125,7 +125,7 @@ async function runReminders(now: Date): Promise<NextResponse> {
   // lead hears it twice.
   //
   // So the marker is CLAIMED rather than checked. The partial unique index from
-  // migration 0030 makes this insert the arbiter — whoever lands it is the
+  // migration 0029 makes this insert the arbiter — whoever lands it is the
   // sender, and the loser gets no row back and stops before writing a single
   // notification. Check and claim are one operation.
   const marker = reminderMarkerSubject(edition.id, milestone);
@@ -137,7 +137,7 @@ async function runReminders(now: Date): Promise<NextResponse> {
       meta: { milestone, claimedAt: new Date().toISOString() },
     })
     // `where` is the INDEX PREDICATE, which is what lets Postgres match the
-    // partial unique index from migration 0030 as the arbiter. Without it there
+    // partial unique index from migration 0029 as the arbiter. Without it there
     // is no unique constraint covering (action, subject) and the conflict clause
     // would have nothing to infer.
     .onConflictDoNothing({

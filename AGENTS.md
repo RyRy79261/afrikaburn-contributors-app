@@ -53,8 +53,7 @@ pnpm turbo run lint typecheck test build   # THE gate — must be green before a
 pnpm e2e:local                             # the OTHER gate — real DB, real browser
 pnpm e2e:local specs/new-burner            # ...or one persona
 pnpm --filter @quagga/web dev              # or org / suppliers
-# NO db:generate — it emits a migration that breaks production. Hand-author
-# migrations instead; see rule 1 under Hard engineering rules.
+pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (offline)
 ```
 
 **The unit gate does not run a single browser.** `turbo run … test` lints and
@@ -92,30 +91,29 @@ list`, then `git worktree remove` what has finished.
 
 ## Hard engineering rules
 
-1. **Migrations are written offline, committed append-only, and applied
-   automatically at deploy time by the advisory-locked runner.**
+1. **Migrations are GENERATED, never hand-written, committed append-only, and
+   applied automatically at deploy time by the advisory-locked runner.** Edit
+   `schema.ts`, run `db:generate`, commit both the SQL and its
+   `meta/NNNN_snapshot.json`.
 
-   > ⚠️ **`db:generate` IS CURRENTLY BROKEN — DO NOT RUN IT AGAINST THIS SCHEMA.**
-   > The drizzle snapshot chain under `packages/db/migrations/meta/` stops at
-   > `0023_snapshot.json`; migrations 0024–0029 were hand-authored and left no
-   > snapshots. So drizzle-kit diffs `schema.ts` against a six-migration-old
-   > picture of the database and emits a migration that **re-creates
-   > `wrangler_assignments`** and re-adds `decision_reason`,
-   > `consent_edition_id` and `questionnaire_responses.group_id`. Since the
-   > build applies migrations to production, that is a hard failure at the first
-   > `CREATE TABLE` — verified 12 Aug 2026 by running it.
+   > **Never hand-author a migration.** It is what breaks `db:generate`: a
+   > hand-written file leaves no snapshot, so drizzle-kit then diffs `schema.ts`
+   > against a stale picture of the database and emits a migration re-creating
+   > tables that already exist. This repo learned it the hard way — the chain
+   > broke at 0024 (29 Jul 2026) and by 0029 the generator wanted to
+   > `CREATE TABLE wrangler_assignments` a second time, which would have failed
+   > the production build at deploy. **The generator was never wrong; its input
+   > was.** The damage is cumulative: every hand-written migration makes the next
+   > generate worse.
    >
-   > **Until the snapshot chain is repaired, write the migration by hand**, in
-   > the style of 0024–0029: defensively idempotent (`ADD COLUMN IF NOT EXISTS`,
-   > `CREATE INDEX IF NOT EXISTS`, `DO $$ … pg_constraint` guards for
-   > constraints), commented with the reasoning, plus its `_journal.json` entry.
-   > Validate it by replaying the whole chain against a throwaway Postgres
-   > (`docker run --rm -e POSTGRES_PASSWORD=… postgres:16-alpine`) before
-   > committing — cheap, and the only thing standing between a typo and the
-   > production database.
-   >
-   > Repairing the chain (regenerating snapshots 0024–0029 so `db:generate`
-   > works again) is worthwhile but is its own piece of work.
+   > **If `db:generate` emits something absurd, the snapshot chain is broken —
+   > repair it, do not write around it.** Recipe: run `drizzle-kit generate` with
+   > the current `schema.ts` against an EMPTY `out/`; it emits a pristine
+   > `0000_snapshot.json` that exactly represents `schema.ts`. Renumber it to the
+   > latest migration index, set `prevId` to the last real snapshot's `id`, and
+   > discard the generated SQL. Verify: `db:generate` must then say "No schema
+   > changes, nothing to migrate", and adding a probe column must produce a
+   > one-line `ALTER TABLE`.
 
    At deploy, every app's
    `build` runs `db:migrate:deploy` (`packages/db/src/migrate.ts`) before `next build`:
