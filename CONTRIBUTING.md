@@ -223,6 +223,15 @@ are load-bearing rather than ceremonial, because of what this product is:
   production data on the next deploy. State the migration number, whether it is
   additive, and exactly what any backfill touches. "None" is a fine answer and
   should be said out loud.
+
+  **Never hand-write a migration.** Edit `packages/db/src/schema.ts`, run
+  `pnpm --filter @quagga/db db:generate`, and commit both the SQL and the
+  `meta/NNNN_snapshot.json` it writes. The snapshot is not optional — it is what
+  the next `db:generate` diffs against, and a hand-written migration skips it,
+  leaving the generator diffing against a stale database and proposing to
+  re-create tables that already exist. If its output looks absurd, the snapshot
+  chain is broken: repair it rather than writing around it (`AGENTS.md` rule 1
+  has the recipe).
 - **Risk** — what breaks if this is wrong and how anyone would notice.
 
 Keep the body's _Overview_ in plain prose. The convention is about the title and

@@ -17,7 +17,14 @@ There is no staging environment. Three things follow, and none of them are optio
    — it seeds fake data and contains no real person. Creating an account or a camp on
    the live site to check a theory is not a shortcut, it is production data.
 2. **A migration you merge runs against production on the next deploy.** There is no
-   step in between that would catch it. See rule 1 under Hard engineering rules.
+   step in between that would catch it. **So never hand-write one** — edit
+   `schema.ts` and run `db:generate`, and commit the snapshot it writes alongside
+   the SQL. Hand-authoring is not a shortcut, it is the thing that breaks the
+   generator for everyone after you: it leaves no snapshot, so the next
+   `db:generate` diffs against a stale database and emits a migration that
+   re-creates tables that already exist. If the generator's output looks absurd,
+   the snapshot chain is broken — repair it, do not write around it. Rule 1 under
+   Hard engineering rules has the detail and the repair recipe.
 3. **You are working in someone else's repository.** Branch, open a pull request, and
    let the maintainer review — never commit to `main`. (Branch protection is not yet
    switched on at the time of writing, so nothing _stops_ you. That makes the rule
@@ -53,7 +60,7 @@ pnpm turbo run lint typecheck test build   # THE gate — must be green before a
 pnpm e2e:local                             # the OTHER gate — real DB, real browser
 pnpm e2e:local specs/new-burner            # ...or one persona
 pnpm --filter @quagga/web dev              # or org / suppliers
-pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (offline)
+pnpm --filter @quagga/db db:generate       # schema.ts → migration + snapshot. NEVER hand-write one.
 ```
 
 **The unit gate does not run a single browser.** `turbo run … test` lints and
