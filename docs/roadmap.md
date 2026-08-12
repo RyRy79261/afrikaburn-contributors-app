@@ -6,7 +6,7 @@
 | **Doc status** | Active |
 | **Normative language** | Descriptive only |
 | **Requirement IDs** | Partial — `RELEASE-*` (App Spec §20) |
-| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+| **Owner / Updated** | Repo maintainers, 2026-08-12 |
 
 _The committed track is built from Finlay's grounded scope documents plus Ryan's offline
 directive. The Quagga Portal doc contributes a **topic map** — a survey of camp-life
@@ -21,7 +21,7 @@ by deadline pressure: registration season drives R1, the event itself drives R2.
 3. **Persistent entities, per-edition records, edition-scoped config.** Year-to-year carry-forward — the one theme both authors independently demand — is the spine, and it's also the biggest single form-burden reducer.
 4. **One `groups` table, ship UI for theme camps.** Joinable groups (kind: org | theme_camp | artwork | mutant_vehicle) with many-to-many memberships give us artworks/MVs, org staff roles, and multi-membership for free; "project" = any non-org group. The generalisation is free now, expensive later.
 5. **Big speculative builds never block a release.** The layout designer (a small CAD app) is the canonical example — candidate track, own lane, if ever.
-6. **The platform never holds funds.** No camp fees, no treasuries. The only money in scope is AB-side logistics fees, and those start as payment-_status_ tracking; an integrated gateway (SA-based, international Visa/Mastercard) happens only if AB wants it.
+6. **The platform never holds funds — settled, not merely current practice.** No camp fees, no treasuries, no gateway, ever ([Decision 009](decisions/decision-009-payment-direction.md), 12 Aug 2026). The only money in scope is AB-side logistics fees, and those are payment-_status_ tracking permanently: a unique code identifying who a payment is for, and a checkbox marking it received. The earlier "an integrated gateway happens only if AB wants it" is superseded — a gateway now requires reopening Decision 009, not a feature request.
 
 ## Committed track
 
@@ -46,11 +46,17 @@ container flows, no attestation flows, no payment processing.
 
 - **Two-form model**: Form 1 (Sept, intent/identity → Committee reviews biweekly → approval + wrangler assigned) is the core registration; **Form 2 (Jan: size/placement/sound/gifting + mandatory layout diagram) ships as an org questionnaire targeting registered_camp_leads** — the questionnaire feature's flagship use case. Wrangler assignment moves to Form-1 acceptance.
   Make Layer A real for camps and AB staff:
-- Production auth, real email (Resend), reminder/deadline jobs (introduce Inngest here if the async workload justifies it)
-- **Payment collection decision with AB**: either keep AB's existing channels (Quicket/EFT) with in-app references + reconciliation, or integrate a gateway — SA-based, accepting international Visa/Mastercard (candidates: Paystack, Peach Payments, PayFast). Either way the platform never holds funds
-- Registration hardening: validation from the real Google Form, export for placement
-- **Previous-year duplication + change-comparison view** — the flagship fewer-forms feature: returning camps confirm deltas instead of re-entering
-- Staff-assigned ERFs + camp codes on profiles (unblocks container booking without any placement tool)
+- Production auth, real email (Resend — **blocked pending AfrikaBurn buy-in**, not an engineering task; the code is complete and degrades honestly without a key), reminder/deadline jobs ✅ _(shipped: `/api/registrations/deadline-reminders`, 21/7/1-day milestones, idempotent. **Nothing schedules it yet** — no Vercel cron job, by decision; it needs a scheduler pointed at it to go live. Inngest was not introduced — one query a day did not justify it)_
+- **Payment: DECIDED, no gateway ever** ([Decision 009](decisions/decision-009-payment-direction.md), 12 Aug 2026). The platform never handles funds. It issues **unique codes that identify who a payment is for** (`QP-2027-MAH-001` for AB-side fees; `MAH-M017` per membership for a camp's own EFT reconciliation) and offers **a checkbox to mark someone paid**. AfrikaBurn collects through its existing channels. ✅ _(shipped: the Payment card on the registration review screen)_
+- Registration hardening: validation owned by **our own questionnaire engine — no Google Forms** ([Decision 014](decisions/decision-014-questionnaire-engine-over-google-forms.md), 12 Aug 2026); export for placement ✅ _(shipped: `/api/registrations/export`, CSV, no personal data)_
+- **Previous-year duplication + change-comparison view** — the flagship fewer-forms feature ✅ _(shipped: `@quagga/core` `registration-carry-forward` + `bio-carry-forward`, the camp-side offer banner, and the reviewer's diff above the sections)_
+
+  **The rollover rule (Ryan, 12 Aug 2026).** Carry-forward is a **typing aid, never a shortcut through the process**. A returning camp still makes a new proposal — new Form 1, new Form 2, reviewed on its own merits — and a returning burner still completes their bio. What rolls over is pre-filled text they must go through and update; nothing is marked complete on their behalf.
+  - **Burner Bio** — copied into the new edition, presented with `completedAt: null` so the onboarding gate still requires completion. **Everything carries except `firstTime`**, which is an edition-relative claim. That includes the ID/passport number (an SA ID never changes, and the field stays editable for a renewed passport) and medical notes (so they are confirmed rather than silently lost).
+  - ⚠️ **The ID retention purge still does not exist.** `@quagga/core` `id-retention` is a pure, tested rule with **no caller** — nothing writes `buildIdPurgePatch()` to the database, so no ID data is deleted on any schedule today. `docs/accounts-security-spec.md` has always said the job is a later task; this is a reminder that it is still outstanding, and that carrying bios forward makes it more worth building rather than less.
+  - **Camp registration** — only **Form 1** answers pre-fill. **Everything Form 2 asks starts empty every year**: size, arrival date, sound, placement preferences and the layout diagram. Placement zones are configured per edition year, so a carried choice could name a zone that no longer exists. The Plug & Play acknowledgement is also given fresh each edition — copying a tick manufactures consent nobody gave.
+  - **Erf and camp code** never carry: they are staff-assigned per edition and are not in the carry-forward field set at all.
+- Staff-assigned ERFs + camp codes on profiles (unblocks container booking without any placement tool) ✅ _(shipped: `registrations.camp_code` unique per edition, `registrations.erf` free text — deliberately not a placement tool, see [Decision 012](decisions/decision-012-map-erf-readiness.md))_
 - **Wrangler assignments + wrangler board**: assign wranglers (org role) to registered camps per edition; board shows per-camp progress (registration status, bookings, milestones as they get defined)
 - **Supplier repository v1**: supplier self-registration at a dedicated URL (account-linked to a burner profile when emails match), directory with vetting status, structured supplier declarations in camp registration (replaces free text), org-side feedback capture
 
@@ -105,10 +111,10 @@ justified. Listed roughly by how plausibly they'd graduate._
 | Blocker                                                                                                                                                      | Blocks                                     | Who           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------- |
 | Sign-on HTML prototype (still not in repo)                                                                                                                   | Auth screen review in R0                   | Collaborators |
-| 2027 registration opening date                                                                                                                               | R1 deadline                                | AB            |
-| Google Form access + validation rules                                                                                                                        | R1 registration hardening                  | AB            |
+| **Resend: buy-in + a registered domain.** Not an ops chore — an AB decision. The email code is complete and tested; without a key it logs and says so honestly | Real email delivery across all three apps  | AB            |
+| 2027 registration opening + closing dates                                                                                                                    | R1 deadline; the reminder job stays silent until a close date is set | AB |
 | Container registry data + format                                                                                                                             | R1 migration                               | AB            |
-| Pricing (routes/storage/water/ice/gas), refund policy, and how AB wants to collect fees (existing channels vs integrated gateway; merchant account status)   | R1/R3                                      | AB            |
+| Pricing (routes/storage/water/ice/gas) and refund policy. **How** AB collects is no longer open — [Decision 009](decisions/decision-009-payment-direction.md) settles it: their channels, our references and a paid checkbox. What remains is the amounts | R1/R3 | AB |
 | Site map / erf data format                                                                                                                                   | Placement candidate work                   | AB            |
 | Full-camper-list vs minimal-contacts decision (default: minimal)                                                                                             | Data posture across the board              | AB            |
 | Supplier deposit/fee amounts, Supplier Agreement text, vetting criteria (procedure itself now documented — see `docs/sources/quaggapedia/supplier-depot.md`) | Supplier portal; repository vetting fields | AB            |

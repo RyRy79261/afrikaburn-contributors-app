@@ -91,15 +91,40 @@ list`, then `git worktree remove` what has finished.
 
 ## Hard engineering rules
 
-1. **Migrations are generated offline, committed append-only, and applied
-   automatically at deploy time by the advisory-locked runner.** Generate with
-   `db:generate` (offline, from `schema.ts`); commit the file. At deploy, every app's
+1. **Migrations are written offline, committed append-only, and applied
+   automatically at deploy time by the advisory-locked runner.**
+
+   > ⚠️ **`db:generate` IS CURRENTLY BROKEN — DO NOT RUN IT AGAINST THIS SCHEMA.**
+   > The drizzle snapshot chain under `packages/db/migrations/meta/` stops at
+   > `0023_snapshot.json`; migrations 0024–0029 were hand-authored and left no
+   > snapshots. So drizzle-kit diffs `schema.ts` against a six-migration-old
+   > picture of the database and emits a migration that **re-creates
+   > `wrangler_assignments`** and re-adds `decision_reason`,
+   > `consent_edition_id` and `questionnaire_responses.group_id`. Since the
+   > build applies migrations to production, that is a hard failure at the first
+   > `CREATE TABLE` — verified 12 Aug 2026 by running it.
+   >
+   > **Until the snapshot chain is repaired, write the migration by hand**, in
+   > the style of 0024–0029: defensively idempotent (`ADD COLUMN IF NOT EXISTS`,
+   > `CREATE INDEX IF NOT EXISTS`, `DO $$ … pg_constraint` guards for
+   > constraints), commented with the reasoning, plus its `_journal.json` entry.
+   > Validate it by replaying the whole chain against a throwaway Postgres
+   > (`docker run --rm -e POSTGRES_PASSWORD=… postgres:16-alpine`) before
+   > committing — cheap, and the only thing standing between a typo and the
+   > production database.
+   >
+   > Repairing the chain (regenerating snapshots 0024–0029 so `db:generate`
+   > works again) is worthwhile but is its own piece of work.
+
+   At deploy, every app's
    `build` runs `db:migrate:deploy` (`packages/db/src/migrate.ts`) before `next build`:
    it takes a Postgres session advisory lock on the UNPOOLED connection so the three
    concurrent Vercel builds serialise safely, then applies any pending migrations
-   (idempotent — drizzle's own table makes the losers no-ops). A migration is NEVER
-   hand-edited, NEVER regenerated, and NEVER applied by an agent from a developer
-   machine against production — the build is the only thing that applies them.
+   (idempotent — drizzle's own table makes the losers no-ops). An ALREADY-COMMITTED
+   migration is NEVER edited, NEVER regenerated, and NEVER applied by an agent from a
+   developer machine against production — the build is the only thing that applies
+   them. (Hand-*authoring* a new migration is now the required path; see the warning
+   above. Hand-*editing* one that has already shipped remains forbidden.)
    **The UNPOOLED endpoint is mandatory and ENFORCED, not merely preferred**: the
    runner reads `DATABASE_URL_UNPOOLED` (Neon's direct endpoint) first, and it
    _aborts the build_ rather than silently falling back to a pooled URL — because
