@@ -30,7 +30,7 @@ answer deterministically instead of guessing from free text.
 
 | Namespace   | Values                                                                                                               | Who sets it                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `type:`     | `bug`, `feature`, `enhancement`, `docs`, `chore`                                                                     | Reporter states it; triage corrects it                                    |
+| `type:`     | `bug`, `feature`, `enhancement`, `docs`, `chore`, `copy`, `design`                                                   | Reporter states it; triage corrects it                                    |
 | `status:`   | `needs-info`, `in-progress`, `blocked`, `wontfix`, `duplicate`                                                       | Triage, then whoever picks it up. `needs-info` is human-filed issues ONLY |
 | `priority:` | `critical`, `high`, `medium`, `low`                                                                                  | **Triage only**                                                           |
 | `app:`      | `web`, `org`, `suppliers`                                                                                            | The reporter, from where it was filed                                     |
@@ -39,6 +39,16 @@ answer deterministically instead of guessing from free text.
 | —           | `needs-triage`, `auto-triaged`, `needs-human`, `source: in-app`                                                      | See below                                                                 |
 
 Exactly one `type:`. Exactly one `priority:`, once triaged. `area:` may repeat.
+
+`copy` and `design` are filed only from `.github/ISSUE_TEMPLATE/` — the in-app
+reporter knows just `bug` and `feature`. Both routes now apply the same
+vocabulary, which was not true until August 2026: the forms applied `bug`,
+`enhancement`, `copy` and `design`, of which the first two were GitHub's default
+labels sitting alongside the real ones and the last two did not exist at all.
+GitHub drops a label a form asks for and the repository does not have, without
+saying so, so those issues arrived unlabelled. `issue-forms.test.ts` in
+`packages/core` now fails if a form applies a label `GITHUB_LABELS` has never
+heard of, skips `needs-triage`, or states a `priority:`.
 
 ### Priority is never set by the reporter
 
@@ -57,7 +67,9 @@ legible:
 - **`needs-triage`** — the entry state. Nobody has reviewed it, so the stated
   `type:` may be wrong and there is no agreed priority. Everything the reporter
   files starts here, by construction: a report filed by a server is unreviewed,
-  and it should not look like an issue somebody already thought about.
+  and it should not look like an issue somebody already thought about. Every
+  issue form applies it too, so the queue is the whole intake and not just the
+  half of it that arrived through the app.
 - **`auto-triaged`** — the labels on this issue were applied by a routine.
 - **`needs-human`** — a person's judgement is required. It arrives two ways, and
   they mean different things:

@@ -1,6 +1,6 @@
 name: Feature or change request
 description: Something the app should do that it doesn't
-labels: ["enhancement"]
+labels: ["type: feature", "needs-triage"]
 body:
   - type: markdown
     attributes:
