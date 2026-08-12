@@ -9,7 +9,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { getBio } from "@/lib/bio-store";
+import { getBioForOnboarding } from "@/lib/bio-store";
 import { searchCampsAction } from "@/lib/camp-search-action";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BioFlow } from "@/components/onboarding/bio-flow";
@@ -35,7 +35,10 @@ export default async function OnboardingPage() {
     return <PreviewNotice feature="Burner Bio onboarding" />;
   }
 
-  const bio = await getBio(user.id, edition.id);
+  // Falls back to the person's most recent PRIOR edition's bio when this
+  // edition has none, pre-filled and reported incomplete — a returning burner
+  // edits rather than retypes, but still completes the flow (Ryan, 12 Aug 2026).
+  const bio = await getBioForOnboarding(user.id, edition);
   if (bio?.completedAt) redirect("/profile");
 
   // Pre-fill from any in-progress bio so "save & finish later" resumes cleanly.

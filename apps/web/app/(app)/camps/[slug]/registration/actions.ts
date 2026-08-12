@@ -15,8 +15,10 @@ import { db, schema } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import {
   applyCampAction,
+  carryForwardRegistration,
   getRegistration,
   saveRegistrationDraft,
+  type CarryForwardResult,
   type RegistrationValues,
   type SaveDraftResult,
   type TransitionResult,
@@ -415,4 +417,29 @@ async function notifySubmitted(input: {
       `camp dashboard.\n\n` +
       `No further action is needed right now.\n\n— The AfrikaBurn Contributors app`,
   });
+}
+
+/**
+ * Bring the camp's most recent prior registration across into this year's draft
+ * (roadmap R1, previous-year duplication).
+ *
+ * Gated on lead/admin like every other write here. The store decides what
+ * carries and what a camp must re-answer; this action only checks who is asking.
+ */
+export async function carryForwardRegistrationAction(
+  slug: string,
+): Promise<CarryForwardResult> {
+  const gate = await requireCampAdmin(slug);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const result = await carryForwardRegistration({
+    group: gate.group,
+    editionId: gate.editionId,
+    editionYear: gate.editionYear,
+  });
+  if (!result.ok) return result;
+
+  revalidatePath(`/camps/${slug}/registration`);
+  revalidatePath(`/camps/${slug}`);
+  return result;
 }
