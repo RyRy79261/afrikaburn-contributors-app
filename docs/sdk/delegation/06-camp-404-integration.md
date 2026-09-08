@@ -151,7 +151,7 @@ this loud (§12.1) but the prefix rule is yours to keep.
 | Event                            | Mechanism                                                           | What happens to live tickets                                                |
 | -------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | You rotate                       | New key issued; old key stays valid until `previous_key_expires_at` | unaffected — tickets are bound to consents, not to key generations          |
-| You say "revoke now"             | `previous_key_expires_at = now()`                                   | unaffected; but no request can present the old key                          |
+| You say "revoke now"             | both key hashes nulled + `status = 'suspended'`, one statement      | **every ticket dies on the next request**, 401 — no key can be presented    |
 | AfrikaBurn suspends Camp 404     | `integrations.status = 'suspended'`                                 | **every ticket dies on the next request**, 401                              |
 | A burner disconnects Camp 404    | their consent row is revoked                                        | **their** tickets die on the next request, 401                              |
 | A burner signs out of AfrikaBurn | their `session` row is deleted                                      | **their** tickets are deleted by `ON DELETE CASCADE`, in the same statement |

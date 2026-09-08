@@ -746,15 +746,23 @@ and every read since the break is suspect.
 | Reads whose `actor_id` resolves to an account whose console rank refuses the same read                 | **the `packages/db/src/actors.ts` coercion.** See below | escalate immediately                                                                                 |
 | Reads with no matching consent                                                                         | the wrapper is broken                                   | step 0                                                                                               |
 
-**2 — The rank-coercion check.** This is the specific failure this product already
-carries. `apps/web/lib/medical-access.ts:215` coerces a non-rank org role to
-`org_staff` (`rank: orgRankFromRole(actorOrgRole) ?? "org_staff"`), where
-`apps/org/lib/session.ts:234` treats the same `null` as the closed console door
-(`orgRankFromRole` returns `null` for `lead`/`admin`/`member`,
-`packages/core/src/org-permissions.ts:178-182`). Fixing it is stage 0(a) of the
-delivery plan and the fix is specified in shard-02 §3. The audit row records
-`basis: "org_staff"` — a true description of what the code decided and a false
-description of who the person is. So:
+**2 — The rank-coercion check.** **This defect is FIXED** (`apps/web/lib/medical-access.ts`,
+`packages/core/src/medical-access.ts`). It is documented here because the historical audit
+rows it produced are still in the table and still have to be read correctly.
+
+What it was: the resolver coerced a non-rank org role to `org_staff`
+(`rank: orgRankFromRole(actorOrgRole) ?? "org_staff"`), where `apps/org/lib/session.ts`
+treats the same `null` as the closed console door (`orgRankFromRole` returns `null` for
+`lead`/`admin`/`member`, `packages/core/src/org-permissions.ts:178-182`). A second defect fed
+it: the fold picking among several org rows tested `isOrgStaffRole`, which is true for
+`god`/`org_staff` only, so an ordinary row arriving after an `engineer` row erased the rank
+its carve-out depends on. Now a null rank skips the org branch entirely, and
+`strongestOrgRole` picks by rank precedence, order-independently.
+
+**Reading rows written before the fix.** An audit row's `basis: "org_staff"` is a true
+description of what the code decided and, for this class, a false description of who the
+person is. Rows dated before the fix landed therefore cannot be trusted to mean the actor
+held an org rank. So:
 
 > For each actor in the suspect set, ask the **console** whether that account may
 > read personal information in `registrations`. If the console refuses and the API

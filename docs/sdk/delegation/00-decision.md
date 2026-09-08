@@ -301,7 +301,9 @@ audit_events
 
 `await`ed. If the insert throws: `console.error`, **503 `audit_unavailable`, no body**. This is the deliberate divergence from the first-party `after()` fail-open, and it must be written into `docs/accounts-security-spec.md` immediately beside the fail-open paragraph or the next reader will "fix" the inconsistency in the wrong direction. CI pins it: no `after(` in the `via` branch; the insert is `await`ed and precedes the response.
 
-**Hop 12 — burn, then answer.** `consumeTicket` runs _after_ the predicate said yes and _before_ the body is built, so a refusal she did not cause never costs her the ticket. One `UPDATE … WHERE consumed_at IS NULL RETURNING id`, so two concurrent requests cannot both win. Response body is `MedicalNotesResponse.parse(...)` — a closed `z.object()` that strips unknown keys.
+**Hop 12 — answer.** Response body is `MedicalNotesResponse.parse(...)` — a closed `z.object()` that strips unknown keys — with `Cache-Control: no-store`, because a medical response must not sit in any intermediary or browser cache.
+
+_(This hop **used to** burn the ticket here: "after the predicate said yes and before the body is built, so a refusal she did not cause never costs her the ticket." That is the F1 flaw. `consumed_at` is read as a returned column of the resolver's join, not a `WHERE` term, so N concurrent requests all see it unconsumed, all pass the predicate, and all disclose — one wins the final `UPDATE`, and the losers have already answered. **The claim now happens before the guard**; see `01-delegated-identity.md` §7.2.1 for the statement, the accepted cost that a refusal consumes the ticket, and the pooled-transaction alternative.)_
 
 **Two minutes later** the ticket is dead and cannot be renewed.
 

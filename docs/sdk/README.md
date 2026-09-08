@@ -35,16 +35,23 @@ auditing procedures, doc/process edits and the Camp 404 retrofit.
 
 ## The one-paragraph version
 
-An API key is a **ceiling, never a principal**: it is bound to a synthetic service user, and
-its effective rights are recomputed per request as `resolve(serviceUser) ∩ key.permissions`,
-so a demoted membership collapses its keys with no sweep job. Rights reach the client as a
+An API key is a **ceiling, never a principal**. It names no burner and on its own reaches
+nothing but public data; a request that can name one must also carry a **relay ticket**
+pointing at that burner's live session row, so effective rights are `ticket ∩ consent ∩
+ceiling` intersected with the END USER's live rights, recomputed every request. A demoted
+membership therefore collapses its keys with no sweep job. Rights reach the client as a
 **server-issued capability manifest** — a document produced by the predicates that already
 exist in `@quagga/core`, never a copy of those predicates. The published package therefore
-contains **no authorisation logic at all**: 49 closed scope strings, generated method stubs,
+contains **no authorisation logic at all**: 50 closed scope strings, generated method stubs,
 a manifest evaluator and response DTOs. `org-permissions.ts`, `project-permissions.ts` and
 `privacy.ts` stay here, stay FSL-1.1-ALv2, and are never published — because
 `org-permissions.ts:22-25` already records what a second source of truth for permissions
 costs. The local gate is developer experience; the server's 403 is the boundary.
+
+_(An earlier draft of this paragraph described a synthetic **service user** whose rights the
+key intersected. `delegation/00-decision.md` rejects that model outright — it deletes the
+service user, the `users.kind` column it needed, and the insider-issues-themselves-a-key
+path with it. The relay ticket above is the design.)_
 
 ## Provenance, and what has actually been verified
 
@@ -74,8 +81,13 @@ prior-art citations in the external research. Treat those as leads.
 
 ## What this investigation found that has nothing to do with the SDK
 
-The most valuable output is arguably a set of first-party defects the sweep turned up. They
-are listed in `06-review.md`; the sharpest is `apps/web/lib/medical-access.ts:215`, where
-`orgRankFromRole(actorOrgRole) ?? "org_staff"` fabricates a rank that
-`apps/org/lib/session.ts:230-234` treats as forbidden — two apps, one input, two answers, on
-a medical-notes path. Fixing that does not depend on any of this spec.
+The most valuable output is arguably a set of first-party defects the sweep turned up, listed
+in `06-review.md`. The sharpest is **fixed in this same branch**: `apps/web/lib/medical-access.ts`
+resolved `orgRankFromRole(actorOrgRole) ?? "org_staff"`, fabricating a rank that
+`apps/org/lib/session.ts` treats as forbidden — two apps, one input, two answers, on a
+medical-notes path. A null rank now skips the org branch entirely, and `strongestOrgRole`
+stops an ordinary org row overwriting an `engineer` and erasing its carve-out.
+
+Two remain open and depend on nothing here: `REGISTRATION_CONTACT_KEYS` is still a
+module-private `const` inside `apps/org`, and the unconditional PII stripper
+`auth-platform-spec.md` §9.4 decision 2 committed to is still unbuilt.
