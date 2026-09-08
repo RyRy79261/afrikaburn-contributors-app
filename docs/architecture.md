@@ -159,6 +159,11 @@ declarations). `auditEvents` spans all four.
 - **Sessions are per-app.** One account pool, but cookies do not cross
   `*.vercel.app` — the Public Suffix List forbids it. Shared sign-on needs a
   custom apex; see [`auth-platform-spec.md`](auth-platform-spec.md).
+- **There is no public API.** Every route handler under `apps/*/app/api/` is better-auth,
+  blob upload, the in-app reporter or a sweep — all data access is server actions and
+  server components behind cookie sessions. An external, key-authenticated `/v1` surface is
+  specified in [`docs/sdk/`](sdk/README.md) and **is not built**; when it lands it is the
+  first inbound authenticated arrow on the diagram above.
 - **Personal data has classes**, enforced in `@quagga/core`: some Bio fields can
   never be public, medical notes require recorded consent, and reads of them are
   audited. A copy of one of those predicates outside `core` is the same risk as

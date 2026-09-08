@@ -136,6 +136,30 @@ list`, then `git worktree remove` what has finished.
    authz predicates live in `@quagga/core` and are enforced server-side (UI hiding is
    never the security boundary).
 8. Vitest covers core logic; add regression tests with every bug fix.
+9. **An API key is a ceiling, never a principal.** Nothing under `/v1` exists yet — the
+   surface is specified in [`docs/sdk/delegation/`](docs/sdk/README.md) — but the law is
+   here before the code because it constrains what may be built. Every `/v1` request that
+   can name a burner resolves, live, on every request:
+
+   ```
+   effective = resolve(END USER, live from the DB)
+             ∩ key.ceiling
+             ∩ scopes that end user consented to THIS integration
+   ```
+
+   Two stages, different in kind. The scope intersection is set maths and can only ever
+   **subtract**; the decision is still taken by the unchanged `@quagga/core` predicates over
+   an actor loaded live for the end user. Nothing widens.
+
+   **Presence is proven, never asserted.** The end user's presence reaches `/v1` as a relay
+   ticket whose foreign key is their live `session.id` (`packages/db/src/schema.ts:376-396`),
+   minted only behind `requireCampUser()` on our own origin by a click on a consent screen we
+   render. **No endpoint accepts a caller-supplied subject identifier, in any form, at any
+   version.**
+
+   `org:*` is **not delegable** — not "not issued by default", not expressible. Org-rank
+   authority is the console's authority, and a burner clicking a consent screen is not the
+   party whose rights are at stake for an org capability.
 
 ## Product laws (violating these is a bug, not a style choice)
 
