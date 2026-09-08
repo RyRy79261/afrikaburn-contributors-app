@@ -1,5 +1,13 @@
 # First deployment runbook
 
+| Field | Value |
+|---|---|
+| **Category** | Operational |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | N/A — operational, not spec-derived |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 The codebase is deliberately deploy-ready-but-unconfigured: all three apps build and
 boot with zero env vars. **Migrations apply automatically on deploy** — every app's
 `build` runs `db:migrate:deploy` before `next build`, so as soon as the DB env is set

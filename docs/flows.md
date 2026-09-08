@@ -1,5 +1,13 @@
 # User flows
 
+| Field | Value |
+|---|---|
+| **Category** | Architecture |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | Partial — `ONBOARD-*`, `REG-*`, `SEC-*` (journeys tied to code, not to individual requirements; the bug-reporter flow has no App Spec counterpart at all) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 The journeys the product exists for, as they actually behave. Each names the
 code that enforces it, so a diagram that drifts can be caught against a file.
 

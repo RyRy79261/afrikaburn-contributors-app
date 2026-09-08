@@ -328,14 +328,6 @@ export const PERSONAS: Record<PersonaKind, PersonaSpec> = {
   },
 };
 
-/** Every distinct capability, for a completeness meta-test. */
-export const ALL_CAPABILITIES: Capability[] = Object.values(C);
-
-/** Look up a persona's spec. */
-export function persona(kind: PersonaKind): PersonaSpec {
-  return PERSONAS[kind];
-}
-
 /** Iterate every (persona, forbidden capability) pair — the negative-path source. */
 export function forbiddenMatrix(): Array<{
   kind: PersonaKind;

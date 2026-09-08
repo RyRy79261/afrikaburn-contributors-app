@@ -2,7 +2,9 @@
 
 Operating guide for AI agents (and humans) in this repo, distilled from how the
 project actually runs. `README.md` has the product overview; the `docs/` specs are the
-feature contracts. **Where anything conflicts, `docs/build-spec.md` wins for
+feature contracts. **The App Specification (external, authoritative — see
+[`docs/README.md`](docs/README.md)) governs what the product should do; where
+anything in this repo conflicts, `docs/build-spec.md` wins for
 engineering and this file wins for process.**
 
 ## Read this first
@@ -25,7 +27,8 @@ If you find a security or privacy problem, report it privately — `SECURITY.md`
 
 **Human contributors start at `CONTRIBUTING.md`**; it covers setup, the commit
 convention and the designer workflow. This file is the operating guide for agents and
-wins on process where the two overlap.
+wins on process where the two overlap. (The full precedence chain, App Spec included,
+is in [`docs/README.md`](docs/README.md).)
 
 ## What this is
 
@@ -297,6 +300,15 @@ So, in this repo:
   regression tests before pushing. This has caught real majors every time it ran.
 - **Orchestration reports**: structured-output reports are pure JSON fields — never
   embed XML-ish tags inside strings (a known repeated failure mode).
+- **Write the pull request short, and put the long version in the fold.** The
+  template's sections want a few lines each; it ends with a collapsed
+  **Supplementary context** block that has no length limit. Reasoning, rejected
+  approaches, the long quote from the spec go THERE — not cut, moved. This is a
+  standing failure mode of agent-written PRs specifically: a thorough description
+  of the work buries **Database** and **Risk**, which are the two things the
+  reviewer of a deployed product actually needs, and the volume reads as
+  confidence rather than as the padding it is. `None.` under Database and
+  Expected follow-ups is a real answer and says you checked.
 - **Issues are labelled, and two labels change how you read one.** The taxonomy and
   the triage routine are `docs/triage.md`. `needs-triage` means nobody has reviewed
   it — the stated `type:` may be wrong. `source: in-app` means the in-app reporter

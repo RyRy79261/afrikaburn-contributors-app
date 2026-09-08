@@ -1,33 +1,21 @@
 // Questionnaire engine (build-spec §Schema questionnaire spine, ported 1:1 from
 // Camp 404). The DB stores a `required_actions` row keyed by `action_key`; this
-// module is the CODE-SIDE registry that maps a key to its definition, plus the
-// pure gating helpers that decide "what blocks this user next". Routing keys →
-// concrete routes stays in apps/web (it owns its route table); everything here
-// is pure and unit-testable.
+// module holds the pure gating helpers that decide "what blocks this user next".
+// Routing keys → concrete routes stays in apps/web (it owns its route table);
+// everything here is pure and unit-testable.
+//
+// This module also once held a code-side registry mapping an action key to its
+// definition builder (`CODE_QUESTIONNAIRES` / `getCodeQuestionnaire` /
+// `isCodeQuestionnaire`). Nothing ever resolved a questionnaire through it —
+// apps/web calls `buildBurnerBioQuestionnaire` directly and treats
+// `BURNER_BIO_ACTION_KEY` as a plain string — so it was removed. Add it back
+// only when a SECOND code questionnaire makes the indirection buy something.
 
-import type { AudienceSpec, Questionnaire } from "@quagga/types";
-import { buildBurnerBioQuestionnaire } from "./bio";
+import type { AudienceSpec } from "@quagga/types";
 
 /** The Burner Bio's `required_actions.action_key` — the one code questionnaire
  * in the MVP. Onboarding is gated on this being completed. */
 export const BURNER_BIO_ACTION_KEY = "burner_bio";
-
-/** Code-side registry: action key → definition builder. Future gated flows add
- * an entry here (BUILDER questionnaires instead live in the DB). */
-const CODE_QUESTIONNAIRES: Record<string, () => Questionnaire> = {
-  [BURNER_BIO_ACTION_KEY]: buildBurnerBioQuestionnaire,
-};
-
-/** Resolve a code questionnaire definition by key, or null if unregistered. */
-export function getCodeQuestionnaire(key: string): Questionnaire | null {
-  const build = CODE_QUESTIONNAIRES[key];
-  return build ? build() : null;
-}
-
-/** Whether a key names a registered code questionnaire. */
-export function isCodeQuestionnaire(key: string): boolean {
-  return key in CODE_QUESTIONNAIRES;
-}
 
 /** Minimal shape the gating helpers need from a `required_actions` row. */
 export interface RequiredActionLike {
@@ -46,13 +34,6 @@ export function firstBlockingAction<T extends RequiredActionLike>(
     if (action.blocking && action.status === "pending") return action;
   }
   return null;
-}
-
-/** True when at least one pending blocking action exists. */
-export function hasPendingBlocker(
-  actions: readonly RequiredActionLike[],
-): boolean {
-  return firstBlockingAction(actions) !== null;
 }
 
 /**

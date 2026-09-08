@@ -23,11 +23,6 @@ function withEditor<T>(markdown: string, read: (editor: Editor) => T): T {
   }
 }
 
-/** Parse markdown → schema-constrained HTML (safe: only known nodes/marks). */
-export function markdownToHtml(markdown: string): string {
-  return withEditor(markdown, (editor) => editor.getHTML());
-}
-
 /** Normalise markdown by parsing then re-serialising through the schema. */
 export function roundTripMarkdown(markdown: string): string {
   return withEditor(markdown, (editor) =>

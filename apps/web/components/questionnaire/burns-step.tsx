@@ -25,19 +25,6 @@ export interface BioExtrasState {
   greenDotTraining: boolean;
 }
 
-/** Build a fresh, empty extras state (used when a bio has no v3 data yet). */
-export function emptyBioExtrasState(): BioExtrasState {
-  return {
-    about: "",
-    campHistory: [],
-    volunteeringInterests: [],
-    volunteeringOther: "",
-    rangerTraining: false,
-    rangerCurious: false,
-    greenDotTraining: false,
-  };
-}
-
 const RANGERS_FB_URL = "https://www.facebook.com/afrikaburn.rangers/";
 const RANGERS_MAILTO = "mailto:rangers@afrikaburn.com";
 

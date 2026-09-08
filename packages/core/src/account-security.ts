@@ -27,13 +27,6 @@ export const PASSWORD_MIN_LENGTH = 15;
 /** NIST "SHALL accept": at least 64 characters. We take the whole 64. */
 export const PASSWORD_MAX_LENGTH = 64;
 
-/**
- * The single piece of copy shown under the password field. One sentence, states
- * the rule positively, and does NOT enumerate composition requirements (there
- * are none).
- */
-export const PASSWORD_HELP_TEXT = `At least ${PASSWORD_MIN_LENGTH} characters. A short sentence you'll remember beats a mangled word — spaces are fine, and you can paste from a password manager.`;
-
 /** Length-based strength bands. Deliberately not entropy theatre. */
 export type PasswordStrength = "too_short" | "fair" | "good" | "strong";
 

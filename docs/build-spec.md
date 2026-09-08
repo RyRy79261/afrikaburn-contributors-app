@@ -1,7 +1,17 @@
 # Build Spec — the engineering contract
 
-The engineering contract. Where any other document conflicts with it, this
-file wins; where this file and `AGENTS.md` conflict, this one wins for engineering and
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | RFC 2119 / RFC 8174 applies |
+| **Requirement IDs** | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*` (the engineering contract implements requirements scattered across many App Spec sections; not individually audited here) |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
+The engineering contract. The **App Specification** (external, authoritative —
+see [`README.md`](README.md)) governs what the product should do; where any
+other document in this repo conflicts with this file, this file wins; where
+this file and `AGENTS.md` conflict, this one wins for engineering and
 `AGENTS.md` wins for process. Camp 404 (github.com/ryry79261/camp-404) is the
 conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries.
 
@@ -15,14 +25,14 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
    back to a pooled URL** — session advisory locks do not hold on PgBouncer. It also
    **bootstraps reference data when `editions` is empty**, so a fresh database comes up
    usable; it is a bootstrap, not a sync, and never re-asserts rows over an organiser's
-   edits. A migration is never hand-edited, never regenerated, and never applied by a
+   edits. A migration MUST NOT be hand-edited, regenerated, or applied by a
    person against production.
 2. Package namespace **`@quagga/`**. Node ≥ 22, pnpm 10, Turborepo.
 3. Stack: Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui, Drizzle + Neon (HTTP driver in handlers, pooled for scripts), **self-hosted Better Auth 1.6.25** mounted per app from `@quagga/auth` at `/api/auth/[...all]` (managed Neon Auth was removed — migration 0013), Resend for email, Vercel Blob for uploads.
-4. Apps must **boot without env/DB** to a landing page (graceful "not configured" state); DB-backed routes may error clearly but must not crash the build.
-5. Schema below is **frozen** — feature agents do not add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
+4. Apps MUST boot without env/DB to a landing page (graceful "not configured" state); DB-backed routes MAY error clearly but MUST NOT crash the build.
+5. Schema below is **frozen** — feature agents MUST NOT add/alter tables. `packages/db/src/schema.ts` is the single source of truth; migrations are generated, append-only, never hand-edited.
 6. TypeScript strict; Zod validation at every boundary; no `any` in committed code. Vitest for core logic. CI gate: `pnpm turbo run lint typecheck test build`.
-   6b. **Prefer prebuilt components over hand-rolling.** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
+   6b. **Prebuilt components SHOULD be preferred over hand-rolling.** For any solved UI problem (phone inputs, date pickers, comboboxes, OTP fields…), use an existing package — preferably from the shadcn ecosystem/registry — and restyle it to our tokens. Hand-rolling complex, already-solved components is a defect. Bio field spec: years-attended is a multi-select of specific years (2007–2026, 2020/21 disabled "no burn"); phone uses an international phone input with country selector; emergency contacts are TWO (on-site + off-site), each with separate name and number fields, all hard-locked private.
 7. UI: **"Tankwa Night"** — brand colours sampled from the afrikaburn.org Elementor kit. Dark-mode-first app shell dressed in AfrikaBurn's real brand colours; light supported via a `.light` class on `<html>`.
    - **Brand ramp** (raw, usable directly as e.g. `text-ab-teal`): teal `#2D7696`, teal-deep `#235C75`, apricot `#F4B672`, peach `#FFBC7D`, sage `#B6D090`, olive `#7D9953`, charcoal `#333333`, warm white `#FFFAF2`.
    - **Dark semantic tokens (default):** background `#17191B`, foreground `#F4F0E8`, card/popover `#1F2326`, muted `#262B2F`, muted-foreground `#ADB6B3`, border/input `#323A3F`, primary `#2D7696` (fg `#F4F0E8`), secondary `#26333B` (fg `#DCE8ED`), accent `#F4B672` (fg `#17191B`), ring `#2D7696`, destructive `#C24438` (fg `#F4F0E8`), success `#B6D090` (fg `#17191B`), warning `#F4B672` (fg `#17191B`). `--radius` `0.5rem`.
@@ -30,7 +40,7 @@ conventional reference — workspace layout, drizzle patterns, Zod-at-boundaries
    - **`.org-accent` skin** (org app applies it on `<html>` alongside the theme): primary → `#F4B672` (fg `#17191B`), ring → `#F4B672`; in `.light.org-accent` primary → `#D98A2B` (fg `#332006`, dark for AA) — so the console's interactive colour is apricot, the participant app's teal.
    - **Status mapping:** approved → success (sage), changes_requested → warning (apricot), rejected → destructive, submitted/under_review → primary (teal), draft → muted/outline.
    - **Typography:** Montserrat via `next/font/google` (weights 500/600/700/800, `--font-brand`, display swap). Body 500; `@layer base` treats `h1,h2` as 800 UPPERCASE (`letter-spacing 0.01em`) and `h3` as 700.
-   - **Identity motif:** `QuiltBand` — a repeating band of brand-triad diamonds on each app-shell header top edge, spanning the **full page width edge-to-edge**, plus landing/auth dividers. **The real AfrikaBurn logo and San-hand emblem are approved for use** (assets in `design/brand/`): nav carries the 282×40 wordmark banner; favicons may adopt the emblem (current original diamond favicons remain until swapped). Photography of identifiable people stays forbidden.
+   - **Identity motif:** `QuiltBand` — a repeating band of brand-triad diamonds on each app-shell header top edge, spanning the **full page width edge-to-edge**, plus landing/auth dividers. **The real AfrikaBurn logo and San-hand emblem are approved for use** (assets in `design/brand/`): nav carries the 282×40 wordmark banner; favicons MAY adopt the emblem (current original diamond favicons remain until swapped). Photography of identifiable people MUST NOT be used.
    - Non-corporate, warm, no lorem ipsum anywhere — realistic copy.
 
 ## Monorepo layout
@@ -56,12 +66,12 @@ and no single proxy implements them. `NEON_LOCAL_PROXY=1` points both drivers at
 `pnpm e2e:local` brings that up from cold, migrates, seeds, boots all three apps and
 runs the persona suite.
 
-## Environment variables (`.env.example` at root; all optional for boot)
+## Environment variables (`.env.example` at root; all OPTIONAL for boot)
 
 `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET` (self-hosted Better
 Auth — identical on all three apps), `BETTER_AUTH_URL` (per app),
-`BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION` (optional override),
-`AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` (optional — RAISE the limiter's
+`BETTER_AUTH_REQUIRE_EMAIL_VERIFICATION` (OPTIONAL override),
+`AUTH_RATE_LIMIT_WINDOW_SECONDS` / `AUTH_RATE_LIMIT_MAX` (OPTIONAL — RAISE the limiter's
 ceiling for a test deployment; leave unset in production), `GOOGLE_CLIENT_ID`,
 `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `GOD_EMAILS` (comma list — grants god on
 first login to a VERIFIED address), `BLOB_READ_WRITE_TOKEN`, `PGCRYPTO_KEY`. Update
@@ -79,19 +89,19 @@ without ever printing a value.
   NOT live on `burner_bios.display_name` — bios are per-edition, so a handle there
   would let one person hold a different name every year and "unique" would mean
   nothing. All rules live once in `@quagga/core` `username.ts`: charset, the reserved
-  list (nobody may take `admin`/`afrikaburn` or shadow a route segment), and the
+  list (`admin`/`afrikaburn` MUST NOT be claimed, and a route segment MUST NOT be shadowed), and the
   neutral `UNNAMED_BURNER` fallback — which is never a legal name and never an email,
   since both are private by default and either as a fallback would be a privacy
   incident.
 
   Consequently **`isBioComplete` keys on `burner_bios.completed_at`** — the burner
   reached the end of the flow and saved — not on any name. Completion is an act, not
-  a filled field; nothing inside the bio is mandatory. _(Marked PROVISIONAL at its
+  a filled field; no field inside the bio is REQUIRED. _(Marked PROVISIONAL at its
   definition: if a real identity anchor is ever wanted, it is the legal name, since
   the ID/passport exist to match a person to their ticket. Do not invent a third
   field.)_
 
-- `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these cannot be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are _hard-locked_ with no access path; **medical is _safety-visible_** — never public, but visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, never in lists or exports).
+- `burner_bios` — user × edition. Field set mirrored from Camp 404's burner profile (read its schema.ts) + `privacy_flags` jsonb (per-field public/private). **Always-private fields** (`id_number`, `passport_number`, phone, emergency contact, medical): enforced in `@quagga/core` — flags for these MUST NOT be set public, ever. pgcrypto-encrypt id/passport **and medical** columns. Two classes (see AGENTS.md §Privacy classes + `docs/accounts-security-spec.md`): the first four are _hard-locked_ with no access path; **medical is _safety-visible_** — MUST NOT be public, but MAY be visible to the burner's own camp leads and org staff on a member DETAIL view (consented at entry via the field's label, audited on read, MUST NOT appear in lists or exports).
 - `profile_keys` — user_id, public_key, encrypted_private_key, created_at. Generated server-side at onboarding; used for nothing yet except future QR attestations.
 - `groups` — kind enum (`org|theme_camp|artwork|mutant_vehicle`), name, `name_normalized` (unique per kind, case/space/punct-insensitive), description (60-word limit for camps), joinability enum (`open|invite_only`), `visibility` reserved column (default `default`), created_by. Exactly one seeded `org` row ("AfrikaBurn").
 - `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group, and on it the enum is **the console DOOR, not the rights** (see apps/org routes). **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label) — and is the anti-lockout ANCHOR. _(Migration 0017's free-text `department` label + `department_lead` flag were DROPPED by 0018: departments are rows now, and two department vocabularies would be the parallel source of truth org roles v1 exists to remove.)_
@@ -131,22 +141,22 @@ key fingerprint display).
 
 ## apps/org routes
 
-Auth gate: only an ORG RANK (god / org_staff / engineer) may enter; everyone else sees a
+Auth gate: only an ORG RANK (god / org_staff / engineer) MAY enter; everyone else MUST see a
 polite wall. **Clearing that gate is the DOOR, not the rights** (org roles v1, migration
 0018). Roles are created and assigned by a System manager rather than hardcoded, with a
-permanent LEAD and MEMBER role per department that cannot be deleted but whose rights are
+permanent LEAD and MEMBER role per department that MUST NOT be deleted but whose rights are
 editable.
 
 What an account may do is the union of the ORG ROLES assigned to it, resolved by the ONE
 resolver in `@quagga/core` `org-permissions` (`orgCan` / `orgCanIn`), which both the gate
-and the UI read so a hidden control and a refused action can never disagree. The model
+and the UI read so a hidden control and a refused action MUST NOT disagree. The model
 deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental model:
 
-- **`org_departments`** — created by a System manager, never hardcoded (the org still
+- **`org_departments`** — created by a System manager; MUST NOT be hardcoded (the org still
   cannot say how many there are). Creating one SEEDS its permanent LEAD and MEMBER roles;
   deleting it cascades them away.
 - **`org_department_domains`** (migration 0019) — WHAT each department owns. A supplier
-  lead may read the personal information of anything supply-RELATED, and the operative
+  lead MAY read the personal information of anything supply-RELATED, and the operative
   word is _related_: a department owns DOMAIN KEYS — subject areas — rather
   than tagged rows, and an entity's department is whichever department owns the domain it
   lives in. `domain` is the PRIMARY KEY, so exactly one department owns each; claiming one
@@ -172,11 +182,11 @@ not law:
 | `write` — reviews, standings, bulletins, sends | ✅                 | ✅                 | ✅                     |
 | `delete` — destructive removals                | ❌                 | ✅                 | ✅                     |
 | `manage_camp_categories`                       | ❌                 | ❌                 | ✅                     |
-| `manage_accounts` — grant access, assign roles | ❌ never grantable | ❌ never grantable | ✅                     |
+| `manage_accounts` — grant access, assign roles | ❌ MUST NOT be granted | ❌ MUST NOT be granted | ✅                     |
 | `read_system` — the System panel (`/system`)   | ✅                 | ❌                 | ✅                     |
 
-**A System manager may edit any of those ticks** — with ONE ceiling
-with the tier correction below: the `engineer` RANK never resolves
+**A System manager MAY edit any of those ticks** — with ONE ceiling
+with the tier correction below: the `engineer` RANK MUST NOT resolve
 `read_personal_information` or `delete`, whatever role it is given
 (`ENGINEER_RANK_CARVE_OUTS`). Every other tick is data, and every edit is audited
 (`org.role.update` records before/after).
@@ -186,7 +196,7 @@ with the tier correction below: the `engineer` RANK never resolves
 | rank        | reach                                                       | depth                                            |
 | ----------- | ----------------------------------------------------------- | ------------------------------------------------ |
 | `org_staff` | the departments whose roles they hold (org-wide roles: all) | whatever their roles grant                       |
-| `engineer`  | EVERY department, always — they run the system              | **never** personal information, **never** delete |
+| `engineer`  | EVERY department, always — they run the system              | **MUST NOT** resolve personal information, **MUST NOT** resolve delete |
 | `god`       | everything                                                  | everything, whatever any row says                |
 
 So the engineer tier is **not a superset of org_staff**: broader in reach, deliberately
@@ -202,13 +212,13 @@ every department at once.
 
 1. **`memberships.role = 'god'` is the anchor.** A System manager resolves every
    capability whatever the role rows say — with zero roles, or holding a role that grants
-   nothing. No table edit can define them out of existence, and the GOD_EMAILS bootstrap
+   nothing. A table edit MUST NOT be able to define them out of existence, and the GOD_EMAILS bootstrap
    still works against an empty `org_roles`.
-2. **The sole System manager cannot be removed or demoted.** A `god` membership is
+2. **The sole System manager MUST NOT be removed or demoted.** A `god` membership is
    untouchable from the accounts panel in either direction, and `god` is not in the
    grantable set.
 3. **Only a System manager manages departments, roles or assignments** — guarded on the
-   anchor (`requireSystemManager`), never on a capability, because this is the surface that
+   anchor (`requireSystemManager`); MUST NOT be guarded on a capability, because this is the surface that
    edits capabilities. `manage_accounts` is refused to EVERY role by the resolver itself,
    so even a hand-written row cannot escalate.
 4. **Fail closed.** An account with the door and no roles clears the gate and resolves
@@ -219,7 +229,7 @@ a department grants its scoped capabilities only for what that department OWNS. 
 questions, three functions, and using the wrong one is the whole hazard: `orgCan` asks "may
 they, anywhere?" (the right question for a nav entry), `orgCanIn(actor, cap, departmentId)`
 asks "may they, in this department?", and `orgCanInDomain(actor, cap, domain)` is what
-guards and queries actually ask — a call site knows which screen it is on, never a
+guards and queries actually ask — a call site MUST key on which screen it is on, not on a
 department id (which is data a System manager can change). A null-department role is
 org-wide; a domain nobody owns is reachable only by an org-wide role; a department that
 owns nothing makes every role scoped to it grant nothing, and the console says so
@@ -241,7 +251,7 @@ into a role that looks granted and does nothing.
 need not nest. Any check shaped like `rank >= org_staff` is wrong in both directions — ask
 `orgCan`.
 
-**Personal information is enforced at the QUERY, PER DOMAIN, never in the JSX.** Every org
+**Personal information MUST be enforced at the QUERY, PER DOMAIN; it MUST NOT be enforced in the JSX.** Every org
 query returning a person resolves `canReadPersonalInformationIn(actor, domain)` before its
 select, naming the part of the console it serves: `accounts`, `registrations`, `suppliers`,
 `questionnaires`, `audit`.
@@ -256,8 +266,8 @@ medical-access audit panel is withheld whole, because a `bio.medical.view` row o
 when its subject HAS notes, making the list a census of who has disclosed. Questionnaire
 RESULTS are refused for the same reason. **The medical predicate reads the same resolved
 capability** (`MedicalAccessContext.actorOrgPersonalInformation`) in both apps, so who the
-org's safety tier is has one definition — a console door with no roles is not it. Access is
-never self-service: the door (`engineer`/`org_staff`) and every role are granted by a
+org's safety tier is has one definition — a console door with no roles is not it. Access
+MUST NOT be self-service: the door (`engineer`/`org_staff`) and every role are granted by a
 System manager; `god` comes solely from a verified `GOD_EMAILS` address.
 
 `/` overview · `/accounts` (search users; the System manager grants/removes console access
@@ -291,7 +301,7 @@ file to read. Four sections:
   calls_, including the exact sentence a deploy would fail with; whether reference data has
   ever been seeded; auth secret, Resend, blob and `PGCRYPTO_KEY` presence.
 - **Security controls** — what the auth stack is _actually_ enforcing, derived from
-  @quagga/auth's own resolvers so the page can never report a rule the stack is not
+  @quagga/auth's own resolvers so the page MUST NOT report a rule the stack is not
   applying: email verification and **why** (derived from `RESEND_API_KEY`, never a switch
   someone forgot), the `AUTH_RATE_LIMIT_*` ceiling, 2FA/passkey availability and passkey
   scope, session lifetime _including the cookie-cache caveat on revocation_, SSO cookie
@@ -307,9 +317,9 @@ file to read. Four sections:
 
 Editing what a role may do _is_ "god level account management", so it lives in this panel
 rather than on the nav bar. **Two gates, deliberately different**: READING it needs
-`read_system` (an engineer may look — the permission model is this deployment's
+`read_system` (an engineer MAY look — the permission model is this deployment's
 configuration, the same class of fact as the auth settings beside it), while CHANGING
-anything needs the **`god` anchor**, never a capability, because this is the surface that
+anything needs the **`god` anchor**; it MUST NOT be gated on a capability, because this is the surface that
 edits capabilities. Every action re-checks `requireSystemManager()` server-side; the
 missing buttons are a courtesy. The one thing a reader does not merely have hidden is the
 deletion-impact data — it carries the affected people's email addresses, so it is **not
@@ -322,9 +332,9 @@ key — someone here is deciding what a colleague can destroy:
   (the seeded lead/member pair AND any custom role scoped to it), names _every person_ who
   loses one, and counts the ones who would be left holding nothing at all ("they will keep
   console access and find it empty"). Nobody is stripped silently.
-- **Roles** — org-wide first, then grouped by department. A permanent role renders with no
+- **Roles** — org-wide first, then grouped by department. A permanent role MUST render with no
   delete control anywhere and the reason in words ("Suppliers needs a lead and a member, so
-  this role exists as long as the department does"), never a disabled button. The rights
+  this role exists as long as the department does"); it MUST NOT render as a disabled button. The rights
   editor is a checklist of consequences — "permanently removes a supplier and everything
   hanging off them… there is no undo", not `delete: true` — and it resolves the draft back
   before saving ("someone whose only role is this can…"). Deleting a custom role is its own
@@ -342,15 +352,15 @@ key — someone here is deciding what a colleague can destroy:
   deployment is in and a surprise if nobody says it.
 
 The union arithmetic is `summarizeOrgActor` in @quagga/core: **one pure function** behind
-the table cell, the dialog preview and the editor preview, so the console cannot describe
+the table cell, the dialog preview and the editor preview, so the console MUST NOT describe
 an access it would refuse. Every scoped grant it reports carries the DOMAINS it reaches, so
 a scope with nothing behind it renders as "in Safety only — which owns no part of the
 console, so this reaches nothing" rather than as access.
 
-**It never prints a secret** — only whether one is set, and what follows. The single
+**It MUST NOT print a secret** — only whether one is set, and what follows. The single
 deliberate exception is a database _hostname_, parsed out so a password in the connection
-string cannot come with it. `GOD_EMAILS` is reported as a **count**: those are people's
-email addresses and an engineer never receives one. A unit test seeds every credential env
+string MUST NOT come with it. `GOD_EMAILS` is reported as a **count**: those are people's
+email addresses and an engineer MUST NOT receive one. A unit test seeds every credential env
 var with a marker and asserts no marker survives into any rendered string.
 
 **The frame exception is paid off.** This page shipped ahead of its frame —
@@ -390,13 +400,13 @@ works offline) with their per-edition onboarding step maps and `user_id` **null*
 real supplier can self-register and claim the row by email overlap · one org-authored
 questionnaire **template** (definition only — no activation, no audience, no responses).
 
-**Never seeded:** users, burner bios, `theme_camp`/`artwork`/`mutant_vehicle` groups,
+**MUST NOT be seeded:** users, burner bios, `theme_camp`/`artwork`/`mutant_vehicle` groups,
 memberships, invites, registrations, supplier declarations, section reviews,
 questionnaire activations/required actions/responses, notifications, bulletins, audit
 events, supplier notes, payments.
 
 An empty directory, registrations queue and status board on a fresh database are the
-**correct** first-boot state. Close that gap with honest empty states, never a seeded row.
+**correct** first-boot state. Close that gap with honest empty states — a seeded row MUST NOT be used.
 
 ## Core logic that MUST have vitest coverage (`packages/core`)
 
@@ -435,7 +445,7 @@ was on this list when the list meant "no design tooling"; that changed.)_
   Late night 🌙 · Quiet camp 🤫 · Inclusive space 🌈.
   (Family-friendly, food-gifting, operating-hours, and sound level already exist as
   registration data — categories complement rather than duplicate them; the directory
-  may ALSO filter on those registration-derived facts, e.g. family-friendly comes free.)
+  MAY also filter on those registration-derived facts, e.g. family-friendly comes free.)
 
 ## Org stats dashboard — the console landing page
 
@@ -447,8 +457,8 @@ coverage across registered camps (assigned vs outstanding), supplier onboarding
 progress distribution + standings, MV/art registrations when they exist, recent
 activity feed (audit events). Time-series where meaningful (registrations over the
 weeks). Charts follow the dataviz standards (load the dataviz skill before authoring
-any chart). This page IS the org landing — glanceable, no scrolling required for the
-headline numbers.
+any chart). This page IS the org landing — glanceable; the headline numbers MUST be
+visible without scrolling.
 
 ## Notifications & bulletins
 

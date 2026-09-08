@@ -1,5 +1,13 @@
 # Requirements Synthesis — AfrikaBurn Contributors App
 
+| Field | Value |
+|---|---|
+| **Category** | Planning |
+| **Doc status** | Historical — this was the requirements-gathering document before the App Specification existed; it has been superseded as an authoritative source by the App Specification itself and is retained for historical rationale only |
+| **Normative language** | Descriptive only |
+| **Requirement IDs** | N/A — superseded as an authoritative source by the App Specification |
+| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+
 _Correlated from all source documents. Plain-text/markdown extractions live in
 [`docs/sources/`](sources/); original PDFs/docx at the repo root. The `AfrikaBurn App/`
 folder is a byte-identical duplicate of the root documents (verified by checksum) and can

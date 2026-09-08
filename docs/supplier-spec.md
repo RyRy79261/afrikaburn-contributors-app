@@ -1,5 +1,13 @@
 # Supplier Portal & Org Supplier Standing — Feature Spec
 
+| Field | Value |
+|---|---|
+| **Category** | Engineering Spec |
+| **Doc status** | Active |
+| **Normative language** | Descriptive only — the deep supplier onboarding and standing workflow has no App Spec counterpart to derive normative requirements from |
+| **Requirement IDs** | Partial — `PNP-005`, `REG-011` (supplier declarations in registration; the deep onboarding/standing workflow has no App Spec counterpart) |
+| **Owner / Updated** | Ryan, 2026-08-05 |
+
 _Ryan, 24 Jul 2026. Suppliers get their own portal with a real onboarding; the org sees
 exactly three things about any supplier: **did they onboard properly, what standing are
 they in, and the notes trail** (infractions/blessings). The `source` field

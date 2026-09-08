@@ -5,8 +5,7 @@
   "type": "module",
   "main": "index.js",
   "files": [
-    "index.js",
-    "next.js"
+    "index.js"
   ],
   "dependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,30 +1,13 @@
+// Org-specific badges only. Registration status is NOT one of them — that
+// vocabulary lives once, in @quagga/ui's `StatusBadge`, which every org screen
+// already imports. A local copy of the status → variant → label map used to sit
+// here with no callers; two sources of truth for a status vocabulary the
+// build-spec pins is exactly the drift worth preventing.
 import { Badge, type BadgeProps } from "@quagga/ui/components/badge";
 import { standingLabel, standingTone } from "@quagga/core";
-import type { RegistrationStatus, SupplierStanding } from "@quagga/types";
+import type { SupplierStanding } from "@quagga/types";
 
 type Variant = BadgeProps["variant"];
-
-const REGISTRATION_STYLE: Record<
-  RegistrationStatus,
-  { label: string; variant: Variant }
-> = {
-  draft: { label: "Draft", variant: "outline" },
-  submitted: { label: "Submitted", variant: "default" },
-  under_review: { label: "Under review", variant: "default" },
-  changes_requested: { label: "Changes requested", variant: "warning" },
-  approved: { label: "Approved", variant: "success" },
-  rejected: { label: "Rejected", variant: "destructive" },
-  withdrawn: { label: "Withdrawn", variant: "secondary" },
-};
-
-export function RegistrationStatusBadge({
-  status,
-}: {
-  status: RegistrationStatus;
-}) {
-  const s = REGISTRATION_STYLE[status];
-  return <Badge variant={s.variant}>{s.label}</Badge>;
-}
 
 export function SupplierStandingBadge({
   standing,

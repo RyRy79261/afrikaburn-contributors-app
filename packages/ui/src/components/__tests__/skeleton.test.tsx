@@ -6,10 +6,9 @@ import {
   SkeletonCardGrid,
   SkeletonField,
   SkeletonForm,
+  SkeletonHeading,
   SkeletonRegion,
   SkeletonRow,
-  SkeletonStats,
-  SkeletonTable,
   SkeletonText,
 } from "../skeleton";
 
@@ -81,15 +80,29 @@ describe("shape primitives", () => {
     expect(container.querySelectorAll(".animate-pulse")).toHaveLength(4);
   });
 
+  // `eyebrow` and `description` are opt-OUT: apps/web/app/(app)/loading.tsx
+  // renders <SkeletonHeading eyebrow={false} />, so the flags are load-bearing
+  // for the shape a real boundary shows. Both defaulted to rendering and had no
+  // test, which is how a heading placeholder silently stops matching its page.
+  it("SkeletonHeading renders eyebrow and description by default, and drops each on request", () => {
+    const { container, rerender } = render(<SkeletonHeading />);
+    // eyebrow + title + description.
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(3);
+
+    rerender(<SkeletonHeading eyebrow={false} />);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(2);
+
+    rerender(<SkeletonHeading eyebrow={false} description={false} />);
+    const bars = [...container.querySelectorAll(".animate-pulse")];
+    // The title bar is the one part that is never optional.
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.className).toContain("h-7");
+  });
+
   it("SkeletonCard renders a title bar plus the requested body lines", () => {
     const { container } = render(<SkeletonCard lines={4} />);
     // 1 title bar + 4 text bars.
     expect(container.querySelectorAll(".animate-pulse")).toHaveLength(5);
-  });
-
-  it("SkeletonTable renders the asked-for number of rows", () => {
-    const { container } = render(<SkeletonTable rows={6} columns={3} />);
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(6 * 3);
   });
 
   it("SkeletonCardGrid keeps the grid classes the page uses", () => {
@@ -109,15 +122,6 @@ describe("the composed shapes", () => {
   // The kit's whole justification is that a boundary shows the DESTINATION's
   // shape, so the counts ARE the behaviour: a stats strip that renders three
   // tiles in front of a four-tile dashboard makes the page jump on arrival.
-
-  it("SkeletonStats renders one tile per stat, four by default", () => {
-    const { container, rerender } = render(<SkeletonStats />);
-    // 4 tiles × (label bar + value bar).
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(8);
-
-    rerender(<SkeletonStats count={3} />);
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(6);
-  });
 
   it("SkeletonCardGrid defaults to six cards of two lines each", () => {
     const { container } = render(<SkeletonCardGrid />);
@@ -147,7 +151,7 @@ describe("the composed shapes", () => {
   it("keeps every pulse block out of the accessibility tree", () => {
     const { container } = render(
       <SkeletonRegion>
-        <SkeletonStats count={2} />
+        <SkeletonCardGrid cards={2} />
         <SkeletonForm fields={2} />
       </SkeletonRegion>,
     );

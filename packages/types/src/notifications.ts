@@ -24,9 +24,6 @@ export const NotificationKind = z.enum([
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
-/** All kinds, for iteration in tests + pickers. */
-export const NOTIFICATION_KINDS = NotificationKind.options;
-
 /**
  * A notification payload — the safe, already-projected copy that lands in an
  * inbox. Built ONLY by the @quagga/core payload builders, which never include

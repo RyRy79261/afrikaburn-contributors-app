@@ -1,6 +1,6 @@
 name: Design change
 description: A screen should look, read or behave differently
-labels: ["design"]
+labels: ["type: design", "needs-triage"]
 body:
   - type: markdown
     attributes:
