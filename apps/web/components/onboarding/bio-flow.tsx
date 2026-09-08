@@ -39,6 +39,10 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { toast } from "@quagga/ui/components/toast";
+import {
+  describedByForGroup,
+  fieldErrorFor,
+} from "@quagga/ui/lib/field-errors";
 import { focusFirstError } from "@quagga/ui/lib/focus-first-error";
 import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
@@ -673,10 +677,8 @@ function DetailsStep({
   // phone, and the identity document pairs a type with a number — the server
   // validates each half separately, so the Field's single error slot has to
   // speak for all of them or one half's refusal goes missing.
-  const fieldError = (...ids: string[]): string | undefined => {
-    const found = ids.map((id) => errors[id]).filter(Boolean);
-    return found.length > 0 ? found.join(" · ") : undefined;
-  };
+  const fieldError = (...ids: string[]): string | undefined =>
+    fieldErrorFor(errors, ...ids);
 
   // …AND THE SECOND CONTROL STILL HAS TO POINT AT THAT MESSAGE. `Field` ids its
   // message from its own `htmlFor` (`${htmlFor}-error` / `-help`), so a control
@@ -684,7 +686,7 @@ function DetailsStep({
   // element nothing renders. This keys on the GROUP and asks whether any of its
   // answers were refused.
   const groupDescribedBy = (fieldId: string, ...keys: string[]): string =>
-    keys.some((k) => errors[k]) ? `${fieldId}-error` : `${fieldId}-help`;
+    describedByForGroup(errors, fieldId, ...keys);
 
   return (
     <div className="flex flex-col gap-6">

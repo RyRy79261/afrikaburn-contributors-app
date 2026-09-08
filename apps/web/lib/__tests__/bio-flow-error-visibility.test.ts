@@ -218,7 +218,22 @@ describe("every server refusal reaches the burner's eyes", () => {
     expect(FLOW).toContain('fieldError("onsite.name", "onsite.phone")');
     expect(FLOW).toContain('fieldError("offsite.name", "offsite.phone")');
     expect(FLOW).toContain('fieldError("id.type", "id.number")');
-    // Both messages, not the first one found.
-    expect(FLOW).toContain('found.join(" · ")');
+
+    // WHAT THOSE CALLS COMPUTE IS NOT ASSERTED HERE, DELIBERATELY. This file
+    // can only read source. An earlier version of this very assertion checked
+    // that `found.join(" · ")` appeared in the component — and stayed green
+    // while the surrounding expression was gutted to
+    // `ids.map((id) => id).filter(() => false)`, which returned `undefined`
+    // for every field and rendered no inline refusal at all. A string being
+    // present proved nothing about what ran.
+    //
+    // So the computing half now lives in `@quagga/ui/lib/field-errors`, where
+    // `packages/ui/src/lib/__tests__/field-errors.test.ts` EXECUTES it — five
+    // mutants killed, that gutting among them. All this file has to hold is
+    // that the component still delegates there rather than growing its own
+    // copy again.
+    expect(FLOW).toContain('from "@quagga/ui/lib/field-errors"');
+    expect(FLOW).toContain("fieldErrorFor(errors, ...ids)");
+    expect(FLOW).toContain("describedByForGroup(errors, fieldId, ...keys)");
   });
 });
