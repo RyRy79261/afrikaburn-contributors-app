@@ -11,16 +11,16 @@ over every burner ([`../06-review.md`](../06-review.md) finding C1). Everything 
 
 ## Read in this order
 
-| Document                                                                     | What it settles                                                                  |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`00-decision.md`](00-decision.md)                                           | The architecture and its decisions table                                         |
-| [`01-delegated-identity.md`](01-delegated-identity.md)                       | The flow, the ticket, the three-way intersection — **the load-bearing document** |
-| [`02-audit-and-the-medical-path.md`](02-audit-and-the-medical-path.md)       | The audit vocabulary, the medical path end to end, subject access                |
-| [`03-security-measures.md`](03-security-measures.md)                         | Defence in depth, each measure tied to the file that implements it               |
-| [`04-security-auditing-procedures.md`](04-security-auditing-procedures.md)   | The recurring human process, checklists and incident runbooks                    |
-| [`05-docs-and-contribution-process.md`](05-docs-and-contribution-process.md) | ~42 literal, copy-paste-ready edits across 13 files — **not yet applied**        |
-| [`06-camp-404-integration.md`](06-camp-404-integration.md)                   | The retrofit guide, written for Camp 404's developer                             |
-| [`07-review.md`](07-review.md)                                               | Security (15 findings), implementability, completeness — **read F1 first**       |
+| Document                                                                     | What it settles                                                                          |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [`00-decision.md`](00-decision.md)                                           | The architecture and its decisions table                                                 |
+| [`01-delegated-identity.md`](01-delegated-identity.md)                       | The flow, the ticket, the three-way intersection — **the load-bearing document**         |
+| [`02-audit-and-the-medical-path.md`](02-audit-and-the-medical-path.md)       | The audit vocabulary, the medical path end to end, subject access                        |
+| [`03-security-measures.md`](03-security-measures.md)                         | Defence in depth, each measure tied to the file that implements it                       |
+| [`04-security-auditing-procedures.md`](04-security-auditing-procedures.md)   | The recurring human process, checklists and incident runbooks                            |
+| [`05-docs-and-contribution-process.md`](05-docs-and-contribution-process.md) | ~42 literal, copy-paste-ready edits across 13 files — **not yet applied**                |
+| [`06-camp-404-integration.md`](06-camp-404-integration.md)                   | The retrofit guide, written for Camp 404's developer                                     |
+| [`07-review.md`](07-review.md)                                               | Security (15 findings), implementability, completeness — F1/F2 now resolved in `01`/`03` |
 
 ## The design in one paragraph
 
@@ -57,25 +57,41 @@ one. Three consequences worth stating up front.
   `after()` fail-open audit into a blocking fail-closed one. One implementation of the
   sharpest read in the product; the API is a caller, not a peer.
 
-## Before implementing: three things the review found
+## Three review findings, resolved in place
 
-1. **F1, critical.** The single-use disclosing ticket is burned _after_ the read, so it is not
-   single-use under concurrency — N parallel requests all see `consumed_at IS NULL` and all
-   disclose. One consent click yields a whole camp's medical notes. The fix (claim the ticket
-   before the guard, or use `createPooledDb()` in a transaction — `packages/db/src/index.ts:37-39`
-   notes the pool _does_ support transactions) is in `07-review.md`.
-2. **F2, high.** "Revoke now" as specified does not revoke the live key, and the documented
-   containment order hands a leaked key a fresh seven-day grace window.
-3. **The resource surface is under-specified.** Two shards specify the security model in
-   exhaustive detail without the HTTP paths and DTOs it protects — `camp:*` has guards but no
-   endpoints. An implementer reaching that stage designs an API from scratch.
+The review in `07-review.md` is kept verbatim, including the three findings below, which the
+spec has since been amended to answer. The findings stand as the record of why the design
+reads as it does.
+
+1. **F1, critical — resolved.** The single-use disclosing ticket was burned _after_ the read,
+   so it was not single-use under concurrency: N parallel requests all saw `consumed_at IS
+NULL` and all disclosed. One consent click yielded a whole camp's medical notes. `01` §7.2.1
+   now claims the ticket **before** the guard on the disclosing tier, accepting that a refusal
+   costs the ticket, and records the pooled-transaction alternative
+   (`packages/db/src/index.ts:37-39` — the pool _does_ support transactions) for anyone who
+   judges the refusal-is-free property worth a pooled connection.
+2. **F2, high — resolved.** "Revoke now" was specified as `previous_key_expires_at = now()`,
+   which is only ever read in the `previous_key_hash` arm of the resolver and does nothing to
+   the live key; and the containment runbook said to rotate, which moves the leaked key into
+   the grace slot with a fresh seven days. `01` §3.2 and `03` §3.4/§12.1 now revoke by nulling
+   **both** hashes and suspending in one statement, and forbid rotation as a containment step.
+3. **The resource surface — resolved.** `camp:*` had guards and no endpoints. `01` §16.2 now
+   maps every delegable scope to its routes and responses, reusing the DTOs already in
+   `../02-core-api-reference.md` §9 and adding one, `MemberDetail`, defined by subtraction
+   from the row so hard-locked fields and medical are absent rather than nulled.
 
 ## Status
 
-Specification. Nothing here is built. The implementability review puts it at ~88 engineer-days,
-and identifies one item that should ship immediately and separately regardless of any of this:
-the `apps/web/lib/medical-access.ts:215` rank fail-closed fix, which is a live production
-defect on a medical-notes path.
+Specification. None of the `/v1` surface is built. The implementability review puts it at
+~88 engineer-days.
 
-The doc and process edits in `05` are written as literal replacement text but have **not been
-applied** — they describe a system that does not exist yet.
+Two things from this work have already shipped:
+
+- **The rank fix is done** — `apps/web/lib/medical-access.ts` no longer invents an `org_staff`
+  rank when none resolves, and `strongestOrgRole` (`packages/core/src/medical-access.ts`)
+  stops an ordinary org row from overwriting an `engineer` and erasing its carve-out. That was
+  a live defect on a medical-notes path, independent of this spec, and it is the resolver
+  every delegated medical read will call.
+- **The doc and process edits in `05` are applied**, so the repo's contribution guidelines,
+  security policy and review requirements already describe the rules a `/v1` contributor works
+  under. They describe a surface that does not exist yet, and say so.

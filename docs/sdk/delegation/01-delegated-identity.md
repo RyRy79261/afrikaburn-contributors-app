@@ -127,7 +127,26 @@ Three columns on `integrations`, not a fourth table: `key_hash`, `previous_key_h
 
 - **Rotate** — mint a new key into `key_hash`, move the old hash to `previous_key_hash`,
   set `previous_key_expires_at = now() + 7 days`.
-- **Revoke now** — `previous_key_expires_at = now()`. The next request refuses.
+- **Revoke now** — clears **both** hashes and suspends, in one statement (below).
+
+**`previous_key_expires_at = now()` is NOT a revocation, and an earlier draft of this spec
+said it was.** That column is only ever consulted inside the `previous_key_hash` arm of the
+resolver's `WHERE`; the live key matches the `i.key_hash = $keyHash` arm and never reaches
+it. Expiring the grace window on a key that is still in `key_hash` changes nothing at all.
+"Revoke now" is therefore one indivisible statement that makes **both** hashes unmatchable:
+
+```sql
+UPDATE integrations
+   SET key_hash               = NULL,
+       previous_key_hash      = NULL,
+       previous_key_expires_at = now(),
+       status                 = 'suspended'
+ WHERE id = $1
+```
+
+`key_hash` is nullable for exactly this reason, and the resolver's `WHERE` compares it to a
+presented hash, so `NULL` matches nothing. It is one statement because a console action that
+containment depends on must not have a window between two of them.
 
 Both hashes are terms in the resolver's `WHERE` clause (§8.2); the grace _clock_ is
 evaluated in the pure refusal function so `key_revoked` is reachable and testable with no
@@ -370,6 +389,10 @@ sequenceDiagram
     alt scope not admissible
         WR-->>C4S: 403 insufficient_scope
     end
+    WR->>DB: CLAIM (disclosing tier only)<br/>UPDATE … SET consumed_at = now()<br/>WHERE id = $1 AND consumed_at IS NULL RETURNING id
+    alt no row returned — another request already claimed it
+        WR-->>C4S: 401 invalid_credentials
+    end
     WR->>DB: GUARDS[scope](caller, target) → loadMedicalAccessContext(...)
     WR->>CORE: canViewMedicalNotes(ctx)         UNCHANGED predicate
     alt predicate false
@@ -381,7 +404,6 @@ sequenceDiagram
     alt audit insert throws
         WR-->>C4S: 503 audit_unavailable — NO BODY
     end
-    WR->>DB: consumeTicket (UPDATE … WHERE consumed_at IS NULL RETURNING id)
     WR-->>C4S: 200 MedicalNotesResponse.parse(...)
 ```
 
@@ -410,11 +432,59 @@ carrying only `X-AfrikaBurn-User` is `invalid_credentials` before anything is ha
 5. **`v1_subject`** — the per-burner counter, now that the burner is known.
 6. **`relayRefusal`** — pure, no I/O.
 7. **`effectiveScopes`** — pure, set math.
-8. **The guard** — the first thing that can say _yes_, and it is a `@quagga/core` predicate.
-9. **The read.**
-10. **The audit** — blocking on the disclosing path.
-11. **Ticket burn** — after the predicate said yes, before the body is built, so a refusal
-    the burner did not cause never costs her the ticket.
+8. **The claim, on the disclosing tier only** — see §7.2.1. Ahead of the guard, because a
+   ticket burned after the read is not single-use.
+9. **The guard** — the first thing that can say _yes_, and it is a `@quagga/core` predicate.
+10. **The read.**
+11. **The audit** — blocking on the disclosing path.
+
+### 7.2.1 The claim comes BEFORE the guard, and this is the whole of it
+
+An earlier draft of this spec burned the ticket at the end — "after the predicate said yes,
+before the body is built, so a refusal the burner did not cause never costs her the ticket."
+That ordering is wrong, and it is wrong in the way that matters most.
+
+`resolveRelayCaller` reads `consumed_at` as a **returned column**, not a `WHERE` term, and
+`relayRefusal` is a pure function evaluating the snapshot that join produced. So N concurrent
+requests carrying the same 120-second medical ticket and N different subject ids each see
+`consumed_at IS NULL`, each pass `relayRefusal`, each run the guard, each decrypt, each write
+an audit row, and each return notes. Exactly one wins the burn at the end. **The losers have
+already disclosed.** One consent click yields as many medical notes as the caller can open
+sockets — and the burner was told "good for one read" (§5.2).
+
+The bound is `v1_subject` at 60/60s, which §6.2 of shard 03 makes **fail open on a storage
+error by design**, and which §21 flags as possibly removable. A rate limit is not an
+atomicity mechanism.
+
+**The rule.** When `scopeTier(requiredScope) === "disclosing"`, claim the ticket immediately
+after `resolveRelayCaller` and before `GUARDS[...]`:
+
+```sql
+UPDATE integration_tickets
+   SET consumed_at = now()
+ WHERE id = $1 AND consumed_at IS NULL
+RETURNING id
+```
+
+No row returned ⇒ `401 invalid_credentials`. This is the same compare-and-swap §10 rule 6
+already uses on the refresh path, applied to the path that discloses.
+
+**What this costs, stated plainly.** A predicate refusal now consumes the ticket. A camp lead
+who requests a member of the wrong camp gets `404` and must return to the consent screen. That
+is what "one read" means, the burner is one click from another, and it is the correct trade:
+the alternative preserved a nicety for the caller and left a hole under it.
+
+**The one alternative that also works.** `packages/db/src/index.ts:37-39` is explicit that
+`createHttpDb()` has no transactions **but `createPooledDb()` is a WebSocket pool that DOES**,
+and that "multi-statement atomic work must use the pool". So the disclosing path may instead
+run on the pool inside a transaction with `SELECT … FOR UPDATE` on the ticket row, which keeps
+the refusal-is-free property. It costs a pooled connection on the hottest-consequence path and
+a second db handle in the wrapper. Take it only if the refusal-is-free property is judged worth
+that; otherwise claim first.
+
+**CI check `disclosing-ticket-claimed-before-predicate`.** The existing `ticket-tier-invariant`
+inspects the mint and cannot see this. The new check asserts that in the disclosing branch of
+the wrapper the claim statement precedes the `GUARDS` call.
 
 ### 7.3 The cookie is deleted twice
 
@@ -1140,8 +1210,7 @@ export interface GuardTarget {
 }
 
 export type GuardVerdict =
-  | { allow: true; context?: unknown }
-  | { allow: false };
+  { allow: true; context?: unknown } | { allow: false };
 
 export type Guard = (
   caller: RelayCaller,
@@ -1505,7 +1574,7 @@ Five independent levers. Four of them propagate by foreign key.
 | 1   | **Disconnect the app**                  | the burner, `/account/connected-apps` | `integration_consents.revoked_at = now()`, `revoked_by = 'subject'`; tickets deleted in the same request | Next call: `consent_revoked` → **401 `reconnect_required`**. Live, not eventual — `revoked_at` is read in the join.                                                                                                                           |
 | 2   | **Integrator disconnect**               | the app, `DELETE /v1/consent`         | same, `revoked_by = 'integrator'`                                                                        | same                                                                                                                                                                                                                                          |
 | 3   | **Suspend the integration**             | System manager, console               | `integrations.status = 'suspended'`                                                                      | Every key, every ticket, every consent for that slug dies on the next request. One row. `integration_suspended` → **401 `invalid_credentials`**. The consent screen for that slug also freezes, so a suspended app cannot re-acquire consent. |
-| 4   | **Revoke the key**                      | System manager, console               | `previous_key_expires_at = now()`                                                                        | `key_revoked` → **401 `invalid_credentials`**                                                                                                                                                                                                 |
+| 4   | **Revoke the key**                      | System manager, console               | `key_hash = NULL, previous_key_hash = NULL, status = 'suspended'` — one statement (§3.2)                 | `key_revoked` → **401 `invalid_credentials`**                                                                                                                                                                                                 |
 | 5   | **Sign out / password reset / erasure** | the burner, or the system             | `session` rows hard-deleted → `ON DELETE CASCADE`                                                        | Tickets vanish **in the same Postgres statement**. §12.                                                                                                                                                                                       |
 
 ```mermaid
@@ -1792,6 +1861,79 @@ Terminal-state wire mapping: `consumed` → `invalid_credentials`; `expired` →
 | `GET /v1/me/capabilities`                 | key + ticket                           | The manifest, resolved **per ticket** for that burner. **H1 fix mandatory**: the SDK hardcodes its base URL and never takes a route from the manifest. |
 | `GET /v1/burners/{id}/medical`            | key + ticket, `bio:medical:read`       | §8.6. Detail only, one subject at a time.                                                                                                              |
 | `GET /.well-known/afrikaburn-integration` | none                                   | Discovery, so an integrator who is not on Node is not stranded on our SDK.                                                                             |
+
+### 16.2 The resource surface — what the `camp:*` and `self:*` guards actually protect
+
+An earlier draft specified `GUARDS` (§13) without the endpoints they guard, which left an
+implementer to design an API at the point of building it. Every delegable scope now names its
+routes. DTOs are the ones already defined in `docs/sdk/02-core-api-reference.md` §9 — this
+adds no new response shape except `MemberDetail`, and reuses `RosterMember` (`:1259`),
+`GroupSummary` (`:1224`), `GroupDetail` (`:1244`) and `ProjectRole` (`:1368`) unchanged.
+
+| Endpoint                                         | Scope                      | Target          | Response                |
+| ------------------------------------------------ | -------------------------- | --------------- | ----------------------- |
+| `GET /v1/camps`                                  | — (ticket only)            | —               | `GroupSummary[]`        |
+| `GET /v1/camps/{groupId}`                        | — (ticket only)            | `groupId`       | `GroupDetail`           |
+| `GET /v1/camps/{groupId}/members`                | — (ticket only)            | `groupId`       | `RosterMember[]`        |
+| `GET /v1/camps/{groupId}/members/{userId}`       | `camp:view_member_details` | `groupId`       | `MemberDetail`          |
+| `PATCH /v1/camps/{groupId}/members/{userId}`     | `camp:manage_members`      | `groupId`       | `RosterMember`          |
+| `DELETE /v1/camps/{groupId}/members/{userId}`    | `camp:manage_members`      | `groupId`       | `204`                   |
+| `GET /v1/camps/{groupId}/roles`                  | `camp:assign_roles`        | `groupId`       | `ProjectRole[]`         |
+| `PUT /v1/camps/{groupId}/members/{userId}/roles` | `camp:assign_roles`        | `groupId`       | `RosterMember`          |
+| `POST /v1/camps/{groupId}/roles`                 | `camp:manage_roles`        | `groupId`       | `ProjectRole`           |
+| `PATCH /v1/camps/{groupId}/roles/{roleId}`       | `camp:manage_roles`        | `groupId`       | `ProjectRole`           |
+| `GET /v1/burners/{userId}/medical`               | `bio:medical:read`         | `subjectUserId` | `MedicalNotesResponse`  |
+| `GET /v1/me/profile`                             | `self:profile:read`        | self            | `SelfProfile`           |
+| `GET /v1/me/notifications`                       | `self:notifications:read`  | self            | `Notification[]`        |
+| `GET /v1/me/registrations`                       | `self:registrations:read`  | self            | `RegistrationSummary[]` |
+
+Four rules bind this table, and none is negotiable.
+
+1. **`groupId` in the path is the guard's `target`, never a filter applied after the read.**
+   `GUARDS["camp:*"]` resolves `loadCampPermissions(db(), caller.endUserId, target.groupId)`
+   — the END USER's live membership of THAT camp. A lead of camp A asking for camp B resolves
+   no membership and gets `404`, existence-opaque, exactly as `apps/web` does.
+2. **The three unscoped rows are not unguarded.** `GET /v1/camps*` carries no scope because
+   membership _is_ the authority: the list is the end user's own camps, and the detail is
+   refused for a camp they are not in. Free camps stay undiscoverable by the same predicate
+   the app uses (`apps/web/lib/groups-store.ts:187`) — there is no scope that widens it, and
+   a search or lookup-by-slug endpoint is deliberately absent.
+3. **Writes ship after reads.** Every `PATCH`/`PUT`/`POST`/`DELETE` row is v0.3 at the
+   earliest, behind the read tranche and behind idempotency keys. They are specified here so
+   the scope vocabulary is not later stretched to cover a shape nobody designed.
+4. **Every response goes through its zod output schema's `.parse()`** (shard 03 §8). A field
+   absent from the schema cannot be in the body, the type, or the docs.
+
+```ts
+/**
+ * What `camp:view_member_details` unlocks beyond the roster projection: the
+ * fields a burner filled in for their camp's leads. It is `RosterMember` plus
+ * the camp-visible bio, and it is defined by SUBTRACTION from the row.
+ *
+ * Absent by construction, not nulled: every HARD_LOCKED_PRIVATE_FIELD
+ * (packages/core/src/privacy.ts:39-47 — saId, passport, phone, both emergency
+ * contacts) and `medical` (`:57`). Hard-locked fields have no reveal path of any
+ * kind, at any scope, in any version. Medical is not a field here at all: it is a
+ * separate endpoint, a separate scope, a separate ticket tier, and a blocking
+ * audit row — precisely so it can never be harvested as a column of a member
+ * record.
+ */
+export interface MemberDetail extends RosterMember {
+  joinedAt: string;
+  roles: readonly ProjectRole[];
+  /** Public-flagged bio fields only — `PublicBioView`, packages/core/src/bio.ts. */
+  bio: PublicBio;
+}
+```
+
+**`MemberDetail` carries no email.** `RosterMember`'s own note
+(`docs/sdk/02-core-api-reference.md:1254-1257`) records that `getCampBySlug`'s member
+projection must never select the account email, because it renders on a public camp page and
+email is POPIA-relevant. A detail view is a narrower audience than that page, but the scope
+gating it is `view_member_details`, not `personal_information` — and email is on the org
+console's personal-information list (`packages/core/src/org-permissions.ts`, the
+load-bearing rule). A camp lead who needs to email a member has the camp's own roster; the API
+does not become the shortcut that puts every member's address behind a camp-level scope.
 
 The inherited "never" tranche (`docs/sdk/04-backend-work-required.md` §4.2, the
 _"Never — no endpoint, at any scope, in any version"_ table at `:411-418`) is amended in
