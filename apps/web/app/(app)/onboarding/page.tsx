@@ -6,7 +6,7 @@ import {
 } from "@quagga/core";
 import { readPendingInvite } from "@/lib/pending-invite";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { ensureCampUser } from "@/lib/session";
+import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio } from "@/lib/bio-store";
@@ -36,7 +36,23 @@ export default async function OnboardingPage() {
   }
 
   const bio = await getBio(user.id, edition.id);
-  if (bio?.completedAt) redirect("/profile");
+  // A COMPLETED BIO LEAVES — BUT ONLY IF THE GATE ACTUALLY OPENED.
+  //
+  // `/profile` is gated: `enforceGate` sends anyone with a pending blocking
+  // action back to `/onboarding`. So an unconditional bounce here trusts that
+  // `completed_at` and the required action can never disagree. When they do,
+  // this line and that one redirect at each other for ever, and the burner
+  // cannot reach any page of the app — including this one, the only page that
+  // could fix it.
+  //
+  // `saveBio` now writes both halves in one transaction so they cannot come
+  // apart, and this is the second lock on the same door: rows written before
+  // that fix, or by any future path that stamps completion without clearing the
+  // gate, land on the flow instead of in a loop. The final step re-saves and
+  // clears the action, so the way out is the way through.
+  if (bio?.completedAt && (await pendingBlockingRoute(user.id)) === null) {
+    redirect("/profile");
+  }
 
   // Pre-fill from any in-progress bio so "save & finish later" resumes cleanly.
   // The username lives on `users`, not the bio row, so it is threaded in.

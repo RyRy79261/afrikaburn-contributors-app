@@ -291,6 +291,57 @@ test.describe("new burner · Burner Bio action row", () => {
 // `isBioComplete` used to BE the username check, so an off-by-one here either
 // locks every new burner out of the app or lets an unfinished bio through.
 
+// A REFUSAL THE BURNER CANNOT SEE IS A BUTTON THAT DOES NOTHING.
+//
+// The username was the only refusal this flow ever drew. Every other question
+// the server validates — and it validates all sixteen — set state that nothing
+// rendered: the page did not move, no text changed, and the only honest reading
+// left to the person is that Save is broken. Medical notes are the case with
+// teeth, because the box has no character counter and no client cap, so the
+// first a burner hears of the 1000-character limit is a save that silently
+// refuses. This is the same defect as the malformed username above, on fifteen
+// more fields.
+test.describe("new burner · Burner Bio refusals", () => {
+  test("a refused field says so, on screen, next to itself", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    // Over the questionnaire's 1000-character cap. Typed as one paste, which is
+    // how a burner actually arrives at it — copying notes out of a document.
+    const notes = webPage.getByRole("textbox", { name: /medical notes/i });
+    await notes.fill("A".repeat(1200));
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+
+    // THE REFUSAL EXISTS…
+    const message = webPage.getByText(/max 1000 characters/i);
+    await expect(message).toBeVisible();
+
+    // …AND IT IS WHERE THE PERSON IS LOOKING. Same assertion as the username
+    // case, for the same reason: `toBeVisible()` is satisfied by a message
+    // several hundred pixels above the fold.
+    const messageOverhang = await overhangOf(message);
+    expect(
+      Math.max(messageOverhang.top, messageOverhang.bottom),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
+
+    // Still on the details step: the refusal blocked the step rather than
+    // letting a half-saved bio through.
+    await expect(notes).toBeVisible();
+
+    // Shortening it lets the step through — proven by ARRIVING on the next
+    // step, not by a button both steps share.
+    await notes.fill("Penicillin allergy.");
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+});
+
 test.describe("new burner · username", () => {
   test("the bio completes with NO username and still releases the gate", async ({
     webPage,
