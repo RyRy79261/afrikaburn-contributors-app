@@ -123,6 +123,41 @@ const PRIVACY_REVIEW_FIELDS = BIO_PRIVACY_FIELDS.filter(
   (f) => !PRIVACY_REVIEW_EXCLUDE.has(f.key),
 );
 
+/**
+ * Put the viewport and the keyboard on the first field that was refused.
+ *
+ * WITHOUT THIS THE SAVE BUTTON READS AS DEAD, on any screen size. The details
+ * step is long, its only rejectable field (the username) is at the very top of
+ * it, and the button is at the very bottom — so `validateDetails` sets an error
+ * several hundred pixels above the fold and returns, the step does not advance,
+ * and NOTHING changes where the person is looking. Someone who typed a handle
+ * with a space in it clicks Save & continue, sees the page sit still, and
+ * reasonably concludes the button is broken. Server-side rejections come back
+ * the same shape from `persist`, so both callers scroll.
+ *
+ * Focus rather than scroll alone: it lands the caret in the field that has to
+ * change, and the control's `aria-describedby` already points at the error, so
+ * a screen reader reads the reason on arrival.
+ *
+ * The error keys ARE the control ids — `Field`'s wiring contract requires it —
+ * which is what makes the lookup possible. `_form`/`_root` are skipped: those
+ * render immediately above the action row and are already on screen.
+ */
+function focusFirstError(errors: Record<string, string>): void {
+  const id = Object.keys(errors).find(
+    (key) => key !== FORM_ERROR_KEY && key !== "_root",
+  );
+  if (!id || typeof document === "undefined") return;
+  // After paint. The error text is what changes the field's height, so
+  // measuring before React has rendered it lands the scroll slightly off.
+  requestAnimationFrame(() => {
+    const el = document.getElementById(id);
+    if (!(el instanceof HTMLElement)) return;
+    el.scrollIntoView({ block: "center" });
+    el.focus({ preventScroll: true });
+  });
+}
+
 export function BioFlow({
   mode,
   initialResponses,
@@ -198,6 +233,7 @@ export function BioFlow({
       }
     }
     setErrors(next);
+    focusFirstError(next);
     return Object.keys(next).length === 0;
   }
 
@@ -207,6 +243,7 @@ export function BioFlow({
         const result = await action(responses, flags, final, extras);
         if (!result.ok) {
           setErrors(result.errors);
+          focusFirstError(result.errors);
           return;
         }
         setErrors({});
@@ -248,6 +285,8 @@ export function BioFlow({
       router.push("/");
     });
   }
+
+  const showBack = stepIndex > 0 && step !== "done";
 
   const primaryLabel = (() => {
     if (step === "welcome") return "Get started";
@@ -315,12 +354,31 @@ export function BioFlow({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-        <div>
-          {stepIndex > 0 && step !== "done" && (
+      {/* THE ACTION ROW STACKS BELOW `sm`, and must. Forced into one line it
+          wants Back + "Save & finish later" + "Save & continue" ≈ 407px, and
+          the column here is 312px wide at the 360px baseline (360 less the
+          shell's `px-6` either side). Buttons are `whitespace-nowrap` with the
+          flex default `min-width: auto`, so nothing shrinks — the row simply
+          overflows and the primary button's last 28px sit off the right edge
+          of the screen (68px at 320px, and it only clears at ~390px). A phone
+          viewport does not pan horizontally to reach them, so the gate the
+          whole app sits behind had a Save button a burner could not press.
+          Measured against this file's real DOM at 320/360/375/390/412px.
+
+          `min-h-11` is the 44px touch target, and the shape below — column
+          stacking to `sm:flex-row sm:items-center sm:justify-between` — is the
+          same footer artwork-registration-form.tsx and the org bulletin
+          composer already use. This row was the outlier. */}
+      <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Kept in the tree when there is no Back button so `justify-between`
+            still pushes the actions right on `sm`; hidden below it so the
+            stacked column does not open with an empty 8px gap. */}
+        <div className={showBack ? undefined : "hidden sm:block"}>
+          {showBack && (
             <Button
               type="button"
               variant="ghost"
+              className="min-h-11"
               onClick={() => goTo(stepIndex - 1)}
               disabled={isPending}
             >
@@ -328,18 +386,24 @@ export function BioFlow({
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {mode === "onboarding" && step !== "welcome" && step !== "done" && (
             <Button
               type="button"
               variant="outline"
+              className="min-h-11"
               onClick={handleFinishLater}
               disabled={isPending}
             >
               Save &amp; finish later
             </Button>
           )}
-          <Button type="button" onClick={handlePrimary} disabled={isPending}>
+          <Button
+            type="button"
+            className="min-h-11"
+            onClick={handlePrimary}
+            disabled={isPending}
+          >
             {isPending ? "Saving…" : primaryLabel}
           </Button>
         </div>

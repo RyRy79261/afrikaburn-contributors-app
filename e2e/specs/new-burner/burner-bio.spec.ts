@@ -135,6 +135,98 @@ test.describe("new burner · Burner Bio", () => {
   });
 });
 
+// --- The action row ---------------------------------------------------------
+//
+// THE BIO IS THE BLOCKING GATE, so a Save button a burner cannot press is the
+// whole app locked. This ran forced into one line: Back + "Save & finish later"
+// + "Save & continue" want ~407px and the 360px baseline gives the column 312.
+// The buttons are `whitespace-nowrap` with the flex default `min-width: auto`,
+// so nothing shrank — the row simply overflowed and the primary button's last
+// 28px sat off the right edge of the screen (68px at 320px). A phone does not
+// pan sideways to recover them.
+//
+// `toBeVisible()` would not have caught it and did not: it asks for a non-empty
+// box, which a button hanging off the side of the screen still has. Being ON
+// SCREEN is a different question, and `toBeInViewport({ ratio: 1 })` is the one
+// that asks it — so this reads as a real assertion on desktop and as the
+// regression test on mobile-360, from the same lines.
+//
+// The click at the end is deliberately NOT forced. `force: true` would step
+// over the actionability check that is the entire point of the test.
+
+/** What `Locator.boundingBox()` returns, once the null case is dealt with. */
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+test.describe("new burner · Burner Bio action row", () => {
+  test("every action stays on screen, apart, and pressable", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    const back = webPage.getByRole("button", { name: "Back", exact: true });
+    const later = webPage.getByRole("button", { name: /save & finish later/i });
+    const primary = webPage.getByRole("button", { name: "Save & continue" });
+
+    // Scroll the row into view first — the details step is longer than any
+    // viewport, so "off screen because you have not scrolled there yet" is not
+    // the failure being looked for.
+    await primary.scrollIntoViewIfNeeded();
+
+    const boxes: Box[] = [];
+    for (const [label, control] of [
+      ["Back", back],
+      ["Save & finish later", later],
+      ["Save & continue", primary],
+    ] as const) {
+      await expect(control, `${label} is on screen`).toBeInViewport({
+        ratio: 1,
+      });
+      const box = await control.boundingBox();
+      if (!box) throw new Error(`${label} reported no box on screen`);
+      boxes.push(box);
+    }
+
+    // None of them overlaps another — stacked or in a row, they are separate
+    // targets. A thumb landing on "Save & finish later" instead of "Save &
+    // continue" abandons the bio halfway.
+    for (const [i, a] of boxes.entries()) {
+      for (const b of boxes.slice(i + 1)) {
+        const overlaps =
+          a.x < b.x + b.width &&
+          b.x < a.x + a.width &&
+          a.y < b.y + b.height &&
+          b.y < a.y + a.height;
+        expect(overlaps, "two action controls overlap").toBe(false);
+      }
+    }
+
+    // And nothing anywhere on the page hangs off the right-hand edge. This is
+    // the cause rather than the symptom: any horizontal overflow makes a mobile
+    // browser shrink the whole page to fit, and every measurement taken on it —
+    // including this suite's own — stops agreeing with what is drawn.
+    const overflow = await webPage
+      .locator("html")
+      .evaluate((html: { scrollWidth: number; clientWidth: number }) =>
+        Math.round(html.scrollWidth - html.clientWidth),
+      );
+    expect(overflow, "the page is horizontally scrollable").toBeLessThanOrEqual(
+      1,
+    );
+
+    await primary.click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+});
+
 // --- The username -----------------------------------------------------------
 //
 // The handle replaced the required "burner name". Three things have to hold at
@@ -185,6 +277,16 @@ test.describe("new burner · username", () => {
     await expect(message).not.toHaveText(/\[a-z|\^|\$/);
     // Still on the details step — the malformed handle blocked the step.
     await expect(field).toBeVisible();
+
+    // AND THE REFUSAL LANDS WHERE THE PERSON IS LOOKING. The username sits at
+    // the top of a step several screens long and the button that refuses it is
+    // at the bottom, so a message that merely EXISTS is a message several
+    // hundred pixels above the fold: the page sits still, nothing near the
+    // button changes, and the honest reading is that the button is broken.
+    // `toBeVisible()` passes in that state — it did — so the assertion has to
+    // be that the message is on screen and the caret is in the field to fix.
+    await expect(message).toBeInViewport({ ratio: 1 });
+    await expect(field).toBeFocused();
 
     // Fixing it lets the step through — proven by ARRIVING on the next step,
     // not by the presence of a button both steps share.
