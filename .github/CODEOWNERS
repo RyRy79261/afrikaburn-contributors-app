@@ -38,3 +38,22 @@
 /CONTRIBUTING.md          @RyRy79261
 /SECURITY.md              @RyRy79261
 /turbo.json               @RyRy79261
+
+# ---------------------------------------------------------------------------
+# THE PUBLISHED SDK AND THE EXTERNAL API — irrevocable in a way nothing else is.
+#
+# An Apache-2.0 grant on a published version cannot be withdrawn; a scope string
+# that shipped is a promise to code in repositories we do not control; and a /v1
+# handler is the one place data leaves the platform to a party that holds no
+# membership. A migration can at least be corrected by another migration.
+#
+# None of these paths exist yet (docs/sdk/), and the entries are inert until
+# branch protection requires code-owner review. Both are the point: the rule
+# should be in place before the first file lands, not written afterwards.
+/packages/scopes/              @RyRy79261
+/packages/sdk/                 @RyRy79261
+/packages/sdk-react/           @RyRy79261
+/apps/web/app/api/v1/          @RyRy79261
+/apps/web/middleware.ts        @RyRy79261
+/.changeset/                   @RyRy79261
+/docs/sdk/                     @RyRy79261

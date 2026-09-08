@@ -58,6 +58,58 @@ const ORG_STAFF_ROLES: ReadonlySet<MembershipRole> = new Set([
   "org_staff",
 ]);
 
+/**
+ * Rank precedence when a viewer holds SEVERAL org-group rows. Strongest first;
+ * a role absent from this list is not an org rank at all and is weaker than
+ * every entry in it.
+ *
+ * `org_staff` outranks `engineer` deliberately, and it is not a typo. An
+ * engineer is BROADER in reach and NARROWER in depth — `ENGINEER_RANK_CARVE_OUTS`
+ * refuses them `read_personal_information` everywhere, whatever roles they hold
+ * (org-permissions.ts). So an account holding both rows genuinely reads personal
+ * information as org_staff, and picking the engineer row would understate the
+ * access they actually have.
+ */
+const ORG_ROLE_PRECEDENCE: readonly MembershipRole[] = [
+  "god",
+  "org_staff",
+  "engineer",
+];
+
+/**
+ * The strongest org-group role a viewer holds, or null when they hold none.
+ *
+ * WHY THIS EXISTS. A viewer can hold membership rows on more than one org group
+ * (the schema does not forbid a second one, and a staging import or a renamed
+ * duplicate creates one). The fold that picked among them used to be
+ * `if (!isOrgStaffRole(actorOrgRole)) actorOrgRole = row.role` — and
+ * `isOrgStaffRole` is TRUE for only `god` and `org_staff`, so an `engineer` in
+ * hand was overwritten by any later ordinary row. The engineer then resolved no
+ * rank at all, and the caller's `?? "org_staff"` fallback promoted them into the
+ * exact tier the carve-out exists to keep them out of — handing them medical
+ * notes in the participant app that the console refuses them. That is the
+ * disagreement between two apps the carve-out comment warns about, arrived at
+ * from the other direction.
+ *
+ * Order-independent by construction: the result depends on the SET of roles, not
+ * on the order the rows came back in.
+ */
+export function strongestOrgRole(
+  roles: readonly MembershipRole[],
+): MembershipRole | null {
+  let best: MembershipRole | null = null;
+  let bestRank = ORG_ROLE_PRECEDENCE.length;
+  for (const role of roles) {
+    const index = ORG_ROLE_PRECEDENCE.indexOf(role);
+    const rank = index === -1 ? ORG_ROLE_PRECEDENCE.length : index;
+    if (best === null || rank < bestRank) {
+      best = role;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
 /** True when a role is org staff (god or org_staff) — the console door. */
 export function isOrgStaffRole(
   role: MembershipRole | null | undefined,

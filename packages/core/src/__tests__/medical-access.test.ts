@@ -3,6 +3,7 @@ import {
   canViewMedicalNotes,
   medicalAccessBasis,
   isOrgStaffRole,
+  strongestOrgRole,
   MEDICAL_VIEW_AUDIT_ACTION,
   type MedicalAccessContext,
 } from "../medical-access";
@@ -201,5 +202,67 @@ describe("REGRESSION: medical notes never appear in ANY public projection", () =
     expect(JSON.stringify(view)).not.toContain(
       "SECRET-penicillin-allergy-diabetic",
     );
+  });
+});
+
+// The regression suite for the rank-blind fold. `isOrgStaffRole` is true for
+// `god` and `org_staff` ONLY, so the fold this replaced dropped an `engineer`
+// the moment any ordinary org row followed it — and a dropped rank became
+// `org_staff` at the call site, which is the one tier the engineer carve-out
+// exists to keep them out of.
+describe("strongestOrgRole", () => {
+  it("returns null when the viewer holds no org rows", () => {
+    expect(strongestOrgRole([])).toBeNull();
+  });
+
+  it("returns the only role when the viewer holds one", () => {
+    expect(strongestOrgRole(["engineer"])).toBe("engineer");
+    expect(strongestOrgRole(["member"])).toBe("member");
+  });
+
+  it("keeps engineer against an ordinary row IN EITHER ORDER", () => {
+    // The bug, both ways round. The old fold survived ["engineer"] first only
+    // by accident of iteration order and failed on the other.
+    expect(strongestOrgRole(["engineer", "member"])).toBe("engineer");
+    expect(strongestOrgRole(["member", "engineer"])).toBe("engineer");
+  });
+
+  it("prefers org_staff to engineer — broader reach, narrower depth", () => {
+    // Not a typo: ENGINEER_RANK_CARVE_OUTS refuses an engineer
+    // read_personal_information everywhere, so an account holding both rows
+    // genuinely reads as org_staff and choosing engineer would understate it.
+    expect(strongestOrgRole(["engineer", "org_staff"])).toBe("org_staff");
+    expect(strongestOrgRole(["org_staff", "engineer"])).toBe("org_staff");
+  });
+
+  it("prefers god above everything", () => {
+    expect(strongestOrgRole(["member", "engineer", "org_staff", "god"])).toBe(
+      "god",
+    );
+    expect(strongestOrgRole(["god", "org_staff"])).toBe("god");
+    expect(strongestOrgRole(["god", "member"])).toBe("god");
+  });
+
+  it("prefers any rank to a non-rank role", () => {
+    expect(strongestOrgRole(["lead", "org_staff"])).toBe("org_staff");
+    expect(strongestOrgRole(["admin", "engineer"])).toBe("engineer");
+  });
+
+  it("returns a non-rank role when that is all there is, so the caller can fail closed", () => {
+    // The caller runs this through `orgRankFromRole`, which answers null — and
+    // null must skip the org branch, never fall back to a fabricated rank.
+    expect(strongestOrgRole(["member", "lead"])).toBe("member");
+  });
+
+  it("is order-independent across every permutation of a mixed set", () => {
+    const perms: Array<Array<"member" | "engineer" | "org_staff">> = [
+      ["member", "engineer", "org_staff"],
+      ["member", "org_staff", "engineer"],
+      ["engineer", "member", "org_staff"],
+      ["engineer", "org_staff", "member"],
+      ["org_staff", "member", "engineer"],
+      ["org_staff", "engineer", "member"],
+    ];
+    for (const p of perms) expect(strongestOrgRole(p)).toBe("org_staff");
   });
 });
