@@ -18,7 +18,7 @@ over every burner ([`../06-review.md`](../06-review.md) finding C1). Everything 
 | [`02-audit-and-the-medical-path.md`](02-audit-and-the-medical-path.md)       | The audit vocabulary, the medical path end to end, subject access                        |
 | [`03-security-measures.md`](03-security-measures.md)                         | Defence in depth, each measure tied to the file that implements it                       |
 | [`04-security-auditing-procedures.md`](04-security-auditing-procedures.md)   | The recurring human process, checklists and incident runbooks                            |
-| [`05-docs-and-contribution-process.md`](05-docs-and-contribution-process.md) | ~42 literal, copy-paste-ready edits across 13 files — **not yet applied**                |
+| [`05-docs-and-contribution-process.md`](05-docs-and-contribution-process.md) | ~42 literal, copy-paste-ready edits across 13 files — **applied, see Status**            |
 | [`06-camp-404-integration.md`](06-camp-404-integration.md)                   | The retrofit guide, written for Camp 404's developer                                     |
 | [`07-review.md`](07-review.md)                                               | Security (15 findings), implementability, completeness — F1/F2 now resolved in `01`/`03` |
 
