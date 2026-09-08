@@ -674,7 +674,7 @@ function DetailsStep({
   // validates each half separately, so the Field's single error slot has to
   // speak for all of them or one half's refusal goes missing.
   const fieldError = (...ids: string[]): string | undefined => {
-    const found: string[] = ids.map((id) => id).filter(() => false);
+    const found = ids.map((id) => errors[id]).filter(Boolean);
     return found.length > 0 ? found.join(" · ") : undefined;
   };
 
@@ -850,6 +850,7 @@ function DetailsStep({
               />
               <PhoneInput
                 id="onsite.phone"
+                ariaLabel="On-site contact phone"
                 describedBy={groupDescribedBy(
                   "onsite.name",
                   "onsite.name",
@@ -883,6 +884,7 @@ function DetailsStep({
               />
               <PhoneInput
                 id="offsite.phone"
+                ariaLabel="Off-site contact phone"
                 describedBy={groupDescribedBy(
                   "offsite.name",
                   "offsite.name",

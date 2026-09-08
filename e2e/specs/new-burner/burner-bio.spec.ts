@@ -302,6 +302,49 @@ test.describe("new burner · Burner Bio action row", () => {
 // refuses. This is the same defect as the malformed username above, on fifteen
 // more fields.
 test.describe("new burner · Burner Bio refusals", () => {
+  test("a refused HALF of a shared field is named, on screen, and focused", async ({
+    webPage,
+  }) => {
+    // The on-site contact pairs a name with a phone in ONE `Field`, and the
+    // server validates each half separately. Until 96cdc41 the phone had no
+    // `id`, so `focusFirstError` — which resolves a key with
+    // `document.getElementById` — could not reach it: the message rendered
+    // beside the field, the catch-all banner stayed quiet because the key is
+    // suppressed there, and the page did not move. Found in review, confirmed
+    // by measuring the rendered DOM, and this is the behavioural half.
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    // Located by id, not by role: the phone half is the control that had none.
+    // (It has an accessible name now, but the id is what the defect was about.)
+    const phone = webPage.locator('[id="onsite.phone"]');
+    await phone.fill("+275"); // 3 digits — the questionnaire wants 7 to 15
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+
+    const message = webPage.getByText(/enter a valid phone number/i);
+    await expect(message).toBeVisible();
+
+    // On screen, not merely in the DOM — same reason as every other refusal
+    // assertion on this page.
+    const messageOverhang = await overhangOf(message);
+    expect(
+      Math.max(messageOverhang.top, messageOverhang.bottom),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
+
+    // AND THE CARET IS IN THE HALF THAT WAS REFUSED. This is the assertion the
+    // missing `id` broke: without it nothing was focused and nothing scrolled.
+    await expect(phone).toBeFocused();
+
+    // Fixing it lets the step through — proven by ARRIVING on the next step.
+    await phone.fill("+27 82 555 1234");
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+
   test("a refused field says so, on screen, next to itself", async ({
     webPage,
   }) => {
