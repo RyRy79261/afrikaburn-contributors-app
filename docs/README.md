@@ -1,12 +1,12 @@
 # Documentation index and conventions
 
-| Field | Value |
-|---|---|
-| **Category** | Operational |
-| **Doc status** | Active |
-| **Normative language** | RFC 2119 / RFC 8174 applies |
-| **Requirement IDs** | N/A — operational, not spec-derived |
-| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+| Field                  | Value                               |
+| ---------------------- | ----------------------------------- |
+| **Category**           | Operational                         |
+| **Doc status**         | Active                              |
+| **Normative language** | RFC 2119 / RFC 8174 applies         |
+| **Requirement IDs**    | N/A — operational, not spec-derived |
+| **Owner / Updated**    | Repo maintainers, 2026-08-05        |
 
 This file is the index and the rulebook for everything under `docs/`. If you are
 about to read, write, or update a doc in this folder, start here.
@@ -31,13 +31,13 @@ common misunderstanding to avoid:
 - **Downstream docs may describe required technical features the App Spec never
   mentions.** Migration discipline, auth architecture, deployment runbooks — none
   of that is in the App Spec, and it doesn't need to be. The App Spec is
-  authoritative on *what the product should do*; this repo is authoritative on
-  *how, and whether, that gets built*. A doc with no Requirement-ID relationship
+  authoritative on _what the product should do_; this repo is authoritative on
+  _how, and whether, that gets built_. A doc with no Requirement-ID relationship
   to the App Spec is not a gap — see the **Requirement-ID protocol** below for
   how each doc states its own relationship (or lack of one) honestly.
 - **Nothing in this repo may contradict the App Spec and win.** If a doc here and
-  the App Spec disagree about what the product *should* do, the App Spec is
-  right and the doc is stale. (Docs are free to describe *why the build diverges*
+  the App Spec disagree about what the product _should_ do, the App Spec is
+  right and the doc is stale. (Docs are free to describe _why the build diverges_
   from the spec — [`technical-spec.md`](technical-spec.md) §4 and §8 do exactly
   that — but that's documenting a known, deliberate gap, not a disagreement about
   which document governs.)
@@ -59,23 +59,24 @@ without restating it:
 
 ## The index
 
-| Doc | Category | Doc status | Requirement-ID coverage |
-|---|---|---|---|
-| `README.md` *(this file)* | Operational | Active | N/A — index and conventions, not spec-derived |
-| [`technical-spec.md`](technical-spec.md) | Product | Active | **Exhaustive** — full 1:1 section mirror of the App Spec |
-| [`architecture.md`](architecture.md) | Architecture | Active | Partial — `SEC-*`, `CORE-*` |
-| [`build-spec.md`](build-spec.md) | Engineering Spec | Active | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*` |
-| [`component-spec.md`](component-spec.md) | Engineering Spec | Active | N/A — implementation detail |
-| [`accounts-security-spec.md`](accounts-security-spec.md) | Security | Active | Partial — `SEC-*`, `CDB-002` |
-| [`auth-platform-spec.md`](auth-platform-spec.md) | Security | Active | Partial — `SEC-*` |
-| [`questionnaire-spec.md`](questionnaire-spec.md) | Engineering Spec | Active | Partial — `ONBOARD-*`, `REG-*`, `SEC-*` |
-| [`notifications-spec.md`](notifications-spec.md) | Engineering Spec | Active | N/A — no dedicated App Spec section |
-| [`supplier-spec.md`](supplier-spec.md) | Engineering Spec | Active | Partial — `PNP-005`, `REG-011` |
-| [`flows.md`](flows.md) | Architecture | Active | Partial — `ONBOARD-*`, `REG-*`, `SEC-*` |
-| [`triage.md`](triage.md) | Operational | Active | N/A — operational, not spec-derived |
-| [`synthesis.md`](synthesis.md) | Planning | **Historical** | N/A — superseded as an authoritative source by the App Specification itself |
-| [`deploy.md`](deploy.md) | Operational | Active | N/A — operational, not spec-derived |
-| [`roadmap.md`](roadmap.md) | Planning | Active | Partial — `RELEASE-*` |
+| Doc                                                      | Category         | Doc status     | Requirement-ID coverage                                                                       |
+| -------------------------------------------------------- | ---------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `README.md` _(this file)_                                | Operational      | Active         | N/A — index and conventions, not spec-derived                                                 |
+| [`technical-spec.md`](technical-spec.md)                 | Product          | Active         | **Exhaustive** — full 1:1 section mirror of the App Spec                                      |
+| [`architecture.md`](architecture.md)                     | Architecture     | Active         | Partial — `SEC-*`, `CORE-*`                                                                   |
+| [`build-spec.md`](build-spec.md)                         | Engineering Spec | Active         | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*`                                    |
+| [`component-spec.md`](component-spec.md)                 | Engineering Spec | Active         | N/A — implementation detail                                                                   |
+| [`accounts-security-spec.md`](accounts-security-spec.md) | Security         | Active         | Partial — `SEC-*`, `CDB-002`                                                                  |
+| [`auth-platform-spec.md`](auth-platform-spec.md)         | Security         | Active         | Partial — `SEC-*`                                                                             |
+| [`questionnaire-spec.md`](questionnaire-spec.md)         | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
+| [`notifications-spec.md`](notifications-spec.md)         | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                           |
+| [`supplier-spec.md`](supplier-spec.md)                   | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                |
+| [`flows.md`](flows.md)                                   | Architecture     | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
+| [`triage.md`](triage.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
+| [`synthesis.md`](synthesis.md)                           | Planning         | **Historical** | N/A — superseded as an authoritative source by the App Specification itself                   |
+| [`deploy.md`](deploy.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
+| [`roadmap.md`](roadmap.md)                               | Planning         | Active         | Partial — `RELEASE-*`                                                                         |
+| [`sdk/`](sdk/README.md)                                  | Engineering Spec | Draft          | N/A — no App Spec section yet; specifies a `/v1` API and published SDK that are **not built** |
 
 Categories: **Product** (what's built vs. the spec) · **Architecture** (how the
 system fits together, current state) · **Engineering Spec** (a subsystem's
@@ -114,18 +115,18 @@ above for which docs are currently marked which way.
 This is the canonical, repo-wide meaning for these four symbols from now on,
 copied from where it was first defined in [`technical-spec.md`](technical-spec.md):
 
-| Symbol | Meaning |
-|---|---|
-| ✅ | **Built** — working in the deployed apps, with tests |
-| 🚧 | **Partial** — some of it works; the rest is named nearby |
-| ❌ | **Not built** — no code, no database tables |
-| ⚠️ | **Blocked** — cannot be built yet, and the blocker is not code |
+| Symbol | Meaning                                                        |
+| ------ | -------------------------------------------------------------- |
+| ✅     | **Built** — working in the deployed apps, with tests           |
+| 🚧     | **Partial** — some of it works; the rest is named nearby       |
+| ❌     | **Not built** — no code, no database tables                    |
+| ⚠️     | **Blocked** — cannot be built yet, and the blocker is not code |
 
 **A section heading's glyph is a summary, not the last word.** In
 `technical-spec.md`, a `##` heading glyph states the section's overall call;
 the `**Requirement IDs:**` line beneath it is the authoritative, per-id
 breakdown, and the two may legitimately differ in altitude rather than agree —
-§8 and §10 head ⚠️ *blocked* while every id they cite is ❌ *not built*, because
+§8 and §10 head ⚠️ _blocked_ while every id they cite is ❌ _not built_, because
 the platform's non-negotiable policy stance (never run a payment gateway;
 Quicket stays the system of record) isn't quite the same claim as "the code
 doesn't exist," even though the practical effect is the same. Where a heading
@@ -148,13 +149,13 @@ Every doc in this folder (except `docs/sources/`, which isn't a spec) carries
 this 5-row table directly under its H1, before any other content:
 
 ```markdown
-| Field | Value |
-|---|---|
-| **Category** | Product \| Architecture \| Engineering Spec \| Security \| Operational \| Planning |
-| **Doc status** | Active \| Historical \| Draft |
-| **Normative language** | RFC 2119 / RFC 8174 applies \| Descriptive only |
-| **Requirement IDs** | Exhaustive \| Partial \| N/A — with a short qualifier |
-| **Owner / Updated** | *name or "Repo maintainers", date* |
+| Field                  | Value                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| **Category**           | Product \| Architecture \| Engineering Spec \| Security \| Operational \| Planning |
+| **Doc status**         | Active \| Historical \| Draft                                                      |
+| **Normative language** | RFC 2119 / RFC 8174 applies \| Descriptive only                                    |
+| **Requirement IDs**    | Exhaustive \| Partial \| N/A — with a short qualifier                              |
+| **Owner / Updated**    | _name or "Repo maintainers", date_                                                 |
 ```
 
 Field definitions:
@@ -162,7 +163,7 @@ Field definitions:
 - **Category** — one of the six values in the index above. Pick the closest fit;
   don't invent a seventh without updating this table.
 - **Doc status** — `Active` (current, maintained), `Historical` (kept for the
-  record, not actively updated — state *why* in the doc's own prose if not
+  record, not actively updated — state _why_ in the doc's own prose if not
   obvious), or `Draft` (not yet reviewed).
 - **Normative language** — whether RFC 2119/8174 keywords carry weight in this
   doc. See above.
@@ -177,13 +178,13 @@ Field definitions:
 Worked example, from [`technical-spec.md`](technical-spec.md):
 
 ```markdown
-| Field | Value |
-|---|---|
-| **Category** | Product |
-| **Doc status** | Active |
-| **Normative language** | Descriptive only — this document reports build status; it does not itself impose requirements |
-| **Requirement IDs** | Exhaustive — full 1:1 section mirror of the App Specification. Every section below cites the `PREFIX-NNN` IDs it addresses |
-| **Owner / Updated** | Repo maintainers, 2026-08-05 |
+| Field                  | Value                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Category**           | Product                                                                                                                    |
+| **Doc status**         | Active                                                                                                                     |
+| **Normative language** | Descriptive only — this document reports build status; it does not itself impose requirements                              |
+| **Requirement IDs**    | Exhaustive — full 1:1 section mirror of the App Specification. Every section below cites the `PREFIX-NNN` IDs it addresses |
+| **Owner / Updated**    | Repo maintainers, 2026-08-05                                                                                               |
 ```
 
 ## Requirement-ID protocol
@@ -195,13 +196,13 @@ Every substantive requirement bullet in the App Specification carries a stable
 append-only and never renumbered or reused — a requirement that no longer
 applies is struck through in place and annotated, never deleted. The App Spec
 itself documents this scheme in full under its own "Requirement ID Conventions"
-heading; this repo only ever *cites* those IDs, never mints its own.
+heading; this repo only ever _cites_ those IDs, never mints its own.
 
 ### Header-level coverage, by doc type
 
 - **A doc that mirrors an App Spec structure 1:1** (today, only
   `technical-spec.md`, which mirrors all 21 sections): `Requirement IDs:
-  Exhaustive`, and every section carries its own inline citation — see below.
+Exhaustive`, and every section carries its own inline citation — see below.
 - **A cross-cutting engineering doc** serving requirements scattered across
   several App Spec sections, with no dedicated section of its own (e.g.
   `questionnaire-spec.md`, which implements pieces of `ONBOARD-*`, `REG-*` and
@@ -210,7 +211,7 @@ heading; this repo only ever *cites* those IDs, never mints its own.
   audited for completeness.
 - **A purely operational doc** with no relationship to the App Spec at all
   (`deploy.md`, `triage.md`): `Requirement IDs: N/A — operational, not
-  spec-derived`.
+spec-derived`.
 
 ### Inline citation format
 
@@ -220,7 +221,7 @@ glyph, matching the App Spec's own convention of bolding the ID before the text
 it tags:
 
 ```markdown
-**Requirement IDs:** ✅ CDB-037, CDB-040, CDB-041, CDB-043 · 🚧 CDB-042 · ❌ CDB-029, CDB-030 · ⚠️ CDB-001–CDB-024 *(App Spec §4)*
+**Requirement IDs:** ✅ CDB-037, CDB-040, CDB-041, CDB-043 · 🚧 CDB-042 · ❌ CDB-029, CDB-030 · ⚠️ CDB-001–CDB-024 _(App Spec §4)_
 ```
 
 A trailing note in parentheses is fine for a divergence that doesn't reduce to a
@@ -255,7 +256,7 @@ whole convention exists to support:
    own convention for the same reason: so an old reference resolves to an
    explanation instead of a silent gap.
 6. **A changed ID** (the App Spec's own IDs are append-only, so this means the
-   *wording* under an existing ID changed): re-read the citing doc's claim. If
+   _wording_ under an existing ID changed): re-read the citing doc's claim. If
    this repo's implementation is unaffected, leave the citation. If the
    technical implication changed, update the doc's prose and note it — this is
    a human judgement call, not a mechanical sync.

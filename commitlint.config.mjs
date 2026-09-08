@@ -12,7 +12,15 @@
 // which is the point: `fix(accounts):` looks reasonable and names nothing that
 // exists, and a scope vocabulary nobody prunes stops meaning anything.
 
-/** Workspace names with the `@quagga/` prefix dropped, plus `repo` for the root. */
+/**
+ * The scope vocabulary. Three kinds, and the difference matters:
+ *   · workspace names with their npm scope dropped — @quagga/* AND @afrikaburn/*
+ *   · `api`  — the /v1 HTTP surface, which lives inside apps/web rather than in a
+ *              workspace of its own. It gets a scope anyway: without one, every
+ *              server-side commit in that workstream is scoped `web` or `core` and
+ *              the whole thing is invisible in `git log --oneline`.
+ *   · `repo` — root-level turbo/tooling/CI/docs about the repo itself
+ */
 const SCOPES = [
   // apps/*
   "web",
@@ -24,6 +32,15 @@ const SCOPES = [
   "ui",
   "auth",
   "types",
+  // packages/* — the published pair and its vocabulary source.
+  // NOTE: `sdk` and `react` are @afrikaburn/*, not @quagga/*. The directory is
+  // packages/sdk-react; the scope is `react`, matching the PACKAGE name, because
+  // that is what a reader recognises in a changelog.
+  "scopes",
+  "sdk",
+  "react",
+  // the public HTTP surface — apps/web/app/api/v1/**. Not a workspace.
+  "api",
   // the e2e workspace
   "e2e",
   // root-level: turbo, workspace tooling, CI, docs about the repo itself

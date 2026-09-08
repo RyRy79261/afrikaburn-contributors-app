@@ -122,3 +122,34 @@ _Settings_:
   you afterwards.
 - **Dependabot alerts** — yes to alerts. Be deliberate about auto-merge, and
   exclude `better-auth` from it entirely for the reason above.
+
+## Credentials we issue
+
+**Nothing described here is issued yet** — the `/v1` API is specified in
+[`docs/sdk/delegation/`](docs/sdk/README.md) and not built. It is written down before it
+exists because an external developer holding a key needs it stated plainly, and because
+these are the properties any implementation has to preserve.
+
+- **An integration key (`ab_ik_…`) is a ceiling, never a principal.** On its own it reaches
+  public data and nothing else. It cannot name a burner, cannot read a profile, and is not
+  an identity.
+- **A relay ticket (`abrt_…`) is not a credential in itself.** It is a pointer at a row whose
+  foreign key is a burner's live session. It is minted only on our origin, behind the
+  burner's own authentication, by a click on a consent screen we render. It is short-lived —
+  900 seconds ordinarily, 120 seconds and single-use for anything disclosing.
+- **Revocation is a foreign key, not a job.** Signing out, resetting a password and erasing
+  an account all hard-delete `session` rows; `ON DELETE CASCADE` takes the tickets with them,
+  in the same statement. There is no propagation window.
+- **Five levels of revocation** exist: the burner revokes their consent; AfrikaBurn suspends
+  the integration; the key is revoked; the session ends; the ticket expires.
+- **What the holder is told at issue time**: the key is shown once and never again; it is not
+  a login; it cannot act for anyone who has not consented; and if it leaks, tell us before
+  you finish investigating.
+- **What happens when the owner's rights change**: the next request resolves live and
+  collapses. There is no cache to wait for.
+- **What is recorded when they read something**: a disclosing read writes an `audit_events`
+  row naming the **end user** as actor, with the app recorded as the basis.
+
+A burner-facing page for reading those records is a blocking prerequisite of the medical
+scope, not a follow-up. This file will name it when it exists; it is deliberately not linked
+here yet, because pointing at a 404 is exactly what the house rule forbids.
