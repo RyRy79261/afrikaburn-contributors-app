@@ -187,8 +187,27 @@ describe("/onboarding does not bounce a burner it cannot release", () => {
     // Unconditional, this line is one half of the redirect loop. `/profile` is
     // gated and sends a pending action straight back here.
     expect(page).not.toMatch(/if \(bio\?\.completedAt\) redirect\("\/profile"\)/);
-    expect(page).toContain(
-      'if (bio?.completedAt && (await pendingBlockingRoute(user.id)) === null)',
-    );
+    expect(page).toContain("const gate = await pendingBlockingRoute(user.id);");
+  });
+
+  it("asks whether the gate points HERE, not whether a gate exists", () => {
+    // THE REGRESSION THIS CLOSES, found by the proofread audit on c9581d0.
+    // `pendingBlockingRoute` returns the first blocking action of ANY kind, so
+    // for a completed bio plus a pending questionnaire it returns
+    // `/questionnaires/<id>` — not null. The first version of this guard asked
+    // `=== null`, which is false there, so the page fell through and redrew the
+    // bio wizard the burner had already finished instead of sending them to the
+    // action actually blocking them. Before the guard existed at all they were
+    // routed correctly (via /profile), so that version was a REGRESSION on the
+    // multi-action path while fixing the lockout on the single-action one.
+    expect(
+      page,
+      "`=== null` keeps a burner here whenever ANY other action is pending",
+    ).not.toContain("(await pendingBlockingRoute(user.id)) === null");
+
+    expect(page).toContain('if (bio?.completedAt && gate !== "/onboarding")');
+    // …and it forwards to that gate rather than dropping them on /profile,
+    // which would only bounce them onward through `enforceGate` anyway.
+    expect(page).toContain('redirect(gate ?? "/profile")');
   });
 });

@@ -50,8 +50,19 @@ export default async function OnboardingPage() {
   // that fix, or by any future path that stamps completion without clearing the
   // gate, land on the flow instead of in a loop. The final step re-saves and
   // clears the action, so the way out is the way through.
-  if (bio?.completedAt && (await pendingBlockingRoute(user.id)) === null) {
-    redirect("/profile");
+  //
+  // THE TEST IS "DOES THE GATE POINT HERE", NOT "IS THERE A GATE". They are
+  // different questions the moment a burner has more than one blocking action.
+  // `pendingBlockingRoute` answers with the FIRST one of ANY kind, so a
+  // completed bio plus a pending questionnaire returns `/questionnaires/<id>`
+  // — not null. Asking "is there a gate" would then keep the burner here and
+  // redraw the bio wizard they have already finished, instead of sending them
+  // to the thing that is actually blocking them. Asking "does it point here"
+  // routes all three cases correctly: onward to whatever blocks them, to
+  // `/profile` when nothing does, and only staying put when THIS is the gate.
+  const gate = await pendingBlockingRoute(user.id);
+  if (bio?.completedAt && gate !== "/onboarding") {
+    redirect(gate ?? "/profile");
   }
 
   // Pre-fill from any in-progress bio so "save & finish later" resumes cleanly.
