@@ -37,6 +37,7 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { toast } from "@quagga/ui/components/toast";
+import { focusFirstError } from "@quagga/ui/lib/focus-first-error";
 import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
 import {
@@ -83,6 +84,10 @@ interface BioFlowProps {
 }
 
 const FORM_ERROR_KEY = "_form";
+// Keys that are form-level rather than a control id. Both already render
+// immediately above the action row, so scrolling to them would be a no-op that
+// moved the page for no reason.
+const NON_FIELD_ERROR_KEYS = [FORM_ERROR_KEY, "_root"] as const;
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again in a moment.";
 
@@ -122,41 +127,6 @@ const PRIVACY_REVIEW_EXCLUDE = new Set([
 const PRIVACY_REVIEW_FIELDS = BIO_PRIVACY_FIELDS.filter(
   (f) => !PRIVACY_REVIEW_EXCLUDE.has(f.key),
 );
-
-/**
- * Put the viewport and the keyboard on the first field that was refused.
- *
- * WITHOUT THIS THE SAVE BUTTON READS AS DEAD, on any screen size. The details
- * step is long, its only rejectable field (the username) is at the very top of
- * it, and the button is at the very bottom — so `validateDetails` sets an error
- * several hundred pixels above the fold and returns, the step does not advance,
- * and NOTHING changes where the person is looking. Someone who typed a handle
- * with a space in it clicks Save & continue, sees the page sit still, and
- * reasonably concludes the button is broken. Server-side rejections come back
- * the same shape from `persist`, so both callers scroll.
- *
- * Focus rather than scroll alone: it lands the caret in the field that has to
- * change, and the control's `aria-describedby` already points at the error, so
- * a screen reader reads the reason on arrival.
- *
- * The error keys ARE the control ids — `Field`'s wiring contract requires it —
- * which is what makes the lookup possible. `_form`/`_root` are skipped: those
- * render immediately above the action row and are already on screen.
- */
-function focusFirstError(errors: Record<string, string>): void {
-  const id = Object.keys(errors).find(
-    (key) => key !== FORM_ERROR_KEY && key !== "_root",
-  );
-  if (!id || typeof document === "undefined") return;
-  // After paint. The error text is what changes the field's height, so
-  // measuring before React has rendered it lands the scroll slightly off.
-  requestAnimationFrame(() => {
-    const el = document.getElementById(id);
-    if (!(el instanceof HTMLElement)) return;
-    el.scrollIntoView({ block: "center" });
-    el.focus({ preventScroll: true });
-  });
-}
 
 export function BioFlow({
   mode,
@@ -233,7 +203,7 @@ export function BioFlow({
       }
     }
     setErrors(next);
-    focusFirstError(next);
+    focusFirstError(next, { ignore: NON_FIELD_ERROR_KEYS });
     return Object.keys(next).length === 0;
   }
 
@@ -243,7 +213,7 @@ export function BioFlow({
         const result = await action(responses, flags, final, extras);
         if (!result.ok) {
           setErrors(result.errors);
-          focusFirstError(result.errors);
+          focusFirstError(result.errors, { ignore: NON_FIELD_ERROR_KEYS });
           return;
         }
         setErrors({});

@@ -26,19 +26,17 @@ export function SignOutButton() {
       type="button"
       onClick={signOut}
       disabled={pending}
-      // The label is on the BUTTON, not only in the text, because the text is
-      // hidden below `sm` — without this the control loses its accessible name
-      // on exactly the screens where it is icon-only.
-      aria-label="Sign out"
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+      // KEEPS ITS WORD AT EVERY WIDTH, and the 44px minimum height that makes
+      // it a real touch target. Hiding this label below `sm` was tried and
+      // reverted: it bought 30px of header width by turning the one destructive
+      // control in the chrome into a bare 16px icon — the smallest tap target
+      // on the page, guarding the action with the worst consequence if
+      // mis-tapped. The width came from the wordmark instead (app-shell.tsx),
+      // which costs nobody anything. Measured: 58x44 here, against 16x16.
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
     >
       <LogOut className="h-4 w-4" aria-hidden />
-      {/* ICON-ONLY BELOW `sm`, exactly as every NavLink beside it already is.
-          This was the one item in the header nav still carrying its word, and
-          at 360px it pushed the row 30px past the right edge of the screen —
-          the button hung off the side of the phone, and the whole page went
-          horizontally scrollable with it. Same treatment, same breakpoint. */}
-      <span className="hidden sm:inline">Sign out</span>
+      Sign out
     </button>
   );
 }

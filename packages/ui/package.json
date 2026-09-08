@@ -9,7 +9,8 @@
   "exports": {
     "./styles.css": "./src/styles/globals.css",
     "./components/*": "./src/components/*.tsx",
-    "./lib/utils": "./src/lib/utils.ts"
+    "./lib/utils": "./src/lib/utils.ts",
+    "./lib/focus-first-error": "./src/lib/focus-first-error.ts"
   },
   "scripts": {
     "lint": "eslint .",
