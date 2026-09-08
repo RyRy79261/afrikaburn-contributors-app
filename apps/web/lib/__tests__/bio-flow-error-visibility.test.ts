@@ -91,6 +91,72 @@ describe("every server refusal reaches the burner's eyes", () => {
     }
   });
 
+  it("gives focusFirstError a control to scroll to for every suppressed key", () => {
+    // THE GAP THIS CLOSES, found by CodeRabbit on 6224bcf and confirmed by
+    // measuring the rendered flow at 390px: `attendedYears`, `onsite.phone`,
+    // `offsite.phone` and `id.type` were suppressed from the banner and drawn
+    // by a `fieldError(...)` call, so the previous test passed — but NO ELEMENT
+    // carried those ids. `focusFirstError` resolves a key with
+    // `document.getElementById(key)`, so for a response of exactly
+    // `{ "onsite.phone": "Enter a valid phone number" }` the message rendered
+    // beside the on-site contact field and the page did not move. Which is the
+    // defect this whole branch exists to fix, one rung further down.
+    //
+    // "Drawn" and "reachable" are different properties. Assert both.
+    const step = FLOW.slice(FLOW.indexOf("function DetailsStep("));
+    for (const id of inlineIds()) {
+      const literal = `id="${id}"`;
+      const constant = id === "username" && step.includes("id={USERNAME_QUESTION_ID}");
+      expect(
+        step.includes(literal) || constant,
+        `no element carries id="${id}", so focusFirstError cannot reach it`,
+      ).toBe(true);
+    }
+  });
+
+  it("points EVERY control in a shared field at the message that is rendered", () => {
+    // `Field` ids its message from its own `htmlFor`, so the phone half of an
+    // emergency contact cannot describe itself as `onsite.phone-error` — no
+    // element has that id. Every control in the group has to name the GROUP's
+    // message, and it is not enough for one of them to do it: an earlier
+    // version of this test asserted the call existed SOMEWHERE in the file and
+    // survived a mutation that reverted the ID-type toggle on its own.
+    expect(FLOW).toContain(
+      'const groupDescribedBy = (fieldId: string, ...keys: string[]): string =>',
+    );
+
+    const GROUPS = [
+      { label: "On-site emergency contact", field: "onsite.name", controls: 2 },
+      { label: "Off-site emergency contact", field: "offsite.name", controls: 2 },
+      { label: "Identity document", field: "id.number", controls: 2 },
+      { label: "Years attended", field: "attendedYears", controls: 1 },
+    ];
+
+    for (const g of GROUPS) {
+      const open = FLOW.indexOf(`label="${g.label}"`);
+      expect(open, `the ${g.label} field still exists`).toBeGreaterThan(-1);
+      const block = FLOW.slice(open, FLOW.indexOf("</Field>", open));
+
+      // Every describing control in the block names the group…
+      const named = [...block.matchAll(/groupDescribedBy\(\s*"([^"]+)"/g)].map(
+        (m) => m[1],
+      );
+      expect(
+        named.length,
+        `${g.label} describes ${named.length} of ${g.controls} controls by its group`,
+      ).toBe(g.controls);
+      for (const fieldId of named) {
+        expect(fieldId, `${g.label} names the wrong field`).toBe(g.field);
+      }
+
+      // …and none of them fell back to a per-key id nothing renders.
+      expect(
+        block,
+        `a control in ${g.label} describes itself by a key with no element`,
+      ).not.toMatch(/\bdescribedBy\("/);
+    }
+  });
+
   it("suppresses only ids that are real questions", () => {
     for (const id of inlineIds()) {
       expect(QUESTION_IDS, `\`${id}\` is not a bio question`).toContain(id);

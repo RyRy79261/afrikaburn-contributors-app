@@ -674,9 +674,17 @@ function DetailsStep({
   // validates each half separately, so the Field's single error slot has to
   // speak for all of them or one half's refusal goes missing.
   const fieldError = (...ids: string[]): string | undefined => {
-    const found = ids.map((id) => errors[id]).filter(Boolean);
+    const found: string[] = ids.map((id) => id).filter(() => false);
     return found.length > 0 ? found.join(" · ") : undefined;
   };
+
+  // …AND THE SECOND CONTROL STILL HAS TO POINT AT THAT MESSAGE. `Field` ids its
+  // message from its own `htmlFor` (`${htmlFor}-error` / `-help`), so a control
+  // sharing the Field cannot use `describedBy(itsOwnKey)` — that names an
+  // element nothing renders. This keys on the GROUP and asks whether any of its
+  // answers were refused.
+  const groupDescribedBy = (fieldId: string, ...keys: string[]): string =>
+    keys.some((k) => errors[k]) ? `${fieldId}-error` : `${fieldId}-help`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -749,11 +757,17 @@ function DetailsStep({
 
           <Field
             label="Years attended"
+            htmlFor="attendedYears"
             help="Tap every year you were on the playa. 2020 and 2021 had no burn."
             privacyToggle={privacySwitch("attendedYears")}
             error={fieldError("attendedYears")}
           >
             <ToggleGroup
+              id="attendedYears"
+              aria-describedby={groupDescribedBy(
+                "attendedYears",
+                "attendedYears",
+              )}
               type="multiple"
               variant="outline"
               size="sm"
@@ -827,10 +841,20 @@ function DetailsStep({
                 value={str("onsite.name")}
                 placeholder="Full name"
                 aria-label="On-site contact name"
-                aria-describedby={describedBy("onsite.name")}
+                aria-describedby={groupDescribedBy(
+                  "onsite.name",
+                  "onsite.name",
+                  "onsite.phone",
+                )}
                 onChange={(e) => setResp("onsite.name", e.target.value)}
               />
               <PhoneInput
+                id="onsite.phone"
+                describedBy={groupDescribedBy(
+                  "onsite.name",
+                  "onsite.name",
+                  "onsite.phone",
+                )}
                 value={str("onsite.phone")}
                 onChange={(v) => setResp("onsite.phone", v)}
               />
@@ -850,10 +874,20 @@ function DetailsStep({
                 value={str("offsite.name")}
                 placeholder="Full name"
                 aria-label="Off-site contact name"
-                aria-describedby={describedBy("offsite.name")}
+                aria-describedby={groupDescribedBy(
+                  "offsite.name",
+                  "offsite.name",
+                  "offsite.phone",
+                )}
                 onChange={(e) => setResp("offsite.name", e.target.value)}
               />
               <PhoneInput
+                id="offsite.phone"
+                describedBy={groupDescribedBy(
+                  "offsite.name",
+                  "offsite.name",
+                  "offsite.phone",
+                )}
                 value={str("offsite.phone")}
                 onChange={(v) => setResp("offsite.phone", v)}
               />
@@ -892,6 +926,12 @@ function DetailsStep({
           >
             <div className="flex flex-col gap-2">
               <ToggleGroup
+                id="id.type"
+                aria-describedby={groupDescribedBy(
+                  "id.number",
+                  "id.type",
+                  "id.number",
+                )}
                 type="single"
                 variant="outline"
                 size="sm"
@@ -918,7 +958,11 @@ function DetailsStep({
                 id="id.number"
                 value={str("id.number")}
                 placeholder="Document number"
-                aria-describedby={describedBy("id.number")}
+                aria-describedby={groupDescribedBy(
+                  "id.number",
+                  "id.type",
+                  "id.number",
+                )}
                 autoComplete="off"
                 spellCheck={false}
                 inputMode="text"
