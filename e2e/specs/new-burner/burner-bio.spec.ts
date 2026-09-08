@@ -182,6 +182,14 @@ interface Overhang {
   left: number;
 }
 
+/** The worst of the four edges. ALL FOUR, deliberately: these assertions live
+ *  on a branch about HORIZONTAL overflow, so checking only `top`/`bottom` would
+ *  miss a refusal clipped off the right edge — the very failure the branch
+ *  exists for. Found in review; it was wrong in all three call sites. */
+function worstOverhang(o: Overhang): number {
+  return Math.max(o.top, o.right, o.bottom, o.left);
+}
+
 function overhangOf(control: Locator): Promise<Overhang> {
   return control.evaluate(
     (el: {
@@ -329,7 +337,7 @@ test.describe("new burner · Burner Bio refusals", () => {
     // assertion on this page.
     const messageOverhang = await overhangOf(message);
     expect(
-      Math.max(messageOverhang.top, messageOverhang.bottom),
+      worstOverhang(messageOverhang),
       `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
     ).toBeLessThanOrEqual(0);
 
@@ -367,7 +375,7 @@ test.describe("new burner · Burner Bio refusals", () => {
     // several hundred pixels above the fold.
     const messageOverhang = await overhangOf(message);
     expect(
-      Math.max(messageOverhang.top, messageOverhang.bottom),
+      worstOverhang(messageOverhang),
       `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
     ).toBeLessThanOrEqual(0);
 
@@ -436,7 +444,7 @@ test.describe("new burner · username", () => {
     await expect(message).toBeVisible();
     const messageOverhang = await overhangOf(message);
     expect(
-      Math.max(messageOverhang.top, messageOverhang.bottom),
+      worstOverhang(messageOverhang),
       `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
     ).toBeLessThanOrEqual(0);
     await expect(field).toBeFocused();
