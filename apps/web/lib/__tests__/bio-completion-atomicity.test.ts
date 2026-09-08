@@ -28,9 +28,13 @@ const EDITION = "eeeeeeee-0000-0000-0000-000000000000";
 // between them and every other page of a live product, and nothing they can do
 // clears it — not signing out, not starting again.
 //
-// Two locks now. The writes are ONE TRANSACTION (here), and `/onboarding` only
-// leaves for `/profile` once the gate has actually opened (below), so a row
-// written before this fix lands on the flow instead of in the loop.
+// Two locks now. The writes are ONE TRANSACTION (here), and `/onboarding` asks
+// whether the GATE POINTS HERE rather than whether a gate exists (below) — so a
+// row written before this fix lands on the flow instead of in the loop, and a
+// burner blocked by something else is sent to that instead of being shown the
+// bio wizard they already finished. The first version of that guard asked
+// `=== null`, which is the "is there a gate" question, and got the second case
+// wrong; see the test named for it.
 
 function source(relative: string): string {
   return readFileSync(
