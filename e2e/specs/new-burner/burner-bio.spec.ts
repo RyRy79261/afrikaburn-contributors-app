@@ -10,6 +10,7 @@
 //
 // Primary journey → runs on desktop AND 360px mobile via the config's projects.
 
+import type { Locator } from "@playwright/test";
 import { test, expect } from "../../fixtures";
 import { completeBio, signUpBurner } from "../../personas/factories";
 import { uniqueName, uniqueUsername } from "../../lib/identity";
@@ -142,17 +143,27 @@ test.describe("new burner · Burner Bio", () => {
 // + "Save & continue" want ~407px and the 360px baseline gives the column 312.
 // The buttons are `whitespace-nowrap` with the flex default `min-width: auto`,
 // so nothing shrank — the row simply overflowed and the primary button's last
-// 28px sat off the right edge of the screen (68px at 320px). A phone does not
-// pan sideways to recover them.
+// 28px sat off the right edge of the screen (68px at 320px).
 //
-// `toBeVisible()` would not have caught it and did not: it asks for a non-empty
-// box, which a button hanging off the side of the screen still has. Being ON
-// SCREEN is a different question, and `toBeInViewport({ ratio: 1 })` is the one
-// that asks it — so this reads as a real assertion on desktop and as the
-// regression test on mobile-360, from the same lines.
+// MEASURE AGAINST `documentElement.clientWidth`, NOT `toBeInViewport`. This is
+// the trap the whole bug sits in, and the first version of this test fell into
+// it. When content overflows horizontally a mobile browser shrinks the page to
+// fit, and the LAYOUT viewport grows to the content width — so on the broken
+// row, with the button hanging 28px off the side of a 360px screen, Chrome
+// reports `innerWidth` 388 against a `clientWidth` of 360 and the button's
+// right edge at exactly 388. Playwright intersects against the former. Checked
+// by reverting the fix and re-running: `toBeInViewport({ ratio: 1 })` passed on
+// all three controls, and so did an unforced `click()`. `clientWidth` is the
+// width the person can actually see, and it is the only one that caught it.
+//
+// That is also why the horizontal-overflow assertion is not a nicety at the
+// end: any overflow anywhere on the page triggers the same rescale, and every
+// coordinate this suite measures stops agreeing with what is drawn — which is
+// how the mobile-360 project came to report pointer interceptions against
+// elements that were nowhere near the button.
 //
 // The click at the end is deliberately NOT forced. `force: true` would step
-// over the actionability check that is the entire point of the test.
+// over the actionability check that is the point of having it.
 
 /** What `Locator.boundingBox()` returns, once the null case is dealt with. */
 interface Box {
@@ -160,6 +171,40 @@ interface Box {
   y: number;
   width: number;
   height: number;
+}
+
+/** Pixels by which a control lies outside the viewport the person actually
+ *  sees, per edge; 0 or less on every edge means fully visible. */
+interface Overhang {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+function overhangOf(control: Locator): Promise<Overhang> {
+  return control.evaluate(
+    (el: {
+      getBoundingClientRect(): {
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+      };
+      ownerDocument: {
+        documentElement: { clientWidth: number; clientHeight: number };
+      };
+    }) => {
+      const box = el.getBoundingClientRect();
+      const seen = el.ownerDocument.documentElement;
+      return {
+        top: Math.round(-box.top),
+        right: Math.round(box.right - seen.clientWidth),
+        bottom: Math.round(box.bottom - seen.clientHeight),
+        left: Math.round(-box.left),
+      };
+    },
+  );
 }
 
 test.describe("new burner · Burner Bio action row", () => {
@@ -185,9 +230,18 @@ test.describe("new burner · Burner Bio action row", () => {
       ["Save & finish later", later],
       ["Save & continue", primary],
     ] as const) {
-      await expect(control, `${label} is on screen`).toBeInViewport({
-        ratio: 1,
-      });
+      // Cheap and honest: it must at least be rendered and hittable.
+      await expect(control, `${label} is rendered`).toBeVisible();
+
+      // …and then the assertion that actually catches the bug. Every edge, so
+      // a control pushed off any side of the screen is caught, not just the
+      // right one this particular regression used.
+      const out = await overhangOf(control);
+      expect(
+        Math.max(out.top, out.right, out.bottom, out.left),
+        `${label} lies outside the visible viewport by ${JSON.stringify(out)}`,
+      ).toBeLessThanOrEqual(0);
+
       const box = await control.boundingBox();
       if (!box) throw new Error(`${label} reported no box on screen`);
       boxes.push(box);
@@ -285,7 +339,12 @@ test.describe("new burner · username", () => {
     // button changes, and the honest reading is that the button is broken.
     // `toBeVisible()` passes in that state — it did — so the assertion has to
     // be that the message is on screen and the caret is in the field to fix.
-    await expect(message).toBeInViewport({ ratio: 1 });
+    await expect(message).toBeVisible();
+    const messageOverhang = await overhangOf(message);
+    expect(
+      Math.max(messageOverhang.top, messageOverhang.bottom),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
     await expect(field).toBeFocused();
 
     // Fixing it lets the step through — proven by ARRIVING on the next step,

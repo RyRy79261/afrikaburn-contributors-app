@@ -132,6 +132,24 @@ describe("focusFirstError", () => {
     expect(document.activeElement).toBe(username);
   });
 
+  it("is inert where there is no document, so a server render cannot throw", () => {
+    // This lives in a package imported by server components. The guard is the
+    // only thing standing between an accidental render-time call and a crash.
+    const real = globalThis.document;
+    try {
+      Reflect.deleteProperty(globalThis, "document");
+      expect(() =>
+        focusFirstError({ username: "bad" }, { defer: false }),
+      ).not.toThrow();
+    } finally {
+      Object.defineProperty(globalThis, "document", {
+        value: real,
+        configurable: true,
+        writable: true,
+      });
+    }
+  });
+
   it("does not scroll a second time when focusing", () => {
     // focus({preventScroll:true}) matters: without it the browser scrolls again
     // on its own terms and undoes the centring.
