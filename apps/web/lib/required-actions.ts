@@ -8,7 +8,7 @@ import {
   isParticipantFacingActivation,
   parseActivationActionKey,
 } from "@quagga/core";
-import { db, schema } from "./db";
+import { db, schema, type Tx } from "./db";
 import { getActiveEdition } from "./edition";
 
 // The code-side action-key → route registry (build-spec: the DB stores the key,
@@ -75,13 +75,23 @@ export async function ensureRequiredAction(input: {
  * Scoped to match the key: without the edition this would complete every
  * edition's copy of the action at once, which is the same "satisfied for ever"
  * bug from the other direction.
+ *
+ * `tx` MATTERS. Clearing the gate is the second half of a pair: something also
+ * recorded the work as done (the Burner Bio stamps `burner_bios.completed_at`).
+ * If those two halves can land separately, the user is left marked complete and
+ * still gated — and `/onboarding` bounces a completed bio to `/profile` while
+ * the gate bounces `/profile` back, which is a redirect loop with no way out.
+ * Callers that write the "done" marker themselves MUST pass their transaction
+ * handle so both commit or neither does. Omitting it keeps the old
+ * single-write behaviour for callers that have nothing to pair with.
  */
 export async function completeRequiredAction(
   userId: string,
   editionId: string,
   actionKey: string,
+  tx?: Tx,
 ): Promise<void> {
-  await db()
+  await (tx ?? db())
     .update(schema.requiredActions)
     .set({ status: "completed", completedAt: new Date() })
     .where(

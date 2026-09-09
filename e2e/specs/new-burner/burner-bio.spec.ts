@@ -10,6 +10,7 @@
 //
 // Primary journey → runs on desktop AND 360px mobile via the config's projects.
 
+import type { Locator } from "@playwright/test";
 import { test, expect } from "../../fixtures";
 import { completeBio, signUpBurner } from "../../personas/factories";
 import { uniqueName, uniqueUsername } from "../../lib/identity";
@@ -135,6 +136,159 @@ test.describe("new burner · Burner Bio", () => {
   });
 });
 
+// --- The action row ---------------------------------------------------------
+//
+// THE BIO IS THE BLOCKING GATE, so a Save button a burner cannot press is the
+// whole app locked. This ran forced into one line: Back + "Save & finish later"
+// + "Save & continue" want ~407px and the 360px baseline gives the column 312.
+// The buttons are `whitespace-nowrap` with the flex default `min-width: auto`,
+// so nothing shrank — the row simply overflowed and the primary button's last
+// 28px sat off the right edge of the screen (68px at 320px).
+//
+// MEASURE AGAINST `documentElement.clientWidth`, NOT `toBeInViewport`. This is
+// the trap the whole bug sits in, and the first version of this test fell into
+// it. When content overflows horizontally a mobile browser shrinks the page to
+// fit, and the LAYOUT viewport grows to the content width — so on the broken
+// row, with the button hanging 28px off the side of a 360px screen, Chrome
+// reports `innerWidth` 388 against a `clientWidth` of 360 and the button's
+// right edge at exactly 388. Playwright intersects against the former. Checked
+// by reverting the fix and re-running: `toBeInViewport({ ratio: 1 })` passed on
+// all three controls, and so did an unforced `click()`. `clientWidth` is the
+// width the person can actually see, and it is the only one that caught it.
+//
+// That is also why the horizontal-overflow assertion is not a nicety at the
+// end: any overflow anywhere on the page triggers the same rescale, and every
+// coordinate this suite measures stops agreeing with what is drawn — which is
+// how the mobile-360 project came to report pointer interceptions against
+// elements that were nowhere near the button.
+//
+// The click at the end is deliberately NOT forced. `force: true` would step
+// over the actionability check that is the point of having it.
+
+/** What `Locator.boundingBox()` returns, once the null case is dealt with. */
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Pixels by which a control lies outside the viewport the person actually
+ *  sees, per edge; 0 or less on every edge means fully visible. */
+interface Overhang {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** The worst of the four edges. ALL FOUR, deliberately: these assertions live
+ *  on a branch about HORIZONTAL overflow, so checking only `top`/`bottom` would
+ *  miss a refusal clipped off the right edge — the very failure the branch
+ *  exists for. Found in review; it was wrong in all three call sites. */
+function worstOverhang(o: Overhang): number {
+  return Math.max(o.top, o.right, o.bottom, o.left);
+}
+
+function overhangOf(control: Locator): Promise<Overhang> {
+  return control.evaluate(
+    (el: {
+      getBoundingClientRect(): {
+        top: number;
+        right: number;
+        bottom: number;
+        left: number;
+      };
+      ownerDocument: {
+        documentElement: { clientWidth: number; clientHeight: number };
+      };
+    }) => {
+      const box = el.getBoundingClientRect();
+      const seen = el.ownerDocument.documentElement;
+      return {
+        top: Math.round(-box.top),
+        right: Math.round(box.right - seen.clientWidth),
+        bottom: Math.round(box.bottom - seen.clientHeight),
+        left: Math.round(-box.left),
+      };
+    },
+  );
+}
+
+test.describe("new burner · Burner Bio action row", () => {
+  test("every action stays on screen, apart, and pressable", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    const back = webPage.getByRole("button", { name: "Back", exact: true });
+    const later = webPage.getByRole("button", { name: /save & finish later/i });
+    const primary = webPage.getByRole("button", { name: "Save & continue" });
+
+    // Scroll the row into view first — the details step is longer than any
+    // viewport, so "off screen because you have not scrolled there yet" is not
+    // the failure being looked for.
+    await primary.scrollIntoViewIfNeeded();
+
+    const boxes: Box[] = [];
+    for (const [label, control] of [
+      ["Back", back],
+      ["Save & finish later", later],
+      ["Save & continue", primary],
+    ] as const) {
+      // Cheap and honest: it must at least be rendered and hittable.
+      await expect(control, `${label} is rendered`).toBeVisible();
+
+      // …and then the assertion that actually catches the bug. Every edge, so
+      // a control pushed off any side of the screen is caught, not just the
+      // right one this particular regression used.
+      const out = await overhangOf(control);
+      expect(
+        Math.max(out.top, out.right, out.bottom, out.left),
+        `${label} lies outside the visible viewport by ${JSON.stringify(out)}`,
+      ).toBeLessThanOrEqual(0);
+
+      const box = await control.boundingBox();
+      if (!box) throw new Error(`${label} reported no box on screen`);
+      boxes.push(box);
+    }
+
+    // None of them overlaps another — stacked or in a row, they are separate
+    // targets. A thumb landing on "Save & finish later" instead of "Save &
+    // continue" abandons the bio halfway.
+    for (const [i, a] of boxes.entries()) {
+      for (const b of boxes.slice(i + 1)) {
+        const overlaps =
+          a.x < b.x + b.width &&
+          b.x < a.x + a.width &&
+          a.y < b.y + b.height &&
+          b.y < a.y + a.height;
+        expect(overlaps, "two action controls overlap").toBe(false);
+      }
+    }
+
+    // And nothing anywhere on the page hangs off the right-hand edge. This is
+    // the cause rather than the symptom: any horizontal overflow makes a mobile
+    // browser shrink the whole page to fit, and every measurement taken on it —
+    // including this suite's own — stops agreeing with what is drawn.
+    const overflow = await webPage
+      .locator("html")
+      .evaluate((html: { scrollWidth: number; clientWidth: number }) =>
+        Math.round(html.scrollWidth - html.clientWidth),
+      );
+    expect(overflow, "the page is horizontally scrollable").toBeLessThanOrEqual(
+      1,
+    );
+
+    await primary.click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+});
+
 // --- The username -----------------------------------------------------------
 //
 // The handle replaced the required "burner name". Three things have to hold at
@@ -144,6 +298,100 @@ test.describe("new burner · Burner Bio", () => {
 // refused with a sentence, not a regex). The gate change is the risky half —
 // `isBioComplete` used to BE the username check, so an off-by-one here either
 // locks every new burner out of the app or lets an unfinished bio through.
+
+// A REFUSAL THE BURNER CANNOT SEE IS A BUTTON THAT DOES NOTHING.
+//
+// The username was the only refusal this flow ever drew. Every other question
+// the server validates — and it validates all sixteen — set state that nothing
+// rendered: the page did not move, no text changed, and the only honest reading
+// left to the person is that Save is broken. Medical notes are the case with
+// teeth, because the box has no character counter and no client cap, so the
+// first a burner hears of the 1000-character limit is a save that silently
+// refuses. This is the same defect as the malformed username above, on fifteen
+// more fields.
+test.describe("new burner · Burner Bio refusals", () => {
+  test("a refused HALF of a shared field is named, on screen, and focused", async ({
+    webPage,
+  }) => {
+    // The on-site contact pairs a name with a phone in ONE `Field`, and the
+    // server validates each half separately. Until 96cdc41 the phone had no
+    // `id`, so `focusFirstError` — which resolves a key with
+    // `document.getElementById` — could not reach it: the message rendered
+    // beside the field, the catch-all banner stayed quiet because the key is
+    // suppressed there, and the page did not move. Found in review, confirmed
+    // by measuring the rendered DOM, and this is the behavioural half.
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    // Located by id, not by role: the phone half is the control that had none.
+    // (It has an accessible name now, but the id is what the defect was about.)
+    const phone = webPage.locator('[id="onsite.phone"]');
+    await phone.fill("+275"); // 3 digits — the questionnaire wants 7 to 15
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+
+    const message = webPage.getByText(/enter a valid phone number/i);
+    await expect(message).toBeVisible();
+
+    // On screen, not merely in the DOM — same reason as every other refusal
+    // assertion on this page.
+    const messageOverhang = await overhangOf(message);
+    expect(
+      worstOverhang(messageOverhang),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
+
+    // AND THE CARET IS IN THE HALF THAT WAS REFUSED. This is the assertion the
+    // missing `id` broke: without it nothing was focused and nothing scrolled.
+    await expect(phone).toBeFocused();
+
+    // Fixing it lets the step through — proven by ARRIVING on the next step.
+    await phone.fill("+27 82 555 1234");
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+
+  test("a refused field says so, on screen, next to itself", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+
+    // Over the questionnaire's 1000-character cap. Typed as one paste, which is
+    // how a burner actually arrives at it — copying notes out of a document.
+    const notes = webPage.getByRole("textbox", { name: /medical notes/i });
+    await notes.fill("A".repeat(1200));
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+
+    // THE REFUSAL EXISTS…
+    const message = webPage.getByText(/max 1000 characters/i);
+    await expect(message).toBeVisible();
+
+    // …AND IT IS WHERE THE PERSON IS LOOKING. Same assertion as the username
+    // case, for the same reason: `toBeVisible()` is satisfied by a message
+    // several hundred pixels above the fold.
+    const messageOverhang = await overhangOf(message);
+    expect(
+      worstOverhang(messageOverhang),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
+
+    // Still on the details step: the refusal blocked the step rather than
+    // letting a half-saved bio through.
+    await expect(notes).toBeVisible();
+
+    // Shortening it lets the step through — proven by ARRIVING on the next
+    // step, not by a button both steps share.
+    await notes.fill("Penicillin allergy.");
+    await webPage.getByRole("button", { name: "Save & continue" }).click();
+    await expect(
+      webPage.getByRole("heading", { name: /your burns & volunteering/i }),
+    ).toBeVisible();
+  });
+});
 
 test.describe("new burner · username", () => {
   test("the bio completes with NO username and still releases the gate", async ({
@@ -185,6 +433,21 @@ test.describe("new burner · username", () => {
     await expect(message).not.toHaveText(/\[a-z|\^|\$/);
     // Still on the details step — the malformed handle blocked the step.
     await expect(field).toBeVisible();
+
+    // AND THE REFUSAL LANDS WHERE THE PERSON IS LOOKING. The username sits at
+    // the top of a step several screens long and the button that refuses it is
+    // at the bottom, so a message that merely EXISTS is a message several
+    // hundred pixels above the fold: the page sits still, nothing near the
+    // button changes, and the honest reading is that the button is broken.
+    // `toBeVisible()` passes in that state — it did — so the assertion has to
+    // be that the message is on screen and the caret is in the field to fix.
+    await expect(message).toBeVisible();
+    const messageOverhang = await overhangOf(message);
+    expect(
+      worstOverhang(messageOverhang),
+      `the refusal is off screen by ${JSON.stringify(messageOverhang)}`,
+    ).toBeLessThanOrEqual(0);
+    await expect(field).toBeFocused();
 
     // Fixing it lets the step through — proven by ARRIVING on the next step,
     // not by the presence of a button both steps share.

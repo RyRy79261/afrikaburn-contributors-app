@@ -75,7 +75,24 @@ export async function AppShell({
         <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold">
             <Flame className="h-5 w-5 text-primary" aria-hidden />
-            <span className="tracking-tight">Contributors</span>
+            {/* THE WORDMARK IS WHERE THE MOBILE HEADER'S WIDTH COMES FROM.
+                This row wants ~92px more than a 360px phone gives it (360 less
+                `px-6` either side = 312), and something has to yield. This
+                word is the cheapest thing in it: the flame beside it is the
+                brand mark and the link still works, so nothing is lost but a
+                repetition of the name in the tab title. The alternatives all
+                cost more — the nav icons are four destinations, and the
+                sign-out label guards the one destructive action in the chrome.
+
+                `sr-only`, NOT `hidden`. `hidden` would strip this link's only
+                text and leave it with NO accessible name below `sm` — verified
+                against the rendered accessibility tree, where it came back as
+                an unnamed `link`. `sr-only` takes it out of the layout and
+                leaves it to assistive technology, so the name holds at every
+                width and the row still fits. Same reasoning as NavLink. */}
+            <span className="sr-only tracking-tight sm:not-sr-only">
+              Contributors
+            </span>
           </Link>
           <div className="flex items-center gap-5 text-sm">
             {showBrowseLinks && (
