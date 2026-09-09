@@ -59,24 +59,25 @@ without restating it:
 
 ## The index
 
-| Doc                                                      | Category         | Doc status     | Requirement-ID coverage                                                                       |
-| -------------------------------------------------------- | ---------------- | -------------- | --------------------------------------------------------------------------------------------- |
-| `README.md` _(this file)_                                | Operational      | Active         | N/A — index and conventions, not spec-derived                                                 |
-| [`technical-spec.md`](technical-spec.md)                 | Product          | Active         | **Exhaustive** — full 1:1 section mirror of the App Spec                                      |
-| [`architecture.md`](architecture.md)                     | Architecture     | Active         | Partial — `SEC-*`, `CORE-*`                                                                   |
-| [`build-spec.md`](build-spec.md)                         | Engineering Spec | Active         | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*`                                    |
-| [`component-spec.md`](component-spec.md)                 | Engineering Spec | Active         | N/A — implementation detail                                                                   |
-| [`accounts-security-spec.md`](accounts-security-spec.md) | Security         | Active         | Partial — `SEC-*`, `CDB-002`                                                                  |
-| [`auth-platform-spec.md`](auth-platform-spec.md)         | Security         | Active         | Partial — `SEC-*`                                                                             |
-| [`questionnaire-spec.md`](questionnaire-spec.md)         | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
-| [`notifications-spec.md`](notifications-spec.md)         | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                           |
-| [`supplier-spec.md`](supplier-spec.md)                   | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                |
-| [`flows.md`](flows.md)                                   | Architecture     | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
-| [`triage.md`](triage.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
-| [`synthesis.md`](synthesis.md)                           | Planning         | **Historical** | N/A — superseded as an authoritative source by the App Specification itself                   |
-| [`deploy.md`](deploy.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
-| [`roadmap.md`](roadmap.md)                               | Planning         | Active         | Partial — `RELEASE-*`                                                                         |
-| [`sdk/`](sdk/README.md)                                  | Engineering Spec | Draft          | N/A — no App Spec section yet; specifies a `/v1` API and published SDK that are **not built** |
+| Doc                                                                  | Category         | Doc status     | Requirement-ID coverage                                                                        |
+| -------------------------------------------------------------------- | ---------------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `README.md` _(this file)_                                            | Operational      | Active         | N/A — index and conventions, not spec-derived                                                  |
+| [`technical-spec.md`](technical-spec.md)                             | Product          | Active         | **Exhaustive** — full 1:1 section mirror of the App Spec                                       |
+| [`architecture.md`](architecture.md)                                 | Architecture     | Active         | Partial — `SEC-*`, `CORE-*`                                                                    |
+| [`build-spec.md`](build-spec.md)                                     | Engineering Spec | Active         | Partial — `CORE-*`, `ONBOARD-*`, `CDB-*`, `SEC-*`, `REG-*`                                     |
+| [`component-spec.md`](component-spec.md)                             | Engineering Spec | Active         | N/A — implementation detail                                                                    |
+| [`accounts-security-spec.md`](accounts-security-spec.md)             | Security         | Active         | Partial — `SEC-*`, `CDB-002`                                                                   |
+| [`auth-platform-spec.md`](auth-platform-spec.md)                     | Security         | Active         | Partial — `SEC-*`                                                                              |
+| [`questionnaire-spec.md`](questionnaire-spec.md)                     | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                        |
+| [`notifications-spec.md`](notifications-spec.md)                     | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                            |
+| [`supplier-spec.md`](supplier-spec.md)                               | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                 |
+| [`flows.md`](flows.md)                                               | Architecture     | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                        |
+| [`triage.md`](triage.md)                                             | Operational      | Active         | N/A — operational, not spec-derived                                                            |
+| [`synthesis.md`](synthesis.md)                                       | Planning         | **Historical** | N/A — superseded as an authoritative source by the App Specification itself                    |
+| [`deploy.md`](deploy.md)                                             | Operational      | Active         | N/A — operational, not spec-derived                                                            |
+| [`roadmap.md`](roadmap.md)                                           | Planning         | Active         | Partial — `RELEASE-*`                                                                          |
+| [`qgis-placement-investigation.md`](qgis-placement-investigation.md) | Planning         | **Draft**      | Partial — `LAYOUT-*`, `ERF-*`, `REG-029`, `REG-030`; investigates data that does not exist yet |
+| [`sdk/`](sdk/README.md)                                              | Engineering Spec | Draft          | N/A — no App Spec section yet; specifies a `/v1` API and published SDK that are **not built**  |
 
 Categories: **Product** (what's built vs. the spec) · **Architecture** (how the
 system fits together, current state) · **Engineering Spec** (a subsystem's
