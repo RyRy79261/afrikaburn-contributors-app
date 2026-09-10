@@ -129,7 +129,6 @@ test.describe("org staff · registration review loop", () => {
     // Lower-case and punctuated, so normalization has work to do. Random,
     // because codes are unique per edition and these tests run in parallel.
     const typed = `q${Math.random().toString(36).slice(2, 7)}-1`;
-    const stored = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
     const code = staff.org.getByLabel("Camp code");
     const save = staff.org.getByRole("button", {
@@ -141,13 +140,18 @@ test.describe("org staff · registration review loop", () => {
     await save.click();
     await expect(staff.org.getByText("Placement details saved.")).toBeVisible();
 
-    // The field shows what was STORED, and nothing is left to save.
-    await expect(code).toHaveValue(stored);
+    // The field drops what was TYPED, and nothing is left to save. The test
+    // does not restate the normalization rule — that is @quagga/core's, and
+    // tested there. What matters here is that the panel shows the server's
+    // answer rather than the keystrokes.
+    await expect(code).not.toHaveValue(typed);
     await expect(save).toBeDisabled();
+    const shown = await code.inputValue();
+    expect(shown).not.toBe("");
 
-    // It survives a reload — the value came from the database, not the input.
+    // And what it shows IS what the database holds: a reload reads it back.
     await staff.org.reload();
-    await expect(staff.org.getByLabel("Camp code")).toHaveValue(stored);
+    await expect(staff.org.getByLabel("Camp code")).toHaveValue(shown);
   });
 
   test("a section review comment is audited and the camp sees it", async ({
