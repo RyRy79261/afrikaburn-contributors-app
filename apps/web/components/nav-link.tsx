@@ -70,7 +70,16 @@ function NavLinkBody({ icon, label }: { icon: NavIcon; label: string }) {
         )}
         aria-hidden
       />
-      <span className={cn("hidden sm:inline", pending && "opacity-60")}>
+      {/* `sr-only`, NOT `hidden`. Both take the word out of the layout below
+          `sm`, which is what the narrow header needs — but `hidden` removes it
+          from the accessibility tree too, and the icon beside it is
+          `aria-hidden`, so the link was left with NO accessible name at all on
+          a phone. Verified against the rendered accessibility tree at 360px:
+          all four of these came back as an unnamed `link`, which is a screen
+          reader announcing "link" four times and a voice-control user with
+          nothing to say. `sr-only` costs the same zero layout width and keeps
+          the name. */}
+      <span className={cn("sr-only sm:not-sr-only", pending && "opacity-60")}>
         {label}
       </span>
       {pending && <span className="sr-only">Loading {label}…</span>}

@@ -91,6 +91,10 @@ export interface PhoneInputProps {
   placeholder?: string;
   disabled?: boolean;
   defaultCountry?: Country;
+  /** Accessible name. Needed when the control does NOT own its Field's label —
+   *  e.g. the phone half of an emergency contact, whose `<label for>` points at
+   *  the name input beside it, leaving this one unnamed. */
+  ariaLabel?: string;
   describedBy?: string;
   className?: string;
 }
@@ -102,6 +106,7 @@ export function PhoneInput({
   placeholder,
   disabled,
   defaultCountry = DEFAULT_COUNTRY,
+  ariaLabel,
   describedBy,
   className,
 }: PhoneInputProps) {
@@ -117,6 +122,7 @@ export function PhoneInput({
       id={id}
       placeholder={placeholder}
       disabled={disabled}
+      aria-label={ariaLabel}
       aria-describedby={describedBy}
       className={cn("flex items-center", className)}
     />

@@ -306,3 +306,107 @@ describe("resolveMedicalNotesForViewer — the org branch is scoped to registrat
     });
   });
 });
+
+describe("resolveMedicalNotesForViewer — a rank is never invented", () => {
+  const piGrant = [
+    {
+      departmentId: REGISTRATIONS_DEPT,
+      permissions: { personal_information: true },
+    },
+  ];
+
+  it("REFUSES an org-group member holding a personal_information grant — apps/org calls that state forbidden", async () => {
+    // `orgRankFromRole("member")` is null, and apps/org/lib/session.ts treats
+    // null as forbidden: "a role that is not an org rank resolves to null and
+    // is forbidden". The resolver used to answer the same input with
+    // `?? "org_staff"`, inventing a rank the account does not hold, so the
+    // console refused a reader the participant app served.
+    dbMock.queue(
+      [{ id: ORG_ONE }],
+      [
+        membership(VIEWER, ORG_ONE, "member"),
+        membership(SUBJECT, CAMP_A, "member"),
+      ],
+      piGrant,
+      DOMAIN_OWNERS,
+    );
+
+    expect(await read()).toEqual({
+      visible: false,
+      notes: null,
+      unreadable: false,
+    });
+    // Fail-closed all the way down: the org branch is skipped, so the role
+    // grants, the domain owners and the encrypted bio row are never selected —
+    // only the org-group and membership lookups run. And a refused read writes
+    // no audit row, because nothing was disclosed.
+    expect(dbMock.queries.filter((q) => q.kind === "select")).toHaveLength(2);
+    await flushAfterTasks();
+    expect(dbMock.queries.some((q) => q.kind === "insert")).toBe(false);
+  });
+
+  it("REFUSES an engineer holding the same grant — the carve-out survives a second org row", async () => {
+    // The rank-blind fold: `isOrgStaffRole` is true for god/org_staff only, so
+    // an ordinary row arriving after the engineer row overwrote it, the rank
+    // resolved null, and the fallback promoted the engineer to org_staff —
+    // handing them exactly what ENGINEER_RANK_CARVE_OUTS refuses them.
+    const rows = [
+      membership(VIEWER, ORG_ONE, "engineer", "org-eng"),
+      membership(VIEWER, ORG_TWO, "member", "org-mem"),
+      membership(SUBJECT, CAMP_A, "member", "camp-sub"),
+    ];
+
+    for (const ordered of [rows, [...rows].reverse()]) {
+      dbMock.reset();
+      resetNextMocks();
+      dbMock.queue(
+        [{ id: ORG_ONE }, { id: ORG_TWO }],
+        ordered,
+        piGrant,
+        DOMAIN_OWNERS,
+      );
+      expect(await read()).toEqual({
+        visible: false,
+        notes: null,
+        unreadable: false,
+      });
+    }
+  });
+
+  it("still permits org_staff holding the grant — the fix closes a hole without closing the door", async () => {
+    dbMock.queue(
+      [{ id: ORG_ONE }],
+      [
+        membership(VIEWER, ORG_ONE, "org_staff"),
+        membership(SUBJECT, CAMP_A, "member"),
+      ],
+      piGrant,
+      DOMAIN_OWNERS,
+      [{ medicalNotes: encrypt(NOTES) }],
+    );
+
+    expect((await read()).notes).toBe(NOTES);
+  });
+
+  it("still permits an engineer who LEADS the subject's camp — a different authority, correctly recorded", async () => {
+    // The carve-out removes the ORG branch, not the person. An engineer who is
+    // also a camp lead reads their own member through the camp branch.
+    dbMock.queue(
+      [{ id: ORG_ONE }],
+      [
+        membership(VIEWER, ORG_ONE, "engineer", "org-eng"),
+        membership(VIEWER, CAMP_A, "lead", "camp-lead"),
+        membership(SUBJECT, CAMP_A, "member", "camp-sub"),
+      ],
+      [],
+      DOMAIN_OWNERS,
+      [{ medicalNotes: encrypt(NOTES) }],
+    );
+
+    expect((await read()).notes).toBe(NOTES);
+    await flushAfterTasks();
+    expect(dbMock.onlyQuery("insert").arg("values")).toMatchObject({
+      meta: { basis: "camp_lead" },
+    });
+  });
+});

@@ -6,13 +6,14 @@ import {
   buildDomainOwnership,
   canReadPersonalInformationIn,
   canViewMedicalNotes,
-  isOrgStaffRole,
   medicalAccessBasis,
   orgRankFromRole,
   sanitizeOrgPermissions,
+  strongestOrgRole,
   MEDICAL_VIEW_AUDIT_ACTION,
   type MedicalAccessContext,
 } from "@quagga/core";
+import type { MembershipRole } from "@quagga/types";
 import { db, schema } from "./db";
 import { decryptField } from "./crypto-guard";
 
@@ -133,16 +134,19 @@ async function buildMedicalAccessContext(
   const actorLeadCampIds: string[] = [];
   const subjectCampIds: string[] = [];
   const actorOrgMembershipIds: string[] = [];
-  let actorOrgRole: MedicalAccessContext["actorOrgRole"] = null;
+  const actorOrgRoles: MembershipRole[] = [];
 
   for (const row of rows) {
     const isOrgGroup = orgGroupIds.has(row.groupId);
     if (row.userId === viewerUserId) {
-      // With more than one org group a viewer can hold several org rows. Keep
-      // the STRONGEST: a qualifying role is never overwritten by a later
-      // non-qualifying one, so the outcome does not depend on row order.
+      // With more than one org group a viewer can hold several org rows.
+      // Collect them all and let `strongestOrgRole` pick, so the outcome
+      // depends on the SET of roles and never on row order. The fold this
+      // replaced tested `isOrgStaffRole`, which is true for god/org_staff only
+      // — so an `engineer` was silently overwritten by any later ordinary row
+      // and lost the rank its carve-out hangs on.
       if (isOrgGroup) {
-        if (!isOrgStaffRole(actorOrgRole)) actorOrgRole = row.role;
+        actorOrgRoles.push(row.role);
         actorOrgMembershipIds.push(row.id);
       } else if (row.role === "lead" || row.role === "admin") {
         actorLeadCampIds.push(row.groupId);
@@ -169,8 +173,21 @@ async function buildMedicalAccessContext(
   // is now carried through rather than erased.
   //
   // (The `god` anchor is handled inside the predicate and needs no roles.)
+  const actorOrgRole = strongestOrgRole(actorOrgRoles);
+
+  // FAIL CLOSED ON A ROLE THAT IS NOT AN ORG RANK. `orgRankFromRole` returns
+  // null for lead/admin/member on an org group, and apps/org/lib/session.ts
+  // treats exactly that state as forbidden — "a role that is not an org rank
+  // resolves to null and is forbidden". This used to read
+  // `orgRankFromRole(actorOrgRole) ?? "org_staff"`, which INVENTED a rank the
+  // account does not hold, so the two apps answered the same input differently
+  // on a medical-notes path: the console refused, the participant app resolved
+  // their role grants as org_staff. There is no safe stand-in for a rank; an
+  // actor without one is not in the org safety tier and the branch is skipped.
+  const actorOrgRank = orgRankFromRole(actorOrgRole);
+
   let actorOrgPersonalInformation = false;
-  if (actorOrgMembershipIds.length > 0) {
+  if (actorOrgMembershipIds.length > 0 && actorOrgRank !== null) {
     const [grants, owners] = await Promise.all([
       handle
         .select({
@@ -212,7 +229,7 @@ async function buildMedicalAccessContext(
         // participant app that the console refuses them — the two apps must
         // resolve this identically. `god` is also decided by `actorOrgRole`
         // inside the predicate, so agreeing with it here is harmless.
-        rank: orgRankFromRole(actorOrgRole) ?? "org_staff",
+        rank: actorOrgRank,
         domains: buildDomainOwnership(owners),
         roles: grants.map((g) => ({
           id: "",

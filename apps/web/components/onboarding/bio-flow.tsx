@@ -6,6 +6,7 @@ import { Check, Lock } from "lucide-react";
 import {
   BIO_PRIVACY_FIELDS,
   INVITE_RESUME_PATH,
+  buildBurnerBioQuestionnaire,
   MEDICAL_AUDIENCE_NOTE,
   USERNAME_HELP,
   USERNAME_MAX_LENGTH,
@@ -15,6 +16,7 @@ import {
 } from "@quagga/core";
 import {
   attendedYearOptions,
+  flattenQuestions,
   type QuestionnaireResponses,
   type QuestionnaireResponseValue,
   type SaveResult,
@@ -37,6 +39,11 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { toast } from "@quagga/ui/components/toast";
+import {
+  describedByForGroup,
+  fieldErrorFor,
+} from "@quagga/ui/lib/field-errors";
+import { focusFirstError } from "@quagga/ui/lib/focus-first-error";
 import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
 import {
@@ -83,6 +90,34 @@ interface BioFlowProps {
 }
 
 const FORM_ERROR_KEY = "_form";
+// Keys that are form-level rather than a control id. Both already render
+// immediately above the action row, so scrolling to them would be a no-op that
+// moved the page for no reason.
+const NON_FIELD_ERROR_KEYS = [FORM_ERROR_KEY, "_root"] as const;
+
+/** Every question id whose refusal the details step draws NEXT TO ITS CONTROL.
+ *  Read only to avoid saying the same thing twice — see `unshownErrors`. */
+const DETAILS_INLINE_ERROR_IDS: ReadonlySet<string> = new Set([
+  USERNAME_QUESTION_ID,
+  "legalName",
+  "homeCity",
+  "attendedYears",
+  "phone",
+  "onsite.name",
+  "onsite.phone",
+  "offsite.name",
+  "offsite.phone",
+  "medicalNotes",
+  "id.type",
+  "id.number",
+]);
+
+/** id → prompt, so a refusal can NAME the field it belongs to. Built from the
+ *  questionnaire itself rather than a second list of labels, which would drift
+ *  the first time a question is renamed. */
+const QUESTION_PROMPTS: ReadonlyMap<string, string> = new Map(
+  flattenQuestions(buildBurnerBioQuestionnaire()).map((q) => [q.id, q.prompt]),
+);
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again in a moment.";
 
@@ -154,6 +189,13 @@ export function BioFlow({
   const step = steps[stepIndex];
   const isLastInput = step === "privacy";
 
+  // Refusals no control on this step is drawing. See the banner below.
+  const unshownErrors = Object.entries(errors).filter(
+    ([key]) =>
+      !(NON_FIELD_ERROR_KEYS as readonly string[]).includes(key) &&
+      !(step === "details" && DETAILS_INLINE_ERROR_IDS.has(key)),
+  );
+
   function setResp(id: string, value: QuestionnaireResponseValue) {
     setResponses((prev) => ({ ...prev, [id]: value }));
     setErrors((prev) => {
@@ -198,6 +240,7 @@ export function BioFlow({
       }
     }
     setErrors(next);
+    focusFirstError(next, { ignore: NON_FIELD_ERROR_KEYS });
     return Object.keys(next).length === 0;
   }
 
@@ -207,6 +250,7 @@ export function BioFlow({
         const result = await action(responses, flags, final, extras);
         if (!result.ok) {
           setErrors(result.errors);
+          focusFirstError(result.errors, { ignore: NON_FIELD_ERROR_KEYS });
           return;
         }
         setErrors({});
@@ -248,6 +292,8 @@ export function BioFlow({
       router.push("/");
     });
   }
+
+  const showBack = stepIndex > 0 && step !== "done";
 
   const primaryLabel = (() => {
     if (step === "welcome") return "Get started";
@@ -315,12 +361,73 @@ export function BioFlow({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-        <div>
-          {stepIndex > 0 && step !== "done" && (
+      {/* NOTHING THE SERVER REFUSES MAY BE SILENT. `saveBio` validates every
+          question in the bio questionnaire and returns errors keyed by question
+          id; this component used to render exactly ONE of them (`username`) and
+          the two form-level keys. Every other refusal — 1000 characters of
+          medical notes, a 41-character ID number, a malformed emergency-contact
+          phone, an impossible attended year — set state that nothing drew. The
+          burner pressed "Save & continue", the page did not move, and no text
+          on screen changed: the same "the button is broken" report this whole
+          branch started from, from a different direction.
+
+          Below, each field draws its own refusal beside its control. This is
+          the net under that: anything not claimed by a control on the CURRENT
+          step is listed here, named by its question prompt. The set is read
+          only to avoid DUPLICATING a message, so a question added later and
+          forgotten by `DETAILS_INLINE_ERROR_IDS` shows up here instead of
+          disappearing — the failure direction that keeps a burner unstuck. */}
+      {unshownErrors.length > 0 && (
+        <div
+          role="alert"
+          className="flex flex-col gap-1 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          <p className="font-medium">
+            This wasn&rsquo;t saved &mdash; please fix the following:
+          </p>
+          <ul className="list-disc pl-5">
+            {unshownErrors.map(([id, message]) => (
+              <li key={id}>
+                {QUESTION_PROMPTS.has(id) ? (
+                  <>
+                    <span className="font-medium">
+                      {QUESTION_PROMPTS.get(id)}
+                    </span>
+                    {" \u2014 "}
+                  </>
+                ) : null}
+                {message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* THE ACTION ROW STACKS BELOW `sm`, and must. Forced into one line it
+          wants Back + "Save & finish later" + "Save & continue" ≈ 407px, and
+          the column here is 312px wide at the 360px baseline (360 less the
+          shell's `px-6` either side). Buttons are `whitespace-nowrap` with the
+          flex default `min-width: auto`, so nothing shrinks — the row simply
+          overflows and the primary button's last 28px sit off the right edge
+          of the screen (68px at 320px, and it only clears at ~390px). A phone
+          viewport does not pan horizontally to reach them, so the gate the
+          whole app sits behind had a Save button a burner could not press.
+          Measured against this file's real DOM at 320/360/375/390/412px.
+
+          `min-h-11` is the 44px touch target, and the shape below — column
+          stacking to `sm:flex-row sm:items-center sm:justify-between` — is the
+          same footer artwork-registration-form.tsx and the org bulletin
+          composer already use. This row was the outlier. */}
+      <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Kept in the tree when there is no Back button so `justify-between`
+            still pushes the actions right on `sm`; hidden below it so the
+            stacked column does not open with an empty 8px gap. */}
+        <div className={showBack ? undefined : "hidden sm:block"}>
+          {showBack && (
             <Button
               type="button"
               variant="ghost"
+              className="min-h-11"
               onClick={() => goTo(stepIndex - 1)}
               disabled={isPending}
             >
@@ -328,18 +435,24 @@ export function BioFlow({
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {mode === "onboarding" && step !== "welcome" && step !== "done" && (
             <Button
               type="button"
               variant="outline"
+              className="min-h-11"
               onClick={handleFinishLater}
               disabled={isPending}
             >
               Save &amp; finish later
             </Button>
           )}
-          <Button type="button" onClick={handlePrimary} disabled={isPending}>
+          <Button
+            type="button"
+            className="min-h-11"
+            onClick={handlePrimary}
+            disabled={isPending}
+          >
             {isPending ? "Saving…" : primaryLabel}
           </Button>
         </div>
@@ -560,6 +673,21 @@ function DetailsStep({
     />
   );
 
+  // ONE FIELD, MORE THAN ONE ANSWER. The emergency contacts pair a name with a
+  // phone, and the identity document pairs a type with a number — the server
+  // validates each half separately, so the Field's single error slot has to
+  // speak for all of them or one half's refusal goes missing.
+  const fieldError = (...ids: string[]): string | undefined =>
+    fieldErrorFor(errors, ...ids);
+
+  // …AND THE SECOND CONTROL STILL HAS TO POINT AT THAT MESSAGE. `Field` ids its
+  // message from its own `htmlFor` (`${htmlFor}-error` / `-help`), so a control
+  // sharing the Field cannot use `describedBy(itsOwnKey)` — that names an
+  // element nothing renders. This keys on the GROUP and asks whether any of its
+  // answers were refused.
+  const groupDescribedBy = (fieldId: string, ...keys: string[]): string =>
+    describedByForGroup(errors, fieldId, ...keys);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -602,6 +730,7 @@ function DetailsStep({
             htmlFor="legalName"
             help="Optional — used only where AfrikaBurn needs it for logistics."
             privacyToggle={privacySwitch("legalName")}
+            error={fieldError("legalName")}
           >
             <Input
               id="legalName"
@@ -617,6 +746,7 @@ function DetailsStep({
             htmlFor="homeCity"
             help="Where you're travelling to the Tankwa from."
             privacyToggle={privacySwitch("homeCity")}
+            error={fieldError("homeCity")}
           >
             <Input
               id="homeCity"
@@ -629,10 +759,17 @@ function DetailsStep({
 
           <Field
             label="Years attended"
+            htmlFor="attendedYears"
             help="Tap every year you were on the playa. 2020 and 2021 had no burn."
             privacyToggle={privacySwitch("attendedYears")}
+            error={fieldError("attendedYears")}
           >
             <ToggleGroup
+              id="attendedYears"
+              aria-describedby={groupDescribedBy(
+                "attendedYears",
+                "attendedYears",
+              )}
               type="multiple"
               variant="outline"
               size="sm"
@@ -683,6 +820,7 @@ function DetailsStep({
             htmlFor="phone"
             help="Include the country code, e.g. +27 82 555 1234."
             privacyToggle={lockedSwitch("Phone")}
+            error={fieldError("phone")}
           >
             <PhoneInput
               id="phone"
@@ -697,6 +835,7 @@ function DetailsStep({
             htmlFor="onsite.name"
             help="Someone at the burn we can reach if needed."
             privacyToggle={lockedSwitch("On-site emergency contact")}
+            error={fieldError("onsite.name", "onsite.phone")}
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <Input
@@ -704,9 +843,21 @@ function DetailsStep({
                 value={str("onsite.name")}
                 placeholder="Full name"
                 aria-label="On-site contact name"
+                aria-describedby={groupDescribedBy(
+                  "onsite.name",
+                  "onsite.name",
+                  "onsite.phone",
+                )}
                 onChange={(e) => setResp("onsite.name", e.target.value)}
               />
               <PhoneInput
+                id="onsite.phone"
+                ariaLabel="On-site contact phone"
+                describedBy={groupDescribedBy(
+                  "onsite.name",
+                  "onsite.name",
+                  "onsite.phone",
+                )}
                 value={str("onsite.phone")}
                 onChange={(v) => setResp("onsite.phone", v)}
               />
@@ -718,6 +869,7 @@ function DetailsStep({
             htmlFor="offsite.name"
             help="Someone not at the burn — next of kin or similar."
             privacyToggle={lockedSwitch("Off-site emergency contact")}
+            error={fieldError("offsite.name", "offsite.phone")}
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <Input
@@ -725,9 +877,21 @@ function DetailsStep({
                 value={str("offsite.name")}
                 placeholder="Full name"
                 aria-label="Off-site contact name"
+                aria-describedby={groupDescribedBy(
+                  "offsite.name",
+                  "offsite.name",
+                  "offsite.phone",
+                )}
                 onChange={(e) => setResp("offsite.name", e.target.value)}
               />
               <PhoneInput
+                id="offsite.phone"
+                ariaLabel="Off-site contact phone"
+                describedBy={groupDescribedBy(
+                  "offsite.name",
+                  "offsite.name",
+                  "offsite.phone",
+                )}
                 value={str("offsite.phone")}
                 onChange={(v) => setResp("offsite.phone", v)}
               />
@@ -745,12 +909,14 @@ function DetailsStep({
             htmlFor="medicalNotes"
             help={`Allergies, conditions, medication a medic should know. ${MEDICAL_AUDIENCE_NOTE}`}
             privacyToggle={lockedSwitch("Medical notes")}
+            error={fieldError("medicalNotes")}
           >
             <Textarea
               id="medicalNotes"
               rows={3}
               value={str("medicalNotes")}
               placeholder="Anything a medic should know…"
+              aria-describedby={describedBy("medicalNotes")}
               onChange={(e) => setResp("medicalNotes", e.target.value)}
             />
           </Field>
@@ -760,9 +926,16 @@ function DetailsStep({
             htmlFor="id.number"
             help="Stored encrypted at rest (POPIA). Used only for ticket and access allocation."
             privacyToggle={lockedSwitch("Identity document")}
+            error={fieldError("id.type", "id.number")}
           >
             <div className="flex flex-col gap-2">
               <ToggleGroup
+                id="id.type"
+                aria-describedby={groupDescribedBy(
+                  "id.number",
+                  "id.type",
+                  "id.number",
+                )}
                 type="single"
                 variant="outline"
                 size="sm"
@@ -789,6 +962,11 @@ function DetailsStep({
                 id="id.number"
                 value={str("id.number")}
                 placeholder="Document number"
+                aria-describedby={groupDescribedBy(
+                  "id.number",
+                  "id.type",
+                  "id.number",
+                )}
                 autoComplete="off"
                 spellCheck={false}
                 inputMode="text"

@@ -25,7 +25,7 @@ import {
   type CampHistoryEntry,
   type QuestionnaireResponses,
 } from "@quagga/types";
-import { db, schema } from "./db";
+import { db, schema, withTransaction } from "./db";
 import {
   safeEncrypt,
   decryptOrNull,
@@ -206,6 +206,12 @@ export type SaveBioResult =
 /** Said the same way by the pre-check and by the lost-race path, so a user can
  * never tell which one fired — and it names no holder. */
 const USERNAME_TAKEN = "That username is already taken. Try another.";
+
+/** A lost username race, raised INSIDE `saveBio`'s transaction so the bio
+ *  upsert that already ran is rolled back with it. Module-private and thrown
+ *  from exactly one place: nothing else may raise it, and nothing outside
+ *  `saveBio` catches it. */
+class UsernameTaken extends Error {}
 
 /**
  * Validate + persist a bio from questionnaire responses. Enforces the privacy
@@ -401,49 +407,84 @@ export async function saveBio(input: {
     updatedAt: now,
   };
 
-  await db()
-    .insert(schema.burnerBios)
-    .values({
-      ...baseValues,
-      // A brand-new row still needs an initial privacy_flags value.
-      privacyFlags: initialPrivacyFlags(input.rawPrivacyFlags),
-      completedAt,
-    })
-    .onConflictDoUpdate({
-      target: [schema.burnerBios.userId, schema.burnerBios.editionId],
-      set: {
-        ...baseValues,
-        // Only touch privacy_flags when the caller explicitly supplied them.
-        ...resolvePrivacyFlagsUpdate(input.rawPrivacyFlags),
-        // On an update, only stamp completedAt when finalising — never unset it.
-        ...(input.final ? { completedAt } : {}),
-      },
-    });
+  // ONE TRANSACTION, AND IT HAS TO BE. Three writes have to agree with each
+  // other or the burner is locked out of the whole product:
+  //
+  //   1. the bio row, stamped `completed_at` when `final`
+  //   2. the account's username
+  //   3. the blocking `required_action`, cleared when `final`
+  //
+  // Run separately, (1) commits and then (2) or (3) fails — a lost username
+  // race, a dropped connection, a statement timeout — and the row now says the
+  // bio is COMPLETE while the gate still says PENDING. `/onboarding` redirects
+  // a completed bio to `/profile` (page.tsx), and the gate redirects a pending
+  // action back to `/onboarding`: an unbreakable redirect loop, on the one
+  // screen standing between a burner and every other page. There is no user
+  // action that recovers it and no admin surface that clears it.
+  //
+  // WHY A THROW AND NOT A RETURNED REFUSAL, unlike `invites-store`'s redeem.
+  // That one refuses BEFORE writing anything, so returning `{ ok: false }`
+  // commits an empty transaction. Here the bio upsert has already happened by
+  // the time the unique index answers, so the refusal must ROLL BACK — and the
+  // only way out of a drizzle transaction callback that rolls back is to throw.
+  try {
+    await withTransaction(async (tx) => {
+      await tx
+        .insert(schema.burnerBios)
+        .values({
+          ...baseValues,
+          // A brand-new row still needs an initial privacy_flags value.
+          privacyFlags: initialPrivacyFlags(input.rawPrivacyFlags),
+          completedAt,
+        })
+        .onConflictDoUpdate({
+          target: [schema.burnerBios.userId, schema.burnerBios.editionId],
+          set: {
+            ...baseValues,
+            // Only touch privacy_flags when the caller explicitly supplied them.
+            ...resolvePrivacyFlagsUpdate(input.rawPrivacyFlags),
+            // On an update, only stamp completedAt when finalising — never unset it.
+            ...(input.final ? { completedAt } : {}),
+          },
+        });
 
-  if (usernamePatch) {
-    try {
-      await db()
-        .update(schema.users)
-        .set(usernamePatch)
-        .where(eq(schema.users.id, input.userId));
-    } catch (error) {
-      // Lost the race between the availability check and the write. The unique
-      // index caught it, which is the point of having one; report it as the
-      // ordinary "taken" outcome rather than a 500.
-      if (!isUniqueViolation(error)) throw error;
+      if (usernamePatch) {
+        try {
+          await tx
+            .update(schema.users)
+            .set(usernamePatch)
+            .where(eq(schema.users.id, input.userId));
+        } catch (error) {
+          // Lost the race between the availability check and the write. The
+          // unique index caught it, which is the point of having one; report it
+          // as the ordinary "taken" outcome rather than a 500.
+          if (!isUniqueViolation(error)) throw error;
+          throw new UsernameTaken();
+        }
+      }
+
+      if (input.final) {
+        await completeRequiredAction(
+          input.userId,
+          input.editionId,
+          BURNER_BIO_ACTION_KEY,
+          tx,
+        );
+      }
+    });
+  } catch (error) {
+    if (error instanceof UsernameTaken) {
       return { ok: false, errors: { username: USERNAME_TAKEN } };
     }
+    throw error;
   }
 
+  // DELIBERATELY OUTSIDE, and after the commit. A keypair is derived state that
+  // any later save re-attempts, and it is not what the gate reads — so a
+  // failure here must not roll back a bio the burner completed, and must not
+  // leave the gate up. It was previously sequenced BEFORE the gate was cleared,
+  // which is exactly the split described above.
   await ensureProfileKeypair(input.userId);
-
-  if (input.final) {
-    await completeRequiredAction(
-      input.userId,
-      input.editionId,
-      BURNER_BIO_ACTION_KEY,
-    );
-  }
 
   return { ok: true };
 }
