@@ -1232,6 +1232,13 @@ export const registrations = pgTable(
     ),
     // Partial unique: two camps in one edition may both be unassigned (NULL),
     // but no two may share a code.
+    //
+    // BUILT WITHOUT `CONCURRENTLY`, and review asked why. drizzle-kit emits a
+    // plain `CREATE UNIQUE INDEX`, and the migrator wraps each migration in a
+    // transaction, where `CONCURRENTLY` is not allowed. So the build holds a
+    // write lock on `registrations` for as long as it runs. This table holds one
+    // row per camp per edition — a few hundred — so that is sub-second. Revisit
+    // if the table ever grows by orders of magnitude.
     editionCampCodeUniq: uniqueIndex("registrations_edition_camp_code_idx")
       .on(r.editionId, r.campCode)
       .where(sql`${r.campCode} IS NOT NULL`),
@@ -1811,6 +1818,13 @@ export const auditEvents = pgTable(
     // this marker with a conflict-safe insert so its idempotency is enforced by
     // the database rather than by a check-then-write that two concurrent cron
     // deliveries both pass.
+    //
+    // BUILT WITHOUT `CONCURRENTLY`, for the same reason as the camp-code index:
+    // the migrator runs each migration in a transaction, where `CONCURRENTLY`
+    // is not allowed. Partial or not, the build scans the whole table once and
+    // blocks audit writes while it does. At today's volume — one row per console
+    // action — that is well under a second. This table only grows, so revisit
+    // before adding another index to it once it is large.
     deadlineReminderMarker: uniqueIndex(
       "audit_events_deadline_reminder_marker_idx",
     )
