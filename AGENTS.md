@@ -129,8 +129,8 @@ list`, then `git worktree remove` what has finished.
    (idempotent — drizzle's own table makes the losers no-ops). An ALREADY-COMMITTED
    migration is NEVER edited, NEVER regenerated, and NEVER applied by an agent from a
    developer machine against production — the build is the only thing that applies
-   them. (Hand-*authoring* a new migration is now the required path; see the warning
-   above. Hand-*editing* one that has already shipped remains forbidden.)
+   them. (A NEW migration is never hand-authored either — it is generated; see the
+   warning above.)
    **The UNPOOLED endpoint is mandatory and ENFORCED, not merely preferred**: the
    runner reads `DATABASE_URL_UNPOOLED` (Neon's direct endpoint) first, and it
    _aborts the build_ rather than silently falling back to a pooled URL — because
