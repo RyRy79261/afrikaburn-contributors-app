@@ -113,6 +113,43 @@ test.describe("org staff · registration review loop", () => {
     ).toBeVisible();
   });
 
+  test("a camp code saves in its stored form, and the form settles", async ({
+    makeAppPage,
+  }) => {
+    // Regression (review on PR #26): the placement panel kept the TYPED text
+    // after a save, while the server stored the normalized code. The field
+    // showed `q…-1` though `Q…1` was written, and Save stayed enabled against
+    // no remaining change. This is the component's behaviour, so it is proved
+    // here, in a browser — apps/org's vitest scope is `lib/` by design.
+    skipUnlessGod();
+    const { campName } = await createSubmittedCamp(makeAppPage);
+    const staff = await provisionOrgStaff(makeAppPage);
+    await openDetailFromQueue(staff.org, campName);
+
+    // Lower-case and punctuated, so normalization has work to do. Random,
+    // because codes are unique per edition and these tests run in parallel.
+    const typed = `q${Math.random().toString(36).slice(2, 7)}-1`;
+    const stored = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    const code = staff.org.getByLabel("Camp code");
+    const save = staff.org.getByRole("button", {
+      name: "Save placement details",
+    });
+
+    await code.fill(typed);
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(staff.org.getByText("Placement details saved.")).toBeVisible();
+
+    // The field shows what was STORED, and nothing is left to save.
+    await expect(code).toHaveValue(stored);
+    await expect(save).toBeDisabled();
+
+    // It survives a reload — the value came from the database, not the input.
+    await staff.org.reload();
+    await expect(staff.org.getByLabel("Camp code")).toHaveValue(stored);
+  });
+
   test("a section review comment is audited and the camp sees it", async ({
     makeAppPage,
   }) => {
