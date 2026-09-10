@@ -17,6 +17,11 @@ Parent page: [App Specification](../app-specification.md)
 | 10/08/2026 | Formalized "4a. Camper Communications" into grouped requirements with new `COMM` prefix (COMM-001–020); added to Requirement Index |
 | 11/08/2026 | Corrected Requirement ID Conventions prefix rule to cover lettered subsections (e.g. 4a), per PR #25 review |
 | 11/08/2026 | Flagged unresolved visibility/permission ambiguity between COMM-001, COMM-002, COMM-017–COMM-019, and COMM-020 with inline cross-references; no decision recorded, detail to follow later |
+| 12/08/2026 | **Decision 009 resolved** — the platform never handles funds. §8 moves from ⚠️ At risk to ❌ Not implemented with a stated resolution; `PAY-001`–`PAY-005` will not be built. Replaced by unique payment-identifying codes plus a paid checkbox, both shipped |
+| 12/08/2026 | **Decision 014 recorded and resolved** — registration intake uses this platform's own questionnaire engine, not Google Forms. Noted inline against §14; no `REG-*` requirement changed |
+| 12/08/2026 | Recorded R1 delivery against §14: previous-year duplication + change comparison, staff-assigned camp code/erf, placement export, deadline reminders |
+| 12/08/2026 | **Edition-rollover rule stated** — carry-forward is a pre-fill, never a shortcut. A returning camp still makes a new proposal and no section is marked complete; every Form 2 answer (size, sound, placement, layout) starts empty each year, as do the erf and camp code. The Burner Bio rolls over the same way — everything carries except `firstTime` |
+| 12/08/2026 | Created placeholders for the four Document Structure links absent from the 06/08/2026 export (Decisions Record, Task Assignment, Member List, Links) and for decision records 007–013, each pointing at the Coda source. Repo-side reconstructions live in `docs/decisions/`; no `docs/sources/` content was invented |
 
 ## 2026-07-29 - Kick-off Alignment Updates
 Owner: Beyers Nel

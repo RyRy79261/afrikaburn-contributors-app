@@ -15,6 +15,7 @@ const {
   savePrivacyFlags,
   ensureProfileKeypair,
   getKeyFingerprint,
+  getBioForOnboarding,
 } = await import("../bio-store");
 
 const USER = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -641,5 +642,90 @@ describe("ensureProfileKeypair / getKeyFingerprint", () => {
     dbMock.reset();
     dbMock.queue([{ publicKey }]);
     expect(await getKeyFingerprint(USER)).toBe(fingerprint);
+  });
+});
+
+describe("getBioForOnboarding — rollover into a new edition", () => {
+  const PRIOR_EDITION = "dddddddd-0000-0000-0000-000000000000";
+  const THIS_EDITION = { id: EDITION, year: 2027 };
+
+  it("returns this edition's bio untouched when one exists", async () => {
+    dbMock.queue([bioRow({ completedAt: new Date("2026-09-01") })], []);
+    const bio = await getBioForOnboarding(USER, THIS_EDITION);
+    expect(bio?.completedAt).toEqual(new Date("2026-09-01"));
+  });
+
+  it("is null for a genuine first-timer with no prior bio", async () => {
+    dbMock.queue(
+      [], // no bio this edition
+      [], // …and none in any earlier edition
+    );
+    expect(await getBioForOnboarding(USER, THIS_EDITION)).toBeNull();
+  });
+
+  it("pre-fills from the most recent prior edition, reported INCOMPLETE", async () => {
+    // The whole rule (Ryan, 12 Aug 2026): copied across, but they still have to
+    // complete it. `completedAt` is what the onboarding page gates on, so a
+    // carried bio reporting a date would skip a returning burner straight past
+    // the flow they are supposed to walk.
+    dbMock.queue(
+      [], // nothing for 2027
+      [{ id: PRIOR_EDITION }], // the prior edition lookup
+      [
+        bioRow({
+          editionId: PRIOR_EDITION,
+          bio: "Six burns running.",
+          completedAt: new Date("2025-09-01"),
+        }),
+      ],
+      [], // getUsername
+    );
+
+    const bio = await getBioForOnboarding(USER, THIS_EDITION);
+
+    expect(bio).not.toBeNull();
+    expect(bio?.completedAt).toBeNull();
+    expect(bio?.fields.bio).toBe("Six burns running.");
+    expect(bio?.fields.legalName).toBe("Alice Hatter");
+  });
+
+  it("carries the ID document across an edition boundary", async () => {
+    // An SA ID does not change; making someone retype it annually is pure
+    // burden. (Note: there is no ID retention purge wired up at all — the rule
+    // in @quagga/core id-retention has no caller.)
+    dbMock.queue(
+      [],
+      [{ id: PRIOR_EDITION }],
+      [
+        bioRow({
+          editionId: PRIOR_EDITION,
+          saIdEncrypted: encrypt("9001015800089"),
+          completedAt: new Date("2025-09-01"),
+        }),
+      ],
+      [],
+    );
+
+    const bio = await getBioForOnboarding(USER, THIS_EDITION);
+    expect(bio?.fields.idNumber).toBe("9001015800089");
+    expect(bio?.fields.idType).toBe("sa_id");
+  });
+
+  it("does carry medical notes, so they are confirmed rather than lost", async () => {
+    dbMock.queue(
+      [],
+      [{ id: PRIOR_EDITION }],
+      [
+        bioRow({
+          editionId: PRIOR_EDITION,
+          medicalNotes: encrypt("Severe bee-sting allergy."),
+          completedAt: new Date("2025-09-01"),
+        }),
+      ],
+      [],
+    );
+
+    const bio = await getBioForOnboarding(USER, THIS_EDITION);
+    expect(bio?.fields.medicalNotes).toBe("Severe bee-sting allergy.");
   });
 });

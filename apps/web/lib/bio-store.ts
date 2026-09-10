@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   BURNER_BIO_ACTION_KEY,
   BURNER_BIO_VERSION,
   buildBurnerBioQuestionnaire,
+  buildBioCarryForward,
   defaultPrivacyFlags,
   initialPrivacyFlags,
   parseVolunteering,
@@ -568,4 +569,65 @@ export async function getKeyFingerprint(
     .limit(1);
   if (!rows[0]) return null;
   return fingerprintPublicKey(rows[0].publicKey);
+}
+
+/**
+ * The bio the ONBOARDING flow opens with — this edition's if it exists, else the
+ * person's most recent prior edition's, pre-filled (Ryan, 12 Aug 2026).
+ *
+ * SEPARATE FROM `getBio` ON PURPOSE. `getBio` answers "what is this person's bio
+ * for this edition", and the profile and account pages need exactly that — a
+ * carried-forward draft is not a fact about the current edition until the person
+ * completes it. Only onboarding wants the fallback, so only onboarding gets it.
+ *
+ * The carried view always reports `completedAt: null`, which is what makes it
+ * pre-fill rather than a completed bio: the onboarding page redirects to the
+ * profile only when `completedAt` is set, so a returning burner still walks the
+ * whole flow and still presses the final button. Which fields survive the
+ * rollover is @quagga/core `buildBioCarryForward`: everything except
+ * `firstTime`, an edition-relative claim. The ID document DOES carry — an SA ID
+ * number does not change, and the field stays editable for a renewed passport.
+ */
+export async function getBioForOnboarding(
+  userId: string,
+  edition: { id: string; year: number },
+): Promise<BioView | null> {
+  const current = await getBio(userId, edition.id);
+  if (current) return current;
+
+  const [priorEdition] = await db()
+    .select({ id: schema.editions.id })
+    .from(schema.burnerBios)
+    .innerJoin(
+      schema.editions,
+      eq(schema.editions.id, schema.burnerBios.editionId),
+    )
+    .where(
+      and(
+        eq(schema.burnerBios.userId, userId),
+        lt(schema.editions.year, edition.year),
+      ),
+    )
+    .orderBy(desc(schema.editions.year))
+    .limit(1);
+  if (!priorEdition) return null;
+
+  const prior = await getBio(userId, priorEdition.id);
+  if (!prior) return null;
+
+  const carried = buildBioCarryForward({
+    fields: prior.fields,
+    extras: prior.extras,
+    privacyFlags: prior.privacyFlags,
+  });
+
+  return {
+    ...prior,
+    fields: carried.fields,
+    extras: carried.extras,
+    privacyFlags: carried.privacyFlags,
+    responses: mapBioToResponses(carried.fields, prior.username),
+    // The whole point: pre-filled, not completed.
+    completedAt: null,
+  };
 }

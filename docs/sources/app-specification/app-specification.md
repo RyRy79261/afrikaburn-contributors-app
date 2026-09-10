@@ -509,12 +509,23 @@ The system must allow the camp to move from proposed figures to actual figures w
 
 ---
 
-# 8. Camp Fees and Payment Gateway ⚠️
+# 8. Camp Fees and Payment Gateway ❌
 
-⚠️ **Status:** At risk
-📋 **Context:** Direction divergence. MVP records payment references/status but avoids fund processing, while this section requires an integrated payment gateway. Group-chat context: payment, store, and operating-cost ownership concerns were raised and remain unresolved (Ryan/Fin, 2026-07-22 16:58–17:02). Open decision: [Decision 009](decisions-record/decision-009-proposed-payment-direction-tracking-vs-gateway.md).
+❌ **Status:** Not implemented — and will not be. The direction is now **decided**, so this section is no longer "at risk": there is no unresolved divergence, there is a resolution that this section loses.
+📋 **Context:** Resolved by [Decision 009](decisions-record/decision-009-proposed-payment-direction-tracking-vs-gateway.md) (Ryan Noble, 2026-08-12): **the platform never handles funds.** Earlier group-chat context on payment, store and operating-cost ownership (Ryan/Fin, 2026-07-22 16:58–17:02) is superseded.
 
 > 📝 **Note (2026-07-29):** Unresolved. The MVP deliberately never holds or processes money — it records payment references and reconciliation status only. A gateway would only be considered if AfrikaBurn requests one, and for AfrikaBurn-side fees rather than camp dues.
+
+> ✅ **Resolution (2026-08-12).** No gateway, now or later. `PAY-001`–`PAY-005` and every other requirement in this section that assumes the platform moves money are **not being built**, and building them requires reopening Decision 009 rather than raising a ticket.
+>
+> What exists instead, and is shipped:
+>
+> - **Unique codes identifying who a payment is for** — `payments.reference` (`QP-2027-MAH-001`) for an AfrikaBurn-side fee, and `memberships.ref_code` (`MAH-M017`) so a camp can reconcile its own EFTs against its own bank account.
+> - **A record that it arrived** — three reversible states (awaiting payment / paid / waived) as a pure rule in `@quagga/core`.
+>
+> AfrikaBurn collects through its existing channels; this app records that the money arrived.
+>
+> **None of this applies to registration, which is free.** AfrikaBurn does not charge theme camps, so `PAY-*` has no registration surface and payment UI appears in no registration context. The status record is reserved for a future logistics app (containers, water, ice, gas), where AB genuinely invoices. What AfrikaBurn still owes us is those fee **amounts**, which is a content question, not an architecture one.
 
 The system should include a payment gateway for:
 
@@ -787,6 +798,19 @@ Final placement decisions remain with AfrikaBurn.
 🚧 **Status:** In progress
 📋 **Context:** Core workflow is implemented in MVP (multi-section registration and review loop), but several listed artifacts depend on other unfinished modules.
 
+> ✅ **Intake mechanism decided (2026-08-12).** Registration intake is **this platform's own questionnaire engine — not Google Forms** ([Decision 014](../../decisions/decision-014-questionnaire-engine-over-google-forms.md)). Access to AfrikaBurn's existing Google Form is no longer requested and no longer blocks anything. The *questions* remain AfrikaBurn's; only the mechanism is settled.
+>
+> **Also shipped for R1 (2026-08-12):**
+>
+> - **Previous-year duplication + change comparison** (§15's `PREVYR-*` in practice). A returning camp brings its most recent prior registration across as a **pre-filled draft** and the reviewer gets a field-by-field diff above the six sections.
+>
+>   **It is a typing aid, not a re-registration** (Ryan, 12 Aug 2026): the camp still makes a new proposal — new Form 1, new Form 2 — and **no section is marked complete** by carrying forward, so the submit gate still requires them to walk every step. **Everything Form 2 asks starts empty every year**: size, arrival date, sound, placement preferences and the layout diagram. Placement zones are configured per edition year, so a carried choice could name a zone that no longer exists; the erf and camp code are staff-assigned per edition and never carry either. The Plug & Play acknowledgement and grant interest are given fresh each edition — an acknowledgement copied from last year manufactures consent that was never given.
+>
+>   The **Burner Bio** rolls over on the same principle: copied into the new edition, presented incomplete so the person confirms and updates it. Everything carries except `firstTime` (an edition-relative claim) — including the ID document, because an SA ID number never changes and the field stays editable for a renewed passport. Note that the ID retention purge described in `docs/accounts-security-spec.md` is still an unwired rule with no caller, so no ID data is deleted on any schedule today.
+> - **Staff-assigned camp code + erf** — unique per edition and free text respectively, for container booking and on-site logistics. Not a placement tool; see [Decision 012](decisions-record/decision-012-proposed-map-erf-integration-strategy-readiness-gate.md).
+> - **Placement export** — one CSV of the edition's camps, carrying no phone numbers, ID numbers, emergency contacts or medical notes.
+> - **Deadline reminders** — 21, 7 and 1 days before the registration close date, to camps that still owe a submission. Silent until AfrikaBurn sets a close date.
+
 The platform must allow a camp to submit its annual registration and placement application.
 
 The submission may include:
@@ -830,7 +854,7 @@ The platform should track:
 # 15. Previous-Year Submissions 🚧
 
 🚧 **Status:** In progress
-📋 **Context:** Edition-scoped foundation exists; duplication/carry-forward and comparison UX are not yet implemented.
+📋 **Context:** ~~Edition-scoped foundation exists; duplication/carry-forward and comparison UX are not yet implemented.~~ **Superseded 12 Aug 2026:** duplication/carry-forward and the comparison UX ARE now implemented — a returning camp opens a pre-filled draft and the reviewer gets a field-by-field diff (`@quagga/core` `registration-carry-forward`), and the Burner Bio rolls over the same way (`bio-carry-forward`). Still "in progress" rather than implemented because the rollover is deliberately partial: only Form 1 answers pre-fill, nothing is marked complete, and everything Form 2 asks starts empty each year. See the note under §14 for the full rule.
 
 The system must store previous registration and placement submissions.
 

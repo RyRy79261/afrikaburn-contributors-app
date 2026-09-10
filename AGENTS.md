@@ -17,7 +17,14 @@ There is no staging environment. Three things follow, and none of them are optio
    — it seeds fake data and contains no real person. Creating an account or a camp on
    the live site to check a theory is not a shortcut, it is production data.
 2. **A migration you merge runs against production on the next deploy.** There is no
-   step in between that would catch it. See rule 1 under Hard engineering rules.
+   step in between that would catch it. **So never hand-write one** — edit
+   `schema.ts` and run `db:generate`, and commit the snapshot it writes alongside
+   the SQL. Hand-authoring is not a shortcut, it is the thing that breaks the
+   generator for everyone after you: it leaves no snapshot, so the next
+   `db:generate` diffs against a stale database and emits a migration that
+   re-creates tables that already exist. If the generator's output looks absurd,
+   the snapshot chain is broken — repair it, do not write around it. Rule 1 under
+   Hard engineering rules has the detail and the repair recipe.
 3. **You are working in someone else's repository.** Branch, open a pull request, and
    let the maintainer review — never commit to `main`. (Branch protection is not yet
    switched on at the time of writing, so nothing _stops_ you. That makes the rule
@@ -53,7 +60,7 @@ pnpm turbo run lint typecheck test build   # THE gate — must be green before a
 pnpm e2e:local                             # the OTHER gate — real DB, real browser
 pnpm e2e:local specs/new-burner            # ...or one persona
 pnpm --filter @quagga/web dev              # or org / suppliers
-pnpm --filter @quagga/db db:generate       # schema.ts → appended migration (offline)
+pnpm --filter @quagga/db db:generate       # schema.ts → migration + snapshot. NEVER hand-write one.
 ```
 
 **The unit gate does not run a single browser.** `turbo run … test` lints and
@@ -91,15 +98,39 @@ list`, then `git worktree remove` what has finished.
 
 ## Hard engineering rules
 
-1. **Migrations are generated offline, committed append-only, and applied
-   automatically at deploy time by the advisory-locked runner.** Generate with
-   `db:generate` (offline, from `schema.ts`); commit the file. At deploy, every app's
+1. **Migrations are GENERATED, never hand-written, committed append-only, and
+   applied automatically at deploy time by the advisory-locked runner.** Edit
+   `schema.ts`, run `db:generate`, commit both the SQL and its
+   `meta/NNNN_snapshot.json`.
+
+   > **Never hand-author a migration.** It is what breaks `db:generate`: a
+   > hand-written file leaves no snapshot, so drizzle-kit then diffs `schema.ts`
+   > against a stale picture of the database and emits a migration re-creating
+   > tables that already exist. This repo learned it the hard way — the chain
+   > broke at 0024 (29 Jul 2026) and by 0029 the generator wanted to
+   > `CREATE TABLE wrangler_assignments` a second time, which would have failed
+   > the production build at deploy. **The generator was never wrong; its input
+   > was.** The damage is cumulative: every hand-written migration makes the next
+   > generate worse.
+   >
+   > **If `db:generate` emits something absurd, the snapshot chain is broken —
+   > repair it, do not write around it.** Recipe: run `drizzle-kit generate` with
+   > the current `schema.ts` against an EMPTY `out/`; it emits a pristine
+   > `0000_snapshot.json` that exactly represents `schema.ts`. Renumber it to the
+   > latest migration index, set `prevId` to the last real snapshot's `id`, and
+   > discard the generated SQL. Verify: `db:generate` must then say "No schema
+   > changes, nothing to migrate", and adding a probe column must produce a
+   > one-line `ALTER TABLE`.
+
+   At deploy, every app's
    `build` runs `db:migrate:deploy` (`packages/db/src/migrate.ts`) before `next build`:
    it takes a Postgres session advisory lock on the UNPOOLED connection so the three
    concurrent Vercel builds serialise safely, then applies any pending migrations
-   (idempotent — drizzle's own table makes the losers no-ops). A migration is NEVER
-   hand-edited, NEVER regenerated, and NEVER applied by an agent from a developer
-   machine against production — the build is the only thing that applies them.
+   (idempotent — drizzle's own table makes the losers no-ops). An ALREADY-COMMITTED
+   migration is NEVER edited, NEVER regenerated, and NEVER applied by an agent from a
+   developer machine against production — the build is the only thing that applies
+   them. (A NEW migration is never hand-authored either — it is generated; see the
+   warning above.)
    **The UNPOOLED endpoint is mandatory and ENFORCED, not merely preferred**: the
    runner reads `DATABASE_URL_UNPOOLED` (Neon's direct endpoint) first, and it
    _aborts the build_ rather than silently falling back to a pooled URL — because

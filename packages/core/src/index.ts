@@ -144,6 +144,15 @@ export * from "./name-dedupe";
 export * from "./word-count";
 export * from "./registration-state";
 export * from "./registration-sections";
+// Previous-year duplication + change comparison (roadmap R1, fewer-forms).
+export * from "./registration-carry-forward";
+// Staff-assigned camp codes + erf labels (roadmap R1).
+export * from "./placement-codes";
+// The placement spreadsheet (roadmap R1) — see the module header for what it
+// deliberately omits.
+export * from "./registration-export";
+// Registration deadline reminders (roadmap R1).
+export * from "./registration-deadline";
 // Form 2 → registration-row mirroring (roadmap M4-20).
 export * from "./form-2";
 // In-app bug-report redaction (public issues — see the module header).
@@ -161,8 +170,12 @@ export * from "./org-domains";
 export * from "./org-permissions";
 export * from "./org-roles";
 export * from "./payment-reference";
+// Payment status tracking. The platform never moves money — see the header.
+export * from "./payment-tracking";
 export * from "./member-ref-code";
 export * from "./bio";
+// Burner Bio rollover into a new edition — pre-fill, never a completed bio.
+export * from "./bio-carry-forward";
 export * from "./username";
 export * from "./questionnaire-engine";
 export * from "./questionnaire-definition";

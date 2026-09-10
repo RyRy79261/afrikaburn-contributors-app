@@ -1,7 +1,8 @@
 import "server-only";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
+  buildCarryForwardPatch,
   completedSectionsFor,
   deriveOnboardingProgress,
   filterPickerEligible,
@@ -655,4 +656,220 @@ export async function applyCampAction(input: {
   }
 
   return { ok: true, status: target, registrationId: existing.id };
+}
+
+// --- Previous-year duplication (roadmap R1) -------------------------------
+// The flagship fewer-forms feature: a returning camp confirms deltas instead of
+// re-typing four hundred words about how it will leave no trace. The policy —
+// which fields carry and which must be re-answered — is @quagga/core
+// `registration-carry-forward`; this layer only finds the prior row and applies
+// the patch.
+
+/** A prior edition's registration, offered as the seed for this year's draft. */
+export interface CarryForwardSource {
+  registrationId: string;
+  editionId: string;
+  editionYear: number;
+  editionName: string;
+  status: RegistrationStatus;
+}
+
+/**
+ * The most recent registration this camp filed BEFORE the given edition, or
+ * null for a first-timer.
+ *
+ * Any status, deliberately. A withdrawn or rejected registration still contains
+ * the camp's own words about its own camp, and those words are what the feature
+ * exists to save them re-typing. The caller shows the year and the status, so
+ * nobody is carrying something forward without knowing what it was.
+ */
+export async function findCarryForwardSource(
+  groupId: string,
+  currentEditionYear: number,
+): Promise<CarryForwardSource | null> {
+  const [row] = await db()
+    .select({
+      registrationId: schema.registrations.id,
+      editionId: schema.editions.id,
+      editionYear: schema.editions.year,
+      editionName: schema.editions.name,
+      status: schema.registrations.status,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.editions,
+      eq(schema.editions.id, schema.registrations.editionId),
+    )
+    .where(
+      and(
+        eq(schema.registrations.groupId, groupId),
+        lt(schema.editions.year, currentEditionYear),
+      ),
+    )
+    .orderBy(desc(schema.editions.year))
+    .limit(1);
+  return row ?? null;
+}
+
+export type CarryForwardResult =
+  | { ok: true; filled: number; source: CarryForwardSource }
+  | { ok: false; error: string };
+
+/** Null, undefined, blank string or empty array — "the camp has not answered". */
+function unanswered(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+/**
+ * Seed this edition's draft from the camp's most recent prior registration.
+ *
+ * ONLY EMPTY FIELDS ARE FILLED. A camp that has already typed this year's
+ * participation plan and then clicks "bring last year's answers across" must not
+ * lose what they wrote — so the patch is applied field by field against what is
+ * currently blank, rather than as a wholesale overwrite. That also makes the
+ * action safe to run twice.
+ *
+ * Refuses once the registration has left the camp's hands, for the same reason
+ * autosave does: a registration under review must not change under the reviewer.
+ */
+export async function carryForwardRegistration(input: {
+  group: { id: string; name: string };
+  editionId: string;
+  editionYear: number;
+}): Promise<CarryForwardResult> {
+  const source = await findCarryForwardSource(input.group.id, input.editionYear);
+  if (!source) {
+    return {
+      ok: false,
+      error: "We can't find an earlier registration for this camp.",
+    };
+  }
+
+  const [prior] = await db()
+    .select()
+    .from(schema.registrations)
+    .where(eq(schema.registrations.id, source.registrationId))
+    .limit(1);
+  if (!prior) {
+    return { ok: false, error: "That earlier registration no longer exists." };
+  }
+
+  // ONE TRANSACTION, AND THE READ THAT DECIDES THE PATCH IS INSIDE IT.
+  //
+  // The wizard autosaves. Reading the current row, deciding which fields are
+  // still blank, and then writing them as three separate round trips leaves a
+  // window where an autosave lands in between — and the write would then replace
+  // text the camp had just typed with last year's, and reset `completed_sections`
+  // under them. Both the read and the compare-and-set now happen in the same
+  // transaction, and the UPDATE re-asserts the two facts the decision rested on
+  // (still editable, still not carried), so a lost race writes nothing and says
+  // so instead of silently winning.
+  return withTransaction(async (tx): Promise<CarryForwardResult> => {
+    const [existing] = await tx
+      .select()
+      .from(schema.registrations)
+      .where(
+        and(
+          eq(schema.registrations.groupId, input.group.id),
+          eq(schema.registrations.editionId, input.editionId),
+        ),
+      )
+      .limit(1);
+
+    if (existing && !isEditableStatus(existing.status)) {
+      return {
+        ok: false,
+        error: "This registration is locked while AfrikaBurn reviews it.",
+      };
+    }
+    if (existing?.carriedForwardAt) {
+      return {
+        ok: false,
+        error: "Last year's answers have already been brought across.",
+      };
+    }
+
+    const patch = buildCarryForwardPatch(prior);
+    const toApply: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (!existing || unanswered((existing as Record<string, unknown>)[key])) {
+        toApply[key] = value;
+      }
+    }
+
+    if (Object.keys(toApply).length === 0) {
+      return {
+        ok: false,
+        error:
+          "There's nothing to bring across — every field last year's registration could fill is already answered.",
+      };
+    }
+
+    // PRE-FILLED IS NOT COMPLETE, and this is the line that enforces it (Ryan,
+    // 12 Aug 2026: "consider it pre-filled and they have to update it").
+    //
+    // No section is marked complete here. A returning camp still makes a NEW
+    // proposal — the text is a typing aid, not an answer it has given this year
+    // — and `completed_sections` is what the submit gate reads. Recomputing it
+    // from the carried text would let a camp press "bring last year's answers
+    // across" and submit in the same breath, which is last year's proposal with
+    // this year's date on it.
+    //
+    // The camp walks the wizard; autosave recomputes completeness section by
+    // section as they save, exactly as it does for a first-time camp.
+    const columns = {
+      ...toApply,
+      completedSections: [],
+      carriedForwardFromId: source.registrationId,
+      carriedForwardAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const conflict = {
+      ok: false,
+      error:
+        "This registration changed while you were reading it — reload and try again.",
+    } as const;
+
+    if (existing) {
+      // COMPARE-AND-SET on the two facts the patch was computed against.
+      const updated = await tx
+        .update(schema.registrations)
+        .set(columns)
+        .where(
+          and(
+            eq(schema.registrations.id, existing.id),
+            eq(schema.registrations.status, existing.status),
+            isNull(schema.registrations.carriedForwardAt),
+          ),
+        )
+        .returning({ id: schema.registrations.id });
+      if (updated.length === 0) return conflict;
+    } else {
+      // The unique index on (group_id, edition_id) is what makes this safe: an
+      // autosave that created the draft first wins, and we decline rather than
+      // overwrite the row it just wrote.
+      const inserted = await tx
+        .insert(schema.registrations)
+        .values({
+          groupId: input.group.id,
+          editionId: input.editionId,
+          status: "draft",
+          ...columns,
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.registrations.groupId,
+            schema.registrations.editionId,
+          ],
+        })
+        .returning({ id: schema.registrations.id });
+      if (inserted.length === 0) return conflict;
+    }
+
+    return { ok: true, filled: Object.keys(toApply).length, source };
+  });
 }

@@ -204,6 +204,25 @@ branch — that is production, with real burners' registrations in it.
   accepts either secret and still refuses any unauthenticated caller. Crons run on
   production deployments only. `NEXT_PUBLIC_APP_URL` (also optional) is the origin
   used to build email-change confirm/revoke links.
+- **Optional, web only — `REGISTRATION_REMINDER_SECRET`**: bearer token for
+  `/api/registrations/deadline-reminders`, the job that tells camps with an
+  unsubmitted registration that the deadline is 21, 7 or 1 days away (roadmap R1).
+  Like the sweeper, the route also accepts `CRON_SECRET`. Unauthenticated callers
+  are refused: the job is not destructive, but an open endpoint that emails every
+  camp lead is still a spam cannon.
+
+  **Nothing schedules it yet.** There is deliberately no Vercel Cron entry for it —
+  it runs only when something calls it. To make it live, either add an entry to
+  `apps/web/vercel.json` (daily is enough) or point an external scheduler at
+  `GET /api/registrations/deadline-reminders` with the bearer above.
+
+  **It stays silent until someone sets a close date.** The job reads
+  `editions.registration_closes_at`; while that is null it reports
+  `no_close_date` and sends nothing. Counting down to a date AfrikaBurn has not
+  announced would have camps planning around an invented deadline, so this is
+  deliberate rather than a gap. Sends are idempotent — one marker per (edition,
+  milestone) in `audit_events`, written in the same transaction as the
+  notifications, so an at-least-once cron cannot double-notify.
 
 ## 5. Smoke test — the live path
 

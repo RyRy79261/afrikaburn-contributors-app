@@ -55,6 +55,8 @@ export function RegistrationReview({
   wranglerCandidates,
   wrangler,
   wranglerRefusal,
+  comparison,
+  railExtras,
 }: {
   detail: RegistrationDetail;
   decisionLog: DecisionLogRow[];
@@ -65,6 +67,12 @@ export function RegistrationReview({
   officersCopy: OfficersCopy;
   showWrangler: boolean;
   roster: RosterMemberRow[];
+  /** The year-on-year diff, rendered above the sections. Null when this
+   * registration was not carried forward from a prior edition. */
+  comparison?: React.ReactNode;
+  /** Extra action-rail cards (placement, payment). Kind-specific, so the caller
+   * supplies them rather than this shell knowing which kinds get what. */
+  railExtras?: React.ReactNode;
   /** Why this viewer may not decide, or null when they may. Resolved by the
    * page, because only the server has the actor. */
   decisionRefusal: string | null;
@@ -147,6 +155,10 @@ export function RegistrationReview({
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Sections column */}
         <div className="flex min-w-0 flex-1 flex-col gap-6">
+          {/* The year-on-year diff sits ABOVE the sections: for a returning camp
+              it is the review, and the full sections below are what you read
+              when it is not enough. */}
+          {comparison}
           {sections.map((section) => {
             const reviews = reviewsBySection.get(section.key) ?? [];
             const openCount = reviews.filter((r) => r.status === "open").length;
@@ -320,6 +332,9 @@ export function RegistrationReview({
               </CardContent>
             </Card>
           )}
+
+          {/* Placement + payment, supplied by the page. */}
+          {railExtras}
 
           {/* Decision history */}
           {decisionLog.length > 0 && (

@@ -40,6 +40,19 @@ import {
   type ProjectField,
   type ProjectRegistrationView,
 } from "@/lib/project-review";
+import {
+  getPlacementContext,
+  getReviewComparison,
+} from "@/lib/registration-placement";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@quagga/ui/components/card";
+import { PlacementPanel } from "@/components/registration/placement-panel";
+import { CarryForwardComparison } from "@/components/registration/carry-forward-comparison";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
 import {
@@ -162,8 +175,20 @@ export default async function RegistrationDetailPage({
     );
   }
 
-  // Theme camp — the original six-section review, untouched.
+  // Theme camp — the original six-section review, plus the two R1 additions.
   const { registration } = detail;
+
+  // Placement and payment share the decision capability (both are the
+  // registrations domain), so they reuse `decisionRefusal` rather than resolving
+  // the same question a third time.
+  const [placement, comparison] = await Promise.all([
+    getPlacementContext({
+      registrationId: registration.id,
+      editionId: detail.edition.id,
+      campName: detail.group.name,
+    }),
+    getReviewComparison(registration, detail.edition.year),
+  ]);
   const fieldsBySection = buildSectionFields(detail, OPERATING_HOURS_LABELS);
   const sections: ReviewSectionView[] = SECTION_KEYS.map((key) => ({
     key,
@@ -200,6 +225,40 @@ export default async function RegistrationDetailPage({
       wranglerCandidates={wranglerCandidates}
       wrangler={wrangler}
       wranglerRefusal={wranglerRefusal}
+      comparison={
+        comparison ? (
+          <CarryForwardComparison
+            priorYear={comparison.priorYear}
+            currentYear={comparison.currentYear}
+            changes={comparison.changes}
+          />
+        ) : null
+      }
+      // NO PAYMENT CARD HERE, and there must never be one. Registration is free
+      // — AfrikaBurn does not charge theme camps — and the product law is
+      // explicit that payment UI appears in no registration context (AGENTS.md
+      // §Product laws; docs/synthesis.md names this screen specifically). An
+      // earlier revision of this branch added one; review caught it.
+      railExtras={
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Placement</CardTitle>
+            <CardDescription>
+              The camp code and erf AfrikaBurn assigns. Container booking and
+              on-site logistics read these; nothing here draws a map.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PlacementPanel
+              registrationId={registration.id}
+              campCode={placement.campCode}
+              erf={placement.erf}
+              suggestedCode={placement.suggestedCode}
+              canAssign={decisionRefusal === null}
+            />
+          </CardContent>
+        </Card>
+      }
     />
   );
 }

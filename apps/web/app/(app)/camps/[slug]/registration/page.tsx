@@ -10,6 +10,7 @@ import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import {
+  findCarryForwardSource,
   getDeclaredSupplierIds,
   getDeclaredSuppliers,
   getRegistration,
@@ -19,6 +20,7 @@ import {
   listSuppliersForPicker,
   type RegistrationValues,
 } from "@/lib/registration-store";
+import { CarryForwardBanner } from "@/components/registration/carry-forward-banner";
 import {
   saveRegistrationDraftAction,
   submitRegistrationAction,
@@ -168,9 +170,23 @@ export default async function RegistrationPage({
         }
       : emptyValues(context.group.description);
 
+    // The carry-forward offer, only while it is still an offer: once this
+    // year's draft has been seeded there is nothing to bring across, and a
+    // banner that stays put after you have pressed it reads as a failure.
+    const carryForwardSource = registration?.carriedForwardAt
+      ? null
+      : await findCarryForwardSource(context.group.id, context.editionYear);
+
     return (
       <>
         {header}
+        {carryForwardSource ? (
+          <CarryForwardBanner
+            slug={slug}
+            source={carryForwardSource}
+            editionYear={context.editionYear}
+          />
+        ) : null}
         <RegistrationWizard
           slug={slug}
           campName={context.group.name}
