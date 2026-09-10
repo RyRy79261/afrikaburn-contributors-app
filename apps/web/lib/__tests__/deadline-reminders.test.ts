@@ -22,12 +22,17 @@ vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
 const mail = vi.hoisted(() => ({
   sent: [] as { to: string }[],
-  fail: false,
+  /** How the stub fails, if at all. The real `sendEmail` RETURNS a provider
+   * failure as `{ ok: false }`; only a fault inside it throws. */
+  failure: null as null | "returns" | "throws",
 }));
 
 vi.mock("../email", () => ({
   sendEmail: async (input: { to: string }) => {
-    if (mail.fail) throw new Error("smtp down");
+    if (mail.failure === "throws") throw new Error("socket hang up");
+    if (mail.failure === "returns") {
+      return { ok: false, error: "Resend responded 503: unavailable" };
+    }
     mail.sent.push(input);
     return { ok: true, id: "mail-1", delivered: true };
   },
@@ -74,7 +79,7 @@ beforeEach(() => {
   dbMock.reset();
   vi.stubEnv("DATABASE_URL", "postgres://test");
   mail.sent = [];
-  mail.fail = false;
+  mail.failure = null;
 });
 
 afterEach(() => {
@@ -186,16 +191,27 @@ describe("runDeadlineReminders — the claim and the send are one unit", () => {
     expect(dbMock.writesTo(schema.notifications)).toHaveLength(0);
   });
 
-  it("does not undo a committed send when the email fails", async () => {
-    mail.fail = true;
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    dbMock.queue(edition(inDays(1)), CAMPS, LEADS, [{ id: "marker-1" }], []);
+  it.each(["returns", "throws"] as const)(
+    "logs an email that fails by %s, and keeps the committed send",
+    async (how) => {
+      mail.failure = how;
+      const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      dbMock.queue(edition(inDays(1)), CAMPS, LEADS, [{ id: "marker-1" }], []);
 
-    const outcome = await runDeadlineReminders(NOW);
+      const outcome = await runDeadlineReminders(NOW);
 
-    expect(outcome.status).toBe("sent");
-    expect(outcome.notified).toBe(1);
-  });
+      expect(outcome.status).toBe("sent");
+      expect(outcome.notified).toBe(1);
+      // A provider failure comes back as `{ ok: false }`, not as an exception.
+      // The first version of this job dropped that shape without a trace.
+      expect(logged).toHaveBeenCalledWith(
+        "[reminders] deadline email failed",
+        how === "returns"
+          ? "Resend responded 503: unavailable"
+          : expect.any(Error),
+      );
+    },
+  );
 });
 
 describe("runDeadlineReminders — nothing to do writes nothing", () => {

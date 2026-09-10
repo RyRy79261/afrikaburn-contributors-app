@@ -198,9 +198,18 @@ export async function runDeadlineReminders(
 
   // Email is best-effort and AFTER the commit. A mail failure must not undo a
   // send the inbox already shows — that would notify every camp twice.
+  //
+  // `sendEmail` reports a provider failure by RETURNING `{ ok: false }`, not by
+  // throwing, so the result is checked as well as the exception. Without that,
+  // a full mail outage left no trace anywhere while the job said "sent".
+  // (`ok: true, delivered: false` is not a failure — it is the no-key path,
+  // which email.ts already logs.)
   for (const email of emails) {
     try {
-      await sendEmail(email);
+      const result = await sendEmail(email);
+      if (!result.ok) {
+        console.error("[reminders] deadline email failed", result.error);
+      }
     } catch (err) {
       console.error("[reminders] deadline email failed", err);
     }
