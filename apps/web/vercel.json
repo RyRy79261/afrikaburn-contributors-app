@@ -4,6 +4,10 @@
     {
       "path": "/api/account/deletion-sweep",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/account/id-retention-sweep",
+      "schedule": "30 3 * * *"
     }
   ]
 }
