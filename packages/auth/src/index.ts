@@ -41,21 +41,20 @@ export { withReauth, isReauth } from "./reauth";
 // the org console's System panel and its unit tests want: they read how auth is
 // configured, they do not need an auth instance to do it.
 export {
-  AUTH_APEX_DOMAIN,
-  AUTH_COOKIE_DOMAIN,
   AUTH_RP_NAME,
   AUTH_SESSION,
-  PRODUCTION_ORIGINS,
   authConfigWarnings,
   isAuthConfigured,
   isEmailProviderConfigured,
   isGoogleConfigured,
   isUnderApex,
   parseBoolEnv,
+  resolveApexDomain,
   resolveBaseURL,
   resolveCookieDomain,
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
+  resolveProductionOrigins,
   resolveRateLimit,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,

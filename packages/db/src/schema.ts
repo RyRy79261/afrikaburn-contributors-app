@@ -545,9 +545,10 @@ export const twoFactor = pgTable(
 
 // --- Passkeys (WebAuthn) --------------------------------------------------
 // Owned by the @better-auth/passkey plugin, wired in @quagga/auth (migration
-// 0015). One row per registered credential. `rpID` is scoped to the apex
-// (quagga.ryanjnoble.dev) in @quagga/auth so a single passkey works across app.,
-// org. and suppliers. subdomains. Passkeys are ADDITIVE — an accelerator on top
+// 0015). One row per registered credential. `rpID` is scoped to the
+// deployment's configured apex domain (AUTH_APEX_DOMAIN, resolved in
+// @quagga/auth/env) so a single passkey works across app., org. and
+// suppliers. subdomains. Passkeys are ADDITIVE — an accelerator on top
 // of password/Google, never the only way in — so losing one is never a lockout
 // (recovery: password or 2FA backup code). `counter` is the WebAuthn signature
 // counter (clone-detection); `credentialID` is the credential handle.

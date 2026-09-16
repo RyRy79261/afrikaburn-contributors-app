@@ -165,16 +165,69 @@ export const TIMEOUTS = {
 /** True in CI (GitHub Actions sets CI=true). Enables retries + single-worker safety. */
 export const IS_CI = process.env.CI === "true" || process.env.CI === "1";
 
-/** Guard: refuse to run the destructive suite against a production apex by accident. */
+/**
+ * The known production hosts to refuse to run against, derived from env so no
+ * deployment-specific domain is hardcoded into the suite. Prefers an explicit
+ * comma-separated E2E_PRODUCTION_HOSTS; otherwise derives the three subdomains
+ * from AUTH_APEX_DOMAIN, the same var production auth is scoped to. Empty when
+ * neither is set — see assertNotProductionUnlessAllowed for what that means.
+ */
+function productionHosts(): string[] {
+  const explicit = (process.env.E2E_PRODUCTION_HOSTS ?? "").trim();
+  if (explicit) {
+    return explicit
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  const apex = (process.env.AUTH_APEX_DOMAIN ?? "").trim().toLowerCase();
+  if (!apex) return [];
+  return ["app", "org", "suppliers"].map((sub) => `${sub}.${apex}`);
+}
+
+/**
+ * Local dev targets, which are always safe: the suite's own defaults (web 3000,
+ * org 3001, suppliers 3002) and anything else served off this machine.
+ *
+ * Deliberately NOT extended to `*.vercel.app`: production is served from
+ * vercel.app hosts too, so allowing that domain would hole the guard wide open.
+ */
+function isLocalHost(host: string): boolean {
+  const name = (host.split(":")[0] ?? "").toLowerCase();
+  return (
+    name === "localhost" ||
+    name === "127.0.0.1" ||
+    name === "::1" ||
+    name === "0.0.0.0" ||
+    name.endsWith(".localhost")
+  );
+}
+
+/**
+ * Guard: refuse to run the destructive suite against production by accident.
+ *
+ * This FAILS CLOSED, and that is the whole point. The suite creates real
+ * accounts and rows, so "I could not work out whether this is production" must
+ * refuse, not shrug. Three cases, in order:
+ *
+ *   1. localhost target      -> always allowed (CI runs this way; e2e-local.sh
+ *                               brings the three apps up on 3000/3001/3002).
+ *   2. remote target, and a production host list IS configured
+ *                            -> refuse on a match, allow otherwise. A preview
+ *                               deployment lands here and runs.
+ *   3. remote target, and NO list is configured
+ *                            -> refuse. Without E2E_PRODUCTION_HOSTS or
+ *                               AUTH_APEX_DOMAIN there is nothing to compare
+ *                               against, and guessing wrong wipes real burners'
+ *                               registrations.
+ *
+ * E2E_ALLOW_PRODUCTION=true is the one deliberate override.
+ */
 export function assertNotProductionUnlessAllowed(): void {
   const allow =
     (process.env.E2E_ALLOW_PRODUCTION ?? "").trim().toLowerCase() === "true";
   if (allow) return;
-  const prodHosts = [
-    "app.quagga.ryanjnoble.dev",
-    "org.quagga.ryanjnoble.dev",
-    "suppliers.quagga.ryanjnoble.dev",
-  ];
+  const prodHosts = productionHosts();
   for (const app of ["web", "org", "suppliers"] as const) {
     const host = (() => {
       try {
@@ -183,7 +236,19 @@ export function assertNotProductionUnlessAllowed(): void {
         return "";
       }
     })();
-    if (prodHosts.includes(host)) {
+    if (host === "" || isLocalHost(host)) continue;
+
+    if (prodHosts.length === 0) {
+      throw new Error(
+        `[e2e] Refusing to run against the non-local host ${host} because no ` +
+          `production host list is configured, so this cannot be checked. The ` +
+          `suite creates real accounts and rows. Set E2E_PRODUCTION_HOSTS (or ` +
+          `AUTH_APEX_DOMAIN) so the guard knows what production is, point ` +
+          `E2E_${app.toUpperCase()}_URL at localhost, or set ` +
+          `E2E_ALLOW_PRODUCTION=true if you REALLY mean it.`,
+      );
+    }
+    if (prodHosts.includes(host.toLowerCase())) {
       throw new Error(
         `[e2e] Refusing to run against production host ${host}. The suite creates ` +
           `real accounts and rows. Point E2E_${app.toUpperCase()}_URL at a preview, ` +
