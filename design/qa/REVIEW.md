@@ -7,13 +7,16 @@ defects that coordinate math then found in one run (145 of them). So reviews her
 
 ## The tooling (this directory)
 
-- `penctl.py` — raw JSONRPC client to the Pen bridge (works even when the MCP session
-  tools are flaky; requires the Pen app running with the doc open). It locates the
-  bridge binary itself, guessing a standard Pencil install per platform (WSL, macOS,
-  Linux). If that guess is wrong — a non-default install location, or a WSL setup
-  where the Windows username can't be read back through `cmd.exe` — set
-  `PENCIL_MCP_BRIDGE` to the absolute path of the MCP server executable and it will
-  use that verbatim.
+- `penctl.py` — raw JSONRPC client to the Pen bridge. **This is transport for
+  `audit.py`, not a tool you should reach for directly.** For ad-hoc inspection —
+  reading a frame's strings, checking one node's props — use the `mcp__pencil__*`
+  tools, which is what `design/pen-lessons.md` now recommends; the bridge exists
+  because `audit.py` is a python process and cannot call those.
+  Requires the Pen app running with the doc open. It locates the bridge binary
+  itself, guessing a standard Pencil install per platform (WSL, macOS, Linux). If
+  that guess is wrong — a non-default install location, or a WSL setup where the
+  Windows username can't be read back through `cmd.exe` — set `PENCIL_MCP_BRIDGE`
+  to the absolute path of the MCP server executable and it is used verbatim.
 - `audit.py` — the checker. Modes:
   - `python3 audit.py --sections <frameId>` → the frame's **component manifest**
     (every node: type, name, which library component it instances, disabled state, size)
