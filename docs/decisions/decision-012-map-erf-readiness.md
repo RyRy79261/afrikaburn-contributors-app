@@ -52,3 +52,18 @@ that renders a map. §13's `ERF-*` requirements remain unimplemented.
 
 Same as [Decision 011](decision-011-layout-tool-strategy.md) — the Roger van Wyk
 / Kshetra mapping meeting.
+
+## Update 2026-09-16 — half the gate may be moving
+
+AB has indicated a **map API** is coming. That addresses the first half of the
+gate (a machine-readable map). The second half — the erf grammar — is addressed
+sideways rather than answered: if the API carries erf identifiers, the grammar is
+*whatever the API emits*, and the plan is to mirror it rather than invent one.
+Whether it carries identifiers at all is the open question (U3 in the plan's
+unknowns register).
+
+Plan: [`docs/gis-placement-spec.md`](../gis-placement-spec.md). It explicitly does
+**not** change `registrations.erf` — the column stays free text, and the reason
+`placement-codes.ts` gives for it stays true, until U3 is answered.
+
+**Status is unchanged.** An announced API is not a read API.

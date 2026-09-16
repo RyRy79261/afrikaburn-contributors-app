@@ -40,6 +40,17 @@ Graeme was arranging a meeting with town planner **Roger van Wyk** and **Kshetra
 to unblock mapping (group chat, 2026-07-29 10:50). The App Spec says §§11–13
 should be revisited after that meeting.
 
+## Update 2026-09-16 — a plan exists, the decision does not move
+
+AfrikaBurn has indicated it will supply layouts through an **API**. The shape is
+unknown, so nothing here is decided. What exists now is a research plan for how
+to build against it without the unknown leaking into the schema:
+[`docs/gis-placement-spec.md`](../gis-placement-spec.md).
+
+Its Phase 0 is a read-only probe that turns "an API of unknown shape" into a
+written contract. **This decision reopens when that probe has run** — not when
+the API is announced.
+
 If that meeting produces a stable erf grammar and a machine-readable map, this
 decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
 
