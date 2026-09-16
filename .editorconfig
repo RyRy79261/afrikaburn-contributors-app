@@ -1,0 +1,24 @@
+# Editor defaults, so a contributor's IDE agrees with the repo's pinned
+# prettier before prettier ever runs. Prettier remains the authority for
+# everything it formats; this covers the files it does not (shell, python,
+# yaml fragments) and stops CRLF/trailing-whitespace churn in diffs.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.sh]
+indent_size = 2
+
+# Markdown: two trailing spaces is a hard line break. Stripping it silently
+# reflows rendered docs, so leave trailing whitespace alone here.
+[*.md]
+trim_trailing_whitespace = false

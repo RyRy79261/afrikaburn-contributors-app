@@ -1,8 +1,46 @@
 #!/usr/bin/env python3
 """Raw JSONRPC stdio client for the pen.dev MCP bridge (Windows exe via WSL interop)."""
-import json, subprocess, sys, threading, queue, time
+import json, os, subprocess, sys, threading, queue, time
 
-BRIDGE = "/mnt/c/Users/Ryan/AppData/Local/Programs/Pencil/resources/app.asar.unpacked/out/mcp-server-windows-x64.exe"
+# The Pencil MCP server binary. Set PENCIL_MCP_BRIDGE to override; the
+# defaults below are best-effort guesses at a standard install and will not be
+# right on every machine.
+#
+# The WSL default needs the WINDOWS username, which is not $USER inside WSL,
+# so it is resolved through cmd.exe interop with $USER as a fallback.
+def _windows_username() -> str:
+    try:
+        out = subprocess.run(
+            ["cmd.exe", "/c", "echo %USERNAME%"],
+            capture_output=True, text=True, timeout=5,
+        )
+        name = out.stdout.strip()
+        if name and "%" not in name:
+            return name
+    except Exception:
+        pass
+    return os.environ.get("USER") or os.environ.get("USERNAME") or ""
+
+
+def _is_wsl() -> bool:
+    try:
+        return "microsoft" in os.uname().release.lower()
+    except AttributeError:
+        return False
+
+
+def _default_bridge() -> str:
+    if sys.platform == "darwin":
+        return ("/Applications/Pencil.app/Contents/Resources"
+                "/app.asar.unpacked/out/mcp-server-macos-x64")
+    if _is_wsl():
+        return (f"/mnt/c/Users/{_windows_username()}/AppData/Local/Programs"
+                "/Pencil/resources/app.asar.unpacked/out"
+                "/mcp-server-windows-x64.exe")
+    return "/opt/Pencil/resources/app.asar.unpacked/out/mcp-server-linux-x64"
+
+
+BRIDGE = os.environ.get("PENCIL_MCP_BRIDGE") or _default_bridge()
 
 class Pen:
     def __init__(self):

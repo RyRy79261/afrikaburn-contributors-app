@@ -1,0 +1,36 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # One PR for the routine noise, individual PRs for majors. Without the
+    # group, a weekly run on a workspace this size opens a dozen PRs and every
+    # one of them burns a full CI matrix.
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # DO NOT REMOVE THESE IGNORES — both pins are load-bearing and documented
+    # in AGENTS.md rule "Pins that must not move" and SECURITY.md.
+    #
+    # `better-auth` is pinned to 1.6.25 EXACTLY. It is a direct dependency that
+    # mints and verifies our sessions, and it has a track record of
+    # high-severity auth advisories; every bump needs a manual read-through of
+    # the changelog against packages/auth before merge, not a green CI run.
+    #
+    # `@radix-ui/react-slot` is held at ~1.2.4 because newer versions break
+    # typecheck/build.
+    ignore:
+      - dependency-name: "better-auth"
+      - dependency-name: "@radix-ui/react-slot"
+
+  # Actions pinned by major tag still drift; this catches the ones that go
+  # unmaintained or ship a breaking v-next while nobody is looking.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

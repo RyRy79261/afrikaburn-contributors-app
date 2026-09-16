@@ -4,6 +4,14 @@
   "license": "FSL-1.1-ALv2",
   "version": "0.0.0",
   "description": "AfrikaBurn Contributors App \u2014 participant + org apps for theme-camp registration and entitlements (Quagga Portal MVP)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RyRy79261/afrikaburn-contributors-app.git"
+  },
+  "homepage": "https://github.com/RyRy79261/afrikaburn-contributors-app#readme",
+  "bugs": {
+    "url": "https://github.com/RyRy79261/afrikaburn-contributors-app/issues"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
