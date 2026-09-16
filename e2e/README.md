@@ -1,11 +1,19 @@
 # @quagga/e2e — Playwright end-to-end harness
 
-The shared harness for the three Quagga Portal apps: **153 tests across 56 spec files
+The shared harness for the three Quagga Portal apps: **177 tests across 70 spec files
 and 8 personas** (`anon`, `new-burner`, `camp-member`, `camp-lead`, `officer`,
 `org-staff`, `god`, `supplier`). **Every persona agent depends on this API.** Import
 from here; do not re-implement sign-up/onboarding/etc. Tests drive the **real UI**
 against a running deployment (local / preview / prod) — no database back doors for
 setup.
+
+> These counts are hand-maintained and have drifted before (this file said 153/56,
+> AGENTS.md said 172, both wrong). Recount with:
+>
+> ```sh
+> find e2e/specs e2e/tests -name '*.spec.ts' | wc -l              # spec files
+> grep -rhE '\btest\s*\(' e2e/specs e2e/tests --include='*.spec.ts' | wc -l   # tests
+> ```
 
 **This suite has been run, and it finds things the unit gate cannot.** `turbo run
 lint typecheck test build` lints and typechecks this package but **executes no

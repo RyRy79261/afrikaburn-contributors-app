@@ -30,7 +30,7 @@ flowchart TB
         ui["@quagga/ui<br/>components"]
     end
 
-    neon[("Neon Postgres<br/>45 tables · 29 migrations")]
+    neon[("Neon Postgres<br/>44 tables · 30 migrations")]
 
     subgraph ext["External services — all optional"]
         resend["Resend<br/>email"]
@@ -128,7 +128,7 @@ Pages re-guard before reading. Hiding a control is never the security boundary.
 
 ## Data
 
-45 tables in one database, owned by `packages/db`. Migrations are append-only
+44 tables in one database, owned by `packages/db`. Migrations are append-only
 and run on deploy (`db:migrate:deploy && next build`) — **against production,
 with no staging step.**
 
