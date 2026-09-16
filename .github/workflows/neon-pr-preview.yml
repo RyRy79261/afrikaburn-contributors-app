@@ -1,0 +1,76 @@
+name: Neon preview branch for PR
+
+# Pairs with neon-pr-cleanup.yml: this one CREATES the preview database branch,
+# that one deletes it when the PR closes.
+#
+# WHY THIS IS NOT THE VERCEL–NEON INTEGRATION. The integration is effectively
+# one Neon project to one Vercel project. This monorepo deploys THREE Vercel
+# apps (web, org, suppliers) against one shared Postgres, so only a single app
+# ever received preview DATABASE_* injection — the other two silently pointed
+# at whatever their Preview env already held. Here we create one Neon branch per
+# git head and attach the same pooled + unpooled URLs to all three.
+#
+# OPT-IN. Without the five secrets below the script exits 0 with a notice, so
+# this file is inert until someone configures it. It does NOT turn PRs red.
+#
+#   NEON_API_KEY          NEON_PROJECT_ID
+#   VERCEL_TOKEN          VERCEL_ORG_ID (team_…)
+#   VERCEL_PROJECT_IDS    comma-separated prj_… list, one per app
+#
+# `pull_request_target`, matching neon-pr-cleanup.yml, and for the same reason:
+# it runs the workflow and script from the BASE branch, never from the PR head.
+# That matters here because this job holds VERCEL_TOKEN — under `pull_request`
+# a PR could edit scripts/neon-preview-env.sh and exfiltrate it. The job checks
+# out no PR code; it reads event metadata and calls two REST APIs.
+#
+# Use the workflow_dispatch input to verify the wiring on a branch before it
+# has merged (that is the case `pull_request_target` cannot cover).
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      head_ref:
+        description: Git head branch name (e.g. chore-neon-preview-verify)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# A second push should supersede the first: the later commit's env wins, and a
+# cancelled run leaves nothing half-written (branch create is idempotent and
+# env rows are replaced wholesale).
+concurrency:
+  group: neon-preview-${{ github.event.pull_request.number || inputs.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  neon-preview-env:
+    # Same-repo PRs only. A fork PR gets no preview Neon branch (and, under
+    # pull_request_target, must not reach these secrets).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          # pull_request_target checks out the base ref by default — the
+          # trusted copy of the script. Do not change this to the PR head.
+          persist-credentials: false
+
+      - name: Provision Neon branch + Vercel Preview env
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_IDS: ${{ secrets.VERCEL_PROJECT_IDS }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || inputs.head_ref }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/neon-preview-env.sh
+          scripts/neon-preview-env.sh
