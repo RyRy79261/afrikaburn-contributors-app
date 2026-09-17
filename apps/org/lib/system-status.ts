@@ -42,13 +42,13 @@ import {
   isGoogleConfigured,
   isUnderApex,
   parseBoolEnv,
+  resolveApexDomain,
   resolveBaseURL,
   resolveCookieDomain,
   resolvePasskeyRpID,
   resolveRateLimit,
   resolveRequireEmailVerification,
   resolveUseSecureCookies,
-  AUTH_APEX_DOMAIN,
 } from "@quagga/auth/env";
 import { connectionHost, planMigration } from "@quagga/db";
 import {
@@ -440,10 +440,16 @@ function deploymentCheck(env: SystemEnv): SystemCheck {
     value: edition,
     tone: "info",
     detail: baseURL
-      ? `Serving as ${baseURL}${isUnderApex(env) ? ` (under the ${AUTH_APEX_DOMAIN} apex)` : " — not under the apex, so cross-app sign-on is host-only here"}.`
+      ? `Serving as ${baseURL}${
+          isUnderApex(env)
+            ? ` (under the ${resolveApexDomain(env)} apex)`
+            : resolveApexDomain(env)
+              ? " — not under the configured apex, so cross-app sign-on is host-only here"
+              : " — no AUTH_APEX_DOMAIN configured, so cross-app sign-on is host-only here"
+        }.`
       : "No base URL is configured, so Better Auth infers the origin from the request headers. " +
         "That is correct for local development and for a preview; a real deployment should set BETTER_AUTH_URL.",
-    env: ["BETTER_AUTH_URL", "VERCEL_ENV", "NODE_ENV"],
+    env: ["BETTER_AUTH_URL", "VERCEL_ENV", "NODE_ENV", "AUTH_APEX_DOMAIN"],
   };
 }
 

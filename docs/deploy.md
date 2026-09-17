@@ -109,6 +109,9 @@ from the advisory lock in `db:migrate:deploy`, not from nominating one owner app
 - Env vars on **all three** projects: `DATABASE_URL`, `DATABASE_URL_UNPOOLED` (the
   direct endpoint — the migrator's advisory lock does not hold on the pooled one),
   `BETTER_AUTH_SECRET` (identical across all three), `BETTER_AUTH_URL` (per app),
+  `AUTH_APEX_DOMAIN` (identical across all three — the shared registrable domain
+  the three apps are subdomains of, e.g. `example.org`; unset means no cross-app
+  SSO cookie/passkey scoping, each app behaves as its own origin),
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PGCRYPTO_KEY`, `RESEND_API_KEY`,
   `GOD_EMAILS`, `BLOB_READ_WRITE_TOKEN` (web only, from a Vercel Blob store).
 - Env vars for the **in-app reporter** (all three projects; every one of them is
@@ -192,7 +195,35 @@ Check the list against open PRs before deleting anything, then
 `DELETE .../branches/<id>` the ones whose PR has closed. Never touch the primary
 branch — that is production, with real burners' registrations in it.
 
-- `GOD_EMAILS=ryanjnoble@gmail.com` — first sign-in with that (verified) email self-elevates to god.
+**Only one of the three apps actually gets the integration's env.** The Vercel–Neon
+integration pairs one Neon project with one Vercel project. This monorepo has three
+Vercel projects (web, org, suppliers) against one Neon project, so exactly one of
+them receives the preview `DATABASE_*` injection; the other two fall back to
+whatever their Preview env already holds — in practice production, or nothing.
+
+`.github/workflows/neon-pr-preview.yml` replaces the integration for this repo:
+one Neon branch per git head, with the same pooled and unpooled URLs written to all
+three Vercel projects as **git-branch-scoped** Preview env, then a redeploy so the
+running preview picks them up. `neon-pr-cleanup.yml` removes both the branch and
+those env rows when the PR closes.
+
+**It is opt-in and inert until configured.** With the secrets unset the workflow
+runs, prints a notice and exits 0 — it does not fail pull requests. To enable it,
+add three secrets alongside the two above:
+
+- `VERCEL_TOKEN` — a Vercel access token with access to all three projects
+- `VERCEL_ORG_ID` — the team id (`team_…`)
+- `VERCEL_PROJECT_IDS` — comma-separated `prj_…` ids, one per app
+
+Then **turn the Vercel–Neon integration's preview branching off**, or the two will
+both create branches for the same PR and compete to write the same env rows.
+
+Verify on a branch before merging with the workflow's `workflow_dispatch` input
+(`head_ref`). `scripts/neon-preview-env.sh` also runs locally and takes `DRY_RUN=1`
+to print what it would do, and `SKIP_REDEPLOY=1` to stop short of redeploying. It
+never logs a connection string — only the host.
+
+- `GOD_EMAILS=<first-maintainer@example.org>,<second-maintainer@example.org>` — first sign-in with a listed (verified) email self-elevates to god (System manager). **List at least two working-group addresses in production** — a single god account is a lockout risk (the System panel itself warns about this).
 - **Optional, web only — `ACCOUNT_SWEEP_SECRET`**: bearer token for
   `/api/account/deletion-sweep`, which sanitizes accounts whose 14-day deletion
   grace period has elapsed (docs/accounts-security-spec.md §Deletion). **Leave it

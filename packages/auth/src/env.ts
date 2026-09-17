@@ -2,7 +2,7 @@
 //
 // PURITY CONTRACT: no I/O, no better-auth import, no side effects (not even a
 // console.warn — warning emission lives in config.ts's createAuth). Everything
-// here is a deterministic function of an env bag, so the derivations Ryan cares
+// here is a deterministic function of an env bag, so the derivations this module cares
 // about (baseURL fallback, DERIVED email verification, cross-subdomain cookie
 // scoping, trusted origins) are unit-testable without a database or a running
 // auth instance. config.ts consumes these to assemble the betterAuth() options;
@@ -12,8 +12,17 @@
  * three apps still boot env-less (AGENTS.md rule 4). */
 export interface AuthEnv {
   BETTER_AUTH_SECRET?: string | undefined;
-  /** Per-app absolute origin in production (e.g. https://app.quagga.ryanjnoble.dev). */
+  /** Per-app absolute origin in production (e.g. https://app.example.org). */
   BETTER_AUTH_URL?: string | undefined;
+  /**
+   * The registrable apex domain every deployed app is a subdomain of (e.g.
+   * `example.org` for `app.example.org` / `org.example.org` /
+   * `suppliers.example.org`). Unset means this deployment has no shared apex
+   * — each app is treated as its own standalone origin (no cross-app SSO
+   * cookie scoping, no shared passkey rpID). There is no built-in default;
+   * a production deployment that wants cross-app SSO must set this.
+   */
+  AUTH_APEX_DOMAIN?: string | undefined;
   /** Vercel preview host (no protocol) — the previews' baseURL source. */
   VERCEL_URL?: string | undefined;
   VERCEL_ENV?: string | undefined;
@@ -33,9 +42,6 @@ export interface AuthEnv {
   GOOGLE_CLIENT_SECRET?: string | undefined;
   NODE_ENV?: string | undefined;
 }
-
-/** The registrable apex every app is a subdomain of. */
-export const AUTH_APEX_DOMAIN = "quagga.ryanjnoble.dev";
 
 /**
  * Session lifetime, in seconds. Database sessions (Better Auth's default) plus
@@ -63,25 +69,41 @@ export const AUTH_SESSION = {
 export const AUTH_RP_NAME = "AfrikaBurn Contributors";
 
 /**
- * The Domain= all session cookies are scoped to (leading dot), so a session
- * minted by one app verifies on the others — this is what gives cross-app SSO.
- * It is a hard prerequisite that cannot be satisfied on a *.vercel.app host
- * (Public Suffix List), which is why crossSubDomainCookies is enabled only when
- * the resolved baseURL is actually under the apex (see resolveCookieDomain).
+ * The configured apex domain, or undefined when this deployment has no
+ * shared apex (see AUTH_APEX_DOMAIN on AuthEnv). Trims and drops an empty
+ * string to undefined so an accidentally-blank env var behaves the same as
+ * unset.
  */
-export const AUTH_COOKIE_DOMAIN = `.${AUTH_APEX_DOMAIN}`;
+export function resolveApexDomain(env: AuthEnv): string | undefined {
+  const raw = env.AUTH_APEX_DOMAIN?.trim();
+  return raw ? raw : undefined;
+}
 
 /**
- * The three production app origins — the only absolute origins trusted by
- * default. trustedOrigins is NEVER a wildcard (the documented ATO bypass class
- * targets wildcard / scheme-less callbackURLs); preview origins are added
- * explicitly and absolutely at resolve time.
+ * The Domain= session cookies are scoped to (leading dot) when an apex is
+ * configured, so a session minted by one app verifies on the others — this
+ * is what gives cross-app SSO. It is a hard prerequisite that cannot be
+ * satisfied on a *.vercel.app host (Public Suffix List), which is why
+ * crossSubDomainCookies is enabled only when the resolved baseURL is
+ * actually under the apex (see resolveCookieDomain).
  */
-export const PRODUCTION_ORIGINS: readonly string[] = [
-  "https://app.quagga.ryanjnoble.dev",
-  "https://org.quagga.ryanjnoble.dev",
-  "https://suppliers.quagga.ryanjnoble.dev",
-];
+function cookieDomainFor(apex: string): string {
+  return `.${apex}`;
+}
+
+/**
+ * The three production app origins for the configured apex — the only
+ * absolute origins trusted by default beyond the current base URL.
+ * trustedOrigins is NEVER a wildcard (the documented ATO bypass class
+ * targets wildcard / scheme-less callbackURLs); preview origins are added
+ * explicitly and absolutely at resolve time. Returns an empty array when no
+ * apex is configured — there are no fixed production subdomains to trust.
+ */
+export function resolveProductionOrigins(env: AuthEnv): string[] {
+  const apex = resolveApexDomain(env);
+  if (!apex) return [];
+  return ["app", "org", "suppliers"].map((sub) => `https://${sub}.${apex}`);
+}
 
 /** True when the auth stack has its shared signing secret — the one env var that
  * makes a session from one app valid in another. Drives isAuthConfigured(). */
@@ -181,13 +203,16 @@ function hostOf(url: string | undefined): string | null {
   }
 }
 
-/** True when the resolved base URL is actually served under our apex. */
+/**
+ * True when the resolved base URL is actually served under the configured
+ * apex. Always false when no apex is configured (AUTH_APEX_DOMAIN unset) —
+ * there is nothing for the base URL to be "under".
+ */
 export function isUnderApex(env: AuthEnv): boolean {
+  const apex = resolveApexDomain(env);
+  if (!apex) return false;
   const host = hostOf(resolveBaseURL(env));
-  return (
-    host === AUTH_APEX_DOMAIN ||
-    (host?.endsWith(`.${AUTH_APEX_DOMAIN}`) ?? false)
-  );
+  return host === apex || (host?.endsWith(`.${apex}`) ?? false);
 }
 
 /**
@@ -198,7 +223,8 @@ export function isUnderApex(env: AuthEnv): boolean {
  * Public Suffix List makes impossible anyway).
  */
 export function resolveCookieDomain(env: AuthEnv): string | undefined {
-  return isUnderApex(env) ? AUTH_COOKIE_DOMAIN : undefined;
+  const apex = resolveApexDomain(env);
+  return apex && isUnderApex(env) ? cookieDomainFor(apex) : undefined;
 }
 
 /** Parse a loose boolean env value. Returns undefined when unset/unrecognised. */
@@ -244,7 +270,8 @@ export function isGoogleConfigured(env: AuthEnv): boolean {
  * blocker — this resolves to the apex the moment production serves under it.)
  */
 export function resolvePasskeyRpID(env: AuthEnv): string | undefined {
-  return isUnderApex(env) ? AUTH_APEX_DOMAIN : undefined;
+  const apex = resolveApexDomain(env);
+  return apex && isUnderApex(env) ? apex : undefined;
 }
 
 /**
@@ -268,7 +295,7 @@ export function resolvePasskeyOrigins(env: AuthEnv): string[] | undefined {
  * only; no wildcards.
  */
 export function resolveTrustedOrigins(env: AuthEnv): string[] {
-  const origins = new Set<string>(PRODUCTION_ORIGINS);
+  const origins = new Set<string>(resolveProductionOrigins(env));
   const base = resolveBaseURL(env);
   if (base) {
     try {
@@ -318,11 +345,21 @@ export function authConfigWarnings(env: AuthEnv): string[] {
     );
   }
 
-  if (isProd && isAuthConfigured(env) && !isUnderApex(env)) {
+  const apex = resolveApexDomain(env);
+  if (isProd && isAuthConfigured(env) && apex && !isUnderApex(env)) {
     warnings.push(
-      "Production auth is not served under the apex " +
-        `(${AUTH_APEX_DOMAIN}); cross-subdomain SSO cookies are disabled for this ` +
+      "Production auth is not served under the configured apex " +
+        `(${apex}); cross-subdomain SSO cookies are disabled for this ` +
         "origin. Set BETTER_AUTH_URL to the app's apex subdomain.",
+    );
+  }
+
+  if (isProd && isAuthConfigured(env) && !apex) {
+    warnings.push(
+      "AUTH_APEX_DOMAIN is not set — each app is treated as its own " +
+        "standalone origin: no cross-app SSO cookie, no shared passkey " +
+        "rpID. Set AUTH_APEX_DOMAIN if the three apps should share a " +
+        "signed-in session.",
     );
   }
 

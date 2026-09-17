@@ -188,17 +188,26 @@ describe("buildAuthOptions assembles env-dependent blocks", () => {
   });
 
   it("scopes cookies to the apex only when actually served under it", () => {
+    const testApex = "contributors.example";
     const apex = buildAuthOptions({
-      BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
+      AUTH_APEX_DOMAIN: testApex,
+      BETTER_AUTH_URL: `https://org.${testApex}`,
     });
     expect(apex.advanced.crossSubDomainCookies).toEqual({
       enabled: true,
-      domain: ".quagga.ryanjnoble.dev",
+      domain: `.${testApex}`,
     });
     // Setting Domain on a host that is not under the apex silently breaks every
     // cookie, so a preview/localhost deployment gets host-only cookies instead.
     expect(
-      buildAuthOptions({ VERCEL_URL: "preview.vercel.app" }).advanced
+      buildAuthOptions({
+        AUTH_APEX_DOMAIN: testApex,
+        VERCEL_URL: "preview.vercel.app",
+      }).advanced.crossSubDomainCookies,
+    ).toBeUndefined();
+    // No apex configured at all — never scoped, whatever the host looks like.
+    expect(
+      buildAuthOptions({ BETTER_AUTH_URL: `https://org.${testApex}` }).advanced
         .crossSubDomainCookies,
     ).toBeUndefined();
   });
@@ -217,7 +226,7 @@ describe("buildAuthOptions assembles env-dependent blocks", () => {
     expect(
       "useSecureCookies" in
         buildAuthOptions({
-          BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+          BETTER_AUTH_URL: "https://app.contributors.example",
         }).advanced,
     ).toBe(false);
   });

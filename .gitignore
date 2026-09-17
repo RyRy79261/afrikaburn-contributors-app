@@ -26,3 +26,9 @@ coverage/
 
 # Agent worktrees — transient, never committed.
 .claude/worktrees/
+
+# --- Python bytecode (design/qa tooling) ---
+# These were tracked once and the compiled .pyc embedded an absolute path from
+# the machine that built them.
+__pycache__/
+*.pyc
