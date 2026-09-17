@@ -346,9 +346,13 @@ both of:
   publishes — MUST land within a stated tolerance of where it belongs after the
   transform. One control point fixes the reflection ambiguity that area cannot.
 - **A round trip.** Transform a sample of imported geometry back to the source's
-  declared CRS and axis order and compare against the original coordinates. A
-  declared axis order that is wrong fails to round-trip, which is a cheap,
-  data-only check that needs no external knowledge.
+  declared CRS and axis order and compare against the original coordinates. This
+  catches a lossy or asymmetric transform — **but it does not establish
+  orientation, and an earlier draft of this document wrongly said it did.** An
+  importer that applies the same wrong axis order in both directions round-trips
+  perfectly, because the two errors are inverses: the check is an identity and
+  proves only that the transform is self-consistent. Orientation has exactly one
+  gate, and it is the control point above.
 
 Failing either refuses promotion, with the same readable error. Signed area (ring
 winding) is _not_ a substitute: sources disagree about winding convention, so a

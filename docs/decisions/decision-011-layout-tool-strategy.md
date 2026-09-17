@@ -58,8 +58,11 @@ trigger of its own: what it can produce is an endpoint and a claim about that
 endpoint, and the probe is what turns the claim into something buildable.
 Deferral stands until the probe report exists.
 
-If that meeting produces a stable erf grammar and a machine-readable map, this
-decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
+_(The sentence that stood here said the meeting reopens this decision directly
+if it produces a stable erf grammar and a machine-readable map. It is replaced
+by the paragraph above rather than kept alongside it: two independent reopening
+triggers in one record is how a deferred decision gets reopened twice, on
+different evidence, by two different people.)_
 
 ## Note on §12
 
