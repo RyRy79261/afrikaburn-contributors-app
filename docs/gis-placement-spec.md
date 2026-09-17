@@ -338,8 +338,9 @@ import** with a readable error when they disagree by more than a few percent.
 otherwise in an earlier draft.** Reflection is an isometry: swapping the axes
 preserves every area exactly and, for a roughly axis-aligned site, leaves the
 bounding box the same size. A mirrored city passes a footprint check cleanly and
-places every camp backwards. So the import MUST also assert **orientation**, by
-both of:
+places every camp backwards. So the import MUST also assert **orientation**,
+which takes an independent reference — no amount of self-comparison gets there.
+Two further checks, doing two different jobs:
 
 - **A control point.** At least one feature whose real-world position is known
   independently — the Clan, the gate, the airstrip whose coordinates Quaggapedia
