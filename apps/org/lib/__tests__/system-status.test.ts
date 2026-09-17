@@ -27,7 +27,8 @@ function secretiveEnv(): SystemEnv {
     DATABASE_URL: `postgres://dbuser:${SECRET}@db.example.com:5432/quagga?sslmode=require`,
     DATABASE_URL_UNPOOLED: `postgres://dbuser:${SECRET}@db.example.com:5432/quagga?sslmode=require`,
     BETTER_AUTH_SECRET: `auth-${SECRET}`,
-    BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
+    AUTH_APEX_DOMAIN: "contributors.example",
+    BETTER_AUTH_URL: "https://org.contributors.example",
     RESEND_API_KEY: `re_${SECRET}`,
     BLOB_READ_WRITE_TOKEN: `blob_${SECRET}`,
     GOOGLE_CLIENT_ID: `gid-${SECRET}`,
@@ -279,11 +280,14 @@ describe("security checks explain WHY, not just what", () => {
 
   it("names the passkey scope, because widening it later re-enrols everyone", () => {
     const apex = check(
-      { BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev" },
+      {
+        AUTH_APEX_DOMAIN: "contributors.example",
+        BETTER_AUTH_URL: "https://org.contributors.example",
+      },
       OK_PROBE,
       "passkeys",
     );
-    expect(apex.value).toMatch(/quagga\.ryanjnoble\.dev/);
+    expect(apex.value).toMatch(/contributors\.example/);
     expect(check({}, OK_PROBE, "passkeys").value).toMatch(/this host/i);
   });
 
@@ -297,7 +301,7 @@ describe("security checks explain WHY, not just what", () => {
     ).toBe("attention");
     expect(
       check(
-        { BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev" },
+        { BETTER_AUTH_URL: "https://org.contributors.example" },
         OK_PROBE,
         "secure-cookies",
       ).tone,
@@ -325,7 +329,7 @@ describe("the headline", () => {
       DATABASE_URL_UNPOOLED: "postgres://u:p@direct.neon.tech/db",
       DATABASE_URL: "postgres://u:p@direct.neon.tech/db",
       BETTER_AUTH_SECRET: "a-real-secret-value-here",
-      BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
+      BETTER_AUTH_URL: "https://org.contributors.example",
       RESEND_API_KEY: "re_key",
       PGCRYPTO_KEY: "a-perfectly-long-key",
       GOD_EMAILS: "someone@example.com",
@@ -342,7 +346,7 @@ describe("the headline", () => {
       DATABASE_URL_UNPOOLED: "postgres://u:p@direct.neon.tech/db",
       DATABASE_URL: "postgres://u:p@direct.neon.tech/db",
       BETTER_AUTH_SECRET: "a-real-secret-value-here",
-      BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
+      BETTER_AUTH_URL: "https://org.contributors.example",
       RESEND_API_KEY: "re_key",
       BLOB_READ_WRITE_TOKEN: "blob_token",
       GOOGLE_CLIENT_ID: "gid",

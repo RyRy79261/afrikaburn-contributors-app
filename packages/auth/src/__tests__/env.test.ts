@@ -1,24 +1,32 @@
 import { describe, it, expect } from "vitest";
 import {
-  AUTH_APEX_DOMAIN,
-  AUTH_COOKIE_DOMAIN,
-  PRODUCTION_ORIGINS,
   authConfigWarnings,
   isAuthConfigured,
   isEmailProviderConfigured,
   isGoogleConfigured,
   isUnderApex,
   parseBoolEnv,
+  resolveApexDomain,
   resolveBaseURL,
   resolveCookieDomain,
   resolvePasskeyOrigins,
   resolvePasskeyRpID,
+  resolveProductionOrigins,
   resolveRateLimit,
   resolveRequireEmailVerification,
   resolveTrustedOrigins,
   resolveUseSecureCookies,
   type AuthEnv,
 } from "../env";
+
+// A fictional apex used throughout — the resolvers are pure functions of
+// AUTH_APEX_DOMAIN, so any registrable domain exercises the same logic a real
+// deployment's apex would. Never a real or personal domain.
+const TEST_APEX = "contributors.example";
+const withApex = (env: AuthEnv = {}): AuthEnv => ({
+  ...env,
+  AUTH_APEX_DOMAIN: TEST_APEX,
+});
 
 describe("isAuthConfigured", () => {
   it("is true only when the shared secret is present", () => {
@@ -31,10 +39,10 @@ describe("resolveBaseURL", () => {
   it("prefers the explicit production URL", () => {
     expect(
       resolveBaseURL({
-        BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+        BETTER_AUTH_URL: `https://app.${TEST_APEX}`,
         VERCEL_URL: "preview.vercel.app",
       }),
-    ).toBe("https://app.quagga.ryanjnoble.dev");
+    ).toBe(`https://app.${TEST_APEX}`);
   });
 
   it("falls back to the Vercel preview URL (adding https)", () => {
@@ -48,33 +56,57 @@ describe("resolveBaseURL", () => {
   });
 });
 
+describe("resolveApexDomain", () => {
+  it("is undefined when AUTH_APEX_DOMAIN is unset — no personal or built-in default", () => {
+    expect(resolveApexDomain({})).toBeUndefined();
+  });
+
+  it("trims whitespace and treats a blank value as unset", () => {
+    expect(resolveApexDomain({ AUTH_APEX_DOMAIN: `  ${TEST_APEX}  ` })).toBe(
+      TEST_APEX,
+    );
+    expect(resolveApexDomain({ AUTH_APEX_DOMAIN: "   " })).toBeUndefined();
+  });
+});
+
 describe("cross-subdomain cookie scoping", () => {
-  it("scopes to the apex only when served under the apex", () => {
+  it("scopes to the apex only when served under the configured apex", () => {
     expect(
-      resolveCookieDomain({
-        BETTER_AUTH_URL: "https://org.quagga.ryanjnoble.dev",
-      }),
-    ).toBe(AUTH_COOKIE_DOMAIN);
+      resolveCookieDomain(
+        withApex({ BETTER_AUTH_URL: `https://org.${TEST_APEX}` }),
+      ),
+    ).toBe(`.${TEST_APEX}`);
     expect(
-      isUnderApex({ BETTER_AUTH_URL: `https://${AUTH_APEX_DOMAIN}` }),
+      isUnderApex(withApex({ BETTER_AUTH_URL: `https://${TEST_APEX}` })),
     ).toBe(true);
   });
 
-  it("does NOT scope on a *.vercel.app preview or localhost", () => {
+  it("never scopes when no apex is configured, however the host looks", () => {
     expect(
-      resolveCookieDomain({ VERCEL_URL: "preview.vercel.app" }),
+      resolveCookieDomain({ BETTER_AUTH_URL: `https://org.${TEST_APEX}` }),
+    ).toBeUndefined();
+    expect(isUnderApex({ BETTER_AUTH_URL: `https://${TEST_APEX}` })).toBe(
+      false,
+    );
+  });
+
+  it("does NOT scope on a *.vercel.app preview or localhost, even with an apex configured", () => {
+    expect(
+      resolveCookieDomain(withApex({ VERCEL_URL: "preview.vercel.app" })),
     ).toBeUndefined();
     expect(
-      resolveCookieDomain({ BETTER_AUTH_URL: "http://localhost:3000" }),
+      resolveCookieDomain(
+        withApex({ BETTER_AUTH_URL: "http://localhost:3000" }),
+      ),
     ).toBeUndefined();
-    expect(resolveCookieDomain({})).toBeUndefined();
+    expect(resolveCookieDomain(withApex())).toBeUndefined();
   });
 
   it("is not fooled by an apex-suffix lookalike host", () => {
     expect(
-      resolveCookieDomain({
-        BETTER_AUTH_URL: "https://quagga.ryanjnoble.dev.evil.com",
-      }),
+      resolveCookieDomain(
+        withApex({ BETTER_AUTH_URL: `https://${TEST_APEX}.evil.com` }),
+      ),
     ).toBeUndefined();
   });
 
@@ -82,16 +114,16 @@ describe("cross-subdomain cookie scoping", () => {
     // A typo'd base URL must fail closed. Reading it as apex-hosted would
     // silently switch on cross-subdomain cookie scoping for an origin that
     // cannot carry it, which breaks every cookie the deployment sets.
-    expect(isUnderApex({ BETTER_AUTH_URL: "app.quagga.ryanjnoble.dev" })).toBe(
+    expect(isUnderApex(withApex({ BETTER_AUTH_URL: `app.${TEST_APEX}` }))).toBe(
       false,
     );
     expect(
-      resolveCookieDomain({ BETTER_AUTH_URL: "not a url at all" }),
+      resolveCookieDomain(withApex({ BETTER_AUTH_URL: "not a url at all" })),
     ).toBeUndefined();
     // …and the same typo must not poison the trusted-origins list either.
     expect(
-      resolveTrustedOrigins({ BETTER_AUTH_URL: "not a url at all" }),
-    ).toEqual([...PRODUCTION_ORIGINS]);
+      resolveTrustedOrigins(withApex({ BETTER_AUTH_URL: "not a url at all" })),
+    ).toEqual(resolveProductionOrigins(withApex()));
   });
 });
 
@@ -113,9 +145,7 @@ describe("resolveUseSecureCookies", () => {
     // opt out of Secure cookies by being misread.
     expect(resolveUseSecureCookies({})).toBeUndefined();
     expect(
-      resolveUseSecureCookies({
-        BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
-      }),
+      resolveUseSecureCookies({ BETTER_AUTH_URL: `https://app.${TEST_APEX}` }),
     ).toBeUndefined();
     // A Vercel preview URL carries no protocol and is resolved to https.
     expect(
@@ -189,17 +219,17 @@ describe("resolveRateLimit", () => {
 // --- Passkeys: rpID and expected origins ---------------------------------
 
 describe("passkey rpID and origins", () => {
-  it("scopes to the apex, with all three production origins, under the apex", () => {
+  it("scopes to the configured apex, with all three production origins, under the apex", () => {
     // ONE passkey has to work on app., org. and suppliers., which is what an
     // apex rpID plus all three expected origins buys. Widening it later would
     // mean re-enrolling every user.
-    const env: AuthEnv = {
-      BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
-    };
+    const env: AuthEnv = withApex({
+      BETTER_AUTH_URL: `https://app.${TEST_APEX}`,
+    });
 
-    expect(resolvePasskeyRpID(env)).toBe(AUTH_APEX_DOMAIN);
+    expect(resolvePasskeyRpID(env)).toBe(TEST_APEX);
     expect(resolvePasskeyOrigins(env)?.sort()).toEqual(
-      [...PRODUCTION_ORIGINS].sort(),
+      resolveProductionOrigins(env).sort(),
     );
   });
 
@@ -208,13 +238,22 @@ describe("passkey rpID and origins", () => {
     // handing localhost or a *.vercel.app preview the apex would break passkeys
     // outright rather than degrade them.
     for (const env of [
-      {},
-      { BETTER_AUTH_URL: "http://localhost:3000" },
-      { VERCEL_URL: "preview.vercel.app" },
+      withApex(),
+      withApex({ BETTER_AUTH_URL: "http://localhost:3000" }),
+      withApex({ VERCEL_URL: "preview.vercel.app" }),
     ]) {
       expect(resolvePasskeyRpID(env)).toBeUndefined();
       expect(resolvePasskeyOrigins(env)).toBeUndefined();
     }
+  });
+
+  it("is undefined with no apex configured at all, even under what would be the apex", () => {
+    expect(
+      resolvePasskeyRpID({ BETTER_AUTH_URL: `https://${TEST_APEX}` }),
+    ).toBeUndefined();
+    expect(
+      resolvePasskeyOrigins({ BETTER_AUTH_URL: `https://${TEST_APEX}` }),
+    ).toBeUndefined();
   });
 });
 
@@ -255,15 +294,39 @@ describe("resolveRequireEmailVerification (DERIVED, never a hardcoded weakening)
   });
 });
 
+describe("resolveProductionOrigins", () => {
+  it("is empty when no apex is configured — there is no fixed set to trust", () => {
+    expect(resolveProductionOrigins({})).toEqual([]);
+  });
+
+  it("derives the three subdomain origins from the configured apex", () => {
+    expect(resolveProductionOrigins(withApex()).sort()).toEqual(
+      [
+        `https://app.${TEST_APEX}`,
+        `https://org.${TEST_APEX}`,
+        `https://suppliers.${TEST_APEX}`,
+      ].sort(),
+    );
+  });
+});
+
 describe("resolveTrustedOrigins", () => {
-  it("always includes the three production origins, absolute, no wildcards", () => {
-    const origins = resolveTrustedOrigins({});
-    for (const o of PRODUCTION_ORIGINS) expect(origins).toContain(o);
+  it("includes the three production origins when an apex is configured, absolute, no wildcards", () => {
+    const origins = resolveTrustedOrigins(withApex());
+    for (const o of resolveProductionOrigins(withApex()))
+      expect(origins).toContain(o);
     expect(origins.some((o) => o.includes("*"))).toBe(false);
   });
 
-  it("adds this deployment's own origin when set, deduped", () => {
+  it("is just this deployment's own origin when no apex is configured", () => {
     const origins = resolveTrustedOrigins({ VERCEL_URL: "preview.vercel.app" });
+    expect(origins).toEqual(["https://preview.vercel.app"]);
+  });
+
+  it("adds this deployment's own origin when set, deduped", () => {
+    const origins = resolveTrustedOrigins(
+      withApex({ VERCEL_URL: "preview.vercel.app" }),
+    );
     expect(origins).toContain("https://preview.vercel.app");
     expect(new Set(origins).size).toBe(origins.length);
   });
@@ -303,23 +366,35 @@ describe("authConfigWarnings", () => {
     expect(w.join(" ")).toMatch(/not gated on email verification/i);
   });
 
-  it("warns in production when not served under the apex", () => {
-    const env: AuthEnv = {
+  it("warns in production when an apex is configured but not served under it", () => {
+    const env: AuthEnv = withApex({
       BETTER_AUTH_SECRET: "x",
       RESEND_API_KEY: "re_x",
       VERCEL_ENV: "production",
       BETTER_AUTH_URL: "https://app.example.vercel.app",
-    };
+    });
     expect(authConfigWarnings(env).join(" ")).toMatch(/cross-subdomain SSO/i);
   });
 
-  it("is silent when fully and correctly configured under the apex", () => {
+  it("warns in production when no apex is configured at all", () => {
     const env: AuthEnv = {
       BETTER_AUTH_SECRET: "x",
       RESEND_API_KEY: "re_x",
       VERCEL_ENV: "production",
-      BETTER_AUTH_URL: "https://app.quagga.ryanjnoble.dev",
+      BETTER_AUTH_URL: `https://app.${TEST_APEX}`,
     };
+    expect(authConfigWarnings(env).join(" ")).toMatch(
+      /AUTH_APEX_DOMAIN is not set/i,
+    );
+  });
+
+  it("is silent when fully and correctly configured under the apex", () => {
+    const env: AuthEnv = withApex({
+      BETTER_AUTH_SECRET: "x",
+      RESEND_API_KEY: "re_x",
+      VERCEL_ENV: "production",
+      BETTER_AUTH_URL: `https://app.${TEST_APEX}`,
+    });
     expect(authConfigWarnings(env)).toEqual([]);
   });
 });

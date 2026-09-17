@@ -78,7 +78,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium

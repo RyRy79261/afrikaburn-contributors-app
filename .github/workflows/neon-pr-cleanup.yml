@@ -140,3 +140,74 @@ jobs:
               exit 1
             fi
           done <<< "$targets"
+
+      # Pairs with neon-pr-preview.yml, which writes git-branch-scoped Preview
+      # DATABASE_URL / DATABASE_URL_UNPOOLED rows onto each Vercel project.
+      # Deleting the Neon branch without deleting those rows leaves every closed
+      # PR's env behind pointing at a database that no longer exists — the same
+      # slow accumulation the Neon branch leak above was, one API up.
+      #
+      # `always()` so the rows go even if the Neon delete failed; they are dead
+      # either way. Skips quietly when the Vercel secrets are not configured,
+      # which is the state this repo is in until someone opts in.
+      - name: Delete git-branch-scoped Vercel Preview DATABASE_* env
+        if: always()
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_IDS: ${{ secrets.VERCEL_PROJECT_IDS }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_TOKEN:-}" ] || [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_IDS:-}" ]; then
+            echo "Vercel secrets not configured — skipping Preview env cleanup."
+            exit 0
+          fi
+          if [ -z "${HEAD_REF:-}" ]; then
+            echo "::warning::no head ref on this event; skipping Preview env cleanup"
+            exit 0
+          fi
+
+          auth=( -H "Authorization: Bearer ${VERCEL_TOKEN}" -H "Accept: application/json" )
+          api="https://api.vercel.com"
+          curl_opts=(--connect-timeout 10 --max-time 30 --retry 3 --retry-delay 5)
+
+          IFS=',' read -r -a project_ids <<< "$VERCEL_PROJECT_IDS"
+          for project_id in "${project_ids[@]}"; do
+            project_id="$(echo "$project_id" | tr -d '[:space:]')"
+            [ -z "$project_id" ] && continue
+            echo "Scanning env on ${project_id} for gitBranch=${HEAD_REF}"
+
+            list=$(curl -sS "${curl_opts[@]}" "${auth[@]}" \
+              "${api}/v9/projects/${project_id}/env?teamId=${VERCEL_ORG_ID}")
+            if ! printf '%s' "$list" | jq -e '.envs' >/dev/null 2>&1; then
+              echo "::warning::could not list env for ${project_id}; skipping"
+              continue
+            fi
+
+            # Narrowly scoped: only the two DATABASE_* keys, only target
+            # "preview", only rows pinned to THIS git branch. Production and
+            # unscoped preview env are never candidates.
+            ids=$(printf '%s' "$list" | jq -r --arg branch "$HEAD_REF" '
+              .envs[]?
+              | select(.key == "DATABASE_URL" or .key == "DATABASE_URL_UNPOOLED")
+              | select((.target // []) | index("preview"))
+              | select((.gitBranch // "") == $branch)
+              | .id
+            ')
+
+            if [ -z "$ids" ]; then
+              echo "  nothing to delete"
+              continue
+            fi
+            while IFS= read -r eid; do
+              [ -z "$eid" ] && continue
+              echo "  deleting env id=${eid}"
+              code=$(curl -sS "${curl_opts[@]}" -o /dev/null -w "%{http_code}" -X DELETE "${auth[@]}" \
+                "${api}/v9/projects/${project_id}/env/${eid}?teamId=${VERCEL_ORG_ID}")
+              if [ "$code" != "200" ] && [ "$code" != "202" ]; then
+                echo "::warning::delete env ${eid} returned HTTP ${code}"
+              fi
+            done <<< "$ids"
+          done

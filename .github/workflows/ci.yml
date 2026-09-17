@@ -56,7 +56,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       # The PR title. It is what the reviewer list shows and what a reader scans;
       # it is also the subject GitHub offers if this is ever squashed.
@@ -92,11 +92,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # No committed lockfile on the first CI run — allow pnpm to resolve and
-      # write one. Switch this to `--frozen-lockfile` once pnpm-lock.yaml is
-      # committed (which pins the resolution the gate below verifies).
+      # `--frozen-lockfile` is the point of having committed pnpm-lock.yaml: CI
+      # installs EXACTLY what the lockfile pins, and a package.json change that
+      # was not accompanied by a lockfile update fails here instead of silently
+      # resolving to something no developer has run locally.
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: CI gate
         run: pnpm turbo run lint typecheck test build
@@ -176,7 +177,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
@@ -454,7 +455,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.scope.outputs.in-scope == 'true'
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       # Fails the shard when any floor in that workspace is breached.
       - name: Run coverage against the floors

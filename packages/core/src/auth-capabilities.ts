@@ -211,7 +211,7 @@ export const AUTH_CAPABILITIES: Readonly<
     method:
       "authClient.passkey.addPasskey / signIn.passkey + auth.api.listPasskeys/deletePasskey",
     reason:
-      "The `@better-auth/passkey` plugin is installed in @quagga/auth (migration 0015: `passkey` table). rpID is scoped to the apex (quagga.ryanjnoble.dev) so one passkey works across app./org./suppliers. Passkeys are ADDITIVE — an accelerator on top of password/Google, never the only way in — so a lost passkey is never a lockout (recovery: password or a 2FA backup code).",
+      "The `@better-auth/passkey` plugin is installed in @quagga/auth (migration 0015: `passkey` table). rpID is scoped to the deployment's configured apex domain so one passkey works across app./org./suppliers. Passkeys are ADDITIVE — an accelerator on top of password/Google, never the only way in — so a lost passkey is never a lockout (recovery: password or a 2FA backup code).",
   },
 };
 
