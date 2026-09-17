@@ -95,14 +95,23 @@ narrows the field considerably. Realistic candidates, roughly in order:
 | **Bespoke JSON**                     | Anything else                                                | Low per-shape, but the shape moves                              |
 | **A PDF, again**                     | It is April                                                  | Out of scope — this plan does not resurrect PDF tracing         |
 
-The adapter registry MUST be able to carry more than one of these at once,
-because the first three are the same adapter with a different URL template and
-the last is a mapping config.
+The adapter registry MUST be able to carry more than one of these at once, and
+each protocol MUST be its own adapter implementation behind a common interface —
+`esri-featureserver@1`, `ogc-features@1`, `geojson@1` are three adapters, not one
+with three URL templates. They differ in exactly the place that silently loses
+data: **paging**. Esri pages on `resultOffset` plus an `exceededTransferLimit`
+flag, OGC API – Features pages on a `next` link relation, and a static GeoJSON
+document does not page at all. An adapter that assumes the wrong one stops early
+and imports a city with half its erven, which looks like a successful import.
+Authentication differs the same way (token query parameter, bearer header, none).
+
+What stays configuration rather than code is the **field mapping** below.
 
 ### A.2 The probe ships before the adapter
 
 `packages/geo/scripts/probe-map-source.ts` — a **read-only** CLI that takes a URL
-and credentials, fetches one page, and writes a report:
+and credentials, walks a representative sample of the collection, and writes a
+report:
 
 - transport: status, content type, paging style, auth style, rate limits seen
 - encoding: GeoJSON / EsriJSON / GML / other; CRS as declared (`crs` member,
@@ -111,8 +120,29 @@ and credentials, fetches one page, and writes a report:
 - geometry: types present, ring winding, vertex counts, bounding box
 - attributes: every key seen, its inferred type, cardinality, and three
   example values — this is what becomes the field-mapping config
-- candidate identifiers: which attributes are unique across the page, which look
-  stable, which look like an erf label
+- candidate identifiers: which attributes are unique across the sample, which
+  look stable, which look like an erf label
+
+**A single page is provisional and MUST NOT be promoted to the field-mapping
+contract.** Everything above is inferred, and one page is a biased sample of an
+API whose shape is the thing we are trying to learn: later pages add keys that
+the first page never showed, turn a clean `string` into `string | null`, mix
+types under one key, and break a uniqueness that only held locally. So the probe
+MUST either walk the whole collection (a few hundred erven is nothing) or take a
+sample spanning first, last and interior pages, and it MUST report the sample
+size and whether coverage was complete. A mapping written against a partial
+sample is marked as such until a full pass confirms it.
+
+**Outbound requests are bounded.** The probe accepts a URL and credentials, so it
+is a credentialed fetcher pointed at a caller-supplied address, and the same is
+true of the `map_sources` URL template and `auth_ref` that a System manager edits
+later. Both MUST: require HTTPS; resolve the host against an explicit allowlist
+of AfrikaBurn-owned origins; bind each credential to the origins it was issued
+for, so a credential is never sent anywhere else; and re-run both checks on every
+redirect rather than following one, refusing a cross-origin redirect instead of
+forwarding the credential to it. This is a planned internal CLI rather than a
+request-reachable surface, which is why it is a boundary to write down now rather
+than a live exposure.
 
 It writes to `docs/sources/` **nothing** — the report is a build artifact, not a
 source document, and it MUST be reviewed for personal data before being pasted
@@ -172,6 +202,28 @@ Rules on this, and they are not stylistic:
 Every fetch produces an immutable **import snapshot**: the raw payload, a content
 hash, the source id, the adapter and mapping versions, who or what triggered it,
 and the time. Imports are never edited and never deleted within an edition.
+
+**The raw payload is the most sensitive thing this subsystem stores, and it needs
+a policy before `map_imports` exists.** It is whatever AB sent, kept verbatim and
+unexamined — which is the point, and also the risk: it may carry camp contact
+details, a planner's internal annotations, or a credential echoed back in a
+response. Three questions MUST be answered in this document before the table is
+generated, and U11 in the [unknowns register](#unknowns-register) tracks the one
+only AB can answer:
+
+- **Classification** — whether raw payloads may contain personal data at all. Until
+  AB says otherwise, assume they can, and treat the column as personal data under
+  the `@quagga/core` classes rather than as opaque bytes.
+- **Access** — reading a raw payload is a distinct act from reading the canonical
+  features projected out of it. It SHOULD require `read_personal_information` in
+  the `placement` domain, and the read SHOULD be audited, the same way medical
+  notes are.
+- **Retention** — how long a superseded snapshot is kept after its edition closes.
+  Auditability wants forever; POPIA does not.
+
+Where full-payload auditability and data minimisation conflict, the answer is
+**protected storage, not scrubbing**: a scrubbed payload is no longer the thing AB
+sent, so it cannot settle the argument it exists to settle.
 
 The dangerous case is not the first import. It is the fourth, in March, after ops
 has allocated two hundred camps, when AB republishes with the binnekring moved
@@ -277,11 +329,30 @@ code_). Two things about it break naive importers:
 2. Values are large and negative-ish in a way that does not resemble degrees, so
    an importer that sniffs "is this lat/lon?" will guess wrong in both directions.
 
-Mitigation is the discrepancy check from §A.3: compute the area and bounding box
-of every imported feature, compare against the source's own attributes and
-against the expected footprint of the city, and **refuse the import** with a
-readable error when they disagree by more than a few percent. A mirrored import
-fails this loudly.
+Mitigation starts with the discrepancy check from §A.3 — compute the area and
+bounding box of every imported feature, compare against the source's own
+attributes and against the expected footprint of the city, and **refuse the
+import** with a readable error when they disagree by more than a few percent.
+
+**That check alone does not catch a mirrored import, and this document said
+otherwise in an earlier draft.** Reflection is an isometry: swapping the axes
+preserves every area exactly and, for a roughly axis-aligned site, leaves the
+bounding box the same size. A mirrored city passes a footprint check cleanly and
+places every camp backwards. So the import MUST also assert **orientation**, by
+both of:
+
+- **A control point.** At least one feature whose real-world position is known
+  independently — the Clan, the gate, the airstrip whose coordinates Quaggapedia
+  publishes — MUST land within a stated tolerance of where it belongs after the
+  transform. One control point fixes the reflection ambiguity that area cannot.
+- **A round trip.** Transform a sample of imported geometry back to the source's
+  declared CRS and axis order and compare against the original coordinates. A
+  declared axis order that is wrong fails to round-trip, which is a cheap,
+  data-only check that needs no external knowledge.
+
+Failing either refuses promotion, with the same readable error. Signed area (ring
+winding) is _not_ a substitute: sources disagree about winding convention, so a
+sign flip there is as likely to mean a sloppy exporter as a mirrored import.
 
 ### B.4 Camp layouts live in erf-local coordinates
 
@@ -320,13 +391,24 @@ choice rather than a constrained one.
 | Correctness of measurement                                | Must pick an SRID and live with its distortion, or store a local SRID                                                                                                                                   | The site plane _is_ the storage unit; a metre is a metre                       |
 | Ops on a live DB with no staging                          | Extension installs and type changes against production, no rehearsal                                                                                                                                    | Ordinary append-only columns                                                   |
 
-**Recommendation: store geometry as GeoJSON-shaped `jsonb` in site-plane metres,
-and put the maths in TypeScript.** At a few hundred polygons of a handful of
+**Recommendation: store geometry as `jsonb` in site-plane metres, in our own
+`SitePolygon` type, and put the maths in TypeScript.** At a few hundred polygons of a handful of
 vertices each, an in-process sweep is microseconds; PostGIS would be buying
 indexes for a dataset that fits in a React component's props. The decisive
 argument is not performance, it is that this repo's two hardest constraints —
 append-only migrations against a live database with no staging, and a domain
 layer that must not touch the database — both point the same way.
+
+**Two geometry types, never one.** `SitePolygon` is metres on the edition's site
+plane; GeoJSON is WGS84 longitude and latitude, because
+[RFC 7946](https://www.rfc-editor.org/rfc/rfc7946#section-4) defines a `Position`
+as exactly that and gives an implementation no way to be told otherwise. A
+`SitePolygon` handed to a standards-compliant GeoJSON consumer reads as
+coordinates a few hundred degrees off the coast of nowhere — and it is a
+plausible enough object that nothing throws. So the two are distinct TypeScript
+types that do not structurally overlap (`SitePolygon` carries an explicit `plane`
+tag), conversion happens only in `geojson.ts`, and the stored column is never
+described as "GeoJSON" anywhere in this subsystem.
 
 **The named trigger to revisit:** a query that must run _across_ editions or
 across a dataset we do not hold in memory (historical MOOP heatmaps, multi-year
@@ -346,15 +428,15 @@ Pure geometry, no React, no database, no domain vocabulary:
 types ──▶ geo ──▶ core ──▶ db · ui · auth ──▶ apps
 ```
 
-| Module          | Contents                                                                      |
-| --------------- | ----------------------------------------------------------------------------- |
-| `site-plane.ts` | WGS84 ⇄ site-plane metres, rotation, the edition's plane definition           |
-| `polygon.ts`    | Area, centroid, bbox, point-in-polygon, winding normalisation, simplification |
-| `transform.ts`  | Erf-local ⇄ site-plane; rotate, translate, compose                            |
-| `clip.ts`       | Half-plane clipping (Sutherland–Hodgman), polygon intersection, offset/buffer |
-| `subdivide.ts`  | Frontage-proportional subdivision; cut-line split                             |
-| `collide.ts`    | Rectangle/circle/polygon overlap with clearance and safety margins            |
-| `geojson.ts`    | Canonical GeoJSON in and out, for interchange only                            |
+| Module          | Contents                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `site-plane.ts` | WGS84 ⇄ site-plane metres, rotation, the edition's plane definition                         |
+| `polygon.ts`    | Area, centroid, bbox, point-in-polygon, winding normalisation, simplification               |
+| `transform.ts`  | Erf-local ⇄ site-plane; rotate, translate, compose                                          |
+| `clip.ts`       | Half-plane clipping (Sutherland–Hodgman), polygon intersection, offset/buffer               |
+| `subdivide.ts`  | Frontage-proportional subdivision; cut-line split                                           |
+| `collide.ts`    | Rectangle/circle/polygon overlap with clearance and safety margins                          |
+| `geojson.ts`    | WGS84 GeoJSON in and out, for interchange only — the one place the two representations meet |
 
 Why a separate package rather than more of `@quagga/core`: core is
 CODEOWNERS-gated and carries the authz and privacy predicates, where a mistake is
@@ -373,18 +455,19 @@ CODEOWNERS-gated and migrations are generated from `schema.ts`, never
 hand-authored (`AGENTS.md` rule 1). Nothing here should be generated until the
 probe report exists.
 
-| Table                   | Purpose                                                                                                                                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `map_sources`           | One configured AB endpoint: adapter id, URL template, auth ref, mapping config (jsonb), enabled                                                                                                                                                                     |
-| `map_imports`           | Immutable snapshot: source, raw payload, content hash, adapter + mapping version, fetched_at, actor, status (`pending` / `active` / `superseded` / `rejected`)                                                                                                      |
-| `site_planes`           | Per edition: origin lat/lon, rotation, declared EPSG                                                                                                                                                                                                                |
-| `site_features`         | Canonical projection of a snapshot. `edition_id`, `import_id`, `kind` (`erf` / `road` / `zone` / `landmark` / `restricted`), `source_feature_id`, `label`, `geometry` (jsonb, site-plane metres), `attributes` (jsonb, ours), `source_attributes` (jsonb, verbatim) |
-| `site_subdivisions`     | Ops-created children of a feature: parent id, geometry, label, frontage edge, provenance (`frontage-split` / `cut-line` / `manual`), created_by                                                                                                                     |
-| `placement_allocations` | `edition_id`, `feature_id` or `subdivision_id`, `allocatee_kind` (`registration` / `org_department` / `project` / `infrastructure`), `allocatee_id`, status, notes, actor, `needs_review`                                                                           |
-| `placement_findings`    | Cached output of the constraint engine per allocation: code (`ERF-001`…), severity, message, computed_at                                                                                                                                                            |
-| `neighbour_requests`    | Resolved form of `registrations.s5_neighbour_request`: requester, requested camp, direction, `reciprocal`, staff-confirmed                                                                                                                                          |
-| `camp_layouts`          | Versioned layout document per registration: `erf_anchor` reference, objects (jsonb), version, status, author                                                                                                                                                        |
-| `camp_layout_reviews`   | ERF-018…023 loop — or, preferably, none of this table at all; see below                                                                                                                                                                                             |
+| Table                      | Purpose                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `map_sources`              | One configured AB endpoint: adapter id, URL template, auth ref, mapping config (jsonb), enabled                                                                                                                                                                                                                                                                     |
+| `map_imports`              | Immutable snapshot: source, raw payload, content hash, adapter + mapping version, fetched_at, actor, status (`pending` / `active` / `superseded` / `rejected`)                                                                                                                                                                                                      |
+| `site_planes`              | Per edition: origin lat/lon, rotation, declared EPSG                                                                                                                                                                                                                                                                                                                |
+| `site_features`            | Canonical projection of a snapshot. `edition_id`, `import_id`, `kind` (`erf` / `road` / `zone` / `landmark` / `restricted`), `source_feature_id`, `label`, `geometry` (jsonb, `SitePolygon` in site-plane metres), `attributes` (jsonb, **ours only**). **No verbatim source attributes** — see the row below                                                       |
+| `site_feature_source_data` | The verbatim unmapped attributes for a feature, keyed by `import_id` + `source_feature_id`. A protected sidecar, not part of the canonical feature — §A.3 says unmapped source data stays on the snapshot, and a column on `site_features` would put it one careless `select *` away from every consumer. Same access and retention rules as the raw payload (§A.4) |
+| `site_subdivisions`        | Ops-created children of a feature: parent id, geometry, label, frontage edge, provenance (`frontage-split` / `cut-line` / `manual`), created_by                                                                                                                                                                                                                     |
+| `placement_allocations`    | `edition_id`, `feature_id` or `subdivision_id`, `allocatee_kind` (`registration` / `org_department` / `project` / `infrastructure`), `allocatee_id`, status, notes, actor, `needs_review`                                                                                                                                                                           |
+| `placement_findings`       | Cached output of the constraint engine per allocation: code (`ERF-001`…), severity, message, computed_at                                                                                                                                                                                                                                                            |
+| `neighbour_requests`       | Resolved form of `registrations.s5_neighbour_request`: requester, requested camp, direction, `reciprocal`, staff-confirmed                                                                                                                                                                                                                                          |
+| `camp_layouts`             | Versioned layout document per registration: `erf_anchor` reference, objects (jsonb), version, status, author                                                                                                                                                                                                                                                        |
+| `camp_layout_reviews`      | ERF-018…023 loop — or, preferably, none of this table at all; see below                                                                                                                                                                                                                                                                                             |
 
 On that last row: the review loop AB describes (`ERF-019` approve, `ERF-020`
 reject, `ERF-021` comment, `ERF-022` suggest revisions, `ERF-023` submit updated
@@ -639,18 +722,19 @@ and a spreadsheet gives them today.
 _This is the part of the document that changes. Each row is a question whose
 answer moves a decision above._
 
-| #   | Unknown                                                                          | Blocks                                                         | Owner        | Default if unanswered                                                              |
-| --- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| U1  | API transport, auth and encoding                                                 | The adapter                                                    | AB           | Probe and find out                                                                 |
-| U2  | CRS and axis order of the payload                                                | Import correctness (§B.3)                                      | AB / Kshetra | Infer from magnitudes, refuse on discrepancy                                       |
-| U3  | Does the API carry erf **identifiers**, or only geometry?                        | §A.5, and whether Decision 012's gate is truly open            | AB           | Erf stays free text; map is a viewer only                                          |
-| U4  | Are identifiers stable year to year?                                             | Carry-forward of placement                                     | AB           | Assume not; scope everything per edition                                           |
-| U5  | Is the API **read-only**, or can we write allocations back?                      | Whether AB's map or ours is the system of record for placement | AB           | Ours is a mirror; AB's stays canonical                                             |
-| U6  | Update cadence and mid-season republication                                      | §A.4 diff/promote flow                                         | AB           | Manual pull, human promotion                                                       |
-| U7  | Does it include roads, zones, restricted areas — or only erven?                  | §E.5 constraint coverage                                       | AB           | Only the checks the data supports; the rest stay unimplemented rather than guessed |
-| U8  | Who owns placement decisions in the tool — wranglers, a placement team, or both? | §H domain design                                               | AB           | One `placement` domain, org-wide until a department claims it                      |
-| U9  | Are real erf dimensions and setback rules published anywhere?                    | Catalogue defaults, `ERF-005`/`006`                            | AB           | Defaults marked as guesses in the UI                                               |
-| U10 | Will camps actually use a drawing tool, or keep uploading diagrams?              | Whether Phase 3 is worth building                              | Camps        | Phase 3 does not start until Phase 2 has run a season                              |
+| #   | Unknown                                                                                    | Blocks                                                         | Owner        | Default if unanswered                                                                         |
+| --- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| U1  | API transport, auth and encoding                                                           | The adapter                                                    | AB           | Probe and find out                                                                            |
+| U2  | CRS and axis order of the payload                                                          | Import correctness (§B.3)                                      | AB / Kshetra | Infer from magnitudes, refuse on discrepancy                                                  |
+| U3  | Does the API carry erf **identifiers**, or only geometry?                                  | §A.5, and whether Decision 012's gate is truly open            | AB           | Erf stays free text; map is a viewer only                                                     |
+| U4  | Are identifiers stable year to year?                                                       | Carry-forward of placement                                     | AB           | Assume not; scope everything per edition                                                      |
+| U5  | Is the API **read-only**, or can we write allocations back?                                | Whether AB's map or ours is the system of record for placement | AB           | Ours is a mirror; AB's stays canonical                                                        |
+| U6  | Update cadence and mid-season republication                                                | §A.4 diff/promote flow                                         | AB           | Manual pull, human promotion                                                                  |
+| U7  | Does it include roads, zones, restricted areas — or only erven?                            | §E.5 constraint coverage                                       | AB           | Only the checks the data supports; the rest stay unimplemented rather than guessed            |
+| U8  | Who owns placement decisions in the tool — wranglers, a placement team, or both?           | §H domain design                                               | AB           | One `placement` domain, org-wide until a department claims it                                 |
+| U9  | Are real erf dimensions and setback rules published anywhere?                              | Catalogue defaults, `ERF-005`/`006`                            | AB           | Defaults marked as guesses in the UI                                                          |
+| U10 | Will camps actually use a drawing tool, or keep uploading diagrams?                        | Whether Phase 3 is worth building                              | Camps        | Phase 3 does not start until Phase 2 has run a season                                         |
+| U11 | Can the raw payload contain personal data, and what may we retain after an edition closes? | §A.4 raw-payload classification, access and retention          | AB           | Assume it can: personal-data class, `read_personal_information` in `placement`, audited reads |
 
 ## Questions for AfrikaBurn
 

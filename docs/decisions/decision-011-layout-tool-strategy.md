@@ -1,9 +1,9 @@
 # Decision 011 — Theme-camp layout tool strategy
 
-| Field | Value |
-| --- | --- |
-| **Status** | Open — deferred, with a stated trigger |
-| **Raised** | 2026-07-29 (App Spec change record) |
+| Field            | Value                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| **Status**       | Open — deferred, with a stated trigger                               |
+| **Raised**       | 2026-07-29 (App Spec change record)                                  |
 | **Spec section** | §11 Theme-Camp Layout Tool (`LAYOUT-*`), and §12 which depends on it |
 
 ## The question
@@ -50,6 +50,13 @@ to build against it without the unknown leaking into the schema:
 Its Phase 0 is a read-only probe that turns "an API of unknown shape" into a
 written contract. **This decision reopens when that probe has run** — not when
 the API is announced.
+
+That **supersedes the trigger stated above**, which said this decision reopens if
+the Roger van Wyk / Kshetra meeting produces a stable erf grammar and a
+machine-readable map. The meeting is now an _input_ to Phase 0 rather than a
+trigger of its own: what it can produce is an endpoint and a claim about that
+endpoint, and the probe is what turns the claim into something buildable.
+Deferral stands until the probe report exists.
 
 If that meeting produces a stable erf grammar and a machine-readable map, this
 decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
