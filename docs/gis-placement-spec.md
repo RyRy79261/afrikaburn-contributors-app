@@ -34,6 +34,25 @@ to actually send them.
 Neither Decision 011 nor Decision 012 is resolved by this document. Both stay
 **Open** until AB's API is real enough to read.
 
+## The standing authorisation, and its limit
+
+[`AGENTS.md`](../AGENTS.md) lists **placement maps** under its product laws as
+"out of scope, **permanently unless Ryan says otherwise**". That law is not
+superseded here and this document does not overrule it — the exception it names
+is the only thing that makes this research admissible:
+
+> Ryan, 16 Sep 2026: _"Could you research a mechanism for integrating GIS
+> surveying map data? … This is a research task to come up with an
+> implementation plan as a PR to refine in the docs once there is more info."_
+
+So what is authorised is **the research and the plan**, and nothing past it.
+Every phase below still needs its own go-ahead, Phase 0 included; none of them
+inherits one from this paragraph. Until a phase is explicitly approved, placement
+maps remain out of scope and `AGENTS.md` reads exactly as it does today. Anyone
+extending this document should quote a fresh instruction rather than lean on
+this one — a standing exception that grows by inference is how a permanent
+"no" turns into a shipped feature nobody agreed to.
+
 ## What is being asked for
 
 Three tools, three audiences, one geometry:
@@ -770,6 +789,9 @@ Short enough to send as-is:
   `packages/db/migrations/` is CODEOWNERS-gated for good reason.
 - It does not change `registrations.erf`. That column stays free text, and the
   reason `placement-codes.ts` gives for it stays true until U3 is answered.
+- It does not lift the `AGENTS.md` product law that places placement maps out of
+  scope. Research was authorised; building was not. See
+  [The standing authorisation, and its limit](#the-standing-authorisation-and-its-limit).
 
 ## Sources
 
