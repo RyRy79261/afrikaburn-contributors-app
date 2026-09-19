@@ -178,9 +178,13 @@ thing that tells us whether the rest of this plan is even the right plan.
                  (paging, auth)        (to WGS84 rings)     (JSON, per source) (our own shape)
 ```
 
-Only the **field mapping** should need to change for a shape we have not seen. It
-is a stored JSON document, versioned, editable by a System manager in the org
-console:
+Only the **field mapping** should need to change for a shape we have not seen —
+**but only within a protocol and geometry encoding an adapter already speaks.**
+A new set of attribute names behind an OGC API – Features endpoint is a config
+change. A Shapefile, a GeoPackage, a DXF drawing, GML, or a bespoke JSON envelope
+is a new protocol adapter (§A.1) and no amount of mapping substitutes for it.
+The mapping is a stored JSON document, versioned, editable by a System manager in
+the org console:
 
 ```jsonc
 {
@@ -234,9 +238,12 @@ only AB can answer:
   AB says otherwise, assume they can, and treat the column as personal data under
   the `@quagga/core` classes rather than as opaque bytes.
 - **Access** — reading a raw payload is a distinct act from reading the canonical
-  features projected out of it. It SHOULD require `read_personal_information` in
-  the `placement` domain, and the read SHOULD be audited, the same way medical
-  notes are.
+  features projected out of it. It MUST require `read_personal_information` in
+  the `placement` domain, and the read MUST be audited, the same way medical
+  notes are. Both are `MUST` rather than `SHOULD` because the classification
+  above defaults to "this may be personal data": a control that is optional under
+  that default is not a control. If AB later confirms the payload carries none
+  (U11), that is what relaxes it — not an implementer's judgement on the day.
 - **Retention** — how long a superseded snapshot is kept after its edition closes.
   Auditability wants forever; POPIA does not.
 
@@ -315,9 +322,13 @@ circles — is **metres east/north on that plane**, as plain numbers. Distances 
 Euclidean, areas are shoelace, rotation is a 2×2 matrix. No projection library in
 the hot path, no floating-point degrees in the editor, no surprises.
 
-WGS84 longitude/latitude is kept **for interchange only**: on each canonical
-feature, so we can hand geometry back to AB, export KML for a handheld GPS, or
-drop a basemap under the city later.
+WGS84 longitude/latitude is **derived, never stored**. There is exactly one
+geometry on a canonical feature — the `SitePolygon` in site-plane metres (§C) —
+and `geojson.ts` converts it at the interchange boundary when we hand geometry
+back to AB, export KML for a handheld GPS, or drop a basemap under the city. A
+second stored copy would be a denormalisation with no owner: the two would drift
+the first time a site plane's origin or rotation was corrected, and nothing would
+say which was right.
 
 ### B.2 Why not just use Web Mercator
 
@@ -479,19 +490,19 @@ CODEOWNERS-gated and migrations are generated from `schema.ts`, never
 hand-authored (`AGENTS.md` rule 1). Nothing here should be generated until the
 probe report exists.
 
-| Table                      | Purpose                                                                                                                                                                                                                                                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `map_sources`              | One configured AB endpoint: adapter id, URL template, auth ref, mapping config (jsonb), enabled                                                                                                                                                                                                                                                                     |
-| `map_imports`              | Immutable snapshot: source, raw payload, content hash, adapter + mapping version, fetched_at, actor, status (`pending` / `active` / `superseded` / `rejected`)                                                                                                                                                                                                      |
-| `site_planes`              | Per edition: origin lat/lon, rotation, declared EPSG                                                                                                                                                                                                                                                                                                                |
-| `site_features`            | Canonical projection of a snapshot. `edition_id`, `import_id`, `kind` (`erf` / `road` / `zone` / `landmark` / `restricted`), `source_feature_id`, `label`, `geometry` (jsonb, `SitePolygon` in site-plane metres), `attributes` (jsonb, **ours only**). **No verbatim source attributes** — see the row below                                                       |
-| `site_feature_source_data` | The verbatim unmapped attributes for a feature, keyed by `import_id` + `source_feature_id`. A protected sidecar, not part of the canonical feature — §A.3 says unmapped source data stays on the snapshot, and a column on `site_features` would put it one careless `select *` away from every consumer. Same access and retention rules as the raw payload (§A.4) |
-| `site_subdivisions`        | Ops-created children of a feature: parent id, geometry, label, frontage edge, provenance (`frontage-split` / `cut-line` / `manual`), created_by                                                                                                                                                                                                                     |
-| `placement_allocations`    | `edition_id`, `feature_id` or `subdivision_id`, `allocatee_kind` (`registration` / `org_department` / `project` / `infrastructure`), `allocatee_id`, status, notes, actor, `needs_review`                                                                                                                                                                           |
-| `placement_findings`       | Cached output of the constraint engine per allocation: code (`ERF-001`…), severity, message, computed_at                                                                                                                                                                                                                                                            |
-| `neighbour_requests`       | Resolved form of `registrations.s5_neighbour_request`: requester, requested camp, direction, `reciprocal`, staff-confirmed                                                                                                                                                                                                                                          |
-| `camp_layouts`             | Versioned layout document per registration: `erf_anchor` reference, objects (jsonb), version, status, author                                                                                                                                                                                                                                                        |
-| `camp_layout_reviews`      | ERF-018…023 loop — or, preferably, none of this table at all; see below                                                                                                                                                                                                                                                                                             |
+| Table                      | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `map_sources`              | One configured AB endpoint: adapter id, URL template, auth ref, mapping config (jsonb), enabled                                                                                                                                                                                                                                                                                                                                                       |
+| `map_imports`              | Immutable snapshot: source, raw payload, content hash, adapter + mapping version, fetched_at, actor, status (`pending` / `active` / `superseded` / `rejected`)                                                                                                                                                                                                                                                                                        |
+| `site_planes`              | Per edition: origin lat/lon, rotation, declared EPSG                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `site_features`            | Canonical projection of a snapshot. `edition_id`, `import_id`, `kind` (`erf` / `road` / `zone` / `landmark` / `restricted`), `source_feature_id`, `label`, `geometry` (jsonb, `SitePolygon` in site-plane metres), `attributes` (jsonb, **ours only**). **No verbatim source attributes** — see the row below                                                                                                                                         |
+| `site_feature_source_data` | The verbatim unmapped attributes for a feature, keyed by `import_id` + `source_feature_id`. A protected sidecar, not part of the canonical feature — §A.3 says unmapped source data stays on the snapshot, and a column on `site_features` would put it one careless `select *` away from every consumer. Same access and retention rules as the raw payload (§A.4)                                                                                   |
+| `site_subdivisions`        | Ops-created children of a feature: parent id, geometry, label, frontage edge, provenance (`frontage-split` / `cut-line` / `manual`), created_by                                                                                                                                                                                                                                                                                                       |
+| `placement_allocations`    | `edition_id`, `feature_id` or `subdivision_id`, `allocatee_kind` (`registration` / `org_department` / `project` / `infrastructure`), `allocatee_id`, status, notes, actor, `needs_review`                                                                                                                                                                                                                                                             |
+| `placement_findings`       | Cached output of the constraint engine per allocation: code (`ERF-001`…), severity, message, computed_at                                                                                                                                                                                                                                                                                                                                              |
+| `neighbour_requests`       | Resolved form of `registrations.s5_neighbour_request`: requester, requested camp, direction, `reciprocal`, staff-confirmed                                                                                                                                                                                                                                                                                                                            |
+| `camp_layouts`             | Versioned layout document owned by a registration — `registration_id` (FK to `registrations`, **the owner**; one camp's layouts for one edition), `erf_anchor` reference, objects (jsonb), version, status, author. The owner is the foreign key and nothing else: `erf_anchor` says where a layout currently sits and changes on reallocation, `placement_allocations` is polymorphic so it cannot name a camp, and `registrations.erf` is free text |
+| `camp_layout_reviews`      | ERF-018…023 loop — or, preferably, none of this table at all; see below                                                                                                                                                                                                                                                                                                                                                                               |
 
 On that last row: the review loop AB describes (`ERF-019` approve, `ERF-020`
 reject, `ERF-021` comment, `ERF-022` suggest revisions, `ERF-023` submit updated
@@ -558,10 +569,20 @@ theme camp** — ops also places crews and infrastructure (DPW, Rangers, medical
 the Artefactory, water points), which is why `placement_allocations` is
 polymorphic rather than a foreign key to `registrations`.
 
-Allocation writes through to the existing free-text `registrations.erf` so that
-container booking, water delivery and every other workflow already keyed on that
-column keeps working unchanged. **The erf column remains the interop surface**;
-the map is an upgrade to how it gets filled in, not a replacement for it.
+**Where an allocation is written back depends on what was allocated**, because
+`placement_allocations` is polymorphic and only one of its allocatee kinds has a
+registration row:
+
+| `allocatee_kind` | Write-through                                                                                                                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `registration`   | Sets the existing free-text `registrations.erf`, so container booking, water delivery and every other workflow already keyed on that column keeps working unchanged. **The erf column remains the interop surface** for camps; the map is an upgrade to how it gets filled in, not a replacement for it |
+| `org_department` | No registration exists. The allocation row is the record; ops reads it from the placement screens and the per-precinct print (§I)                                                                                                                                                                       |
+| `project`        | Same — until artworks and mutant vehicles have a registration of their own, in which case this row becomes `registration` and the question disappears                                                                                                                                                   |
+| `infrastructure` | Same. Water points and depots have no registration and are not owed one                                                                                                                                                                                                                                 |
+
+Nothing outside `allocatee_kind = registration` writes to `registrations.erf`,
+and a plan that implied otherwise would have had an importer reaching for a row
+that does not exist.
 
 ### E.4 "Camp X wants to be near camp Y"
 
