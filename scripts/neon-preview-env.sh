@@ -112,11 +112,15 @@ branch_id="$(printf '%s' "$branches_json" | jq -r --arg n "$BRANCH_NAME" \
 if [ -z "$branch_id" ] || [ "$branch_id" = "null" ]; then
   echo "Creating Neon branch ${BRANCH_NAME} from primary…"
   if [ "$DRY_RUN" = "1" ]; then
-    echo "DRY_RUN: would POST /branches name=${BRANCH_NAME} parent=${primary_id}"
+    echo "DRY_RUN: would POST /branches name=${BRANCH_NAME} parent=${primary_id} + read_write endpoint"
     branch_id="dry-run-branch"
   else
+    # Neon creates branches WITHOUT a compute unless `endpoints` is set
+    # (API: "If omitted, the branch is created without any compute endpoint").
+    # That yields permanent "endpoint not found" on connection_uri — not a brief
+    # race. Always request a read_write endpoint with the branch.
     create_body="$(jq -n --arg name "$BRANCH_NAME" --arg parent "$primary_id" \
-      '{branch:{name:$name,parent_id:$parent}}')"
+      '{branch:{name:$name,parent_id:$parent},endpoints:[{type:"read_write"}]}')"
     create_resp="$(neon_post "/branches" "$create_body")"
     branch_id="$(printf '%s' "$create_resp" | jq -r '.branch.id // empty')"
     if [ -z "$branch_id" ]; then
@@ -140,10 +144,44 @@ if [ "$DRY_RUN" = "1" ]; then
   exit 0
 fi
 
-# Neon creates the branch row before the compute endpoint exists. A fixed
-# sleep is not enough — connection_uri returns {"message":"endpoint not found"}
-# until the endpoint is provisioned (seen on PR preview runs). Wait for an
-# endpoint on this branch, then still retry URI fetch below for wake-from-idle.
+# Branches created before this script requested an endpoint (or created without
+# one) have no compute. Ensure a read_write endpoint exists, then wait until it
+# is past "init" before connection_uri.
+endpoint_id_for_branch() {
+  local endpoints_json="$1"
+  printf '%s' "$endpoints_json" | jq -r --arg bid "$branch_id" '
+    [.endpoints[]? | select(.branch_id == $bid) | .id][0] // empty
+  '
+}
+
+ensure_neon_endpoint() {
+  local endpoints_json existing create_ep_body create_ep_resp new_id
+
+  endpoints_json="$(neon_get "/endpoints")"
+  existing="$(endpoint_id_for_branch "$endpoints_json")"
+  if [ -n "$existing" ]; then
+    echo "Neon endpoint already present for branch: ${existing}"
+    return 0
+  fi
+
+  echo "No compute on branch ${branch_id} — creating read_write endpoint…"
+  create_ep_body="$(jq -n --arg bid "$branch_id" \
+    '{endpoint:{branch_id:$bid,type:"read_write"}}')"
+  create_ep_resp="$(neon_post "/endpoints" "$create_ep_body")"
+  new_id="$(printf '%s' "$create_ep_resp" | jq -r '.endpoint.id // empty')"
+  if [ -z "$new_id" ]; then
+    # Another runner may have won the race — re-list once.
+    endpoints_json="$(neon_get "/endpoints")"
+    new_id="$(endpoint_id_for_branch "$endpoints_json")"
+  fi
+  if [ -z "$new_id" ]; then
+    echo "::error::failed to create Neon endpoint for branch ${branch_id}" >&2
+    printf '%s\n' "$create_ep_resp" >&2
+    exit 1
+  fi
+  echo "Created Neon endpoint: ${new_id}"
+}
+
 wait_for_neon_endpoint() {
   local deadline=$((SECONDS + 180))
   local endpoints_json endpoint_id endpoint_state
@@ -156,7 +194,7 @@ wait_for_neon_endpoint() {
       continue
     fi
 
-    # Prefer an active/idle endpoint (provisioned). "init" means still creating.
+    # Prefer an endpoint that has left "init" (provisioned — idle or active).
     endpoint_id="$(printf '%s' "$endpoints_json" | jq -r --arg bid "$branch_id" '
       [.endpoints[]?
         | select(.branch_id == $bid)
@@ -177,7 +215,13 @@ wait_for_neon_endpoint() {
       return 0
     fi
 
-    echo "Waiting for Neon endpoint to become ready for branch ${branch_id}…"
+    # Still only init, or still missing after create — keep waiting.
+    endpoint_id="$(endpoint_id_for_branch "$endpoints_json")"
+    if [ -n "$endpoint_id" ]; then
+      echo "Neon endpoint ${endpoint_id} still initializing for branch ${branch_id}…"
+    else
+      echo "Waiting for Neon endpoint to become ready for branch ${branch_id}…"
+    fi
     sleep 5
   done
 
@@ -186,6 +230,7 @@ wait_for_neon_endpoint() {
   exit 1
 }
 
+ensure_neon_endpoint
 wait_for_neon_endpoint
 
 # --- Neon: connection URIs ------------------------------------------------------
