@@ -130,8 +130,6 @@ if [ -z "$branch_id" ] || [ "$branch_id" = "null" ]; then
       printf '%s\n' "${create_resp:-}" >&2
       exit 1
     fi
-    # Wait briefly for compute/endpoints to come up.
-    sleep 3
   fi
 else
   echo "Reusing existing Neon branch id: ${branch_id}"
@@ -141,6 +139,54 @@ if [ "$DRY_RUN" = "1" ]; then
   echo "DRY_RUN: skipping connection URI fetch and Vercel updates"
   exit 0
 fi
+
+# Neon creates the branch row before the compute endpoint exists. A fixed
+# sleep is not enough — connection_uri returns {"message":"endpoint not found"}
+# until the endpoint is provisioned (seen on PR preview runs). Wait for an
+# endpoint on this branch, then still retry URI fetch below for wake-from-idle.
+wait_for_neon_endpoint() {
+  local deadline=$((SECONDS + 180))
+  local endpoints_json endpoint_id endpoint_state
+
+  while (( SECONDS < deadline )); do
+    endpoints_json="$(neon_get "/endpoints")"
+    if ! printf '%s' "$endpoints_json" | jq -e '.endpoints' >/dev/null 2>&1; then
+      echo "Waiting for Neon endpoints list for branch ${branch_id}…"
+      sleep 5
+      continue
+    fi
+
+    # Prefer an active/idle endpoint (provisioned). "init" means still creating.
+    endpoint_id="$(printf '%s' "$endpoints_json" | jq -r --arg bid "$branch_id" '
+      [.endpoints[]?
+        | select(.branch_id == $bid)
+        | select((.current_state // .state // "") != "init")
+        | .id
+      ][0] // empty
+    ')"
+    endpoint_state="$(printf '%s' "$endpoints_json" | jq -r --arg bid "$branch_id" --arg eid "$endpoint_id" '
+      [.endpoints[]?
+        | select(.branch_id == $bid)
+        | select(.id == $eid)
+        | (.current_state // .state // "")
+      ][0] // empty
+    ')"
+
+    if [ -n "$endpoint_id" ]; then
+      echo "Neon endpoint ready: ${endpoint_id} (state=${endpoint_state:-unknown})"
+      return 0
+    fi
+
+    echo "Waiting for Neon endpoint to become ready for branch ${branch_id}…"
+    sleep 5
+  done
+
+  echo "::error::Neon endpoint never became ready for branch ${branch_id}" >&2
+  neon_get "/endpoints" >&2 || true
+  exit 1
+}
+
+wait_for_neon_endpoint
 
 # --- Neon: connection URIs ------------------------------------------------------
 
@@ -163,17 +209,32 @@ echo "Using database=${NEON_DATABASE} role=${NEON_ROLE}"
 
 uri_for() {
   local pooled="$1" # true|false
-  local resp
-  resp="$(curl -sS "${curl_opts[@]}" "${auth_neon[@]}" \
-    "${neon_api}/connection_uri?branch_id=${branch_id}&database_name=${NEON_DATABASE}&role_name=${NEON_ROLE}&pooled=${pooled}")"
-  local uri
-  uri="$(printf '%s' "$resp" | jq -r '.uri // empty')"
-  if [ -z "$uri" ]; then
+  local resp uri attempt
+  for attempt in $(seq 1 20); do
+    resp="$(curl -sS "${curl_opts[@]}" "${auth_neon[@]}" \
+      "${neon_api}/connection_uri?branch_id=${branch_id}&database_name=${NEON_DATABASE}&role_name=${NEON_ROLE}&pooled=${pooled}")"
+    uri="$(printf '%s' "$resp" | jq -r '.uri // empty')"
+
+    if [ -n "$uri" ] && [ "$uri" != "null" ]; then
+      printf '%s' "$uri"
+      return 0
+    fi
+
+    if printf '%s' "$resp" | jq -e '
+      (.message // "") | test("endpoint not found|not ready|not found"; "i")
+    ' >/dev/null 2>&1; then
+      echo "Neon endpoint not ready for connection_uri pooled=${pooled}; retrying (${attempt}/20)…"
+      sleep 5
+      continue
+    fi
+
     echo "::error::failed to fetch connection_uri pooled=${pooled}" >&2
     printf '%s\n' "$resp" >&2
     exit 1
-  fi
-  printf '%s' "$uri"
+  done
+
+  echo "::error::timed out waiting for Neon connection_uri pooled=${pooled}" >&2
+  exit 1
 }
 
 DATABASE_URL="$(uri_for true)"
