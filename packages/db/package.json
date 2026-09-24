@@ -27,16 +27,16 @@
     "@neondatabase/serverless": "^1.1.0",
     "@quagga/core": "workspace:*",
     "@quagga/types": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.3"
   },
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "drizzle-kit": "^0.31.10",
-    "eslint": "^10.4.0",
-    "tsx": "^4.20.6",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^10.11.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }
