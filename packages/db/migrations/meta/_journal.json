@@ -218,6 +218,13 @@
       "when": 1790428209411,
       "tag": "0030_epics_expiry_safety_docs_campmates",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790454686776,
+      "tag": "0031_announcements_and_direct_messages",
+      "breakpoints": true
     }
   ]
 }
