@@ -197,7 +197,12 @@ export default async function EditVehiclePage({
           </div>
         </header>
 
+        {/* KEYED on the carry-forward: the form holds its answers in client
+            state seeded once from `initialValues`, so after "bring last
+            year's answers across" refreshes the page it would otherwise keep
+            showing — and on save, write back — the empty pre-carry values. */}
         <VehicleRegistrationForm
+          key={ctx.carriedForward ? "carried" : "fresh"}
           action={updateVehicleRegistrationAction.bind(null, slug)}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
           initialValues={toInitialValues(ctx.group.name, ctx)}

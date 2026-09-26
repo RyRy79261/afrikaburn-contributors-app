@@ -204,7 +204,12 @@ export default async function EditArtworkPage({
           </div>
         </header>
 
+        {/* KEYED on the carry-forward: the form holds its answers in client
+            state seeded once from `initialValues`, so after "bring last
+            year's answers across" refreshes the page it would otherwise keep
+            showing — and on save, write back — the empty pre-carry values. */}
         <ArtworkRegistrationForm
+          key={ctx.carriedForward ? "carried" : "fresh"}
           action={updateArtworkRegistrationAction.bind(null, slug)}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
           initialValues={toInitialValues(ctx.group.name, ctx)}
