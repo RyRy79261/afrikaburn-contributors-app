@@ -1,9 +1,9 @@
 # Decision 011 — Theme-camp layout tool strategy
 
-| Field | Value |
-| --- | --- |
-| **Status** | Open — deferred, with a stated trigger |
-| **Raised** | 2026-07-29 (App Spec change record) |
+| Field            | Value                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| **Status**       | **Reopened 2026-09-26 — in scope** (see the updates at the end)      |
+| **Raised**       | 2026-07-29 (App Spec change record)                                  |
 | **Spec section** | §11 Theme-Camp Layout Tool (`LAYOUT-*`), and §12 which depends on it |
 
 ## The question
@@ -40,10 +40,59 @@ Graeme was arranging a meeting with town planner **Roger van Wyk** and **Kshetra
 to unblock mapping (group chat, 2026-07-29 10:50). The App Spec says §§11–13
 should be revisited after that meeting.
 
-If that meeting produces a stable erf grammar and a machine-readable map, this
-decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
+## Update 2026-09-16 — a plan exists, the decision does not move
+
+AfrikaBurn has indicated it will supply layouts through an **API**. The shape is
+unknown, so nothing here is decided. What exists now is a research plan for how
+to build against it without the unknown leaking into the schema:
+[`docs/gis-placement-spec.md`](../gis-placement-spec.md).
+
+Its Phase 0 is a read-only probe that turns "an API of unknown shape" into a
+written contract. **This decision reopens when that probe has run** — not when
+the API is announced.
+
+That **supersedes the trigger stated above**, which said this decision reopens if
+the Roger van Wyk / Kshetra meeting produces a stable erf grammar and a
+machine-readable map. The meeting is now an _input_ to Phase 0 rather than a
+trigger of its own: what it can produce is an endpoint and a claim about that
+endpoint, and the probe is what turns the claim into something buildable.
+Deferral stands until the probe report exists.
+
+_(The sentence that stood here said the meeting reopens this decision directly
+if it produces a stable erf grammar and a machine-readable map. It is replaced
+by the paragraph above rather than kept alongside it: two independent reopening
+triggers in one record is how a deferred decision gets reopened twice, on
+different evidence, by two different people.)_
 
 ## Note on §12
 
 §12 (private tent placement under Bedouin tents) is ❌ Not implemented and
 depends entirely on this foundation. It cannot be decided separately.
+
+## Update — 2026-09-26 (Ryan Noble): reopened, in scope
+
+Reopened by an explicit maintainer decision, not by the trigger above. The
+16 Sep update made the Phase 0 probe the only trigger and asked that anything
+beyond research quote a fresh instruction; this is that instruction:
+
+> Ryan, 26 Sep 2026: _"we will be doing the placement maps since we need to work
+> on the GIS integration prep anyway"_ — describing a click-and-drag camp layout
+> editor that shows sizes in metres, starts from a simple rectangle, later takes
+> the allocated plot's shape from the GIS data, and treats a Bedouin as its own
+> layout area that tents are dragged under.
+
+Placement maps therefore leave `AGENTS.md`'s out-of-scope list. What this
+authorises, and what it does not:
+
+- **Now:** the layout editor that needs no AfrikaBurn data — a drawn
+  rectangle, objects dragged and resized in metres, the §12 tent-under-Bedouin
+  packer on the same mechanism. Layouts are stored in plot-local metres, which
+  is the ERF-local coordinate model [`gis-placement-spec.md`](../gis-placement-spec.md)
+  already chose.
+- **Still phase-gated:** anything that reads AfrikaBurn's map data. That goes
+  through the spec's phases in order, starting with the Phase 0 read-only
+  probe, and each phase still needs its own go-ahead.
+
+Unchanged: AI auto-layout stays out (the working group rejected it); the build
+lives in its own lane and never blocks a release (roadmap principle 5).
+Tracked as an epic in the issue tracker.

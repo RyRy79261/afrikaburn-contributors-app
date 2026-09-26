@@ -23,6 +23,78 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # WHETHER THE E2E FLEET IS IN SCOPE FOR THIS CHANGE.
+  #
+  # Fail-safe: default is run e2e. Skip only when EVERY file in base...HEAD
+  # matches a conservative meta/process allowlist (docs, design canvas,
+  # CONTRIBUTING, PR templates, commitlint, husky, dependabot.yml, …).
+  # An incomplete allowlist means extra CI, never a silent product gap.
+  #
+  # `.github/workflows/**` is deliberately NOT on the allowlist — editing the
+  # e2e job itself must still run the fleet. Push to main always runs e2e.
+  # Coverage already self-skips per workspace; turbo stays unconditional.
+  #
+  # Nothing on the allowlist is read by apps/, packages/ or e2e/ at build or
+  # run time (checked 26 Sep 2026) — re-check before adding a path to it.
+  scope:
+    name: change scope
+    runs-on: ubuntu-latest
+    outputs:
+      e2e: ${{ steps.classify.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify whether e2e is required
+        id: classify
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "Not a pull request — e2e required."
+            exit 0
+          fi
+
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          mapfile -t files < <(git diff --name-only "$base...$head")
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "Empty diff — e2e required (fail-safe)."
+            exit 0
+          fi
+
+          is_meta() {
+            case "$1" in
+              docs/*|design/*) return 0 ;;
+              README.md|CONTRIBUTING.md|AGENTS.md|SECURITY.md|LICENSE) return 0 ;;
+              .github/PULL_REQUEST_TEMPLATE/*|.github/pull_request_template.md) return 0 ;;
+              .github/ISSUE_TEMPLATE/*|.github/CODEOWNERS|.github/dependabot.yml) return 0 ;;
+              commitlint.config.mjs|.husky/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          product=()
+          for f in "${files[@]}"; do
+            if ! is_meta "$f"; then
+              product+=("$f")
+            fi
+          done
+
+          if [ "${#product[@]}" -eq 0 ]; then
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "Meta-only change (${#files[@]} file(s)) — e2e skipped."
+            printf '  %s\n' "${files[@]}"
+          else
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "Product-touching change — e2e required. Non-meta path(s):"
+            printf '  %s\n' "${product[@]}"
+          fi
+
   # Conventional Commits with a workspace scope (CONTRIBUTING.md,
   # commitlint.config.mjs). BOTH halves are checked, because this repo MERGES
   # pull requests rather than squashing them: every individual commit lands on
@@ -117,8 +189,13 @@ jobs:
   #
   # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
   # CI runs and the thing a developer runs cannot drift apart.
+  #
+  # Skipped on meta-only PRs (see `scope` job). `ci-pass` accepts that skip.
+  # Fail-safe: only an explicit `e2e=false` skips — empty/missing runs the fleet.
   e2e:
     name: e2e · ${{ matrix.label }}
+    needs: [scope]
+    if: needs.scope.result == 'success' && needs.scope.outputs.e2e != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -297,7 +374,7 @@ jobs:
 
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Per persona, or eight uploads collide on one name.
           name: playwright-report-${{ matrix.persona }}
@@ -316,9 +393,11 @@ jobs:
   # required is a shard that can go red without blocking a merge. The failure
   # mode is silent, which is the worst kind.
   #
-  # So protection requires exactly one: `CI pass`. `ci` and `e2e` must SUCCEED;
-  # `commitlint` may also be `skipped`, because it is pull-request-only and does
-  # not run on a push to main. Nothing else is tolerated — see the step below.
+  # So protection requires exactly one: `CI pass`. `ci` must SUCCEED; `e2e`
+  # must SUCCEED when the change is product-touching, and may be `skipped` on
+  # meta-only PRs (see `scope`); `commitlint` may also be `skipped`, because it
+  # is pull-request-only and does not run on a push to main. Nothing else is
+  # tolerated — see the step below.
   #
   # It needs no maintenance when the matrix changes: a new shard is covered the
   # moment it is added, because `needs: [e2e]` is the whole matrix rather than a
@@ -417,17 +496,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.0
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       # ONLY REPORT WHAT THE BRANCH ACTUALLY TOUCHED.
       #
       # Five unchanged coverage tables on every pull request is noise, and noise
@@ -452,6 +520,24 @@ jobs:
             echo "in-scope=false" >> "$GITHUB_OUTPUT"
             echo "${{ matrix.directory }} is untouched on this branch — skipping."
           fi
+
+      # AFTER the scope check, and gated on it. setup-node with `cache: pnpm`
+      # registers a post-job step that saves the pnpm store; on an out-of-scope
+      # shard the install is skipped, the store path never exists, and that
+      # post-step fails the shard with "Path Validation Error" — a red coverage
+      # check for a workspace that was skipped by design.
+      - name: Install pnpm
+        if: steps.scope.outputs.in-scope == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        if: steps.scope.outputs.in-scope == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         if: steps.scope.outputs.in-scope == 'true'
@@ -519,11 +605,12 @@ jobs:
   ci-pass:
     name: CI pass
     if: always()
-    needs: [commitlint, ci, e2e, coverage]
+    needs: [scope, commitlint, ci, e2e, coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Check every job passed
         run: |
+          echo "change scope       : e2e=${{ needs.scope.outputs.e2e }} (job ${{ needs.scope.result }})"
           echo "commit conventions : ${{ needs.commitlint.result }}"
           echo "lint/typecheck/... : ${{ needs.ci.result }}"
           echo "e2e (all shards)   : ${{ needs.e2e.result }}"
@@ -532,18 +619,33 @@ jobs:
 
           # UNCONDITIONAL — these run on every event and must succeed.
           #
-          # `needs.e2e.result` covers the WHOLE matrix: with fail-fast disabled
-          # every shard runs, and the aggregate is `failure` if any single one
-          # failed. That is the property that makes this maintenance-free.
-          # `coverage` works the same way, and a shard that skipped itself as
-          # out of scope still reports `success`.
-          for job in "ci:${{ needs.ci.result }}" "e2e:${{ needs.e2e.result }}" "coverage:${{ needs.coverage.result }}"; do
+          # `coverage` aggregates its matrix, and a shard that skipped itself
+          # as out of scope still reports `success`.
+          for job in "scope:${{ needs.scope.result }}" "ci:${{ needs.ci.result }}" "coverage:${{ needs.coverage.result }}"; do
             name="${job%%:*}"; result="${job#*:}"
             if [ "$result" != "success" ]; then
               echo "::error::$name did not pass (result: $result)"
               exit 1
             fi
           done
+
+          # GATED — e2e is skipped on meta-only PRs (`scope.outputs.e2e=false`)
+          # and on nothing else. When required, `needs.e2e.result` covers the
+          # WHOLE matrix: with fail-fast disabled every shard runs, and the
+          # aggregate is `failure` if any single one failed. That is the
+          # property that makes this maintenance-free.
+          if [ "${{ needs.scope.outputs.e2e }}" = "false" ]; then
+            case "${{ needs.e2e.result }}" in
+              skipped) ;;
+              *)
+                echo "::error::e2e should be skipped on meta-only PRs (result: ${{ needs.e2e.result }})"
+                exit 1
+                ;;
+            esac
+          elif [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "::error::e2e did not pass (result: ${{ needs.e2e.result }})"
+            exit 1
+          fi
 
           # GATED — `commitlint` only runs on pull requests, so `skipped` is a
           # legitimate outcome on a push to main and must not fail the gate.
