@@ -29,7 +29,8 @@
   Keycloak database.
 - The only boundary is **OIDC / OAuth 2.0**: the application registers as a
   Keycloak client, users sign in at `login.afrikaburn.net`, and the
-  application receives signed identity / access tokens.
+  application receives a signed OIDC ID Token and a provider-specific OAuth
+  access token.
 - Any stack with a competent OIDC client library can participate.
 - Integration is arranged with **AfrikaBurn IT**.
 

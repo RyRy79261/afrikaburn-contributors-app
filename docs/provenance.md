@@ -39,10 +39,13 @@ Fork state examined: `main` at `c1c50c978425670e105be0ad9d563a2f272027d7`
    `GitHub`) is the exact second GitHub records that PR as merged, by
    RyRy79261 (2026-09-10T11:23:34Z). The same exact-second match holds for the
    other shared commits checked (#11, #28).
-4. **Authorship.** Of the fork's 140 commits, 96 are authored by Ryan Noble
-   (72 as `RyRy79261`, 24 as `Ryan Noble`, one email address). Of the 105
-   shared commits, 96 are his, 8 are by the fork's maintainer (contributed
-   while working in this repository) and 1 is a review bot.
+4. **Git author fields.** Of the fork's 140 commits, 96 carry the author
+   name `RyRy79261` (72) or `Ryan Noble` (24), both with the author email
+   `ryanjnoble@gmail.com`. Of the 105 shared commits, 96 carry those values,
+   8 carry the fork maintainer's author values (contributed while working in
+   this repository) and 1 a review bot's. These are git author-field values,
+   not independently verified identities; point 3 is what ties the shared
+   history to this repository.
 5. **The licence notice is unchanged.** The fork's `LICENSE` still reads
    _"Copyright 2026 Ryan Noble and the Quagga Portal contributors"_
    (FSL-1.1-ALv2), byte-identical to this repository's.
@@ -104,14 +107,15 @@ The shared history's commit subjects reference pull requests #11, #13, #14,
 #15, #16, #17, #19, #20, #22, #23, #25, #26, #27 and #28. The three above were
 checked individually; the rest were not.
 
-### 4. Authorship counts
+### 4. Git author-field counts
 
-Across the fork's 140 commits (`git log <fork>/main --format='%an'`):
+Across the fork's 140 commits (`git log <fork>/main --format='%an <%ae>'`).
+These are the values recorded in each commit's author field:
 
-| Author                         | Commits | Of which in shared history |
+| Author field                   | Commits | Of which in shared history |
 | ------------------------------ | ------: | -------------------------: |
-| Ryan Noble (`RyRy79261`)       |      72 |                         72 |
-| Ryan Noble (`Ryan Noble`)      |      24 |                         24 |
+| `RyRy79261`                    |      72 |                         72 |
+| `Ryan Noble`                   |      24 |                         24 |
 | Fork maintainer (3 addresses)  |      42 |                          8 |
 | dependabot / coderabbit (bots) |       2 |                          1 |
 
@@ -172,9 +176,23 @@ git rev-list --count 856d29b
 git rev-list --count 856d29b..fork/main
 git log --reverse --format='%h %ad %an %s' --date=iso 856d29b..fork/main | head -3
 
-# Authorship
-git log fork/main --format='%an' | sort | uniq -c
-git log 856d29b   --format='%an' | sort | uniq -c
+# Git author fields (name and email)
+git log fork/main --format='%an <%ae>' | sort | uniq -c
+git log 856d29b   --format='%an <%ae>' | sort | uniq -c
+
+# File content: files at 856d29b, and how many are byte-identical at the fork tip
+git ls-tree -r --name-only 856d29b | wc -l
+comm -12 <(git ls-tree -r fork/main | awk '{print $3" "$4}' | sort) \
+         <(git ls-tree -r 856d29b   | awk '{print $3" "$4}' | sort) | wc -l
+
+# Attribution changes in the fork
+git show 856d29b:AGENTS.md   | grep -ci ryan   # 6
+git show fork/main:AGENTS.md | grep -ci ryan   # 0
+git show fork/main:MAINTAINERS.md | grep -n "Sole maintainer"
+
+# The fork's own minutes (lines 10 and 22)
+git show fork/main:docs/sources/app-specification/meeting-minutes/2026-09-17-dev-alignment.md \
+  | sed -n '10p;22p'
 
 # Licence notice and code-owner change
 git diff main fork/main -- LICENSE

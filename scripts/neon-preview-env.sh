@@ -266,7 +266,7 @@ uri_for() {
     fi
 
     if printf '%s' "$resp" | jq -e '
-      (.message // "") | test("endpoint not found|not ready|not found"; "i")
+      (.message // "") | test("endpoint not found|not ready"; "i")
     ' >/dev/null 2>&1; then
       echo "Neon endpoint not ready for connection_uri pooled=${pooled}; retrying (${attempt}/20)…" >&2
       sleep 5

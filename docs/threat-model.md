@@ -96,7 +96,7 @@ against the code for this adaptation. Likelihood / impact are coarse
 | B4  | Undetected medical disclosure (audit drop)      | L / M | Accepted | `bio.medical.view` rows written via `after()` (`apps/web/lib/medical-access.ts`, `apps/org/lib/medical-audit.ts`)                                                                                                                                             | A missed audit row is possible under a serverless / DB blip                                                                 |
 | B5  | Org staff over-collection / enumeration         | M / M | Accepted | No volume alerting on medical reads (deliberate — AGENTS.md); detail-only surfaces                                                                                                                                                                            | Relies on organisational trust + audit reconstruction after the fact                                                        |
 | B6  | UI hiding treated as the security boundary      | M / H | Covered  | Authz predicates in `@quagga/core`, enforced server-side                                                                                                                                                                                                      | Contributor discipline — `SECURITY.md`                                                                                      |
-| B7  | ID / passport retention unbounded               | M / M | Covered  | Rule in `packages/core/src/id-retention.ts`; applied by `apps/web/lib/id-retention-sweep.ts` via `apps/web/app/api/account/id-retention-sweep/route.ts`, scheduled daily 03:30 UTC in `apps/web/vercel.json` (commit 51b65e2); returns 500 on partial failure | Depends on `ACCOUNT_SWEEP_SECRET` being set in production — the route is disabled when unset; no alert on cron failure (F1) |
+| B7  | ID / passport retention unbounded               | M / M | Partial  | Rule in `packages/core/src/id-retention.ts`; applied by `apps/web/lib/id-retention-sweep.ts` via `apps/web/app/api/account/id-retention-sweep/route.ts`, scheduled daily 03:30 UTC in `apps/web/vercel.json` (commit 51b65e2); returns 500 on partial failure | Depends on `ACCOUNT_SWEEP_SECRET` being set in production — the route is disabled when unset; no alert on cron failure (F1) |
 | B8  | Free-camp discovery by strangers                | M / L | Covered  | Directory / type-ahead / profile visibility rules _(unverified in this pass)_                                                                                                                                                                                 | Repo-built rule; a Decision Record is still desirable                                                                       |
 | B9  | Org permission model self-escalation            | L / H | Covered  | `god` resolves all; `manage_accounts` refused by the resolver; lockout tests in `apps/org/lib/__tests__/org-role-lockout.test.ts`                                                                                                                             | —                                                                                                                           |
 
@@ -150,10 +150,10 @@ against the code for this adaptation. Likelihood / impact are coarse
 
 ## Summary
 
-**Covered:** A4, B2, B3, B6, B7, B8, B9, C2, D3, D4, D5, E3 — plus the Accepted
+**Covered:** A4, B2, B3, B6, B8, B9, C2, D3, D4, D5, E3 — plus the Accepted
 trade-offs A5, B1, B4, B5, F2.
 
-**Partial:** A1, A2, A3, A7, C1, C3, C4, C6, D1, D2, E2, E4.
+**Partial:** A1, A2, A3, A7, B7, C1, C3, C4, C6, D1, D2, E2, E4.
 
 **Open:**
 
