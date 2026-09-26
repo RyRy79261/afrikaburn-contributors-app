@@ -108,10 +108,18 @@ test.describe("new burner — passkeys", () => {
 
       // REMOVE. A credential you cannot revoke is worse than none: the whole
       // point of the list is the day a device is lost.
-      await webPage.getByRole("button", { name: /^remove$/i }).click();
-      await expect(webPage.getByText(label)).toHaveCount(0, {
-        timeout: 30_000,
-      });
+      // RETRIED, because the page was just server-rendered by the goto above:
+      // "Remove" is visible and clickable before React has hydrated it, and a
+      // click in that window is silently a no-op — the row then sits there for
+      // the whole timeout (seen in CI on 26 Sep, and locally 1 run in 2). A
+      // Remove that genuinely does nothing still fails here after 30s.
+      const remove = webPage.getByRole("button", { name: /^remove$/i });
+      await expect(async () => {
+        if ((await webPage.getByText(label).count()) > 0) await remove.click();
+        await expect(webPage.getByText(label)).toHaveCount(0, {
+          timeout: 5_000,
+        });
+      }).toPass({ timeout: 30_000 });
 
       await webPage.goto("/account/security");
       await expect(webPage.getByText(label)).toHaveCount(0);
