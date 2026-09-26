@@ -197,10 +197,15 @@ list`, then `git worktree remove` what has finished.
 
 ## Product laws (violating these is a bug, not a style choice)
 
-- **The platform never holds or processes money.** Registration is free — AfrikaBurn
-  never charges theme camps. No payment UI in any registration context. Payment
-  _reference tracking_ exists only for future logistics apps. Camp-internal member ref
-  codes (`MAH-M017`) are allowed — they're the camp's own EFT reconciliation.
+- **The platform never holds or processes money — it may TRACK it, the way a
+  spreadsheet does.** Registration is free — AfrikaBurn never charges theme camps.
+  No payment UI in any registration context. Recording amounts is allowed: a camp's
+  budget, what each member owes the camp and whether they paid, a declared budget on
+  a large-camp disclosure, AB-side logistics fee references. Collecting, holding,
+  moving or refunding money is not: no gateway, card capture, escrow, payouts or
+  wallet. Camp-internal member ref codes (`MAH-M017`) are the camp's own EFT
+  reconciliation. _(Clarified 26 Sep 2026: "no camp treasuries/dues" meant no money
+  handling, not no ledger.)_
 - **Fewer forms, not more.** Every field must earn its place; derive over ask; carry
   forward by default; progressive disclosure over blanket collection.
 - **Privacy classes** (two, both enforced in `@quagga/core` `privacy.ts`, never in
@@ -255,8 +260,12 @@ list`, then `git worktree remove` what has finished.
   account may do — the accounts table, the assignment dialog, the role editor — renders
   `summarizeOrgActor` from @quagga/core, so the console can never advertise an access it
   would refuse, or understate one it would allow.
-- **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's),
-  placement maps, camp treasuries/dues.
+- **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's), and
+  any camp treasury or dues feature that collects or holds money (tracking budgets and
+  dues as records is in scope — see the money law above). _(Placement maps were on this
+  list until 26 Sep 2026; they are now in scope as part of the GIS integration prep —
+  see [Decision 011](docs/decisions/decision-011-layout-tool-strategy.md) and
+  [Decision 012](docs/decisions/decision-012-map-erf-readiness.md).)_
 - Blocking questionnaires are labeled explicitly everywhere and gate hard (fill page +
   sign-out only); org-internal questionnaires never leak into the participant app.
 - **Seeds contain ONLY org-owned reference/catalog data** (edition, org group, camp
