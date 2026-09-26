@@ -25,12 +25,12 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.1",
-    "@commitlint/config-conventional": "^21.2.0",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "husky": "^9.1.7",
-    "prettier": "^3.8.3",
-    "tsx": "^4.23.5",
-    "turbo": "^2.9.14",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.3",
     "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@10.30.0",
