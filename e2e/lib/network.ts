@@ -27,6 +27,13 @@ import type { Page, Request, Response } from "@playwright/test";
  * What the caller races is the router's navigation, and that is outstanding
  * until the server answers; a response in hand is the signal that matters.
  *
+ * Next's LINK PREFETCHES are ignored. The sign-in page prefetches its own links
+ * (`/auth/sign-up`, `/auth/forgot-password`, `/`), and when the page navigates
+ * away Chromium abandons them with neither a response nor a `requestfailed` —
+ * seen in CI on 26 Sep 2026 — so they would sit "pending" forever. A prefetch is
+ * not a navigation, so a caller's `goto` cannot be aborted by one; it is safe to
+ * leave out. Next marks them with the `Next-Router-Prefetch` header.
+ *
  * `settled()` resolves once nothing has been awaiting a response for `quietMs`,
  * and fails LOUDLY on timeout, naming the requests still pending — a server
  * that never answers should be a readable error, not a mystery 20-second hang.
@@ -37,6 +44,7 @@ export function trackRequests(page: Page): {
   const pending = new Set<Request>();
   let lastChange = Date.now();
   const started = (r: Request) => {
+    if (isPrefetch(r)) return;
     pending.add(r);
     lastChange = Date.now();
   };
@@ -69,4 +77,12 @@ export function trackRequests(page: Page): {
       }
     },
   };
+}
+
+function isPrefetch(r: Request): boolean {
+  const headers = r.headers();
+  return (
+    "next-router-prefetch" in headers ||
+    "next-router-segment-prefetch" in headers
+  );
 }
