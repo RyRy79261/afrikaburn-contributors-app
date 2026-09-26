@@ -53,11 +53,27 @@ that renders a map. §13's `ERF-*` requirements remain unimplemented.
 Same as [Decision 011](decision-011-layout-tool-strategy.md) — the Roger van Wyk
 / Kshetra mapping meeting.
 
+## Update 2026-09-16 — half the gate may be moving
+
+AB has indicated a **map API** is coming. That addresses the first half of the
+gate (a machine-readable map). The second half — the erf grammar — is addressed
+sideways rather than answered: if the API carries erf identifiers, the grammar is
+*whatever the API emits*, and the plan is to mirror it rather than invent one.
+Whether it carries identifiers at all is the open question (U3 in the plan's
+unknowns register).
+
+Plan: [`docs/gis-placement-spec.md`](../gis-placement-spec.md). It explicitly does
+**not** change `registrations.erf` — the column stays free text, and the reason
+`placement-codes.ts` gives for it stays true, until U3 is answered.
+
+**Status is unchanged.** An announced API is not a read API.
+
 ## Update — 2026-09-26 (Ryan Noble): reopened, gate partly met
 
 The mapping meetings happened. Of the two gate items, the **machine-readable
 map** is on its way: read-only vector layers (theme-camp boundaries first) from
-AfrikaBurn's QGIS/Postgres GIS, pending the formal access grant. The **erf
+AfrikaBurn's QGIS/Postgres GIS, and the map API above, pending the formal access
+grant. Ingestion follows [`docs/gis-placement-spec.md`](../gis-placement-spec.md). The **erf
 grammar** is still outstanding. Placement maps are now in scope (Decision 011),
 so work that needs no erf grammar — the generic planner, the tent packer,
 reading boundary layers once granted — may start. The erf column stays free
