@@ -11,6 +11,7 @@
 import type {
   ManageQuestionnairesScope,
   MembershipRole,
+  PostAnnouncementsScope,
   ProjectPermissionKey,
   ProjectPermissions,
   ProjectRoleKind,
@@ -48,6 +49,13 @@ export function hasProjectPermission(
   for (const p of m.rolePermissions) {
     if (key === "manage_questionnaires") {
       if (p.manage_questionnaires) return true;
+      continue;
+    }
+    // A scoped privilege: holding it at all is the presence of its config.
+    // Checked explicitly, never by the `=== true` below — the stored value is
+    // an object, so a truthiness slip there would silently deny every holder.
+    if (key === "post_announcements") {
+      if (p.post_announcements) return true;
       continue;
     }
     if (key === "assign_roles" && p.manage_roles === true) return true;
@@ -96,6 +104,46 @@ export function canManageQuestionnaireAudience(
   return req.targetRoleIds.every((id) => allowed.has(id));
 }
 
+/**
+ * May the member post a camp ANNOUNCEMENT to these target roles? The
+ * `post_announcements` twin of `canManageQuestionnaireAudience`, with the same
+ * union-of-granting-roles rule:
+ *
+ * - lead/admin → always allowed (the irrevocable backstop).
+ * - otherwise some held role must grant `post_announcements`, and across those
+ *   roles: a must-acknowledge send needs `mayRequireAck` on at least one; the
+ *   audience is allowed if any granting role says `"all"`, else every targeted
+ *   role id must be inside the union of their `audienceRoles`.
+ *
+ * Targeting the whole camp is targeting the baseline role id (the caller maps
+ * "everyone" to it, exactly as for questionnaires).
+ */
+export function canPostAnnouncementAudience(
+  m: PermissionMembership,
+  req: { targetRoleIds: readonly string[]; requireAck: boolean },
+): boolean {
+  if (isPermissionBackstop(m.structuralRole)) return true;
+
+  let granted = false;
+  let allowAll = false;
+  let mayRequireAck = false;
+  const allowed = new Set<string>();
+  for (const p of m.rolePermissions) {
+    const scope: PostAnnouncementsScope | undefined = p.post_announcements;
+    if (!scope) continue;
+    granted = true;
+    if (scope.mayRequireAck) mayRequireAck = true;
+    if (scope.audienceRoles === "all") allowAll = true;
+    else for (const id of scope.audienceRoles) allowed.add(id);
+  }
+  if (!granted) return false;
+  if (req.requireAck && !mayRequireAck) return false;
+  if (allowAll) return true;
+  // An empty target list addresses nobody; it is never a way past the scope.
+  if (req.targetRoleIds.length === 0) return false;
+  return req.targetRoleIds.every((id) => allowed.has(id));
+}
+
 // --- Captain lock + kind-derived permission rules -------------------------
 
 /** The full permissions object (every privilege, all audiences, may block). */
@@ -106,6 +154,7 @@ export function allProjectPermissions(): ProjectPermissions {
     assign_roles: true,
     manage_roles: true,
     manage_members: true,
+    post_announcements: { audienceRoles: "all", mayRequireAck: true },
   };
 }
 

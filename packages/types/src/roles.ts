@@ -265,6 +265,7 @@ export const ProjectPermissionKey = z.enum([
   "assign_roles",
   "manage_roles",
   "manage_members",
+  "post_announcements",
 ]);
 export type ProjectPermissionKey = z.infer<typeof ProjectPermissionKey>;
 
@@ -286,9 +287,25 @@ export type ManageQuestionnairesScope = z.infer<
 >;
 
 /**
+ * Config for `post_announcements` (camp announcements, epic #56) — the SAME
+ * shape of limit `manage_questionnaires` carries: which role audiences the
+ * holder may address (`"all"`, or an explicit set of project_role ids, where
+ * the baseline role's id means the whole camp), and whether they may send a
+ * MUST-ACKNOWLEDGE announcement. Must-acknowledge puts a full-screen gate in
+ * front of every recipient's app, so it is its own switch, exactly as
+ * `mayBlock` is for blocking questionnaires.
+ */
+export const PostAnnouncementsScope = z.object({
+  audienceRoles: z.union([z.literal("all"), z.array(z.string().min(1))]),
+  mayRequireAck: z.boolean(),
+});
+export type PostAnnouncementsScope = z.infer<typeof PostAnnouncementsScope>;
+
+/**
  * The permissions OBJECT stored on `project_roles.permissions` (jsonb). Each
- * boolean privilege is present+true when granted; `manage_questionnaires` holds
- * its scope config when granted (absent = not granted).
+ * boolean privilege is present+true when granted; `manage_questionnaires` and
+ * `post_announcements` hold their scope config when granted (absent = not
+ * granted).
  */
 export const ProjectPermissions = z.object({
   view_member_details: z.boolean().optional(),
@@ -296,6 +313,7 @@ export const ProjectPermissions = z.object({
   assign_roles: z.boolean().optional(),
   manage_roles: z.boolean().optional(),
   manage_members: z.boolean().optional(),
+  post_announcements: PostAnnouncementsScope.optional(),
 });
 export type ProjectPermissions = z.infer<typeof ProjectPermissions>;
 
@@ -306,6 +324,7 @@ export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
   assign_roles: "Assign roles",
   manage_roles: "Manage roles",
   manage_members: "Manage members",
+  post_announcements: "Post announcements",
 };
 
 // --- Officer catalog (questionnaire-spec §"Officer roles") -----------------

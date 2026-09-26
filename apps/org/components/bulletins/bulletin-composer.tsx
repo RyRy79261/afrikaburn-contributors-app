@@ -24,7 +24,7 @@ import {
   audienceSpecForOption,
   optionForAudienceSpec,
 } from "./audience-options";
-import { plainPreview } from "./preview-text";
+import { plainPreview } from "@quagga/core";
 
 // Bulletin compose / edit form (canvas `U8CqE` · mobile `zW1uE`).
 //

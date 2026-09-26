@@ -319,10 +319,15 @@ export function buildBulletinNotifications(
  */
 export function shouldSendImmediateEmail(
   kind: NotificationKind,
-  opts?: { blocking?: boolean },
+  opts?: { blocking?: boolean; mustAcknowledge?: boolean },
 ): boolean {
   if (kind === "registration") return true;
   if (kind === "questionnaire") return opts?.blocking === true;
+  // A MUST-ACKNOWLEDGE camp announcement (epic #56) is a gate in front of the
+  // recipient's app — the announcement analogue of a blocking questionnaire —
+  // so it earns the same immediate nudge. Ordinary (feed) announcements and
+  // org bulletins wait for the digest.
+  if (kind === "bulletin") return opts?.mustAcknowledge === true;
   return false;
 }
 

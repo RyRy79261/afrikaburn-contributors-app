@@ -8,7 +8,7 @@ import { guardConsole } from "@/lib/gate";
 import { PageHeading } from "@/components/page-heading";
 import { formatDate } from "@/lib/labels";
 import { listBulletins, type BulletinSummary } from "@/lib/bulletins";
-import { plainPreview } from "@/components/bulletins/preview-text";
+import { plainPreview } from "@quagga/core";
 
 // Org Bulletins list (canvas `QqnNq` · mobile `laWqH`): everything the org has
 // broadcast, sent first with its read-rate bar, then drafts (muted, never sent).

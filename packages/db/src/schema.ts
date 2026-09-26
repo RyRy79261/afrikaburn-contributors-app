@@ -12,6 +12,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  check,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -249,6 +250,15 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   "supplier",
   "security",
   "bulletin",
+]);
+
+// How a bulletin/announcement LANDS (epic #56). `feed` = an ordinary inbox
+// item; `acknowledge` = a full-screen must-acknowledge gate that stamps
+// `notifications.acknowledged_at` on the recipient's own delivery. Mirrors
+// `AnnouncementPresentation` in @quagga/types. Org bulletins are all `feed`.
+export const bulletinPresentationEnum = pgEnum("bulletin_presentation", [
+  "feed",
+  "acknowledge",
 ]);
 
 // Questionnaire spine (ported 1:1 from Camp 404's pattern).
@@ -1945,10 +1955,60 @@ export const bulletins = pgTable(
     pinned: boolean("pinned").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+
+    // --- Camp announcements (epic #56) ------------------------------------
+    // Generalised, NOT a new table: a camp announcement is a bulletin with
+    // `group_id` set. NULL = an org bulletin (every row that existed before
+    // this change). The CHECK below makes "a camp audience only ever targets
+    // that same camp" structural: an org row may not carry a project audience,
+    // and a camp row's audience must be a project audience for its own group.
+    groupId: uuid("group_id").references(() => groups.id, {
+      onDelete: "cascade",
+    }),
+    presentation: bulletinPresentationEnum("presentation")
+      .notNull()
+      .default("feed"),
+    // Optional meeting link — just an https URL (validated by `MeetingUrl` in
+    // @quagga/types at the action boundary).
+    meetingUrl: text("meeting_url"),
+    // The composer's "keep it at the top", recorded on a DRAFT as intent only.
+    // Spent into a real pin (pinned_at/pinned_by + audit row) at fan-out, so a
+    // draft never writes a pin and re-editing never re-stamps one.
+    pinOnPublish: boolean("pin_on_publish").notNull().default(false),
+    // When and by whom it was pinned. `pinned` stays the flag every reader
+    // already checks; these carry the ORDER (`sortPinned` in @quagga/core —
+    // newest pin first) and the provenance. Kept in step by every pin writer.
+    pinnedAt: timestamp("pinned_at", { mode: "date" }),
+    pinnedByUserId: uuid("pinned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Optional scheduled send. NULL = fan out at publish. A scheduled row is
+    // published (immutable) but undelivered until the dispatch job claims it
+    // by stamping `dispatched_at`.
+    sendAt: timestamp("send_at", { mode: "date" }),
+    // When the fan-out ran. The dispatch job's claim is a compare-and-set on
+    // `dispatched_at IS NULL`, so two overlapping runs cannot both deliver.
+    dispatchedAt: timestamp("dispatched_at", { mode: "date" }),
   },
   (b) => ({
     editionIdx: index("bulletins_edition_idx").on(b.editionId),
     publishedIdx: index("bulletins_published_idx").on(b.publishedAt),
+    // A camp's announcements list (group + newest first).
+    groupCreatedIdx: index("bulletins_group_created_idx").on(
+      b.groupId,
+      b.createdAt,
+    ),
+    // The dispatch job's "what is due" scan: only published, scheduled,
+    // undelivered rows — a handful at any moment.
+    dueIdx: index("bulletins_dispatch_due_idx")
+      .on(b.sendAt)
+      .where(
+        sql`${b.publishedAt} is not null and ${b.dispatchedAt} is null and ${b.sendAt} is not null`,
+      ),
+    campAudienceMatchesGroup: check(
+      "bulletins_camp_audience_matches_group",
+      sql`(${b.groupId} is null and (${b.audience}->>'kind') <> 'project') or (${b.groupId} is not null and (${b.audience}->>'kind') = 'project' and (${b.audience}->>'groupId') = ${b.groupId}::text)`,
+    ),
   }),
 );
 
@@ -2059,6 +2119,13 @@ export const notifications = pgTable(
     }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     readAt: timestamp("read_at", { mode: "date" }),
+    /**
+     * MUST-ACKNOWLEDGE (epic #56). Set when the recipient ticks "I've read
+     * this" on a `presentation = 'acknowledge'` announcement — on their OWN row
+     * only, so one member's acknowledgement can never be recorded for another.
+     * Null on every other row.
+     */
+    acknowledgedAt: timestamp("acknowledged_at", { mode: "date" }),
   },
   (n) => ({
     // Unread count + filter: (user, read_at).
@@ -2068,6 +2135,13 @@ export const notifications = pgTable(
       n.userId,
       n.createdAt.desc(),
     ),
+    // ONE DELIVERY PER RECIPIENT PER BULLETIN (epic #56). The fan-out inserts
+    // with ON CONFLICT DO NOTHING against this, so a retried publish or two
+    // overlapping dispatch runs can never deliver the same announcement twice.
+    // Partial: personal event notifications carry no bulletin and may repeat.
+    bulletinUserUniq: uniqueIndex("notifications_bulletin_user_idx")
+      .on(n.bulletinId, n.userId)
+      .where(sql`${n.bulletinId} is not null`),
   }),
 );
 

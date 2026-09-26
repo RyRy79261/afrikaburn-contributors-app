@@ -53,6 +53,80 @@ export const BulletinComposeInput = z.object({
 });
 export type BulletinComposeInput = z.infer<typeof BulletinComposeInput>;
 
+// --- Camp announcements (epic #56) ----------------------------------------
+// A camp announcement is a `bulletins` row with `group_id` set: the same
+// broadcast spine the org uses, authored by a camp member holding
+// `post_announcements` and addressed to that camp's own members only.
+
+/**
+ * How an announcement LANDS for its recipient.
+ *
+ * - `feed`        — an ordinary inbox item.
+ * - `acknowledge` — must-acknowledge: a full-screen gate whose only way
+ *                   forward is ticking "I've read this" (and whose only other
+ *                   reachable action is signing out), mirroring the blocking-
+ *                   questionnaire gate. Stamps `acknowledged_at` on the
+ *                   recipient's OWN delivery row.
+ *
+ * Mirrors `bulletinPresentationEnum` in @quagga/db schema.ts.
+ */
+export const AnnouncementPresentation = z.enum(["feed", "acknowledge"]);
+export type AnnouncementPresentation = z.infer<typeof AnnouncementPresentation>;
+
+/**
+ * The optional meeting link. Just a URL — nothing is fetched, embedded or
+ * previewed — and only `https:` is accepted, so an announcement can never
+ * carry a `javascript:` / `data:` / plain-http link to every member of a camp.
+ */
+export const MeetingUrl = z
+  .string()
+  .trim()
+  .max(2000, "That link is too long.")
+  .pipe(
+    z.url({
+      protocol: /^https$/,
+      hostname: z.regexes.domain,
+      error: "Use a full https:// link.",
+    }),
+  );
+
+/**
+ * The camp announcement composer's input (save a draft). Title + markdown body
+ * + audience + presentation + optional pin, meeting link and scheduled time.
+ * Nothing that collects data from recipients (fewer-forms law) and no field
+ * about any member (announcements carry no personal data).
+ */
+export const CampAnnouncementDraftInput = z.object({
+  slug: z.string().min(1),
+  /** Present when editing an existing DRAFT. */
+  id: z.string().uuid().optional(),
+  title: z.string().trim().min(1, "Give the announcement a title.").max(200),
+  bodyMd: z
+    .string()
+    .trim()
+    .min(1, "Write the announcement.")
+    .max(20000, "That announcement is too long."),
+  mode: z.enum(["everyone", "roles"]),
+  roleIds: z.array(z.string().uuid()).max(100).default([]),
+  presentation: AnnouncementPresentation.default("feed"),
+  pinOnPublish: z.boolean().default(false),
+  /** Empty string from the form means "no link". */
+  meetingUrl: z
+    .union([z.literal(""), MeetingUrl])
+    .nullable()
+    .default(null)
+    .transform((v) => (v ? v : null)),
+  /** ISO instant; null / empty = send immediately on publish. */
+  sendAt: z
+    .union([z.literal(""), z.string().datetime({ offset: true })])
+    .nullable()
+    .default(null)
+    .transform((v) => (v ? v : null)),
+});
+export type CampAnnouncementDraftInput = z.input<
+  typeof CampAnnouncementDraftInput
+>;
+
 /** Notification list filter tabs (the /notifications surface). */
 export const NotificationFilter = z.enum(["all", "unread", "bulletins"]);
 export type NotificationFilter = z.infer<typeof NotificationFilter>;
