@@ -34,6 +34,10 @@ test.describe("camp member — camp announcements", () => {
   test("a must-acknowledge announcement to one role gates that role only, and the lead sees it acknowledged", async ({
     makeAppPage,
   }) => {
+    // Three people sign up and onboard, and the lead builds a camp and a role,
+    // before the announcement itself: well past the 90 s default (the other
+    // multi-persona specs here allow 180-300 s).
+    test.setTimeout(240_000);
     const leadPage = await makeAppPage("web");
     const cookPage = await makeAppPage("web");
     const builderPage = await makeAppPage("web");
