@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 import {
   assessDeletionEligibility,
   buildSanitizationPlan,
@@ -232,6 +232,25 @@ export async function sanitizeAccount(
     await tx
       .delete(schema.securityEvents)
       .where(eq(schema.securityEvents.userId, userId));
+
+    // 2b. DIRECT MESSAGES (epic #69). Every message this account SENT is
+    //     hard-deleted, whatever its conversation's timer says — the timer is a
+    //     ceiling on how long a message lives, never a floor that outlasts the
+    //     person. The other participant's own messages are theirs and stay (the
+    //     conversation then shows the "Departed Burner" stub, and nobody can
+    //     post into it: @quagga/core `canSendMessage`). Blocks go in both
+    //     directions. A REPORT'S COPY of this account's messages is kept to its
+    //     own fixed retention on purpose, so deleting an account cannot erase
+    //     the evidence of a report against it.
+    await tx.delete(schema.messages).where(eq(schema.messages.senderId, userId));
+    await tx
+      .delete(schema.userBlocks)
+      .where(
+        or(
+          eq(schema.userBlocks.blockerId, userId),
+          eq(schema.userBlocks.blockedId, userId),
+        ),
+      );
 
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the

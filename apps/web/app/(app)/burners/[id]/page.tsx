@@ -18,6 +18,17 @@ import {
   resolveAvatarForViewer,
 } from "@/lib/campmates-store";
 import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
+import {
+  findDirectConversation,
+  viewerHasBlocked,
+  viewerMayStartConversation,
+} from "@/lib/messages-store";
+import { ProfileMessageActions } from "@/components/messages/profile-message-actions";
+import {
+  blockUserAction,
+  startConversationAction,
+  unblockUserAction,
+} from "../../messages/actions";
 import { PreviewNotice } from "@/components/preview-notice";
 import { ProfileHero } from "@/components/profile-public/profile-hero";
 import { ProfileSection } from "@/components/profile-public/profile-section";
@@ -57,9 +68,12 @@ const ParamsSchema = z.object({ id: z.string().uuid() });
 
 export default async function BurnerProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ message?: string }>;
 }) {
+  const messageRefused = (await searchParams).message === "unavailable";
   const parsed = ParamsSchema.safeParse(await params);
   if (!parsed.success) notFound();
   const { id } = parsed.data;
@@ -80,6 +94,22 @@ export default async function BurnerProfilePage({
 
   const profile = await getPublicBurnerProfile(id, edition.id);
   if (!profile) notFound();
+
+  const isOwnProfile = profile.userId === viewer.id;
+  // Epic #69: may the viewer message this burner? @quagga/core decides
+  // (`canStartConversation` — their contactable setting, a shared camp for
+  // camp_mates, blocks both ways); an existing chat can always be reopened.
+  const [mayStart, existingChat, blockedByViewer] = isOwnProfile
+    ? [false, null, false]
+    : await Promise.all([
+        viewerMayStartConversation({
+          viewerUserId: viewer.id,
+          targetUserId: profile.userId,
+          editionId: edition.id,
+        }),
+        findDirectConversation(viewer.id, profile.userId),
+        viewerHasBlocked(viewer.id, profile.userId),
+      ]);
 
   const [medical, campmateFields, avatarKey] = await Promise.all([
     resolveMedicalNotesForViewer({
@@ -150,9 +180,28 @@ export default async function BurnerProfilePage({
                   Edit your bio
                 </Link>
               </Button>
-            ) : null
+            ) : (
+              <ProfileMessageActions
+                targetUserId={profile.userId}
+                name={heading}
+                canMessage={mayStart || existingChat !== null}
+                blockedByViewer={blockedByViewer}
+                start={startConversationAction}
+                block={blockUserAction}
+                unblock={unblockUserAction}
+              />
+            )
           }
         />
+
+        {messageRefused && (
+          <p
+            role="alert"
+            className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+          >
+            You can&apos;t message {heading} right now.
+          </p>
+        )}
 
         {medical.visible && medical.notes && (
           <ProfileSection
