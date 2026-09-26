@@ -71,6 +71,27 @@ export const contactabilityEnum = pgEnum("contactability", [
   "anyone",
 ]);
 
+// Epic #69 — a direct conversation's disappearing-messages timer. Mirrors
+// @quagga/core `MESSAGE_TIMERS`; default `off` (no platform retention period —
+// how long messages live is the participants' choice).
+export const messageTimerEnum = pgEnum("message_timer", [
+  "off",
+  "24h",
+  "7d",
+  "90d",
+]);
+
+// Epic #69 — `text` is what a participant wrote; `system` is a line the app
+// posts into the chat (today only "X set disappearing messages to …").
+export const messageKindEnum = pgEnum("message_kind", ["text", "system"]);
+
+// Epic #69 — a message report's state in the org safety queue. Mirrors
+// @quagga/core `MESSAGE_REPORT_STATUSES`.
+export const messageReportStatusEnum = pgEnum("message_report_status", [
+  "open",
+  "resolved",
+]);
+
 // Reserved: visibility is currently DERIVED (registered ⇒ public). This column
 // exists so explicit privacy settings can land later without a migration.
 export const groupVisibilityEnum = pgEnum("group_visibility", [
@@ -338,6 +359,13 @@ export const users = pgTable(
     // per-edition part. Nulled (and the blob deleted) on removal and on
     // account sanitization.
     avatarKey: text("avatar_key"),
+    // Epic #69 — the member's personal default disappearing-messages timer,
+    // applied to new conversations THEY start. Account-level (like the
+    // username): a preference about how they talk, not a per-edition privacy
+    // choice. Default `off`.
+    defaultMessageTimer: messageTimerEnum("default_message_timer")
+      .notNull()
+      .default("off"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (u) => ({
@@ -2295,5 +2323,176 @@ export const securityEvents = pgTable(
       e.userId,
       e.createdAt.desc(),
     ),
+  }),
+);
+
+// --- Direct messaging (epic #69) -----------------------------------------
+// Private 1:1 conversations between burners. The laws, enforced in
+// @quagga/core `messaging.ts` and the store that applies it:
+//
+//   · ONLY PARTICIPANTS READ A CONVERSATION. There is no org, god or camp-lead
+//     path to `messages` — not a query, not a join, not a capability. The org
+//     sees `message_report_items`: copies of the specific messages a
+//     participant chose to report, and nothing else.
+//   · NO PHONE NUMBERS. People are addressed by `users.id`; nothing here stores
+//     or joins a phone.
+//   · RETENTION IS THE USER'S CHOICE. `conversations.timer` is set by any
+//     participant; each message stores its own `expires_at`, fixed at send
+//     time. A scheduled sweep HARD-deletes expired rows and every read filters
+//     `expires_at > now()` so nothing shows between sweeps.
+//   · ACCOUNT DELETION deletes the account's own `messages` and `user_blocks`
+//     whatever the timer says (apps/web `account-sanitize.ts`).
+
+export const conversations = pgTable("conversations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  // The sorted pair of participant ids (@quagga/core
+  // `directConversationKey`). UNIQUE, so two concurrent "Message" clicks — from
+  // either side — converge on one conversation instead of creating two.
+  pairKey: text("pair_key").notNull().unique(),
+  // The timer applied to messages sent from now on. Changing it never rewrites
+  // an existing message's `expires_at`.
+  timer: messageTimerEnum("timer").notNull().default("off"),
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  // Bumped on every send; orders the inbox without scanning `messages`.
+  lastMessageAt: timestamp("last_message_at", { mode: "date" }),
+});
+
+export const conversationParticipants = pgTable(
+  "conversation_participants",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { mode: "date" }).notNull().defaultNow(),
+    // Everything at or before this instant has been seen — the unread count is
+    // "live messages from others after last_read_at". No per-message state.
+    lastReadAt: timestamp("last_read_at", { mode: "date" }),
+    // Set when THIS participant blocks the other: the conversation disappears
+    // from their inbox. Cleared if they open it again from a profile.
+    hiddenAt: timestamp("hidden_at", { mode: "date" }),
+  },
+  (p) => ({
+    pk: primaryKey({ columns: [p.conversationId, p.userId] }),
+    // The inbox and the unread count: "conversations I am in".
+    userIdx: index("conversation_participants_user_idx").on(p.userId),
+  }),
+);
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    // The sanitizer DELETES a departed account's messages rather than
+    // orphaning them, so this is never null; cascade matches that intent.
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: messageKindEnum("kind").notNull().default("text"),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    // Fixed at send time from the conversation's timer; null = never.
+    expiresAt: timestamp("expires_at", { mode: "date" }),
+  },
+  (m) => ({
+    // Reading a conversation, oldest to newest.
+    conversationCreatedIdx: index("messages_conversation_created_idx").on(
+      m.conversationId,
+      m.createdAt,
+    ),
+    // Account deletion: "every message this account sent".
+    senderIdx: index("messages_sender_idx").on(m.senderId),
+    // The expiry sweep. Partial: most chats have no timer and never need it.
+    expiresAtIdx: index("messages_expires_at_idx")
+      .on(m.expiresAt)
+      .where(sql`${m.expiresAt} IS NOT NULL`),
+  }),
+);
+
+// A block is directional in who made it and symmetric in effect: either
+// direction refuses starting a chat and sending into one (@quagga/core
+// `isBlockedEitherWay`).
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    pk: primaryKey({ columns: [b.blockerId, b.blockedId] }),
+    blockedIdx: index("user_blocks_blocked_idx").on(b.blockedId),
+  }),
+);
+
+// An abuse report. Holds COPIES of only the messages the reporter selected
+// (`message_report_items`), so the safety queue can still act after the
+// originals expire on the chat's timer. Its own fixed retention:
+// `expires_at` = reported + @quagga/core `REPORT_COPY_RETENTION_DAYS` (180),
+// after which the same sweep hard-deletes the report and its copies.
+export const messageReports = pgTable(
+  "message_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Deliberately NOT a foreign key: the report must outlive the
+    // conversation's messages, and is never a handle to read the rest of it.
+    conversationId: uuid("conversation_id").notNull(),
+    reporterId: uuid("reporter_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reportedUserId: uuid("reported_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason"),
+    status: messageReportStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    resolvedAt: timestamp("resolved_at", { mode: "date" }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (r) => ({
+    statusCreatedIdx: index("message_reports_status_created_idx").on(
+      r.status,
+      r.createdAt.desc(),
+    ),
+    expiresAtIdx: index("message_reports_expires_at_idx").on(r.expiresAt),
+  }),
+);
+
+// The snapshot of ONE reported message. A copy, not a reference: the original
+// may be deleted by its timer or its sender's account deletion, and the
+// report must still read the same.
+export const messageReportItems = pgTable(
+  "message_report_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reportId: uuid("report_id")
+      .notNull()
+      .references(() => messageReports.id, { onDelete: "cascade" }),
+    // The original's id, for de-duplication only — no FK, it may be gone.
+    originalMessageId: uuid("original_message_id").notNull(),
+    senderId: uuid("sender_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    kind: messageKindEnum("kind").notNull(),
+    body: text("body").notNull(),
+    sentAt: timestamp("sent_at", { mode: "date" }).notNull(),
+  },
+  (i) => ({
+    reportIdx: index("message_report_items_report_idx").on(i.reportId),
   }),
 );

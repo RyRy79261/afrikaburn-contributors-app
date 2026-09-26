@@ -179,6 +179,9 @@ export * from "./bio-carry-forward";
 // Camp-mate profiles (epic #68): the camp-mate predicate + projection, photo
 // and contact rules, the opt-in people view, and the raster-only photo check.
 export * from "./campmates";
+// Direct messaging (epic #69): participant-only reads, contactability-gated
+// starts, blocks, reports that copy only selected messages, user-chosen timers.
+export * from "./messaging";
 export * from "./avatar";
 export * from "./username";
 export * from "./questionnaire-engine";
