@@ -738,6 +738,9 @@ directly once someone confirms which was intended.
 
 - **No OAuth 2.1 Provider / "Sign in with AfrikaBurn" IdP on the critical path now.** Parked
   (Part 2); a separate deployment on its own newer better-auth version when Part 2 revives.
+  _The opposite direction — a future "Log in with AfrikaBurn" where this product is an OIDC
+  **client** of AfrikaBurn's TMI Identity (Keycloak at `login.afrikaburn.net`) — is recorded as
+  context in [`sources/research/tmi-identity.md`](sources/research/tmi-identity.md). No work is planned._
 
 - **No storing ID/passport numbers by default** — collect only on an explicit, documented,
   minimised decision with a named downstream purpose (§8.2).

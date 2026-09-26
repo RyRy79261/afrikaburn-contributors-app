@@ -68,6 +68,7 @@ without restating it:
 | [`component-spec.md`](component-spec.md)                 | Engineering Spec | Active         | N/A — implementation detail                                                                   |
 | [`accounts-security-spec.md`](accounts-security-spec.md) | Security         | Active         | Partial — `SEC-*`, `CDB-002`                                                                  |
 | [`auth-platform-spec.md`](auth-platform-spec.md)         | Security         | Active         | Partial — `SEC-*`                                                                             |
+| [`threat-model.md`](threat-model.md)                     | Security         | Draft          | Partial — `SEC-*` (cross-cutting register)                                                    |
 | [`questionnaire-spec.md`](questionnaire-spec.md)         | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
 | [`notifications-spec.md`](notifications-spec.md)         | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                           |
 | [`supplier-spec.md`](supplier-spec.md)                   | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                |
@@ -76,6 +77,7 @@ without restating it:
 | [`triage.md`](triage.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
 | [`synthesis.md`](synthesis.md)                           | Planning         | **Historical** | N/A — superseded as an authoritative source by the App Specification itself                   |
 | [`deploy.md`](deploy.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
+| [`provenance.md`](provenance.md)                         | Operational      | Record         | N/A — evidence record, not spec-derived                                                       |
 | [`roadmap.md`](roadmap.md)                               | Planning         | Active         | Partial — `RELEASE-*`                                                                         |
 | [`decisions/`](decisions/README.md)                      | Planning         | Active         | References App Spec IDs; defines none                                                         |
 | [`sdk/`](sdk/README.md)                                  | Engineering Spec | Draft          | N/A — no App Spec section yet; specifies a `/v1` API and published SDK that are **not built** |

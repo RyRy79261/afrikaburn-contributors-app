@@ -1,18 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat } from "next/font/google";
+import { brandFont } from "@quagga/ui/fonts/brand";
 import { Toaster } from "@quagga/ui/components/toast";
 import { ClientErrorCapture } from "@quagga/ui/components/client-error-capture";
 import { QuiltBand } from "@quagga/ui/components/quilt-band";
 import "@quagga/ui/styles.css";
-
-// AfrikaBurn's brand face. Exposed as --font-brand; globals.css falls through
-// to it from --font-sans. Body 500, headings up to 800.
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-brand",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "AfrikaBurn Organiser Console",
@@ -37,7 +28,7 @@ export default function RootLayout({
   // `.org-accent` skin (interactive colour → apricot) plus the quilt band so it
   // is never mistaken for the participant app.
   return (
-    <html lang="en" className={`dark org-accent ${montserrat.variable}`}>
+    <html lang="en" className={`dark org-accent ${brandFont.variable}`}>
       <body className="font-sans antialiased">
         {/* Renders nothing. Fills the recent-errors buffer the reporter
             attaches. Mounted at the root so it is already collecting by the
