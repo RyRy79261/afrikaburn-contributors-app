@@ -28,6 +28,33 @@
 import { test, expect } from "../../fixtures";
 import { signUpBurner } from "../../personas/factories";
 import { uniqueName } from "../../lib/identity";
+import type { Page } from "@playwright/test";
+
+/**
+ * Save the artwork form as a draft and land on its dashboard.
+ *
+ * The form SOFT-WARNS on a near-duplicate name ("Similar to the existing
+ * project … Submit again to keep this name") and needs a second, confirming
+ * click. `uniqueName` varies a suffix, not the stem, so once the other
+ * browser project or an earlier run has saved one, a near-match is likely —
+ * a single click then leaves the page on the form and the redirect never
+ * comes (seen in CI on 26 Sep). Same handling as the camp factory
+ * (personas/factories.ts); the warning itself is asserted by
+ * art-and-vehicle-registration.spec.ts.
+ */
+async function saveDraft(page: Page): Promise<string> {
+  const save = page.getByRole("button", { name: /^save draft$/i });
+  const dashboard = /\/camps\/[^/]+$/;
+  await save.click();
+  const warning = page.getByText(/similar to the existing project/i);
+  await Promise.race([
+    page.waitForURL(dashboard).catch(() => undefined),
+    warning.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
+  ]);
+  if (await warning.count()) await save.click();
+  await page.waitForURL(dashboard);
+  return page.url().split("/").pop() ?? "";
+}
 
 test.describe("new burner — creative projects reach camp parity", () => {
   test("an artwork requests WAPs and keeps a private safety document", async ({
@@ -37,7 +64,7 @@ test.describe("new burner — creative projects reach camp parity", () => {
     test.setTimeout(240_000);
     await signUpBurner(webPage, { onboard: true });
 
-    const artworkName = uniqueName("The Whispering Baobab");
+    const artworkName = uniqueName("Kalkoentjie Totem");
     const docTitle = uniqueName("Structural sign-off");
 
     await webPage.goto("/artworks/new");
@@ -56,9 +83,7 @@ test.describe("new burner — creative projects reach camp parity", () => {
     await webPage.getByRole("button", { name: /^add document$/i }).click();
     await expect(webPage.getByRole("link", { name: docTitle })).toBeVisible();
 
-    await webPage.getByRole("button", { name: /^save draft$/i }).click();
-    await webPage.waitForURL(/\/camps\/[^/]+$/);
-    const slug = webPage.url().split("/").pop() ?? "";
+    const slug = await saveDraft(webPage);
     expect(slug.length).toBeGreaterThan(0);
 
     // PRIVATE: the dashboard rendered (present), and the document is not on it.
@@ -97,9 +122,7 @@ test.describe("new burner — creative projects reach camp parity", () => {
     const artworkName = uniqueName("Dust Lantern");
     await webPage.goto("/artworks/new");
     await webPage.getByLabel("Artwork name").fill(artworkName);
-    await webPage.getByRole("button", { name: /^save draft$/i }).click();
-    await webPage.waitForURL(/\/camps\/[^/]+$/);
-    const slug = webPage.url().split("/").pop() ?? "";
+    const slug = await saveDraft(webPage);
 
     // The dashboard's CTA points at the artwork route, not the camp one.
     await expect(
