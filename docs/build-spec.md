@@ -118,6 +118,12 @@ without ever printing a value.
   `user_id` account link, imported_at. _(`vetting_status` and `source` were killed per
   `docs/supplier-spec.md` and no longer exist — do not reintroduce them.)_
 - `supplier_declarations` — registration_id × supplier_id, note.
+- `registration_safety_documents` — registration_id (cascade), title, url, `expires_on`
+  date (required), uploaded_by (set null). Safety evidence for a registration
+  (epic #52, CREATIVE-017; artworks + mutant vehicles first). **Private**: the
+  project's structural lead/admin and org staff who read personal information in the
+  registrations domain — never a public page, list, roster or export. Uploads go
+  through the existing `/api/registration/upload` route (`purpose=safety-document`).
 - `payments` — subject_type + subject_id (polymorphic by string key), amount_cents nullable, currency default ZAR, reference (human-readable, e.g. `QP-2027-MAH-001`), status enum (`pending|reconciled|waived`), details jsonb, recorded_by. **No processing, ever.**
 - `audit_events` — actor_id, action, subject, meta jsonb. Written on: elevation, approval/rejection, payment reconciliation.
 

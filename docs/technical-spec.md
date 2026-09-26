@@ -426,6 +426,33 @@ built for camps either (§6, §7, §9, §10).
 This section needs no separate technical plan. Anything built for camps arrives
 for creative projects roughly free, provided it is built on the shared spine.
 
+**Parity pass (epic #52).** Features built onto the camp registration had skipped
+art projects and mutant vehicles, because those register through their own forms.
+Now:
+
+- **Work Access Passes (CREATIVE-014):** both forms ask for a WAP count and store it
+  on the same `registrations.s4_work_access_passes` column a camp's Form 2 writes, so
+  allocation reads one column whatever kind of group asked. Shown on the org review.
+- **Safety documents (CREATIVE-017):** both forms attach documents with an expiry
+  date (`registration_safety_documents`). Private to the project's lead/admin and to
+  org staff who read personal information for registrations. A document "covers the
+  event" only if it is in force on the edition's last day.
+- **Previous-year duplication (CREATIVE-019):** the camp rule, applied to projects —
+  a returning project still makes a new proposal. Its own words carry (artist,
+  descriptions, images/photos, build and strike plans, power); what is new each year
+  (footprint, placement, sound, WAPs) and every intent or consent (burn intent, grant
+  interest, flame effects, night driving, the DMV acknowledgements) starts empty, so
+  the submit gate refuses a carried draft until those are answered again. Safety
+  documents carry only while still in force through the new edition's end. Policy:
+  `@quagga/core` `project-registration`.
+- **Team onboarding (CREATIVE-007):** project-scoped questionnaires on
+  `/artworks/[slug]/questionnaires` and `/vehicles/[slug]/questionnaires`.
+- **Installations (CREATIVE-005)** are artworks. There is no separate group kind: an
+  installation registers through `/artworks/new`. A distinct kind would add a third
+  project form with nothing that differs from an artwork's questions.
+- **Fundraising (CREATIVE-006, CREATIVE-011)** stays out: the platform never holds or
+  processes money.
+
 ## 19. Permissions and security ✅
 
 **Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-019, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*

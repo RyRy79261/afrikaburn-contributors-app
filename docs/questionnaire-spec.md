@@ -218,6 +218,14 @@ any member holding `manage_questionnaires`** (authz predicate + tests updated to
   viewing).
 - **Participant app** `/camps/[slug]/questionnaires` (lead/admin): same builder scoped
   to the project, audience = role multi-select; completion table of members.
+  Creative projects get the same surface on their own routes —
+  `/artworks/[slug]/questionnaires` and `/vehicles/[slug]/questionnaires`
+  (epic #52, App Spec CREATIVE-007: a project lead can onboard a crew with a
+  blocking questionnaire exactly as a camp lead can). The spine is kind-agnostic;
+  the only kind-aware rule is the route: a group renders on its own kind's route,
+  a project reached through `/camps/…/questionnaires` redirects to its own, and
+  any other mismatch is a 404. The actions refuse the org group outright — org
+  questionnaires are authored in the console only, never from the participant app.
 - **Participant app, member side**: blocking gate page reusing the existing
   QuestionnaireRunner; non-blocking = dashboard "Pending questionnaires" card.
 - **Roles management**: members card gains role chips + lead-only editing.
