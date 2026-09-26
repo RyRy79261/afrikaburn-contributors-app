@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # pull_request_target checks out the base ref by default — the
           # trusted copy of the script. Do not change this to the PR head.
