@@ -102,14 +102,14 @@ against the code for this adaptation. Likelihood / impact are coarse
 
 ### C — Supply chain and build integrity
 
-| ID  | Threat                                  | L / I | Coverage | Primary controls                                                                                                                                                     | Residual / open                                                                                                                                                                  |
-| --- | --------------------------------------- | ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C1  | Malicious or compromised npm package    | M / H | Partial  | Committed `pnpm-lock.yaml`; every CI install is `pnpm install --frozen-lockfile` (`.github/workflows/`); `packageManager` pinned to `pnpm@10.30.0`                   | Nothing inspects a package before install — a malicious version that makes it into the lockfile (via a reviewed bump or a transitive) installs in CI and on contributor machines |
-| C2  | Auto-bump of high-risk auth dependency  | M / H | Covered  | `better-auth` exact pin `1.6.25`; Dependabot `ignore` for `better-auth`, `@better-auth/*` and `@radix-ui/react-slot` (`../.github/dependabot.yml`); manual CVE watch | Human patch latency on a critical GHSA; no named owner for the watch (`auth-platform-spec.md` §11 #7).                                                                           |
-| C3  | Unreviewed dependency drift (general)   | M / M | Partial  | Weekly Dependabot (npm + Actions); minor/patch grouped; no auto-merge                                                                                                | No severity-based merge gate (OSV / SCA fail-on-PR)                                                                                                                              |
-| C4  | Compromised GitHub Action               | L / H | Partial  | Dependabot for `github-actions`; workflow-level `permissions: contents: read`                                                                                        | Actions pinned by major tag (`@v4`), not by commit SHA                                                                                                                           |
-| C5  | Lockfile / SBOM invisible to auditors   | L / L | Open     | Lockfile is the inventory today                                                                                                                                      | No SBOM generated in CI                                                                                                                                                          |
-| C6  | Typosquat / brand-new malicious publish | L / H | Open     | Frozen lockfile means nothing new arrives without a reviewed diff to `pnpm-lock.yaml`                                                                                | No malware-intel or minimum-package-age check on install; no Dependabot cooldown configured. A new dependency is only as safe as the reviewer of its PR                          |
+| ID  | Threat                                  | L / I | Coverage | Primary controls                                                                                                                                                          | Residual / open                                                                                                                                                                       |
+| --- | --------------------------------------- | ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | Malicious or compromised npm package    | M / H | Partial  | Committed `pnpm-lock.yaml`; every CI install is `pnpm install --frozen-lockfile` (`.github/workflows/`); `packageManager` pinned to `pnpm@10.30.0`                        | Nothing inspects a package before install — a malicious version that makes it into the lockfile (via a reviewed bump or a transitive) installs in CI and on contributor machines      |
+| C2  | Auto-bump of high-risk auth dependency  | M / H | Covered  | `better-auth` exact pin `1.6.25`; Dependabot `ignore` for `better-auth`, `@better-auth/*` and `@radix-ui/react-slot` (`../.github/dependabot.yml`); manual CVE watch      | Human patch latency on a critical GHSA; no named owner for the watch (`auth-platform-spec.md` §11 #7).                                                                                |
+| C3  | Unreviewed dependency drift (general)   | M / M | Partial  | Weekly Dependabot (npm + Actions); minor/patch grouped; no auto-merge                                                                                                     | No severity-based merge gate (OSV / SCA fail-on-PR)                                                                                                                                   |
+| C4  | Compromised GitHub Action               | L / H | Partial  | Dependabot for `github-actions`; workflow-level `permissions: contents: read`                                                                                             | Actions pinned by major tag (`@v4`), not by commit SHA                                                                                                                                |
+| C5  | Lockfile / SBOM invisible to auditors   | L / L | Open     | Lockfile is the inventory today                                                                                                                                           | No SBOM generated in CI                                                                                                                                                               |
+| C6  | Typosquat / brand-new malicious publish | L / H | Partial  | Frozen lockfile means nothing new arrives without a reviewed diff to `pnpm-lock.yaml`; Dependabot version updates wait out a 2-day cooldown (`../.github/dependabot.yml`) | No malware-intel or minimum-package-age check on hand-added dependencies or on young transitives pulled into the lockfile. A new dependency is only as safe as the reviewer of its PR |
 
 ### D — Secrets, keys, and configuration
 
@@ -153,18 +153,17 @@ against the code for this adaptation. Likelihood / impact are coarse
 **Covered:** A4, B2, B3, B6, B7, B8, B9, C2, D3, D4, D5, E3 — plus the Accepted
 trade-offs A5, B1, B4, B5, F2.
 
-**Partial:** A1, A2, A3, A7, C1, C3, C4, D1, D2, E2, E4.
+**Partial:** A1, A2, A3, A7, C1, C3, C4, C6, D1, D2, E2, E4.
 
 **Open:**
 
-| ID  | One-line gap                                | Likely next step                                            |
-| --- | ------------------------------------------- | ----------------------------------------------------------- |
-| A6  | No `BETTER_AUTH_SECRET` drift detection     | Alert or boot-time cross-app check                          |
-| C5  | No SBOM in CI                               | Generate CycloneDX/SPDX from the lockfile on `main` builds  |
-| C6  | No install-time malware / package-age check | Evaluate an install-time scanner or Dependabot `cooldown`   |
-| E1  | Branch protection off → CODEOWNERS inert    | Enable as in `SECURITY.md` §Repository settings             |
-| F1  | No auth/ops alerting                        | Minimal failed-login, secret-drift and cron-failure signals |
-| F3  | SEC-018 restore procedure undocumented      | Short Neon PITR note in `deploy.md`                         |
+| ID  | One-line gap                             | Likely next step                                            |
+| --- | ---------------------------------------- | ----------------------------------------------------------- |
+| A6  | No `BETTER_AUTH_SECRET` drift detection  | Alert or boot-time cross-app check                          |
+| C5  | No SBOM in CI                            | Generate CycloneDX/SPDX from the lockfile on `main` builds  |
+| E1  | Branch protection off → CODEOWNERS inert | Enable as in `SECURITY.md` §Repository settings             |
+| F1  | No auth/ops alerting                     | Minimal failed-login, secret-drift and cron-failure signals |
+| F3  | SEC-018 restore procedure undocumented   | Short Neon PITR note in `deploy.md`                         |
 
 Also worth closing from the Partial rows: **A1** (breach-password check).
 
