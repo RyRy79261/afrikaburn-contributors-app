@@ -176,6 +176,10 @@ export * from "./member-ref-code";
 export * from "./bio";
 // Burner Bio rollover into a new edition — pre-fill, never a completed bio.
 export * from "./bio-carry-forward";
+// Camp-mate profiles (epic #68): the camp-mate predicate + projection, photo
+// and contact rules, the opt-in people view, and the raster-only photo check.
+export * from "./campmates";
+export * from "./avatar";
 export * from "./username";
 export * from "./questionnaire-engine";
 export * from "./questionnaire-definition";

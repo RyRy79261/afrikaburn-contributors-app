@@ -62,6 +62,14 @@ export const groupKindEnum = pgEnum("group_kind", [
 
 export const joinabilityEnum = pgEnum("joinability", ["open", "invite_only"]);
 
+// Epic #68 — who may start contact with a burner. Mirrors @quagga/core
+// `CONTACTABILITY_LEVELS`; default `nobody` (being reachable is opt-in).
+export const contactabilityEnum = pgEnum("contactability", [
+  "nobody",
+  "camp_mates",
+  "anyone",
+]);
+
 // Reserved: visibility is currently DERIVED (registered ⇒ public). This column
 // exists so explicit privacy settings can land later without a migration.
 export const groupVisibilityEnum = pgEnum("group_visibility", [
@@ -311,6 +319,15 @@ export const users = pgTable(
     // that stops a sanitized account being silently re-animated by a later sign-in
     // (@quagga/core `isSanitized` / `assertNotSanitized`).
     sanitizedAt: timestamp("sanitized_at", { mode: "date" }),
+    // Profile photo (epic #68): the PATHNAME of a PRIVATE Vercel Blob under
+    // `avatars/<users.id>/`. Never a public URL — the photo is served only
+    // through the authorised proxy (`/api/avatar/[userId]`), which checks the
+    // photo's own visibility level (`burner_bios.privacy_flags.avatar`, default
+    // private) against the viewer on every request. Account-level, like the
+    // username: it is the same face every edition; WHO may see it is the
+    // per-edition part. Nulled (and the blob deleted) on removal and on
+    // account sanitization.
+    avatarKey: text("avatar_key"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (u) => ({
@@ -707,12 +724,26 @@ export const burnerBios = pgTable(
     rangerCurious: boolean("ranger_curious"),
     greenDotTraining: boolean("green_dot_training"),
 
-    // Per-field public/private map, e.g. { "displayName": true, "bio": true }.
-    // Hard-locked fields are force-private regardless of what's stored here.
+    // Per-field visibility map, e.g. { "homeCity": true, "bio": "camp_mates" }.
+    // THREE levels since epic #68, stored backward-compatibly: `true` = public
+    // and `false` = private exactly as before, and the one new value
+    // `"camp_mates"` = visible to people who share a theme camp. A reader that
+    // only knows `=== true` therefore reads a camp-mates field as private (fails
+    // closed). Decoding/encoding lives in @quagga/core `privacy.ts`
+    // (`readFieldVisibility` / `enforcePrivacyFlags`). Always-private fields are
+    // forced private regardless of what's stored here.
     privacyFlags: jsonb("privacy_flags")
-      .$type<Record<string, boolean>>()
+      .$type<Record<string, boolean | "private" | "camp_mates" | "public">>()
       .notNull()
       .default({}),
+
+    // Epic #68 camp-mate settings — per edition, carried forward as pre-fill
+    // the member confirms (@quagga/core bio-carry-forward). Both default to the
+    // private choice: reachable by nobody, not listed in the camp people view.
+    contactable: contactabilityEnum("contactable").notNull().default("nobody"),
+    listedInCampPeople: boolean("listed_in_camp_people")
+      .notNull()
+      .default(false),
 
     // Questionnaire-engine bookkeeping (this is a "code questionnaire").
     version: text("version").notNull(),

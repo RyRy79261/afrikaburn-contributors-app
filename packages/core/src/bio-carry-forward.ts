@@ -1,4 +1,6 @@
 import type { BurnerBioFields, BioExtras } from "./bio";
+import { readCampmateSettings, type CampmateSettings } from "./campmates";
+import type { PrivacyFlags } from "./privacy";
 
 // Burner Bio rollover into a new edition (Ryan, 12 Aug 2026: "We copy across the
 // Burner bio but they still have to complete that — consider it pre-filled and
@@ -63,6 +65,13 @@ import type { BurnerBioFields, BioExtras } from "./bio";
 // back during a flow they must complete, so it gets confirmed or corrected
 // rather than lost.
 //
+// **The camp-mate settings carry** (epic #68): who may contact you, and whether
+// you are listed in your camp's people view — along with every per-field level,
+// including the photo's (it is a privacy flag). They are pre-fill like the rest:
+// the returning burner sees them on the flow's Privacy step and confirms them by
+// pressing the final button, and nothing is written for the new edition until
+// they do. A setting that was never chosen carries as its private default.
+//
 // Encryption, hard-locked privacy and the medical access log are unchanged by any
 // of this. When no `PGCRYPTO_KEY` is configured, `decryptOrNull` yields null
 // upstream and nothing sensitive carries at all — the correct fail-safe.
@@ -71,7 +80,8 @@ import type { BurnerBioFields, BioExtras } from "./bio";
 export interface BioCarryForward {
   fields: BurnerBioFields;
   extras: BioExtras;
-  privacyFlags: Record<string, boolean>;
+  privacyFlags: PrivacyFlags;
+  campmate: CampmateSettings;
 }
 
 /** Fields deliberately dropped on rollover — see the module header. */
@@ -86,7 +96,8 @@ export const BIO_NON_CARRIED_FIELDS = ["firstTime"] as const;
 export function buildBioCarryForward(prior: {
   fields: BurnerBioFields;
   extras: BioExtras;
-  privacyFlags: Record<string, boolean>;
+  privacyFlags: PrivacyFlags;
+  campmate?: Partial<CampmateSettings>;
 }): BioCarryForward {
   return {
     fields: {
@@ -102,5 +113,8 @@ export function buildBioCarryForward(prior: {
     // should not silently become private, nor the reverse. Hard-locked fields
     // are forced private downstream regardless of what is stored here.
     privacyFlags: { ...prior.privacyFlags },
+    // Carried as a default the member confirms — re-read through the fail-
+    // closed decoder, so a missing or corrupt prior value carries as private.
+    campmate: readCampmateSettings(prior.campmate ?? {}),
   };
 }

@@ -55,6 +55,9 @@ export const DEPARTED_BURNER_NAME = "Departed Burner";
 export interface UserSanitizationPatch {
   email: null;
   username: null;
+  /** The profile photo's blob key (epic #68). A face is personal information;
+   * the app deletes the blob itself before this patch lands. */
+  avatarKey: null;
   sanitizedAt: Date;
 }
 
@@ -67,7 +70,7 @@ export function buildUserSanitizationPatch(
   _userId: string,
   at: Date,
 ): UserSanitizationPatch {
-  return { email: null, username: null, sanitizedAt: at };
+  return { email: null, username: null, avatarKey: null, sanitizedAt: at };
 }
 
 /**
@@ -128,6 +131,10 @@ export type BurnerBioSanitizationPatch = Record<SanitizedBioNullField, null> & {
   greenDotTraining: null;
   firstTime: false;
   privacyFlags: Record<string, boolean>;
+  // Epic #68: reset to the private defaults — a departed account is reachable
+  // by nobody and listed nowhere.
+  contactable: "nobody";
+  listedInCampPeople: false;
   updatedAt: Date;
 };
 
@@ -154,6 +161,8 @@ export function buildBioSanitizationPatch(
     greenDotTraining: null,
     firstTime: false,
     privacyFlags: {},
+    contactable: "nobody",
+    listedInCampPeople: false,
     updatedAt: at,
   };
 }
