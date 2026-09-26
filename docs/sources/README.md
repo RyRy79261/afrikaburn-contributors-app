@@ -35,3 +35,16 @@ the **concrete scope** — plus Graham's Quagga Portal platform document, which 
 
 Where the two visions differ and what was chosen from each is recorded in
 [`../synthesis.md`](../synthesis.md).
+
+### [`research/`](research/) — working-group research notes
+
+Unlike everything above, these are **adapted summaries**, not verbatim sources:
+notes from the working group (Sept 2026) on external AfrikaBurn systems. Their
+external facts are unverified by this repo, and they commit to no work.
+
+- [`research/gis-spatial-data.md`](research/gis-spatial-data.md) — the org's
+  GIS (QGIS, Postgres layers, drone-photogrammetry DEM) and the read-only
+  vector-layer access model. Input to the placement-map / GIS integration prep.
+- [`research/tmi-identity.md`](research/tmi-identity.md) — AfrikaBurn's TMI
+  Identity platform (Keycloak + LDAP + Postgres + SES); external apps integrate
+  only as OIDC clients of `login.afrikaburn.net`.

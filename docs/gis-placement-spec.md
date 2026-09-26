@@ -31,8 +31,9 @@ into the database, the domain, or the UI. It is written to be _refined_: the
 and the [Questions for AfrikaBurn](#questions-for-afrikaburn) section is the list
 to actually send them.
 
-Neither Decision 011 nor Decision 012 is resolved by this document. Both stay
-**Open** until AB's API is real enough to read.
+Neither Decision 011 nor Decision 012 is resolved by this document. Both were
+reopened as in scope on 26 Sep 2026 by a separate maintainer decision; everything
+that depends on AB's API stays open until that API is real enough to read.
 
 ## The standing authorisation, and its limit
 
@@ -52,6 +53,14 @@ maps remain out of scope and `AGENTS.md` reads exactly as it does today. Anyone
 extending this document should quote a fresh instruction rather than lean on
 this one — a standing exception that grows by inference is how a permanent
 "no" turns into a shipped feature nobody agreed to.
+
+**Fresh instruction, 26 Sep 2026.** Ryan lifted the product law for placement
+maps: _"we will be doing the placement maps since we need to work on the GIS
+integration prep anyway."_ `AGENTS.md` no longer lists them as out of scope, and
+[Decision 011](decisions/decision-011-layout-tool-strategy.md) records the
+scope. That authorises the camp layout editor that needs no AfrikaBurn data.
+It does **not** pre-approve the phases below: each one that reads AfrikaBurn's
+map data, Phase 0 included, still needs its own go-ahead.
 
 ## What is being asked for
 
@@ -803,15 +812,17 @@ Short enough to send as-is:
 ## What this document does not decide
 
 - It does not resolve [Decision 011](decisions/decision-011-layout-tool-strategy.md)
-  or [Decision 012](decisions/decision-012-map-erf-readiness.md). Both stay Open.
+  or [Decision 012](decisions/decision-012-map-erf-readiness.md). Their
+  API-dependent parts stay open; the 26 Sep 2026 in-scope ruling is separate.
 - It does not commit a release. Placement stays a candidate direction on the
   [roadmap](roadmap.md) until Phase 0 has run.
 - It does not authorise a migration. Every table in §D.2 is a sketch, and
   `packages/db/migrations/` is CODEOWNERS-gated for good reason.
 - It does not change `registrations.erf`. That column stays free text, and the
   reason `placement-codes.ts` gives for it stays true until U3 is answered.
-- It does not lift the `AGENTS.md` product law that places placement maps out of
-  scope. Research was authorised; building was not. See
+- It did not, by itself, lift the `AGENTS.md` product law on placement maps.
+  That law was lifted separately on 26 Sep 2026 for the layout editor; the
+  phases here still each need their own go-ahead. See
   [The standing authorisation, and its limit](#the-standing-authorisation-and-its-limit).
 
 ## Sources

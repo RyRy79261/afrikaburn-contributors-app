@@ -31,11 +31,19 @@ export default defineConfig({
       reportOnFailure: true,
       // Count every source file, not only the ones a test imports.
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["**/__tests__/**", "**/*.d.ts"],
+      exclude: [
+        "**/__tests__/**",
+        "**/*.d.ts",
+        // next/font/local is a Next compiler transform: under vitest the call
+        // cannot load a face, so a test would prove nothing and a mock would
+        // only pad the denominator. The only such file in the package.
+        "src/fonts/**",
+      ],
       // A ratchet, not a target. Raise it as coverage improves; never lower it
       // to make a build pass — the drop is the signal.
       //
-      // NOTHING IS EXCLUDED beyond tests and type declarations, deliberately.
+      // NOTHING IS EXCLUDED beyond tests, type declarations and the next/font
+      // brand face (above), deliberately.
       // Narrowing `include` to the files a test happens to reach would shrink
       // the denominator rather than measure anything, and this package contains
       // no file in the legitimate "executing it proves nothing" category — no

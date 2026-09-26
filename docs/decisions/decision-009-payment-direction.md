@@ -84,3 +84,18 @@ later ticket.
   exist yet, so the module waits for the first one.
 - **AfrikaBurn still owes us** the fee amounts and which channel they want
   referenced. That is a content question now, not an architecture one.
+
+## Clarification — 2026-09-26 (Ryan Noble)
+
+"No camp treasuries, no dues collection" above forecloses **handling** money,
+not **recording** it. The platform may track money the way a spreadsheet does:
+a camp's working budget, what each member owes the camp and whether they have
+paid, a declared budget on a large-camp disclosure, village-level budget
+totals. Every one of those is a record a person keeps up by hand, with the
+money moving outside the platform (EFT, cash).
+
+Still foreclosed, unchanged: collecting, holding, moving or refunding money —
+no gateway, card capture, escrow, payouts or wallet — and no payment UI in any
+registration context. `assertRecordableAmount`'s rule stands. The resolution
+of this decision does not change; this only states where its line was always
+meant to be.

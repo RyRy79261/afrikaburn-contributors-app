@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | Open — but routed around as of 2026-08-12 |
+| **Status** | **Reopened 2026-09-26 — in scope**; gate partly met (see the update at the end) |
 | **Raised** | 2026-07-29 (App Spec change record) |
 | **Spec section** | §13 AfrikaBurn Map and Erf Placement (`ERF-*`) |
 
@@ -67,3 +67,14 @@ Plan: [`docs/gis-placement-spec.md`](../gis-placement-spec.md). It explicitly do
 `placement-codes.ts` gives for it stays true, until U3 is answered.
 
 **Status is unchanged.** An announced API is not a read API.
+
+## Update — 2026-09-26 (Ryan Noble): reopened, gate partly met
+
+The mapping meetings happened. Of the two gate items, the **machine-readable
+map** is on its way: read-only vector layers (theme-camp boundaries first) from
+AfrikaBurn's QGIS/Postgres GIS, and the map API above, pending the formal access
+grant. Ingestion follows [`docs/gis-placement-spec.md`](../gis-placement-spec.md). The **erf
+grammar** is still outstanding. Placement maps are now in scope (Decision 011),
+so work that needs no erf grammar — the generic planner, the tent packer,
+reading boundary layers once granted — may start. The erf column stays free
+text until a real grammar arrives, exactly as above.
