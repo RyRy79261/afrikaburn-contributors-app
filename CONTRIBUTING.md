@@ -377,8 +377,9 @@ fails — `fix(accounts):` looks reasonable and names nothing that exists), the
 header limit is 72 rather than 100, and long body/footer lines warn instead of
 failing, because hard-wrapping a URL to satisfy a linter makes a message worse.
 
-Merge commits and git-generated reverts are ignored; they cannot be conventional
-and are not written by a person.
+Merge commits, git-generated reverts and Dependabot's `chore(deps): bump …` /
+`chore(deps-dev): bump …` commits are ignored; they are not written by a person,
+and the bot cannot be taught the scope list.
 
 ## Pull request descriptions
 
