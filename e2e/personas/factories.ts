@@ -213,6 +213,18 @@ export async function signInAs(
   // interrupted by another navigation to /directory". It reads as the app
   // failing to serve a page it serves perfectly well.
   await page.waitForLoadState("load");
+  // "load" IS NOT ENOUGH ON ITS OWN. The auth forms leave through
+  // `navigateOnwards` — a SOFT `router.push()` + `router.refresh()`, deferred a
+  // macrotask (apps/web/lib/client-navigation.ts). No new document is loaded,
+  // so the load state above resolves at once, from the sign-in page's own load
+  // event, while the push's RSC fetch, the refresh and any server redirect from
+  // the landing route are still in flight. The caller's `goto` then races them
+  // and CI reports the same `net::ERR_ABORTED` this wait was written to stop —
+  // god-sole-god-cannot-self-delete and account-management both hit it on
+  // unrelated PRs (26 Sep 2026). Waiting for the network to go quiet covers the
+  // router's own requests. Safe here: no page an auth form lands on polls
+  // (the only interval in the apps is the registration wizard's autosave).
+  await page.waitForLoadState("networkidle");
 }
 
 /** End the current session (web/org header sign-out; supplier equivalent). */

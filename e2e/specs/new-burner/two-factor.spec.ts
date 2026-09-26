@@ -31,6 +31,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import { test, expect } from "../../fixtures";
 import { signUpBurner } from "../../personas/factories";
 import { TEST_PASSWORD } from "../../lib/identity";
+import { appAlerts } from "../../lib/dom";
 
 test.describe("new burner — two-factor enrolment", () => {
   test("enrols with a real TOTP, refuses a wrong one, shows backup codes, and turns off", async ({
@@ -68,7 +69,10 @@ test.describe("new burner — two-factor enrolment", () => {
       (await createOTP(secret).totp()) === "000000" ? "111111" : "000000";
     await webPage.getByLabel(/enter the 6-digit code/i).fill(wrong);
     await webPage.getByRole("button", { name: /verify and turn on/i }).click();
-    await expect(webPage.getByRole("alert")).toBeVisible();
+    // appAlerts(), not getByRole("alert"): once Next's route announcer has
+    // rendered, the bare query matches two elements and strict mode fails the
+    // spec on a refusal the app displayed correctly (e2e/lib/dom.ts).
+    await expect(appAlerts(webPage).filter({ hasText: /\S/ })).toBeVisible();
     // Still enrolling — a refused code must not half-enable anything.
     await expect(
       webPage.getByRole("button", { name: /verify and turn on/i }),
