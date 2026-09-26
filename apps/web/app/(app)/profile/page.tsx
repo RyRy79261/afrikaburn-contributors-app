@@ -38,6 +38,9 @@ import { CampmateProfileCard } from "@/components/campmate-profile-card";
 import { toBioExtrasState } from "@/components/questionnaire/extras-state";
 import { checkUsernameAvailabilityAction } from "../onboarding/actions";
 import { saveCampmateSettingsAction, updateBioAction } from "./actions";
+import { getDefaultMessageTimer } from "@/lib/messages-store";
+import { MessageSettingsCard } from "@/components/messages/message-settings-card";
+import { saveDefaultMessageTimerAction } from "../messages/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -181,12 +184,13 @@ export default async function ProfilePage({
   // Three independent reads — the profile key fingerprint, the linked sign-in
   // methods and the camp-history display names. None feeds another, so they go
   // out together instead of one round trip after the next.
-  const [fingerprint, linkedAccounts, campHistory, photoOnFile] =
+  const [fingerprint, linkedAccounts, campHistory, photoOnFile, defaultTimer] =
     await Promise.all([
       getKeyFingerprint(user.id),
       listLinkedAccounts(),
       resolveCampHistoryDisplay(extras.campHistory, edition.id),
       hasAvatar(user.id),
+      getDefaultMessageTimer(user.id),
     ]);
   const signInMethods = describeSignInMethods(linkedAccounts);
   const volunteeringLabels = extras.volunteeringInterests.map(
@@ -430,6 +434,12 @@ export default async function ProfilePage({
           settings={bio.campmate}
           uploadsConfigured={isAvatarStorageConfigured()}
           save={saveCampmateSettingsAction}
+        />
+
+        {/* Messages (epic #69) -------------------------------------------- */}
+        <MessageSettingsCard
+          timer={defaultTimer}
+          save={saveDefaultMessageTimerAction}
         />
 
         {/* Security ------------------------------------------------------- */}

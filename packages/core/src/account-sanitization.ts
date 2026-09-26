@@ -198,6 +198,14 @@ export const SANITIZATION_PURGED_TABLES = [
   "profile_keys",
   "email_change_requests",
   "security_events",
+  // Direct messages (epic #69): the account's OWN sent messages are deleted
+  // whatever the conversation's timer says, and its blocks (in both
+  // directions) go with it. The other participant's messages are theirs and
+  // stay. A report's COPY of a message is the documented exception — it keeps
+  // its own fixed retention (@quagga/core `REPORT_COPY_RETENTION_DAYS`) so
+  // deleting an account cannot erase the evidence of a report against it.
+  "messages",
+  "user_blocks",
 ] as const;
 
 /**

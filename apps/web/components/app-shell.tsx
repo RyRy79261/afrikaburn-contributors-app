@@ -9,6 +9,8 @@ import { ReportLauncher } from "@quagga/ui/components/report-launcher";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getEditionLabel } from "@/lib/edition";
 import { getUnreadNotificationCount } from "@/lib/notifications";
+import { getUnreadMessageCount } from "@/lib/messages-store";
+import { getCurrentCampUser } from "@/lib/session";
 import { SignOutButton } from "./sign-out-button";
 import { HeaderNotificationBell } from "./header-notification-bell";
 import { NavLink } from "./nav-link";
@@ -63,10 +65,14 @@ export async function AppShell({
   const showBrowseLinks = (!minimalNav || Boolean(user)) && !gatedNav;
   // Both are request-scoped: the edition row is the same for everyone and the
   // camp-user upsert behind the unread count is shared with the page.
-  const [editionLabel, unread] = await Promise.all([
+  const [editionLabel, unread, campUser] = await Promise.all([
     getEditionLabel(),
     user ? getUnreadNotificationCount() : 0,
+    user ? getCurrentCampUser() : null,
   ]);
+  // Direct messages (epic #69): a count, never a preview.
+  const unreadMessages =
+    campUser && !gatedNav ? await getUnreadMessageCount(campUser.id) : 0;
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -111,6 +117,12 @@ export async function AppShell({
                   <>
                     <NavLink href="/profile" icon="profile" label="Profile" />
                     <NavLink href="/account" icon="account" label="Account" />
+                    <NavLink
+                      href="/messages"
+                      icon="messages"
+                      label="Messages"
+                      count={unreadMessages}
+                    />
                     <HeaderNotificationBell count={unread} />
                   </>
                 )}

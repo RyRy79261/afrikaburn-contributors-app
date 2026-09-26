@@ -179,6 +179,9 @@ export * from "./bio-carry-forward";
 // Camp-mate profiles (epic #68): the camp-mate predicate + projection, photo
 // and contact rules, the opt-in people view, and the raster-only photo check.
 export * from "./campmates";
+// Direct messaging (epic #69): participant-only reads, contactability-gated
+// starts, blocks, reports that copy only selected messages, user-chosen timers.
+export * from "./messaging";
 export * from "./avatar";
 export * from "./username";
 export * from "./questionnaire-engine";
@@ -198,6 +201,10 @@ export * from "./supplier-import";
 export * from "./supplier-onboarding";
 export * from "./supplier-standing";
 export * from "./notifications";
+// Camp announcements — camp-authored bulletins (epic #56).
+export * from "./announcements";
+// Plain-text preview of a markdown body (bulletin + announcement list cards).
+export * from "./markdown-preview";
 export * from "./camp-categories";
 export * from "./org-stats";
 export * from "./auth-capabilities";

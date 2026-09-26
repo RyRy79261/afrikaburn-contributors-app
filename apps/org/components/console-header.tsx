@@ -57,6 +57,11 @@ const NAV_ITEMS: ConsoleNavItem[] = [
   // control is decorative — which is exactly what supplier sign-up management
   // shipped as until someone noticed.
   { href: "/audit", label: "Audit" },
+  // Direct-message reports (epic #69): only the messages a burner chose to
+  // report. Shown to accounts that may read personal information somewhere;
+  // the page itself asks for it in the registrations domain (the safety tier
+  // that reads medical notes) and explains a refusal out loud.
+  { href: "/safety", label: "Safety", capability: "personal_information" },
   // IT's surface: how the deployment is configured and whether it is answering.
   // Engineer and System manager only — org staff hold every other capability on
   // this bar and not this one, which is the clearest illustration that the ranks

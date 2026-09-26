@@ -352,6 +352,42 @@ describe("pendingBlockingRoute — the hard-gate spine", () => {
 
     expect(await pendingBlockingRoute(USER_ID)).toBeNull();
   });
+
+  // MUST-ACKNOWLEDGE camp announcements (epic #56) gate like a blocking
+  // questionnaire, AFTER any blocking required action.
+  const ANNOUNCEMENT_ID = "a0000000-0000-4000-8000-0000000000aa";
+
+  it("routes an unacknowledged must-acknowledge announcement to its page", async () => {
+    queueActions([]);
+    dbMock.queue([{ bulletinId: ANNOUNCEMENT_ID }]);
+
+    expect(await pendingBlockingRoute(USER_ID)).toBe(
+      `/bulletins/${ANNOUNCEMENT_ID}`,
+    );
+  });
+
+  it("a blocking required action outranks an announcement to acknowledge", async () => {
+    queueActions([
+      {
+        actionKey: BURNER_BIO_ACTION_KEY,
+        blocking: true,
+        status: "pending",
+        audience: null,
+        activationStatus: null,
+      },
+    ]);
+    dbMock.queue([{ bulletinId: ANNOUNCEMENT_ID }]);
+
+    expect(await pendingBlockingRoute(USER_ID)).toBe("/onboarding");
+  });
+
+  it("a failing acknowledgement read never takes the app down", async () => {
+    queueActions([]);
+    dbMock.queue(new Error("connection terminated"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await pendingBlockingRoute(USER_ID)).toBeNull();
+  });
 });
 
 describe("enforceGate", () => {

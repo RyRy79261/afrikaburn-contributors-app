@@ -902,7 +902,12 @@ export async function getMemberPermissions(
   if (baseline) rolePermissions.push(baseline.permissions);
   for (const r of roles) {
     if (r.kind === "baseline") continue;
-    if (heldIds.has(r.id)) rolePermissions.push(r.permissions);
+    // Read through the kind rule, not just written through it: a captain row
+    // stored before a privilege existed (post_announcements, epic #56) must
+    // still resolve to every privilege, because "captains can do everything"
+    // is a property of the kind, not of whatever JSON was saved last.
+    if (heldIds.has(r.id))
+      rolePermissions.push(enforceKindPermissions(r.kind, r.permissions));
   }
 
   return { structuralRole: m.role, rolePermissions };

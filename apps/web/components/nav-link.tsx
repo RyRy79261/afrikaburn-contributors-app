@@ -1,7 +1,13 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { Compass, Settings, TentTree, UserRound } from "lucide-react";
+import {
+  Compass,
+  MessageCircle,
+  Settings,
+  TentTree,
+  UserRound,
+} from "lucide-react";
 import { cn } from "@quagga/ui/lib/utils";
 
 /**
@@ -33,6 +39,7 @@ const ICONS = {
   "create-camp": TentTree,
   profile: UserRound,
   account: Settings,
+  messages: MessageCircle,
 } as const;
 
 export type NavIcon = keyof typeof ICONS;
@@ -41,17 +48,28 @@ export function NavLink({
   href,
   icon,
   label,
+  count,
 }: {
   href: string;
   icon: NavIcon;
   label: string;
+  /** An unread count (the Messages link). Shown as a badge when > 0, and
+   * spoken as part of the link's name so it is not colour-only. */
+  count?: number;
 }) {
+  const unread = count && count > 0 ? count : 0;
   return (
     <Link
       href={href}
       className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
     >
       <NavLinkBody icon={icon} label={label} />
+      {unread > 0 && (
+        <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-4 text-primary-foreground">
+          {unread > 99 ? "99+" : unread}
+          <span className="sr-only"> unread</span>
+        </span>
+      )}
     </Link>
   );
 }

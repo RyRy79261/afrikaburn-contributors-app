@@ -101,6 +101,8 @@ function queueErasure(
     /* delete profileKeys */ [],
     /* delete emailChangeRequests */ [],
     /* delete securityEvents */ [],
+    /* delete messages (epic #69) */ [],
+    /* delete userBlocks (epic #69) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -414,6 +416,31 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(
       dbMock.queriesOfKind("delete").map((q) => tableName(q.calls[0]!.args[0])),
     ).not.toContain("required_actions");
+  });
+
+  it("DELETES the account's sent messages and its blocks, in the erasure transaction (epic #69)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const messageDeletes = dbMock
+      .writesTo(schema.messages)
+      .filter((q) => q.kind === "delete");
+    expect(messageDeletes).toHaveLength(1);
+    expect(messageDeletes[0]!.tx).toBe(true);
+    // Scoped to THIS account — bound to the user id, not a blanket delete.
+    expect(boundStrings(messageDeletes[0]!)).toContain(USER);
+
+    const blockDeletes = dbMock
+      .writesTo(schema.userBlocks)
+      .filter((q) => q.kind === "delete");
+    expect(blockDeletes).toHaveLength(1);
+    expect(blockDeletes[0]!.tx).toBe(true);
+
+    // The REPORT copies are the documented exception: never touched here.
+    expect(dbMock.writesTo(schema.messageReportItems)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.messageReports)).toHaveLength(0);
   });
 
   it("leaves auth_user_id alone so the tombstone stays findable", async () => {

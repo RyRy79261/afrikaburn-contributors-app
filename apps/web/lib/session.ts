@@ -4,6 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import {
+  announcementPath,
   BURNER_BIO_ACTION_KEY,
   firstBlockingAction,
   canBootstrapGod,
@@ -14,6 +15,7 @@ import { db, schema } from "./db";
 import { isDatabaseConfigured } from "./config";
 import { getActiveEdition } from "./edition";
 import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
+import { firstUnacknowledgedAnnouncement } from "./announcement-gate";
 import {
   actionRoute,
   ensureRequiredAction,
@@ -212,9 +214,30 @@ export async function pendingBlockingRoute(
 ): Promise<string | null> {
   const actions = await listRequiredActions(userId);
   const blocker = firstBlockingAction(actions);
-  if (!blocker) return null;
-  return actionRoute(blocker.actionKey) ?? "/onboarding";
+  if (blocker) return actionRoute(blocker.actionKey) ?? "/onboarding";
+  // MUST-ACKNOWLEDGE camp announcements (epic #56) gate the same way, AFTER any
+  // blocking required action (the Burner Bio and blocking questionnaires keep
+  // their priority). The gate route is the announcement's own page, which
+  // renders the tick box; acknowledging is the only way forward and signing
+  // out the only other reachable action (the shell strips its nav whenever
+  // this returns non-null — `viewerIsGated`).
+  const unacknowledged = await firstUnacknowledgedCached(userId);
+  return unacknowledged ? announcementPath(unacknowledged) : null;
 }
+
+/** Request-scoped: the layout's `viewerIsGated` and the page's `enforceGate`
+ * both ask on every gated render. */
+const firstUnacknowledgedCached = cache(async (userId: string) => {
+  try {
+    return await firstUnacknowledgedAnnouncement(userId);
+  } catch (err) {
+    // The gate must never take the app down. A read failure here leaves the
+    // member ungated for this request rather than crashing every page; the
+    // announcement is still in their inbox.
+    console.error("[gate] unacknowledged-announcement read failed", err);
+    return null;
+  }
+});
 
 /**
  * Is the CURRENT viewer behind the hard gate? For chrome, not for authorisation

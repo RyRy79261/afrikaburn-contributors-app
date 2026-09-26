@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 import { fakeDb, type FakeDb } from "./support/fake-db";
 
@@ -423,14 +425,101 @@ describe("setBulletinPinned", () => {
   });
 
   it("toggles the pin and records which way", async () => {
+    db.seed("bulletins", [{ id: BULLETIN_ID }]);
     await setBulletinPinned({ id: BULLETIN_ID, pinned: true });
     expect(db.recorded("update", "bulletins")[0]?.values).toMatchObject({
       pinned: true,
+      pinnedByUserId: "user-1",
     });
+    // The pin's own time orders the dashboard banner (sortPinned).
+    expect(
+      (db.recorded("update", "bulletins")[0]?.values as { pinnedAt: unknown })
+        .pinnedAt,
+    ).toBeInstanceOf(Date);
     expect(db.inserted("audit_events")).toMatchObject({
       action: "bulletin.pin",
       meta: { pinned: true },
     });
+  });
+
+  // Regression: pinning an ALREADY-pinned bulletin restamped pinned_at and
+  // pinned_by_user_id, so a repeat click jumped it to the front of the banner
+  // and re-attributed someone else's pin. saveBulletin already kept them.
+  it("pinning an already-pinned bulletin keeps its original pin time and pinner", async () => {
+    db.seed("bulletins", [{ id: BULLETIN_ID, pinned: true }]);
+    const result = await setBulletinPinned({ id: BULLETIN_ID, pinned: true });
+    expect(result).toMatchObject({ ok: true });
+    // The current state was read LOCKED inside the same transaction.
+    const [read] = db.recorded("select", "bulletins");
+    expect(read?.methods).toContain("for");
+    const [update] = db.recorded("update", "bulletins");
+    const values = update?.values as Record<string, unknown>;
+    expect(values.pinned).toBe(true);
+    expect(values).not.toHaveProperty("pinnedAt");
+    expect(values).not.toHaveProperty("pinnedByUserId");
+    // The write stays keyed org-only, like the read.
+    expect(new PgDialect().sqlToQuery(update?.where as SQL).sql).toContain(
+      '"bulletins"."group_id" is null',
+    );
+  });
+
+  it("unpinning clears the pin time and pinner", async () => {
+    db.seed("bulletins", [{ id: BULLETIN_ID, pinned: true }]);
+    await setBulletinPinned({ id: BULLETIN_ID, pinned: false });
+    expect(db.recorded("update", "bulletins")[0]?.values).toMatchObject({
+      pinned: false,
+      pinnedAt: null,
+      pinnedByUserId: null,
+    });
+  });
+});
+
+// CAMP ANNOUNCEMENTS SHARE THE TABLE (epic #56) — `group_id` set. They are the
+// camp's own: the console must never list, open, publish, edit or pin one. A
+// free camp's messages in particular must not surface to AfrikaBurn staff.
+describe("camp announcements are invisible to the console", () => {
+  const dialect = new PgDialect();
+  const sqlOf = (where: unknown) => dialect.sqlToQuery(where as SQL).sql;
+  const ORG_ONLY = '"bulletins"."group_id" is null';
+
+  it("listBulletins and getBulletin read org bulletins only", async () => {
+    db.seed("bulletins", []);
+    db.seed("notifications", []);
+    await listBulletins();
+    await getBulletin(BULLETIN_ID);
+    const reads = db.recorded("select", "bulletins");
+    expect(reads).toHaveLength(2);
+    for (const read of reads) expect(sqlOf(read.where)).toContain(ORG_ONLY);
+  });
+
+  it("a pin on a camp announcement's id answers as missing and writes nothing else", async () => {
+    // The org-only predicate matches no row, so the update returns nothing.
+    db.seed("bulletins", []);
+    const result = await setBulletinPinned({ id: BULLETIN_ID, pinned: true });
+    expect(result).toEqual({
+      ok: false,
+      error: "That bulletin no longer exists.",
+    });
+    // The locked pre-read is keyed org-only, so it finds nothing and nothing
+    // is written.
+    expect(sqlOf(db.recorded("select", "bulletins")[0]?.where)).toContain(
+      ORG_ONLY,
+    );
+    expect(db.recorded("update", "bulletins")).toHaveLength(0);
+    expect(db.recorded("insert", "audit_events")).toHaveLength(0);
+  });
+
+  it("publish and edit claim org bulletins only", async () => {
+    db.seed("bulletins", []);
+    await publishBulletin({ id: BULLETIN_ID });
+    await saveBulletin({ ...COMPOSE, id: BULLETIN_ID });
+    const locked = db
+      .recorded("select", "bulletins")
+      .filter((c) => c.methods.includes("for"));
+    expect(locked).toHaveLength(2);
+    for (const read of locked) expect(sqlOf(read.where)).toContain(ORG_ONLY);
+    expect(db.recorded("update", "bulletins")).toHaveLength(0);
+    expect(db.recorded("insert", "notifications")).toHaveLength(0);
   });
 });
 
