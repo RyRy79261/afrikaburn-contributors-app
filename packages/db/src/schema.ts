@@ -966,6 +966,13 @@ export const orgRoleAssignments = pgTable(
       .notNull()
       .references(() => orgRoles.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    // ACCESS EXPIRY (App Spec SEC-019). Null = no expiry. From this instant the
+    // assignment grants nothing: every loader that resolves capabilities filters
+    // `expires_at > $now` (`liveOrgRoleAssignment`), and `@quagga/core` ignores it again on top. The row
+    // is KEPT rather than deleted, so the accounts screen can show it as expired
+    // and a System manager can renew it. `god` holds no assignments and is
+    // untouched — the no-lockout anchor cannot expire.
+    expiresAt: timestamp("expires_at", { mode: "date" }),
   },
   (a) => ({
     pk: primaryKey({ columns: [a.membershipId, a.orgRoleId] }),

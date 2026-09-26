@@ -12,6 +12,9 @@ export { configureLocalProxy } from "./local-proxy";
 // button, so "signing in cancels it" and "pressing Cancel cancels it" cannot
 // drift into two different behaviours.
 export { cancelPendingDeletion, type CancelDeletionResult } from "./deletion";
+// Access expiry for org role assignments — the one SQL predicate every
+// capability-resolving loader filters through.
+export { liveOrgRoleAssignment } from "./org-role-expiry";
 // Server actions that call `auth.api.*` in-process skip Better Auth's HTTP
 // limiter entirely; this is the counter that covers them.
 export {
