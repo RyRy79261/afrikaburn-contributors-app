@@ -1,4 +1,4 @@
-import type { Page, Request } from "@playwright/test";
+import type { Page, Request, Response } from "@playwright/test";
 
 /**
  * Wait for the page's network to go quiet after an in-page (soft) navigation.
@@ -19,10 +19,17 @@ import type { Page, Request } from "@playwright/test";
  *   await expect(page).not.toHaveURL(signInRoute);
  *   await network.settled();
  *
- * `settled()` resolves once nothing has been in flight for `quietMs`, and fails
- * LOUDLY on timeout, naming the requests still pending — a page that holds a
- * request open (a poll, a stream) should be a readable error, not a mystery
- * 20-second hang.
+ * A request counts as done when its RESPONSE ARRIVES, not when its body has
+ * finished downloading. Next's router reads RSC payloads as a stream, and in CI
+ * (26 Sep 2026) the `?_rsc=` fetches after every sign-in never fired
+ * `requestfinished` at all, although the server closes them in well under a
+ * second — so waiting for the body timed out on every shard that signs in.
+ * What the caller races is the router's navigation, and that is outstanding
+ * until the server answers; a response in hand is the signal that matters.
+ *
+ * `settled()` resolves once nothing has been awaiting a response for `quietMs`,
+ * and fails LOUDLY on timeout, naming the requests still pending — a server
+ * that never answers should be a readable error, not a mystery 20-second hang.
  */
 export function trackRequests(page: Page): {
   settled: (opts?: { quietMs?: number; timeout?: number }) => Promise<void>;
@@ -37,8 +44,9 @@ export function trackRequests(page: Page): {
     pending.delete(r);
     lastChange = Date.now();
   };
+  const answered = (r: Response) => ended(r.request());
   page.on("request", started);
-  page.on("requestfinished", ended);
+  page.on("response", answered);
   page.on("requestfailed", ended);
 
   return {
@@ -56,7 +64,7 @@ export function trackRequests(page: Page): {
         }
       } finally {
         page.off("request", started);
-        page.off("requestfinished", ended);
+        page.off("response", answered);
         page.off("requestfailed", ended);
       }
     },
