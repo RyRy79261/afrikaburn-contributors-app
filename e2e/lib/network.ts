@@ -27,7 +27,13 @@ import type { Page, Request, Response } from "@playwright/test";
  * What the caller races is the router's navigation, and that is outstanding
  * until the server answers; a response in hand is the signal that matters.
  *
- * Next's LINK PREFETCHES are ignored. The sign-in page prefetches its own links
+ * ONLY NAVIGATION REQUESTS ARE TRACKED — `fetch`, `xhr` and `document`, which
+ * is what the router's RSC requests are. Static assets are not: a JS chunk
+ * served from cache was seen in CI (26 Sep 2026) never reporting a response at
+ * all, and no script, stylesheet, image or font can abort a caller's `goto`.
+ * Any of `response`, `requestfinished` or `requestfailed` ends a request.
+ *
+ * Next's LINK PREFETCHES are ignored too. The sign-in page prefetches its own links
  * (`/auth/sign-up`, `/auth/forgot-password`, `/`), and when the page navigates
  * away Chromium abandons them with neither a response nor a `requestfailed` —
  * seen in CI on 26 Sep 2026 — so they would sit "pending" forever. A prefetch is
@@ -44,7 +50,7 @@ export function trackRequests(page: Page): {
   const pending = new Set<Request>();
   let lastChange = Date.now();
   const started = (r: Request) => {
-    if (isPrefetch(r)) return;
+    if (!NAVIGATION_TYPES.has(r.resourceType()) || isPrefetch(r)) return;
     pending.add(r);
     lastChange = Date.now();
   };
@@ -55,6 +61,7 @@ export function trackRequests(page: Page): {
   const answered = (r: Response) => ended(r.request());
   page.on("request", started);
   page.on("response", answered);
+  page.on("requestfinished", ended);
   page.on("requestfailed", ended);
 
   return {
@@ -73,11 +80,14 @@ export function trackRequests(page: Page): {
       } finally {
         page.off("request", started);
         page.off("response", answered);
+        page.off("requestfinished", ended);
         page.off("requestfailed", ended);
       }
     },
   };
 }
+
+const NAVIGATION_TYPES = new Set(["fetch", "xhr", "document"]);
 
 function isPrefetch(r: Request): boolean {
   const headers = r.headers();
