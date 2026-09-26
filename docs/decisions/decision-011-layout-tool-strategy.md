@@ -1,9 +1,9 @@
 # Decision 011 — Theme-camp layout tool strategy
 
-| Field | Value |
-| --- | --- |
-| **Status** | Open — deferred, with a stated trigger |
-| **Raised** | 2026-07-29 (App Spec change record) |
+| Field            | Value                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| **Status**       | Open — deferred, with a stated trigger                               |
+| **Raised**       | 2026-07-29 (App Spec change record)                                  |
 | **Spec section** | §11 Theme-Camp Layout Tool (`LAYOUT-*`), and §12 which depends on it |
 
 ## The question
@@ -40,8 +40,29 @@ Graeme was arranging a meeting with town planner **Roger van Wyk** and **Kshetra
 to unblock mapping (group chat, 2026-07-29 10:50). The App Spec says §§11–13
 should be revisited after that meeting.
 
-If that meeting produces a stable erf grammar and a machine-readable map, this
-decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
+## Update 2026-09-16 — a plan exists, the decision does not move
+
+AfrikaBurn has indicated it will supply layouts through an **API**. The shape is
+unknown, so nothing here is decided. What exists now is a research plan for how
+to build against it without the unknown leaking into the schema:
+[`docs/gis-placement-spec.md`](../gis-placement-spec.md).
+
+Its Phase 0 is a read-only probe that turns "an API of unknown shape" into a
+written contract. **This decision reopens when that probe has run** — not when
+the API is announced.
+
+That **supersedes the trigger stated above**, which said this decision reopens if
+the Roger van Wyk / Kshetra meeting produces a stable erf grammar and a
+machine-readable map. The meeting is now an _input_ to Phase 0 rather than a
+trigger of its own: what it can produce is an endpoint and a claim about that
+endpoint, and the probe is what turns the claim into something buildable.
+Deferral stands until the probe report exists.
+
+_(The sentence that stood here said the meeting reopens this decision directly
+if it produces a stable erf grammar and a machine-readable map. It is replaced
+by the paragraph above rather than kept alongside it: two independent reopening
+triggers in one record is how a deferred decision gets reopened twice, on
+different evidence, by two different people.)_
 
 ## Note on §12
 
