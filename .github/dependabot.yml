@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # commitlint's scope enum is workspace names + `repo`, not Dependabot's
+    # default `deps` / `deps-dev`, and CI lints every PR title and commit.
+    # Prefix with `chore(repo)` and leave `include: scope` off so titles stay
+    # in vocabulary.
+    commit-message:
+      prefix: "chore(repo)"
     # One PR for the routine noise, individual PRs for majors. Without the
     # group, a weekly run on a workspace this size opens a dozen PRs and every
     # one of them burns a full CI matrix.
@@ -21,10 +27,17 @@ updates:
     # high-severity auth advisories; every bump needs a manual read-through of
     # the changelog against packages/auth before merge, not a green CI run.
     #
+    # `@better-auth/*` moves in lockstep with it: the plugins declare exact
+    # peer ranges on better-auth and @better-auth/core (e.g. passkey 1.7.x
+    # requires better-auth ^1.7), so a grouped minor bump of a plugin alone
+    # installs a mismatched pair against the pinned core. Bump them together,
+    # by hand, with the pin.
+    #
     # `@radix-ui/react-slot` is held at ~1.2.4 because newer versions break
     # typecheck/build.
     ignore:
       - dependency-name: "better-auth"
+      - dependency-name: "@better-auth/*"
       - dependency-name: "@radix-ui/react-slot"
 
   # Actions pinned by major tag still drift; this catches the ones that go
@@ -34,3 +47,5 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(repo)"
