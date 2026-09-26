@@ -68,9 +68,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Unconfigured is not an error, matching scripts/neon-preview-env.sh:
+          # with no Neon secrets the preview workflow never created a branch,
+          # so there is nothing here to leak. Failing would turn every closed
+          # PR red until someone configures an opt-in feature.
           if [ -z "${NEON_API_KEY:-}" ] || [ -z "${NEON_PROJECT_ID:-}" ]; then
-            echo "::error::NEON_API_KEY or NEON_PROJECT_ID is empty"
-            exit 1
+            echo "::notice::Neon preview wiring is not configured (NEON_API_KEY / NEON_PROJECT_ID unset) — nothing to clean up."
+            exit 0
           fi
 
           prefix="preview/${HEAD_REF}"
