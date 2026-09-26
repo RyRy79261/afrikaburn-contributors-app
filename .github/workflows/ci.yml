@@ -417,17 +417,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.0
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       # ONLY REPORT WHAT THE BRANCH ACTUALLY TOUCHED.
       #
       # Five unchanged coverage tables on every pull request is noise, and noise
@@ -452,6 +441,24 @@ jobs:
             echo "in-scope=false" >> "$GITHUB_OUTPUT"
             echo "${{ matrix.directory }} is untouched on this branch — skipping."
           fi
+
+      # AFTER the scope check, and gated on it. setup-node with `cache: pnpm`
+      # registers a post-job step that saves the pnpm store; on an out-of-scope
+      # shard the install is skipped, the store path never exists, and that
+      # post-step fails the shard with "Path Validation Error" — a red coverage
+      # check for a workspace that was skipped by design.
+      - name: Install pnpm
+        if: steps.scope.outputs.in-scope == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - name: Install Node.js
+        if: steps.scope.outputs.in-scope == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         if: steps.scope.outputs.in-scope == 'true'
