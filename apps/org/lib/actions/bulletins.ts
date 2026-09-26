@@ -395,20 +395,32 @@ export async function setBulletinPinned(
     // Pin toggle + audit are one atomic unit.
     await withTransaction(async (tx) => {
       const now = new Date();
-      const updated = await tx
+      // Read the current pin state LOCKED, as saveBulletin does, so "was it
+      // already pinned?" and the write below are one indivisible step.
+      const [existing] = await tx
+        .select({ pinned: schema.bulletins.pinned })
+        .from(schema.bulletins)
+        .where(orgBulletin(input.id))
+        .limit(1)
+        .for("update");
+      // A camp announcement is not the console's to pin.
+      if (!existing) throw new Error("That bulletin no longer exists.");
+      await tx
         .update(schema.bulletins)
         .set({
           pinned: input.pinned,
-          // The pin's own time orders the dashboard banner (`sortPinned`), so
-          // it is stamped alongside the flag — and cleared with it.
-          pinnedAt: input.pinned ? now : null,
-          pinnedByUserId: input.pinned ? session.dbUserId : null,
+          // The pin's own time orders the dashboard banner (`sortPinned`):
+          // stamped only on the unpinned → pinned transition, kept when an
+          // already-pinned bulletin is pinned again (a repeat click must not
+          // bump it to the front or re-attribute it), cleared on unpin.
+          ...(input.pinned
+            ? existing.pinned
+              ? {}
+              : { pinnedAt: now, pinnedByUserId: session.dbUserId }
+            : { pinnedAt: null, pinnedByUserId: null }),
           updatedAt: now,
         })
-        .where(orgBulletin(input.id))
-        .returning({ id: schema.bulletins.id });
-      // A camp announcement is not the console's to pin.
-      if (!updated[0]) throw new Error("That bulletin no longer exists.");
+        .where(orgBulletin(input.id));
       await writeAuditEvent(tx, {
         actorId: session.dbUserId,
         action: "bulletin.pin",

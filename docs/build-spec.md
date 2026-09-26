@@ -488,8 +488,10 @@ visible without scrolling.
   `group_id` (null = org), `presentation` (`feed` | `acknowledge`), `meeting_url`,
   `pin_on_publish`, `pinned_at`, `pinned_by_user_id`, `send_at`, `dispatched_at`,
   plus a CHECK that a camp row's audience is a project audience for that group.
-  `notifications` gains `acknowledged_at` and a partial unique index on
-  `(bulletin_id, user_id)`. Participant routes `/camps/[slug]/announcements`,
+  `notifications` gains `acknowledged_at`. One delivery per recipient comes
+  from the compare-and-set claims (publish on the draft, dispatch on
+  `dispatched_at IS NULL`), not from an index. Participant routes
+  `/camps/[slug]/announcements`,
   `/new`, `/[id]`; job `/api/announcements/dispatch`. Immediate email also for a
   must-acknowledge announcement. Full model: docs/notifications-spec.md §Camp
   announcements.

@@ -1,5 +1,5 @@
 {
-  "id": "3fc99b6e-7d4e-4329-8d8c-06c322340eac",
+  "id": "e960414f-314d-4fd7-ba78-94dac30d7877",
   "prevId": "88a8a7e1-5e6e-4042-b5d8-932c33f392a8",
   "version": "7",
   "dialect": "postgresql",
@@ -2690,28 +2690,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "notifications_bulletin_user_idx": {
-          "name": "notifications_bulletin_user_idx",
-          "columns": [
-            {
-              "expression": "bulletin_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"notifications\".\"bulletin_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

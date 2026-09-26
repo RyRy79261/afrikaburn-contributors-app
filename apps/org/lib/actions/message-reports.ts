@@ -9,7 +9,7 @@ import {
   orgCapabilityRefusal,
 } from "@quagga/core";
 
-import { getDb, schema } from "@/lib/db";
+import { schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { runAction, type ActionResult } from "./result";
@@ -41,28 +41,34 @@ export async function resolveMessageReportAction(
         orgCapabilityRefusal(state.actor, "update", "registrations"),
       );
     }
-    const db = getDb();
-    const updated = await db
-      .update(schema.messageReports)
-      .set({
-        status: "resolved",
-        resolvedAt: new Date(),
-        resolvedBy: state.dbUserId,
-      })
-      .where(
-        and(
-          eq(schema.messageReports.id, parsed.data.reportId),
-          eq(schema.messageReports.status, "open"),
-        ),
-      )
-      .returning({ id: schema.messageReports.id });
-    if (updated.length === 0) {
-      throw new Error("That report is already resolved or no longer exists.");
-    }
-    await writeAuditEvent(db, {
-      actorId: state.dbUserId,
-      action: MESSAGE_REPORT_RESOLVE_AUDIT_ACTION,
-      subject: parsed.data.reportId,
+    // The state change and its audit row are ONE unit: a resolved report with
+    // no record of who resolved it (or an audit row for a resolve that rolled
+    // back) is the partial write `withTransaction` exists to prevent. The HTTP
+    // driver (`getDb()`) has no transactions, so this runs on the pooled one.
+    await withTransaction(async (tx) => {
+      // Compare-and-set on `open`: a second resolve matches nothing.
+      const updated = await tx
+        .update(schema.messageReports)
+        .set({
+          status: "resolved",
+          resolvedAt: new Date(),
+          resolvedBy: state.dbUserId,
+        })
+        .where(
+          and(
+            eq(schema.messageReports.id, parsed.data.reportId),
+            eq(schema.messageReports.status, "open"),
+          ),
+        )
+        .returning({ id: schema.messageReports.id });
+      if (updated.length === 0) {
+        throw new Error("That report is already resolved or no longer exists.");
+      }
+      await writeAuditEvent(tx, {
+        actorId: state.dbUserId,
+        action: MESSAGE_REPORT_RESOLVE_AUDIT_ACTION,
+        subject: parsed.data.reportId,
+      });
     });
     revalidatePath("/safety");
     revalidatePath(`/safety/${parsed.data.reportId}`);

@@ -95,5 +95,4 @@ ALTER TABLE "bulletins" ADD CONSTRAINT "bulletins_group_id_groups_id_fk" FOREIGN
 ALTER TABLE "bulletins" ADD CONSTRAINT "bulletins_pinned_by_user_id_users_id_fk" FOREIGN KEY ("pinned_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "bulletins_group_created_idx" ON "bulletins" USING btree ("group_id","created_at");--> statement-breakpoint
 CREATE INDEX "bulletins_dispatch_due_idx" ON "bulletins" USING btree ("send_at") WHERE "bulletins"."published_at" is not null and "bulletins"."dispatched_at" is null and "bulletins"."send_at" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "notifications_bulletin_user_idx" ON "notifications" USING btree ("bulletin_id","user_id") WHERE "notifications"."bulletin_id" is not null;--> statement-breakpoint
 ALTER TABLE "bulletins" ADD CONSTRAINT "bulletins_camp_audience_matches_group" CHECK (("bulletins"."group_id" is null and ("bulletins"."audience"->>'kind') <> 'project') or ("bulletins"."group_id" is not null and ("bulletins"."audience"->>'kind') = 'project' and ("bulletins"."audience"->>'groupId') = "bulletins"."group_id"::text));

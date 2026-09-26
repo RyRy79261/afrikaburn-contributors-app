@@ -104,8 +104,13 @@ know who read and acknowledged them. Model ported from Camp 404._
 set (null = an org bulletin). Its audience is a `project` AudienceSpec for that
 same group — enforced by `canSendCampAnnouncement` (@quagga/core) and by a DB
 CHECK (`bulletins_camp_audience_matches_group`). Deliveries are `notifications`
-rows (kind `bulletin`, `origin = 'camp'`, `link_app = 'web'`), one per recipient,
-unique on `(bulletin_id, user_id)`.
+rows (kind `bulletin`, `origin = 'camp'`, `link_app = 'web'`), one per recipient.
+There is no unique index on `(bulletin_id, user_id)`: one delivery is
+guaranteed by the claim, not the insert. Publishing claims the draft with a
+compare-and-set on still-unpublished, dispatch claims a scheduled row with a
+compare-and-set on `dispatched_at IS NULL`, and fan-out runs only in the
+transaction that won the claim — so a retried publish or an overlapping
+dispatch run delivers nothing a second time.
 
 - **Who may send:** the structural lead/admin (irrevocable backstop), or any
   member holding the `post_announcements` project permission — limited, like

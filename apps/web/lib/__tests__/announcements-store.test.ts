@@ -18,7 +18,7 @@ import type { SenderContext } from "@/lib/announcements-store";
 // asserted against the statement text, not a mock's say-so.
 //
 // WHAT IT CANNOT. Whether Postgres honours those statements under concurrency
-// (the row locks, ON CONFLICT against the partial unique index). That is the
+// (the row locks, the compare-and-set claims). That is the
 // camp-announcements persona spec's job, against a real database.
 
 vi.mock("@/lib/db", async () =>
@@ -205,8 +205,17 @@ describe("publishCampAnnouncement", () => {
     const [insert] = notificationInserts();
     expect(insert).toBeDefined();
     expect(insert!.tx).toBe(true);
-    // ON CONFLICT DO NOTHING: the partial unique index makes a retry a no-op.
-    expect(insert!.called("onConflictDoNothing")).toBe(true);
+    // ONE DELIVERY comes from the CLAIM, not from the insert: there is no
+    // (bulletin, user) unique index to absorb a second fan-out. The claim is a
+    // compare-and-set on still-a-draft, in the same transaction, and it runs
+    // BEFORE any delivery is written — so a retried publish finds nothing to
+    // claim and never reaches the insert (the lost-claim test below).
+    const [claim] = bulletinUpdates();
+    expect(claim!.tx).toBe(true);
+    expect(whereOf(claim!).sql).toContain('"bulletins"."published_at" is null');
+    expect(dbMock.queries.indexOf(claim!)).toBeLessThan(
+      dbMock.queries.indexOf(insert!),
+    );
     const values = insert!.arg("values") as {
       userId: string;
       origin: string;
@@ -583,6 +592,7 @@ describe("dispatchDueCampAnnouncements — idempotent", () => {
           sendAt: new Date(),
         }),
       ],
+      /* author is live */ [{ sanitizedAt: null }],
     );
     queueSender({ posterGrants: false });
     dbMock.queue(/* audit */ []);
@@ -610,6 +620,7 @@ describe("dispatchDueCampAnnouncements — idempotent", () => {
           sendAt: new Date(),
         }),
       ],
+      /* author is live */ [{ sanitizedAt: null }],
     );
     queueSender({ posterGrants: true });
     dbMock.queue([]);
@@ -630,13 +641,24 @@ describe("dispatchDueCampAnnouncements — idempotent", () => {
           sendAt: new Date(),
         }),
       ],
+      /* author is live */ [{ sanitizedAt: null }],
     );
     queueSender({ posterGrants: true });
     queueFanOutReads();
 
     const summary = await store.dispatchDueCampAnnouncements(new Date());
     expect(summary).toMatchObject({ dispatched: 1, deliveries: 1, skipped: 0 });
-    expect(notificationInserts()[0]!.called("onConflictDoNothing")).toBe(true);
+    // Delivered once because the claim is a compare-and-set on
+    // dispatched_at IS NULL, taken in the same transaction BEFORE the insert.
+    const [insert] = notificationInserts();
+    const [claim] = bulletinUpdates();
+    expect(insert!.tx).toBe(true);
+    expect(whereOf(claim!).sql).toContain(
+      '"bulletins"."dispatched_at" is null',
+    );
+    expect(dbMock.queries.indexOf(claim!)).toBeLessThan(
+      dbMock.queries.indexOf(insert!),
+    );
   });
 });
 
@@ -672,6 +694,17 @@ describe("the recipient side", () => {
     expect(where.sql).toContain('"bulletins"."presentation" = $');
     expect(where.params).toContain("acknowledge");
     expect(where.params).toContain(COOK);
+  });
+
+  // Regression: the gate matched an UNPUBLISHED must-acknowledge row that the
+  // reader (lib/bulletins.ts) answers with a 404, so the gate redirected to a
+  // 404 and back, forever. It now applies the reader's published rule.
+  it("the gate only ever counts PUBLISHED announcements, the reader's rule", async () => {
+    dbMock.queue([]);
+    expect(await gate.firstUnacknowledgedAnnouncement(COOK)).toBeNull();
+    const where = whereOf(dbMock.queries[0]!);
+    expect(where.sql).toContain('"bulletins"."published_at" is not null');
+    expect(where.sql).toContain('"notifications"."acknowledged_at" is null');
   });
 });
 
@@ -1209,6 +1242,70 @@ describe("dispatchDueCampAnnouncements — skips and failures", () => {
       { meta: { reason: "author_gone" } },
     );
     // No sender lock was taken for an author that no longer exists.
+    expect(dbMock.queriesTouching(schema.memberships)).toHaveLength(0);
+  });
+
+  // Regression: a sanitized author's membership rows can outlive them, so the
+  // locked sender re-read alone still said "allowed" and the scheduled send
+  // went out in the name of an account that no longer exists.
+  it("a SANITIZED author's scheduled announcement is skipped as author_gone and fans out nothing", async () => {
+    dbMock.queue(
+      [{ id: DRAFT }],
+      [{ id: EDITION }],
+      [
+        draftRow({
+          groupId: CAMP,
+          publishedAt: new Date(),
+          sendAt: new Date(),
+        }),
+      ],
+      /* author read */ [{ sanitizedAt: new Date("2027-03-01T09:00:00Z") }],
+    );
+    // What the sender re-read WOULD say if it ran: still a poster.
+    queueSender({ posterGrants: true });
+    queueFanOutReads();
+
+    const summary = await store.dispatchDueCampAnnouncements(new Date());
+
+    expect(summary).toMatchObject({ dispatched: 0, skipped: 1, deliveries: 0 });
+    expect(notificationInserts()).toHaveLength(0);
+    const skipped = dbMock
+      .writesTo(schema.auditEvents)
+      .map((q) => q.arg("values"));
+    expect(skipped).toEqual([
+      expect.objectContaining({
+        action: "announcement.dispatch_skipped",
+        meta: expect.objectContaining({ reason: "author_gone" }),
+      }),
+    ]);
+    // The author was read inside the claim's transaction, by id, locked.
+    const authorRead = dbMock
+      .queriesTouching(schema.users)
+      .find((q) => q.kind === "select")!;
+    expect(authorRead.tx).toBe(true);
+    expect(authorRead.arg("for")).toBe("share");
+    expect(whereOf(authorRead).params).toEqual([AUTHOR]);
+  });
+
+  it("an author whose account row is missing is skipped as author_gone", async () => {
+    dbMock.queue(
+      [{ id: DRAFT }],
+      [{ id: EDITION }],
+      [
+        draftRow({
+          groupId: CAMP,
+          publishedAt: new Date(),
+          sendAt: new Date(),
+        }),
+      ],
+      /* author read finds no row */ [],
+    );
+    queueSender({ posterGrants: true });
+    queueFanOutReads();
+
+    const summary = await store.dispatchDueCampAnnouncements(new Date());
+    expect(summary).toMatchObject({ dispatched: 0, skipped: 1, deliveries: 0 });
+    expect(notificationInserts()).toHaveLength(0);
     expect(dbMock.queriesTouching(schema.memberships)).toHaveLength(0);
   });
 

@@ -37,7 +37,7 @@ import {
 // Camp announcements (epic #56), ported from Camp 404's behaviour tests
 // (team-announcements, announcement-drafts, announcement-pins,
 // broadcast-dispatch, audience) to this codebase's pure predicates. The SQL
-// halves — the compare-and-set claims, the locked re-read, ON CONFLICT — are
+// halves — the compare-and-set claims, the locked re-read — are
 // covered by the store tests' recorded WHERE clauses and, end to end, by the
 // camp-announcements persona spec. Nothing here proves a query.
 

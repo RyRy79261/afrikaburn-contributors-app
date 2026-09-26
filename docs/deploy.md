@@ -264,8 +264,8 @@ never logs a connection string — only the host.
   is immutable, so accepting one that nothing will deliver would lose it). Set
   the flag only in the same change that wires a Vercel Cron entry or external
   scheduler to the route. Announcements sent immediately are unaffected. Runs
-  are idempotent: each announcement is claimed by a compare-and-set on `dispatched_at`, and deliveries
-  insert against a unique (bulletin, recipient) index.
+  are idempotent: each announcement is claimed by a compare-and-set on
+  `dispatched_at IS NULL`, and only the run that wins the claim fans out.
 
 ## 5. Smoke test — the live path
 

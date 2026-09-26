@@ -2163,13 +2163,6 @@ export const notifications = pgTable(
       n.userId,
       n.createdAt.desc(),
     ),
-    // ONE DELIVERY PER RECIPIENT PER BULLETIN (epic #56). The fan-out inserts
-    // with ON CONFLICT DO NOTHING against this, so a retried publish or two
-    // overlapping dispatch runs can never deliver the same announcement twice.
-    // Partial: personal event notifications carry no bulletin and may repeat.
-    bulletinUserUniq: uniqueIndex("notifications_bulletin_user_idx")
-      .on(n.bulletinId, n.userId)
-      .where(sql`${n.bulletinId} is not null`),
   }),
 );
 

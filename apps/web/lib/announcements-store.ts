@@ -57,8 +57,9 @@ import {
 //     publishing is refused, and a demotion that arrives mid-publish waits.
 //   · Fan-out is in the same transaction as the claim: an announcement is
 //     never published without its deliveries, nor delivered without being
-//     published. Deliveries insert ON CONFLICT DO NOTHING against the partial
-//     unique (bulletin_id, user_id) index, so no retry double-delivers.
+//     published. Fan-out runs only after a claim succeeds (publish's CAS on
+//     the unpublished draft, dispatch's CAS on `dispatched_at IS NULL`), so
+//     a retry or an overlapping run claims nothing and delivers nothing.
 //   · Published announcements are immutable. There is no edit or delete path
 //     for one here, by design.
 //   · The recipient's delivery row IS the read permission (lib/bulletins.ts).
@@ -566,8 +567,12 @@ const DELIVERY_CHUNK = 1000;
 /**
  * Deliver a CLAIMED announcement, inside the claim's own transaction: resolve
  * the camp's current audience, spend the pin-on-publish intent (audited, as
- * every path to a pin is), and write one delivery per recipient ON CONFLICT DO
- * NOTHING (the partial unique index makes a retry a no-op, never a duplicate).
+ * every path to a pin is), and write one delivery per recipient. Idempotency
+ * comes from the claim, not from this insert: the caller only reaches here
+ * after its compare-and-set (publish on the unpublished draft, dispatch on
+ * `dispatched_at IS NULL`) updated the row, and a retry or overlapping run
+ * finds nothing to claim and never calls this. There is no unique index on
+ * (bulletin, user) to fall back on.
  */
 async function fanOut(
   tx: Tx,
@@ -657,21 +662,18 @@ async function fanOut(
   });
   for (let i = 0; i < recipientIds.length; i += DELIVERY_CHUNK) {
     const chunk = recipientIds.slice(i, i + DELIVERY_CHUNK);
-    await tx
-      .insert(schema.notifications)
-      .values(
-        chunk.map((userId) => ({
-          userId,
-          kind: payload.kind,
-          title: payload.title,
-          body: payload.body,
-          link: payload.link,
-          origin: "camp",
-          linkApp: "web",
-          bulletinId: row.id,
-        })),
-      )
-      .onConflictDoNothing();
+    await tx.insert(schema.notifications).values(
+      chunk.map((userId) => ({
+        userId,
+        kind: payload.kind,
+        title: payload.title,
+        body: payload.body,
+        link: payload.link,
+        origin: "camp",
+        linkApp: "web",
+        bulletinId: row.id,
+      })),
+    );
   }
 
   return { recipientIds, campName };
@@ -1019,9 +1021,23 @@ export async function dispatchDueCampAnnouncements(
         if (claimed.audience.kind !== "project") return "skipped" as const;
 
         const groupId = claimed.groupId;
-        const sender = claimed.createdByUserId
-          ? await lockSenderContext(tx, groupId, claimed.createdByUserId)
-          : null;
+        // A sanitized (or vanished) author is GONE, whatever membership rows
+        // survive them: their scheduled send is skipped as author_gone, never
+        // delivered in the name of an account that no longer speaks. Read
+        // inside the claim's transaction, FOR SHARE, so a sanitization that
+        // lands mid-dispatch waits rather than racing the fan-out.
+        const [author] = claimed.createdByUserId
+          ? await tx
+              .select({ sanitizedAt: schema.users.sanitizedAt })
+              .from(schema.users)
+              .where(eq(schema.users.id, claimed.createdByUserId))
+              .limit(1)
+              .for("share")
+          : [];
+        const sender =
+          claimed.createdByUserId && author && author.sanitizedAt === null
+            ? await lockSenderContext(tx, groupId, claimed.createdByUserId)
+            : null;
         const decision = decideDispatch({
           senderAllowed: sender
             ? sendAllowed(

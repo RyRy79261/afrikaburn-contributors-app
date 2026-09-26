@@ -9,9 +9,9 @@ import { dispatchDueCampAnnouncements } from "@/lib/announcements-store";
 // THIS FILE ONLY AUTHORISES. The job — claim each due announcement with a
 // compare-and-set on `dispatched_at IS NULL`, re-check the sender's permission
 // under lock, fan out in the same transaction — is
-// `dispatchDueCampAnnouncements` in lib/announcements-store.ts. Idempotent: an
-// overlapping or repeated run claims nothing twice, and the partial unique
-// (bulletin_id, user_id) index makes every delivery insert a no-op on retry.
+// `dispatchDueCampAnnouncements` in lib/announcements-store.ts. Idempotent
+// through the claim alone: an overlapping or repeated run finds the row
+// already dispatched and claims nothing, so nothing fans out twice.
 //
 // NOT SCHEDULED BY THIS CHANGE. Nothing in apps/web/vercel.json calls it yet —
 // adding a cron entry is a deployment decision (plan limits on cron frequency,

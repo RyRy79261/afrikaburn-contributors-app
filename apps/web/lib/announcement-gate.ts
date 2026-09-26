@@ -63,7 +63,8 @@ export async function acknowledgeAnnouncement(input: {
 /**
  * The oldest must-acknowledge announcement this user has received and not yet
  * acknowledged, or null. Feeds the app-wide hard gate (lib/session.ts), after
- * any blocking required action.
+ * any blocking required action. Only PUBLISHED announcements count — the same
+ * rule the reader applies, so the gate never sends anyone to a page that 404s.
  */
 export async function firstUnacknowledgedAnnouncement(
   userId: string,
@@ -80,6 +81,9 @@ export async function firstUnacknowledgedAnnouncement(
         eq(schema.notifications.userId, userId),
         isNull(schema.notifications.acknowledgedAt),
         eq(schema.bulletins.presentation, "acknowledge"),
+        // The reader's published rule (lib/bulletins.ts): an unpublished row
+        // 404s there, so gating on one would redirect to a 404 forever.
+        isNotNull(schema.bulletins.publishedAt),
       ),
     )
     .orderBy(asc(schema.notifications.createdAt))
