@@ -24,6 +24,7 @@ import {
   type AppName,
 } from "../lib/env";
 import { requireMailbox, type Mailbox } from "../lib/mail";
+import { trackRequests } from "../lib/network";
 import {
   TEST_PASSWORD,
   uniqueCampName,
@@ -200,6 +201,9 @@ export async function signInAs(
   // this helper timed out on a form it had already loaded.
   await page.getByLabel(/^Email/).fill(account.email);
   await page.getByLabel(/^Password/).fill(account.password);
+  // Tracked from BEFORE the click, so the router's requests are seen from
+  // their start — see the settle below.
+  const network = trackRequests(page);
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).not.toHaveURL(
     new RegExp(`${signInPath(app).replace(/\//g, "\\/")}`),
@@ -221,10 +225,14 @@ export async function signInAs(
   // the landing route are still in flight. The caller's `goto` then races them
   // and CI reports the same `net::ERR_ABORTED` this wait was written to stop —
   // god-sole-god-cannot-self-delete and account-management both hit it on
-  // unrelated PRs (26 Sep 2026). Waiting for the network to go quiet covers the
-  // router's own requests. Safe here: no page an auth form lands on polls
-  // (the only interval in the apps is the registration wizard's autosave).
-  await page.waitForLoadState("networkidle");
+  // unrelated PRs (26 Sep 2026).
+  // NOT `waitForLoadState("networkidle")` either: that state is per document,
+  // so the sign-in page's own idle satisfies it and it returns in ~1ms with the
+  // router's fetches still running (measured; lib/network.ts has the detail).
+  // Counting the requests ourselves is what actually waits. Safe here: no page
+  // an auth form lands on polls (the only interval in the apps is the
+  // registration wizard's autosave).
+  await network.settled();
 }
 
 /** End the current session (web/org header sign-out; supplier equivalent). */
