@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
 import { GroupKind } from "@quagga/types";
-import { CONTACTABILITY_LEVELS, MESSAGE_TIMERS } from "@quagga/core";
+import {
+  CONTACTABILITY_LEVELS,
+  MESSAGE_TIMERS,
+  UNNAMED_BURNER,
+} from "@quagga/core";
 import { boundStrings, dbMock } from "@/test/db-mock";
 
 // Direct messaging store (epic #69). Asserts DECISIONS — who is refused before
@@ -765,5 +769,304 @@ describe("default timer and the sweep", () => {
       await store.listInbox({ viewerUserId: ALICE, editionId: EDITION }),
     ).toEqual([]);
     expect(dbMock.queries).toHaveLength(0);
+  });
+});
+
+describe("viewerMayStartConversation — the facts it refuses on", () => {
+  it("refuses a conversation with yourself without a query", async () => {
+    expect(
+      await store.viewerMayStartConversation({
+        viewerUserId: ALICE,
+        targetUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(false);
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("refuses a target whose account does not exist, even at `anyone`", async () => {
+    dbMock.queue(
+      /* users: only the viewer came back */ [{ id: REN, sanitizedAt: null }],
+      [{ contactable: ANYONE, completedAt: new Date("2027-01-01") }],
+      [],
+    );
+    expect(
+      await store.viewerMayStartConversation({
+        viewerUserId: REN,
+        targetUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses a target with no bio for this edition", async () => {
+    dbMock.queue(
+      [
+        { id: REN, sanitizedAt: null },
+        { id: ALICE, sanitizedAt: null },
+      ],
+      /* no bio row */ [],
+      [],
+    );
+    expect(
+      await store.viewerMayStartConversation({
+        viewerUserId: REN,
+        targetUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(false);
+  });
+
+  it("admits a confirmed, contactable target with no memberships at `anyone`", async () => {
+    dbMock.queue(
+      [
+        { id: REN, sanitizedAt: null },
+        { id: ALICE, sanitizedAt: null },
+      ],
+      [{ contactable: ANYONE, completedAt: new Date("2027-01-01") }],
+      [],
+    );
+    expect(
+      await store.viewerMayStartConversation({
+        viewerUserId: REN,
+        targetUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("startConversation — reopen and race paths", () => {
+  it("an existing chat the viewer is not in is refused, and nothing is un-hidden", async () => {
+    // A pair-key collision can only name the two people in it; this proves the
+    // participant gate still holds if it ever names someone else.
+    dbMock.queue([{ id: CONVO }], [participant(REN), participant(JABU)]);
+    const result = await store.startConversation({
+      viewerUserId: ALICE,
+      targetUserId: REN,
+      editionId: EDITION,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "You can't message this person.",
+    });
+    expect(dbMock.writesTo(schema.conversationParticipants)).toHaveLength(0);
+  });
+
+  it("a concurrent start that won the insert is converged on, not duplicated", async () => {
+    dbMock.queue(
+      /* findDirectConversation */ [],
+      [
+        { id: REN, sanitizedAt: null },
+        { id: ALICE, sanitizedAt: null },
+      ],
+      [{ contactable: ANYONE, completedAt: new Date("2027-01-01") }],
+      /* blocks */ [],
+      /* starter timer */ [],
+      /* insert lost the race */ [],
+      /* the winner's row */ [{ id: OTHER_CONVO }],
+      /* participants */ [],
+    );
+    const result = await store.startConversation({
+      viewerUserId: REN,
+      targetUserId: ALICE,
+      editionId: EDITION,
+    });
+    expect(result).toEqual({ ok: true, conversationId: OTHER_CONVO });
+    // No stored default: the new chat takes the timer's fail-closed value.
+    expect(
+      dbMock.writesTo(schema.conversations)[0]!.arg("values"),
+    ).toMatchObject({ timer: OFF });
+    const participants = dbMock
+      .writesTo(schema.conversationParticipants)[0]!
+      .arg("values") as { conversationId: string }[];
+    expect(participants.map((p) => p.conversationId)).toEqual([
+      OTHER_CONVO,
+      OTHER_CONVO,
+    ]);
+  });
+
+  it("throws rather than inventing a conversation when neither insert nor re-read finds one", async () => {
+    dbMock.queue(
+      [],
+      [
+        { id: REN, sanitizedAt: null },
+        { id: ALICE, sanitizedAt: null },
+      ],
+      [{ contactable: ANYONE, completedAt: new Date("2027-01-01") }],
+      [],
+      [],
+      [],
+      [],
+    );
+    await expect(
+      store.startConversation({
+        viewerUserId: REN,
+        targetUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).rejects.toThrow("conversation could not be created");
+    expect(dbMock.writesTo(schema.conversationParticipants)).toHaveLength(0);
+  });
+});
+
+describe("hidden, blocked and expired edges", () => {
+  it("a conversation with no other participant is null, and `messages` is never read", async () => {
+    dbMock.queue([participant(ALICE)]);
+    expect(
+      await store.getConversation({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        editionId: EDITION,
+      }),
+    ).toBeNull();
+    expect(dbMock.queriesTouching(schema.messages)).toHaveLength(0);
+  });
+
+  it("a message from someone no longer a participant shows under a placeholder name", async () => {
+    dbMock.queue(
+      PAIR,
+      [{ timer: OFF }],
+      [message("m1", { senderId: JABU })],
+      [],
+    );
+    const view = await store.getConversation({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      editionId: EDITION,
+    });
+    expect(view!.messages).toHaveLength(1);
+    expect(view!.messages[0]!.mine).toBe(false);
+    expect(view!.messages[0]!.senderName).toBe(UNNAMED_BURNER);
+  });
+
+  it("the inbox skips a conversation whose other side is missing, and defaults unread to 0", async () => {
+    dbMock.queue(
+      [
+        {
+          conversationId: CONVO,
+          lastReadAt: null,
+          lastMessageAt: NOW,
+          createdAt: NOW,
+        },
+        {
+          conversationId: OTHER_CONVO,
+          lastReadAt: null,
+          lastMessageAt: null,
+          createdAt: NOW,
+        },
+      ],
+      [
+        {
+          conversationId: CONVO,
+          userId: REN,
+          username: "ren_notfound",
+          sanitizedAt: null,
+        },
+      ],
+      /* no unread rows */ [],
+    );
+    const inbox = await store.listInbox({
+      viewerUserId: ALICE,
+      editionId: EDITION,
+      now: NOW,
+    });
+    expect(inbox.map((e) => [e.conversationId, e.unread])).toEqual([
+      [CONVO, 0],
+    ]);
+  });
+
+  it("a timer change is refused when the other side has blocked the viewer", async () => {
+    dbMock.queue(PAIR, [{ blockerId: REN, blockedId: ALICE }]);
+    const result = await store.setConversationTimer({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      timer: SEVEN_DAYS,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "You can't change this conversation.",
+    });
+    expect(dbMock.writesTo(schema.conversations)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.messages)).toHaveLength(0);
+  });
+
+  it("a timer change is refused when the send rate limit is spent", async () => {
+    dbMock.queue(PAIR, []);
+    stubs.rateLimit = { allowed: false, retryAfterSeconds: 10 };
+    const result = await store.setConversationTimer({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      timer: SEVEN_DAYS,
+    });
+    expect(result.ok).toBe(false);
+    expect(dbMock.transactions).toBe(0);
+  });
+
+  it("a message expired at `now` cannot be reported, even by a participant", async () => {
+    // The live filter drops it from the read, so the selection comes back short.
+    dbMock.queue(PAIR, []);
+    const result = await store.reportMessages({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      messageIds: ["m-expired"],
+      reason: null,
+      now: NOW,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Those messages can't be reported from here.",
+    });
+    expect(dbMock.writesTo(schema.messageReports)).toHaveLength(0);
+  });
+
+  it("a report is refused when the report rate limit is spent", async () => {
+    dbMock.queue(PAIR, [message("m1")]);
+    stubs.rateLimit = { allowed: false, retryAfterSeconds: 60 };
+    const result = await store.reportMessages({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      messageIds: ["m1"],
+      reason: "spam",
+    });
+    expect(result.ok).toBe(false);
+    expect(dbMock.writesTo(schema.messageReports)).toHaveLength(0);
+  });
+
+  it("a blank reason is stored as no reason", async () => {
+    dbMock.queue(PAIR, [message("m1")], [{ id: "report-2" }], []);
+    const result = await store.reportMessages({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      messageIds: ["m1", "m1"],
+      reason: "   ",
+      now: NOW,
+    });
+    expect(result).toEqual({ ok: true, reportId: "report-2" });
+    expect(
+      dbMock.writesTo(schema.messageReports)[0]!.arg("values"),
+    ).toMatchObject({ reason: null, reportedUserId: REN });
+  });
+
+  it("a report whose insert returns nothing fails, and copies no message", async () => {
+    dbMock.queue(PAIR, [message("m1")], []);
+    await expect(
+      store.reportMessages({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        messageIds: ["m1"],
+        reason: null,
+      }),
+    ).rejects.toThrow("report could not be created");
+    expect(dbMock.writesTo(schema.messageReportItems)).toHaveLength(0);
+  });
+
+  it("blocking someone you never chatted with hides nothing", async () => {
+    dbMock.queue([{ id: REN }], /* no conversation */ []);
+    expect(
+      await store.blockUser({ viewerUserId: ALICE, targetUserId: REN }),
+    ).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.userBlocks)).toHaveLength(1);
+    expect(dbMock.writesTo(schema.conversationParticipants)).toHaveLength(0);
   });
 });
