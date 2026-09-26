@@ -192,12 +192,14 @@ export async function getMessageReport(
 
   after(async () => {
     try {
-      await getDb().insert(schema.auditEvents).values({
-        actorId: viewerDbUserId,
-        action: MESSAGE_REPORT_VIEW_AUDIT_ACTION,
-        subject: report.id,
-        meta: { messages: items.length },
-      });
+      await getDb()
+        .insert(schema.auditEvents)
+        .values({
+          actorId: viewerDbUserId,
+          action: MESSAGE_REPORT_VIEW_AUDIT_ACTION,
+          subject: report.id,
+          meta: { messages: items.length },
+        });
     } catch (err) {
       console.error("[message-reports] audit write failed", err);
     }

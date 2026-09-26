@@ -38,7 +38,9 @@ async function setContactable(
   level: "Nobody" | "Camp mates" | "Anyone",
 ): Promise<void> {
   await page.goto("/profile");
-  const item = page.getByRole("radio", { name: `Who can contact you: ${level}` });
+  const item = page.getByRole("radio", {
+    name: `Who can contact you: ${level}`,
+  });
   await expect(item).toBeVisible();
   await item.click();
   await expect(async () => {
@@ -64,7 +66,11 @@ async function burnerIdFromRoster(
   return id;
 }
 
-async function sendMessage(page: Page, to: string, text: string): Promise<void> {
+async function sendMessage(
+  page: Page,
+  to: string,
+  text: string,
+): Promise<void> {
   const box = page.getByRole("textbox", { name: `Message ${to}` });
   await box.fill(text);
   await page.getByRole("button", { name: "Send", exact: true }).click();
@@ -87,7 +93,9 @@ test.describe("camp member — direct messaging", () => {
 
     // ALICE leads the camp and is contactable by camp mates.
     await signUpBurner(alicePage, { onboard: true, username: alice });
-    const camp = await createCamp(alicePage, { name: uniqueName("Dust Bunnies") });
+    const camp = await createCamp(alicePage, {
+      name: uniqueName("Dust Bunnies"),
+    });
     await setContactable(alicePage, "Camp mates");
     const invite = await inviteToCamp(alicePage, camp.slug, "member");
 
@@ -127,7 +135,9 @@ test.describe("camp member — direct messaging", () => {
     await expect(
       alicePage.getByRole("heading", { name: "Messages", exact: true }),
     ).toBeVisible();
-    await expect(alicePage.getByText(`1 new message from ${ren}`)).toBeVisible();
+    await expect(
+      alicePage.getByText(`1 new message from ${ren}`),
+    ).toBeVisible();
     await expect(alicePage.locator("body")).not.toContainText(hello);
 
     // Alice opens it, reads it, and replies.
@@ -161,7 +171,9 @@ test.describe("camp member — direct messaging", () => {
     const ren = uniqueUsername("ren_notfound");
 
     await signUpBurner(alicePage, { onboard: true, username: alice });
-    const camp = await createCamp(alicePage, { name: uniqueName("Stofpad Saloon") });
+    const camp = await createCamp(alicePage, {
+      name: uniqueName("Stofpad Saloon"),
+    });
     await setContactable(alicePage, "Camp mates");
     const invite = await inviteToCamp(alicePage, camp.slug, "member");
     await signUpBurner(renPage, { onboard: true, username: ren });
@@ -192,7 +204,9 @@ test.describe("camp member — direct messaging", () => {
     // Alice sees the same system line, attributed to Ren.
     await alicePage.goto(path);
     await expect(
-      alicePage.getByText(new RegExp(`${ren} set disappearing messages to 7 days`)),
+      alicePage.getByText(
+        new RegExp(`${ren} set disappearing messages to 7 days`),
+      ),
     ).toBeVisible();
     await expect(
       alicePage.getByRole("radio", { name: "Disappearing messages: 7 days" }),

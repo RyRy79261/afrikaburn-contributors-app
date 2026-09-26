@@ -1,6 +1,18 @@
 import "server-only";
 
-import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { consumeRateLimit } from "@quagga/db";
 import {
   DM_RATE_LIMITS,
@@ -48,8 +60,7 @@ import {
 /** A refused action's result. The copy is deliberately the same for "not
  * allowed" and "does not exist", so a refusal leaks nothing. */
 export type DmResult<T = object> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+  ({ ok: true } & T) | { ok: false; error: string };
 
 const NOT_AVAILABLE = "You can't message this person.";
 const NOT_FOUND = "That conversation isn't available.";
@@ -151,7 +162,9 @@ export async function viewerMayStartConversation(input: {
     db()
       .select({ id: schema.users.id, sanitizedAt: schema.users.sanitizedAt })
       .from(schema.users)
-      .where(inArray(schema.users.id, [input.viewerUserId, input.targetUserId])),
+      .where(
+        inArray(schema.users.id, [input.viewerUserId, input.targetUserId]),
+      ),
     db()
       .select({
         contactable: schema.burnerBios.contactable,
@@ -309,7 +322,12 @@ export interface ConversationMessageView {
 export interface ConversationView {
   id: string;
   timer: MessageTimer;
-  other: { userId: string; name: string; showAvatar: boolean; departed: boolean };
+  other: {
+    userId: string;
+    name: string;
+    showAvatar: boolean;
+    departed: boolean;
+  };
   messages: ConversationMessageView[];
   /** The viewer may post (no block either way, nobody departed). */
   canSend: boolean;
@@ -380,7 +398,10 @@ export async function getConversation(input: {
     .set({ lastReadAt: now })
     .where(
       and(
-        eq(schema.conversationParticipants.conversationId, input.conversationId),
+        eq(
+          schema.conversationParticipants.conversationId,
+          input.conversationId,
+        ),
         eq(schema.conversationParticipants.userId, input.viewerUserId),
       ),
     );
@@ -451,7 +472,10 @@ export async function listInbox(input: {
     .from(schema.conversationParticipants)
     .innerJoin(
       schema.conversations,
-      eq(schema.conversations.id, schema.conversationParticipants.conversationId),
+      eq(
+        schema.conversations.id,
+        schema.conversationParticipants.conversationId,
+      ),
     )
     .where(
       and(
@@ -469,23 +493,23 @@ export async function listInbox(input: {
   const ids = mine.map((r) => r.conversationId);
 
   const others = await db()
-      .select({
-        conversationId: schema.conversationParticipants.conversationId,
-        userId: schema.conversationParticipants.userId,
-        username: schema.users.username,
-        sanitizedAt: schema.users.sanitizedAt,
-      })
-      .from(schema.conversationParticipants)
-      .innerJoin(
-        schema.users,
-        eq(schema.users.id, schema.conversationParticipants.userId),
-      )
-      .where(
-        and(
-          inArray(schema.conversationParticipants.conversationId, ids),
-          ne(schema.conversationParticipants.userId, me),
-        ),
-      );
+    .select({
+      conversationId: schema.conversationParticipants.conversationId,
+      userId: schema.conversationParticipants.userId,
+      username: schema.users.username,
+      sanitizedAt: schema.users.sanitizedAt,
+    })
+    .from(schema.conversationParticipants)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.conversationParticipants.userId),
+    )
+    .where(
+      and(
+        inArray(schema.conversationParticipants.conversationId, ids),
+        ne(schema.conversationParticipants.userId, me),
+      ),
+    );
   const unreadRows = await unreadCounts(me, now, ids);
 
   const avatarOf = new Map<string, boolean>();
@@ -556,7 +580,9 @@ async function unreadCounts(
 
 /** The header badge: unread messages across every visible conversation.
  * Env-less / failure ⇒ 0, so the chrome always renders. */
-export async function getUnreadMessageCount(viewerUserId: string): Promise<number> {
+export async function getUnreadMessageCount(
+  viewerUserId: string,
+): Promise<number> {
   if (!isDatabaseConfigured()) return 0;
   try {
     const counts = await unreadCounts(viewerUserId, new Date());
@@ -583,15 +609,25 @@ export async function sendMessage(input: {
   if (!isDatabaseConfigured()) return { ok: false, error: NOT_FOUND };
   const body = input.body.trim();
   if (body.length === 0 || body.length > MESSAGE_MAX_LENGTH) {
-    return { ok: false, error: `Messages are 1–${MESSAGE_MAX_LENGTH} characters.` };
+    return {
+      ok: false,
+      error: `Messages are 1–${MESSAGE_MAX_LENGTH} characters.`,
+    };
   }
   const participants = await loadParticipants(input.conversationId);
   const ids = participants.map((p) => p.userId);
-  if (!canReadConversation({ viewerUserId: input.viewerUserId, participantUserIds: ids })) {
+  if (
+    !canReadConversation({
+      viewerUserId: input.viewerUserId,
+      participantUserIds: ids,
+    })
+  ) {
     return { ok: false, error: NOT_FOUND };
   }
   const other = ids.find((id) => id !== input.viewerUserId);
-  const blocks = other ? await loadBlocksBetween(input.viewerUserId, other) : [];
+  const blocks = other
+    ? await loadBlocksBetween(input.viewerUserId, other)
+    : [];
   if (
     !canSendMessage({
       senderUserId: input.viewerUserId,
@@ -605,7 +641,11 @@ export async function sendMessage(input: {
     return { ok: false, error: "You can't reply in this conversation." };
   }
   if (await rateLimited("send", input.viewerUserId)) {
-    return { ok: false, error: "You're sending messages very quickly. Wait a moment and try again." };
+    return {
+      ok: false,
+      error:
+        "You're sending messages very quickly. Wait a moment and try again.",
+    };
   }
 
   const now = input.now ?? new Date();
@@ -634,7 +674,10 @@ export async function sendMessage(input: {
       .set({ lastReadAt: now, hiddenAt: null })
       .where(
         and(
-          eq(schema.conversationParticipants.conversationId, input.conversationId),
+          eq(
+            schema.conversationParticipants.conversationId,
+            input.conversationId,
+          ),
           eq(schema.conversationParticipants.userId, input.viewerUserId),
         ),
       );
@@ -656,11 +699,18 @@ export async function setConversationTimer(input: {
   if (!isDatabaseConfigured()) return { ok: false, error: NOT_FOUND };
   const participants = await loadParticipants(input.conversationId);
   const ids = participants.map((p) => p.userId);
-  if (!canReadConversation({ viewerUserId: input.viewerUserId, participantUserIds: ids })) {
+  if (
+    !canReadConversation({
+      viewerUserId: input.viewerUserId,
+      participantUserIds: ids,
+    })
+  ) {
     return { ok: false, error: NOT_FOUND };
   }
   const other = ids.find((id) => id !== input.viewerUserId);
-  const blocks = other ? await loadBlocksBetween(input.viewerUserId, other) : [];
+  const blocks = other
+    ? await loadBlocksBetween(input.viewerUserId, other)
+    : [];
   if (
     !canSendMessage({
       senderUserId: input.viewerUserId,
@@ -674,7 +724,10 @@ export async function setConversationTimer(input: {
     return { ok: false, error: "You can't change this conversation." };
   }
   if (await rateLimited("send", input.viewerUserId)) {
-    return { ok: false, error: "Too many changes. Wait a moment and try again." };
+    return {
+      ok: false,
+      error: "Too many changes. Wait a moment and try again.",
+    };
   }
   const now = input.now ?? new Date();
   const timer = readMessageTimer(input.timer);
@@ -827,9 +880,13 @@ export async function reportMessages(input: {
     return { ok: false, error: "Those messages can't be reported from here." };
   }
   if (await rateLimited("report", input.viewerUserId)) {
-    return { ok: false, error: "You've sent several reports recently. Try again later." };
+    return {
+      ok: false,
+      error: "You've sent several reports recently. Try again later.",
+    };
   }
-  const reason = input.reason?.trim().slice(0, REPORT_REASON_MAX_LENGTH) || null;
+  const reason =
+    input.reason?.trim().slice(0, REPORT_REASON_MAX_LENGTH) || null;
   const reportedUserId =
     participantIds.find((id) => id !== input.viewerUserId) ?? null;
 
@@ -873,7 +930,9 @@ export async function saveDefaultMessageTimer(
     .where(eq(schema.users.id, userId));
 }
 
-export async function getDefaultMessageTimer(userId: string): Promise<MessageTimer> {
+export async function getDefaultMessageTimer(
+  userId: string,
+): Promise<MessageTimer> {
   if (!isDatabaseConfigured()) return "off";
   const [row] = await db()
     .select({ timer: schema.users.defaultMessageTimer })

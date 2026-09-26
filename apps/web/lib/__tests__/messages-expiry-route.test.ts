@@ -42,7 +42,11 @@ describe("messages expiry sweep route", () => {
   it("runs for Vercel Cron's bearer", async () => {
     const res = await route.GET(request("GET", "cron-secret-value"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, messagesDeleted: 4, reportsDeleted: 1 });
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      messagesDeleted: 4,
+      reportsDeleted: 1,
+    });
     expect(stubs.runs).toBe(1);
   });
 
@@ -71,8 +75,12 @@ describe("messages expiry sweep route", () => {
 
   it("answers 500 when the sweep fails, and 503 without a database", async () => {
     stubs.fail = true;
-    expect((await route.POST(request("POST", "cron-secret-value"))).status).toBe(500);
+    expect(
+      (await route.POST(request("POST", "cron-secret-value"))).status,
+    ).toBe(500);
     delete process.env.DATABASE_URL;
-    expect((await route.POST(request("POST", "cron-secret-value"))).status).toBe(503);
+    expect(
+      (await route.POST(request("POST", "cron-secret-value"))).status,
+    ).toBe(503);
   });
 });

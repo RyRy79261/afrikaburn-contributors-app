@@ -25,7 +25,8 @@ import {
 // the signed-in, onboarded user resolved server-side (never an id from the
 // client), and the decision left to @quagga/core via lib/messages-store.
 
-type ActionResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+type ActionResult<T = object> =
+  ({ ok: true } & T) | { ok: false; error: string };
 
 const Uuid = z.string().uuid();
 const INVALID = { ok: false as const, error: "That request wasn't valid." };
@@ -34,7 +35,9 @@ const StartInput = z.object({ targetUserId: Uuid });
 
 /** Open (or create) the chat with a burner, then go to it. Used as a form
  * action from the burner's profile. */
-export async function startConversationAction(formData: FormData): Promise<void> {
+export async function startConversationAction(
+  formData: FormData,
+): Promise<void> {
   const parsed = StartInput.safeParse({
     targetUserId: formData.get("targetUserId"),
   });
@@ -47,13 +50,17 @@ export async function startConversationAction(formData: FormData): Promise<void>
     targetUserId: parsed.data.targetUserId,
     editionId: edition.id,
   });
-  if (!result.ok) redirect(`/burners/${parsed.data.targetUserId}?message=unavailable`);
+  if (!result.ok)
+    redirect(`/burners/${parsed.data.targetUserId}?message=unavailable`);
   redirect(`/messages/${result.conversationId}`);
 }
 
 const SendInput = z.object({
   conversationId: Uuid,
-  body: z.string().min(1).max(MESSAGE_MAX_LENGTH * 2),
+  body: z
+    .string()
+    .min(1)
+    .max(MESSAGE_MAX_LENGTH * 2),
 });
 
 export async function sendMessageAction(

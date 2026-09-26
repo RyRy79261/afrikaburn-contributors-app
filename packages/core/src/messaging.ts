@@ -79,7 +79,10 @@ export type DmRateLimitAction = keyof typeof DM_RATE_LIMITS;
 
 /** The limiter key for one account and one action. Per ACCOUNT, not per IP:
  * the actions are signed-in, and on site a whole camp shares one uplink. */
-export function dmRateLimitKey(action: DmRateLimitAction, userId: string): string {
+export function dmRateLimitKey(
+  action: DmRateLimitAction,
+  userId: string,
+): string {
   return `dm_${action}:${userId}`;
 }
 
@@ -136,7 +139,9 @@ export function isMessageLive(
   message: { expiresAt: Date | null },
   now: Date,
 ): boolean {
-  return message.expiresAt == null || message.expiresAt.getTime() > now.getTime();
+  return (
+    message.expiresAt == null || message.expiresAt.getTime() > now.getTime()
+  );
 }
 
 /** The system line posted into the chat when a participant changes the timer.
@@ -277,7 +282,12 @@ export function canSendMessage(input: {
   blocks: readonly UserBlock[];
 }): boolean {
   const ids = input.participants.map((p) => p.userId);
-  if (!canReadConversation({ viewerUserId: input.senderUserId, participantUserIds: ids })) {
+  if (
+    !canReadConversation({
+      viewerUserId: input.senderUserId,
+      participantUserIds: ids,
+    })
+  ) {
     return false;
   }
   for (const p of input.participants) {
@@ -350,7 +360,9 @@ export function canResolveMessageReports(
  * own number to share.
  */
 export function messageLooksLikePhoneNumber(body: string): boolean {
-  return sanitizeReportText(body, MESSAGE_MAX_LENGTH).redacted.includes("phone");
+  return sanitizeReportText(body, MESSAGE_MAX_LENGTH).redacted.includes(
+    "phone",
+  );
 }
 
 export const PHONE_NUMBER_HINT =

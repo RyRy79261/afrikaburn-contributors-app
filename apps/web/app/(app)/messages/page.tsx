@@ -40,7 +40,10 @@ export default async function MessagesPage() {
   ]);
   if (!edition) return <PreviewNotice feature="Messages" />;
 
-  const inbox = await listInbox({ viewerUserId: user.id, editionId: edition.id });
+  const inbox = await listInbox({
+    viewerUserId: user.id,
+    editionId: edition.id,
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">

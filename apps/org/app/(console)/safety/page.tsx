@@ -78,9 +78,8 @@ export default async function SafetyReportsPage({
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Reported messages are private words between burners. Only the
-            safety team — the people who may read medical notes — can open
-            them.
+            Reported messages are private words between burners. Only the safety
+            team — the people who may read medical notes — can open them.
           </CardContent>
         </Card>
       ) : (
@@ -104,7 +103,9 @@ export default async function SafetyReportsPage({
           {reports.length === 0 ? (
             <EmptyState
               icon={<ShieldAlert className="h-6 w-6" aria-hidden />}
-              title={status === "open" ? "No open reports" : "Nothing resolved yet"}
+              title={
+                status === "open" ? "No open reports" : "Nothing resolved yet"
+              }
               description="When a burner reports messages from a chat, it lands here."
             />
           ) : (

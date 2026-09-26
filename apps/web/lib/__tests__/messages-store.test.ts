@@ -138,9 +138,12 @@ describe("getConversation — participants only", () => {
   });
 
   it("reports a block by the viewer and refuses sending", async () => {
-    dbMock.queue(PAIR, [{ timer: OFF }], [], [
-      { blockerId: ALICE, blockedId: REN },
-    ]);
+    dbMock.queue(
+      PAIR,
+      [{ timer: OFF }],
+      [],
+      [{ blockerId: ALICE, blockedId: REN }],
+    );
     const view = await store.getConversation({
       viewerUserId: ALICE,
       conversationId: CONVO,
@@ -307,7 +310,13 @@ describe("sendMessage", () => {
 
   it("refuses an empty or oversized body without querying", async () => {
     expect(
-      (await store.sendMessage({ viewerUserId: ALICE, conversationId: CONVO, body: "   " })).ok,
+      (
+        await store.sendMessage({
+          viewerUserId: ALICE,
+          conversationId: CONVO,
+          body: "   ",
+        })
+      ).ok,
     ).toBe(false);
     expect(
       (
@@ -325,7 +334,13 @@ describe("sendMessage", () => {
     dbMock.queue(PAIR, []);
     stubs.rateLimit = { allowed: false, retryAfterSeconds: 10 };
     expect(
-      (await store.sendMessage({ viewerUserId: ALICE, conversationId: CONVO, body: "hi" })).ok,
+      (
+        await store.sendMessage({
+          viewerUserId: ALICE,
+          conversationId: CONVO,
+          body: "hi",
+        })
+      ).ok,
     ).toBe(false);
     expect(dbMock.writesTo(schema.messages)).toHaveLength(0);
   });
@@ -370,7 +385,12 @@ describe("setConversationTimer", () => {
 
 describe("reportMessages — copies only selected messages of the reporter's own chat", () => {
   it("copies the selected messages into a report with a 180-day expiry", async () => {
-    dbMock.queue(PAIR, [message("m1"), message("m2")], [{ id: "report-1" }], []);
+    dbMock.queue(
+      PAIR,
+      [message("m1"), message("m2")],
+      [{ id: "report-1" }],
+      [],
+    );
     const result = await store.reportMessages({
       viewerUserId: ALICE,
       conversationId: CONVO,
@@ -379,18 +399,18 @@ describe("reportMessages — copies only selected messages of the reporter's own
       now: NOW,
     });
     expect(result).toEqual({ ok: true, reportId: "report-1" });
-    const report = dbMock.writesTo(schema.messageReports)[0]!.arg(
-      "values",
-    ) as Record<string, unknown>;
+    const report = dbMock
+      .writesTo(schema.messageReports)[0]!
+      .arg("values") as Record<string, unknown>;
     expect(report).toMatchObject({
       reporterId: ALICE,
       reportedUserId: REN,
       reason: "harassment",
       expiresAt: new Date("2027-10-24T12:00:00Z"),
     });
-    const items = dbMock.writesTo(schema.messageReportItems)[0]!.arg(
-      "values",
-    ) as { originalMessageId: string; body: string }[];
+    const items = dbMock
+      .writesTo(schema.messageReportItems)[0]!
+      .arg("values") as { originalMessageId: string; body: string }[];
     expect(items.map((i) => i.originalMessageId)).toEqual(["m1", "m2"]);
     expect(items[0]!.body).toBe("body of m1");
   });
@@ -496,11 +516,28 @@ describe("blocks", () => {
 describe("inbox and unread counts carry no message body", () => {
   it("lists conversations by sender and unread count only", async () => {
     dbMock.queue(
-      [{ conversationId: CONVO, lastReadAt: null, lastMessageAt: NOW, createdAt: NOW }],
-      [{ conversationId: CONVO, userId: REN, username: "ren_notfound", sanitizedAt: null }],
+      [
+        {
+          conversationId: CONVO,
+          lastReadAt: null,
+          lastMessageAt: NOW,
+          createdAt: NOW,
+        },
+      ],
+      [
+        {
+          conversationId: CONVO,
+          userId: REN,
+          username: "ren_notfound",
+          sanitizedAt: null,
+        },
+      ],
       [{ conversationId: CONVO, count: 3 }],
     );
-    const inbox = await store.listInbox({ viewerUserId: ALICE, editionId: EDITION });
+    const inbox = await store.listInbox({
+      viewerUserId: ALICE,
+      editionId: EDITION,
+    });
     expect(inbox).toEqual([
       {
         conversationId: CONVO,
@@ -513,13 +550,17 @@ describe("inbox and unread counts carry no message body", () => {
     ]);
     // No select anywhere asked for a message body.
     for (const q of dbMock.queriesOfKind("select")) {
-      expect(Object.keys((q.arg("select") as object) ?? {})).not.toContain("body");
+      expect(Object.keys((q.arg("select") as object) ?? {})).not.toContain(
+        "body",
+      );
     }
   });
 
   it("returns an empty inbox without further queries", async () => {
     dbMock.queue([]);
-    expect(await store.listInbox({ viewerUserId: ALICE, editionId: EDITION })).toEqual([]);
+    expect(
+      await store.listInbox({ viewerUserId: ALICE, editionId: EDITION }),
+    ).toEqual([]);
     expect(dbMock.queries).toHaveLength(1);
   });
 
@@ -557,16 +598,45 @@ describe("default timer and the sweep", () => {
   it("refuses every write env-less, without a query", async () => {
     delete process.env.DATABASE_URL;
     const refusals = await Promise.all([
-      store.startConversation({ viewerUserId: ALICE, targetUserId: REN, editionId: EDITION }),
-      store.sendMessage({ viewerUserId: ALICE, conversationId: CONVO, body: "hi" }),
-      store.setConversationTimer({ viewerUserId: ALICE, conversationId: CONVO, timer: OFF }),
+      store.startConversation({
+        viewerUserId: ALICE,
+        targetUserId: REN,
+        editionId: EDITION,
+      }),
+      store.sendMessage({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        body: "hi",
+      }),
+      store.setConversationTimer({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        timer: OFF,
+      }),
       store.blockUser({ viewerUserId: ALICE, targetUserId: REN }),
       store.unblockUser({ viewerUserId: ALICE, targetUserId: REN }),
-      store.reportMessages({ viewerUserId: ALICE, conversationId: CONVO, messageIds: ["m1"], reason: null }),
+      store.reportMessages({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        messageIds: ["m1"],
+        reason: null,
+      }),
     ]);
     for (const r of refusals) expect(r.ok).toBe(false);
-    expect(await store.getConversation({ viewerUserId: ALICE, conversationId: CONVO, editionId: EDITION })).toBeNull();
-    expect(await store.viewerMayStartConversation({ viewerUserId: ALICE, targetUserId: REN, editionId: EDITION })).toBe(false);
+    expect(
+      await store.getConversation({
+        viewerUserId: ALICE,
+        conversationId: CONVO,
+        editionId: EDITION,
+      }),
+    ).toBeNull();
+    expect(
+      await store.viewerMayStartConversation({
+        viewerUserId: ALICE,
+        targetUserId: REN,
+        editionId: EDITION,
+      }),
+    ).toBe(false);
     expect(await store.findDirectConversation(ALICE, REN)).toBeNull();
     expect(await store.viewerHasBlocked(ALICE, REN)).toBe(false);
     expect(await store.getDefaultMessageTimer(ALICE)).toBe(OFF);
@@ -576,7 +646,10 @@ describe("default timer and the sweep", () => {
 
   it("nobody may post into a chat with a deleted account, and it shows as departed", async () => {
     dbMock.queue(
-      [participant(ALICE), participant(REN, { sanitizedAt: new Date("2027-01-01") })],
+      [
+        participant(ALICE),
+        participant(REN, { sanitizedAt: new Date("2027-01-01") }),
+      ],
       [{ timer: OFF }],
       [],
       [],
@@ -598,7 +671,9 @@ describe("default timer and the sweep", () => {
       reportsDeleted: 0,
     });
     expect(await store.getUnreadMessageCount(ALICE)).toBe(0);
-    expect(await store.listInbox({ viewerUserId: ALICE, editionId: EDITION })).toEqual([]);
+    expect(
+      await store.listInbox({ viewerUserId: ALICE, editionId: EDITION }),
+    ).toEqual([]);
     expect(dbMock.queries).toHaveLength(0);
   });
 });

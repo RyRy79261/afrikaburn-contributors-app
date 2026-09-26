@@ -71,28 +71,58 @@ describe("canReadConversation — participants only, no role bypass", () => {
   const participants = [ALICE, REN];
 
   it("admits each participant", () => {
-    expect(canReadConversation({ viewerUserId: ALICE, participantUserIds: participants })).toBe(true);
-    expect(canReadConversation({ viewerUserId: REN, participantUserIds: participants })).toBe(true);
+    expect(
+      canReadConversation({
+        viewerUserId: ALICE,
+        participantUserIds: participants,
+      }),
+    ).toBe(true);
+    expect(
+      canReadConversation({
+        viewerUserId: REN,
+        participantUserIds: participants,
+      }),
+    ).toBe(true);
   });
 
   it("refuses a non-participant", () => {
-    expect(canReadConversation({ viewerUserId: JABU, participantUserIds: participants })).toBe(false);
+    expect(
+      canReadConversation({
+        viewerUserId: JABU,
+        participantUserIds: participants,
+      }),
+    ).toBe(false);
   });
 
   it("refuses the System manager (god) — there is no parameter through which a rank could pass", () => {
     // The god account is an ordinary non-participant here. That the predicate
     // takes no actor/rank at all is the point: an org role cannot widen it.
-    expect(canReadConversation({ viewerUserId: GOD, participantUserIds: participants })).toBe(false);
+    expect(
+      canReadConversation({
+        viewerUserId: GOD,
+        participantUserIds: participants,
+      }),
+    ).toBe(false);
     expect(canReadConversation.length).toBe(1);
   });
 
   it("refuses a camp lead of the participants' own camp who is not in the chat", () => {
     // JABU re-cast as a lead of camp A: still not a participant, still refused.
-    expect(canReadConversation({ viewerUserId: JABU, participantUserIds: participants })).toBe(false);
+    expect(
+      canReadConversation({
+        viewerUserId: JABU,
+        participantUserIds: participants,
+      }),
+    ).toBe(false);
   });
 
   it("refuses an empty viewer id", () => {
-    expect(canReadConversation({ viewerUserId: "", participantUserIds: ["", ALICE] })).toBe(false);
+    expect(
+      canReadConversation({
+        viewerUserId: "",
+        participantUserIds: ["", ALICE],
+      }),
+    ).toBe(false);
   });
 });
 
@@ -105,55 +135,119 @@ describe("canStartConversation", () => {
 
   it("anyone may start a chat with an `anyone` burner", () => {
     expect(
-      canStartConversation({ ...base, ctx: ctx(JABU, [campB], ALICE, [campA]), contactable: ANYONE }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(JABU, [campB], ALICE, [campA]),
+        contactable: ANYONE,
+      }),
     ).toBe(true);
   });
 
   it("camp_mates admits a shared theme camp and refuses a lead of another camp", () => {
     expect(
-      canStartConversation({ ...base, ctx: ctx(REN, [campA], ALICE, [campA]), contactable: CAMP_MATES }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(REN, [campA], ALICE, [campA]),
+        contactable: CAMP_MATES,
+      }),
     ).toBe(true);
     expect(
-      canStartConversation({ ...base, ctx: ctx(JABU, [campB], ALICE, [campA]), contactable: CAMP_MATES }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(JABU, [campB], ALICE, [campA]),
+        contactable: CAMP_MATES,
+      }),
     ).toBe(false);
   });
 
   it("an org membership is not a shared camp — the god is refused at camp_mates", () => {
     expect(
-      canStartConversation({ ...base, ctx: ctx(GOD, [org], ALICE, [campA, org]), contactable: CAMP_MATES }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(GOD, [org], ALICE, [campA, org]),
+        contactable: CAMP_MATES,
+      }),
     ).toBe(false);
   });
 
   it("nobody (the default) refuses everyone, camp-mates included", () => {
     expect(
-      canStartConversation({ ...base, ctx: ctx(REN, [campA], ALICE, [campA]), contactable: NOBODY }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(REN, [campA], ALICE, [campA]),
+        contactable: NOBODY,
+      }),
     ).toBe(false);
     expect(
-      canStartConversation({ ...base, ctx: ctx(REN, [campA], ALICE, [campA]), contactable: undefined }),
+      canStartConversation({
+        ...base,
+        ctx: ctx(REN, [campA], ALICE, [campA]),
+        contactable: undefined,
+      }),
     ).toBe(false);
   });
 
   it("a block refuses in BOTH directions, whatever the setting", () => {
     const c = ctx(REN, [campA], ALICE, [campA]);
     expect(
-      canStartConversation({ ...base, ctx: c, contactable: ANYONE, blocks: [{ blockerId: ALICE, blockedId: REN }] }),
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        blocks: [{ blockerId: ALICE, blockedId: REN }],
+      }),
     ).toBe(false);
     expect(
-      canStartConversation({ ...base, ctx: c, contactable: ANYONE, blocks: [{ blockerId: REN, blockedId: ALICE }] }),
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        blocks: [{ blockerId: REN, blockedId: ALICE }],
+      }),
     ).toBe(false);
     // Positive control: a block between OTHER people does not refuse.
     expect(
-      canStartConversation({ ...base, ctx: c, contactable: ANYONE, blocks: [{ blockerId: JABU, blockedId: ALICE }] }),
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        blocks: [{ blockerId: JABU, blockedId: ALICE }],
+      }),
     ).toBe(true);
   });
 
   it("refuses an unconfirmed bio, a sanitized subject, and self", () => {
     const c = ctx(REN, [campA], ALICE, [campA]);
-    expect(canStartConversation({ ...base, ctx: c, contactable: ANYONE, subjectConfirmed: false })).toBe(false);
-    expect(canStartConversation({ ...base, ctx: c, contactable: ANYONE, subjectSanitized: true })).toBe(false);
-    expect(canStartConversation({ ...base, ctx: c, contactable: ANYONE, actorSanitized: true })).toBe(false);
     expect(
-      canStartConversation({ ...base, ctx: ctx(ALICE, [campA], ALICE, [campA]), contactable: ANYONE }),
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        subjectConfirmed: false,
+      }),
+    ).toBe(false);
+    expect(
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        subjectSanitized: true,
+      }),
+    ).toBe(false);
+    expect(
+      canStartConversation({
+        ...base,
+        ctx: c,
+        contactable: ANYONE,
+        actorSanitized: true,
+      }),
+    ).toBe(false);
+    expect(
+      canStartConversation({
+        ...base,
+        ctx: ctx(ALICE, [campA], ALICE, [campA]),
+        contactable: ANYONE,
+      }),
     ).toBe(false);
   });
 });
@@ -165,17 +259,33 @@ describe("canSendMessage", () => {
   ];
 
   it("a participant may send while nothing blocks", () => {
-    expect(canSendMessage({ senderUserId: ALICE, participants: people, blocks: NO_BLOCKS })).toBe(true);
+    expect(
+      canSendMessage({
+        senderUserId: ALICE,
+        participants: people,
+        blocks: NO_BLOCKS,
+      }),
+    ).toBe(true);
   });
 
   it("a non-participant may not", () => {
-    expect(canSendMessage({ senderUserId: JABU, participants: people, blocks: NO_BLOCKS })).toBe(false);
+    expect(
+      canSendMessage({
+        senderUserId: JABU,
+        participants: people,
+        blocks: NO_BLOCKS,
+      }),
+    ).toBe(false);
   });
 
   it("a blocked user may not, and neither may the blocker", () => {
     const blocks = [{ blockerId: ALICE, blockedId: REN }];
-    expect(canSendMessage({ senderUserId: REN, participants: people, blocks })).toBe(false);
-    expect(canSendMessage({ senderUserId: ALICE, participants: people, blocks })).toBe(false);
+    expect(
+      canSendMessage({ senderUserId: REN, participants: people, blocks }),
+    ).toBe(false);
+    expect(
+      canSendMessage({ senderUserId: ALICE, participants: people, blocks }),
+    ).toBe(false);
   });
 
   it("nobody may send into a chat with a deleted account", () => {
@@ -198,13 +308,23 @@ describe("canReportMessages — only messages from the reporter's own conversati
 
   it("admits a participant selecting messages of this conversation", () => {
     expect(
-      canReportMessages({ reporterUserId: ALICE, conversationId: CONVO, participantUserIds: participants, selected: own }),
+      canReportMessages({
+        reporterUserId: ALICE,
+        conversationId: CONVO,
+        participantUserIds: participants,
+        selected: own,
+      }),
     ).toBe(true);
   });
 
   it("refuses a non-participant, however the ids were obtained", () => {
     expect(
-      canReportMessages({ reporterUserId: JABU, conversationId: CONVO, participantUserIds: participants, selected: own }),
+      canReportMessages({
+        reporterUserId: JABU,
+        conversationId: CONVO,
+        participantUserIds: participants,
+        selected: own,
+      }),
     ).toBe(false);
   });
 
@@ -221,14 +341,24 @@ describe("canReportMessages — only messages from the reporter's own conversati
 
   it("refuses an empty or oversized selection", () => {
     expect(
-      canReportMessages({ reporterUserId: ALICE, conversationId: CONVO, participantUserIds: participants, selected: [] }),
+      canReportMessages({
+        reporterUserId: ALICE,
+        conversationId: CONVO,
+        participantUserIds: participants,
+        selected: [],
+      }),
     ).toBe(false);
     const many = Array.from({ length: REPORT_MAX_MESSAGES + 1 }, (_, i) => ({
       id: `m${i}`,
       conversationId: CONVO,
     }));
     expect(
-      canReportMessages({ reporterUserId: ALICE, conversationId: CONVO, participantUserIds: participants, selected: many }),
+      canReportMessages({
+        reporterUserId: ALICE,
+        conversationId: CONVO,
+        participantUserIds: participants,
+        selected: many,
+      }),
     ).toBe(false);
     expect(
       canReportMessages({
@@ -259,17 +389,27 @@ describe("canReviewMessageReports — the safety tier, never a god-only shortcut
   });
 
   it("admits org staff holding personal information (org-wide)", () => {
-    const a = actor("org_staff", [role({ read: true, personal_information: true })]);
+    const a = actor("org_staff", [
+      role({ read: true, personal_information: true }),
+    ]);
     expect(canReviewMessageReports(a)).toBe(true);
     expect(canResolveMessageReports(a)).toBe(false);
-    const b = actor("org_staff", [role({ read: true, update: true, personal_information: true })]);
+    const b = actor("org_staff", [
+      role({ read: true, update: true, personal_information: true }),
+    ]);
     expect(canResolveMessageReports(b)).toBe(true);
   });
 
   it("refuses org staff with read only, an engineer (carve-out) and no actor", () => {
-    expect(canReviewMessageReports(actor("org_staff", [role({ read: true, update: true })]))).toBe(false);
     expect(
-      canReviewMessageReports(actor("engineer", [role({ read: true, personal_information: true })])),
+      canReviewMessageReports(
+        actor("org_staff", [role({ read: true, update: true })]),
+      ),
+    ).toBe(false);
+    expect(
+      canReviewMessageReports(
+        actor("engineer", [role({ read: true, personal_information: true })]),
+      ),
     ).toBe(false);
     expect(canReviewMessageReports(null)).toBe(false);
   });
@@ -292,16 +432,26 @@ describe("disappearing messages", () => {
 
   it("stores an expiry per message from the timer in force at send time", () => {
     expect(messageExpiresAt("off", sent)).toBeNull();
-    expect(messageExpiresAt("24h", sent)?.toISOString()).toBe("2027-04-27T10:00:00.000Z");
-    expect(messageExpiresAt("7d", sent)?.toISOString()).toBe("2027-05-03T10:00:00.000Z");
-    expect(messageExpiresAt("90d", sent)?.toISOString()).toBe("2027-07-25T10:00:00.000Z");
+    expect(messageExpiresAt("24h", sent)?.toISOString()).toBe(
+      "2027-04-27T10:00:00.000Z",
+    );
+    expect(messageExpiresAt("7d", sent)?.toISOString()).toBe(
+      "2027-05-03T10:00:00.000Z",
+    );
+    expect(messageExpiresAt("90d", sent)?.toISOString()).toBe(
+      "2027-07-25T10:00:00.000Z",
+    );
   });
 
   it("hides a message at exactly its expiry (exclusive boundary)", () => {
     const expiresAt = messageExpiresAt("24h", sent)!;
-    expect(isMessageLive({ expiresAt }, new Date(expiresAt.getTime() - 1))).toBe(true);
+    expect(
+      isMessageLive({ expiresAt }, new Date(expiresAt.getTime() - 1)),
+    ).toBe(true);
     expect(isMessageLive({ expiresAt }, expiresAt)).toBe(false);
-    expect(isMessageLive({ expiresAt: null }, new Date("2099-01-01"))).toBe(true);
+    expect(isMessageLive({ expiresAt: null }, new Date("2099-01-01"))).toBe(
+      true,
+    );
   });
 
   it("names the timer in the system notice, and says when it is off", () => {
@@ -311,13 +461,17 @@ describe("disappearing messages", () => {
 
   it("keeps a report copy for the documented fixed period", () => {
     expect(REPORT_COPY_RETENTION_DAYS).toBe(180);
-    expect(reportCopyExpiresAt(sent).toISOString()).toBe("2027-10-23T10:00:00.000Z");
+    expect(reportCopyExpiresAt(sent).toISOString()).toBe(
+      "2027-10-23T10:00:00.000Z",
+    );
   });
 });
 
 describe("helpers", () => {
   it("keys a pair the same way from either side, and refuses self", () => {
-    expect(directConversationKey(ALICE, REN)).toBe(directConversationKey(REN, ALICE));
+    expect(directConversationKey(ALICE, REN)).toBe(
+      directConversationKey(REN, ALICE),
+    );
     expect(() => directConversationKey(ALICE, ALICE)).toThrow();
   });
 
@@ -331,7 +485,11 @@ describe("helpers", () => {
   it("hints at South African phone numbers without matching ordinary text", () => {
     expect(messageLooksLikePhoneNumber("call me on 082 123 4567")).toBe(true);
     expect(messageLooksLikePhoneNumber("+27 82 123 4567")).toBe(true);
-    expect(messageLooksLikePhoneNumber("meet at 10:00 by the Clan fire, bring 2 chairs")).toBe(false);
+    expect(
+      messageLooksLikePhoneNumber(
+        "meet at 10:00 by the Clan fire, bring 2 chairs",
+      ),
+    ).toBe(false);
   });
 
   it("previews unread messages by sender and count only", () => {
@@ -342,6 +500,8 @@ describe("helpers", () => {
 
   it("keys rate limits per account and action", () => {
     expect(dmRateLimitKey("start", ALICE)).toBe(`dm_start:${ALICE}`);
-    expect(dmRateLimitKey("send", ALICE)).not.toBe(dmRateLimitKey("start", ALICE));
+    expect(dmRateLimitKey("send", ALICE)).not.toBe(
+      dmRateLimitKey("start", ALICE),
+    );
   });
 });

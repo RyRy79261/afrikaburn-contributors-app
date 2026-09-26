@@ -103,10 +103,7 @@ export default async function SafetyReportPage({
         <CardContent>
           <ol className="flex flex-col gap-3">
             {report.items.map((item) => (
-              <li
-                key={item.id}
-                className="rounded-lg border border-border p-3"
-              >
+              <li key={item.id} className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
                     {item.senderName}

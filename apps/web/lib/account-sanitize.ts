@@ -242,7 +242,9 @@ export async function sanitizeAccount(
     //     directions. A REPORT'S COPY of this account's messages is kept to its
     //     own fixed retention on purpose, so deleting an account cannot erase
     //     the evidence of a report against it.
-    await tx.delete(schema.messages).where(eq(schema.messages.senderId, userId));
+    await tx
+      .delete(schema.messages)
+      .where(eq(schema.messages.senderId, userId));
     await tx
       .delete(schema.userBlocks)
       .where(

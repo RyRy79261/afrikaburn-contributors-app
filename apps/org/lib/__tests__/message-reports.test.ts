@@ -40,9 +40,8 @@ vi.mock("next/server", () => ({
   },
 }));
 
-const { listMessageReports, getMessageReport } = await import(
-  "../message-reports"
-);
+const { listMessageReports, getMessageReport } =
+  await import("../message-reports");
 
 const [OPEN] = MESSAGE_REPORT_STATUSES;
 const NOW = new Date("2027-04-28T08:00:00Z");
@@ -94,7 +93,10 @@ beforeEach(() => {
 describe("who may review message reports", () => {
   for (const [name, actor] of [
     ["an org-wide reader without personal information", READER],
-    ["a Suppliers lead (personal information in another domain)", SUPPLIERS_LEAD],
+    [
+      "a Suppliers lead (personal information in another domain)",
+      SUPPLIERS_LEAD,
+    ],
     ["an account with no roles", NO_ROLES],
   ] as const) {
     it(`refuses ${name} before any query`, async () => {

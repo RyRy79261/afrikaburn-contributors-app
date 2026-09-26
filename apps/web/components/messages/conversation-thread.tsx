@@ -152,7 +152,9 @@ export function ConversationThread({
   }
 
   async function block() {
-    const result = await run(() => actions.block({ targetUserId: otherUserId }));
+    const result = await run(() =>
+      actions.block({ targetUserId: otherUserId }),
+    );
     setBlockOpen(false);
     if (result?.ok) {
       toast.success(`${otherName} is blocked.`);
@@ -236,8 +238,8 @@ export function ConversationThread({
           </ToggleGroup>
         </div>
         <p className="text-xs text-muted-foreground">
-          Applies to messages sent after it is changed. Either of you can
-          change it. {DISAPPEARING_MESSAGES_NOTE}
+          Applies to messages sent after it is changed. Either of you can change
+          it. {DISAPPEARING_MESSAGES_NOTE}
         </p>
       </section>
 
@@ -434,8 +436,8 @@ export function ConversationThread({
             <DialogTitle>Block {otherName}?</DialogTitle>
             <DialogDescription>
               Neither of you will be able to message the other, and this
-              conversation disappears from your inbox. You can unblock them
-              from their profile later.
+              conversation disappears from your inbox. You can unblock them from
+              their profile later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
