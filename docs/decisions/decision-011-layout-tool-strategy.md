@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | Open — deferred, with a stated trigger |
+| **Status** | **Reopened 2026-09-26 — in scope** (see the update at the end) |
 | **Raised** | 2026-07-29 (App Spec change record) |
 | **Spec section** | §11 Theme-Camp Layout Tool (`LAYOUT-*`), and §12 which depends on it |
 
@@ -47,3 +47,20 @@ decision reopens. If it does not, deferral stands and §§11–12 stay unbuilt.
 
 §12 (private tent placement under Bedouin tents) is ❌ Not implemented and
 depends entirely on this foundation. It cannot be decided separately.
+
+## Update — 2026-09-26 (Ryan Noble): reopened, in scope
+
+The trigger above fired. The mapping meetings with AfrikaBurn spatial planning
+took place (Aug and Sept 2026), and the "no structured geo data" premise no
+longer holds: AfrikaBurn's GIS runs on QGIS with Postgres vector layers, and
+read-only access to specific layers — theme-camp boundaries first — is the
+agreed model, with changes returned to AfrikaBurn for manual merge
+([research note](../sources/research/gis-spatial-data.md)).
+
+Placement maps are therefore **in scope**, as GIS integration prep, and leave
+`AGENTS.md`'s out-of-scope list. The build order follows the App Spec's own
+ladder: v1 a generic planner against a drawn rectangle (no GIS dependency) and
+the §12 tent-under-Bedouin packer on the same mechanism; v2 plot-specific once
+formal layer access is granted; v3 neighbours. AI auto-layout stays out, as the
+working group rejected it. It remains a big build in its own lane (roadmap
+principle 5) and never blocks a release. Tracked as an epic in the issue tracker.

@@ -5,10 +5,8 @@
 > **unverified by this repo**.
 >
 > **Scope:** context only — not a spec, not an engineering decision, and no work
-> is planned. GIS / placement work that would sit alongside an org integration
-> remains **out of scope** per the product laws in
-> [`AGENTS.md`](../../../AGENTS.md). This product's own auth is self-hosted Better
-> Auth ([`auth-platform-spec.md`](../../auth-platform-spec.md)).
+> is planned. This product's own auth is self-hosted Better Auth
+> ([`auth-platform-spec.md`](../../auth-platform-spec.md)).
 
 ## What TMI Identity is (as described)
 

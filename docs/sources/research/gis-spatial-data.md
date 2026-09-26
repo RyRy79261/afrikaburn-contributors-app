@@ -4,9 +4,11 @@
 > meetings with AfrikaBurn spatial planning, Aug and Sept 2026). External facts
 > are **unverified by this repo**.
 >
-> **Scope:** GIS and placement remain **out of scope** for this product — placement
-> maps are excluded by the product laws in [`AGENTS.md`](../../../AGENTS.md). This
-> file is context only; it is not a spec and commits to no work.
+> **Scope:** placement maps are **in scope** as of 2026-09-26, as GIS integration
+> prep ([Decision 011](../../decisions/decision-011-layout-tool-strategy.md),
+> [Decision 012](../../decisions/decision-012-map-erf-readiness.md)). This file is
+> research context, not a spec; the external facts below still need confirming
+> with AfrikaBurn before anything is built against them.
 
 Related Decision Records in this repo:
 [011 — layout tool strategy](../../decisions/decision-011-layout-tool-strategy.md),

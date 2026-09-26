@@ -44,7 +44,7 @@ external facts are unverified by this repo, and they commit to no work.
 
 - [`research/gis-spatial-data.md`](research/gis-spatial-data.md) — the org's
   GIS (QGIS, Postgres layers, drone-photogrammetry DEM) and the read-only
-  vector-layer access model. Context only: placement maps are out of scope.
+  vector-layer access model. Input to the placement-map / GIS integration prep.
 - [`research/tmi-identity.md`](research/tmi-identity.md) — AfrikaBurn's TMI
   Identity platform (Keycloak + LDAP + Postgres + SES); external apps integrate
   only as OIDC clients of `login.afrikaburn.net`.

@@ -260,9 +260,12 @@ list`, then `git worktree remove` what has finished.
   account may do — the accounts table, the assignment dialog, the role editor — renders
   `summarizeOrgActor` from @quagga/core, so the console can never advertise an access it
   would refuse, or understate one it would allow.
-- **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's),
-  placement maps, and any camp treasury or dues feature that collects or holds money
-  (tracking budgets and dues as records is in scope — see the money law above).
+- **Out of scope, permanently unless Ryan says otherwise**: ticketing (Quicket's), and
+  any camp treasury or dues feature that collects or holds money (tracking budgets and
+  dues as records is in scope — see the money law above). _(Placement maps were on this
+  list until 26 Sep 2026; they are now in scope as part of the GIS integration prep —
+  see [Decision 011](docs/decisions/decision-011-layout-tool-strategy.md) and
+  [Decision 012](docs/decisions/decision-012-map-erf-readiness.md).)_
 - Blocking questionnaires are labeled explicitly everywhere and gate hard (fill page +
   sign-out only); org-internal questionnaires never leak into the participant app.
 - **Seeds contain ONLY org-owned reference/catalog data** (edition, org group, camp
