@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Propose a release only once it is 2 days old. Most malicious publishes
+    # are caught and pulled within that window. Security-update PRs ignore
+    # cooldown and still open immediately, so this never delays a CVE fix.
+    cooldown:
+      default-days: 2
     # commitlint's scope enum is workspace names + `repo`, not Dependabot's
     # default `deps` / `deps-dev`, and CI lints every PR title and commit.
     # Prefix with `chore(repo)` and leave `include: scope` off so titles stay
@@ -47,5 +52,7 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 2
     commit-message:
       prefix: "chore(repo)"
