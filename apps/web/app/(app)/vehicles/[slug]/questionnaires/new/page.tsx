@@ -1,4 +1,4 @@
-import { ProjectQuestionnairesList } from "@/app/(app)/_project-questionnaires/list";
+import { NewProjectQuestionnaire } from "@/app/(app)/_project-questionnaires/new";
 
 // Thin route: the page body is shared by /camps, /artworks and /vehicles
 // (app/(app)/_project-questionnaires). `routeKind` is what keeps a slug on the
@@ -12,5 +12,5 @@ export default async function Page({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <ProjectQuestionnairesList slug={slug} routeKind="theme_camp" />;
+  return <NewProjectQuestionnaire slug={slug} routeKind="mutant_vehicle" />;
 }

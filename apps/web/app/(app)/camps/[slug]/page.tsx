@@ -41,7 +41,7 @@ import {
   getMemberPermissions,
   pendingOfficerConsents,
 } from "@/lib/roles-store";
-import { hasProjectPermission } from "@quagga/core";
+import { hasProjectPermission, projectQuestionnairesPath } from "@quagga/core";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
@@ -495,7 +495,7 @@ export default async function CampPage({
                   variant="secondary"
                   className="w-full"
                 >
-                  <Link href={`/camps/${camp.slug}/questionnaires`}>
+                  <Link href={projectQuestionnairesPath(camp.kind, camp.slug)}>
                     Manage questionnaires
                   </Link>
                 </Button>

@@ -108,12 +108,16 @@ export function QuestionnaireBuilder({
   members,
   scope,
   action,
+  returnHref,
 }: {
   slug: string;
   roles: BuilderRole[];
   members: BuilderMember[];
   scope: BuilderScope;
   action: typeof createQuestionnaireAction;
+  /** Where to land after sending — the group's own questionnaires route
+   * (/camps, /artworks or /vehicles, by kind). */
+  returnHref: string;
 }) {
   const router = useRouter();
   const targetable = React.useMemo(
@@ -223,7 +227,7 @@ export function QuestionnaireBuilder({
               ? ""
               : " (Email not configured — logged to console.)"),
         );
-        router.push(`/camps/${slug}/questionnaires`);
+        router.push(returnHref);
         router.refresh();
       } else {
         toast.error(result.error);

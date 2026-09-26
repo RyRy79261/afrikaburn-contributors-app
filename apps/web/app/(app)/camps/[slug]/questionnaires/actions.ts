@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canAuthorProjectQuestionnaire } from "@quagga/core";
+import {
+  canAuthorProjectQuestionnaire,
+  projectQuestionnairesPath,
+} from "@quagga/core";
 import { Questionnaire, type ProjectAudience } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
@@ -11,13 +14,24 @@ import { getBaselineRoleId, getMemberPermissions } from "@/lib/roles-store";
 import { db, schema, withTransaction } from "@/lib/db";
 import { and, eq } from "drizzle-orm";
 
-async function groupIdForSlug(slug: string): Promise<string | null> {
+/**
+ * The group a questionnaire action targets — a theme camp, an artwork or a
+ * mutant vehicle (the spine is kind-agnostic; CREATIVE-007). NEVER the org
+ * group: org questionnaires are authored in the console, and a participant-app
+ * action that resolved the org's slug would be one step from sending (or
+ * recalling) one from here.
+ */
+async function projectGroupForSlug(
+  slug: string,
+): Promise<{ id: string; kind: string } | null> {
   const rows = await db()
-    .select({ id: schema.groups.id })
+    .select({ id: schema.groups.id, kind: schema.groups.kind })
     .from(schema.groups)
     .where(eq(schema.groups.slug, slug))
     .limit(1);
-  return rows[0]?.id ?? null;
+  const group = rows[0];
+  if (!group || group.kind === "org") return null;
+  return group;
 }
 
 // Boundary schema (Zod at every action). The definition is validated against
@@ -57,8 +71,9 @@ export async function createQuestionnaireAction(
     parsed.data;
 
   const user = await requireCampUser();
-  const groupId = await groupIdForSlug(slug);
-  if (!groupId) return { ok: false, error: "Camp not found." };
+  const group = await projectGroupForSlug(slug);
+  if (!group) return { ok: false, error: "Camp not found." };
+  const groupId = group.id;
 
   const audience: ProjectAudience = {
     kind: "project",
@@ -117,7 +132,7 @@ export async function createQuestionnaireAction(
     dueAt,
   });
 
-  revalidatePath(`/camps/${slug}/questionnaires`);
+  revalidatePath(projectQuestionnairesPath(group.kind, slug));
   return {
     ok: true,
     activationId: result.activationId,
@@ -162,8 +177,9 @@ export async function closeQuestionnaireAction(
   const { slug, activationId } = parsed.data;
 
   const user = await requireCampUser();
-  const groupId = await groupIdForSlug(slug);
-  if (!groupId) return { ok: false, error: "Camp not found." };
+  const group = await projectGroupForSlug(slug);
+  if (!group) return { ok: false, error: "Camp not found." };
+  const groupId = group.id;
 
   const rows = await db()
     .select({
@@ -231,6 +247,6 @@ export async function closeQuestionnaireAction(
     });
   }
 
-  revalidatePath(`/camps/${slug}/questionnaires`);
+  revalidatePath(projectQuestionnairesPath(group.kind, slug));
   return { ok: true };
 }

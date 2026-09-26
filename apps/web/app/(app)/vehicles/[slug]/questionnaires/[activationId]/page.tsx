@@ -16,7 +16,7 @@ export default async function Page({
     <ProjectQuestionnaireResults
       slug={slug}
       activationId={activationId}
-      routeKind="theme_camp"
+      routeKind="mutant_vehicle"
     />
   );
 }
