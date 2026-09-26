@@ -13,15 +13,19 @@
 //   · the people view lists an opted-in camp-mate to a member, and is a
 //     not-found for a non-member (`buildCampPeopleView`) — medical and the
 //     hard-locked fields never appear on it;
-//   · the photo proxy answers a stranger 404, and the upload refuses an SVG by
-//     its bytes even when it is labelled image/png.
+//   · the upload refuses an SVG by its bytes even when it is labelled
+//     image/png (positive control: a real PNG gets past the byte check).
 //
 // HONEST SCOPE: the local e2e stack has no BLOB_READ_WRITE_TOKEN (see
 // camp-lead/layout-uploads.spec.ts for why), so a real photo is never stored
-// here — a PNG upload answers 501. The photo-visibility decision itself is
-// proven against a stored photo in apps/web lib/__tests__/avatar-routes.test.ts
-// and campmates-store.test.ts; what this spec proves is the HTTP boundary a
-// browser can reach.
+// here — a PNG upload answers 501, and the photo PROXY answers 404 to everyone
+// before it reaches any authorisation (storage unconfigured). A "stranger gets
+// 404" check here would therefore pass even if the visibility predicate let
+// everyone through, so this spec deliberately makes NO claim about who may see
+// a photo. That decision — stranger refused a camp_mates photo, camp-mate
+// served it (the positive control) — is proven against a stored photo, with
+// the token stubbed, in apps/web lib/__tests__/avatar-routes.test.ts and
+// campmates-store.test.ts.
 //
 // Selectors: apps/web/components/privacy-toggles.tsx (radios named
 // "<field>: <level>"), components/campmate-settings-fields.tsx (the people-list
@@ -205,16 +209,11 @@ test.describe("camp member — camp-mate profiles", () => {
     ]);
   });
 
-  test("the photo proxy refuses a stranger and the upload refuses an SVG by its bytes", async ({
+  test("the photo upload refuses an SVG by its bytes", async ({
     makeAppPage,
   }) => {
     const ownerPage = await makeAppPage("web");
-    const strangerPage = await makeAppPage("web");
-    const ownerName = uniqueUsername("dust_bunny");
-
-    await signUpBurner(ownerPage, { onboard: true, username: ownerName });
-    const camp = await createCamp(ownerPage);
-    const ownerId = await burnerIdFromRoster(ownerPage, camp.slug, ownerName);
+    await signUpBurner(ownerPage, { onboard: true });
 
     // An SVG labelled as a PNG: refused by the sniffed bytes (415), before the
     // deployment's storage is even consulted.
@@ -246,13 +245,6 @@ test.describe("camp member — camp-mate profiles", () => {
       },
     });
     expect([200, 501]).toContain(png.status());
-
-    // The proxy: a signed-in stranger asking for the owner's photo gets the
-    // same 404 as "no photo" — no oracle, and never an image.
-    await signUpBurner(strangerPage, { onboard: true });
-    const photo = await strangerPage.request.get(`/api/avatar/${ownerId}`);
-    expect(photo.status()).toBe(404);
-    expect(photo.headers()["content-type"] ?? "").not.toMatch(/^image\//);
-    expect(photo.headers()["cache-control"]).toBe("private, no-store");
+    // No proxy assertion here on purpose — see HONEST SCOPE in the header.
   });
 });
