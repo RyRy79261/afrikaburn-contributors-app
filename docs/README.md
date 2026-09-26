@@ -76,6 +76,7 @@ without restating it:
 | [`triage.md`](triage.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
 | [`synthesis.md`](synthesis.md)                           | Planning         | **Historical** | N/A — superseded as an authoritative source by the App Specification itself                   |
 | [`deploy.md`](deploy.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |
+| [`provenance.md`](provenance.md)                         | Operational      | Record         | N/A — evidence record, not spec-derived                                                       |
 | [`roadmap.md`](roadmap.md)                               | Planning         | Active         | Partial — `RELEASE-*`                                                                         |
 | [`decisions/`](decisions/README.md)                      | Planning         | Active         | References App Spec IDs; defines none                                                         |
 | [`sdk/`](sdk/README.md)                                  | Engineering Spec | Draft          | N/A — no App Spec section yet; specifies a `/v1` API and published SDK that are **not built** |
