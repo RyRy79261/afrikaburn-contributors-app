@@ -9,7 +9,10 @@ import { MarkdownView } from "@quagga/ui/components/markdown-editor/markdown-vie
 import { PreviewNotice } from "@/components/preview-notice";
 import { AnnouncementComposer } from "@/components/announcements/composer";
 import { AnnouncementPinToggle } from "@/components/announcements/pin-toggle";
-import { getCampAnnouncementForSender } from "@/lib/announcements-store";
+import {
+  announcementSchedulingEnabled,
+  getCampAnnouncementForSender,
+} from "@/lib/announcements-store";
 import { composerData, loadAnnouncementsContext } from "../context";
 import {
   deleteAnnouncementDraftAction,
@@ -109,6 +112,7 @@ export default async function CampAnnouncementPage({
             meetingUrl: announcement.meetingUrl,
             sendAt: announcement.sendAt?.toISOString() ?? null,
           }}
+          schedulingEnabled={announcementSchedulingEnabled()}
           saveAction={saveAnnouncementDraftAction}
           publishAction={publishAnnouncementAction}
           deleteAction={deleteAnnouncementDraftAction}

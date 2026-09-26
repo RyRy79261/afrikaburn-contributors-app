@@ -154,6 +154,8 @@ export const ANNOUNCEMENT_MESSAGES = {
   notDelivered: "Only an announcement that has gone out can be pinned.",
   alreadyPinned: "It's already pinned. Reload the page.",
   alreadyUnpinned: "It isn't pinned. Reload the page.",
+  schedulingOff:
+    "Scheduled sending isn't switched on yet. Clear the send time and publish it now.",
 } as const;
 
 /** The row facts a draft refusal is explained from. */
@@ -208,6 +210,18 @@ export function explainPinRefusal(
 
 // --- Scheduling + dispatch ------------------------------------------------
 
+/**
+ * Is scheduled sending switched on? Only when the deployment says a scheduler
+ * actually calls `/api/announcements/dispatch`: `ANNOUNCEMENT_DISPATCH_ENABLED`
+ * set to "true". Unset (the default, and env-less boot) means off: the
+ * composer hides "Send later" and save/publish refuse a send time.
+ */
+export function isAnnouncementSchedulingEnabled(
+  flag: string | undefined,
+): boolean {
+  return (flag ?? "").trim().toLowerCase() === "true";
+}
+
 /** How far ahead a send may be scheduled. A burn is a year apart. */
 export const MAX_SCHEDULE_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -220,8 +234,15 @@ export const MAX_SCHEDULE_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
 export function validateSendAt(
   sendAt: Date | null,
   now: Date,
+  opts: { schedulingEnabled: boolean },
 ): { ok: true; sendAt: Date | null } | { ok: false; error: string } {
   if (sendAt === null) return { ok: true, sendAt: null };
+  // Nothing delivers a scheduled row unless a scheduler calls the dispatch
+  // route, and a published announcement is immutable, so accepting a send
+  // time while no scheduler is wired would silently lose the author's message.
+  if (!opts.schedulingEnabled) {
+    return { ok: false, error: ANNOUNCEMENT_MESSAGES.schedulingOff };
+  }
   if (Number.isNaN(sendAt.getTime())) {
     return { ok: false, error: "That send time isn't a valid date." };
   }
@@ -361,12 +382,16 @@ export function campAnnouncementEmail(input: {
   campName: string;
   title: string;
   announcementId: string;
+  /** The participant app's origin (NEXT_PUBLIC_APP_URL). An email client
+   * cannot follow a relative path; unset falls back to the path alone. */
+  appUrl?: string | null;
 }): { subject: string; text: string } {
+  const base = (input.appUrl ?? "").trim().replace(/\/+$/, "");
   return {
     subject: `${input.campName}: please read and acknowledge — ${input.title}`,
     text:
       `${input.campName} has posted an announcement they need you to read and acknowledge: "${input.title}".\n\n` +
-      `Open it here: ${announcementPath(input.announcementId)}\n\n` +
+      `Open it here: ${base}${announcementPath(input.announcementId)}\n\n` +
       `You'll see it the next time you open the Contributors portal.`,
   };
 }

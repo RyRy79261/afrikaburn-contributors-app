@@ -23,6 +23,7 @@ const stubs = vi.hoisted(() => ({
   sender: null as unknown,
   saved: [] as unknown[],
   published: [] as unknown[],
+  scheduling: false,
 }));
 
 vi.mock("@/lib/session", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/edition", () => ({
   getActiveEdition: async () => ({ id: "ed-2027", year: 2027 }),
 }));
 vi.mock("@/lib/announcements-store", () => ({
+  announcementSchedulingEnabled: () => stubs.scheduling,
   getSenderContext: async () => stubs.sender,
   saveCampAnnouncementDraft: async (input: unknown) => {
     stubs.saved.push(input);
@@ -79,6 +81,7 @@ beforeEach(() => {
   stubs.sender = kitchenPoster();
   stubs.saved = [];
   stubs.published = [];
+  stubs.scheduling = false;
 });
 
 describe("saveAnnouncementDraftAction", () => {
@@ -154,6 +157,7 @@ describe("saveAnnouncementDraftAction", () => {
   });
 
   it("refuses a send time in the past", async () => {
+    stubs.scheduling = true;
     dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
     const result = await actions.saveAnnouncementDraftAction({
       ...DRAFT,
@@ -161,6 +165,44 @@ describe("saveAnnouncementDraftAction", () => {
     });
     expect(result.ok).toBe(false);
     expect(stubs.saved).toHaveLength(0);
+  });
+});
+
+describe("scheduled sending is off unless a scheduler is wired", () => {
+  const tomorrow = () =>
+    new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  // Regression: a lead could save and publish a scheduled announcement that
+  // nothing would ever dispatch, and a published one cannot be edited.
+  it("refuses a future send time while scheduling is off", async () => {
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction({
+      ...DRAFT,
+      sendAt: tomorrow(),
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: ANNOUNCEMENT_MESSAGES.schedulingOff,
+    });
+    expect(stubs.saved).toHaveLength(0);
+  });
+
+  it("still saves a send-now draft while scheduling is off", async () => {
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction(DRAFT);
+    expect(result).toMatchObject({ ok: true });
+    expect(stubs.saved).toHaveLength(1);
+  });
+
+  it("accepts a future send time once scheduling is on", async () => {
+    stubs.scheduling = true;
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction({
+      ...DRAFT,
+      sendAt: tomorrow(),
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(stubs.saved).toHaveLength(1);
   });
 });
 

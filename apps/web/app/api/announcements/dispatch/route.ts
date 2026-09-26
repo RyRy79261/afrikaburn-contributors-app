@@ -16,9 +16,11 @@ import { dispatchDueCampAnnouncements } from "@/lib/announcements-store";
 // NOT SCHEDULED BY THIS CHANGE. Nothing in apps/web/vercel.json calls it yet —
 // adding a cron entry is a deployment decision (plan limits on cron frequency,
 // and the Aug 2026 "no Vercel cron jobs" note in the deadline-reminder route).
-// Until something calls it, a scheduled announcement stays published-but-
-// undelivered; immediate announcements are unaffected (they fan out inline).
-// Wire it the same way as the deadline reminders:
+// So scheduling ships OFF: unless ANNOUNCEMENT_DISPATCH_ENABLED=true, the
+// composer hides "Send later" and save/publish refuse a send time (a published
+// announcement is immutable, so one nothing delivers would be lost). Set the
+// flag in the same change that wires a caller, the same way as the deadline
+// reminders:
 //
 //   · a Vercel Cron entry in `apps/web/vercel.json`, or
 //   · any scheduler issuing `GET /api/announcements/dispatch` with the bearer.

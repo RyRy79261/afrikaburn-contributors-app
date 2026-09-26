@@ -258,10 +258,13 @@ never logs a connection string — only the host.
   `/api/announcements/dispatch`, which delivers camp announcements an author
   SCHEDULED for later (epic #56; docs/notifications-spec.md §Camp announcements).
   Like the other jobs it also accepts `CRON_SECRET` and refuses unauthenticated
-  callers. **Nothing schedules it yet** — until a Vercel Cron entry or an external
-  scheduler calls it, a scheduled announcement stays published but undelivered
-  (announcements sent immediately are unaffected). Runs are idempotent: each
-  announcement is claimed by a compare-and-set on `dispatched_at`, and deliveries
+  callers. **Nothing schedules it yet**, so scheduled sending ships switched
+  OFF: unless `ANNOUNCEMENT_DISPATCH_ENABLED=true`, the composer hides "Send
+  later" and both save and publish refuse a send time (a published announcement
+  is immutable, so accepting one that nothing will deliver would lose it). Set
+  the flag only in the same change that wires a Vercel Cron entry or external
+  scheduler to the route. Announcements sent immediately are unaffected. Runs
+  are idempotent: each announcement is claimed by a compare-and-set on `dispatched_at`, and deliveries
   insert against a unique (bulletin, recipient) index.
 
 ## 5. Smoke test — the live path

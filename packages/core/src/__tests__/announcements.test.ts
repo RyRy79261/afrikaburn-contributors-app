@@ -16,6 +16,7 @@ import {
   decideDispatch,
   explainDraftRefusal,
   explainPinRefusal,
+  isAnnouncementSchedulingEnabled,
   isDueForDispatch,
   resolveCampAnnouncementRecipients,
   sortPinned,
@@ -426,19 +427,44 @@ describe("sortPinned — a total order", () => {
 describe("scheduling and dispatch", () => {
   const now = new Date("2027-03-01T08:00:00Z");
 
+  const on = { schedulingEnabled: true };
+  const off = { schedulingEnabled: false };
+
   it("validateSendAt: null is now, the past is refused, a year is the horizon", () => {
-    expect(validateSendAt(null, now)).toEqual({ ok: true, sendAt: null });
-    expect(validateSendAt(new Date("2027-02-28T08:00:00Z"), now).ok).toBe(
+    expect(validateSendAt(null, now, on)).toEqual({ ok: true, sendAt: null });
+    expect(validateSendAt(new Date("2027-02-28T08:00:00Z"), now, on).ok).toBe(
       false,
     );
-    expect(validateSendAt(new Date(now.getTime() + 30_000), now).ok).toBe(
+    expect(validateSendAt(new Date(now.getTime() + 30_000), now, on).ok).toBe(
       false,
     );
-    expect(validateSendAt(new Date("2027-03-02T08:00:00Z"), now).ok).toBe(true);
-    expect(validateSendAt(new Date("2028-06-01T08:00:00Z"), now).ok).toBe(
+    expect(validateSendAt(new Date("2027-03-02T08:00:00Z"), now, on).ok).toBe(
+      true,
+    );
+    expect(validateSendAt(new Date("2028-06-01T08:00:00Z"), now, on).ok).toBe(
       false,
     );
-    expect(validateSendAt(new Date("nonsense"), now).ok).toBe(false);
+    expect(validateSendAt(new Date("nonsense"), now, on).ok).toBe(false);
+  });
+
+  // Regression: with no scheduler calling the dispatch route, a scheduled
+  // publish was accepted ("Scheduled for ...") and then never delivered, and a
+  // published announcement cannot be edited or cancelled, so it was lost.
+  it("validateSendAt: a send time is refused while scheduling is off; now still works", () => {
+    expect(validateSendAt(null, now, off)).toEqual({ ok: true, sendAt: null });
+    expect(validateSendAt(new Date("2027-03-02T08:00:00Z"), now, off)).toEqual({
+      ok: false,
+      error: ANNOUNCEMENT_MESSAGES.schedulingOff,
+    });
+  });
+
+  it('isAnnouncementSchedulingEnabled: only an explicit "true" turns it on', () => {
+    expect(isAnnouncementSchedulingEnabled(undefined)).toBe(false);
+    expect(isAnnouncementSchedulingEnabled("")).toBe(false);
+    expect(isAnnouncementSchedulingEnabled("false")).toBe(false);
+    expect(isAnnouncementSchedulingEnabled("1")).toBe(false);
+    expect(isAnnouncementSchedulingEnabled("true")).toBe(true);
+    expect(isAnnouncementSchedulingEnabled(" TRUE ")).toBe(true);
   });
 
   it("isDueForDispatch: only published, scheduled, undelivered CAMP rows whose time came", () => {
@@ -527,6 +553,27 @@ describe("payloads carry no personal data", () => {
     });
     expect(email.subject).toContain("Mad Hatters");
     expect(email.text).toContain("/bulletins/a1");
+  });
+
+  // Regression: the link was the bare path "/bulletins/a1", which an email
+  // client cannot open, so the must-acknowledge nudge had no way through.
+  it("the immediate email links absolutely when the app URL is known", () => {
+    const email = campAnnouncementEmail({
+      campName: "Mad Hatters",
+      title: "Fire safety brief",
+      announcementId: "a1",
+      appUrl: "https://contributors.example.com/",
+    });
+    expect(email.text).toContain(
+      "Open it here: https://contributors.example.com/bulletins/a1",
+    );
+    const relative = campAnnouncementEmail({
+      campName: "Mad Hatters",
+      title: "Fire safety brief",
+      announcementId: "a1",
+      appUrl: null,
+    });
+    expect(relative.text).toContain("Open it here: /bulletins/a1");
   });
 
   it("only a must-acknowledge announcement emails immediately", () => {

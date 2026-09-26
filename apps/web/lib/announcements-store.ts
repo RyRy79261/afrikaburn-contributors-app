@@ -21,6 +21,7 @@ import {
   enforceKindPermissions,
   explainDraftRefusal,
   explainPinRefusal,
+  isAnnouncementSchedulingEnabled,
   resolveCampAnnouncementRecipients,
   shouldSendImmediateEmail,
   validateSendAt,
@@ -707,11 +708,24 @@ async function emailMustAcknowledge(
       campName: fan.campName,
       title: row.title,
       announcementId: row.id,
+      appUrl: process.env.NEXT_PUBLIC_APP_URL ?? null,
     });
     await sendEmail({ to: emails, ...message });
   } catch (err) {
     console.error("[announcements] must-acknowledge email failed", err);
   }
+}
+
+/**
+ * Scheduled sending is on only when the deployment has wired a scheduler to
+ * `/api/announcements/dispatch` and says so with
+ * `ANNOUNCEMENT_DISPATCH_ENABLED=true`. Off by default: nothing else would
+ * ever deliver a scheduled row, and a published one cannot be edited.
+ */
+export function announcementSchedulingEnabled(): boolean {
+  return isAnnouncementSchedulingEnabled(
+    process.env.ANNOUNCEMENT_DISPATCH_ENABLED,
+  );
 }
 
 // --- Publish ------------------------------------------------------------
@@ -733,6 +747,8 @@ export async function publishCampAnnouncement(input: {
   actorId: string;
   activeEditionId: string;
   now?: Date;
+  /** Defaults to the deployment flag; tests pass it explicitly. */
+  schedulingEnabled?: boolean;
 }): Promise<PublishOutcome> {
   const now = input.now ?? new Date();
   let emailAfter: { row: FanOutRow; fan: FanOutResult } | null = null;
@@ -761,7 +777,10 @@ export async function publishCampAnnouncement(input: {
             "This draft was written for an earlier edition. Start a new announcement for this one.",
         };
       }
-      const schedule = validateSendAt(row.sendAt, now);
+      const schedule = validateSendAt(row.sendAt, now, {
+        schedulingEnabled:
+          input.schedulingEnabled ?? announcementSchedulingEnabled(),
+      });
       if (!schedule.ok) return { ok: false, error: schedule.error };
       const scheduled = schedule.sendAt !== null;
 

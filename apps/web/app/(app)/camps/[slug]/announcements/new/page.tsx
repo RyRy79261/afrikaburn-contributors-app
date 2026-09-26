@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { PreviewNotice } from "@/components/preview-notice";
 import { AnnouncementComposer } from "@/components/announcements/composer";
+import { announcementSchedulingEnabled } from "@/lib/announcements-store";
 import { composerData, loadAnnouncementsContext } from "../context";
 import {
   deleteAnnouncementDraftAction,
@@ -45,6 +46,7 @@ export default async function NewCampAnnouncementPage({
         roles={data.roles}
         members={data.members}
         scope={data.scope}
+        schedulingEnabled={announcementSchedulingEnabled()}
         saveAction={saveAnnouncementDraftAction}
         publishAction={publishAnnouncementAction}
         deleteAction={deleteAnnouncementDraftAction}

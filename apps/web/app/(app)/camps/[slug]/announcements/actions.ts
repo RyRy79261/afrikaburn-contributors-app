@@ -19,6 +19,7 @@ import { getActiveEdition } from "@/lib/edition";
 import { requireCampUser } from "@/lib/session";
 import {
   deleteCampAnnouncementDraft,
+  announcementSchedulingEnabled,
   getSenderContext,
   publishCampAnnouncement,
   saveCampAnnouncementDraft,
@@ -117,7 +118,9 @@ export async function saveAnnouncementDraftAction(
   }
 
   const sendAt = input.sendAt ? new Date(input.sendAt) : null;
-  const schedule = validateSendAt(sendAt, new Date());
+  const schedule = validateSendAt(sendAt, new Date(), {
+    schedulingEnabled: announcementSchedulingEnabled(),
+  });
   if (!schedule.ok) return schedule;
 
   const result = await saveCampAnnouncementDraft({

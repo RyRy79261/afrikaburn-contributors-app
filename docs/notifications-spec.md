@@ -150,8 +150,12 @@ unique on `(bulletin_id, user_id)`.
   `published_at` (it is now immutable) but not `dispatched_at`; the
   `/api/announcements/dispatch` job (CRON_SECRET / ANNOUNCEMENT_DISPATCH_SECRET
   bearer) claims due rows by compare-and-set on `dispatched_at IS NULL`,
-  re-checks the sender, and fans out. **Nothing schedules that route yet** — see
+  re-checks the sender, and fans out. **Nothing schedules that route yet**, so
+  scheduling is gated by `ANNOUNCEMENT_DISPATCH_ENABLED=true` (off by default):
+  while off, "Send later" is hidden and save/publish refuse a send time — see
   docs/deploy.md.
+- **Email link:** the must-acknowledge email links to
+  `NEXT_PUBLIC_APP_URL` + `/bulletins/<id>` (a bare path when the URL is unset).
 - **Product law:** announcements carry no personal data about members (payload =
   camp name + the author's title); free camps stay undiscoverable (only that
   camp's own members are ever reached, and the sender surface 404s for

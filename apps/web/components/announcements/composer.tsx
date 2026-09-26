@@ -83,6 +83,7 @@ export function AnnouncementComposer({
   members,
   scope,
   draft,
+  schedulingEnabled,
   saveAction,
   publishAction,
   deleteAction,
@@ -93,6 +94,9 @@ export function AnnouncementComposer({
   members: { roleIds: string[] }[];
   scope: ComposerScope;
   draft?: ComposerDraft;
+  /** Is a scheduler wired to the dispatch route? Off hides "Send later"
+   * entirely (the server refuses a send time anyway). */
+  schedulingEnabled: boolean;
   saveAction: SaveAction;
   publishAction: PublishAction;
   deleteAction: IdAction;
@@ -112,7 +116,7 @@ export function AnnouncementComposer({
   );
   const [meetingUrl, setMeetingUrl] = React.useState(draft?.meetingUrl ?? "");
   const [sendAtLocal, setSendAtLocal] = React.useState(
-    toLocalInput(draft?.sendAt ?? null),
+    schedulingEnabled ? toLocalInput(draft?.sendAt ?? null) : "",
   );
 
   const targetable = new Set(scope.targetableRoleIds);
@@ -341,18 +345,20 @@ export function AnnouncementComposer({
           />
         </Field>
 
-        <Field
-          label="Send later"
-          htmlFor="announcement-send-at"
-          help="Optional. Leave empty to send when you publish. A scheduled send goes out on the next dispatch run after this time."
-        >
-          <Input
-            id="announcement-send-at"
-            type="datetime-local"
-            value={sendAtLocal}
-            onChange={(e) => setSendAtLocal(e.target.value)}
-          />
-        </Field>
+        {schedulingEnabled && (
+          <Field
+            label="Send later"
+            htmlFor="announcement-send-at"
+            help="Optional. Leave empty to send when you publish. A scheduled send goes out on the next dispatch run after this time."
+          >
+            <Input
+              id="announcement-send-at"
+              type="datetime-local"
+              value={sendAtLocal}
+              onChange={(e) => setSendAtLocal(e.target.value)}
+            />
+          </Field>
+        )}
 
         <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 p-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />

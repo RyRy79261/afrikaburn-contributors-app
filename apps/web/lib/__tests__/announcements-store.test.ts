@@ -287,6 +287,7 @@ describe("publishCampAnnouncement", () => {
       id: DRAFT,
       actorId: AUTHOR,
       activeEditionId: EDITION,
+      schedulingEnabled: true,
     });
 
     expect(result).toEqual({ ok: true, recipients: 0, scheduledFor: later });
@@ -294,6 +295,47 @@ describe("publishCampAnnouncement", () => {
     const set = bulletinUpdates()[0]!.arg("set") as Record<string, unknown>;
     expect(set.dispatchedAt).toBeNull();
     expect(set.publishedAt).toBeInstanceOf(Date);
+  });
+
+  // Regression: with no scheduler wired, a scheduled publish was claimed
+  // (published, immutable) and then never delivered by anything.
+  it("a scheduled draft is refused, unclaimed, while scheduling is off", async () => {
+    const later = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    queueSender({ posterGrants: true });
+    dbMock.queue([draftRow({ sendAt: later })], [{ id: DRAFT }], []);
+
+    const result = await store.publishCampAnnouncement({
+      groupId: CAMP,
+      id: DRAFT,
+      actorId: AUTHOR,
+      activeEditionId: EDITION,
+      schedulingEnabled: false,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: ANNOUNCEMENT_MESSAGES.schedulingOff,
+    });
+    expect(bulletinUpdates()).toHaveLength(0);
+    expect(notificationInserts()).toHaveLength(0);
+  });
+
+  it("the scheduling flag defaults to the deployment env, off when unset", async () => {
+    vi.stubEnv("ANNOUNCEMENT_DISPATCH_ENABLED", "");
+    const later = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    queueSender({ posterGrants: true });
+    dbMock.queue([draftRow({ sendAt: later })], [{ id: DRAFT }], []);
+
+    const result = await store.publishCampAnnouncement({
+      groupId: CAMP,
+      id: DRAFT,
+      actorId: AUTHOR,
+      activeEditionId: EDITION,
+    });
+    vi.unstubAllEnvs();
+
+    expect(result.ok).toBe(false);
+    expect(bulletinUpdates()).toHaveLength(0);
   });
 
   it("a must-acknowledge publish emails the recipients after commit", async () => {
@@ -318,6 +360,36 @@ describe("publishCampAnnouncement", () => {
     expect(result.ok).toBe(true);
     expect(mail.sent).toHaveLength(1);
     expect(mail.sent[0]).toMatchObject({ to: ["cook@example.com"] });
+  });
+
+  // Regression: the email linked the bare path "/bulletins/<id>", which no
+  // email client can open.
+  it("the must-acknowledge email links to the app's absolute URL", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://contributors.example.com");
+    queueSender({ posterGrants: true });
+    dbMock.queue(
+      [draftRow({ presentation: "acknowledge" })],
+      [{ id: DRAFT }],
+      [],
+    );
+    queueFanOutReads();
+    dbMock.queue(
+      /* notifications insert */ [],
+      [{ email: "cook@example.com" }],
+    );
+
+    await store.publishCampAnnouncement({
+      groupId: CAMP,
+      id: DRAFT,
+      actorId: AUTHOR,
+      activeEditionId: EDITION,
+    });
+    vi.unstubAllEnvs();
+
+    expect(mail.sent).toHaveLength(1);
+    expect((mail.sent[0] as { text: string }).text).toContain(
+      `https://contributors.example.com/bulletins/${DRAFT}`,
+    );
   });
 });
 
