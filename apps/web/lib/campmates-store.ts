@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   areCampMates,
   buildCampPeopleView,
@@ -50,6 +50,8 @@ const SAFE_BIO_COLUMNS = {
   privacyFlags: schema.burnerBios.privacyFlags,
   contactable: schema.burnerBios.contactable,
   listedInCampPeople: schema.burnerBios.listedInCampPeople,
+  // Confirmation: every camp-mate exposure requires it (core module header).
+  completedAt: schema.burnerBios.completedAt,
 };
 
 type SafeBioRow = {
@@ -70,7 +72,13 @@ type SafeBioRow = {
   privacyFlags: Record<string, unknown>;
   contactable: string;
   listedInCampPeople: boolean;
+  completedAt: Date | null;
 };
+
+/** Has the subject confirmed this edition's bio? A missing row is not. */
+function isConfirmed(row: SafeBioRow | undefined): boolean {
+  return row?.completedAt != null;
+}
 
 /** Column-shaped fields with every sensitive slot EMPTY — they were never
  * loaded, so they cannot be projected. */
@@ -188,6 +196,7 @@ export async function getCampmateBioView(input: {
     fields: safeFields(row),
     privacyFlags: flagsOf(row),
     extras: safeExtras(row),
+    confirmed: isConfirmed(row),
   });
 }
 
@@ -230,6 +239,7 @@ export async function resolveAvatarForViewer(input: {
     viewerSignedIn: true,
     privacyFlags: flagsOf(bio),
     subjectSanitized: subject.sanitizedAt != null,
+    subjectConfirmed: isConfirmed(bio),
   });
   return allowed ? subject.avatarKey : null;
 }
@@ -259,6 +269,7 @@ export async function canViewerContact(input: {
     ctx,
     contactable: bio?.contactable,
     subjectSanitized: subject.sanitizedAt != null,
+    subjectConfirmed: isConfirmed(bio),
   });
 }
 
@@ -324,6 +335,8 @@ export async function listCampPeople(input: {
       and(
         eq(schema.memberships.groupId, group.id),
         eq(schema.burnerBios.listedInCampPeople, true),
+        // Confirmed this edition only — a carried, unconfirmed opt-in is inert.
+        isNotNull(schema.burnerBios.completedAt),
       ),
     );
 
@@ -342,6 +355,7 @@ export async function listCampPeople(input: {
       privacyFlags: flagsOf(row),
       extras: safeExtras(row),
       listedInCampPeople: row.listedInCampPeople,
+      confirmed: isConfirmed(row),
     },
   }));
 

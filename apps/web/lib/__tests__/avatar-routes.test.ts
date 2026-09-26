@@ -103,6 +103,9 @@ function bio(flags: Record<string, unknown>) {
     privacyFlags: flags,
     contactable: "nobody",
     listedInCampPeople: false,
+    // Confirmed this edition — an unconfirmed bio shows its photo to nobody
+    // but its owner (campmates-store.test.ts covers that case).
+    completedAt: new Date("2027-01-10T00:00:00Z"),
   };
 }
 

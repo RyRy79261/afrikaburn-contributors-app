@@ -53,6 +53,8 @@ function safeBio(overrides: Record<string, unknown> = {}) {
     privacyFlags: {},
     contactable: "nobody",
     listedInCampPeople: false,
+    // Confirmed this edition. The unconfirmed (draft) case is its own block.
+    completedAt: new Date("2027-01-10T00:00:00Z"),
     ...overrides,
   };
 }
@@ -375,6 +377,99 @@ describe("listCampPeople", () => {
     const cols = selectedColumns(2);
     expect(cols).toContain("listedInCampPeople");
     for (const col of SENSITIVE_COLUMNS) expect(cols).not.toContain(col);
+  });
+});
+
+// Regression (review of epic #68): onboarding saves DRAFTS on "Save & continue"
+// and "Finish later", and a new edition's draft carries last year's camp-mate
+// choices. Until the member confirms on the Privacy step (completed_at set),
+// none of those choices may expose them — each case below is the most-open
+// carried setting on an UNCONFIRMED row, against the viewer it would admit.
+describe("an unconfirmed (carried-forward draft) bio exposes nothing", () => {
+  const DRAFT = { completedAt: null };
+  const KEY = `avatars/${ALICE}/photo-x.png`;
+
+  it("the people view does not list a carried opt-in, and filters on confirmation in the query", async () => {
+    dbMock.queue(
+      [{ id: CAMP_A, kind: THEME_CAMP, name: "Mad Hatters", slug: "mad-hatters" }],
+      [m(REN, CAMP_A)],
+      [
+        {
+          ...safeBio({
+            ...DRAFT,
+            listedInCampPeople: true,
+            privacyFlags: { homeCity: "camp_mates" },
+          }),
+          username: "alice_hatter",
+          sanitizedAt: null,
+          avatarKey: null,
+        },
+      ],
+    );
+    const result = await listCampPeople({
+      viewerUserId: REN,
+      slug: "mad-hatters",
+      editionId: EDITION,
+    });
+    expect(result?.people).toEqual([]);
+    expect(selectedColumns(2)).toContain("completedAt");
+  });
+
+  it("the camp-mate view is refused", async () => {
+    dbMock.queue(
+      [m(REN, CAMP_A), m(ALICE, CAMP_A)],
+      [safeBio({ ...DRAFT, privacyFlags: { homeCity: "camp_mates" } })],
+    );
+    expect(
+      await getCampmateBioView({
+        viewerUserId: REN,
+        subjectUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBeNull();
+  });
+
+  it("a carried contactable=anyone admits nobody", async () => {
+    dbMock.queue(
+      [{ sanitizedAt: null }],
+      [m(REN, CAMP_A), m(ALICE, CAMP_A)],
+      [safeBio({ ...DRAFT, contactable: "anyone" })],
+    );
+    expect(
+      await canViewerContact({
+        viewerUserId: REN,
+        subjectUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(false);
+  });
+
+  it("a carried camp_mates photo is refused to a camp-mate, but still served to its owner", async () => {
+    dbMock.queue(
+      [{ avatarKey: KEY, sanitizedAt: null }],
+      [m(REN, CAMP_A), m(ALICE, CAMP_A)],
+      [safeBio({ ...DRAFT, privacyFlags: { avatar: "camp_mates" } })],
+    );
+    expect(
+      await resolveAvatarForViewer({
+        viewerUserId: REN,
+        subjectUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBeNull();
+
+    dbMock.reset();
+    dbMock.queue(
+      [{ avatarKey: KEY, sanitizedAt: null }],
+      [safeBio({ ...DRAFT, privacyFlags: { avatar: "camp_mates" } })],
+    );
+    expect(
+      await resolveAvatarForViewer({
+        viewerUserId: ALICE,
+        subjectUserId: ALICE,
+        editionId: EDITION,
+      }),
+    ).toBe(KEY);
   });
 });
 

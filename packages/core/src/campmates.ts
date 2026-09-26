@@ -37,6 +37,18 @@
 // members who opted in for this edition, shows each of them only as a
 // camp-mate would see them, and is served only to a member of that same camp —
 // never to a non-member, so a free camp's roster stays undiscoverable.
+//
+// ── ONLY A CONFIRMED BIO EXPOSES ANYTHING ───────────────────────────────────
+//
+// Every camp-mate exposure — the camp-mate view, the photo (to anyone but its
+// owner), contactability and the people-view listing — requires the subject's
+// bio for THIS edition to be CONFIRMED (`burner_bios.completed_at` set). A new
+// edition's bio opens pre-filled from last year's (./bio-carry-forward), and
+// the onboarding flow saves drafts as the member moves through it, so an
+// unconfirmed row may hold last year's "list me / contact me / show my photo"
+// choices that the member has not yet seen this year. Those are a DEFAULT the
+// member confirms on the Privacy step; until they press the final button the
+// row is inert here and they read as private to everyone else.
 
 import type { GroupKind } from "@quagga/types";
 import {
@@ -106,8 +118,12 @@ export function campmateBioView(
     fields: BurnerBioFields;
     privacyFlags: Readonly<Record<string, unknown>>;
     extras?: BioExtras;
+    /** This edition's bio was confirmed (completed_at set). Unconfirmed ⇒
+     * refused: carried-forward levels are a default, not a choice yet. */
+    confirmed: boolean;
   },
 ): PublicBioView | null {
+  if (!bio.confirmed) return null;
   if (!areCampMates(ctx)) return null;
   return campMateProjection(
     bio.fields,
@@ -140,10 +156,14 @@ export function canViewAvatar(input: {
   privacyFlags: Readonly<Record<string, unknown>>;
   /** A sanitized (deleted) account shows nobody anything. */
   subjectSanitized?: boolean;
+  /** The subject's bio this edition is confirmed. The owner sees their own
+   * photo regardless; everyone else only once the level is confirmed. */
+  subjectConfirmed: boolean;
 }): boolean {
   if (!input.viewerSignedIn) return false;
   if (input.subjectSanitized) return false;
   if (input.ctx.viewerUserId === input.ctx.subjectUserId) return true;
+  if (!input.subjectConfirmed) return false;
   const level = avatarVisibility(input.privacyFlags);
   if (level === "public") return true;
   if (level === "camp_mates") return areCampMates(input.ctx);
@@ -182,9 +202,12 @@ export function canContact(input: {
   ctx: CampmateContext;
   contactable: unknown;
   subjectSanitized?: boolean;
+  /** The subject's bio this edition is confirmed — see the module header. */
+  subjectConfirmed: boolean;
 }): boolean {
   if (input.ctx.viewerUserId === input.ctx.subjectUserId) return false;
   if (input.subjectSanitized) return false;
+  if (!input.subjectConfirmed) return false;
   const level = readContactability(input.contactable);
   if (level === "anyone") return true;
   if (level === "camp_mates") return areCampMates(input.ctx);
@@ -256,6 +279,8 @@ export interface CampPersonInput {
     privacyFlags: Readonly<Record<string, unknown>>;
     extras?: BioExtras;
     listedInCampPeople: boolean;
+    /** completed_at set this edition. An unconfirmed opt-in lists nobody. */
+    confirmed: boolean;
   } | null;
   memberships: readonly CampmateMembership[];
 }
@@ -286,6 +311,8 @@ export function buildCampPeopleView(input: {
   const cards: CampPersonCard[] = [];
   for (const member of input.members) {
     if (member.sanitized || !member.bio?.listedInCampPeople) continue;
+    // A carried-forward opt-in the member has not confirmed this edition.
+    if (!member.bio.confirmed) continue;
     // The listed member must ALSO be in this group — a loader bug that handed
     // over someone else's row must not put a stranger on the list.
     const inGroup = member.memberships.some(
@@ -323,6 +350,7 @@ export function buildCampPeopleView(input: {
               viewerSignedIn: true,
               privacyFlags: member.bio.privacyFlags,
               subjectSanitized: member.sanitized,
+              subjectConfirmed: member.bio.confirmed,
             })),
       fields,
     });

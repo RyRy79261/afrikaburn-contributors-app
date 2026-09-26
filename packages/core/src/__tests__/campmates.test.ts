@@ -230,6 +230,7 @@ describe("campmateBioView", () => {
   it("shows camp-mates what was shared with camp-mates or everyone", () => {
     const view = campmateBioView(ctx(REN, ren, ALICE, alice), {
       fields: fields(),
+      confirmed: true,
       privacyFlags: { homeCity: "camp_mates", bio: true, skills: false },
     });
     expect(view).not.toBeNull();
@@ -242,6 +243,7 @@ describe("campmateBioView", () => {
     expect(
       campmateBioView(ctx(JABU, jabu, ALICE, alice), {
         fields: fields(),
+        confirmed: true,
         privacyFlags: { homeCity: "camp_mates" },
       }),
     ).toBeNull();
@@ -256,6 +258,7 @@ describe("campmateBioView", () => {
     expect(
       campmateBioView(ctx(ALICE, leadOfA, JABU, memberOfB), {
         fields: fields(),
+        confirmed: true,
         privacyFlags: everyFieldAt("camp_mates"),
       }),
     ).toBeNull();
@@ -282,6 +285,7 @@ describe("campmateBioView", () => {
   it("never carries a hard-locked field or medical, even with every flag camp_mates", () => {
     const view = campmateBioView(ctx(REN, ren, ALICE, alice), {
       fields: fields(),
+      confirmed: true,
       privacyFlags: everyFieldAt("camp_mates"),
     });
     const serialised = JSON.stringify(view);
@@ -310,6 +314,7 @@ describe("profile photo visibility", () => {
       canViewAvatar({
         ctx: ctx(JABU, stranger, ALICE, alice),
         viewerSignedIn: true,
+        subjectConfirmed: true,
         privacyFlags: flags,
       }),
     ).toBe(false);
@@ -317,6 +322,7 @@ describe("profile photo visibility", () => {
       canViewAvatar({
         ctx: ctx(REN, ren, ALICE, alice),
         viewerSignedIn: true,
+        subjectConfirmed: true,
         privacyFlags: flags,
       }),
     ).toBe(true);
@@ -327,6 +333,7 @@ describe("profile photo visibility", () => {
       canViewAvatar({
         ctx: ctx(REN, ren, ALICE, alice),
         viewerSignedIn: true,
+        subjectConfirmed: true,
         privacyFlags: { avatar: false },
       }),
     ).toBe(false);
@@ -334,6 +341,7 @@ describe("profile photo visibility", () => {
       canViewAvatar({
         ctx: ctx(ALICE, alice, ALICE, alice),
         viewerSignedIn: true,
+        subjectConfirmed: true,
         privacyFlags: { avatar: false },
       }),
     ).toBe(true);
@@ -343,6 +351,7 @@ describe("profile photo visibility", () => {
     const base = {
       ctx: ctx(JABU, stranger, ALICE, alice),
       privacyFlags: { avatar: true },
+      subjectConfirmed: true,
     };
     expect(canViewAvatar({ ...base, viewerSignedIn: true })).toBe(true);
     expect(canViewAvatar({ ...base, viewerSignedIn: false })).toBe(false);
@@ -436,28 +445,30 @@ describe("contactability", () => {
   it("nobody ⇒ refused to all; camp_mates ⇒ camp-mates only; anyone ⇒ all", () => {
     const asMate = ctx(REN, ren, ALICE, alice);
     const asStranger = ctx(JABU, stranger, ALICE, alice);
-    expect(canContact({ ctx: asMate, contactable: "nobody" })).toBe(false);
-    expect(canContact({ ctx: asMate, contactable: "camp_mates" })).toBe(true);
-    expect(canContact({ ctx: asStranger, contactable: "camp_mates" })).toBe(
+    expect(canContact({ ctx: asMate, contactable: "nobody", subjectConfirmed: true })).toBe(false);
+    expect(canContact({ ctx: asMate, contactable: "camp_mates", subjectConfirmed: true })).toBe(true);
+    expect(canContact({ ctx: asStranger, contactable: "camp_mates", subjectConfirmed: true })).toBe(
       false,
     );
-    expect(canContact({ ctx: asStranger, contactable: "anyone" })).toBe(true);
+    expect(canContact({ ctx: asStranger, contactable: "anyone", subjectConfirmed: true })).toBe(true);
   });
 
   it("fails closed on junk, self and a sanitized account", () => {
     const asMate = ctx(REN, ren, ALICE, alice);
-    expect(canContact({ ctx: asMate, contactable: "everyone" })).toBe(false);
-    expect(canContact({ ctx: asMate, contactable: undefined })).toBe(false);
+    expect(canContact({ ctx: asMate, contactable: "everyone", subjectConfirmed: true })).toBe(false);
+    expect(canContact({ ctx: asMate, contactable: undefined, subjectConfirmed: true })).toBe(false);
     expect(
       canContact({
         ctx: ctx(ALICE, alice, ALICE, alice),
         contactable: "anyone",
+        subjectConfirmed: true,
       }),
     ).toBe(false);
     expect(
       canContact({
         ctx: asMate,
         contactable: "anyone",
+        subjectConfirmed: true,
         subjectSanitized: true,
       }),
     ).toBe(false);
@@ -476,6 +487,7 @@ describe("people in my camp", () => {
       flags?: Record<string, unknown>;
       sanitized?: boolean;
       hasAvatar?: boolean;
+      confirmed?: boolean;
     } = {},
   ): CampPersonInput {
     return {
@@ -489,6 +501,7 @@ describe("people in my camp", () => {
         extras: emptyBioExtras(),
         privacyFlags: opts.flags ?? { homeCity: "camp_mates" },
         listedInCampPeople: opts.listed ?? false,
+        confirmed: opts.confirmed ?? true,
       },
     };
   }
@@ -596,6 +609,79 @@ describe("people in my camp", () => {
     });
     expect(view?.find((c) => c.userId === ALICE)?.showAvatar).toBe(true);
     expect(view?.find((c) => c.userId === JABU)?.showAvatar).toBe(false);
+  });
+});
+
+// Regression (review of epic #68): a new edition's onboarding saves drafts that
+// carry last year's camp-mate choices. Until the member confirms this edition's
+// bio, every exposure is refused — the most-open setting on an unconfirmed bio,
+// against the viewer it would otherwise admit.
+describe("an unconfirmed bio exposes nothing to anyone but its owner", () => {
+  const alice = [inCamp(CAMP_A)];
+  const ren = [inCamp(CAMP_A)];
+
+  it("campmateBioView refuses a camp-mate", () => {
+    expect(
+      campmateBioView(ctx(REN, ren, ALICE, alice), {
+        fields: fields(),
+        confirmed: false,
+        privacyFlags: { homeCity: "camp_mates" },
+      }),
+    ).toBeNull();
+  });
+
+  it("the photo is refused to a camp-mate, still shown to its owner", () => {
+    expect(
+      canViewAvatar({
+        ctx: ctx(REN, ren, ALICE, alice),
+        viewerSignedIn: true,
+        privacyFlags: { avatar: true },
+        subjectConfirmed: false,
+      }),
+    ).toBe(false);
+    expect(
+      canViewAvatar({
+        ctx: ctx(ALICE, alice, ALICE, alice),
+        viewerSignedIn: true,
+        privacyFlags: { avatar: false },
+        subjectConfirmed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("contactable=anyone admits nobody", () => {
+    expect(
+      canContact({
+        ctx: ctx(REN, ren, ALICE, alice),
+        contactable: "anyone",
+        subjectConfirmed: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("a carried people-view opt-in lists nobody", () => {
+    const view = buildCampPeopleView({
+      viewerUserId: REN,
+      viewerMemberships: ren,
+      groupId: CAMP_A,
+      groupKind: THEME_CAMP,
+      members: [
+        {
+          userId: ALICE,
+          displayName: "lice",
+          sanitized: false,
+          hasAvatar: true,
+          memberships: alice,
+          bio: {
+            fields: fields(),
+            privacyFlags: { homeCity: "camp_mates", avatar: "camp_mates" },
+            listedInCampPeople: true,
+            confirmed: false,
+          },
+        },
+      ],
+    });
+    expect(view).toEqual([]);
   });
 });
 

@@ -69,8 +69,13 @@ import type { PrivacyFlags } from "./privacy";
 // you are listed in your camp's people view — along with every per-field level,
 // including the photo's (it is a privacy flag). They are pre-fill like the rest:
 // the returning burner sees them on the flow's Privacy step and confirms them by
-// pressing the final button, and nothing is written for the new edition until
-// they do. A setting that was never chosen carries as its private default.
+// pressing the final button. The flow DOES save drafts before that (each "Save &
+// continue" and "Finish later" writes the row, carried values included, so a
+// resumed flow shows what they were shown) — but a draft is inert: every camp-
+// mate read path (./campmates) requires the new edition's bio to be confirmed
+// (`completed_at` set), so until they press the final button they are unlisted,
+// uncontactable and their photo is private to everyone but themselves. A
+// setting that was never chosen carries as its private default.
 //
 // Encryption, hard-locked privacy and the medical access log are unchanged by any
 // of this. When no `PGCRYPTO_KEY` is configured, `decryptOrNull` yields null
