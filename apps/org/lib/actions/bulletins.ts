@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
@@ -34,6 +34,16 @@ import { runAction, type ActionResult } from "./result";
 // the rank. Bulletins are broadcasts to an org audience; project audiences are
 // rejected (those are camp-scoped questionnaires, not org bulletins).
 // Informational only — no data collection.
+
+/**
+ * The row predicate every console bulletin write uses: this id AND an org
+ * bulletin (`group_id IS NULL`). Camp announcements share the table (epic #56)
+ * but are the camp's own — the console can neither publish, edit nor pin one,
+ * and an id that names one answers exactly as a missing id does.
+ */
+function orgBulletin(id: string) {
+  return and(eq(schema.bulletins.id, id), isNull(schema.bulletins.groupId));
+}
 
 function authzMemberships(session: OrgSession): AuthzMembership[] {
   return [{ groupId: session.orgGroupId, role: session.role }];
@@ -152,9 +162,10 @@ export async function saveBulletin(
             title: schema.bulletins.title,
             audience: schema.bulletins.audience,
             publishedAt: schema.bulletins.publishedAt,
+            pinned: schema.bulletins.pinned,
           })
           .from(schema.bulletins)
-          .where(eq(schema.bulletins.id, input.id!))
+          .where(orgBulletin(input.id!))
           .limit(1)
           .for("update");
         if (!existing) throw new Error("That bulletin no longer exists.");
@@ -182,11 +193,21 @@ export async function saveBulletin(
               : { title: input.title, audience: input.audience }),
             bodyMd: input.bodyMd,
             pinned: input.pinned,
+            // The pin's own time orders the dashboard banner (`sortPinned`):
+            // stamped when the pin goes ON, kept while it stays on (re-saving
+            // the body must not bump it to the front), cleared when it goes off.
+            ...(input.pinned
+              ? existing.pinned
+                ? {}
+                : { pinnedAt: now, pinnedByUserId: session.dbUserId }
+              : { pinnedAt: null, pinnedByUserId: null }),
             // Publishing a draft stamps published_at; never un-publish or restamp.
-            ...(input.publish && !alreadyPublished ? { publishedAt: now } : {}),
+            ...(input.publish && !alreadyPublished
+              ? { publishedAt: now, dispatchedAt: now }
+              : {}),
             updatedAt: now,
           })
-          .where(eq(schema.bulletins.id, input.id!));
+          .where(orgBulletin(input.id!));
 
         if (input.publish && !alreadyPublished) {
           await fanOut(
@@ -225,7 +246,10 @@ export async function saveBulletin(
           audience: input.audience,
           createdByUserId: session.dbUserId,
           pinned: input.pinned,
+          pinnedAt: input.pinned ? now : null,
+          pinnedByUserId: input.pinned ? session.dbUserId : null,
           publishedAt: input.publish ? now : null,
+          dispatchedAt: input.publish ? now : null,
         })
         .returning({ id: schema.bulletins.id });
       if (!created) throw new Error("Could not create the bulletin.");
@@ -310,7 +334,7 @@ export async function publishBulletin(
       const [bulletin] = await tx
         .select()
         .from(schema.bulletins)
-        .where(eq(schema.bulletins.id, input.id))
+        .where(orgBulletin(input.id))
         .limit(1)
         .for("update");
       if (!bulletin) throw new Error("That bulletin no longer exists.");
@@ -332,8 +356,8 @@ export async function publishBulletin(
       const now = new Date();
       await tx
         .update(schema.bulletins)
-        .set({ publishedAt: now, updatedAt: now })
-        .where(eq(schema.bulletins.id, input.id));
+        .set({ publishedAt: now, dispatchedAt: now, updatedAt: now })
+        .where(orgBulletin(input.id));
 
       await fanOut(
         tx,
@@ -370,10 +394,21 @@ export async function setBulletinPinned(
     const input = SetPinnedInput.parse(raw);
     // Pin toggle + audit are one atomic unit.
     await withTransaction(async (tx) => {
-      await tx
+      const now = new Date();
+      const updated = await tx
         .update(schema.bulletins)
-        .set({ pinned: input.pinned, updatedAt: new Date() })
-        .where(eq(schema.bulletins.id, input.id));
+        .set({
+          pinned: input.pinned,
+          // The pin's own time orders the dashboard banner (`sortPinned`), so
+          // it is stamped alongside the flag — and cleared with it.
+          pinnedAt: input.pinned ? now : null,
+          pinnedByUserId: input.pinned ? session.dbUserId : null,
+          updatedAt: now,
+        })
+        .where(orgBulletin(input.id))
+        .returning({ id: schema.bulletins.id });
+      // A camp announcement is not the console's to pin.
+      if (!updated[0]) throw new Error("That bulletin no longer exists.");
       await writeAuditEvent(tx, {
         actorId: session.dbUserId,
         action: "bulletin.pin",

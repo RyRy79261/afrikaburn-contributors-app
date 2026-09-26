@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { AudienceSpec } from "@quagga/types";
 
 import { getDb, schema } from "./db";
@@ -62,9 +62,13 @@ export async function listBulletins(): Promise<BulletinSummary[]> {
   if (!isDatabaseConfigured()) return [];
   const db = getDb();
 
+  // ORG bulletins only. Camp announcements share this table (epic #56,
+  // `group_id` set) and are the camp's own: its drafts are its author's, and a
+  // free camp's messages must not surface in the console at all.
   const rows = await db
     .select()
     .from(schema.bulletins)
+    .where(isNull(schema.bulletins.groupId))
     .orderBy(desc(schema.bulletins.createdAt));
 
   // Per-bulletin read/sent tallies from the notifications fan-out. One grouped
@@ -100,10 +104,11 @@ export async function getBulletin(id: string): Promise<BulletinSummary | null> {
   if (!isDatabaseConfigured()) return null;
   const db = getDb();
 
+  // A camp announcement (group_id set) answers exactly as a missing id does.
   const [row] = await db
     .select()
     .from(schema.bulletins)
-    .where(eq(schema.bulletins.id, id))
+    .where(and(eq(schema.bulletins.id, id), isNull(schema.bulletins.groupId)))
     .limit(1);
   if (!row) return null;
 

@@ -193,42 +193,44 @@ describe("the inbox reads — a link for another app is a guaranteed 404", () =>
 });
 
 describe("bulletins — read-side audience enforcement", () => {
-  it("is null when the user has NO notification row for it, published or not", async () => {
-    // This is what stops an org-internal broadcast leaking into a participant
-    // surface: receiving it is what makes it readable.
-    dbMock.queue(/* no notification row */ []);
-
-    expect(await getBulletinForCurrentUser(BULLETIN_ID)).toBeNull();
-    // The bulletin itself was never even read.
-    expect(dbMock.queries).toHaveLength(1);
-  });
-
-  it("is null for an UNPUBLISHED bulletin the user did receive", async () => {
-    dbMock.queue(
-      [{ id: NOTIFICATION_ID }],
-      [
-        {
-          id: BULLETIN_ID,
-          title: "Draft",
-          bodyMd: "not ready",
-          pinned: false,
-          publishedAt: null,
-        },
-      ],
-    );
-
-    expect(await getBulletinForCurrentUser(BULLETIN_ID)).toBeNull();
-  });
-
-  it("returns a published bulletin the user received", async () => {
-    const bulletin = {
+  /** A received bulletin as the joined read returns it. */
+  function received(overrides: Record<string, unknown> = {}) {
+    return {
       id: BULLETIN_ID,
       title: "Gate opens Sunday",
       bodyMd: "# Gate",
       pinned: true,
       publishedAt: new Date("2026-08-01"),
+      groupId: null,
+      campName: null,
+      presentation: "feed",
+      meetingUrl: null,
+      acknowledgedAt: null,
+      ...overrides,
     };
-    dbMock.queue([{ id: NOTIFICATION_ID }], [bulletin]);
+  }
+
+  it("is null when the user has NO notification row for it, published or not", async () => {
+    // This is what stops an org-internal broadcast — or a camp announcement
+    // aimed at other roles — leaking into a participant surface: receiving it
+    // is what makes it readable.
+    dbMock.queue(/* no delivery row, so the join yields nothing */ []);
+
+    expect(await getBulletinForCurrentUser(BULLETIN_ID)).toBeNull();
+    expect(dbMock.queries).toHaveLength(1);
+    // The read is keyed on the CALLER's own delivery: their id is bound.
+    expect(boundStrings(dbMock.queries[0]!)).toContain(USER);
+  });
+
+  it("is null for an UNPUBLISHED bulletin the user did receive", async () => {
+    dbMock.queue([received({ title: "Draft", publishedAt: null })]);
+
+    expect(await getBulletinForCurrentUser(BULLETIN_ID)).toBeNull();
+  });
+
+  it("returns a published bulletin the user received", async () => {
+    const bulletin = received();
+    dbMock.queue([bulletin]);
 
     expect(await getBulletinForCurrentUser(BULLETIN_ID)).toEqual(bulletin);
   });
@@ -238,15 +240,17 @@ describe("bulletins — read-side audience enforcement", () => {
       {
         id: BULLETIN_ID,
         title: "Live",
-        bodyMd: "x",
-        pinned: true,
+        groupId: null,
+        campName: null,
+        pinnedAt: null,
         publishedAt: new Date("2026-08-01"),
       },
       {
         id: "b-2",
         title: "Draft",
-        bodyMd: "y",
-        pinned: true,
+        groupId: null,
+        campName: null,
+        pinnedAt: null,
         publishedAt: null,
       },
     ]);
@@ -254,6 +258,41 @@ describe("bulletins — read-side audience enforcement", () => {
     expect((await getPinnedBulletinsForCurrentUser()).map((b) => b.id)).toEqual(
       [BULLETIN_ID],
     );
+  });
+
+  it("on a camp dashboard, shows AfrikaBurn's pins and THAT camp's, newest pin first", async () => {
+    const CAMP = "33333333-3333-4333-8333-333333333333";
+    const OTHER = "44444444-4444-4444-8444-444444444444";
+    dbMock.queue([
+      {
+        id: "org-old",
+        title: "Org",
+        groupId: null,
+        campName: null,
+        pinnedAt: null,
+        publishedAt: new Date("2026-08-01"),
+      },
+      {
+        id: "camp-new",
+        title: "Ours",
+        groupId: CAMP,
+        campName: "Mad Hatters",
+        pinnedAt: new Date("2026-08-05"),
+        publishedAt: new Date("2026-08-02"),
+      },
+      {
+        id: "other-camp",
+        title: "Theirs",
+        groupId: OTHER,
+        campName: "Camp 404",
+        pinnedAt: new Date("2026-08-09"),
+        publishedAt: new Date("2026-08-09"),
+      },
+    ]);
+
+    expect(
+      (await getPinnedBulletinsForCurrentUser(CAMP)).map((b) => b.id),
+    ).toEqual(["camp-new", "org-old"]);
   });
 
   it("both are empty signed out and env-less", async () => {

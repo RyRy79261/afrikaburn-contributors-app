@@ -7,6 +7,7 @@ import {
   CalendarClock,
   LayoutGrid,
   FileCheck2,
+  Megaphone,
   CheckCircle2,
   ClipboardList,
   UserCog,
@@ -164,7 +165,7 @@ export default async function CampPage({
     isMember ? getOfficerStatus(camp.id, edition.id) : null,
     campUser ? pendingOfficerConsents(campUser.id) : [],
     campUser ? listPendingQuestionnaires(campUser.id) : [],
-    campUser ? getPinnedBulletinsForCurrentUser() : [],
+    campUser ? getPinnedBulletinsForCurrentUser(camp.id) : [],
   ]);
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
@@ -197,6 +198,8 @@ export default async function CampPage({
     !!viewerPerms && hasProjectPermission(viewerPerms, "manage_roles");
   const canViewDetails =
     !!viewerPerms && hasProjectPermission(viewerPerms, "view_member_details");
+  const canPostAnnouncements =
+    !!viewerPerms && hasProjectPermission(viewerPerms, "post_announcements");
 
   // Officer status → settings-link badge; the member's OWN officer roles →
   // banner. The query is app-wide, so narrow it to this camp here. It returns
@@ -227,16 +230,18 @@ export default async function CampPage({
         ? "Continue registration"
         : "Edit registration";
 
-  // Pinned-bulletin banner (canvas RGcNS `adNWQ`). Only pinned, PUBLISHED
-  // bulletins this viewer was actually targeted by resolve — the query joins
-  // through their own notification rows, so an untargeted (or org-internal)
-  // broadcast can never light this banner. Newest wins; no pin, no banner.
-  const pinnedBulletin = pinnedBulletins[0]
-    ? {
-        title: pinnedBulletins[0].title,
-        href: `/bulletins/${pinnedBulletins[0].id}`,
-      }
-    : null;
+  // Pinned banners (canvas RGcNS `adNWQ`). Only pinned, PUBLISHED bulletins
+  // this viewer actually RECEIVED resolve — the query joins through their own
+  // delivery rows, so an untargeted (or org-internal) broadcast, or a camp
+  // announcement sent to roles they don't hold, can never light a banner.
+  // AfrikaBurn's pins and THIS camp's own, in `sortPinned` order; every one is
+  // shown (a pin is never silently dropped off the end) and none dismisses —
+  // a pin stays until its author unpins it.
+  const pinnedBanners = pinnedBulletins.map((b) => ({
+    id: b.id,
+    title: b.campName ? `${b.campName}: ${b.title}` : b.title,
+    href: `/bulletins/${b.id}`,
+  }));
 
   return (
     <>
@@ -267,11 +272,12 @@ export default async function CampPage({
           )}
         </header>
 
-        {pinnedBulletin && (
-          <PinnedBulletinBanner
-            title={pinnedBulletin.title}
-            href={pinnedBulletin.href}
-          />
+        {pinnedBanners.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {pinnedBanners.map((b) => (
+              <PinnedBulletinBanner key={b.id} title={b.title} href={b.href} />
+            ))}
+          </div>
         )}
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
@@ -513,6 +519,34 @@ export default async function CampPage({
                 >
                   <Link href={projectQuestionnairesPath(camp.kind, camp.slug)}>
                     Manage questionnaires
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Announcements — lead/admin, or anyone granted post_announcements */}
+          {canPostAnnouncements && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Megaphone className="h-4 w-4 text-accent" aria-hidden />
+                  Announcements
+                </CardTitle>
+                <CardDescription>
+                  Tell your members what&apos;s happening — the whole camp or
+                  chosen roles, and see who has read it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="secondary"
+                  className="w-full"
+                >
+                  <Link href={`/camps/${camp.slug}/announcements`}>
+                    Manage announcements
                   </Link>
                 </Button>
               </CardContent>
