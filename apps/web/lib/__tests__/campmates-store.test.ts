@@ -13,6 +13,9 @@ const {
   resolveAvatarForViewer,
 } = await import("../campmates-store");
 const { saveCampmateSettings } = await import("../bio-store");
+const { hasAvatar } = await import("../avatar-store");
+const { CampmateSettingsInput, CampmateSettingsPatchInput, PrivacyFlagsInput } =
+  await import("../campmate-input");
 
 // Values from the real vocabularies (AGENTS.md: a fixture outside the enum is
 // inert). Ids are fictional.
@@ -423,5 +426,64 @@ describe("saveCampmateSettings", () => {
       await saveCampmateSettings(ALICE, EDITION, { contactable: "anyone" }),
     ).toBe(false);
     expect(dbMock.writesTo(schema.burnerBios)).toHaveLength(0);
+  });
+});
+
+describe("hasAvatar", () => {
+  it("reports whether a photo is on file", async () => {
+    dbMock.queue(
+      [{ avatarKey: `avatars/${ALICE}/p.png` }],
+      [{ avatarKey: null }],
+    );
+    expect(await hasAvatar(ALICE)).toBe(true);
+    expect(await hasAvatar(ALICE)).toBe(false);
+  });
+});
+
+describe("the Zod boundaries (campmate-input)", () => {
+  it("accepts the legacy booleans and the three named levels, nothing else", () => {
+    expect(
+      PrivacyFlagsInput.safeParse({
+        homeCity: true,
+        bio: false,
+        skills: "camp_mates",
+        about: "public",
+        legalName: "private",
+      }).success,
+    ).toBe(true);
+    expect(PrivacyFlagsInput.safeParse({ homeCity: "everyone" }).success).toBe(
+      false,
+    );
+    expect(PrivacyFlagsInput.safeParse({ homeCity: 1 }).success).toBe(false);
+  });
+
+  it("caps the size of a flags map", () => {
+    const huge = Object.fromEntries(
+      Array.from({ length: 65 }, (_, i) => [`f${i}`, true]),
+    );
+    expect(PrivacyFlagsInput.safeParse(huge).success).toBe(false);
+  });
+
+  it("only takes the contactability vocabulary, and rejects unknown patch keys", () => {
+    expect(
+      CampmateSettingsInput.safeParse({
+        contactable: "camp_mates",
+        listedInCampPeople: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      CampmateSettingsInput.safeParse({
+        contactable: "everyone",
+        listedInCampPeople: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      CampmateSettingsPatchInput.safeParse({ avatarVisibility: "camp_mates" })
+        .success,
+    ).toBe(true);
+    expect(
+      CampmateSettingsPatchInput.safeParse({ privacyFlags: { phone: true } })
+        .success,
+    ).toBe(false);
   });
 });

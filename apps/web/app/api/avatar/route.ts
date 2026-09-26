@@ -19,9 +19,32 @@ import {
 
 export const runtime = "nodejs";
 
-async function authorise(): Promise<
-  { ok: true; userId: string } | { ok: false; response: Response }
-> {
+/**
+ * A cross-site request is refused before the session is even read. These are
+ * cookie-authenticated mutations with no server-action CSRF token, so a page on
+ * another origin must not be able to replace or delete someone's photo with a
+ * forged form post. Browsers send `Origin` on every POST and DELETE; a request
+ * without one (a non-browser client) carries no ambient cookies to abuse.
+ */
+function isCrossSite(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).host !== new URL(request.url).host;
+  } catch {
+    return true;
+  }
+}
+
+async function authorise(
+  request: Request,
+): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
+  if (isCrossSite(request)) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Forbidden." }, { status: 403 }),
+    };
+  }
   const user = await getCurrentCampUser();
   if (!user) {
     return {
@@ -42,7 +65,7 @@ async function authorise(): Promise<
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const auth = await authorise();
+  const auth = await authorise(request);
   if (!auth.ok) return auth.response;
 
   // Cheap early refusal on the declared length; the real cap is enforced on
@@ -95,8 +118,8 @@ export async function POST(request: Request): Promise<Response> {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(): Promise<Response> {
-  const auth = await authorise();
+export async function DELETE(request: Request): Promise<Response> {
+  const auth = await authorise(request);
   if (!auth.ok) return auth.response;
   try {
     await removeAvatar(auth.userId);

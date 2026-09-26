@@ -121,6 +121,13 @@ function uploadRequest(bytes: Uint8Array, type: string, name = "me.png") {
   });
 }
 
+function deleteRequest(origin?: string) {
+  return new Request("http://localhost/api/avatar", {
+    method: "DELETE",
+    headers: origin ? { origin } : {},
+  });
+}
+
 beforeEach(() => {
   dbMock.reset();
   stubs.viewer = null;
@@ -254,7 +261,7 @@ describe("DELETE /api/avatar — remove your own photo", () => {
   it("deletes the blob, then clears the key", async () => {
     stubs.viewer = { id: ALICE };
     dbMock.queue([{ avatarKey: KEY }]);
-    const res = await own.DELETE();
+    const res = await own.DELETE(deleteRequest());
     expect(res.status).toBe(200);
     expect(stubs.dels).toEqual([KEY]);
     const set = dbMock.writesTo(schema.users)[0]!.arg("set") as Record<
@@ -268,15 +275,40 @@ describe("DELETE /api/avatar — remove your own photo", () => {
     stubs.viewer = { id: ALICE };
     stubs.delFails = true;
     dbMock.queue([{ avatarKey: KEY }]);
-    const res = await own.DELETE();
+    const res = await own.DELETE(deleteRequest());
     expect(res.status).toBe(500);
     expect(dbMock.writesTo(schema.users)).toHaveLength(0);
+  });
+
+  it("refuses a cross-site request before reading the session (CSRF)", async () => {
+    stubs.viewer = { id: ALICE };
+    dbMock.queue([{ avatarKey: KEY }]);
+    const res = await own.DELETE(deleteRequest("https://evil.example"));
+    expect(res.status).toBe(403);
+    expect(stubs.dels).toEqual([]);
+    expect(dbMock.queries).toHaveLength(0);
+
+    const form = new FormData();
+    form.append("file", new File([new Uint8Array(PNG)], "me.png"));
+    const post = await own.POST(
+      new Request("http://localhost/api/avatar", {
+        method: "POST",
+        body: form,
+        headers: { origin: "https://evil.example" },
+      }),
+    );
+    expect(post.status).toBe(403);
+    expect(stubs.puts).toHaveLength(0);
+
+    // Same-origin is fine.
+    const ok = await own.DELETE(deleteRequest("http://localhost"));
+    expect(ok.status).toBe(200);
   });
 
   it("never deletes a key outside the member's own prefix", async () => {
     stubs.viewer = { id: ALICE };
     dbMock.queue([{ avatarKey: `avatars/${REN}/theirs.png` }]);
-    await own.DELETE();
+    await own.DELETE(deleteRequest());
     expect(stubs.dels).toEqual([]);
   });
 });
