@@ -483,6 +483,15 @@ visible without scrolling.
   and registration decisions. In-app is source of truth (offline law).
 - Law: bulletins are informational only (no data collection — fewer-forms);
   notifications never leak hard-locked fields; no payment notifications exist.
+- Camp announcements (epic #56) generalise `bulletins` rather than adding a table:
+  `group_id` (null = org), `presentation` (`feed` | `acknowledge`), `meeting_url`,
+  `pin_on_publish`, `pinned_at`, `pinned_by_user_id`, `send_at`, `dispatched_at`,
+  plus a CHECK that a camp row's audience is a project audience for that group.
+  `notifications` gains `acknowledged_at` and a partial unique index on
+  `(bulletin_id, user_id)`. Participant routes `/camps/[slug]/announcements`,
+  `/new`, `/[id]`; job `/api/announcements/dispatch`. Immediate email also for a
+  must-acknowledge announcement. Full model: docs/notifications-spec.md §Camp
+  announcements.
 
 ## Platform/database separation
 

@@ -254,6 +254,15 @@ never logs a connection string — only the host.
   deliberate rather than a gap. Sends are idempotent — one marker per (edition,
   milestone) in `audit_events`, written in the same transaction as the
   notifications, so an at-least-once cron cannot double-notify.
+- **Optional, web only — `ANNOUNCEMENT_DISPATCH_SECRET`**: bearer token for
+  `/api/announcements/dispatch`, which delivers camp announcements an author
+  SCHEDULED for later (epic #56; docs/notifications-spec.md §Camp announcements).
+  Like the other jobs it also accepts `CRON_SECRET` and refuses unauthenticated
+  callers. **Nothing schedules it yet** — until a Vercel Cron entry or an external
+  scheduler calls it, a scheduled announcement stays published but undelivered
+  (announcements sent immediately are unaffected). Runs are idempotent: each
+  announcement is claimed by a compare-and-set on `dispatched_at`, and deliveries
+  insert against a unique (bulletin, recipient) index.
 
 ## 5. Smoke test — the live path
 

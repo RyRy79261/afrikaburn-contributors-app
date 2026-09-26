@@ -94,6 +94,69 @@ Notification examples (canonical demo copy):
   NO — pinned banner goes on the participant dashboard/home surfaces only where a
   camp context exists (Camp Dashboard); Landing stays marketing-clean.
 
+## Camp announcements (epic #56)
+
+_A camp's only broadcast channel used to be a questionnaire. Leads need to tell
+members things — build dates, meetings, rule changes — and for important ones
+know who read and acknowledged them. Model ported from Camp 404._
+
+**Not a new table.** A camp announcement is a `bulletins` row with `group_id`
+set (null = an org bulletin). Its audience is a `project` AudienceSpec for that
+same group — enforced by `canSendCampAnnouncement` (@quagga/core) and by a DB
+CHECK (`bulletins_camp_audience_matches_group`). Deliveries are `notifications`
+rows (kind `bulletin`, `origin = 'camp'`, `link_app = 'web'`), one per recipient,
+unique on `(bulletin_id, user_id)`.
+
+- **Who may send:** the structural lead/admin (irrevocable backstop), or any
+  member holding the `post_announcements` project permission — limited, like
+  `manage_questionnaires`, to the role audiences its scope lists, with a
+  separate `mayRequireAck` switch for must-acknowledge. The permission is
+  re-checked INSIDE the publish transaction over rows held `FOR SHARE`, so a
+  sender demoted between drafting and publishing is refused.
+- **Audience:** the whole camp or chosen roles — the camp's current (live)
+  members only, never the author, never a sanitized account. A pending invitee
+  has no membership and is never reached; a draft written for an earlier
+  edition cannot be published into this one, and a scheduled send whose edition
+  has ended is skipped at dispatch.
+- **Drafts** are visible to their author only (another member's draft answers
+  exactly as a missing one). **Publishing** claims the draft with a
+  compare-and-set UPDATE and fans out in the same transaction. **Published
+  announcements are immutable** — no edit, no delete; post a correction.
+- **Presentation:** `feed` (an inbox item) or `acknowledge` (must-acknowledge:
+  the announcement page becomes a full-screen gate — nav stripped to sign-out,
+  a tick box and one button the only way forward, mirroring the blocking-
+  questionnaire gate; it stamps `acknowledged_at` on the reader's own delivery
+  only). Blocking required actions (Burner Bio, blocking questionnaires) keep
+  priority over an acknowledgement.
+- **Pinning:** `pin_on_publish` on the draft is intent only; it is spent into
+  `pinned_at`/`pinned_by_user_id` (audited) at fan-out. Pin/unpin is an audited
+  compare-and-set; pinning authority follows posting authority over the
+  announcement's audience. The camp dashboard shows every pinned bulletin the
+  viewer RECEIVED — AfrikaBurn's and that camp's — ordered by `sortPinned`
+  (newest pin first). No dismiss.
+- **Counts:** the sender sees sent / read / acknowledged numbers — never a list
+  of who has or hasn't. Opening the announcement page marks the reader's own
+  delivery read.
+- **Reading rule:** the delivery row is the permission. "Not for you" answers
+  exactly like "doesn't exist" (404). The org console never lists, opens,
+  publishes or pins a camp announcement.
+- **Optional meeting link:** a plain `https://` URL, nothing fetched or embedded.
+- **Delivery:** in-app always. Must-acknowledge also emails immediately through
+  the existing Resend seam (one message per recipient). Feed announcements are
+  unread notifications, so the daily digest will include them when it is built —
+  the digest route is still a stub, and needs nothing announcement-specific.
+  No push.
+- **Scheduled send:** optional `send_at`. Publishing a scheduled draft stamps
+  `published_at` (it is now immutable) but not `dispatched_at`; the
+  `/api/announcements/dispatch` job (CRON_SECRET / ANNOUNCEMENT_DISPATCH_SECRET
+  bearer) claims due rows by compare-and-set on `dispatched_at IS NULL`,
+  re-checks the sender, and fans out. **Nothing schedules that route yet** — see
+  docs/deploy.md.
+- **Product law:** announcements carry no personal data about members (payload =
+  camp name + the author's title); free camps stay undiscoverable (only that
+  camp's own members are ever reached, and the sender surface 404s for
+  non-senders).
+
 ## Rollout
 
 1. Design pass (this doc → canvas), then Ryan review.
