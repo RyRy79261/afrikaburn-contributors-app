@@ -43,15 +43,31 @@ import type { Page, Request, Response } from "@playwright/test";
  * `settled()` resolves once nothing has been awaiting a response for `quietMs`,
  * and fails LOUDLY on timeout, naming the requests still pending — a server
  * that never answers should be a readable error, not a mystery 20-second hang.
+ *
+ * A REQUEST PENDING LONGER THAN `staleMs` NO LONGER HOLDS THE WAIT. When the
+ * auth forms' `router.refresh()` supersedes the `router.push()` it follows, the
+ * router drops the push's `?_rsc=` fetch and Chromium reports nothing for it:
+ * no response, no `requestfinished`, no `requestfailed`. CI on 26 Sep 2026
+ * (PRs #73 and #74, and `main` itself) failed sign-in after sign-in on exactly
+ * that, with "still pending: http://localhost:3000/?_rsc=…" after 20s, while
+ * the landing page had rendered. An abandoned request cannot abort the caller's
+ * next `goto`, so once it is `staleMs` old it is logged and left out. A server
+ * that is merely slow still holds the wait for `staleMs`, and whatever it
+ * failed to serve is caught by the caller's next assertion.
  */
 export function trackRequests(page: Page): {
-  settled: (opts?: { quietMs?: number; timeout?: number }) => Promise<void>;
+  settled: (opts?: {
+    quietMs?: number;
+    timeout?: number;
+    staleMs?: number;
+  }) => Promise<void>;
 } {
-  const pending = new Set<Request>();
+  // Each pending request, with the time it started.
+  const pending = new Map<Request, number>();
   let lastChange = Date.now();
   const started = (r: Request) => {
     if (!NAVIGATION_TYPES.has(r.resourceType()) || isPrefetch(r)) return;
-    pending.add(r);
+    pending.set(r, Date.now());
     lastChange = Date.now();
   };
   const ended = (r: Request) => {
@@ -65,17 +81,29 @@ export function trackRequests(page: Page): {
   page.on("requestfailed", ended);
 
   return {
-    async settled({ quietMs = 500, timeout = 20_000 } = {}) {
+    async settled({ quietMs = 500, timeout = 20_000, staleMs = 5_000 } = {}) {
       const deadline = Date.now() + timeout;
+      const live = () => {
+        const now = Date.now();
+        return [...pending].filter(([, since]) => now - since < staleMs);
+      };
       try {
-        while (pending.size > 0 || Date.now() - lastChange < quietMs) {
+        while (live().length > 0 || Date.now() - lastChange < quietMs) {
           if (Date.now() > deadline) {
-            const urls = [...pending].map((r) => r.url()).join(", ");
+            const urls = live()
+              .map(([r]) => r.url())
+              .join(", ");
             throw new Error(
               `network did not settle within ${timeout}ms; still pending: ${urls || "(none — requests kept starting)"}`,
             );
           }
           await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        if (pending.size > 0) {
+          const urls = [...pending.keys()].map((r) => r.url()).join(", ");
+          console.warn(
+            `[e2e] settled(): left out ${pending.size} request(s) pending over ${staleMs}ms (abandoned by the router): ${urls}`,
+          );
         }
       } finally {
         page.off("request", started);
