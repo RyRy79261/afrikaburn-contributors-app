@@ -297,7 +297,7 @@ jobs:
 
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Per persona, or eight uploads collide on one name.
           name: playwright-report-${{ matrix.persona }}
