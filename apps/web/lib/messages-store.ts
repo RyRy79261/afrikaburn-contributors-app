@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   and,
-  asc,
   desc,
   eq,
   gt,
@@ -335,6 +334,9 @@ export interface ConversationView {
   blockedByViewer: boolean;
 }
 
+/** How many of a conversation's most recent live messages one read serves. */
+export const CONVERSATION_MESSAGE_LIMIT = 500;
+
 /**
  * The conversation for a participant, or null — for a non-participant AND for
  * an id that does not exist, identically. Marks it read up to now.
@@ -383,8 +385,11 @@ export async function getConversation(input: {
           liveAt(now),
         ),
       )
-      .orderBy(asc(schema.messages.createdAt))
-      .limit(500),
+      // NEWEST first, then reversed below: an ascending limit would serve the
+      // OLDEST window and silently drop every new message once a chat passes
+      // the cap — while the mark-read below still clears the badge for them.
+      .orderBy(desc(schema.messages.createdAt), desc(schema.messages.id))
+      .limit(CONVERSATION_MESSAGE_LIMIT),
     loadBlocksBetween(input.viewerUserId, other.userId),
     resolveAvatarForViewer({
       viewerUserId: input.viewerUserId,
@@ -416,7 +421,7 @@ export async function getConversation(input: {
       showAvatar: avatarKey !== null,
       departed: other.sanitizedAt != null,
     },
-    messages: rows.map((m) => ({
+    messages: [...rows].reverse().map((m) => ({
       id: m.id,
       kind: m.kind,
       body: m.body,
@@ -668,10 +673,23 @@ export async function sendMessage(input: {
       .update(schema.conversations)
       .set({ lastMessageAt: now })
       .where(eq(schema.conversations.id, input.conversationId));
+    // A new message surfaces the chat for EVERY participant. Safe because
+    // canSendMessage above already refused if a block exists either way, and
+    // blocking is the only thing that hides a chat — so a hidden row here is
+    // a stale one (e.g. left by a block since lifted).
+    await tx
+      .update(schema.conversationParticipants)
+      .set({ hiddenAt: null })
+      .where(
+        eq(
+          schema.conversationParticipants.conversationId,
+          input.conversationId,
+        ),
+      );
     // Sending is reading: the sender's own unread marker moves with them.
     await tx
       .update(schema.conversationParticipants)
-      .set({ lastReadAt: now, hiddenAt: null })
+      .set({ lastReadAt: now })
       .where(
         and(
           eq(
@@ -791,20 +809,42 @@ export async function blockUser(input: {
   return { ok: true };
 }
 
-/** Lift the viewer's own block. Never lifts the other person's. */
+/**
+ * Lift the viewer's own block. Never lifts the other person's. The shared
+ * conversation `blockUser` hid from the viewer's inbox comes back with it —
+ * otherwise nothing the other person sends afterwards would ever surface
+ * (inbox and unread badge both skip hidden rows).
+ */
 export async function unblockUser(input: {
   viewerUserId: string;
   targetUserId: string;
 }): Promise<DmResult> {
   if (!isDatabaseConfigured()) return { ok: false, error: NOT_AVAILABLE };
-  await db()
-    .delete(schema.userBlocks)
-    .where(
-      and(
-        eq(schema.userBlocks.blockerId, input.viewerUserId),
-        eq(schema.userBlocks.blockedId, input.targetUserId),
-      ),
-    );
+  const conversationId = await findDirectConversation(
+    input.viewerUserId,
+    input.targetUserId,
+  );
+  await withTransaction(async (tx) => {
+    await tx
+      .delete(schema.userBlocks)
+      .where(
+        and(
+          eq(schema.userBlocks.blockerId, input.viewerUserId),
+          eq(schema.userBlocks.blockedId, input.targetUserId),
+        ),
+      );
+    if (conversationId) {
+      await tx
+        .update(schema.conversationParticipants)
+        .set({ hiddenAt: null })
+        .where(
+          and(
+            eq(schema.conversationParticipants.conversationId, conversationId),
+            eq(schema.conversationParticipants.userId, input.viewerUserId),
+          ),
+        );
+    }
+  });
   return { ok: true };
 }
 

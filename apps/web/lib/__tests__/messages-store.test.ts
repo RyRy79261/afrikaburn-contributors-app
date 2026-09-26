@@ -113,7 +113,8 @@ describe("getConversation — participants only", () => {
     dbMock.queue(
       PAIR,
       /* conversation */ [{ timer: SEVEN_DAYS }],
-      /* messages */ [message("m1"), message("m2", { senderId: ALICE })],
+      // The database answers NEWEST first (the query orders desc).
+      /* messages */ [message("m2", { senderId: ALICE }), message("m1")],
       /* blocks */ [],
     );
     const view = await store.getConversation({
@@ -135,6 +136,45 @@ describe("getConversation — participants only", () => {
     const read = dbMock.queriesTouching(schema.messages)[0]!;
     expect(read.calls.some((c) => c.method === "where")).toBe(true);
     expect(dbMock.writesTo(schema.conversationParticipants)).toHaveLength(1);
+  });
+
+  it("serves the NEWEST window once a chat passes the cap, in chronological order", async () => {
+    // Regression: the read ordered ASC with the limit, so past the cap every
+    // new message vanished for both sides while the mark-read cleared the
+    // badge for them. The mock answers what Postgres would for a desc read of
+    // a chat one message over the cap: the newest CONVERSATION_MESSAGE_LIMIT.
+    const total = store.CONVERSATION_MESSAGE_LIMIT + 1;
+    const all = Array.from({ length: total }, (_, i) =>
+      message(`m${i}`, {
+        createdAt: new Date(Date.parse("2027-04-20T00:00:00Z") + i * 60_000),
+      }),
+    );
+    const newestFirst = [...all]
+      .reverse()
+      .slice(0, store.CONVERSATION_MESSAGE_LIMIT);
+    dbMock.queue(PAIR, [{ timer: OFF }], newestFirst, []);
+    const view = await store.getConversation({
+      viewerUserId: ALICE,
+      conversationId: CONVO,
+      editionId: EDITION,
+      now: NOW,
+    });
+    const read = dbMock.queriesTouching(schema.messages)[0]!;
+    // The order is DESCENDING — the only order under which a limit keeps the
+    // newest rows.
+    const order = read.calls.find((c) => c.method === "orderBy")!;
+    expect(
+      boundStrings({ ...read, calls: [order] }).some((s) => /desc/i.test(s)),
+    ).toBe(true);
+    expect(
+      boundStrings({ ...read, calls: [order] }).some((s) => /asc/i.test(s)),
+    ).toBe(false);
+    expect(read.arg("limit")).toBe(store.CONVERSATION_MESSAGE_LIMIT);
+    // Shown oldest-to-newest, ending on the latest message.
+    const ids = view!.messages.map((m) => m.id);
+    expect(ids).toHaveLength(store.CONVERSATION_MESSAGE_LIMIT);
+    expect(ids.at(-1)).toBe(`m${total - 1}`);
+    expect(ids[0]).toBe("m1");
   });
 
   it("reports a block by the viewer and refuses sending", async () => {
@@ -504,6 +544,56 @@ describe("blocks", () => {
     const del = dbMock.writesTo(schema.userBlocks)[0]!;
     expect(del.kind).toBe("delete");
     expect(boundStrings(del)).toEqual(expect.arrayContaining([ALICE, REN]));
+  });
+
+  it("unblocking brings the hidden conversation back for the unblocker only", async () => {
+    // Regression: unblock deleted the block row but left hidden_at set, and
+    // inbox + unread badge skip hidden rows — so everything the other person
+    // sent afterwards never surfaced.
+    dbMock.queue(/* findDirectConversation */ [{ id: CONVO }]);
+    expect(
+      await store.unblockUser({ viewerUserId: ALICE, targetUserId: REN }),
+    ).toEqual({ ok: true });
+    const unhide = dbMock.writesTo(schema.conversationParticipants);
+    expect(unhide).toHaveLength(1);
+    expect(unhide[0]!.arg("set")).toEqual({ hiddenAt: null });
+    expect(boundStrings(unhide[0]!)).toEqual(
+      expect.arrayContaining([CONVO, ALICE]),
+    );
+    expect(boundStrings(unhide[0]!)).not.toContain(REN);
+  });
+
+  it("a message un-hides the chat for the recipient too", async () => {
+    // Belt and braces for the same defect: a hidden row can only be stale
+    // when a send is allowed (any block refuses the send), so the send
+    // surfaces the chat for every participant.
+    dbMock.queue(PAIR, /* blocks */ [], /* timer */ [{ timer: OFF }]);
+    expect(
+      (
+        await store.sendMessage({
+          viewerUserId: REN,
+          conversationId: CONVO,
+          body: "hello again",
+          now: NOW,
+        })
+      ).ok,
+    ).toBe(true);
+    const writes = dbMock.writesTo(schema.conversationParticipants);
+    const unhideAll = writes.find(
+      (w) =>
+        JSON.stringify(Object.keys(w.arg("set") as object)) ===
+        JSON.stringify(["hiddenAt"]),
+    );
+    expect(unhideAll).toBeDefined();
+    expect(unhideAll!.arg("set")).toEqual({ hiddenAt: null });
+    // Scoped to the conversation, not to the sender.
+    expect(boundStrings(unhideAll!)).toContain(CONVO);
+    expect(boundStrings(unhideAll!)).not.toContain(REN);
+    // The sender's read marker still moves, and only theirs.
+    const readMark = writes.find(
+      (w) => "lastReadAt" in (w.arg("set") as object),
+    );
+    expect(boundStrings(readMark!)).toContain(REN);
   });
 
   it("answers whether the viewer has blocked someone", async () => {
