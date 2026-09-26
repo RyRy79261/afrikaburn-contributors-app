@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formForSection } from "@quagga/types";
+import { MembershipRole, formForSection } from "@quagga/types";
 
 import {
   buildCarryForwardPatch,
@@ -11,7 +11,13 @@ import {
   NON_CARRIED_FIELDS,
   labelForField,
   sectionForField,
+  canViewCampRegistration,
+  isValidCarryForwardSource,
+  pastSubmittedRegistrations,
+  selectComparisonPrior,
+  wasSubmitted,
   type CarryForwardFields,
+  type PriorRegistrationRef,
 } from "../registration-carry-forward";
 
 /** A fully-answered prior registration. */
@@ -23,7 +29,8 @@ function priorRegistration(
     s1AltContactName: "Thandi",
     s1AltContactPhone: "+27821234567",
     s1AltContactEmail: "thandi@madhatters.example",
-    s2LntPlan: "Sweep grid daily, MOOP bins at every exit, final sweep Tuesday.",
+    s2LntPlan:
+      "Sweep grid daily, MOOP bins at every exit, final sweep Tuesday.",
     s2LntLeadName: "Sipho",
     s2LntLeadPhone: "+27829876543",
     s2LntLeadEmail: "sipho@madhatters.example",
@@ -148,7 +155,8 @@ describe("diffRegistrations", () => {
   it("ignores whitespace-only edits", () => {
     const prior = priorRegistration();
     const current = priorRegistration({
-      s2LntPlan: "  Sweep grid daily, MOOP bins at every exit, final sweep Tuesday.  ",
+      s2LntPlan:
+        "  Sweep grid daily, MOOP bins at every exit, final sweep Tuesday.  ",
     });
     expect(changedFields(prior, current)).toEqual([]);
   });
@@ -201,7 +209,9 @@ describe("diffRegistrations", () => {
 
     const changes = changedFields(prior, current);
     expect(changes.map((c) => c.field)).toContain("s5SoundPlan");
-    expect(changes.find((c) => c.field === "s5SoundPlan")?.kind).toBe("cleared");
+    expect(changes.find((c) => c.field === "s5SoundPlan")?.kind).toBe(
+      "cleared",
+    );
   });
 
   it("marks the never-carried fields so the UI can explain them", () => {
@@ -258,5 +268,163 @@ describe("summarizeChanges", () => {
     expect(summarizeChanges(diffRegistrations(prior, current), 2026)).toBe(
       "1 change since 2026",
     );
+  });
+});
+
+// ── Part two (epic #50) ────────────────────────────────────────────────────
+
+const MAD_HATTERS = "11111111-1111-4111-8111-111111111111";
+const CAMP_404 = "22222222-2222-4222-8222-222222222222";
+
+function ref(
+  year: number,
+  overrides: Partial<PriorRegistrationRef> = {},
+): PriorRegistrationRef {
+  return {
+    registrationId: `reg-${year}`,
+    groupId: MAD_HATTERS,
+    editionYear: year,
+    submittedAt: new Date(`${year}-01-10T00:00:00Z`),
+    ...overrides,
+  };
+}
+
+describe("the rollover rule — no part-two path produces completeness", () => {
+  it("never puts completed_sections (or any lifecycle column) in the patch", () => {
+    // The chosen-source path runs the SAME patch builder as the latest-source
+    // one. If a future change let the patch carry `completedSections`, a camp
+    // could pick an old approved registration and submit it unchanged.
+    const patch = buildCarryForwardPatch({
+      ...priorRegistration(),
+      // A prior row as the DB hands it over carries lifecycle columns too.
+      ...({
+        completedSections: ["identity", "lnt", "participation"],
+        status: "approved",
+        submittedAt: new Date(),
+      } as object),
+    } as CarryForwardFields);
+    const keys = Object.keys(patch);
+    expect(keys).not.toContain("completedSections");
+    expect(keys).not.toContain("status");
+    expect(keys).not.toContain("submittedAt");
+    for (const key of keys) {
+      expect(CARRIED_FIELDS as readonly string[]).toContain(key);
+    }
+  });
+});
+
+describe("isValidCarryForwardSource — PREVYR-014", () => {
+  const target = { groupId: MAD_HATTERS, editionYear: 2027 };
+
+  it("accepts any strictly earlier edition of the same camp", () => {
+    expect(isValidCarryForwardSource(ref(2026), target)).toBe(true);
+    expect(isValidCarryForwardSource(ref(2019), target)).toBe(true);
+  });
+
+  it("refuses another camp's registration — the id comes from the client", () => {
+    expect(
+      isValidCarryForwardSource(ref(2026, { groupId: CAMP_404 }), target),
+    ).toBe(false);
+  });
+
+  it("refuses this edition and any later one", () => {
+    expect(isValidCarryForwardSource(ref(2027), target)).toBe(false);
+    expect(isValidCarryForwardSource(ref(2028), target)).toBe(false);
+  });
+});
+
+describe("pastSubmittedRegistrations — PREVYR-001/-011", () => {
+  const target = { groupId: MAD_HATTERS, editionYear: 2027 };
+
+  it("lists every submitted prior edition, newest first", () => {
+    const list = pastSubmittedRegistrations(
+      [ref(2024), ref(2026), ref(2025)],
+      target,
+    );
+    expect(list.map((r) => r.editionYear)).toEqual([2026, 2025, 2024]);
+  });
+
+  it("drops never-submitted drafts, other camps, and this edition", () => {
+    const list = pastSubmittedRegistrations(
+      [
+        ref(2026, { submittedAt: null }),
+        ref(2025, { groupId: CAMP_404 }),
+        ref(2027),
+        ref(2024),
+      ],
+      target,
+    );
+    expect(list.map((r) => r.registrationId)).toEqual(["reg-2024"]);
+  });
+
+  it("wasSubmitted reads submitted_at, not status", () => {
+    expect(wasSubmitted({ submittedAt: null })).toBe(false);
+    expect(wasSubmitted({ submittedAt: new Date() })).toBe(true);
+  });
+});
+
+describe("selectComparisonPrior — the reviewer's and the camp's diff", () => {
+  it("uses the carried-forward source when there is one, even if older", () => {
+    const picked = selectComparisonPrior({
+      current: {
+        groupId: MAD_HATTERS,
+        editionYear: 2027,
+        carriedForwardFromId: "reg-2024",
+      },
+      candidates: [ref(2026), ref(2024)],
+    });
+    expect(picked?.basis).toBe("carried_forward");
+    expect(picked?.prior.editionYear).toBe(2024);
+  });
+
+  it("falls back to the previous SUBMITTED edition when nothing was carried", () => {
+    const picked = selectComparisonPrior({
+      current: {
+        groupId: MAD_HATTERS,
+        editionYear: 2027,
+        carriedForwardFromId: null,
+      },
+      candidates: [ref(2025), ref(2026, { submittedAt: null })],
+    });
+    expect(picked?.basis).toBe("previous_edition");
+    expect(picked?.prior.editionYear).toBe(2025);
+  });
+
+  it("falls back when the carried source is not a valid prior of this camp", () => {
+    // A row from another camp must never become this camp's "last year",
+    // however the pointer came to name it.
+    const picked = selectComparisonPrior({
+      current: {
+        groupId: MAD_HATTERS,
+        editionYear: 2027,
+        carriedForwardFromId: "reg-2026",
+      },
+      candidates: [ref(2026, { groupId: CAMP_404 }), ref(2025)],
+    });
+    expect(picked?.basis).toBe("previous_edition");
+    expect(picked?.prior.registrationId).toBe("reg-2025");
+  });
+
+  it("is null for a first-time camp", () => {
+    expect(
+      selectComparisonPrior({
+        current: {
+          groupId: MAD_HATTERS,
+          editionYear: 2027,
+          carriedForwardFromId: null,
+        },
+        candidates: [],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("canViewCampRegistration", () => {
+  it("is exactly the camp's leads and admins", () => {
+    const allowed = MembershipRole.options.filter((role) =>
+      canViewCampRegistration(role),
+    );
+    expect(allowed).toEqual(["lead", "admin"]);
+    expect(canViewCampRegistration(null)).toBe(false);
   });
 });

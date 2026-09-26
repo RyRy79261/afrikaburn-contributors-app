@@ -1,5 +1,9 @@
-import type { SectionKey } from "@quagga/types";
-import { SECTION_LABELS, formForSection } from "@quagga/types";
+import type { MembershipRole, SectionKey } from "@quagga/types";
+import {
+  PROJECT_ADMIN_ROLES,
+  SECTION_LABELS,
+  formForSection,
+} from "@quagga/types";
 
 // Previous-year duplication + change comparison (roadmap R1, "the flagship
 // fewer-forms feature": returning camps confirm deltas instead of re-entering).
@@ -315,4 +319,138 @@ export function summarizeChanges(
   const moved = changes.filter((c) => c.kind !== "unchanged").length;
   if (moved === 0) return `No changes since ${priorYear}`;
   return `${moved} change${moved === 1 ? "" : "s"} since ${priorYear}`;
+}
+
+// ── PART TWO: WHICH PRIOR, AND WHO MAY SEE IT (epic #50) ────────────────────
+//
+// Part one offered only the single most recent registration, and compared years
+// only on the reviewer's side and only when the draft had been carried forward.
+// Part two widens both, and every widening is a question of WHICH ROW — so the
+// choice lives here, pure and tested, and the stores only fetch candidates.
+//
+// NONE OF THIS MARKS ANYTHING COMPLETE. Choosing an older source, reading a past
+// registration and looking at a diff are all reads or typing aids; the rollover
+// rule above (pre-filled is not complete) is untouched, and the store test
+// "marks NO section complete" covers the chosen-source path too.
+
+/**
+ * The minimum a candidate prior registration must carry for the rules below.
+ * Stores pass richer rows; the generic helpers hand the same rows back.
+ */
+export interface PriorRegistrationRef {
+  registrationId: string;
+  groupId: string;
+  editionYear: number;
+  /** Set the first time the camp submitted it; null for a never-sent draft. */
+  submittedAt: Date | null;
+}
+
+/** The registration being written or reviewed — the "now" side of a pair. */
+export interface RegistrationTarget {
+  groupId: string;
+  editionYear: number;
+}
+
+/**
+ * May `source` seed `target`'s draft? (PREVYR-014: "any prior edition", not
+ * only the latest.)
+ *
+ * SAME CAMP. The chosen id arrives from the client, so it is an assertion to be
+ * checked, not a fact: without this a lead could name another camp's
+ * registration id and copy that camp's LNT plan and alt-contact phone into their
+ * own draft.
+ *
+ * STRICTLY EARLIER EDITION. The current edition's own row is not a "prior", and a
+ * later one cannot exist legitimately — accepting either would let the feature
+ * copy a row into itself or run backwards in time.
+ */
+export function isValidCarryForwardSource(
+  source: RegistrationTarget,
+  target: RegistrationTarget,
+): boolean {
+  return (
+    source.groupId === target.groupId &&
+    Number.isInteger(source.editionYear) &&
+    Number.isInteger(target.editionYear) &&
+    source.editionYear < target.editionYear
+  );
+}
+
+/** True once the camp sent it to AfrikaBurn at least once. */
+export function wasSubmitted(ref: { submittedAt: Date | null }): boolean {
+  return ref.submittedAt !== null;
+}
+
+/**
+ * The camp's past registrations, newest edition first (PREVYR-001, -011).
+ *
+ * ONLY WHAT WAS SUBMITTED. "Past registrations" is the record of what the camp
+ * sent AfrikaBurn in earlier years; a draft that never left the camp's hands was
+ * never a registration anyone decided on, and listing it beside approved ones
+ * would present an abandoned sketch as history. (It can still be CHOSEN as a
+ * carry-forward source — that is a typing aid, and the camp's own words are the
+ * point of it; see `findCarryForwardSource` in apps/web.)
+ *
+ * Rows from another camp, or from this or a later edition, are dropped even if a
+ * store hands them over — the filter is the guard, not the query.
+ */
+export function pastSubmittedRegistrations<T extends PriorRegistrationRef>(
+  candidates: readonly T[],
+  target: RegistrationTarget,
+): T[] {
+  return candidates
+    .filter((c) => isValidCarryForwardSource(c, target) && wasSubmitted(c))
+    .sort((a, b) => b.editionYear - a.editionYear);
+}
+
+/**
+ * Why a comparison is against the row it is against — the copy differs:
+ *
+ *   · `carried_forward` — the draft was seeded from this row, so the diff is
+ *     "what the camp changed from the text it started with".
+ *   · `previous_edition` — the camp typed this year fresh (or its source row is
+ *     gone); the diff is against its most recent SUBMITTED prior edition.
+ */
+export type ComparisonBasis = "carried_forward" | "previous_edition";
+
+/**
+ * Which prior registration a year-on-year comparison should read, or null when
+ * there is none to compare against (a first-time camp).
+ *
+ * The carried-forward source wins when it is still a valid prior of the same
+ * camp: it is what the camp was actually editing. Otherwise match on camp +
+ * previous edition — the newest earlier edition the camp SUBMITTED in. A
+ * never-submitted draft is not a fair "last year" to hold a reviewer's diff
+ * against; nobody at AfrikaBurn ever read it.
+ */
+export function selectComparisonPrior<T extends PriorRegistrationRef>(input: {
+  current: RegistrationTarget & { carriedForwardFromId: string | null };
+  candidates: readonly T[];
+}): { prior: T; basis: ComparisonBasis } | null {
+  const { current, candidates } = input;
+  if (current.carriedForwardFromId) {
+    const carried = candidates.find(
+      (c) => c.registrationId === current.carriedForwardFromId,
+    );
+    if (carried && isValidCarryForwardSource(carried, current)) {
+      return { prior: carried, basis: "carried_forward" };
+    }
+  }
+  const [previous] = pastSubmittedRegistrations(candidates, current);
+  return previous ? { prior: previous, basis: "previous_edition" } : null;
+}
+
+/**
+ * May this camp role read the camp's registrations — this year's workspace AND
+ * the past ones (PREVYR-001)?
+ *
+ * EXACTLY THE AUDIENCE THAT CAN ALREADY SEE THE REGISTRATION. The past
+ * registrations hold the same answers as the current one — alternate-contact and
+ * LNT-lead phone numbers among them — so widening "history" beyond the camp's
+ * leads and admins would be a new disclosure of old data. A plain member, a
+ * custom-role holder or a non-member reads nothing here. `null` is "not a member
+ * of this camp".
+ */
+export function canViewCampRegistration(role: MembershipRole | null): boolean {
+  return role !== null && PROJECT_ADMIN_ROLES.includes(role);
 }
