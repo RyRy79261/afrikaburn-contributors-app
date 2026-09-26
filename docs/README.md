@@ -68,6 +68,7 @@ without restating it:
 | [`component-spec.md`](component-spec.md)                 | Engineering Spec | Active         | N/A — implementation detail                                                                   |
 | [`accounts-security-spec.md`](accounts-security-spec.md) | Security         | Active         | Partial — `SEC-*`, `CDB-002`                                                                  |
 | [`auth-platform-spec.md`](auth-platform-spec.md)         | Security         | Active         | Partial — `SEC-*`                                                                             |
+| [`threat-model.md`](threat-model.md)                     | Security         | Draft          | Partial — `SEC-*` (cross-cutting register)                                                    |
 | [`questionnaire-spec.md`](questionnaire-spec.md)         | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
 | [`notifications-spec.md`](notifications-spec.md)         | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                           |
 | [`supplier-spec.md`](supplier-spec.md)                   | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                |
