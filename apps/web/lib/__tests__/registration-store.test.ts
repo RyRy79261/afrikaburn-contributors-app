@@ -16,6 +16,9 @@ const {
   saveRegistrationDraft,
   applyCampAction,
   carryForwardRegistration,
+  listPastRegistrations,
+  getPastRegistration,
+  getRegistrationComparison,
 } = await import("../registration-store");
 
 const GROUP = "11111111-1111-4111-8111-111111111111";
@@ -548,6 +551,8 @@ describe("carryForwardRegistration — previous-year duplication", () => {
   function prior(overrides: Record<string, unknown> = {}) {
     return {
       id: PRIOR_REGISTRATION,
+      groupId: GROUP,
+      editionId: PRIOR_EDITION,
       s2LntPlan: "Sweep the grid daily.",
       s3ParticipationPlan: "Tea at dawn.",
       s4ExpectedPopulation: 42,
@@ -655,10 +660,10 @@ describe("carryForwardRegistration — previous-year duplication", () => {
       editionYear: 2027,
     });
 
-    const written = dbMock
-      .queriesOfKind("update")
-      .at(-1)
-      ?.arg("set") as Record<string, unknown>;
+    const written = dbMock.queriesOfKind("update").at(-1)?.arg("set") as Record<
+      string,
+      unknown
+    >;
     expect(written.completedSections).toEqual([]);
   });
 
@@ -683,10 +688,10 @@ describe("carryForwardRegistration — previous-year duplication", () => {
     });
 
     expect(result.ok).toBe(true);
-    const written = dbMock
-      .queriesOfKind("update")
-      .at(-1)
-      ?.arg("set") as Record<string, unknown>;
+    const written = dbMock.queriesOfKind("update").at(-1)?.arg("set") as Record<
+      string,
+      unknown
+    >;
 
     // The blank one is filled…
     expect(written.s2LntPlan).toBe("Sweep the grid daily.");
@@ -806,5 +811,196 @@ describe("carryForwardRegistration — previous-year duplication", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/nothing to bring across/);
+  });
+});
+
+describe("carryForwardRegistration — a CHOSEN source (PREVYR-014)", () => {
+  const OLDER_REGISTRATION = "88888888-8888-4888-8888-888888888888";
+  const OLDER_EDITION = "cccccccc-0000-4000-8000-000000000000";
+  const OTHER_CAMP = "22222222-2222-4222-8222-222222222222";
+
+  /** What `loadChosenSource`'s joined select returns. */
+  function chosen(overrides: Record<string, unknown> = {}, editionYear = 2024) {
+    return {
+      row: {
+        id: OLDER_REGISTRATION,
+        groupId: GROUP,
+        editionId: OLDER_EDITION,
+        status: "approved",
+        submittedAt: new Date("2024-01-10"),
+        completedSections: SUBMITTABLE_SECTIONS,
+        s2LntPlan: "The 2024 LNT plan.",
+        s3ParticipationPlan: "The 2024 participation plan.",
+        ...overrides,
+      },
+      editionYear,
+      editionName: `AfrikaBurn ${editionYear}`,
+    };
+  }
+
+  it("seeds from the older edition the camp picked, not the latest", async () => {
+    dbMock.queue([chosen()], [], [{ id: REGISTRATION }]);
+
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+      sourceRegistrationId: OLDER_REGISTRATION,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.source.editionYear).toBe(2024);
+    const written = dbMock
+      .queriesOfKind("insert")
+      .at(-1)
+      ?.arg("values") as Record<string, unknown>;
+    expect(written.s2LntPlan).toBe("The 2024 LNT plan.");
+    expect(written.carriedForwardFromId).toBe(OLDER_REGISTRATION);
+  });
+
+  it("marks NO section complete, even from an approved, fully complete source", async () => {
+    // THE ROLLOVER RULE, on the new path. The source was approved with every
+    // Form 1 section complete; none of that completeness may travel.
+    dbMock.queue(
+      [chosen()],
+      [registration({ s2LntPlan: null, s3ParticipationPlan: null })],
+      [{ id: REGISTRATION }],
+    );
+
+    await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+      sourceRegistrationId: OLDER_REGISTRATION,
+    });
+
+    const written = dbMock.queriesOfKind("update").at(-1)?.arg("set") as Record<
+      string,
+      unknown
+    >;
+    expect(written.completedSections).toEqual([]);
+    expect(written).not.toHaveProperty("status");
+  });
+
+  it("refuses another camp's registration id, and writes nothing", async () => {
+    dbMock.queue([chosen({ groupId: OTHER_CAMP })]);
+
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+      sourceRegistrationId: OLDER_REGISTRATION,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/earlier registration/);
+    expect(dbMock.queriesOfKind("insert")).toHaveLength(0);
+    expect(dbMock.queriesOfKind("update")).toHaveLength(0);
+  });
+
+  it("refuses this edition's own row and a later one", async () => {
+    for (const year of [2027, 2028]) {
+      dbMock.reset();
+      dbMock.queue([chosen({}, year)]);
+      const result = await carryForwardRegistration({
+        group: { id: GROUP, name: "Mad Hatters" },
+        editionId: EDITION,
+        editionYear: 2027,
+        sourceRegistrationId: OLDER_REGISTRATION,
+      });
+      expect(result.ok, `year ${year}`).toBe(false);
+      expect(dbMock.queriesOfKind("insert")).toHaveLength(0);
+      expect(dbMock.queriesOfKind("update")).toHaveLength(0);
+    }
+  });
+
+  it("refuses an id that matches nothing", async () => {
+    dbMock.queue([]);
+    const result = await carryForwardRegistration({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      editionYear: 2027,
+      sourceRegistrationId: OLDER_REGISTRATION,
+    });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("past registrations + the camp-side comparison", () => {
+  /** A joined prior row as `listPriorRegistrations` selects it. */
+  function priorRow(year: number, overrides: Record<string, unknown> = {}) {
+    return {
+      row: {
+        id: `reg-${year}`,
+        groupId: GROUP,
+        editionId: `edition-${year}`,
+        status: "approved",
+        submittedAt: new Date(`${year}-01-10`),
+        carriedForwardFromId: null,
+        s2LntPlan: `LNT ${year}`,
+        ...overrides,
+      },
+      editionYear: year,
+      editionName: `AfrikaBurn ${year}`,
+    };
+  }
+
+  it("lists only submitted earlier editions, newest first", async () => {
+    dbMock.queue([
+      priorRow(2026, { submittedAt: null, status: "draft" }),
+      priorRow(2025, { status: "withdrawn" }),
+      priorRow(2024),
+    ]);
+    const past = await listPastRegistrations(GROUP, 2027);
+    expect(past.map((p) => p.editionYear)).toEqual([2025, 2024]);
+  });
+
+  it("finds a past registration by year, and nothing for an unsubmitted one", async () => {
+    dbMock.queue([priorRow(2026, { submittedAt: null })]);
+    expect(await getPastRegistration(GROUP, 2027, 2026)).toBeNull();
+
+    dbMock.queue([priorRow(2025)]);
+    const found = await getPastRegistration(GROUP, 2027, 2025);
+    expect(found?.registrationId).toBe("reg-2025");
+  });
+
+  it("compares a draft that was NOT carried forward against the previous submitted edition", async () => {
+    dbMock.queue([priorRow(2026)]);
+    const comparison = await getRegistrationComparison({
+      groupId: GROUP,
+      editionYear: 2027,
+      current: registration({
+        carriedForwardFromId: null,
+        s2LntPlan: "LNT 2027",
+      }) as never,
+    });
+    expect(comparison?.basis).toBe("previous_edition");
+    expect(comparison?.priorYear).toBe(2026);
+    expect(comparison?.changes.map((c) => c.field)).toEqual(["s2LntPlan"]);
+  });
+
+  it("is null for a first-time camp", async () => {
+    dbMock.queue([]);
+    expect(
+      await getRegistrationComparison({
+        groupId: GROUP,
+        editionYear: 2027,
+        current: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("issues no write — reading history never touches completed_sections", async () => {
+    dbMock.queue([priorRow(2026)], [priorRow(2026)], [priorRow(2026)]);
+    await listPastRegistrations(GROUP, 2027);
+    await getPastRegistration(GROUP, 2027, 2026);
+    await getRegistrationComparison({
+      groupId: GROUP,
+      editionYear: 2027,
+      current: null,
+    });
+    expect(
+      dbMock.queries.filter((q) => q.kind !== "select").map((q) => q.kind),
+    ).toEqual([]);
   });
 });

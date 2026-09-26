@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { PROJECT_ADMIN_ROLES } from "@quagga/types";
+import { ArrowLeft, GitCompare, History } from "lucide-react";
+import {
+  canViewCampRegistration,
+  pastSubmittedRegistrations,
+  selectComparisonPrior,
+} from "@quagga/core";
 import { PreviewNotice } from "@/components/preview-notice";
 import { RegistrationWizard } from "@/components/registration/registration-wizard";
 import { RegistrationSummary } from "@/components/registration/registration-summary";
@@ -10,14 +14,15 @@ import { getCurrentCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import {
-  findCarryForwardSource,
   getDeclaredSupplierIds,
   getDeclaredSuppliers,
   getRegistration,
   getRegistrationCampContext,
   getSectionReviews,
   isEditableStatus,
+  listPriorRegistrations,
   listSuppliersForPicker,
+  toCarryForwardSource,
   type RegistrationValues,
 } from "@/lib/registration-store";
 import { CarryForwardBanner } from "@/components/registration/carry-forward-banner";
@@ -92,16 +97,33 @@ export default async function RegistrationPage({
   const context = await getRegistrationCampContext(slug, campUser.id, edition);
   if (!context) notFound();
 
-  // Only a lead/admin may edit or view the registration workspace.
-  if (!context.role || !PROJECT_ADMIN_ROLES.includes(context.role)) {
+  // Only a lead/admin may edit or view the registration workspace — the same
+  // @quagga/core predicate that guards its read-only companions (history,
+  // changes), so the workspace and its history can never disagree on who.
+  if (!canViewCampRegistration(context.role)) {
     redirect(`/camps/${slug}`);
   }
 
-  const registration = await getRegistration(
-    context.group.id,
-    context.editionId,
-  );
+  const [registration, priors] = await Promise.all([
+    getRegistration(context.group.id, context.editionId),
+    // Every earlier registration of this camp (a handful of rows): the
+    // carry-forward choices, the "Past registrations" link and the "what
+    // changed" link all read this one list.
+    listPriorRegistrations(context.group.id, context.editionYear),
+  ]);
   const status = registration?.status ?? "draft";
+  const target = {
+    groupId: context.group.id,
+    editionYear: context.editionYear,
+  };
+  const hasPast = pastSubmittedRegistrations(priors, target).length > 0;
+  const comparisonPrior = selectComparisonPrior({
+    current: {
+      ...target,
+      carriedForwardFromId: registration?.carriedForwardFromId ?? null,
+    },
+    candidates: priors,
+  });
 
   const header = (
     <header className="mb-6 flex flex-col gap-2">
@@ -120,6 +142,31 @@ export default async function RegistrationPage({
           {context.group.name}
         </h1>
       </div>
+      {hasPast || comparisonPrior ? (
+        <nav
+          aria-label="Earlier registrations"
+          className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
+        >
+          {comparisonPrior && isEditableStatus(status) ? (
+            <Link
+              href={`/camps/${slug}/registration/changes`}
+              className="inline-flex items-center gap-1.5 text-accent hover:underline"
+            >
+              <GitCompare className="h-4 w-4" aria-hidden />
+              What changed since {comparisonPrior.prior.editionYear}
+            </Link>
+          ) : null}
+          {hasPast ? (
+            <Link
+              href={`/camps/${slug}/registration/history`}
+              className="inline-flex items-center gap-1.5 text-accent hover:underline"
+            >
+              <History className="h-4 w-4" aria-hidden />
+              Past registrations
+            </Link>
+          ) : null}
+        </nav>
+      ) : null}
     </header>
   );
 
@@ -173,17 +220,20 @@ export default async function RegistrationPage({
     // The carry-forward offer, only while it is still an offer: once this
     // year's draft has been seeded there is nothing to bring across, and a
     // banner that stays put after you have pressed it reads as a failure.
-    const carryForwardSource = registration?.carriedForwardAt
-      ? null
-      : await findCarryForwardSource(context.group.id, context.editionYear);
+    //
+    // Every earlier edition is offered, newest first (PREVYR-014); the server
+    // re-validates whichever one comes back.
+    const carryForwardSources = registration?.carriedForwardAt
+      ? []
+      : priors.map(toCarryForwardSource);
 
     return (
       <>
         {header}
-        {carryForwardSource ? (
+        {carryForwardSources.length > 0 ? (
           <CarryForwardBanner
             slug={slug}
-            source={carryForwardSource}
+            sources={carryForwardSources}
             editionYear={context.editionYear}
           />
         ) : null}

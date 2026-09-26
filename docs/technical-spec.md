@@ -339,13 +339,28 @@ and strike plans, WAP and ticket requirements as structured submission artifacts
 
 ## 15. Previous-year submissions 🚧
 
-**Requirement IDs:** ✅ PREVYR-011 (edition-scoped storage keeps every year intact) · 🚧 PREVYR-001, PREVYR-012 · ❌ PREVYR-002–PREVYR-010, PREVYR-013–PREVYR-025 *(App Spec §15 — nothing forward-carrying exists yet, only the underlying per-edition storage a carry-forward feature would build on)*
+**Requirement IDs:** ✅ PREVYR-001, PREVYR-010, PREVYR-011, PREVYR-014 · 🚧 PREVYR-012 · ❌ the remainder of PREVYR-002–PREVYR-025 *(App Spec §15; PREVYR-015 start-from-template is deliberately out of scope for now)*
 
 **Built:** everything is stored per edition, so previous years exist and are
-intact.
+intact. On top of that (roadmap R1 + epic #50):
 
-**Not built:** duplicating last year's submission, carrying data forward,
-comparing years, flagging what needs re-confirming.
+- **Carry-forward** from ANY earlier edition's registration, newest by default
+  (PREVYR-014). The chosen id is re-validated server-side — same camp, strictly
+  earlier edition (`isValidCarryForwardSource`). The rollover rule holds on
+  every path: carried text is a typing aid and no section is marked complete.
+- **Past registrations** (PREVYR-001, -011): `/camps/[slug]/registration/history`
+  lists every earlier edition the camp SUBMITTED; each opens read-only. Same
+  audience as the registration itself (`canViewCampRegistration` — leads and
+  admins).
+- **Year-on-year comparison, both sides** (PREVYR-010): the reviewer's diff in
+  the org console and the camp's "What changed since …" page read one function
+  (`selectComparisonPrior` + `changedFields`) and one component. The prior is
+  the carried-forward source when there is one, otherwise the camp's most
+  recent submitted earlier edition — so a camp that typed its answers fresh is
+  still compared.
+
+**Not built:** flagging what needs re-confirming, and expiry for documents that
+must be renewed each year.
 
 **What it would take:** ordinary work, with one rule worth agreeing up front —
 **what must never carry forward**. Safety certificates, insurance and fire or
