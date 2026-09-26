@@ -455,7 +455,7 @@ Now:
 
 ## 19. Permissions and security ✅
 
-**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-019, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*
+**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-019, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*
 
 Built, and beyond the App Spec's list.
 
