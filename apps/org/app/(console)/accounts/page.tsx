@@ -59,6 +59,8 @@ export default async function AccountsPage({
       color: r.color,
       departmentId: r.departmentId,
       departmentName: r.departmentName,
+      expiresOn: r.expiresOn,
+      expired: r.expired,
     })),
     // Resolved server-side by the same predicate the actions refuse with.
     capabilities: a.capabilities.map((c) => ({

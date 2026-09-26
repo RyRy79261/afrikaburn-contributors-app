@@ -16,6 +16,7 @@ import {
   CapabilitySummary,
   type CapabilityGrantView,
 } from "@/components/org-roles/capability-summary";
+import { formatLastDay } from "@/lib/access-expiry";
 
 /** One org role an account holds, as the table renders it. */
 export interface AccountRoleChip {
@@ -24,6 +25,10 @@ export interface AccountRoleChip {
   color: RoleColor;
   departmentId: string | null;
   departmentName: string | null;
+  /** Inclusive last day of access (SAST, `YYYY-MM-DD`), or null for none. */
+  expiresOn: string | null;
+  /** Already expired: listed so it can be renewed, but it grants nothing. */
+  expired: boolean;
 }
 
 /** One account row, pre-shaped by the server page (serializable only). */
@@ -135,13 +140,38 @@ export function AccountsTable({
         ) : (
           <span className="flex flex-wrap items-center gap-1.5">
             {a.roles.map((r) => (
-              <RoleBadge
+              // ACCESS EXPIRY: an expired role is SHOWN, struck through and
+              // named as expired, rather than dropped — it grants nothing (the
+              // next column is resolved without it), and seeing it is how a
+              // System manager knows there is something to renew.
+              <span
                 key={r.id}
-                name={
-                  r.departmentName ? `${r.name} · ${r.departmentName}` : r.name
-                }
-                color={r.color}
-              />
+                className="inline-flex flex-wrap items-center gap-1"
+                data-expired={r.expired ? "true" : undefined}
+              >
+                <RoleBadge
+                  name={
+                    r.departmentName
+                      ? `${r.name} · ${r.departmentName}`
+                      : r.name
+                  }
+                  color={r.color}
+                  className={r.expired ? "line-through opacity-60" : undefined}
+                />
+                {r.expiresOn && (
+                  <span
+                    className={
+                      r.expired
+                        ? "text-xs font-medium text-destructive"
+                        : "text-xs"
+                    }
+                  >
+                    {r.expired
+                      ? `Expired ${formatLastDay(r.expiresOn)}`
+                      : `Until ${formatLastDay(r.expiresOn)}`}
+                  </span>
+                )}
+              </span>
             ))}
           </span>
         ),
@@ -163,7 +193,9 @@ export function AccountsTable({
             emptyLabel={
               a.roles.length === 0
                 ? "Nothing — the console opens empty until a role is assigned."
-                : "Nothing: the roles they hold grant nothing at all."
+                : a.roles.every((r) => r.expired)
+                  ? "Nothing: every role they hold has expired. Renew one to restore access."
+                  : "Nothing: the roles they hold grant nothing at all."
             }
             className="max-w-[26rem]"
           />
@@ -183,7 +215,11 @@ export function AccountsTable({
             // name is the fallback when the account has no address.
             personLabel={a.email ?? a.username ?? "this account"}
             role={a.role}
-            heldRoleIds={a.roles.map((r) => r.id)}
+            heldRoles={a.roles.map((r) => ({
+              id: r.id,
+              expiresOn: r.expiresOn,
+              expired: r.expired,
+            }))}
             assignableRoles={assignableRoles}
             isSelf={a.userId === selfUserId}
           />

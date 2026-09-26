@@ -39,6 +39,7 @@ import {
   deriveSupplierStandingRollup,
   domainsOwnedBy,
   grantedOrgCapabilities,
+  isOrgRoleAssignmentLive,
   isSystemManager,
   orgRankFromRole,
   publicMemberName,
@@ -62,6 +63,7 @@ import {
 import { decryptField } from "@quagga/db/crypto";
 
 import { getDb, schema } from "@/lib/db";
+import { lastDayFromExpiry } from "@/lib/access-expiry";
 import { deriveCohort, type Cohort } from "@/lib/org-logic";
 import {
   computeOrgRoleImpacts,
@@ -200,6 +202,19 @@ export interface AssignedOrgRole {
   departmentId: string | null;
   /** That department's label, or null for an org-wide role. */
   departmentName: string | null;
+  /**
+   * ACCESS EXPIRY (SEC-019): the inclusive last day of access (SAST,
+   * `YYYY-MM-DD`), or null for none. A string, not a Date, because the table
+   * hands these rows to a client component.
+   */
+  expiresOn: string | null;
+  /**
+   * True when the assignment has already expired — it grants NOTHING (the
+   * capabilities column is resolved without it) but is still listed, so a
+   * System manager sees it as expired and can renew it rather than finding it
+   * silently gone.
+   */
+  expired: boolean;
 }
 
 /**
@@ -247,6 +262,7 @@ export interface AccountRow {
 type LoadedRole = AssignedOrgRole & {
   key: string;
   permissions: OrgPermissions;
+  expiresAt: Date | null;
 };
 
 /**
@@ -259,6 +275,8 @@ type LoadedRole = AssignedOrgRole & {
 async function loadAssignedRoles(
   orgGroupId: string,
   userIds: readonly string[],
+  /** The one clock every row on this screen is judged against. */
+  asOf: Date,
 ): Promise<Map<string, LoadedRole[]>> {
   const byUser = new Map<string, LoadedRole[]>();
   if (userIds.length === 0) return byUser;
@@ -275,6 +293,11 @@ async function loadAssignedRoles(
       departmentName: schema.orgDepartments.name,
       permissions: schema.orgRoles.permissions,
       sort: schema.orgRoles.sort,
+      // NOT filtered on expiry, deliberately: this loader feeds a DISPLAY, and
+      // an expired assignment must read as expired rather than vanish. What it
+      // RESOLVES to is decided by @quagga/core, which ignores it (see
+      // `resolveAccountCapabilities`).
+      expiresAt: schema.orgRoleAssignments.expiresAt,
     })
     .from(schema.orgRoleAssignments)
     .innerJoin(
@@ -311,6 +334,9 @@ async function loadAssignedRoles(
       // a row written by anything other than the role editor still cannot
       // present a capability no role may hold.
       permissions: sanitizeOrgPermissions(r.permissions),
+      expiresAt: r.expiresAt,
+      expiresOn: r.expiresAt ? lastDayFromExpiry(r.expiresAt) : null,
+      expired: !isOrgRoleAssignmentLive(r.expiresAt, asOf),
     });
     byUser.set(r.userId, list);
   }
@@ -326,6 +352,8 @@ function roleChip(r: LoadedRole): AssignedOrgRole {
     color: r.color,
     departmentId: r.departmentId,
     departmentName: r.departmentName,
+    expiresOn: r.expiresOn,
+    expired: r.expired,
   };
 }
 
@@ -345,8 +373,13 @@ function resolveAccountCapabilities(
    * about the console, identical for everyone, and the summarised account has no
    * session of its own to read it from. */
   domains: OrgActor["domains"],
+  /** The same clock the rows' `expired` flags were computed against. */
+  asOf: Date,
 ): AccountCapability[] {
   if (!rank) return [];
+  // Expired assignments are passed THROUGH, with their expiry, and the core
+  // resolver ignores them — so "what they can do" is the resolver's answer,
+  // not a second filter here that could disagree with it.
   const actor: OrgActor = {
     rank,
     roles: roles.map((r) => ({
@@ -356,8 +389,10 @@ function resolveAccountCapabilities(
       kind: r.kind,
       departmentId: r.departmentId,
       permissions: r.permissions,
+      expiresAt: r.expiresAt,
     })),
     domains,
+    asOf,
   };
   const names = new Map(
     roles
@@ -460,9 +495,11 @@ export async function searchAccounts(
     .orderBy(desc(schema.users.createdAt))
     .limit(50);
 
+  const asOf = new Date();
   const roles = await loadAssignedRoles(
     orgGroupId,
     rows.map((r) => r.userId),
+    asOf,
   );
 
   return rows.map((r) => {
@@ -474,7 +511,7 @@ export async function searchAccounts(
       username: r.username,
       role: rank,
       roles: held.map(roleChip),
-      capabilities: resolveAccountCapabilities(rank, held, actor.domains),
+      capabilities: resolveAccountCapabilities(rank, held, actor.domains, asOf),
       createdAt: r.createdAt,
     };
   });
@@ -798,9 +835,11 @@ export async function getOrgAccessRoster(
     .orderBy(asc(schema.users.createdAt))
     .limit(200);
 
+  const asOf = new Date();
   const roles = await loadAssignedRoles(
     orgGroupId,
     rows.map((r) => r.userId),
+    asOf,
   );
 
   const members = rows.map((r) => {
@@ -812,7 +851,7 @@ export async function getOrgAccessRoster(
       username: r.username,
       role: rank,
       roles: held.map(roleChip),
-      capabilities: resolveAccountCapabilities(rank, held, actor.domains),
+      capabilities: resolveAccountCapabilities(rank, held, actor.domains, asOf),
       createdAt: r.createdAt,
     };
   });

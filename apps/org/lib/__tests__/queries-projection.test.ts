@@ -212,6 +212,8 @@ describe("searchAccounts — the personal column is never selected OR matched", 
         color: "amber",
         departmentId: "dept-suppliers",
         departmentName: "Suppliers",
+        expiresOn: null,
+        expired: false,
       },
     ]);
     // ...and the resolved union is computed with the same core resolver the
@@ -1205,5 +1207,99 @@ describe("the whole projection rule, stated once", () => {
     ]);
     const [note] = await getSupplierNotes("sup-1", NO_ROLES);
     expect(note?.authorEmail).toBeNull();
+  });
+});
+
+describe("access expiry on the accounts screens (SEC-019)", () => {
+  // An expired assignment must READ as expired — so a System manager can renew
+  // it — and must GRANT nothing: the capabilities column is the resolver's
+  // answer over the same rows. The expired role grants `delete` and the live
+  // one grants only `read`, so a capabilities list that still says `delete`
+  // is the expired row leaking through, and one that says nothing at all is
+  // the live row being dropped with it.
+  const HOUR = 60 * 60 * 1000;
+
+  function assignment(
+    id: string,
+    permissions: Record<string, boolean>,
+    expiresAt: Date | null,
+    sort: number,
+  ) {
+    return {
+      userId: "user-2",
+      id,
+      key: `custom.${id}`,
+      name: id,
+      kind: "custom",
+      color: "neutral",
+      departmentId: null,
+      departmentName: null,
+      permissions,
+      sort,
+      expiresAt,
+    };
+  }
+
+  const REN = {
+    userId: "user-2",
+    username: "ren",
+    email: "ren@example.com",
+    role: "org_staff",
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+  };
+
+  it("lists the expired role AS expired, and resolves only the live one", async () => {
+    db.seed("memberships", [REN]);
+    db.seed("org_role_assignments", [
+      assignment(
+        "build",
+        { read: true, delete: true },
+        new Date(Date.now() - HOUR),
+        0,
+      ),
+      assignment("reader", { read: true }, new Date(Date.now() + 24 * HOUR), 1),
+    ]);
+    const roster = await getOrgAccessRoster("org-1", PERSONAL_READER);
+    const ren = roster.members[0];
+    expect(ren?.roles.map((r) => [r.id, r.expired])).toEqual([
+      ["build", true],
+      ["reader", false],
+    ]);
+    for (const r of ren?.roles ?? []) {
+      expect(r.expiresOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+    expect(ren?.capabilities.map((c) => c.capability)).toEqual(["read"]);
+  });
+
+  it("the fixture moves the number: with no expiry, delete comes back", async () => {
+    db.seed("memberships", [REN]);
+    db.seed("org_role_assignments", [
+      assignment("build", { read: true, delete: true }, null, 0),
+    ]);
+    const roster = await getOrgAccessRoster("org-1", PERSONAL_READER);
+    expect(roster.members[0]?.roles[0]).toMatchObject({
+      expired: false,
+      expiresOn: null,
+    });
+    expect(roster.members[0]?.capabilities.map((c) => c.capability)).toEqual([
+      "read",
+      "delete",
+    ]);
+  });
+
+  it("searchAccounts resolves the same way", async () => {
+    db.seed("users", [REN]);
+    db.seed("org_role_assignments", [
+      assignment(
+        "build",
+        { read: true, delete: true },
+        new Date(Date.now() - HOUR),
+        0,
+      ),
+      assignment("reader", { read: true }, null, 1),
+    ]);
+    const rows = await searchAccounts("org-1", "", PERSONAL_READER);
+    expect(rows[0]?.roles.map((r) => r.expired)).toEqual([true, false]);
+    expect(rows[0]?.capabilities.map((c) => c.capability)).toEqual(["read"]);
   });
 });
