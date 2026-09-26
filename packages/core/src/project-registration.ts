@@ -333,6 +333,49 @@ export function carriedSafetyDocuments<T extends { expiresOn: string }>(
   return docs.filter((d) => d.expiresOn >= edition.endDate);
 }
 
+/** Same file, whatever it was called: a document's identity for de-duping a
+ * carry against what the draft already holds. */
+function safetyDocumentFileKey(d: { url: string }): string {
+  return d.url.trim();
+}
+
+/**
+ * Which carried documents may be ADDED to a draft that already holds
+ * `existing`. Carrying forward is additive (the draft keeps what the lead
+ * attached this year), so without this a carry could leave the draft with a
+ * file twice, or with more than `MAX_SAFETY_DOCUMENTS` rows — a list the form
+ * then refuses to save until the lead finds and deletes one.
+ *
+ *   · a carried document whose file (URL) the draft already has is skipped —
+ *     this year's copy wins, with this year's title and expiry;
+ *   · duplicates WITHIN the carried list collapse to the first;
+ *   · the rest are taken in order until the draft is full.
+ */
+export function mergeCarriedSafetyDocuments<T extends { url: string }>(
+  existing: readonly { url: string }[],
+  carried: readonly T[],
+): { add: T[]; skippedDuplicate: number; skippedFull: number } {
+  const seen = new Set(existing.map(safetyDocumentFileKey));
+  const room = Math.max(0, MAX_SAFETY_DOCUMENTS - existing.length);
+  const add: T[] = [];
+  let skippedDuplicate = 0;
+  let skippedFull = 0;
+  for (const doc of carried) {
+    const key = safetyDocumentFileKey(doc);
+    if (seen.has(key)) {
+      skippedDuplicate += 1;
+      continue;
+    }
+    if (add.length >= room) {
+      skippedFull += 1;
+      continue;
+    }
+    seen.add(key);
+    add.push(doc);
+  }
+  return { add, skippedDuplicate, skippedFull };
+}
+
 /**
  * Who may see and change a project's safety documents on the participant side:
  * its STRUCTURAL lead/admin only. Not a custom-role grant, not a member —

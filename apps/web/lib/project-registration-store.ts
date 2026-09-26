@@ -5,6 +5,7 @@ import {
   buildProjectCarryForwardAnswers,
   canManageProjectSafetyDocuments,
   carriedSafetyDocuments,
+  mergeCarriedSafetyDocuments,
   mergeProjectCarryForward,
   projectCarriedColumns,
   resolveCampAction,
@@ -700,7 +701,15 @@ export async function syncSafetyDocuments(
 // through the new edition's end. This layer finds the prior year and applies it.
 
 export type ProjectCarryForwardResult =
-  | { ok: true; filled: number; documents: number; source: CarryForwardSource }
+  | {
+      ok: true;
+      filled: number;
+      documents: number;
+      /** Carried documents NOT added: the draft already held that file, or
+       * was full (MAX_SAFETY_DOCUMENTS). */
+      documentsSkipped: number;
+      source: CarryForwardSource;
+    }
   | { ok: false; error: string };
 
 /**
@@ -710,8 +719,19 @@ export type ProjectCarryForwardResult =
  * payload's `completedAt` is written null, and the kind's submit gate still
  * needs answers that deliberately never carry — so a returning project cannot
  * carry forward and submit in one breath. Only EMPTY answers are filled, so a
- * lead's typing this year survives, and the read-decide-write happens in one
- * transaction with a compare-and-set on the facts the decision rested on.
+ * lead's typing this year survives.
+ *
+ * CONCURRENCY. The merge replaces the WHOLE answer payload, so the rows it
+ * reads are taken `FOR UPDATE` — the registration first (the same order a save
+ * writes them, so the two cannot deadlock), then the answer row. A co-lead's
+ * save that commits first is therefore what the merge reads; one that arrives
+ * later waits for this transaction and then writes its own full form. The
+ * compare-and-set on the registration is kept for the insert-race path, where
+ * there is no row to lock yet.
+ *
+ * Documents are ADDED to what the draft already holds, de-duplicated by file
+ * and capped at MAX_SAFETY_DOCUMENTS (`mergeCarriedSafetyDocuments`), so a
+ * carry can never leave a list the form would refuse to save.
  */
 export async function carryForwardProjectRegistration(input: {
   groupId: string;
@@ -752,7 +772,7 @@ export async function carryForwardProjectRegistration(input: {
     .orderBy(asc(schema.registrationSafetyDocuments.createdAt));
 
   const patch = buildProjectCarryForwardAnswers(input.kind, priorAnswers);
-  const documents = carriedSafetyDocuments(priorDocuments, {
+  const carriedDocuments = carriedSafetyDocuments(priorDocuments, {
     endDate: input.editionEndDate,
   });
   const answerKey = projectRegistrationAnswerKey(input.groupId, input.kind);
@@ -771,7 +791,8 @@ export async function carryForwardProjectRegistration(input: {
           eq(schema.registrations.editionId, input.editionId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     if (existing && !EDITABLE_STATUSES.includes(existing.status)) {
       return {
@@ -799,13 +820,29 @@ export async function carryForwardProjectRegistration(input: {
         ),
       )
       .orderBy(asc(schema.questionnaireResponses.id))
-      .limit(1);
+      .limit(1)
+      .for("update");
+
+    // Read under the registration lock, so a concurrent save's document sync
+    // has either committed (and is counted) or has not started.
+    const heldDocuments = existing
+      ? await tx
+          .select({ url: schema.registrationSafetyDocuments.url })
+          .from(schema.registrationSafetyDocuments)
+          .where(
+            eq(schema.registrationSafetyDocuments.registrationId, existing.id),
+          )
+      : [];
 
     const { answers, filled } = mergeProjectCarryForward(
       currentAnswers?.responses ?? null,
       patch,
     );
-    if (filled.length === 0 && documents.length === 0) {
+    const documents = mergeCarriedSafetyDocuments(
+      heldDocuments,
+      carriedDocuments,
+    );
+    if (filled.length === 0 && documents.add.length === 0) {
       return {
         ok: false,
         error:
@@ -882,9 +919,9 @@ export async function carryForwardProjectRegistration(input: {
 
     // New rows, so this year's list can change without touching last year's
     // evidence. The original uploader is kept — they supplied it.
-    if (documents.length > 0) {
+    if (documents.add.length > 0) {
       await tx.insert(schema.registrationSafetyDocuments).values(
-        documents.map((d) => ({
+        documents.add.map((d) => ({
           registrationId,
           title: d.title,
           url: d.url,
@@ -897,7 +934,8 @@ export async function carryForwardProjectRegistration(input: {
     return {
       ok: true,
       filled: filled.length,
-      documents: documents.length,
+      documents: documents.add.length,
+      documentsSkipped: documents.skippedDuplicate + documents.skippedFull,
       source,
     };
   });

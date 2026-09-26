@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
+import { MAX_SAFETY_DOCUMENTS } from "@quagga/core";
 import { boundStrings, dbMock, uniqueViolation } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
@@ -852,6 +853,7 @@ describe("carryForwardProjectRegistration", () => {
       [],
       [{ id: "reg-2027", status: "draft", carriedForwardAt: null }],
       [{ id: "resp-2027", responses: { base_vehicle: "Typed this year" } }],
+      [], // documents the draft already holds
       [{ id: "reg-2027" }],
     );
 
@@ -904,10 +906,113 @@ describe("carryForwardProjectRegistration", () => {
       [{ id: "reg-2027", status: "draft", carriedForwardAt: null }],
       [],
       [],
+      [],
     );
     const result = await carry();
     expect(result.ok).toBe(false);
     expect(dbMock.writesTo(schema.questionnaireResponses)).toHaveLength(0);
+  });
+});
+
+describe("carryForwardProjectRegistration — an existing draft", () => {
+  // Regression: a carry used to insert every still-valid prior document on top
+  // of whatever this year's draft already held — no cap, no de-dupe — so the
+  // draft could end with 7+ rows, and the next save was refused by
+  // SafetyDocumentList.max(MAX_SAFETY_DOCUMENTS) until the lead deleted one.
+  const SOURCE = {
+    registrationId: "reg-2026",
+    editionId: EDITION_2026,
+    editionYear: 2026,
+    editionName: "AfrikaBurn 2026",
+    status: "approved",
+  };
+  const doc = (n: number) => ({
+    title: `Certificate ${n}`,
+    url: `https://blob.example/cert-${n}.pdf`,
+    expiresOn: "2027-12-31",
+    uploadedByUserId: "original-uploader",
+  });
+
+  function carry() {
+    return carryForwardProjectRegistration({
+      groupId: GROUP,
+      kind: "mutant_vehicle",
+      editionId: EDITION_2027,
+      editionYear: 2027,
+      editionEndDate: "2027-05-02",
+      editorUserId: USER,
+      editorEmail: "hatter@example.test",
+    });
+  }
+
+  function queueCarry(held: { url: string }[], carried: object[]) {
+    // source · prior answers · prior docs · [tx] existing reg (locked) ·
+    // current answers (locked) · held docs · registration CAS · answer update
+    dbMock.queue(
+      [SOURCE],
+      [{ responses: { base_vehicle: "1974 Land Rover" } }],
+      carried,
+      [{ id: "reg-2027", status: "draft", carriedForwardAt: null }],
+      [{ id: "resp-2027", responses: {} }],
+      held,
+      [{ id: "reg-2027" }],
+    );
+  }
+
+  it("never leaves the draft with more than MAX_SAFETY_DOCUMENTS", async () => {
+    const held = [1, 2, 3, 4, 5].map(doc);
+    queueCarry(held, [6, 7, 8].map(doc));
+
+    const result = await carry();
+
+    expect(result).toMatchObject({
+      ok: true,
+      documents: 1,
+      documentsSkipped: 2,
+    });
+    const inserted = dbMock
+      .writesTo(schema.registrationSafetyDocuments)[0]!
+      .arg("values") as { url: string }[];
+    expect(held.length + inserted.length).toBeLessThanOrEqual(
+      MAX_SAFETY_DOCUMENTS,
+    );
+    expect(inserted.map((d) => d.url)).toEqual([doc(6).url]);
+  });
+
+  it("does not duplicate a file this year's draft already holds", async () => {
+    queueCarry([doc(1)], [doc(1), doc(2)]);
+
+    const result = await carry();
+
+    expect(result).toMatchObject({
+      ok: true,
+      documents: 1,
+      documentsSkipped: 1,
+    });
+    const inserted = dbMock
+      .writesTo(schema.registrationSafetyDocuments)[0]!
+      .arg("values") as { url: string }[];
+    expect(inserted.map((d) => d.url)).toEqual([doc(2).url]);
+  });
+
+  it("locks the registration and the answer row before merging", async () => {
+    // The merge replaces the whole answer payload; without these row locks a
+    // co-lead's save committing between the read and the write was lost.
+    queueCarry([], []);
+
+    expect((await carry()).ok).toBe(true);
+
+    const txReads = dbMock.queriesOfKind("select").filter((q) => q.tx);
+    const regRead = txReads.find((q) =>
+      q.calls.some((c) => c.args.includes(schema.registrations)),
+    )!;
+    const answerRead = txReads.find((q) =>
+      q.calls.some((c) => c.args.includes(schema.questionnaireResponses)),
+    )!;
+    expect(regRead.arg("for")).toBe("update");
+    expect(answerRead.arg("for")).toBe("update");
+    // Registration first — the order a save writes them in, so no deadlock.
+    expect(txReads.indexOf(regRead)).toBeLessThan(txReads.indexOf(answerRead));
   });
 });
 

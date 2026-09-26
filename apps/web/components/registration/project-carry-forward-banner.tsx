@@ -21,6 +21,7 @@ export type ProjectCarryForwardActionResult =
       ok: true;
       filled: number;
       documents: number;
+      documentsSkipped: number;
       source: { editionYear: number };
     }
   | { ok: false; error: string };
@@ -58,8 +59,12 @@ export function ProjectCarryForwardBanner({
         result.documents > 0
           ? ` and ${result.documents} safety document${result.documents === 1 ? "" : "s"} still in date`
           : "";
+      const skipped =
+        result.documentsSkipped > 0
+          ? ` ${result.documentsSkipped} document${result.documentsSkipped === 1 ? " was" : "s were"} left behind — already attached, or the list is full.`
+          : "";
       toast.success(
-        `Brought ${result.filled} answer${result.filled === 1 ? "" : "s"}${docs} across from ${result.source.editionYear}. Check each one — nothing has been submitted.`,
+        `Brought ${result.filled} answer${result.filled === 1 ? "" : "s"}${docs} across from ${result.source.editionYear}. Check each one — nothing has been submitted.${skipped}`,
       );
       router.refresh();
     });

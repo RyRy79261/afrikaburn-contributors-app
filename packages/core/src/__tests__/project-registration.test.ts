@@ -14,6 +14,7 @@ import {
   carriedProjectAnswerKeys,
   carriedSafetyDocuments,
   isIsoCalendarDate,
+  mergeCarriedSafetyDocuments,
   mergeProjectCarryForward,
   nonCarriedProjectAnswerKeys,
   projectCarriedColumns,
@@ -253,6 +254,42 @@ describe("carriedSafetyDocuments", () => {
     expect(
       carriedSafetyDocuments(docs, { endDate: "2028-05-07" }).map((d) => d.id),
     ).toEqual(["a", "d"]);
+  });
+});
+
+describe("mergeCarriedSafetyDocuments", () => {
+  const doc = (n: number) => ({ url: `https://blob.example/${n}.pdf` });
+
+  it("never takes a draft past MAX_SAFETY_DOCUMENTS", () => {
+    const existing = [1, 2, 3, 4, 5].map(doc);
+    const result = mergeCarriedSafetyDocuments(existing, [6, 7, 8].map(doc));
+    expect(result.add.map((d) => d.url)).toEqual([doc(6).url]);
+    expect(result.skippedFull).toBe(2);
+    expect(existing.length + result.add.length).toBe(MAX_SAFETY_DOCUMENTS);
+  });
+
+  it("adds nothing to a draft that is already full", () => {
+    const existing = [1, 2, 3, 4, 5, 6].map(doc);
+    expect(mergeCarriedSafetyDocuments(existing, [doc(7)])).toEqual({
+      add: [],
+      skippedDuplicate: 0,
+      skippedFull: 1,
+    });
+  });
+
+  it("skips a file the draft already holds, and a repeat within the carry", () => {
+    const result = mergeCarriedSafetyDocuments(
+      [{ url: " https://blob.example/1.pdf " }],
+      [doc(1), doc(2), doc(2)],
+    );
+    expect(result.add.map((d) => d.url)).toEqual([doc(2).url]);
+    expect(result.skippedDuplicate).toBe(2);
+    expect(result.skippedFull).toBe(0);
+  });
+
+  it("takes everything into an empty draft, in order", () => {
+    const carried = [3, 1, 2].map(doc);
+    expect(mergeCarriedSafetyDocuments([], carried).add).toEqual(carried);
   });
 });
 
