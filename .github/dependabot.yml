@@ -20,6 +20,14 @@ updates:
     # group, a weekly run on a workspace this size opens a dozen PRs and every
     # one of them burns a full CI matrix.
     groups:
+      # vitest and its @vitest/* plugins must move in lockstep, majors included:
+      # coverage-v8 5 against vitest 4 (or the reverse) throws inside the
+      # coverage provider and every coverage job reports 0%. Listed first so it
+      # wins over minor-and-patch for these packages.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       minor-and-patch:
         update-types:
           - minor

@@ -63,8 +63,16 @@ export default {
   },
   // `Merge pull request #N from …` is written by GitHub, not by a human, and it
   // cannot be conventional. Same for revert commits git generates itself.
+  //
+  // Dependabot's version bumps are the third bot-written shape. Its subject is
+  // `chore(deps): bump …` / `chore(deps-dev): bump …` — a scope that names no
+  // workspace, and a grouped update runs past 72 characters on its own ("bump the
+  // minor-and-patch group across 1 directory with 37 updates"). The bot cannot be
+  // taught our vocabulary, so every one of its PRs failed this check and none
+  // could merge. Matched on the exact bot form, not on `chore(deps)` in general.
   ignores: [
     (message) => /^Merge (branch|pull request|remote-tracking)/.test(message),
     (message) => /^Revert "/.test(message),
+    (message) => /^chore\(deps(-dev)?\): bump /.test(message),
   ],
 };
