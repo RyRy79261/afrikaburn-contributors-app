@@ -2,7 +2,7 @@
 
 | Field            | Value                                                                |
 | ---------------- | -------------------------------------------------------------------- |
-| **Status**       | Open — deferred, with a stated trigger                               |
+| **Status**       | **Reopened 2026-09-26 — in scope** (see the updates at the end)      |
 | **Raised**       | 2026-07-29 (App Spec change record)                                  |
 | **Spec section** | §11 Theme-Camp Layout Tool (`LAYOUT-*`), and §12 which depends on it |
 
@@ -68,3 +68,31 @@ different evidence, by two different people.)_
 
 §12 (private tent placement under Bedouin tents) is ❌ Not implemented and
 depends entirely on this foundation. It cannot be decided separately.
+
+## Update — 2026-09-26 (Ryan Noble): reopened, in scope
+
+Reopened by an explicit maintainer decision, not by the trigger above. The
+16 Sep update made the Phase 0 probe the only trigger and asked that anything
+beyond research quote a fresh instruction; this is that instruction:
+
+> Ryan, 26 Sep 2026: _"we will be doing the placement maps since we need to work
+> on the GIS integration prep anyway"_ — describing a click-and-drag camp layout
+> editor that shows sizes in metres, starts from a simple rectangle, later takes
+> the allocated plot's shape from the GIS data, and treats a Bedouin as its own
+> layout area that tents are dragged under.
+
+Placement maps therefore leave `AGENTS.md`'s out-of-scope list. What this
+authorises, and what it does not:
+
+- **Now:** the layout editor that needs no AfrikaBurn data — a drawn
+  rectangle, objects dragged and resized in metres, the §12 tent-under-Bedouin
+  packer on the same mechanism. Layouts are stored in plot-local metres, which
+  is the ERF-local coordinate model [`gis-placement-spec.md`](../gis-placement-spec.md)
+  already chose.
+- **Still phase-gated:** anything that reads AfrikaBurn's map data. That goes
+  through the spec's phases in order, starting with the Phase 0 read-only
+  probe, and each phase still needs its own go-ahead.
+
+Unchanged: AI auto-layout stays out (the working group rejected it); the build
+lives in its own lane and never blocks a release (roadmap principle 5).
+Tracked as an epic in the issue tracker.

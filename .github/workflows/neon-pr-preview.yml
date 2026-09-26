@@ -50,13 +50,21 @@ jobs:
   neon-preview-env:
     # Same-repo PRs only. A fork PR gets no preview Neon branch (and, under
     # pull_request_target, must not reach these secrets).
+    #
+    # Not for Dependabot either: a weekly bump would otherwise create a Neon
+    # branch and redeploy three apps for a lockfile change. Keyed on the PR's
+    # AUTHOR, not `github.actor` — the actor is whoever triggered this event,
+    # so a maintainer pushing a fix onto a Dependabot branch would switch
+    # provisioning back on for a PR the rule meant to exclude. Such a PR's
+    # Vercel preview builds against the Preview env's default DATABASE_URL*.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # pull_request_target checks out the base ref by default — the
           # trusted copy of the script. Do not change this to the PR head.
