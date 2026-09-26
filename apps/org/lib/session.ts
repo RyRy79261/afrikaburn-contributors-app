@@ -22,6 +22,7 @@ import type { MembershipRole } from "@quagga/types";
 
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
+import { liveOrgRoleAssignment } from "@quagga/db";
 import { getDb, schema } from "@/lib/db";
 import { canBootstrapGodEmail, isGodEmail } from "@/lib/god";
 import { writeAuditEvent } from "@/lib/audit";
@@ -252,7 +253,15 @@ export const resolveOrgSession = cache(
             schema.orgRoles,
             eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
           )
-          .where(eq(schema.orgRoleAssignments.membershipId, membership.id))
+          .where(
+            and(
+              eq(schema.orgRoleAssignments.membershipId, membership.id),
+              // ACCESS EXPIRY (SEC-019): an expired assignment never reaches
+              // the actor. `@quagga/core` ignores it again on top; `god` holds
+              // no assignments and so cannot expire.
+              liveOrgRoleAssignment(new Date()),
+            ),
+          )
           .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name));
 
         const roles: OrgRoleGrant[] = assigned.map((r) => ({

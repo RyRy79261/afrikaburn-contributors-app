@@ -21,9 +21,14 @@ import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
 import {
+  NumberField,
   RadioChoiceGroup,
   YesNoField,
 } from "@/components/registration/field-kit";
+import {
+  SafetyDocumentsField,
+  type SafetyDocumentValue,
+} from "@/components/registration/safety-documents-field";
 import type { VehicleRegistrationActionResult } from "@/app/(app)/vehicles/new/shared";
 import {
   EBIKE_NOTE,
@@ -52,6 +57,10 @@ export interface VehicleFormInitialValues {
   flameEffects: boolean | null;
   nightDriving: boolean | null;
   acks: VehicleAckKey[];
+  /** Work Access Passes requested (null = not asked). */
+  workAccessPasses: number | null;
+  /** This edition's safety documents (lead/admin-only prefill). */
+  safetyDocuments: SafetyDocumentValue[];
 }
 
 export interface VehicleRegistrationFormProps {
@@ -64,6 +73,10 @@ export interface VehicleRegistrationFormProps {
   nameLocked?: boolean;
   /** Submit-button label ("Submit to DMV" on create, "Resubmit…" on edit). */
   submitLabel?: string;
+  /** The edition's last day — safety documents must be in force on it. */
+  editionEndDate: string;
+  /** Today (`YYYY-MM-DD`) from the server, so validity renders identically. */
+  today: string;
 }
 
 /**
@@ -269,6 +282,8 @@ export function VehicleRegistrationForm({
   initialValues,
   nameLocked = false,
   submitLabel = "Submit to DMV",
+  editionEndDate,
+  today,
 }: VehicleRegistrationFormProps) {
   const router = useRouter();
   const [name, setName] = React.useState(initialValues?.name ?? "");
@@ -291,6 +306,12 @@ export function VehicleRegistrationForm({
   const [acks, setAcks] = React.useState<VehicleAckKey[]>(
     initialValues?.acks ?? [],
   );
+  const [workAccessPasses, setWorkAccessPasses] = React.useState<number | null>(
+    initialValues?.workAccessPasses ?? null,
+  );
+  const [safetyDocuments, setSafetyDocuments] = React.useState<
+    SafetyDocumentValue[]
+  >(initialValues?.safetyDocuments ?? []);
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -315,6 +336,8 @@ export function VehicleRegistrationForm({
         flameEffects,
         nightDriving,
         acks,
+        workAccessPasses,
+        safetyDocuments,
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
       });
@@ -453,9 +476,33 @@ export function VehicleRegistrationForm({
         <Callout>{EBIKE_NOTE}</Callout>
       </Section>
 
-      {/* 6 — Acknowledgements */}
+      {/* 6 — Crew access & safety (CREATIVE-014, CREATIVE-017) */}
       <Section
         index={6}
+        title="Crew access & safety"
+        description="Early-access passes for your build crew, and the safety paperwork that backs this vehicle."
+      >
+        <NumberField
+          id="mv-waps"
+          label="Work Access Passes (optional)"
+          hint="Requested WAPs for your build crew's early access — allocated separately by AfrikaBurn, exactly as for theme camps."
+          value={workAccessPasses}
+          onChange={setWorkAccessPasses}
+          onCommit={() => undefined}
+        />
+        <SafetyDocumentsField
+          idPrefix="mv"
+          value={safetyDocuments}
+          onChange={setSafetyDocuments}
+          blobConfigured={blobConfigured}
+          editionEndDate={editionEndDate}
+          today={today}
+        />
+      </Section>
+
+      {/* 7 — Acknowledgements */}
+      <Section
+        index={7}
         title="Acknowledgements"
         description="On-site licensing happens at the event — sign these before you cruise."
       >

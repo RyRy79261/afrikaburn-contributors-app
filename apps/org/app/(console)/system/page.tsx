@@ -160,6 +160,8 @@ export default async function SystemPage() {
         color: r.color,
         departmentId: r.departmentId,
         departmentName: r.departmentName,
+        expiresOn: r.expiresOn,
+        expired: r.expired,
       })),
       capabilities: m.capabilities.map((c) => ({
         capability: c.capability,
@@ -183,8 +185,11 @@ export default async function SystemPage() {
   // Accounts that cleared the door and hold nothing — a half-finished grant,
   // visible here because nobody would otherwise go looking for it.
   const withoutRoles =
-    roster?.members.filter((m) => m.role !== "god" && m.roles.length === 0)
-      .length ?? 0;
+    // An account whose every role has EXPIRED is in the same state — it
+    // opens an empty console — so it counts here too.
+    roster?.members.filter(
+      (m) => m.role !== "god" && m.roles.every((r) => r.expired),
+    ).length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -337,8 +342,8 @@ export default async function SystemPage() {
                   {" "}
                   <span className="text-foreground">
                     {withoutRoles === 1
-                      ? "One account holds console access and no role at all"
-                      : `${withoutRoles} accounts hold console access and no role at all`}
+                      ? "One account holds console access and no current role"
+                      : `${withoutRoles} accounts hold console access and no current role`}
                     , so the console opens empty for{" "}
                     {withoutRoles === 1 ? "them" : "each of them"}.
                   </span>

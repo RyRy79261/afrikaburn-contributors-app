@@ -1,6 +1,12 @@
 import "server-only";
 
 import { and, asc, eq } from "drizzle-orm";
+import {
+  canReadPersonalInformationIn,
+  safetyDocumentValidity,
+  type OrgActor,
+  type SafetyDocumentValidity,
+} from "@quagga/core";
 import type { QuestionnaireResponses } from "@quagga/types";
 
 import { getDb, schema } from "@/lib/db";
@@ -72,4 +78,67 @@ export async function getProjectRegistrationAnswers(
     .orderBy(asc(schema.questionnaireResponses.id))
     .limit(1);
   return row?.responses ?? null;
+}
+
+/** A safety document as the review page renders it (CREATIVE-017). */
+export interface ReviewSafetyDocument {
+  title: string;
+  url: string;
+  expiresOn: string;
+  validity: SafetyDocumentValidity;
+}
+
+/**
+ * A registration's safety documents, or `null` when THIS viewer may not read
+ * them — withheld, which the page says out loud rather than showing "none".
+ *
+ * The audience is org staff who read personal information in the
+ * registrations domain (`canReadPersonalInformationIn`), decided BEFORE the
+ * query: a certificate can carry an engineer's or a vehicle owner's details,
+ * and an engineer-rank account reading the review has no reason to hold them.
+ * The project's own lead/admin reads them on the web app; nobody else does.
+ */
+export async function getReviewSafetyDocuments(
+  registrationId: string,
+  actor: OrgActor,
+  today: string,
+): Promise<ReviewSafetyDocument[] | null> {
+  if (!canReadPersonalInformationIn(actor, "registrations")) return null;
+  const db = getDb();
+  const rows = await db
+    .select({
+      title: schema.registrationSafetyDocuments.title,
+      url: schema.registrationSafetyDocuments.url,
+      expiresOn: schema.registrationSafetyDocuments.expiresOn,
+      editionEndDate: schema.editions.endDate,
+    })
+    .from(schema.registrationSafetyDocuments)
+    .innerJoin(
+      schema.registrations,
+      eq(
+        schema.registrations.id,
+        schema.registrationSafetyDocuments.registrationId,
+      ),
+    )
+    .innerJoin(
+      schema.editions,
+      eq(schema.editions.id, schema.registrations.editionId),
+    )
+    .where(
+      eq(schema.registrationSafetyDocuments.registrationId, registrationId),
+    )
+    .orderBy(
+      asc(schema.registrationSafetyDocuments.createdAt),
+      asc(schema.registrationSafetyDocuments.id),
+    );
+  return rows.map((r) => ({
+    title: r.title,
+    url: r.url,
+    expiresOn: r.expiresOn,
+    validity: safetyDocumentValidity(
+      r.expiresOn,
+      { endDate: r.editionEndDate },
+      today,
+    ),
+  }));
 }

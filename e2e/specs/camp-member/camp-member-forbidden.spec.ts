@@ -76,6 +76,34 @@ test.describe("camp member — server-side refusals (own camp)", () => {
     ).toHaveCount(0);
   });
 
+  test("cannot open past registrations or the year-on-year changes — redirected [canViewCampRegistration in lib/registration-viewer.ts]", async ({
+    makeAppPage,
+  }) => {
+    // Epic #50. Past registrations hold the same answers as this year's —
+    // alternate-contact and LNT-lead phone numbers among them — so their
+    // audience is exactly the workspace's: leads and admins.
+    const { memberPage, slug } = await memberOfFreshCamp(makeAppPage);
+
+    for (const path of [
+      "registration/history",
+      "registration/history/2026",
+      "registration/changes",
+    ]) {
+      await memberPage.goto(`/camps/${slug}/${path}`);
+      await expect(memberPage).toHaveURL(new RegExp(`/camps/${slug}$`));
+      // PRESENT first — a member-only control on the dashboard they landed on.
+      await expect(
+        memberPage.getByRole("button", { name: /leave camp/i }),
+      ).toBeVisible();
+      await expect(
+        memberPage.getByRole("heading", { name: /past registrations/i }),
+      ).toHaveCount(0);
+      await expect(
+        memberPage.getByText(/nothing to compare with yet/i),
+      ).toHaveCount(0);
+    }
+  });
+
   test("cannot reach the Roles & Officers settings — refused [manage_roles/assign_roles gate in settings/roles/page.tsx]", async ({
     makeAppPage,
   }) => {

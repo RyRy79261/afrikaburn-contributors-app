@@ -339,13 +339,33 @@ and strike plans, WAP and ticket requirements as structured submission artifacts
 
 ## 15. Previous-year submissions 🚧
 
-**Requirement IDs:** ✅ PREVYR-011 (edition-scoped storage keeps every year intact) · 🚧 PREVYR-001, PREVYR-012 · ❌ PREVYR-002–PREVYR-010, PREVYR-013–PREVYR-025 *(App Spec §15 — nothing forward-carrying exists yet, only the underlying per-edition storage a carry-forward feature would build on)*
+**Requirement IDs:** ✅ PREVYR-001, PREVYR-010, PREVYR-011, PREVYR-014 · 🚧 PREVYR-012 · ❌ the remainder of PREVYR-002–PREVYR-025 *(App Spec §15; PREVYR-015 start-from-template is deliberately out of scope for now)*
 
 **Built:** everything is stored per edition, so previous years exist and are
-intact.
+intact. On top of that (roadmap R1 + epic #50):
 
-**Not built:** duplicating last year's submission, carrying data forward,
-comparing years, flagging what needs re-confirming.
+- **Carry-forward** from ANY earlier edition's registration, newest by default
+  (PREVYR-014). The chosen id is re-validated server-side — same camp, strictly
+  earlier edition (`isValidCarryForwardSource`). The rollover rule holds on
+  every path: carried text is a typing aid and no section is marked complete.
+- **Past registrations** (PREVYR-001, -011): `/camps/[slug]/registration/history`
+  lists every earlier edition the camp SUBMITTED; each opens read-only. Same
+  audience as the registration itself (`canViewCampRegistration` — leads and
+  admins). There is no version history: `submitted_at` is never cleared and the
+  wizard autosaves in `draft` and `changes_requested`, so a row later sent
+  back, withdrawn or reopened may hold unsent edits. Only a row in `submitted`,
+  `under_review`, `approved` or `rejected` is labelled "what was submitted"
+  (`holdsSubmittedVersion`); the rest say the submitted version was not kept.
+- **Year-on-year comparison, both sides** (PREVYR-010): the reviewer's diff in
+  the org console and the camp's "What changed since …" page read one function
+  (`selectComparisonPrior` + `changedFields`) and one component. The prior is
+  the carried-forward source when there is one, otherwise the camp's most
+  recent earlier edition that still holds its submitted version
+  (`holdsSubmittedVersion`) — so a camp that typed its answers fresh is still
+  compared, and never against words no reviewer read.
+
+**Not built:** flagging what needs re-confirming, and expiry for documents that
+must be renewed each year.
 
 **What it would take:** ordinary work, with one rule worth agreeing up front —
 **what must never carry forward**. Safety certificates, insurance and fire or
@@ -406,9 +426,36 @@ built for camps either (§6, §7, §9, §10).
 This section needs no separate technical plan. Anything built for camps arrives
 for creative projects roughly free, provided it is built on the shared spine.
 
+**Parity pass (epic #52).** Features built onto the camp registration had skipped
+art projects and mutant vehicles, because those register through their own forms.
+Now:
+
+- **Work Access Passes (CREATIVE-014):** both forms ask for a WAP count and store it
+  on the same `registrations.s4_work_access_passes` column a camp's Form 2 writes, so
+  allocation reads one column whatever kind of group asked. Shown on the org review.
+- **Safety documents (CREATIVE-017):** both forms attach documents with an expiry
+  date (`registration_safety_documents`). Private to the project's lead/admin and to
+  org staff who read personal information for registrations. A document "covers the
+  event" only if it is in force on the edition's last day.
+- **Previous-year duplication (CREATIVE-019):** the camp rule, applied to projects —
+  a returning project still makes a new proposal. Its own words carry (artist,
+  descriptions, images/photos, build and strike plans, power); what is new each year
+  (footprint, placement, sound, WAPs) and every intent or consent (burn intent, grant
+  interest, flame effects, night driving, the DMV acknowledgements) starts empty, so
+  the submit gate refuses a carried draft until those are answered again. Safety
+  documents carry only while still in force through the new edition's end. Policy:
+  `@quagga/core` `project-registration`.
+- **Team onboarding (CREATIVE-007):** project-scoped questionnaires on
+  `/artworks/[slug]/questionnaires` and `/vehicles/[slug]/questionnaires`.
+- **Installations (CREATIVE-005)** are artworks. There is no separate group kind: an
+  installation registers through `/artworks/new`. A distinct kind would add a third
+  project form with nothing that differs from an artwork's questions.
+- **Fundraising (CREATIVE-006, CREATIVE-011)** stays out: the platform never holds or
+  processes money.
+
 ## 19. Permissions and security ✅
 
-**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-019, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*
+**Requirement IDs:** ✅ SEC-001, SEC-002, SEC-009, SEC-010, SEC-011, SEC-012, SEC-013, SEC-014, SEC-015, SEC-016, SEC-019, SEC-021 · 🚧 SEC-005, SEC-006, SEC-007, SEC-017, SEC-018, SEC-020, SEC-023 · ❌ SEC-003, SEC-004, SEC-008, SEC-022 *(App Spec §19 — the strongest section: most roles and every core security control are built; the two acknowledged gaps below sit under SEC-020/SEC-023. SEC-004 Treasurer has no dedicated role, same as SEC-003/SEC-008)*
 
 Built, and beyond the App Spec's list.
 

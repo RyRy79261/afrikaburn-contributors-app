@@ -5,6 +5,7 @@ import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
+import { getActiveEdition } from "@/lib/edition";
 import { PreviewNotice } from "@/components/preview-notice";
 import { VehicleRegistrationForm } from "@/components/vehicles/vehicle-registration-form";
 import { createVehicleRegistrationAction } from "./actions";
@@ -30,6 +31,10 @@ export default async function NewVehiclePage() {
   // Onboarding (and any blocking questionnaire) gates everything else.
   const gate = await pendingBlockingRoute(user.id);
   if (gate) redirect(gate);
+
+  // For the safety-document validity labels; the create action refuses on its
+  // own when no edition is open.
+  const edition = await getActiveEdition();
 
   return (
     <>
@@ -63,6 +68,8 @@ export default async function NewVehiclePage() {
         <VehicleRegistrationForm
           action={createVehicleRegistrationAction}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+          editionEndDate={edition?.endDate ?? ""}
+          today={new Date().toISOString().slice(0, 10)}
         />
       </div>
     </>

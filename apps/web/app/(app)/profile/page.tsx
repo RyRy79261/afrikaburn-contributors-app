@@ -3,11 +3,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { KeyRound, Lock, Pencil, ShieldCheck, Tent } from "lucide-react";
 import {
-  initialsFromName,
+  avatarVisibility,
   mapBioToResponses,
   publicMemberName,
+  readFieldVisibility,
   type BioExtras,
   type BurnerBioFields,
+  type PrivacyFlags,
 } from "@quagga/core";
 import { volunteerPortfolioLabel } from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
@@ -24,19 +26,22 @@ import { ensureCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getBio, getKeyFingerprint } from "@/lib/bio-store";
+import { hasAvatar, isAvatarStorageConfigured } from "@/lib/avatar-store";
 import { describeSignInMethods, listLinkedAccounts } from "@/lib/account";
 import { resolveCampHistoryDisplay } from "@/lib/groups-store";
 import { searchCampsAction } from "@/lib/camp-search-action";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BioFlow } from "@/components/onboarding/bio-flow";
 import { SignOutButton } from "@/components/sign-out-button";
+import { AvatarImage } from "@/components/avatar-image";
+import { CampmateProfileCard } from "@/components/campmate-profile-card";
 import { toBioExtrasState } from "@/components/questionnaire/extras-state";
 import { checkUsernameAvailabilityAction } from "../onboarding/actions";
-import { updateBioAction } from "./actions";
+import { saveCampmateSettingsAction, updateBioAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type Visibility = "public" | "private" | "locked";
+type Visibility = "public" | "camp_mates" | "private" | "locked";
 
 function PrivacyBadge({ visibility }: { visibility: Visibility }) {
   if (visibility === "locked") {
@@ -51,6 +56,13 @@ function PrivacyBadge({ visibility }: { visibility: Visibility }) {
     return (
       <Badge variant="success" className="shrink-0">
         Public
+      </Badge>
+    );
+  }
+  if (visibility === "camp_mates") {
+    return (
+      <Badge variant="outline" className="shrink-0">
+        Camp mates
       </Badge>
     );
   }
@@ -93,8 +105,8 @@ function BioRow({
   );
 }
 
-function vis(flags: Record<string, boolean>, key: string): Visibility {
-  return flags[key] === true ? "public" : "private";
+function vis(flags: PrivacyFlags, key: string): Visibility {
+  return readFieldVisibility(flags[key]);
 }
 
 function contactSummary(
@@ -151,6 +163,7 @@ export default async function ProfilePage({
             mode="edit"
             initialResponses={mapBioToResponses(bio.fields, bio.username)}
             initialFlags={bio.privacyFlags}
+            initialCampmate={bio.campmate}
             initialExtras={toBioExtrasState(bio.extras)}
             action={updateBioAction}
             searchCamps={searchCampsAction}
@@ -168,11 +181,13 @@ export default async function ProfilePage({
   // Three independent reads — the profile key fingerprint, the linked sign-in
   // methods and the camp-history display names. None feeds another, so they go
   // out together instead of one round trip after the next.
-  const [fingerprint, linkedAccounts, campHistory] = await Promise.all([
-    getKeyFingerprint(user.id),
-    listLinkedAccounts(),
-    resolveCampHistoryDisplay(extras.campHistory, edition.id),
-  ]);
+  const [fingerprint, linkedAccounts, campHistory, photoOnFile] =
+    await Promise.all([
+      getKeyFingerprint(user.id),
+      listLinkedAccounts(),
+      resolveCampHistoryDisplay(extras.campHistory, edition.id),
+      hasAvatar(user.id),
+    ]);
   const signInMethods = describeSignInMethods(linkedAccounts);
   const volunteeringLabels = extras.volunteeringInterests.map(
     volunteerPortfolioLabel,
@@ -210,12 +225,12 @@ export default async function ProfilePage({
 
         {/* Identity ------------------------------------------------------- */}
         <div className="flex items-center gap-4">
-          <span
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-primary"
-            aria-hidden
-          >
-            {initialsFromName(bio.username)}
-          </span>
+          <AvatarImage
+            userId={user.id}
+            name={bio.username}
+            showPhoto={photoOnFile}
+            className="h-14 w-14 text-lg"
+          />
           <div className="min-w-0">
             <p className="truncate text-xl font-semibold tracking-tight">
               {publicMemberName(bio.username)}
@@ -405,6 +420,17 @@ export default async function ProfilePage({
             )}
           </CardContent>
         </Card>
+
+        {/* Photo & camp mates (epic #68) ---------------------------------- */}
+        <CampmateProfileCard
+          userId={user.id}
+          name={bio.username}
+          hasPhoto={photoOnFile}
+          photoVisibility={avatarVisibility(flags)}
+          settings={bio.campmate}
+          uploadsConfigured={isAvatarStorageConfigured()}
+          save={saveCampmateSettingsAction}
+        />
 
         {/* Security ------------------------------------------------------- */}
         <Card>

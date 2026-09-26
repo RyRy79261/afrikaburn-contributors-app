@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { Check, ExternalLink, X } from "lucide-react";
-import { orgCanInDomain, orgCapabilityRefusal } from "@quagga/core";
+import {
+  SAFETY_DOCUMENT_VALIDITY_LABELS,
+  orgCanInDomain,
+  orgCapabilityRefusal,
+} from "@quagga/core";
 import {
   SECTION_KEYS,
   SECTION_LABELS,
@@ -29,6 +33,7 @@ import {
 import {
   asProjectKind,
   getProjectRegistrationAnswers,
+  getReviewSafetyDocuments,
 } from "@/lib/project-registration";
 import {
   ARTWORK_POWER_LABELS,
@@ -52,7 +57,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { PlacementPanel } from "@/components/registration/placement-panel";
-import { CarryForwardComparison } from "@/components/registration/carry-forward-comparison";
+import { RegistrationChanges } from "@quagga/ui/components/registration-changes";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
 import {
@@ -128,7 +133,16 @@ export default async function RegistrationDetailPage({
         detail.edition.id,
       );
 
+    // Safety documents: decided per viewer INSIDE the loader (null = withheld).
+    const safetyDocuments = await getReviewSafetyDocuments(
+      registration.id,
+      actor,
+      new Date().toISOString().slice(0, 10),
+    );
+
     const view: ProjectRegistrationView = {
+      workAccessPasses: registration.s4WorkAccessPasses,
+      safetyDocuments,
       contactEmail: registration.s1ContactEmail,
       areaDimensions: registration.s4AreaDimensions,
       imageUrls: registration.s4LayoutUploadUrls,
@@ -227,10 +241,12 @@ export default async function RegistrationDetailPage({
       wranglerRefusal={wranglerRefusal}
       comparison={
         comparison ? (
-          <CarryForwardComparison
+          <RegistrationChanges
             priorYear={comparison.priorYear}
             currentYear={comparison.currentYear}
             changes={comparison.changes}
+            basis={comparison.basis}
+            audience="reviewer"
           />
         ) : null
       }
@@ -335,6 +351,51 @@ function renderProjectField(field: ProjectField): FieldSpec {
         ),
       };
     }
+    case "documents":
+      return {
+        label: field.label,
+        wide: field.wide,
+        value:
+          value.docs === null ? (
+            <span className="text-muted-foreground">
+              Withheld — safety documents are visible to staff who read personal
+              information for registrations.
+            </span>
+          ) : value.docs.length > 0 ? (
+            <span className="flex flex-col gap-1.5">
+              {value.docs.map((doc, i) => (
+                <span
+                  key={`${doc.url}-${i}`}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    {doc.title}
+                  </a>
+                  <span className="text-xs text-muted-foreground">
+                    expires {doc.expiresOn} ·{" "}
+                    <span
+                      className={
+                        doc.validity === "valid"
+                          ? undefined
+                          : "font-medium text-destructive"
+                      }
+                    >
+                      {SAFETY_DOCUMENT_VALIDITY_LABELS[doc.validity]}
+                    </span>
+                  </span>
+                </span>
+              ))}
+            </span>
+          ) : (
+            "—"
+          ),
+      };
     case "power":
       return {
         label: field.label,

@@ -18,6 +18,7 @@ import {
   grantedOrgCapabilities,
   isDepartmentScopedCapability,
   isDepartmentScopedGrant,
+  isOrgRoleAssignmentLive,
   isRankCarveOut,
   isSystemManager,
   orgCan,
@@ -1092,5 +1093,64 @@ describe("consequence copy — what an editor is actually deciding", () => {
     expect(DEPARTMENT_SCOPE_NOTE).toMatch(/department/i);
     expect(DEPARTMENT_SCOPE_NOTE).toMatch(/owns none/i);
     expect(DEPARTMENT_SCOPE_NOTE).not.toMatch(/yet/i);
+  });
+});
+
+// ACCESS EXPIRY (SEC-019). The full lockout scenarios live in
+// apps/org/lib/__tests__/org-role-lockout.test.ts; these pin the resolver's
+// own contract where the package's coverage floor can see it.
+describe("access expiry — an expired assignment grants nothing", () => {
+  const STOP = new Date("2027-05-02T22:00:00.000Z");
+  const lead = (expiresAt: Date | null): OrgRoleGrant => ({
+    ...role("suppliers.lead", { read: true, delete: true }, SUPPLIERS),
+    expiresAt,
+  });
+  const at = (roles: OrgRoleGrant[], asOf: Date): OrgActor => ({
+    rank: "org_staff",
+    roles,
+    domains: OWNERSHIP,
+    asOf,
+  });
+
+  it("the boundary is exclusive, and null never expires", () => {
+    expect(isOrgRoleAssignmentLive(null, STOP)).toBe(true);
+    expect(isOrgRoleAssignmentLive(undefined, STOP)).toBe(true);
+    expect(isOrgRoleAssignmentLive(STOP, new Date(STOP.getTime() - 1))).toBe(
+      true,
+    );
+    expect(isOrgRoleAssignmentLive(STOP, STOP)).toBe(false);
+  });
+
+  it("every resolver drops the expired grant — and keeps it one ms earlier", () => {
+    const before = at([lead(STOP)], new Date(STOP.getTime() - 1));
+    const after = at([lead(STOP)], STOP);
+
+    expect(orgCanInDomain(before, "delete", "suppliers")).toBe(true);
+    expect(isDepartmentScopedGrant(before, "delete")).toBe(true);
+    expect(departmentsGranting(before, "delete")).toEqual([SUPPLIERS]);
+    expect(summarizeOrgActor(before).map((g) => g.capability)).toEqual([
+      "read",
+      "delete",
+    ]);
+
+    expect(orgCan(after, "read")).toBe(false);
+    expect(orgCanInDomain(after, "delete", "suppliers")).toBe(false);
+    expect(isDepartmentScopedGrant(after, "delete")).toBe(false);
+    expect(departmentsGranting(after, "delete")).toEqual([]);
+    expect(summarizeOrgActor(after)).toEqual([]);
+  });
+
+  it("the refusal names expiry rather than claiming no roles were ever held", () => {
+    expect(orgCapabilityRefusal(at([lead(STOP)], STOP), "read")).toMatch(
+      /expired/,
+    );
+    expect(orgCapabilityRefusal(at([], STOP), "read")).toMatch(
+      /no org roles yet/,
+    );
+  });
+
+  it("a System manager is untouched by expiry", () => {
+    const god: OrgActor = { ...at([lead(STOP)], STOP), rank: "god" };
+    for (const c of ORG_CAPABILITIES) expect(orgCan(god, c)).toBe(true);
   });
 });

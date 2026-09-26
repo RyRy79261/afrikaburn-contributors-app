@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, Lock } from "lucide-react";
 import {
+  AVATAR_PRIVACY_KEY,
   BIO_PRIVACY_FIELDS,
   INVITE_RESUME_PATH,
   buildBurnerBioQuestionnaire,
@@ -12,7 +13,12 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_QUESTION_ID,
   validateUsername,
+  readFieldVisibility,
+  encodeFieldVisibility,
   type BioPrivacyField,
+  type CampmateSettings,
+  type PrivacyFlags,
+  type PrivacyFlagValue,
 } from "@quagga/core";
 import {
   attendedYearOptions,
@@ -46,6 +52,7 @@ import {
 import { focusFirstError } from "@quagga/ui/lib/focus-first-error";
 import { cn } from "@quagga/ui/lib/utils";
 import { PrivacyToggles } from "../privacy-toggles";
+import { CampmateSettingsFields } from "../campmate-settings-fields";
 import {
   BurnsAndVolunteeringStep,
   type BioExtrasState,
@@ -63,9 +70,10 @@ import { navigateOnwards } from "@/lib/client-navigation";
 
 export type BioFlowAction = (
   responses: QuestionnaireResponses,
-  privacyFlags: Record<string, boolean> | null,
+  privacyFlags: PrivacyFlags | null,
   final: boolean,
   extras?: BioExtrasState | null,
+  campmate?: CampmateSettings | null,
 ) => Promise<SaveResult>;
 
 /** Mirrors `checkUsernameAvailabilityAction`'s result (kept structural so this
@@ -78,7 +86,10 @@ export type UsernameCheckResult =
 interface BioFlowProps {
   mode: "onboarding" | "edit";
   initialResponses: QuestionnaireResponses;
-  initialFlags: Record<string, boolean>;
+  initialFlags: PrivacyFlags;
+  /** Epic #68: contactability + the camp people opt-in. On a new edition these
+   * arrive carried forward and are confirmed on the Privacy step. */
+  initialCampmate: CampmateSettings;
   initialExtras: BioExtrasState;
   action: BioFlowAction;
   searchCamps: (query: string) => Promise<CampSearchResult[]>;
@@ -157,11 +168,19 @@ const PRIVACY_REVIEW_EXCLUDE = new Set([
 const PRIVACY_REVIEW_FIELDS = BIO_PRIVACY_FIELDS.filter(
   (f) => !PRIVACY_REVIEW_EXCLUDE.has(f.key),
 );
+// In EDIT mode the photo's level is edited beside the photo itself (the
+// profile card), so the review leaves it out rather than offering two controls
+// for one setting. Onboarding keeps it: a returning burner's carried-forward
+// photo level is confirmed there with everything else.
+const EDIT_PRIVACY_REVIEW_FIELDS = PRIVACY_REVIEW_FIELDS.filter(
+  (f) => f.key !== AVATAR_PRIVACY_KEY,
+);
 
 export function BioFlow({
   mode,
   initialResponses,
   initialFlags,
+  initialCampmate,
   initialExtras,
   action,
   searchCamps,
@@ -180,8 +199,9 @@ export function BioFlow({
     const v = initialResponses[USERNAME_QUESTION_ID];
     return typeof v === "string" ? v.trim().toLowerCase() : "";
   });
-  const [flags, setFlags] =
-    React.useState<Record<string, boolean>>(initialFlags);
+  const [flags, setFlags] = React.useState<PrivacyFlags>(initialFlags);
+  const [campmate, setCampmate] =
+    React.useState<CampmateSettings>(initialCampmate);
   const [extras, setExtras] = React.useState<BioExtrasState>(initialExtras);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isPending, startTransition] = React.useTransition();
@@ -206,8 +226,8 @@ export function BioFlow({
     });
   }
 
-  function setFlag(key: string, isPublic: boolean) {
-    setFlags((prev) => ({ ...prev, [key]: isPublic }));
+  function setFlag(key: string, value: PrivacyFlagValue) {
+    setFlags((prev) => ({ ...prev, [key]: value }));
   }
 
   const str = (id: string): string => {
@@ -247,7 +267,7 @@ export function BioFlow({
   function persist(final: boolean, onOk: () => void) {
     startTransition(async () => {
       try {
-        const result = await action(responses, flags, final, extras);
+        const result = await action(responses, flags, final, extras, campmate);
         if (!result.ok) {
           setErrors(result.errors);
           focusFirstError(result.errors, { ignore: NON_FIELD_ERROR_KEYS });
@@ -341,15 +361,23 @@ export function BioFlow({
           <div>
             <h2 className="text-lg font-semibold">Privacy</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              A final look at what shows on your public profile. Sensitive
-              fields are locked private and can never be made public.
+              A final look at who sees what: only you, the people in your theme
+              camp, or everyone. Sensitive fields are locked private and can
+              never be shared.
             </p>
           </div>
           <PrivacyToggles
-            fields={PRIVACY_REVIEW_FIELDS}
+            fields={
+              mode === "edit"
+                ? EDIT_PRIVACY_REVIEW_FIELDS
+                : PRIVACY_REVIEW_FIELDS
+            }
             flags={flags}
-            onChange={setFlag}
+            onChange={(key, level) =>
+              setFlag(key, encodeFieldVisibility(level))
+            }
           />
+          <CampmateSettingsFields value={campmate} onChange={setCampmate} />
         </div>
       )}
 
@@ -639,8 +667,8 @@ interface DetailsStepProps {
   errors: Record<string, string>;
   describedBy: (id: string) => string;
   setResp: (id: string, value: QuestionnaireResponseValue) => void;
-  flags: Record<string, boolean>;
-  setFlag: (key: string, isPublic: boolean) => void;
+  flags: PrivacyFlags;
+  setFlag: (key: string, value: PrivacyFlagValue) => void;
   usernameState: UsernameState;
 }
 
@@ -659,7 +687,15 @@ function DetailsStep({
     return (
       <Switch
         variant="privacy"
-        checked={flags[key] === true}
+        checked={readFieldVisibility(flags[key]) === "public"}
+        // The inline switch is public on/off. A field shared with camp-mates
+        // is "off" here but NOT private, so it says so rather than lying; the
+        // Privacy step is where the three levels are chosen.
+        offLabel={
+          readFieldVisibility(flags[key]) === "camp_mates"
+            ? "Off · Camp mates"
+            : undefined
+        }
         onCheckedChange={(v) => setFlag(key, v)}
         aria-label={`${f?.label ?? key} — public or private`}
       />

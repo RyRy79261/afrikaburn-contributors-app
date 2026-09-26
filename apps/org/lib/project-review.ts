@@ -11,7 +11,10 @@
 
 import type { QuestionnaireResponses, SectionKey } from "@quagga/types";
 
-import type { ProjectRegistrationKind } from "./project-registration";
+import type {
+  ProjectRegistrationKind,
+  ReviewSafetyDocument,
+} from "./project-registration";
 import {
   classifySoundLevel,
   deriveCohort,
@@ -123,7 +126,9 @@ export type ProjectFieldValue =
   | { type: "yesno"; value: boolean | null }
   | { type: "uploads"; urls: string[]; noun: string }
   | { type: "acks"; ackedKeys: string[] }
-  | { type: "power"; keys: string[] };
+  | { type: "power"; keys: string[] }
+  /** `docs: null` = withheld from this viewer (said out loud, never "none"). */
+  | { type: "documents"; docs: ReviewSafetyDocument[] | null };
 
 export interface ProjectField {
   label: string;
@@ -147,6 +152,30 @@ export interface ProjectRegistrationView {
   placementNotes: string | null;
   lntPlan: string | null;
   grantsInterest: boolean | null;
+  /** `s4_work_access_passes` — the same WAP column a camp writes (CREATIVE-014). */
+  workAccessPasses: number | null;
+  /** Safety documents (CREATIVE-017); null when this viewer may not read them. */
+  safetyDocuments: ReviewSafetyDocument[] | null;
+}
+
+/** The WAP request, rendered the same way the camp review renders it. */
+function wapField(view: ProjectRegistrationView): ProjectField {
+  return {
+    label: "Work Access Passes requested",
+    value: {
+      type: "text",
+      value:
+        view.workAccessPasses === null ? null : String(view.workAccessPasses),
+    },
+  };
+}
+
+function safetyField(view: ProjectRegistrationView): ProjectField {
+  return {
+    label: "Safety documents",
+    value: { type: "documents", docs: view.safetyDocuments },
+    wide: true,
+  };
 }
 
 function vehicleSections(
@@ -181,13 +210,14 @@ function vehicleSections(
     },
     {
       key: "size_logistics",
-      label: "Photos",
+      label: "Photos & crew access",
       fields: [
         {
           label: "Vehicle photos",
           value: { type: "uploads", urls: view.imageUrls, noun: "Photo" },
           wide: true,
         },
+        wapField(view),
       ],
     },
     {
@@ -231,6 +261,12 @@ function vehicleSections(
         },
       ],
     },
+    {
+      // The one section key a vehicle did not use — its own review thread.
+      key: "suppliers_commerce",
+      label: "Safety documents",
+      fields: [safetyField(view)],
+    },
   ];
 }
 
@@ -265,12 +301,13 @@ function artworkSections(
     },
     {
       key: "size_logistics",
-      label: "Physical footprint",
+      label: "Footprint & crew access",
       fields: [
         {
           label: "Footprint (W × D × H)",
           value: { type: "text", value: view.areaDimensions },
         },
+        wapField(view),
         {
           label: "Concept images",
           value: { type: "uploads", urls: view.imageUrls, noun: "Image" },
@@ -280,7 +317,9 @@ function artworkSections(
     },
     {
       key: "participation",
-      label: "Burning & power",
+      // All six section keys are taken for an artwork, so the safety evidence
+      // sits with the burn it is mostly about.
+      label: "Burning, power & safety",
       fields: [
         {
           label: "Intended to burn?",
@@ -293,6 +332,7 @@ function artworkSections(
             keys: answerStringArray(answers, "power_needs"),
           },
         },
+        safetyField(view),
       ],
     },
     {

@@ -14,6 +14,7 @@ import {
   type MedicalAccessContext,
 } from "@quagga/core";
 import type { MembershipRole } from "@quagga/types";
+import { liveOrgRoleAssignment } from "@quagga/db";
 import { db, schema } from "./db";
 import { decryptField } from "./crypto-guard";
 
@@ -200,9 +201,14 @@ async function buildMedicalAccessContext(
           eq(schema.orgRoles.id, schema.orgRoleAssignments.orgRoleId),
         )
         .where(
-          inArray(
-            schema.orgRoleAssignments.membershipId,
-            actorOrgMembershipIds,
+          and(
+            inArray(
+              schema.orgRoleAssignments.membershipId,
+              actorOrgMembershipIds,
+            ),
+            // ACCESS EXPIRY (SEC-019): the console refuses an expired role, so
+            // this app must too — the two resolve medical access identically.
+            liveOrgRoleAssignment(new Date()),
           ),
         ),
       handle

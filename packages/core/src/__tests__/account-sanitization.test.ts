@@ -136,10 +136,15 @@ describe("buildUserSanitizationPatch", () => {
     // NOT carry an authUserId key at all — the column is deliberately preserved.
     expect(Object.keys(patch)).not.toContain("authUserId");
     expect(Object.keys(patch).sort()).toEqual([
+      "avatarKey",
       "email",
       "sanitizedAt",
       "username",
     ]);
+  });
+
+  it("erases the profile photo key (epic #68 — a face is personal data)", () => {
+    expect(patch.avatarKey).toBeNull();
   });
 });
 

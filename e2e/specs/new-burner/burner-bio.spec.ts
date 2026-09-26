@@ -122,17 +122,23 @@ test.describe("new burner · Burner Bio", () => {
     }
 
     // Advance to the Privacy review step, where the hard-lock is even starker:
-    // the locked classes have NO switch at all, just a "Locked private" chip,
-    // while a public-eligible field (home city) still has a working switch.
+    // the locked classes have NO control at all, just a "Locked private" chip,
+    // while a public-eligible field (home city) has its three-way level control
+    // (epic #68: Only me / Camp mates / Public, one radio each).
     await webPage.getByRole("button", { name: "Save & continue" }).click(); // → burns
     await webPage.getByRole("button", { name: "Save & continue" }).click(); // → privacy
     await expect(webPage.getByText(/locked private/i).first()).toBeVisible();
+    await expect(
+      webPage.getByRole("radio", { name: /home city/i }),
+    ).toHaveCount(3);
+    // Neither the phone nor medical can be offered to camp mates or anyone.
+    await expect(webPage.getByRole("radio", { name: /phone/i })).toHaveCount(0);
+    await expect(webPage.getByRole("radio", { name: /medical/i })).toHaveCount(
+      0,
+    );
     await expect(webPage.getByRole("switch", { name: /phone/i })).toHaveCount(
       0,
     );
-    await expect(
-      webPage.getByRole("switch", { name: /home city/i }),
-    ).toHaveCount(1);
   });
 });
 

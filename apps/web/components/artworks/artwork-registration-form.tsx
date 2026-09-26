@@ -20,7 +20,15 @@ import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
-import { CheckGroup, YesNoField } from "@/components/registration/field-kit";
+import {
+  CheckGroup,
+  NumberField,
+  YesNoField,
+} from "@/components/registration/field-kit";
+import {
+  SafetyDocumentsField,
+  type SafetyDocumentValue,
+} from "@/components/registration/safety-documents-field";
 import type { ArtworkRegistrationActionResult } from "@/app/(app)/artworks/new/shared";
 import {
   ART_GRANT_NOTE,
@@ -50,6 +58,10 @@ export interface ArtworkFormInitialValues {
   buildPlan: string;
   strikePlan: string;
   grantInterest: boolean;
+  /** Work Access Passes requested (null = not asked). */
+  workAccessPasses: number | null;
+  /** This edition's safety documents (lead/admin-only prefill). */
+  safetyDocuments: SafetyDocumentValue[];
 }
 
 export interface ArtworkRegistrationFormProps {
@@ -62,6 +74,10 @@ export interface ArtworkRegistrationFormProps {
   nameLocked?: boolean;
   /** Submit-button label ("Submit project" on create, "Resubmit…" on edit). */
   submitLabel?: string;
+  /** The edition's last day — safety documents must be in force on it. */
+  editionEndDate: string;
+  /** Today (`YYYY-MM-DD`) from the server, so validity renders identically. */
+  today: string;
 }
 
 /**
@@ -301,6 +317,8 @@ export function ArtworkRegistrationForm({
   initialValues,
   nameLocked = false,
   submitLabel = "Submit project",
+  editionEndDate,
+  today,
 }: ArtworkRegistrationFormProps) {
   const router = useRouter();
   const [name, setName] = React.useState(initialValues?.name ?? "");
@@ -338,6 +356,12 @@ export function ArtworkRegistrationForm({
   const [grantInterest, setGrantInterest] = React.useState(
     initialValues?.grantInterest ?? false,
   );
+  const [workAccessPasses, setWorkAccessPasses] = React.useState<number | null>(
+    initialValues?.workAccessPasses ?? null,
+  );
+  const [safetyDocuments, setSafetyDocuments] = React.useState<
+    SafetyDocumentValue[]
+  >(initialValues?.safetyDocuments ?? []);
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -361,6 +385,8 @@ export function ArtworkRegistrationForm({
         buildPlan: buildPlan.trim() || undefined,
         strikePlan: strikePlan.trim() || undefined,
         grantInterest,
+        workAccessPasses,
+        safetyDocuments,
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
       });
@@ -557,8 +583,32 @@ export function ArtworkRegistrationForm({
         </Field>
       </Section>
 
-      {/* 5 — Art grants */}
-      <Section index={5} title="Art grants">
+      {/* 5 — Crew access & safety (CREATIVE-014, CREATIVE-017) */}
+      <Section
+        index={5}
+        title="Crew access & safety"
+        description="Early-access passes for your build crew, and the safety paperwork that backs this artwork."
+      >
+        <NumberField
+          id="art-waps"
+          label="Work Access Passes (optional)"
+          hint="Requested WAPs for your build crew's early access — allocated separately by AfrikaBurn, exactly as for theme camps."
+          value={workAccessPasses}
+          onChange={setWorkAccessPasses}
+          onCommit={() => undefined}
+        />
+        <SafetyDocumentsField
+          idPrefix="art"
+          value={safetyDocuments}
+          onChange={setSafetyDocuments}
+          blobConfigured={blobConfigured}
+          editionEndDate={editionEndDate}
+          today={today}
+        />
+      </Section>
+
+      {/* 6 — Art grants */}
+      <Section index={6} title="Art grants">
         <AckRow
           checked={grantInterest}
           onChange={(e) => setGrantInterest(e.target.checked)}

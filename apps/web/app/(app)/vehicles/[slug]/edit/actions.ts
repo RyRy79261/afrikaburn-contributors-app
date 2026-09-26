@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { PROJECT_ADMIN_ROLES } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
@@ -7,6 +8,8 @@ import {
   getProjectRegistrationForEdit,
   updateProjectRegistration,
 } from "@/lib/project-registration-store";
+import { runProjectCarryForward } from "@/lib/project-carry-forward";
+import type { ProjectCarryForwardResult } from "@/lib/project-registration-store";
 import {
   VehicleRegistrationInput,
   buildVehiclePayload,
@@ -83,11 +86,30 @@ export async function updateVehicleRegistrationAction(
     editionId: edition.id,
     kind: "mutant_vehicle",
     editorUserId: user.id,
+    editorEmail: user.email,
     description: payload.description,
     submit: input.submit,
     columns: payload.columns,
     answers: payload.answers,
+    safetyDocuments: payload.safetyDocuments,
   });
   if (!result.ok) return { status: "error", message: result.error };
   return { status: "updated", slug: result.slug };
+}
+
+const CarryForwardSlug = z.string().trim().min(1).max(200);
+
+/**
+ * Bring this project's most recent prior registration across into this
+ * edition's draft (CREATIVE-019). Lead/admin only, enforced in
+ * `runProjectCarryForward`; what carries is @quagga/core's policy.
+ */
+export async function carryForwardVehicleRegistrationAction(
+  slug: string,
+): Promise<ProjectCarryForwardResult> {
+  const parsed = CarryForwardSlug.safeParse(slug);
+  if (!parsed.success) {
+    return { ok: false, error: "That project isn't one we recognise." };
+  }
+  return runProjectCarryForward(parsed.data, "mutant_vehicle");
 }

@@ -82,15 +82,20 @@ async function completePiiBioAllPublic(
   // Step 3 — Burns & volunteering (nothing required).
   await page.getByRole("button", { name: "Save & continue" }).click();
 
-  // Step 4 — Privacy review: flip EVERY public-eligible switch to public. The
-  // hard-locked rows render as static "Locked private" spans (no switch), so this
-  // can only ever expose the fields that are legally exposable.
-  const switches = page.getByRole("switch");
-  const count = await switches.count();
+  // Step 4 — Privacy review: set EVERY public-eligible field to Public. Since
+  // epic #68 each row is a three-way toggle group (Only me / Camp mates /
+  // Public — radios named "<field>: <level>"); the hard-locked rows render as
+  // static "Locked private" spans with no radios at all, so this can only ever
+  // expose the fields that are legally exposable. Assert the radios exist
+  // first — a loop over zero controls would prove nothing.
+  const publicRadios = page.getByRole("radio", { name: /: Public$/ });
+  await expect(publicRadios.first()).toBeVisible();
+  const count = await publicRadios.count();
   for (let i = 0; i < count; i++) {
-    const sw = switches.nth(i);
-    if ((await sw.getAttribute("aria-checked")) !== "true") {
-      await sw.click();
+    const radio = publicRadios.nth(i);
+    if ((await radio.getAttribute("aria-checked")) !== "true") {
+      await radio.click();
+      await expect(radio).toHaveAttribute("aria-checked", "true");
     }
   }
   await page.getByRole("button", { name: "Complete my bio" }).click();

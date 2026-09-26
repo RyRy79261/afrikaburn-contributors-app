@@ -592,13 +592,83 @@ describe("setAccountOrgRoles", () => {
 
     expect(db.recorded("delete", "org_role_assignments")).toHaveLength(1);
     expect(db.inserted("org_role_assignments")).toEqual([
-      { membershipId: "mem-1", orgRoleId: ROLE_ID },
+      { membershipId: "mem-1", orgRoleId: ROLE_ID, expiresAt: null },
     ]);
     expect(db.inserted("audit_events")).toMatchObject({
       action: "org.roles.assign",
       subject: USER_ID,
-      meta: { roleIds: [ROLE_ID] },
+      meta: { roleIds: [ROLE_ID], expiries: {} },
     });
+  });
+
+  // ACCESS EXPIRY (SEC-019).
+  it("stores a future last day as the instant access stops, and audits it", async () => {
+    db.seed("memberships", [{ id: "mem-1", role: "org_staff" }]);
+    db.seed("org_roles", [{ id: ROLE_ID }]);
+
+    await expect(
+      setAccountOrgRoles({
+        userId: USER_ID,
+        roleIds: [ROLE_ID],
+        expiries: [{ roleId: ROLE_ID, lastDay: "2099-05-02" }],
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    const stops = new Date("2099-05-02T22:00:00.000Z");
+    expect(db.inserted("org_role_assignments")).toEqual([
+      { membershipId: "mem-1", orgRoleId: ROLE_ID, expiresAt: stops },
+    ]);
+    expect(db.inserted("audit_events")).toMatchObject({
+      meta: { expiries: { [ROLE_ID]: stops.toISOString() } },
+    });
+  });
+
+  it("refuses a new last day that has already passed, writing nothing", async () => {
+    db.seed("memberships", [{ id: "mem-1", role: "org_staff" }]);
+    db.seed("org_roles", [{ id: ROLE_ID }]);
+
+    const result = await setAccountOrgRoles({
+      userId: USER_ID,
+      roleIds: [ROLE_ID],
+      expiries: [{ roleId: ROLE_ID, lastDay: "2020-01-01" }],
+    });
+
+    expect(result).toMatchObject({ ok: false });
+    expect((result as { error: string }).error).toMatch(/already passed/);
+    expect(db.recorded("delete", "org_role_assignments")).toHaveLength(0);
+    expect(db.recorded("insert", "org_role_assignments")).toHaveLength(0);
+  });
+
+  it("keeps an UNCHANGED expired assignment as stored, so it stays renewable", async () => {
+    const lapsed = new Date("2020-01-01T22:00:00.000Z");
+    db.seed("memberships", [{ id: "mem-1", role: "org_staff" }]);
+    db.seed("org_roles", [{ id: ROLE_ID }]);
+    db.seed("org_role_assignments", [
+      { orgRoleId: ROLE_ID, expiresAt: lapsed },
+    ]);
+
+    await expect(
+      setAccountOrgRoles({
+        userId: USER_ID,
+        roleIds: [ROLE_ID],
+        expiries: [{ roleId: ROLE_ID, lastDay: "2020-01-01" }],
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(db.inserted("org_role_assignments")).toEqual([
+      { membershipId: "mem-1", orgRoleId: ROLE_ID, expiresAt: lapsed },
+    ]);
+  });
+
+  it("rejects a malformed last day at the Zod boundary", async () => {
+    db.seed("memberships", [{ id: "mem-1", role: "org_staff" }]);
+    const result = await setAccountOrgRoles({
+      userId: USER_ID,
+      roleIds: [ROLE_ID],
+      expiries: [{ roleId: ROLE_ID, lastDay: "next season" }],
+    });
+    expect(result).toMatchObject({ ok: false });
+    expect(db.recorded("insert", "org_role_assignments")).toHaveLength(0);
   });
 
   it("clears every role when the set is empty, without a pointless insert", async () => {

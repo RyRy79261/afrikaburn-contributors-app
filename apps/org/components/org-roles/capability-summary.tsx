@@ -71,6 +71,9 @@ export interface PreviewRole {
    * empty (meaningfully) for a department that has been given nothing. */
   departmentDomains?: readonly OrgDomain[];
   capabilities: readonly OrgCapability[];
+  /** When the draft assignment would stop granting (null/absent = never). The
+   * resolver judges it against now, so an expired draft previews as nothing. */
+  expiresAt?: Date | null;
 }
 
 /**
@@ -130,6 +133,7 @@ export function grantsForRoles(
       kind: "custom" as const,
       departmentId: r.departmentId,
       permissions: orgPermissionsFromKeys([...r.capabilities]),
+      expiresAt: r.expiresAt ?? null,
     })),
   }).map((grant) => ({
     capability: grant.capability,

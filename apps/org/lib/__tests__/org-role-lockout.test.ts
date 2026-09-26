@@ -5,12 +5,16 @@ import {
   ORG_CAPABILITIES,
   ORG_DOMAINS,
   buildDomainOwnership,
+  isOrgRoleAssignmentLive,
   isSystemManager,
   orgCan,
   orgCanIn,
   orgCanInDomain,
+  orgCapabilityRefusal,
+  summarizeOrgActor,
   type DomainOwnership,
   type OrgActor,
+  type OrgRoleGrant,
 } from "@quagga/core";
 
 /** A deployment where Suppliers owns the supply-related parts of the console
@@ -88,6 +92,8 @@ function functionBody(text: string, name: string): string {
 const session = source("lib/session.ts");
 const accounts = source("lib/actions/accounts.ts");
 const orgRoles = source("lib/actions/org-roles.ts");
+const queries = source("lib/queries.ts");
+const webMedicalAccess = source("../web/lib/medical-access.ts");
 
 describe("LOCKOUT SCENARIO 1: the god bootstrap still works", () => {
   // A fresh deployment has no roles, no departments and no assignments. If the
@@ -486,5 +492,181 @@ describe("the write path and the resolver agree about what may be stored", () =>
     ]) {
       expect(functionBody(orgRoles, action)).toContain("withTransaction");
     }
+  });
+});
+
+// ACCESS EXPIRY (App Spec SEC-019, epic #64).
+//
+// Sessions and invites expire; org role assignments used not to, so seasonal
+// staff kept console access forever. An assignment may now carry `expiresAt`,
+// and from that instant it grants NOTHING — while `god`, which holds no
+// assignments, cannot expire at all. Every fixture below uses a role that
+// grants EVERY capability org-wide, so an assertion that it resolves nothing is
+// not satisfied by a role that never granted anything in the first place.
+describe("LOCKOUT SCENARIO 5: an expired assignment grants nothing, and cannot lock out the anchor", () => {
+  const EXPIRES = new Date("2027-05-02T22:00:00.000Z"); // end of 2 May 2027 SAST
+  const BEFORE = new Date(EXPIRES.getTime() - 1);
+  const AFTER = new Date(EXPIRES.getTime() + 60 * 60 * 1000);
+
+  const everything = Object.fromEntries(
+    ORG_CAPABILITIES.map((c) => [c, true]),
+  ) as OrgRoleGrant["permissions"];
+
+  function grant(expiresAt: Date | null | undefined): OrgRoleGrant {
+    return {
+      id: "r-season",
+      key: "custom.build_crew",
+      name: "Build crew",
+      kind: "custom",
+      departmentId: null,
+      permissions: everything,
+      expiresAt,
+    };
+  }
+
+  function holder(
+    rank: OrgActor["rank"],
+    roles: OrgRoleGrant[],
+    asOf: Date,
+  ): OrgActor {
+    return { rank, roles, domains: OWNERSHIP, asOf };
+  }
+
+  function resolvesNothing(actor: OrgActor): void {
+    for (const capability of ORG_CAPABILITIES) {
+      expect(orgCan(actor, capability), capability).toBe(false);
+      expect(orgCanIn(actor, capability, null), capability).toBe(false);
+      expect(orgCanIn(actor, capability, SUPPLIERS), capability).toBe(false);
+      for (const domain of ORG_DOMAINS) {
+        expect(orgCanInDomain(actor, capability, domain), domain).toBe(false);
+      }
+    }
+    expect(summarizeOrgActor(actor)).toEqual([]);
+  }
+
+  it("the fixture is live before it expires — so 'nothing' below is the expiry, not the fixture", () => {
+    const live = holder("org_staff", [grant(EXPIRES)], BEFORE);
+    for (const capability of ORG_CAPABILITIES) {
+      expect(orgCan(live, capability), capability).toBe(true);
+    }
+    expect(summarizeOrgActor(live).map((g) => g.capability)).toEqual([
+      ...ORG_CAPABILITIES,
+    ]);
+  });
+
+  it("an expired assignment grants nothing, for org staff and engineers alike", () => {
+    for (const rank of ["org_staff", "engineer"] as const) {
+      resolvesNothing(holder(rank, [grant(EXPIRES)], AFTER));
+    }
+  });
+
+  it("the boundary is exclusive: at exactly expires_at the grant is gone", () => {
+    expect(isOrgRoleAssignmentLive(EXPIRES, BEFORE)).toBe(true);
+    expect(isOrgRoleAssignmentLive(EXPIRES, EXPIRES)).toBe(false);
+    expect(orgCan(holder("org_staff", [grant(EXPIRES)], BEFORE), "read")).toBe(
+      true,
+    );
+    resolvesNothing(holder("org_staff", [grant(EXPIRES)], EXPIRES));
+  });
+
+  it("no expiry (null or absent) never expires", () => {
+    const farFuture = new Date("2099-01-01T00:00:00Z");
+    for (const expiresAt of [null, undefined]) {
+      const a = holder("org_staff", [grant(expiresAt)], farFuture);
+      for (const capability of ORG_CAPABILITIES) {
+        expect(orgCan(a, capability)).toBe(true);
+      }
+    }
+  });
+
+  it("an unparseable expiry fails CLOSED", () => {
+    resolvesNothing(holder("org_staff", [grant(new Date("nope"))], BEFORE));
+  });
+
+  it("an unexpired role still works beside an expired one — only the expired one is dropped", () => {
+    const readOnly: OrgRoleGrant = {
+      ...grant(null),
+      id: "r-read",
+      key: "custom.reader",
+      permissions: { read: true },
+    };
+    const a = holder("org_staff", [grant(EXPIRES), readOnly], AFTER);
+    expect(orgCan(a, "read")).toBe(true);
+    expect(orgCan(a, "delete")).toBe(false);
+    expect(orgCan(a, "personal_information")).toBe(false);
+    expect(summarizeOrgActor(a).map((g) => g.capability)).toEqual(["read"]);
+  });
+
+  it("an expired DEPARTMENT-SCOPED grant does not keep its department either", () => {
+    const scoped: OrgRoleGrant = {
+      ...grant(EXPIRES),
+      departmentId: SUPPLIERS,
+    };
+    const a = holder("org_staff", [scoped], AFTER);
+    expect(orgCanInDomain(a, "delete", "suppliers")).toBe(false);
+    expect(orgCanInDomain(a, "personal_information", "suppliers")).toBe(false);
+  });
+
+  it("a god with ONLY expired assignments still resolves everything", () => {
+    const god = holder("god", [grant(EXPIRES)], AFTER);
+    expect(isSystemManager(god)).toBe(true);
+    for (const capability of ORG_CAPABILITIES) {
+      expect(orgCan(god, capability)).toBe(true);
+      expect(orgCanIn(god, capability, null)).toBe(true);
+      for (const domain of ORG_DOMAINS) {
+        expect(orgCanInDomain(god, capability, domain)).toBe(true);
+      }
+    }
+    expect(summarizeOrgActor(god).map((g) => g.capability)).toEqual([
+      ...ORG_CAPABILITIES,
+    ]);
+  });
+
+  it("without an explicit clock, expiry is judged against now", () => {
+    const now = Date.now();
+    const past: OrgActor = {
+      rank: "org_staff",
+      domains: OWNERSHIP,
+      roles: [grant(new Date(now - 60 * 60 * 1000))],
+    };
+    const future: OrgActor = {
+      rank: "org_staff",
+      domains: OWNERSHIP,
+      roles: [grant(new Date(now + 60 * 60 * 1000))],
+    };
+    expect(orgCan(past, "read")).toBe(false);
+    expect(orgCan(future, "read")).toBe(true);
+  });
+
+  it("the refusal says the roles EXPIRED, rather than that there are none", () => {
+    const lapsed = holder("org_staff", [grant(EXPIRES)], AFTER);
+    expect(orgCapabilityRefusal(lapsed, "read")).toMatch(/expired/);
+    expect(
+      orgCapabilityRefusal(holder("org_staff", [], AFTER), "read"),
+    ).toMatch(/holds no org roles yet/);
+  });
+
+  it("the SESSION filters expired assignments out before the actor is built", () => {
+    const resolve = functionBody(session, "resolveOrgSession");
+    const loadAt = resolve.indexOf("orgRoleAssignments");
+    expect(resolve).toContain("liveOrgRoleAssignment(new Date())");
+    expect(resolve.indexOf("liveOrgRoleAssignment(")).toBeGreaterThan(loadAt);
+  });
+
+  it("the participant app's medical path filters them too — the two apps resolve alike", () => {
+    expect(webMedicalAccess).toContain("liveOrgRoleAssignment(new Date())");
+  });
+
+  it("the accounts table resolves through core with the SAME clock its expired flags use", () => {
+    // The display loader keeps expired rows (so they read as expired and can be
+    // renewed) and hands them to the resolver WITH their expiry — the resolver,
+    // not a second filter, decides what they grant.
+    const load = functionBody(queries, "loadAssignedRoles");
+    expect(load).toContain("expiresAt: schema.orgRoleAssignments.expiresAt");
+    expect(load).not.toContain("liveOrgRoleAssignment");
+    expect(load).toContain("isOrgRoleAssignmentLive(r.expiresAt, asOf)");
+    const resolveCaps = functionBody(queries, "resolveAccountCapabilities");
+    expect(resolveCaps).toContain("expiresAt: r.expiresAt");
+    expect(resolveCaps).toContain("asOf,");
   });
 });

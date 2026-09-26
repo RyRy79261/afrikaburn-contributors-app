@@ -1,15 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import type { SaveResult } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
-import { saveBio, savePrivacyFlags } from "@/lib/bio-store";
+import {
+  saveBio,
+  saveCampmateSettings,
+  savePrivacyFlags,
+} from "@/lib/bio-store";
+import {
+  CampmateSettingsInput,
+  CampmateSettingsPatchInput,
+  PrivacyFlagsInput,
+} from "@/lib/campmate-input";
 
-const FlagsSchema = z.record(z.string(), z.boolean());
+const FlagsSchema = PrivacyFlagsInput;
 
-const NullableFlagsSchema = z.record(z.string(), z.boolean()).nullable();
+const NullableFlagsSchema = PrivacyFlagsInput.nullable();
 
 /** Update the Burner Bio from the profile editor. The editor's Privacy step
  * sends the FULL per-field flag map alongside the answers, so we forward it —
@@ -20,6 +28,7 @@ export async function updateBioAction(
   privacyFlags: unknown,
   final: boolean,
   extras?: unknown,
+  campmate?: unknown,
 ): Promise<SaveResult> {
   const user = await requireCampUser();
   const edition = await getActiveEdition();
@@ -27,12 +36,14 @@ export async function updateBioAction(
     return { ok: false, errors: { _form: "No active edition is configured." } };
   }
   const flags = NullableFlagsSchema.safeParse(privacyFlags);
+  const settings = CampmateSettingsInput.safeParse(campmate);
   const result = await saveBio({
     userId: user.id,
     editionId: edition.id,
     rawResponses: responses,
     rawPrivacyFlags: flags.success && flags.data ? flags.data : undefined,
     rawExtras: extras,
+    campmate: settings.success ? settings.data : undefined,
     final: Boolean(final),
   });
   if (result.ok) revalidatePath("/profile");
@@ -42,7 +53,7 @@ export async function updateBioAction(
 /** Persist edited per-field privacy flags. Hard-locked fields are re-forced
  * private inside the store regardless of input. */
 export async function savePrivacyFlagsAction(
-  flags: Record<string, boolean>,
+  flags: unknown,
 ): Promise<{ ok: boolean; error?: string }> {
   const parsed = FlagsSchema.safeParse(flags);
   if (!parsed.success) return { ok: false, error: "Invalid privacy settings." };
@@ -50,6 +61,29 @@ export async function savePrivacyFlagsAction(
   const edition = await getActiveEdition();
   if (!edition) return { ok: false, error: "No active edition is configured." };
   await savePrivacyFlags(user.id, edition.id, parsed.data);
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+/**
+ * Epic #68: update the camp-mate settings from the profile card — who may see
+ * the photo, who may contact you, and whether you are in your camp's people
+ * list. A partial patch (only what the card changed), Zod-validated here and
+ * merged server-side; the photo level goes through `enforcePrivacyFlags` like
+ * every other privacy write.
+ */
+export async function saveCampmateSettingsAction(
+  patch: unknown,
+): Promise<{ ok: boolean; error?: string }> {
+  const parsed = CampmateSettingsPatchInput.safeParse(patch);
+  if (!parsed.success) return { ok: false, error: "Invalid settings." };
+  const user = await requireCampUser();
+  const edition = await getActiveEdition();
+  if (!edition) return { ok: false, error: "No active edition is configured." };
+  const saved = await saveCampmateSettings(user.id, edition.id, parsed.data);
+  if (!saved) {
+    return { ok: false, error: "Finish your Burner Bio first." };
+  }
   revalidatePath("/profile");
   return { ok: true };
 }

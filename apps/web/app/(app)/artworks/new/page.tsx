@@ -5,6 +5,7 @@ import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
+import { getActiveEdition } from "@/lib/edition";
 import { PreviewNotice } from "@/components/preview-notice";
 import { ArtworkRegistrationForm } from "@/components/artworks/artwork-registration-form";
 import { createArtworkRegistrationAction } from "./actions";
@@ -30,6 +31,10 @@ export default async function NewArtworkPage() {
   // Onboarding (and any blocking questionnaire) gates everything else.
   const gate = await pendingBlockingRoute(user.id);
   if (gate) redirect(gate);
+
+  // For the safety-document validity labels; the create action refuses on its
+  // own when no edition is open.
+  const edition = await getActiveEdition();
 
   return (
     <>
@@ -64,6 +69,8 @@ export default async function NewArtworkPage() {
         <ArtworkRegistrationForm
           action={createArtworkRegistrationAction}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+          editionEndDate={edition?.endDate ?? ""}
+          today={new Date().toISOString().slice(0, 10)}
         />
       </div>
     </>

@@ -62,6 +62,14 @@ export const groupKindEnum = pgEnum("group_kind", [
 
 export const joinabilityEnum = pgEnum("joinability", ["open", "invite_only"]);
 
+// Epic #68 — who may start contact with a burner. Mirrors @quagga/core
+// `CONTACTABILITY_LEVELS`; default `nobody` (being reachable is opt-in).
+export const contactabilityEnum = pgEnum("contactability", [
+  "nobody",
+  "camp_mates",
+  "anyone",
+]);
+
 // Reserved: visibility is currently DERIVED (registered ⇒ public). This column
 // exists so explicit privacy settings can land later without a migration.
 export const groupVisibilityEnum = pgEnum("group_visibility", [
@@ -311,6 +319,15 @@ export const users = pgTable(
     // that stops a sanitized account being silently re-animated by a later sign-in
     // (@quagga/core `isSanitized` / `assertNotSanitized`).
     sanitizedAt: timestamp("sanitized_at", { mode: "date" }),
+    // Profile photo (epic #68): the PATHNAME of a PRIVATE Vercel Blob under
+    // `avatars/<users.id>/`. Never a public URL — the photo is served only
+    // through the authorised proxy (`/api/avatar/[userId]`), which checks the
+    // photo's own visibility level (`burner_bios.privacy_flags.avatar`, default
+    // private) against the viewer on every request. Account-level, like the
+    // username: it is the same face every edition; WHO may see it is the
+    // per-edition part. Nulled (and the blob deleted) on removal and on
+    // account sanitization.
+    avatarKey: text("avatar_key"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (u) => ({
@@ -707,12 +724,26 @@ export const burnerBios = pgTable(
     rangerCurious: boolean("ranger_curious"),
     greenDotTraining: boolean("green_dot_training"),
 
-    // Per-field public/private map, e.g. { "displayName": true, "bio": true }.
-    // Hard-locked fields are force-private regardless of what's stored here.
+    // Per-field visibility map, e.g. { "homeCity": true, "bio": "camp_mates" }.
+    // THREE levels since epic #68, stored backward-compatibly: `true` = public
+    // and `false` = private exactly as before, and the one new value
+    // `"camp_mates"` = visible to people who share a theme camp. A reader that
+    // only knows `=== true` therefore reads a camp-mates field as private (fails
+    // closed). Decoding/encoding lives in @quagga/core `privacy.ts`
+    // (`readFieldVisibility` / `enforcePrivacyFlags`). Always-private fields are
+    // forced private regardless of what's stored here.
     privacyFlags: jsonb("privacy_flags")
-      .$type<Record<string, boolean>>()
+      .$type<Record<string, boolean | "private" | "camp_mates" | "public">>()
       .notNull()
       .default({}),
+
+    // Epic #68 camp-mate settings — per edition, carried forward as pre-fill
+    // the member confirms (@quagga/core bio-carry-forward). Both default to the
+    // private choice: reachable by nobody, not listed in the camp people view.
+    contactable: contactabilityEnum("contactable").notNull().default("nobody"),
+    listedInCampPeople: boolean("listed_in_camp_people")
+      .notNull()
+      .default(false),
 
     // Questionnaire-engine bookkeeping (this is a "code questionnaire").
     version: text("version").notNull(),
@@ -966,6 +997,13 @@ export const orgRoleAssignments = pgTable(
       .notNull()
       .references(() => orgRoles.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    // ACCESS EXPIRY (App Spec SEC-019). Null = no expiry. From this instant the
+    // assignment grants nothing: every loader that resolves capabilities filters
+    // `expires_at > $now` (`liveOrgRoleAssignment`), and `@quagga/core` ignores it again on top. The row
+    // is KEPT rather than deleted, so the accounts screen can show it as expired
+    // and a System manager can renew it. `god` holds no assignments and is
+    // untouched — the no-lockout anchor cannot expire.
+    expiresAt: timestamp("expires_at", { mode: "date" }),
   },
   (a) => ({
     pk: primaryKey({ columns: [a.membershipId, a.orgRoleId] }),
@@ -1243,6 +1281,50 @@ export const registrations = pgTable(
     editionCampCodeUniq: uniqueIndex("registrations_edition_camp_code_idx")
       .on(r.editionId, r.campCode)
       .where(sql`${r.campCode} IS NOT NULL`),
+  }),
+);
+
+// --- Registration safety documents (epic #52, App Spec CREATIVE-017) -----
+// Safety evidence attached to ONE registration (group × edition): a structural
+// engineer's sign-off, a fire-safety certificate, a vehicle's roadworthy. Built
+// for artwork + mutant-vehicle registrations first; keyed to `registrations`
+// rather than to a project so a theme camp can use the same table later
+// without a second one.
+//
+// PER REGISTRATION, NOT PER GROUP. A certificate is evidence for a specific
+// burn. Rolling a project into a new edition copies only the documents that
+// are still valid through that edition's END (@quagga/core
+// `carriedSafetyDocuments`) as NEW rows, so deleting next year's copy never
+// removes last year's evidence.
+//
+// `expires_on` is a DATE and is REQUIRED: a safety document without an expiry
+// is one nobody can tell is stale, and "valid through the event" is the only
+// question a reviewer asks of it.
+//
+// PRIVATE. Readable by the project's structural lead/admin and by org staff
+// who read personal information in the registrations domain — never on a
+// public page, directory card, roster or export.
+export const registrationSafetyDocuments = pgTable(
+  "registration_safety_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // The uploaded blob URL (registration upload route) or a pasted https link.
+    url: text("url").notNull(),
+    expiresOn: date("expires_on", { mode: "string" }).notNull(),
+    // `set null`: a departed uploader must not delete the evidence.
+    uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    registrationIdx: index("registration_safety_documents_registration_idx").on(
+      d.registrationId,
+    ),
   }),
 );
 

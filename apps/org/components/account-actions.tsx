@@ -14,6 +14,7 @@ import {
 import type { RoleColor } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
 import { Checkbox } from "@quagga/ui/components/checkbox";
+import { Input } from "@quagga/ui/components/input";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,11 @@ import { RoleSwatch } from "@quagga/ui/components/role-badge";
 import { toast } from "@quagga/ui/components/toast";
 import { setOrgStaffRole } from "@/lib/actions/accounts";
 import { setAccountOrgRoles } from "@/lib/actions/org-roles";
+import {
+  expiryFromLastDay,
+  formatLastDay,
+  todayInSast,
+} from "@/lib/access-expiry";
 import {
   CapabilitySummary,
   grantsForRoles,
@@ -44,6 +50,14 @@ export interface AssignableRole {
    * not a smaller grant, it is no grant, and the preview must say which. */
   departmentDomains: OrgDomain[];
   capabilities: OrgCapability[];
+}
+
+/** One org role this account holds now, with its access expiry (SEC-019). */
+export interface HeldRole {
+  id: string;
+  /** Inclusive last day of access (SAST, `YYYY-MM-DD`), or null for none. */
+  expiresOn: string | null;
+  expired: boolean;
 }
 
 /**
@@ -73,7 +87,7 @@ export function AccountActions({
   userId,
   personLabel,
   role,
-  heldRoleIds,
+  heldRoles,
   assignableRoles,
   isSelf,
 }: {
@@ -81,14 +95,23 @@ export function AccountActions({
   /** Who this row is, named in the confirmation copy (frame node `T6n33z`). */
   personLabel: string;
   role: OrgRank | null;
-  heldRoleIds: string[];
+  heldRoles: HeldRole[];
   assignableRoles: AssignableRole[];
   isSelf: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [intent, setIntent] = useState<Intent | null>(null);
+  const heldRoleIds = heldRoles.map((r) => r.id);
   const [roleDraft, setRoleDraft] = useState<string[]>(heldRoleIds);
+  // ACCESS EXPIRY draft: role id → inclusive last day (`YYYY-MM-DD`), "" for
+  // none. Seeded from what is held, so an expired role opens showing its date.
+  const heldExpiries = (): Record<string, string> =>
+    Object.fromEntries(heldRoles.map((r) => [r.id, r.expiresOn ?? ""]));
+  const [expiryDraft, setExpiryDraft] =
+    useState<Record<string, string>>(heldExpiries);
+  const heldById = new Map(heldRoles.map((r) => [r.id, r]));
+  const today = todayInSast(new Date());
 
   if (role === "god") {
     return (
@@ -105,7 +128,14 @@ export function AccountActions({
     startTransition(async () => {
       const result =
         current.kind === "roles"
-          ? await setAccountOrgRoles({ userId, roleIds: roleDraft })
+          ? await setAccountOrgRoles({
+              userId,
+              roleIds: roleDraft,
+              expiries: roleDraft.map((roleId) => ({
+                roleId,
+                lastDay: expiryDraft[roleId] || null,
+              })),
+            })
           : await setOrgStaffRole({
               userId,
               action: current.kind,
@@ -170,6 +200,7 @@ export function AccountActions({
               disabled={pending}
               onClick={() => {
                 setRoleDraft(heldRoleIds);
+                setExpiryDraft(heldExpiries());
                 setIntent({ kind: "roles" });
               }}
             >
@@ -256,43 +287,113 @@ export function AccountActions({
                     System → Roles.
                   </p>
                 ) : (
-                  assignableRoles.map((r) => (
-                    <label
-                      key={r.id}
-                      className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-2.5 text-sm"
-                    >
-                      <Checkbox
-                        className="mt-0.5"
-                        checked={roleDraft.includes(r.id)}
-                        disabled={pending}
-                        onChange={(e) =>
-                          setRoleDraft((prev) =>
-                            e.target.checked
-                              ? [...new Set([...prev, r.id])]
-                              : prev.filter((id) => id !== r.id),
-                          )
-                        }
-                      />
-                      <span className="flex flex-1 flex-col gap-1">
-                        <span className="flex items-center gap-1.5 font-medium">
-                          <RoleSwatch color={r.color} />
-                          {r.name}
-                          {r.departmentName && (
-                            <span className="font-normal text-muted-foreground">
-                              · {r.departmentName}
+                  assignableRoles.map((r) => {
+                    const checked = roleDraft.includes(r.id);
+                    const held = heldById.get(r.id);
+                    const lastDay = expiryDraft[r.id] ?? "";
+                    // Still showing the date it expired on, untouched: saving
+                    // keeps it as it is (expired, renewable later).
+                    const stillExpired =
+                      held?.expired === true && lastDay === held.expiresOn;
+                    const fieldId = `expiry-${userId}-${r.id}`;
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex flex-col gap-2 rounded-md border border-border p-2.5 text-sm"
+                      >
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={checked}
+                            disabled={pending}
+                            onChange={(e) =>
+                              setRoleDraft((prev) =>
+                                e.target.checked
+                                  ? [...new Set([...prev, r.id])]
+                                  : prev.filter((id) => id !== r.id),
+                              )
+                            }
+                          />
+                          <span className="flex flex-1 flex-col gap-1">
+                            <span className="flex items-center gap-1.5 font-medium">
+                              <RoleSwatch color={r.color} />
+                              {r.name}
+                              {r.departmentName && (
+                                <span className="font-normal text-muted-foreground">
+                                  · {r.departmentName}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {r.capabilities.length === 0
-                            ? "Grants nothing yet."
-                            : r.capabilities
-                                .map((c) => ORG_CAPABILITY_LABELS[c])
-                                .join(" · ")}
-                        </span>
-                      </span>
-                    </label>
-                  ))
+                            <span className="text-xs text-muted-foreground">
+                              {r.capabilities.length === 0
+                                ? "Grants nothing yet."
+                                : r.capabilities
+                                    .map((c) => ORG_CAPABILITY_LABELS[c])
+                                    .join(" · ")}
+                            </span>
+                          </span>
+                        </label>
+                        {/* ACCESS EXPIRY (SEC-019), per role and only for a
+                            ticked one. Optional — blank means the role holds
+                            until someone removes it. */}
+                        {checked && (
+                          <div className="flex flex-col gap-1 pl-7">
+                            <label
+                              htmlFor={fieldId}
+                              className="text-xs font-medium"
+                            >
+                              Last day of access (optional)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                id={fieldId}
+                                type="date"
+                                value={lastDay}
+                                min={today}
+                                disabled={pending}
+                                onChange={(e) =>
+                                  setExpiryDraft((prev) => ({
+                                    ...prev,
+                                    [r.id]: e.target.value,
+                                  }))
+                                }
+                                className="h-8 max-w-[11rem] text-xs"
+                              />
+                              {lastDay && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    setExpiryDraft((prev) => ({
+                                      ...prev,
+                                      [r.id]: "",
+                                    }))
+                                  }
+                                >
+                                  No end date
+                                </Button>
+                              )}
+                            </div>
+                            <span
+                              className={
+                                stillExpired
+                                  ? "text-xs font-medium text-destructive"
+                                  : "text-xs text-muted-foreground"
+                              }
+                            >
+                              {stillExpired && held?.expiresOn
+                                ? `Expired after ${formatLastDay(held.expiresOn)} — it grants nothing. Pick a new last day or choose no end date to renew it.`
+                                : lastDay
+                                  ? `Access through ${formatLastDay(lastDay)}, South African time; it stops at midnight.`
+                                  : "No end date — holds until someone removes it."}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
@@ -307,7 +408,15 @@ export function AccountActions({
                 </p>
                 <CapabilitySummary
                   grants={grantsForRoles(
-                    assignableRoles.filter((r) => roleDraft.includes(r.id)),
+                    assignableRoles
+                      .filter((r) => roleDraft.includes(r.id))
+                      .map((r) => ({
+                        ...r,
+                        // So a role left expired previews as granting nothing.
+                        expiresAt: expiryDraft[r.id]
+                          ? expiryFromLastDay(expiryDraft[r.id] as string)
+                          : null,
+                      })),
                   )}
                   emptyLabel="Nothing. They keep console access and it opens empty."
                 />

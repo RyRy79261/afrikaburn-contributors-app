@@ -13,8 +13,15 @@ export function ProfileHero({
   burnsCount,
   firstTime,
   action,
+  eyebrow = "Public profile",
+  avatar,
 }: {
   displayName: string;
+  /** "Public profile" unless the viewer is seeing the camp-mate view. */
+  eyebrow?: string;
+  /** The avatar, already resolved server-side for THIS viewer (photo or
+   * initials). Falls back to initials when omitted. */
+  avatar?: React.ReactNode;
   /** Public home city, or null when withheld. */
   homeCity: string | null;
   /** Number of public attended years, or null when the years are withheld. */
@@ -34,16 +41,18 @@ export function ProfileHero({
   return (
     <header className="flex flex-col gap-3">
       <p className="font-mono text-xs uppercase tracking-[0.3em] text-accent">
-        Public profile
+        {eyebrow}
       </p>
       <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-border bg-card p-5">
         <div className="flex min-w-0 items-center gap-4">
-          <span
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-foreground sm:h-[72px] sm:w-[72px]"
-            aria-hidden
-          >
-            {initialsFromName(displayName)}
-          </span>
+          {avatar ?? (
+            <span
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/15 text-lg font-semibold text-foreground sm:h-[72px] sm:w-[72px]"
+              aria-hidden
+            >
+              {initialsFromName(displayName)}
+            </span>
+          )}
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
               {displayName}

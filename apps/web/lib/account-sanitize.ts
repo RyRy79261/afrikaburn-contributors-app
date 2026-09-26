@@ -12,6 +12,7 @@ import { buildDeletionGuardContext } from "@/lib/account";
 import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
+import { deleteAvatarBlob } from "@/lib/avatar-store";
 
 // The sanitization runner — the business end of account deletion
 // (docs/accounts-security-spec.md §Deletion, the Camp 404 "Lost Cat" precedent).
@@ -166,6 +167,7 @@ export async function sanitizeAccount(
     .select({
       email: schema.users.email,
       authUserId: schema.users.authUserId,
+      avatarKey: schema.users.avatarKey,
       sanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.users)
@@ -191,6 +193,28 @@ export async function sanitizeAccount(
     bioCount: Number(bios),
     membershipCount: Number(memberships),
   });
+
+  // 1b. THE PROFILE PHOTO (epic #68). A face is personal information, and it
+  //     lives OUTSIDE the database, so no transaction can erase it — the blob is
+  //     deleted here, BEFORE the transaction, and a failure stops the whole
+  //     sanitization (the request stays pending and the next sweep retries).
+  //     The other order would commit a tombstone saying "erased" while the
+  //     photo still sat in the store with nothing pointing at it — an orphan no
+  //     later sweep could ever find. Deleting first means the worst case is a
+  //     missing blob behind a key the transaction then nulls anyway (`del` is
+  //     idempotent, so a retry is harmless).
+  if (user.avatarKey) {
+    try {
+      await deleteAvatarBlob(userId, user.avatarKey);
+    } catch (err) {
+      return {
+        ...base,
+        error: `Could not delete the profile photo, so nothing was erased: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      };
+    }
+  }
 
   // Steps 2–5 + the request/audit writes all commit as ONE transaction, so the
   // POPIA erasure is all-or-nothing. Ordering within it still follows the notes

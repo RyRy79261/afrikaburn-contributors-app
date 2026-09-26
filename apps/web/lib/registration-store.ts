@@ -3,13 +3,19 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   buildCarryForwardPatch,
+  changedFields,
   completedSectionsFor,
   deriveOnboardingProgress,
   filterPickerEligible,
   isSubmittable,
+  isValidCarryForwardSource,
+  pastSubmittedRegistrations,
   publicMemberName,
   resolveCampAction,
+  selectComparisonPrior,
   type CampAction,
+  type ComparisonBasis,
+  type FieldChange,
   type RegistrationSectionData,
 } from "@quagga/core";
 import type {
@@ -711,9 +717,188 @@ export async function findCarryForwardSource(
   return row ?? null;
 }
 
+/** A prior edition's registration row, with the edition it belongs to. */
+export interface PriorRegistration extends CarryForwardSource {
+  groupId: string;
+  submittedAt: Date | null;
+  row: RegistrationRow;
+}
+
+/**
+ * Every registration this camp filed BEFORE the given edition, newest first,
+ * whole rows included. A camp has one row per edition, so this is a handful of
+ * rows at most — cheaper than a second round trip for whichever one a caller
+ * then needs.
+ *
+ * NOT AN AUTHZ BOUNDARY. Callers gate on `canViewCampRegistration` before they
+ * ask; this only reads.
+ */
+export async function listPriorRegistrations(
+  groupId: string,
+  currentEditionYear: number,
+): Promise<PriorRegistration[]> {
+  const rows = await db()
+    .select({
+      row: schema.registrations,
+      editionYear: schema.editions.year,
+      editionName: schema.editions.name,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.editions,
+      eq(schema.editions.id, schema.registrations.editionId),
+    )
+    .where(
+      and(
+        eq(schema.registrations.groupId, groupId),
+        lt(schema.editions.year, currentEditionYear),
+      ),
+    )
+    .orderBy(desc(schema.editions.year));
+  return rows.map(toPrior);
+}
+
+function toPrior(r: {
+  row: RegistrationRow;
+  editionYear: number;
+  editionName: string;
+}): PriorRegistration {
+  return {
+    registrationId: r.row.id,
+    groupId: r.row.groupId,
+    editionId: r.row.editionId,
+    editionYear: r.editionYear,
+    editionName: r.editionName,
+    status: r.row.status,
+    submittedAt: r.row.submittedAt,
+    row: r.row,
+  };
+}
+
+/** Strip the row off, for anything handed to a client component. */
+export function toCarryForwardSource(p: PriorRegistration): CarryForwardSource {
+  return {
+    registrationId: p.registrationId,
+    editionId: p.editionId,
+    editionYear: p.editionYear,
+    editionName: p.editionName,
+    status: p.status,
+  };
+}
+
+/**
+ * The camp's "Past registrations" (PREVYR-001, -011): every earlier edition it
+ * SUBMITTED, newest first. Which rows qualify is @quagga/core's
+ * `pastSubmittedRegistrations`.
+ */
+export async function listPastRegistrations(
+  groupId: string,
+  currentEditionYear: number,
+): Promise<PriorRegistration[]> {
+  const priors = await listPriorRegistrations(groupId, currentEditionYear);
+  return pastSubmittedRegistrations(priors, {
+    groupId,
+    editionYear: currentEditionYear,
+  });
+}
+
+/**
+ * One past registration by edition year, or null when this camp did not submit
+ * one that year. The year arrives from the URL; the core filter is what makes
+ * "this camp, an earlier edition, actually submitted" true of whatever comes
+ * back — an arbitrary year simply finds nothing.
+ */
+export async function getPastRegistration(
+  groupId: string,
+  currentEditionYear: number,
+  editionYear: number,
+): Promise<PriorRegistration | null> {
+  const past = await listPastRegistrations(groupId, currentEditionYear);
+  return past.find((p) => p.editionYear === editionYear) ?? null;
+}
+
+export interface RegistrationComparison {
+  priorYear: number;
+  basis: ComparisonBasis;
+  /** False for a carried-forward source that was never submitted — it has no
+   * page under "Past registrations" to link to. */
+  priorSubmitted: boolean;
+  changes: FieldChange[];
+}
+
+/**
+ * "What changed since last year" for the camp's own draft (PREVYR-010) — the
+ * same diff the reviewer reads (@quagga/core `changedFields`), against the same
+ * prior (`selectComparisonPrior`), so the camp sees before submitting exactly
+ * what AfrikaBurn will see after.
+ */
+export async function getRegistrationComparison(input: {
+  groupId: string;
+  editionYear: number;
+  current: RegistrationRow | null;
+}): Promise<RegistrationComparison | null> {
+  const priors = await listPriorRegistrations(input.groupId, input.editionYear);
+  const picked = selectComparisonPrior({
+    current: {
+      groupId: input.groupId,
+      editionYear: input.editionYear,
+      carriedForwardFromId: input.current?.carriedForwardFromId ?? null,
+    },
+    candidates: priors,
+  });
+  if (!picked) return null;
+  return {
+    priorYear: picked.prior.editionYear,
+    basis: picked.basis,
+    priorSubmitted: picked.prior.submittedAt !== null,
+    // A camp that has not started this year's draft has, so far, cleared
+    // everything — which is true, and is what the diff will say.
+    changes: changedFields(picked.prior.row, input.current ?? {}),
+  };
+}
+
 export type CarryForwardResult =
   | { ok: true; filled: number; source: CarryForwardSource }
   | { ok: false; error: string };
+
+/** The latest prior registration and its row — part one's default source. */
+async function loadLatestSource(
+  groupId: string,
+  editionYear: number,
+): Promise<{ source: CarryForwardSource; prior: RegistrationRow } | null> {
+  const source = await findCarryForwardSource(groupId, editionYear);
+  if (!source) return null;
+  const [prior] = await db()
+    .select()
+    .from(schema.registrations)
+    .where(eq(schema.registrations.id, source.registrationId))
+    .limit(1);
+  return prior ? { source, prior } : null;
+}
+
+/** A chosen prior registration by id, with its edition — NOT yet validated. */
+async function loadChosenSource(
+  registrationId: string,
+): Promise<{ source: CarryForwardSource; prior: RegistrationRow } | null> {
+  const [found] = await db()
+    .select({
+      row: schema.registrations,
+      editionYear: schema.editions.year,
+      editionName: schema.editions.name,
+    })
+    .from(schema.registrations)
+    .innerJoin(
+      schema.editions,
+      eq(schema.editions.id, schema.registrations.editionId),
+    )
+    .where(eq(schema.registrations.id, registrationId))
+    .limit(1);
+  if (!found) return null;
+  return {
+    source: toCarryForwardSource(toPrior(found)),
+    prior: found.row,
+  };
+}
 
 /** Null, undefined, blank string or empty array — "the camp has not answered". */
 function unanswered(value: unknown): boolean {
@@ -724,7 +909,8 @@ function unanswered(value: unknown): boolean {
 }
 
 /**
- * Seed this edition's draft from the camp's most recent prior registration.
+ * Seed this edition's draft from a prior registration — the most recent by
+ * default, or the one the camp chose (PREVYR-014).
  *
  * ONLY EMPTY FIELDS ARE FILLED. A camp that has already typed this year's
  * participation plan and then clicks "bring last year's answers across" must not
@@ -739,22 +925,38 @@ export async function carryForwardRegistration(input: {
   group: { id: string; name: string };
   editionId: string;
   editionYear: number;
+  /**
+   * The prior registration the camp CHOSE (PREVYR-014). Omitted means "the most
+   * recent one", which is what the offer defaults to. Client-supplied, so it is
+   * validated below — same camp, strictly earlier edition — never trusted.
+   */
+  sourceRegistrationId?: string;
 }): Promise<CarryForwardResult> {
-  const source = await findCarryForwardSource(input.group.id, input.editionYear);
-  if (!source) {
+  const resolved = input.sourceRegistrationId
+    ? await loadChosenSource(input.sourceRegistrationId)
+    : await loadLatestSource(input.group.id, input.editionYear);
+  if (!resolved) {
     return {
       ok: false,
       error: "We can't find an earlier registration for this camp.",
     };
   }
+  const { source, prior } = resolved;
 
-  const [prior] = await db()
-    .select()
-    .from(schema.registrations)
-    .where(eq(schema.registrations.id, source.registrationId))
-    .limit(1);
-  if (!prior) {
-    return { ok: false, error: "That earlier registration no longer exists." };
+  // THE CHOSEN ID IS AN ASSERTION. Checked against the row the DB actually
+  // holds, not against anything the client said about it: another camp's id,
+  // or this edition's own row, is refused with the same words as a missing one
+  // so the response does not confirm that a foreign id exists.
+  if (
+    !isValidCarryForwardSource(
+      { groupId: prior.groupId, editionYear: source.editionYear },
+      { groupId: input.group.id, editionYear: input.editionYear },
+    )
+  ) {
+    return {
+      ok: false,
+      error: "We can't find an earlier registration for this camp.",
+    };
   }
 
   // ONE TRANSACTION, AND THE READ THAT DECIDES THE PATCH IS INSIDE IT.

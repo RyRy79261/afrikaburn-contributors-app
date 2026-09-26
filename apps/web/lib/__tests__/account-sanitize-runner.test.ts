@@ -22,6 +22,16 @@ const stubs = vi.hoisted(() => ({
   guardCalls: [] as string[],
   sent: [] as { to: string | string[] }[],
   delivered: true,
+  /** Every (userId, key) the photo-blob delete was called with. */
+  avatarDeletes: [] as [string, string][],
+  avatarDeleteFails: false,
+}));
+
+vi.mock("@/lib/avatar-store", () => ({
+  deleteAvatarBlob: async (userId: string, key: string) => {
+    if (stubs.avatarDeleteFails) throw new Error("blob store unreachable");
+    stubs.avatarDeletes.push([userId, key]);
+  },
 }));
 
 vi.mock("@/lib/account", () => ({
@@ -66,7 +76,11 @@ function dueRequest(overrides: Record<string, unknown> = {}) {
  */
 function queueErasure(
   input: {
-    user?: { email: string | null; authUserId: string } | null;
+    user?: {
+      email: string | null;
+      authUserId: string;
+      avatarKey?: string | null;
+    } | null;
     memberships?: number;
     bios?: number;
     releasedSuppliers?: unknown[];
@@ -124,6 +138,8 @@ beforeEach(() => {
   stubs.guardCalls = [];
   stubs.sent = [];
   stubs.delivered = true;
+  stubs.avatarDeletes = [];
+  stubs.avatarDeleteFails = false;
   vi.stubEnv("DATABASE_URL", "postgres://test/quagga");
 });
 
@@ -274,6 +290,52 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(patch.attendedYears).toEqual([]);
     expect(patch.privacyFlags).toEqual({});
     expect(patch.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("DELETES the profile photo blob and nulls its key (epic #68)", async () => {
+    const key = `avatars/${USER}/photo-abc.png`;
+    dbMock.queue([dueRequest()]);
+    queueErasure({
+      user: { email: "alice@example.com", authUserId: AUTH_ID, avatarKey: key },
+    });
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(true);
+    expect(stubs.avatarDeletes).toEqual([[USER, key]]);
+    const tombstone = dbMock
+      .writesTo(schema.users)
+      .find((q) => q.kind === "update")!;
+    expect((tombstone.arg("set") as Record<string, unknown>).avatarKey).toBe(
+      null,
+    );
+  });
+
+  it("ERASES NOTHING when the photo cannot be deleted — no orphaned face behind a tombstone", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure({
+      user: {
+        email: "alice@example.com",
+        authUserId: AUTH_ID,
+        avatarKey: `avatars/${USER}/photo-abc.png`,
+      },
+    });
+    stubs.avatarDeleteFails = true;
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toMatch(/profile photo/i);
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.writesTo(schema.users)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.burnerBios)).toHaveLength(0);
+  });
+
+  it("does not touch the blob store when there is no photo", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+    await sanitizeAccount(USER, REQUEST, NOW);
+    expect(stubs.avatarDeletes).toEqual([]);
   });
 
   it("nulls the email and username on the users row it keeps", async () => {

@@ -420,15 +420,33 @@ async function notifySubmitted(input: {
 }
 
 /**
- * Bring the camp's most recent prior registration across into this year's draft
- * (roadmap R1, previous-year duplication).
+ * The chosen source, when the camp picked one (PREVYR-014). Absent means "the
+ * most recent", part one's behaviour. A malformed id is refused here; a
+ * well-formed one naming another camp's row, or this edition's, is refused by
+ * the store against the row the database actually holds.
+ */
+const CarryForwardSourceSchema = z.string().uuid().optional();
+
+/**
+ * Bring a prior registration across into this year's draft (roadmap R1,
+ * previous-year duplication) — the most recent one, or whichever earlier
+ * edition the camp chose.
  *
  * Gated on lead/admin like every other write here. The store decides what
  * carries and what a camp must re-answer; this action only checks who is asking.
  */
 export async function carryForwardRegistrationAction(
   slug: string,
+  rawSourceRegistrationId?: unknown,
 ): Promise<CarryForwardResult> {
+  const parsed = CarryForwardSourceSchema.safeParse(rawSourceRegistrationId);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "We can't find an earlier registration for this camp.",
+    };
+  }
+
   const gate = await requireCampAdmin(slug);
   if (!gate.ok) return { ok: false, error: gate.error };
 
@@ -436,6 +454,7 @@ export async function carryForwardRegistrationAction(
     group: gate.group,
     editionId: gate.editionId,
     editionYear: gate.editionYear,
+    sourceRegistrationId: parsed.data,
   });
   if (!result.ok) return result;
 

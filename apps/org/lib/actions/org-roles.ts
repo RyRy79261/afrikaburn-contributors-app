@@ -28,6 +28,10 @@ import { OrgCapabilityKey, RoleColor } from "@quagga/types";
 import { schema, withTransaction } from "@/lib/db";
 import { requireSystemManager } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import {
+  LAST_DAY_PATTERN,
+  resolveAssignmentExpiries,
+} from "@/lib/access-expiry";
 import { runAction, type ActionResult } from "./result";
 
 // DEPARTMENTS, ROLES AND ASSIGNMENTS — SYSTEM MANAGER ONLY.
@@ -584,6 +588,20 @@ export async function deleteOrgRole(
 const SetAccountRolesInput = z.object({
   userId: z.string().uuid(),
   roleIds: z.array(z.string().uuid()).max(ORG_ROLE_CAP),
+  /**
+   * ACCESS EXPIRY (SEC-019), per assigned role: the inclusive last day of
+   * access in SAST, or null for none. A role not listed here has no expiry —
+   * omitting the field entirely is how every pre-expiry caller keeps working.
+   */
+  expiries: z
+    .array(
+      z.object({
+        roleId: z.string().uuid(),
+        lastDay: z.string().regex(LAST_DAY_PATTERN).nullable(),
+      }),
+    )
+    .max(ORG_ROLE_CAP)
+    .optional(),
 });
 
 /**
@@ -626,6 +644,26 @@ export async function setAccountOrgRoles(
       }
 
       const roleIds = [...new Set(input.roleIds)];
+
+      // What is stored now, so an UNCHANGED expired expiry can be kept (the
+      // row stays visible as expired and renewable) while a new one in the
+      // past is refused. See `resolveAssignmentExpiries`.
+      const current = await tx
+        .select({
+          orgRoleId: schema.orgRoleAssignments.orgRoleId,
+          expiresAt: schema.orgRoleAssignments.expiresAt,
+        })
+        .from(schema.orgRoleAssignments)
+        .where(eq(schema.orgRoleAssignments.membershipId, membership.id));
+      const resolved = resolveAssignmentExpiries({
+        roleIds,
+        expiries: input.expiries ?? [],
+        stored: new Map(current.map((c) => [c.orgRoleId, c.expiresAt])),
+        now: new Date(),
+      });
+      if (!resolved.ok) throw new Error(resolved.error);
+      const expiries = resolved.expiries;
+
       if (roleIds.length > 0) {
         const found = await tx
           .select({ id: schema.orgRoles.id })
@@ -644,6 +682,7 @@ export async function setAccountOrgRoles(
           roleIds.map((orgRoleId) => ({
             membershipId: membership.id,
             orgRoleId,
+            expiresAt: expiries.get(orgRoleId) ?? null,
           })),
         );
       }
@@ -652,7 +691,16 @@ export async function setAccountOrgRoles(
         actorId: session.dbUserId,
         action: "org.roles.assign",
         subject: input.userId,
-        meta: { roleIds },
+        meta: {
+          roleIds,
+          // Only the roles that HAVE an end date, as ISO instants — who was
+          // given access until when is exactly what an audit is asked later.
+          expiries: Object.fromEntries(
+            [...expiries]
+              .filter((e): e is [string, Date] => e[1] !== null)
+              .map(([id, at]) => [id, at.toISOString()]),
+          ),
+        },
       });
     });
 

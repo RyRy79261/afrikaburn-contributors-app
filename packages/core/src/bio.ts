@@ -15,8 +15,10 @@ import {
 } from "@quagga/types";
 import {
   ALWAYS_PRIVATE_FIELDS,
-  canBePublic,
   enforcePrivacyFlags,
+  isVisibleToCampMates,
+  isVisibleToPublic,
+  type PrivacyFlags,
 } from "./privacy";
 import { USERNAME_HELP, USERNAME_MAX_LENGTH } from "./username";
 
@@ -134,13 +136,18 @@ export interface BioPrivacyField {
   label: string;
   /** True ⇒ always-private, toggle is disabled (build-spec hard-lock). */
   locked: boolean;
-  /** The out-of-the-box public/private stance for a non-locked field. */
+  /** The out-of-the-box public/private stance for a non-locked field. (A new
+   * field is never born `camp_mates` — that level is always a member's own
+   * choice.) */
   defaultPublic: boolean;
   /** One-line reason shown on a locked row. */
   lockReason?: string;
 }
 
 const ALWAYS_PRIVATE = new Set<string>(ALWAYS_PRIVATE_FIELDS);
+
+/** The privacy-flags key that governs who may see the profile photo. */
+export const AVATAR_PRIVACY_KEY = "avatar";
 
 /**
  * THE consent control for medical notes. Medical is never public, but it IS
@@ -218,6 +225,17 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
     locked: false,
     defaultPublic: true,
   },
+  // Epic #68. The profile PHOTO's own audience. Default PRIVATE — a face is the
+  // most identifying thing a profile can hold, so it is shared only when the
+  // member chooses to. The photo itself lives on `users.avatar_key` (account
+  // level); only who may SEE it lives here, per edition, so it carries forward
+  // like every other flag.
+  {
+    key: AVATAR_PRIVACY_KEY,
+    label: "Profile photo",
+    locked: false,
+    defaultPublic: false,
+  },
   {
     key: "phone",
     label: "Phone number",
@@ -279,8 +297,8 @@ export const BIO_PRIVACY_FIELDS: readonly BioPrivacyField[] = [
 
 /** The default privacy-flags map for a brand-new bio — non-locked fields take
  * their `defaultPublic`, locked fields are forced private. */
-export function defaultPrivacyFlags(): Record<string, boolean> {
-  const flags: Record<string, boolean> = {};
+export function defaultPrivacyFlags(): PrivacyFlags {
+  const flags: PrivacyFlags = {};
   for (const field of BIO_PRIVACY_FIELDS) {
     flags[field.key] = field.locked ? false : field.defaultPublic;
   }
@@ -294,8 +312,8 @@ export function defaultPrivacyFlags(): Record<string, boolean> {
  * (see `resolvePrivacyFlagsUpdate`).
  */
 export function initialPrivacyFlags(
-  rawPrivacyFlags?: Record<string, boolean>,
-): Record<string, boolean> {
+  rawPrivacyFlags?: Readonly<Record<string, unknown>>,
+): PrivacyFlags {
   return enforcePrivacyFlags({
     ...defaultPrivacyFlags(),
     ...(rawPrivacyFlags ?? {}),
@@ -312,8 +330,8 @@ export function initialPrivacyFlags(
  * into the update `set`.
  */
 export function resolvePrivacyFlagsUpdate(
-  rawPrivacyFlags: Record<string, boolean> | undefined,
-): { privacyFlags: Record<string, boolean> } | Record<string, never> {
+  rawPrivacyFlags: Readonly<Record<string, unknown>> | undefined,
+): { privacyFlags: PrivacyFlags } | Record<string, never> {
   if (rawPrivacyFlags === undefined) return {};
   return { privacyFlags: initialPrivacyFlags(rawPrivacyFlags) };
 }
@@ -349,21 +367,15 @@ export interface PublicBioView {
 }
 
 /**
- * Build the public, third-party-facing view of a bio. A field appears only when
- * BOTH its privacy flag is explicitly `true` AND it is allowed to be public at
- * all (`canBePublic`). The `canBePublic` guard is the last line of defence: even
- * if `privacyFlags` is corrupted to claim a hard-locked field public, this
- * function will not leak it. Pass the FULL bio so the caller cannot accidentally
- * bypass the lock by pre-selecting fields — the gate lives here.
+ * The one projection both audiences share. `show(key)` is the ONLY decision;
+ * the shape carries no always-private field at all, so no predicate — however
+ * wrong — can put a phone, an emergency contact, an ID or medical notes into it.
  */
-export function publicBioView(
+function projectBio(
   fields: BurnerBioFields,
-  privacyFlags: Record<string, boolean>,
-  extras: BioExtras = emptyBioExtras(),
+  extras: BioExtras,
+  show: (key: string) => boolean,
 ): PublicBioView {
-  const show = (key: string): boolean =>
-    canBePublic(key) && privacyFlags[key] === true;
-
   // The three ranger flags share one privacy toggle ("ranger").
   const showRanger = show("ranger");
 
@@ -387,6 +399,45 @@ export function publicBioView(
     rangerCurious: showRanger ? extras.rangerCurious : false,
     greenDotTraining: showRanger ? extras.greenDotTraining : false,
   };
+}
+
+/**
+ * Build the public, third-party-facing view of a bio. A field appears only when
+ * BOTH its privacy level is `public` AND it is allowed to be public at all
+ * (`canBePublic`, via `isVisibleToPublic`). The class guard is the last line of
+ * defence: even if `privacyFlags` is corrupted to claim a hard-locked field
+ * public, this function will not leak it. A field shared with camp-mates only
+ * is NOT public. Pass the FULL bio so the caller cannot accidentally bypass the
+ * lock by pre-selecting fields — the gate lives here.
+ */
+export function publicBioView(
+  fields: BurnerBioFields,
+  privacyFlags: Readonly<Record<string, unknown>>,
+  extras: BioExtras = emptyBioExtras(),
+): PublicBioView {
+  return projectBio(fields, extras, (key) =>
+    isVisibleToPublic(privacyFlags, key),
+  );
+}
+
+/**
+ * The camp-mate projection of a bio: every field its owner shared with
+ * camp-mates OR with everyone, and nothing that can never be camp-visible.
+ *
+ * UNGATED ON PURPOSE — it answers "what does this bio show a camp-mate", not
+ * "is this viewer a camp-mate". Never call it from a read path: go through
+ * `campmateBioView` (./campmates), which refuses unless the viewer and the
+ * subject genuinely share a camp. It is exported only so that module and its
+ * tests share one projection with `publicBioView`.
+ */
+export function campMateProjection(
+  fields: BurnerBioFields,
+  privacyFlags: Readonly<Record<string, unknown>>,
+  extras: BioExtras = emptyBioExtras(),
+): PublicBioView {
+  return projectBio(fields, extras, (key) =>
+    isVisibleToCampMates(privacyFlags, key),
+  );
 }
 
 /**

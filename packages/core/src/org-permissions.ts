@@ -408,6 +408,42 @@ export interface OrgRoleGrant {
   /** The department this role is scoped to, or null for org-wide. */
   departmentId: string | null;
   permissions: OrgPermissions;
+  /**
+   * When THIS ASSIGNMENT stops granting (SEC-019 — seasonal staff must not keep
+   * console access forever). Absent or null means no expiry. At or after this
+   * instant the grant resolves to nothing, exactly as if it were not held — but
+   * the row is kept, so a System manager sees it as expired and can renew it.
+   */
+  expiresAt?: Date | null;
+}
+
+/**
+ * Is an assignment that expires at `expiresAt` still granting at `asOf`?
+ *
+ * The boundary is EXCLUSIVE: at exactly `expiresAt` the grant is gone — the
+ * instant is when access stops, not the last instant it works. The SQL filters
+ * in the loaders say the same thing (`liveOrgRoleAssignment` in @quagga/db). An unparseable date
+ * compares false and so fails closed.
+ */
+export function isOrgRoleAssignmentLive(
+  expiresAt: Date | null | undefined,
+  asOf: Date,
+): boolean {
+  if (expiresAt == null) return true;
+  return expiresAt.getTime() > asOf.getTime();
+}
+
+/**
+ * THE ROLES THAT STILL GRANT. Every resolver below reads roles through this and
+ * never through `actor.roles` directly, so an expired assignment cannot reach a
+ * capability by any path. `god` never needs it — the anchor is checked first
+ * and holds no roles to expire.
+ */
+function liveRoles(actor: OrgActor): readonly OrgRoleGrant[] {
+  const asOf = actor.asOf ?? new Date();
+  return actor.roles.filter((role) =>
+    isOrgRoleAssignmentLive(role.expiresAt, asOf),
+  );
 }
 
 /**
@@ -429,6 +465,12 @@ export interface OrgActor {
   rank: OrgRank;
   roles: readonly OrgRoleGrant[];
   domains: DomainOwnership;
+  /**
+   * The instant assignment expiry is judged at. Defaults to now; passed
+   * explicitly where one render must judge every row against the same clock
+   * (the accounts table) and in tests of the boundary.
+   */
+  asOf?: Date;
 }
 
 /**
@@ -464,7 +506,7 @@ export function orgCan(
   // The engineer ceiling: universal reach, and never these two. See
   // ENGINEER_RANK_CARVE_OUTS — this is not an inverted comparison.
   if (isRankCarveOut(actor, capability)) return false;
-  return actor.roles.some((role) => roleGrants(role, capability));
+  return liveRoles(actor).some((role) => roleGrants(role, capability));
 }
 
 /**
@@ -495,7 +537,7 @@ export function orgCanIn(
   if (SYSTEM_MANAGER_ONLY_SET.has(capability)) return false;
   if (isRankCarveOut(actor, capability)) return false;
   const everywhere = reachesEveryDepartment(actor, capability);
-  return actor.roles.some(
+  return liveRoles(actor).some(
     (role) =>
       roleGrants(role, capability) &&
       (role.departmentId === null ||
@@ -545,7 +587,7 @@ export function isDepartmentScopedGrant(
   if (!orgCan(actor, capability)) return false;
   // An engineer is in every department, so nothing they hold is confined to one.
   if (reachesEveryDepartment(actor, capability)) return false;
-  return !actor.roles.some(
+  return !liveRoles(actor).some(
     (role) => roleGrants(role, capability) && role.departmentId === null,
   );
 }
@@ -557,7 +599,7 @@ export function departmentsGranting(
 ): string[] {
   if (!actor) return [];
   const ids = new Set<string>();
-  for (const role of actor.roles) {
+  for (const role of liveRoles(actor)) {
     if (roleGrants(role, capability) && role.departmentId !== null) {
       ids.add(role.departmentId);
     }
@@ -641,7 +683,10 @@ export function orgCapabilityRefusal(
     return `Only a ${manager} can do that. It is deliberately not grantable to a role — it is what keeps every other permission safe to edit.`;
   }
 
-  if (actor.roles.length === 0) {
+  if (liveRoles(actor).length === 0) {
+    if (actor.roles.length > 0) {
+      return `Your org roles have expired, so there is nothing your account can do here until they are renewed. A ${manager} renews them from the Accounts screen.`;
+    }
     return `Your account can open the console but holds no org roles yet, so there is nothing it can do here. A ${manager} assigns roles from the Accounts screen.`;
   }
 

@@ -72,6 +72,7 @@ export async function createVehicleRegistrationAction(
     submit: input.submit,
     columns: payload.columns,
     answers: payload.answers,
+    safetyDocuments: payload.safetyDocuments,
   });
   if (!result.ok) return { status: "error", message: result.error };
   return { status: "created", slug: result.slug };

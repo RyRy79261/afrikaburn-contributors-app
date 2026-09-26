@@ -107,7 +107,7 @@ without ever printing a value.
 - `memberships` — user × group, role enum (`god|org_staff|lead|admin|member|engineer`), unique(user, group). The three ORG ranks (`god|org_staff|engineer`) are only valid on the org group, and on it the enum is **the console DOOR, not the rights** (see apps/org routes). **`god` is presented throughout the UI as "System manager"** — the stored value stays `god` deliberately (renaming it would migrate live rows and re-cut the GOD_EMAILS bootstrap for a label) — and is the anti-lockout ANCHOR. _(Migration 0017's free-text `department` label + `department_lead` flag were DROPPED by 0018: departments are rows now, and two department vocabularies would be the parallel source of truth org roles v1 exists to remove.)_
 - `org_departments` — org departments as DATA (0018): `key` (stable slug), name, normalized name, description, sort. Created by a System manager; creating one seeds its permanent LEAD + MEMBER roles, deleting one cascades them away.
 - `org_roles` — the org mirror of `project_roles` (0018): `key`, nullable `department_id` (cascade), name + normalized name, `kind` (`system` = seeded/undeletable/rights-editable, `custom` = fully the System manager's), curated `color`, `permissions` jsonb over the org capability vocabulary, sort. Unique on `key` and on normalized name.
-- `org_role_assignments` — membership × role, composite PK (0018), mirroring `member_role_assignments`. Cascades off the membership, so removing console access releases every role with it.
+- `org_role_assignments` — membership × role, composite PK (0018), mirroring `member_role_assignments`. Cascades off the membership, so removing console access releases every role with it. Optional `expires_at` (SEC-019, epic #64): from that instant the assignment grants nothing — capability loaders filter it (`liveOrgRoleAssignment`) and `@quagga/core` ignores it again — but the row is kept so the accounts screen shows it as expired and a System manager can renew it. Set per role in the assignment dialog as an inclusive last day, SAST. `god` holds no assignments and cannot expire.
 - `invites` — group_id, token, kind (`member|lead_transfer`), created_by, expires_at, used_by, used_at. One-time.
 - `editions` — name, year, start_date, end_date, is_active. Seed: **AfrikaBurn 2027, 2027-04-26 → 2027-05-02, active**.
 - `registrations` — group × edition, status enum (`draft|submitted|under_review|changes_requested|approved|rejected|withdrawn`), plus typed columns for the six sections per Finlay's field list in `docs/sources/scope-theme-camp-registration.txt` (identity/contact, LNT incl. lead contact, participation & gifting, size & logistics incl. layout upload URLs (max 4), sound & placement prefs, suppliers & commerce), `submitted_at`, `decided_at`. **A camp is "registered" for an edition iff an approved registration row exists** — that predicate lives in `@quagga/core` (`isRegistered`), and entitlements derive from it.
@@ -118,6 +118,12 @@ without ever printing a value.
   `user_id` account link, imported_at. _(`vetting_status` and `source` were killed per
   `docs/supplier-spec.md` and no longer exist — do not reintroduce them.)_
 - `supplier_declarations` — registration_id × supplier_id, note.
+- `registration_safety_documents` — registration_id (cascade), title, url, `expires_on`
+  date (required), uploaded_by (set null). Safety evidence for a registration
+  (epic #52, CREATIVE-017; artworks + mutant vehicles first). **Private**: the
+  project's structural lead/admin and org staff who read personal information in the
+  registrations domain — never a public page, list, roster or export. Uploads go
+  through the existing `/api/registration/upload` route (`purpose=safety-document`).
 - `payments` — subject_type + subject_id (polymorphic by string key), amount_cents nullable, currency default ZAR, reference (human-readable, e.g. `QP-2027-MAH-001`), status enum (`pending|reconciled|waived`), details jsonb, recorded_by. **No processing, ever.**
 - `audit_events` — actor_id, action, subject, meta jsonb. Written on: elevation, approval/rejection, payment reconciliation.
 
@@ -169,7 +175,7 @@ deliberately MIRRORS camp Roles v2 — same shapes, same vocabulary, one mental 
   UNDELETABLE and RIGHTS-EDITABLE; `kind = custom` is a
   System manager's own, fully editable and deletable. Only `custom` deletes — exactly
   `UNDELETABLE_ROLE_KINDS` on the camp side.
-- **`org_role_assignments`** — membership × role; a person holds zero or more.
+- **`org_role_assignments`** — membership × role; a person holds zero or more. Each may carry an `expires_at` (access expiry, SEC-019).
 
 The two seeded system roles carry EXACTLY the rights the hardcoded ranks carried, so the
 change of mechanism was not also a change of access — but they are now DEFAULTS OF A ROW,

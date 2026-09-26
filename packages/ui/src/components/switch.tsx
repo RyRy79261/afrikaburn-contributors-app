@@ -32,6 +32,10 @@ export interface SwitchProps extends Omit<
   onCheckedChange?: (checked: boolean) => void;
   /** Bio hard-lock: forces OFF, disables, shows "ALWAYS PRIVATE". */
   hardLocked?: boolean;
+  /** privacy variant: the caps label shown when OFF. Defaults to
+   * "Off · Private"; a field shared with camp-mates is OFF (not public) but
+   * not private either, and says so. */
+  offLabel?: string;
 }
 
 const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
@@ -42,6 +46,7 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
       checked = false,
       onCheckedChange,
       hardLocked = false,
+      offLabel = "Off · Private",
       disabled,
       "aria-label": ariaLabel,
       ...props
@@ -86,7 +91,7 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
       ? "Always private"
       : isOn
         ? "On · Public"
-        : "Off · Private";
+        : offLabel;
 
     return (
       <span className={cn("inline-flex items-center gap-2", className)}>
