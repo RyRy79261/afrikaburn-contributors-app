@@ -1253,6 +1253,50 @@ export const registrations = pgTable(
   }),
 );
 
+// --- Registration safety documents (epic #52, App Spec CREATIVE-017) -----
+// Safety evidence attached to ONE registration (group × edition): a structural
+// engineer's sign-off, a fire-safety certificate, a vehicle's roadworthy. Built
+// for artwork + mutant-vehicle registrations first; keyed to `registrations`
+// rather than to a project so a theme camp can use the same table later
+// without a second one.
+//
+// PER REGISTRATION, NOT PER GROUP. A certificate is evidence for a specific
+// burn. Rolling a project into a new edition copies only the documents that
+// are still valid through that edition's END (@quagga/core
+// `carriedSafetyDocuments`) as NEW rows, so deleting next year's copy never
+// removes last year's evidence.
+//
+// `expires_on` is a DATE and is REQUIRED: a safety document without an expiry
+// is one nobody can tell is stale, and "valid through the event" is the only
+// question a reviewer asks of it.
+//
+// PRIVATE. Readable by the project's structural lead/admin and by org staff
+// who read personal information in the registrations domain — never on a
+// public page, directory card, roster or export.
+export const registrationSafetyDocuments = pgTable(
+  "registration_safety_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // The uploaded blob URL (registration upload route) or a pasted https link.
+    url: text("url").notNull(),
+    expiresOn: date("expires_on", { mode: "string" }).notNull(),
+    // `set null`: a departed uploader must not delete the evidence.
+    uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    registrationIdx: index("registration_safety_documents_registration_idx").on(
+      d.registrationId,
+    ),
+  }),
+);
+
 // --- Wrangler assignments -------------------------------------------------
 // A wrangler is AfrikaBurn's "dusty guardian angel" for a registered theme camp
 // (docs/synthesis.md): an org member from the theme-camp leads team who

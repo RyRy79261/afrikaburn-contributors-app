@@ -204,3 +204,5 @@ export * from "./supplier-code";
 export * from "./supplier-documents";
 export * from "./security-events";
 export * from "./id-retention";
+// Creative-project parity: WAP, safety documents, carry-forward (epic #52).
+export * from "./project-registration";
