@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   hasProjectPermission,
   canManageQuestionnaireAudience,
+  canPostAnnouncementAudience,
   allProjectPermissions,
   enforceKindPermissions,
   isPermissionsLockedKind,
@@ -144,6 +145,105 @@ describe("canManageQuestionnaireAudience — scope enforced server-side", () => 
         blocking: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("post_announcements — scoped camp announcements", () => {
+  const scoped = (
+    audienceRoles: "all" | string[],
+    mayRequireAck: boolean,
+  ): ProjectPermissions => ({
+    post_announcements: { audienceRoles, mayRequireAck },
+  });
+
+  it("hasProjectPermission reads the scope object as held, absence as not", () => {
+    expect(
+      hasProjectPermission(
+        member("member", scoped(["a"], false)),
+        "post_announcements",
+      ),
+    ).toBe(true);
+    expect(
+      hasProjectPermission(member("member", NONE), "post_announcements"),
+    ).toBe(false);
+  });
+
+  it("lead/admin post to any audience, acknowledgement included", () => {
+    for (const role of ["lead", "admin"] as const) {
+      expect(
+        canPostAnnouncementAudience(member(role), {
+          targetRoleIds: ["x"],
+          requireAck: true,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("a member with no granting role is refused", () => {
+    expect(
+      canPostAnnouncementAudience(
+        member("member", NONE, { manage_members: true }),
+        {
+          targetRoleIds: ["a"],
+          requireAck: false,
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("must-acknowledge needs mayRequireAck on at least one granting role", () => {
+    const noAck = member("member", scoped("all", false));
+    expect(
+      canPostAnnouncementAudience(noAck, {
+        targetRoleIds: ["a"],
+        requireAck: true,
+      }),
+    ).toBe(false);
+    expect(
+      canPostAnnouncementAudience(noAck, {
+        targetRoleIds: ["a"],
+        requireAck: false,
+      }),
+    ).toBe(true);
+    const oneAck = member("member", scoped(["a"], false), scoped(["b"], true));
+    expect(
+      canPostAnnouncementAudience(oneAck, {
+        targetRoleIds: ["a"],
+        requireAck: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("the audience must sit inside the union of granted roles", () => {
+    const m = member("member", scoped(["a"], false), scoped(["b"], false));
+    expect(
+      canPostAnnouncementAudience(m, {
+        targetRoleIds: ["a", "b"],
+        requireAck: false,
+      }),
+    ).toBe(true);
+    expect(
+      canPostAnnouncementAudience(m, {
+        targetRoleIds: ["a", "c"],
+        requireAck: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("an empty target list is never a way past a role scope", () => {
+    expect(
+      canPostAnnouncementAudience(member("member", scoped(["a"], true)), {
+        targetRoleIds: [],
+        requireAck: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("the full permission set grants every audience with acknowledgement", () => {
+    expect(allProjectPermissions().post_announcements).toEqual({
+      audienceRoles: "all",
+      mayRequireAck: true,
+    });
   });
 });
 
