@@ -979,6 +979,27 @@ describe("past registrations + the camp-side comparison", () => {
     expect(comparison?.changes.map((c) => c.field)).toEqual(["s2LntPlan"]);
   });
 
+  it("does not compare against a submitted row later sent back and edited", async () => {
+    // submitted_at is never cleared and the wizard autosaves in
+    // changes_requested / draft, so 2026's text is not what AfrikaBurn read.
+    for (const status of ["changes_requested", "draft"] as const) {
+      dbMock.queue([
+        priorRow(2026, { status, s2LntPlan: "unsent edit" }),
+        priorRow(2025),
+      ]);
+      const comparison = await getRegistrationComparison({
+        groupId: GROUP,
+        editionYear: 2027,
+        current: registration({
+          carriedForwardFromId: null,
+          s2LntPlan: "LNT 2027",
+        }) as never,
+      });
+      expect(comparison?.priorYear).toBe(2025);
+      expect(comparison?.changes[0]?.prior).toBe("LNT 2025");
+    }
+  });
+
   it("is null for a first-time camp", async () => {
     dbMock.queue([]);
     expect(

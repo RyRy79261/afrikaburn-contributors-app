@@ -1,4 +1,8 @@
-import type { MembershipRole, SectionKey } from "@quagga/types";
+import type {
+  MembershipRole,
+  RegistrationStatus,
+  SectionKey,
+} from "@quagga/types";
 import {
   PROJECT_ADMIN_ROLES,
   SECTION_LABELS,
@@ -341,8 +345,12 @@ export interface PriorRegistrationRef {
   registrationId: string;
   groupId: string;
   editionYear: number;
-  /** Set the first time the camp submitted it; null for a never-sent draft. */
+  /** Set each time the camp submits it; never cleared. Null for a
+   * never-sent draft. */
   submittedAt: Date | null;
+  /** Where the row ended up — decides whether its text is still exactly what
+   * was last submitted (`holdsSubmittedVersion`). */
+  status: RegistrationStatus;
 }
 
 /** The registration being written or reviewed — the "now" side of a pair. */
@@ -382,7 +390,48 @@ export function wasSubmitted(ref: { submittedAt: Date | null }): boolean {
 }
 
 /**
+ * The statuses in which a submitted row's text CANNOT have moved since it was
+ * last submitted: the wizard is read-only in all of them, and the only ways in
+ * are a submit or AfrikaBurn acting on one.
+ *
+ * Deliberately NOT here:
+ *   · `draft` / `changes_requested` — the wizard autosaves into both, and
+ *     `submitted_at` is never cleared, so a row sent back for changes (or
+ *     withdrawn and reopened) and then edited holds words nobody sent.
+ *   · `withdrawn` — reachable from `changes_requested` and from a reopened
+ *     `draft`, so it may carry those same unsent edits. A withdrawal straight
+ *     from `submitted` is clean, but the row does not say which it was.
+ *
+ * There is no version history table, so for those rows the last SUBMITTED text
+ * is simply not retained; a caller says so rather than presenting the row as
+ * what AfrikaBurn received.
+ */
+export const SUBMITTED_VERSION_STATUSES: readonly RegistrationStatus[] = [
+  "submitted",
+  "under_review",
+  "approved",
+  "rejected",
+];
+
+/**
+ * Does this row's text match what the camp last sent AfrikaBurn? True only for
+ * a submitted row in a status the wizard cannot write
+ * (`SUBMITTED_VERSION_STATUSES`).
+ */
+export function holdsSubmittedVersion(ref: {
+  submittedAt: Date | null;
+  status: RegistrationStatus;
+}): boolean {
+  return wasSubmitted(ref) && SUBMITTED_VERSION_STATUSES.includes(ref.status);
+}
+
+/**
  * The camp's past registrations, newest edition first (PREVYR-001, -011).
+ *
+ * A row here was submitted at least once, but its text is only guaranteed to be
+ * the submitted version when `holdsSubmittedVersion` says so — a row later sent
+ * back, withdrawn or reopened may carry edits nobody sent. The history pages
+ * label those instead of calling them "what was submitted".
  *
  * ONLY WHAT WAS SUBMITTED. "Past registrations" is the record of what the camp
  * sent AfrikaBurn in earlier years; a draft that never left the camp's hands was
@@ -409,7 +458,8 @@ export function pastSubmittedRegistrations<T extends PriorRegistrationRef>(
  *   · `carried_forward` — the draft was seeded from this row, so the diff is
  *     "what the camp changed from the text it started with".
  *   · `previous_edition` — the camp typed this year fresh (or its source row is
- *     gone); the diff is against its most recent SUBMITTED prior edition.
+ *     gone); the diff is against its most recent prior edition whose text is
+ *     still exactly what was submitted (`holdsSubmittedVersion`).
  */
 export type ComparisonBasis = "carried_forward" | "previous_edition";
 
@@ -419,9 +469,10 @@ export type ComparisonBasis = "carried_forward" | "previous_edition";
  *
  * The carried-forward source wins when it is still a valid prior of the same
  * camp: it is what the camp was actually editing. Otherwise match on camp +
- * previous edition — the newest earlier edition the camp SUBMITTED in. A
- * never-submitted draft is not a fair "last year" to hold a reviewer's diff
- * against; nobody at AfrikaBurn ever read it.
+ * previous edition — the newest earlier edition whose row still holds what the
+ * camp SUBMITTED. A never-submitted draft is not a fair "last year" to hold a
+ * reviewer's diff against; nobody at AfrikaBurn ever read it — and nor is a
+ * submitted row later edited and never resubmitted, for the same reason.
  */
 export function selectComparisonPrior<T extends PriorRegistrationRef>(input: {
   current: RegistrationTarget & { carriedForwardFromId: string | null };
@@ -436,7 +487,12 @@ export function selectComparisonPrior<T extends PriorRegistrationRef>(input: {
       return { prior: carried, basis: "carried_forward" };
     }
   }
-  const [previous] = pastSubmittedRegistrations(candidates, current);
+  // Only a row whose text is still exactly what AfrikaBurn received — the
+  // newest such edition. A row sent back and edited, or withdrawn, would hold
+  // the reviewer's diff against words no reviewer ever read.
+  const [previous] = pastSubmittedRegistrations(candidates, current).filter(
+    holdsSubmittedVersion,
+  );
   return previous ? { prior: previous, basis: "previous_edition" } : null;
 }
 

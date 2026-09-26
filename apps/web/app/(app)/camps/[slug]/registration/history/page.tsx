@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, History } from "lucide-react";
+import { holdsSubmittedVersion } from "@quagga/core";
 import { EmptyState } from "@quagga/ui/components/empty-state";
 import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -73,6 +74,11 @@ export default async function PastRegistrationsPage({
                   {p.submittedAt ? (
                     <p className="text-xs text-muted-foreground">
                       Last submitted {formatDate(p.submittedAt)}
+                      {/* submitted_at is never cleared; a row sent back,
+                          withdrawn or reopened may since hold unsent edits. */}
+                      {holdsSubmittedVersion(p)
+                        ? null
+                        : " · may include later, unsent edits"}
                     </p>
                   ) : null}
                 </div>

@@ -90,7 +90,7 @@ export default async function RegistrationChangesPage({
         <EmptyState
           icon={<GitCompare className="h-6 w-6" />}
           title="Nothing to compare with yet"
-          description={`${context.group.name} has no submitted registration from an earlier edition, so there is no "last year" to compare against.`}
+          description={`${context.group.name} has no registration from an earlier edition that still holds what was submitted, so there is no "last year" to compare against.`}
         />
       )}
     </>

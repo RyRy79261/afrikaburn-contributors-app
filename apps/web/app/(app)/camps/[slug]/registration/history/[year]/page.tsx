@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { holdsSubmittedVersion } from "@quagga/core";
 import { SECTION_KEYS, SECTION_LABELS } from "@quagga/types";
 import { StatusBadge } from "@quagga/ui/components/status-badge";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -18,11 +19,14 @@ export const dynamic = "force-dynamic";
 
 // One past registration, read-only (PREVYR-001, -011; epic #50).
 //
-// WHAT IT SHOWS is the registration row for that edition as it stands — which,
-// for a past edition, is the last version the camp submitted, since the camp's
-// wizard only ever writes the ACTIVE edition's row. There is no version history
-// table; if AfrikaBurn asked for changes and the camp never resubmitted, the
-// status badge says so.
+// WHAT IT SHOWS is the registration row for that edition as it stands. There is
+// no version history table, so that is the last SUBMITTED version only when the
+// row's status says the wizard could not have written it since
+// (@quagga/core `holdsSubmittedVersion`). A row sent back for changes, withdrawn,
+// or reopened to a draft may hold edits the camp made during that edition and
+// never sent — `submitted_at` is never cleared, so the timestamp cannot tell.
+// The copy below says which one the reader is looking at rather than calling
+// unsent words "what was submitted".
 //
 // WHAT IT OMITS: the camp description (it lives on the camp, so it is TODAY's
 // text, not what was submitted then) and the reviewer threads (they belong to
@@ -75,8 +79,13 @@ export default async function PastRegistrationPage({
       >
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <StatusBadge status={past.status} />
-          <span className="text-xs text-muted-foreground">
-            Read-only — this is what was submitted for {past.editionYear}.
+          <span
+            className="text-xs text-muted-foreground"
+            data-testid="past-registration-provenance"
+          >
+            {holdsSubmittedVersion(past)
+              ? `Read-only — this is what was submitted for ${past.editionYear}.`
+              : `Read-only — this may include edits made after it was last submitted for ${past.editionYear}. The version AfrikaBurn last received was not kept.`}
           </span>
         </div>
       </RegistrationSubpageHeader>

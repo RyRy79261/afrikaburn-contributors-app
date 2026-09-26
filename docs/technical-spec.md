@@ -351,13 +351,18 @@ intact. On top of that (roadmap R1 + epic #50):
 - **Past registrations** (PREVYR-001, -011): `/camps/[slug]/registration/history`
   lists every earlier edition the camp SUBMITTED; each opens read-only. Same
   audience as the registration itself (`canViewCampRegistration` — leads and
-  admins).
+  admins). There is no version history: `submitted_at` is never cleared and the
+  wizard autosaves in `draft` and `changes_requested`, so a row later sent
+  back, withdrawn or reopened may hold unsent edits. Only a row in `submitted`,
+  `under_review`, `approved` or `rejected` is labelled "what was submitted"
+  (`holdsSubmittedVersion`); the rest say the submitted version was not kept.
 - **Year-on-year comparison, both sides** (PREVYR-010): the reviewer's diff in
   the org console and the camp's "What changed since …" page read one function
   (`selectComparisonPrior` + `changedFields`) and one component. The prior is
   the carried-forward source when there is one, otherwise the camp's most
-  recent submitted earlier edition — so a camp that typed its answers fresh is
-  still compared.
+  recent earlier edition that still holds its submitted version
+  (`holdsSubmittedVersion`) — so a camp that typed its answers fresh is still
+  compared, and never against words no reviewer read.
 
 **Not built:** flagging what needs re-confirming, and expiry for documents that
 must be renewed each year.

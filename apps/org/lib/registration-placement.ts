@@ -126,6 +126,7 @@ export async function getReviewComparison(
       groupId: r.row.groupId,
       editionYear: r.year,
       submittedAt: r.row.submittedAt,
+      status: r.row.status,
       row: r.row,
     })),
   });

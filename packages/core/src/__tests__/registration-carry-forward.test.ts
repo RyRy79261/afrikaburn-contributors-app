@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { MembershipRole, formForSection } from "@quagga/types";
+import {
+  MembershipRole,
+  RegistrationStatus,
+  formForSection,
+} from "@quagga/types";
 
 import {
   buildCarryForwardPatch,
@@ -16,6 +20,8 @@ import {
   pastSubmittedRegistrations,
   selectComparisonPrior,
   wasSubmitted,
+  holdsSubmittedVersion,
+  SUBMITTED_VERSION_STATUSES,
   type CarryForwardFields,
   type PriorRegistrationRef,
 } from "../registration-carry-forward";
@@ -285,6 +291,7 @@ function ref(
     groupId: MAD_HATTERS,
     editionYear: year,
     submittedAt: new Date(`${year}-01-10T00:00:00Z`),
+    status: "approved",
     ...overrides,
   };
 }
@@ -416,6 +423,86 @@ describe("selectComparisonPrior — the reviewer's and the camp's diff", () => {
         candidates: [],
       }),
     ).toBeNull();
+  });
+});
+
+describe("holdsSubmittedVersion — submitted_at is never cleared", () => {
+  // The wizard autosaves in `draft` and `changes_requested`, and submitting sets
+  // `submitted_at` without anything ever nulling it. So a row sent back for
+  // changes and edited (or withdrawn, reopened and edited) still reads as
+  // "submitted" by timestamp while holding words nobody sent.
+  const sentBackAndEdited = ref(2026, { status: "changes_requested" });
+  const reopenedDraft = ref(2026, { status: "draft" });
+  const withdrawn = ref(2026, { status: "withdrawn" });
+
+  it("is true only for statuses the wizard cannot write", () => {
+    const holding = RegistrationStatus.options.filter((status) =>
+      holdsSubmittedVersion({ submittedAt: new Date(), status }),
+    );
+    expect(holding).toEqual([
+      "submitted",
+      "under_review",
+      "approved",
+      "rejected",
+    ]);
+    expect(holding).toEqual([...SUBMITTED_VERSION_STATUSES]);
+  });
+
+  it("is false for a changes_requested row and a reopened draft, both with submitted_at", () => {
+    expect(wasSubmitted(sentBackAndEdited)).toBe(true);
+    expect(holdsSubmittedVersion(sentBackAndEdited)).toBe(false);
+    expect(wasSubmitted(reopenedDraft)).toBe(true);
+    expect(holdsSubmittedVersion(reopenedDraft)).toBe(false);
+    expect(holdsSubmittedVersion(withdrawn)).toBe(false);
+  });
+
+  it("is false for a never-submitted row in any status", () => {
+    for (const status of RegistrationStatus.options) {
+      expect(holdsSubmittedVersion({ submittedAt: null, status })).toBe(false);
+    }
+  });
+
+  it("keeps such rows out of the previous-edition comparison", () => {
+    // Last year was sent back and edited; the newest row AfrikaBurn actually
+    // read is 2025's, so that is the baseline — not 2026's unsent text.
+    for (const unsent of [sentBackAndEdited, reopenedDraft, withdrawn]) {
+      const picked = selectComparisonPrior({
+        current: {
+          groupId: MAD_HATTERS,
+          editionYear: 2027,
+          carriedForwardFromId: null,
+        },
+        candidates: [unsent, ref(2025, { status: "rejected" })],
+      });
+      expect(picked?.basis).toBe("previous_edition");
+      expect(picked?.prior.registrationId).toBe("reg-2025");
+    }
+  });
+
+  it("gives no comparison rather than an unsent one", () => {
+    expect(
+      selectComparisonPrior({
+        current: {
+          groupId: MAD_HATTERS,
+          editionYear: 2027,
+          carriedForwardFromId: null,
+        },
+        candidates: [sentBackAndEdited, reopenedDraft],
+      }),
+    ).toBeNull();
+  });
+
+  it("still lists them as past registrations, for the page to flag", () => {
+    const list = pastSubmittedRegistrations(
+      [sentBackAndEdited, ref(2025)],
+      { groupId: MAD_HATTERS, editionYear: 2027 },
+    );
+    expect(list.map((r) => [r.editionYear, holdsSubmittedVersion(r)])).toEqual(
+      [
+        [2026, false],
+        [2025, true],
+      ],
+    );
   });
 });
 

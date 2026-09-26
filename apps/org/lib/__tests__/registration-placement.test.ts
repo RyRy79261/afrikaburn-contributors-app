@@ -107,6 +107,7 @@ describe("getReviewComparison", () => {
         id,
         groupId: GROUP_ID,
         submittedAt: new Date(`${year}-01-10T00:00:00Z`),
+        status: "approved",
         s4ExpectedPopulation: 42,
         s2LntPlan: "Sweep the grid daily.",
         ...overrides,
@@ -172,6 +173,28 @@ describe("getReviewComparison", () => {
       [
         // 2026 was started and abandoned — never submitted, never reviewed.
         prior(PRIOR_ID, 2026, { submittedAt: null, s4ExpectedPopulation: 1 }),
+        prior(OLDER_ID, 2025),
+      ],
+    ]);
+    const result = await getReviewComparison(
+      registration({ carriedForwardFromId: null }),
+      2027,
+    );
+    expect(result?.basis).toBe("previous_edition");
+    expect(result?.priorYear).toBe(2025);
+    expect(result?.changes[0]?.prior).toBe(42);
+  });
+
+  it("skips a submitted row that was sent back and edited, never resubmitted", async () => {
+    // submitted_at is never cleared, and the wizard autosaves in
+    // changes_requested — so 2026's text is not what any reviewer read. The
+    // baseline is the newest row that still holds a submitted version.
+    db.seed("registrations", [
+      [
+        prior(PRIOR_ID, 2026, {
+          status: "changes_requested",
+          s4ExpectedPopulation: 1,
+        }),
         prior(OLDER_ID, 2025),
       ],
     ]);
