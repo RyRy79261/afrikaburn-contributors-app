@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import {
   INVITE_RESUME_PATH,
+  defaultCampmateSettings,
   defaultPrivacyFlags,
   mapBioToResponses,
 } from "@quagga/core";
@@ -101,6 +102,9 @@ export default async function OnboardingPage() {
           mode="onboarding"
           initialResponses={initialResponses}
           initialFlags={initialFlags}
+          // Carried forward from last edition when this is a new one — shown
+          // on the Privacy step and confirmed by the final save.
+          initialCampmate={bio?.campmate ?? defaultCampmateSettings()}
           initialExtras={toBioExtrasState(bio?.extras)}
           action={saveOnboardingBioAction}
           searchCamps={searchCampsAction}

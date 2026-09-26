@@ -9,13 +9,21 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { getPublicBurnerProfile } from "@/lib/groups-store";
+import {
+  getPublicBurnerProfile,
+  resolveCampHistoryDisplay,
+} from "@/lib/groups-store";
+import {
+  getCampmateBioView,
+  resolveAvatarForViewer,
+} from "@/lib/campmates-store";
 import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
 import { PreviewNotice } from "@/components/preview-notice";
 import { ProfileHero } from "@/components/profile-public/profile-hero";
 import { ProfileSection } from "@/components/profile-public/profile-section";
 import { ProfileCamps } from "@/components/profile-public/profile-camps";
 import { PrivacyNote } from "@/components/profile-public/privacy-note";
+import { AvatarImage } from "@/components/avatar-image";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +43,13 @@ export const dynamic = "force-dynamic";
 // the only place they render (never a roster, never an export);
 // `resolveMedicalNotesForViewer` re-derives the authz from memberships
 // server-side and audits the read.
+//
+// AND ONE WIDER VIEW (epic #68): a CAMP-MATE — someone who shares a theme camp
+// with the burner — sees what the burner shared with camp-mates, via
+// `getCampmateBioView` → @quagga/core `campmateBioView`. It returns null for
+// anyone else (including a lead of a DIFFERENT camp), and then this page shows
+// the public view exactly as before. The photo is decided the same way
+// (`resolveAvatarForViewer` → `canViewAvatar`) and re-checked by the proxy.
 
 // Zod-validate the dynamic segment at the boundary (build-spec §Hard constraints
 // 6). User ids are uuids; anything else is a 404, not a query.
@@ -66,14 +81,31 @@ export default async function BurnerProfilePage({
   const profile = await getPublicBurnerProfile(id, edition.id);
   if (!profile) notFound();
 
-  const medical = await resolveMedicalNotesForViewer({
-    viewerUserId: viewer.id,
-    subjectUserId: profile.userId,
-    editionId: edition.id,
-  });
+  const [medical, campmateFields, avatarKey] = await Promise.all([
+    resolveMedicalNotesForViewer({
+      viewerUserId: viewer.id,
+      subjectUserId: profile.userId,
+      editionId: edition.id,
+    }),
+    getCampmateBioView({
+      viewerUserId: viewer.id,
+      subjectUserId: profile.userId,
+      editionId: edition.id,
+    }),
+    resolveAvatarForViewer({
+      viewerUserId: viewer.id,
+      subjectUserId: profile.userId,
+      editionId: edition.id,
+    }),
+  ]);
 
   const isOwn = profile.userId === viewer.id;
-  const pf = profile.publicFields;
+  // The camp-mate view is a SUPERSET of the public one (it includes every
+  // public field), so when it exists it replaces the public projection.
+  const pf = campmateFields ?? profile.publicFields;
+  const campHistory = campmateFields
+    ? await resolveCampHistoryDisplay(campmateFields.campHistory, edition.id)
+    : profile.campHistory;
 
   // The username is a public handle by construction — unique, no privacy toggle
   // (see @quagga/core `username.ts`) — so it needs no flag check here; the
@@ -89,12 +121,21 @@ export default async function BurnerProfilePage({
     volunteeringLabels.length > 0 || Boolean(pf.volunteeringOther);
   const hasRanger =
     pf.rangerTraining || pf.rangerCurious || pf.greenDotTraining;
-  const hasCamps = profile.camps.length > 0 || profile.campHistory.length > 0;
+  const hasCamps = profile.camps.length > 0 || campHistory.length > 0;
 
   return (
     <>
       <div className="mx-auto flex max-w-3xl flex-col gap-5">
         <ProfileHero
+          eyebrow={campmateFields ? "Camp-mate profile" : undefined}
+          avatar={
+            <AvatarImage
+              userId={profile.userId}
+              name={heading}
+              showPhoto={avatarKey !== null}
+              className="h-16 w-16 text-lg sm:h-[72px] sm:w-[72px]"
+            />
+          }
           displayName={heading}
           homeCity={pf.homeCity}
           burnsCount={
@@ -192,10 +233,7 @@ export default async function BurnerProfilePage({
 
         {hasCamps && (
           <ProfileSection label="Camps">
-            <ProfileCamps
-              camps={profile.camps}
-              campHistory={profile.campHistory}
-            />
+            <ProfileCamps camps={profile.camps} campHistory={campHistory} />
           </ProfileSection>
         )}
 

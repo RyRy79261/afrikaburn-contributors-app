@@ -19,7 +19,9 @@ import {
   pageById,
   presentationBlocks,
   presentationOptions,
+  encodeFieldVisibility,
   type BioPrivacyField,
+  type PrivacyFlags,
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { cn } from "@quagga/ui/lib/utils";
@@ -46,7 +48,7 @@ const AUTOSAVE_DEBOUNCE_MS = 700;
 
 export type RunnerAction = (
   responses: QuestionnaireResponses,
-  privacyFlags: Record<string, boolean> | null,
+  privacyFlags: PrivacyFlags | null,
   final: boolean,
   extras?: BioExtrasState | null,
 ) => Promise<SaveResult>;
@@ -58,7 +60,7 @@ interface RunnerProps {
   /** When provided, a privacy step is appended after the questionnaire pages. */
   privacy?: {
     fields: readonly BioPrivacyField[];
-    initialFlags: Record<string, boolean>;
+    initialFlags: PrivacyFlags;
   };
   /** When provided, a bespoke "Your burns & volunteering" step is inserted after
    * the questionnaire pages and before the privacy step (build-spec v3). */
@@ -122,7 +124,7 @@ export function QuestionnaireRunner({
   );
   const [responses, setResponses] =
     React.useState<QuestionnaireResponses>(initialResponses);
-  const [flags, setFlags] = React.useState<Record<string, boolean>>(
+  const [flags, setFlags] = React.useState<PrivacyFlags>(
     privacy?.initialFlags ?? {},
   );
   const [extras, setExtras] = React.useState<BioExtrasState | null>(
@@ -405,15 +407,19 @@ export function QuestionnaireRunner({
           <div>
             <h2 className="text-lg font-semibold">Privacy</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Choose what shows on your public profile. Sensitive fields are
-              locked private and can never be made public.
+              Choose who sees each field: only you, the people in your theme
+              camp, or everyone. Sensitive fields are locked private and can
+              never be shared.
             </p>
           </div>
           <PrivacyToggles
             fields={privacy.fields}
             flags={flags}
-            onChange={(key, isPublic) =>
-              setFlags((prev) => ({ ...prev, [key]: isPublic }))
+            onChange={(key, level) =>
+              setFlags((prev) => ({
+                ...prev,
+                [key]: encodeFieldVisibility(level),
+              }))
             }
           />
         </div>

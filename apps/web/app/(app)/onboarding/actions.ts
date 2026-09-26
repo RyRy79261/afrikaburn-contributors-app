@@ -6,8 +6,11 @@ import type { SaveResult } from "@quagga/types";
 import { requireCampUser } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
 import { isUsernameAvailable, saveBio } from "@/lib/bio-store";
+import { CampmateSettingsInput, PrivacyFlagsInput } from "@/lib/campmate-input";
 
-const FlagsSchema = z.record(z.string(), z.boolean()).nullable();
+// Three levels since epic #68 (true/false/"camp_mates"). A map that fails this
+// shape is DROPPED (stored flags untouched), never partially applied.
+const FlagsSchema = PrivacyFlagsInput.nullable();
 
 /** Save the Burner Bio from the onboarding runner. Validates responses + flags
  * (Zod at the boundary); `final` completes onboarding and clears the gate. */
@@ -16,6 +19,7 @@ export async function saveOnboardingBioAction(
   privacyFlags: unknown,
   final: boolean,
   extras?: unknown,
+  campmate?: unknown,
 ): Promise<SaveResult> {
   const user = await requireCampUser();
   const edition = await getActiveEdition();
@@ -23,12 +27,15 @@ export async function saveOnboardingBioAction(
     return { ok: false, errors: { _form: "No active edition is configured." } };
   }
   const flags = FlagsSchema.safeParse(privacyFlags);
+  // Carried-forward camp-mate settings are confirmed HERE, by the final save.
+  const settings = CampmateSettingsInput.safeParse(campmate);
   return saveBio({
     userId: user.id,
     editionId: edition.id,
     rawResponses: responses,
     rawPrivacyFlags: flags.success && flags.data ? flags.data : undefined,
     rawExtras: extras,
+    campmate: settings.success ? settings.data : undefined,
     final: Boolean(final),
   });
 }

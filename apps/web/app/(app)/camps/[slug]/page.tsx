@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardList,
   UserCog,
+  Users,
 } from "lucide-react";
 import type {
   GroupKind,
@@ -302,6 +303,21 @@ export default async function CampPage({
                   ? "Accepting new members via invite link."
                   : "Invite-only — members join through a one-time link."}
               </CardDescription>
+              {/* Epic #68: the opt-in people view. Linked for members of a
+                  theme camp only; the page itself re-checks membership. */}
+              {isMember && camp.kind === "theme_camp" && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-fit"
+                >
+                  <Link href={`/camps/${camp.slug}/people`}>
+                    <Users className="h-4 w-4" aria-hidden />
+                    People in this camp
+                  </Link>
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {isMember ? (

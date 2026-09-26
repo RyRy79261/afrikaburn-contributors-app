@@ -14,10 +14,18 @@ import {
   mapBioToResponses,
   mapResponsesToBio,
   normalizeUsername,
+  readCampmateSettings,
   usernameFromResponses,
   validateUsername,
+  AVATAR_PRIVACY_KEY,
+  encodeFieldVisibility,
+  enforcePrivacyFlags,
   type BioExtras,
   type BurnerBioFields,
+  type CampmateSettings,
+  type Contactability,
+  type FieldVisibility,
+  type PrivacyFlags,
 } from "@quagga/core";
 import {
   BioExtrasInput,
@@ -43,7 +51,10 @@ export interface BioView {
    * bio flow can pre-fill it — it is NOT a `burner_bios` column. */
   username: string | null;
   responses: QuestionnaireResponses;
-  privacyFlags: Record<string, boolean>;
+  /** Per-field levels (true = public, false = private, "camp_mates"). */
+  privacyFlags: PrivacyFlags;
+  /** Epic #68: who may contact them + whether they are in the people view. */
+  campmate: CampmateSettings;
   completedAt: Date | null;
   /** Whether crypto is configured — the ID document is dropped without it. */
   cryptoConfigured: boolean;
@@ -116,6 +127,7 @@ export async function getBio(
     username,
     responses: mapBioToResponses(fields, username),
     privacyFlags: { ...defaultPrivacyFlags(), ...row.privacyFlags },
+    campmate: readCampmateSettings(row),
     completedAt: row.completedAt,
     cryptoConfigured: isCryptoConfigured(),
   };
@@ -224,9 +236,13 @@ export async function saveBio(input: {
   userId: string;
   editionId: string;
   rawResponses: unknown;
-  rawPrivacyFlags?: Record<string, boolean>;
+  rawPrivacyFlags?: Record<string, unknown>;
   /** v3 extras. `undefined` ⇒ leave the stored v3 columns untouched. */
   rawExtras?: unknown;
+  /** Epic #68 camp-mate settings (already Zod-validated by the action).
+   * `undefined` ⇒ leave the stored columns untouched (a new row takes the
+   * private column defaults). */
+  campmate?: CampmateSettings;
   final: boolean;
 }): Promise<SaveBioResult> {
   const questionnaire = buildBurnerBioQuestionnaire();
@@ -403,6 +419,8 @@ export async function saveBio(input: {
     passportEncrypted,
     // v3 columns only when the caller supplied extras (else left untouched).
     ...(extrasValues ?? {}),
+    // Camp-mate settings likewise — re-read through the fail-closed decoder.
+    ...(input.campmate ? readCampmateSettings(input.campmate) : {}),
     version: BURNER_BIO_VERSION,
     updatedAt: now,
   };
@@ -493,7 +511,7 @@ export async function saveBio(input: {
 export async function savePrivacyFlags(
   userId: string,
   editionId: string,
-  rawPrivacyFlags: Record<string, boolean>,
+  rawPrivacyFlags: Record<string, unknown>,
 ): Promise<void> {
   const privacyFlags = initialPrivacyFlags(rawPrivacyFlags);
   await db()
@@ -505,6 +523,68 @@ export async function savePrivacyFlags(
         eq(schema.burnerBios.editionId, editionId),
       ),
     );
+}
+
+/**
+ * Update the camp-mate settings on this edition's EXISTING bio (epic #68): who
+ * may contact them, whether they are listed in their camp's people view, and
+ * who may see their photo. Each is optional — only what is supplied changes.
+ *
+ * The photo's level is one key of `privacy_flags`, so it is MERGED into the
+ * stored map (never a whole-map replace — that would reset every other field)
+ * and the merged map goes back through `enforcePrivacyFlags`, the same last line
+ * every other write crosses. Returns false when there is no bio row to update.
+ */
+export async function saveCampmateSettings(
+  userId: string,
+  editionId: string,
+  patch: {
+    contactable?: Contactability;
+    listedInCampPeople?: boolean;
+    avatarVisibility?: FieldVisibility;
+  },
+): Promise<boolean> {
+  const where = and(
+    eq(schema.burnerBios.userId, userId),
+    eq(schema.burnerBios.editionId, editionId),
+  );
+  return withTransaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        privacyFlags: schema.burnerBios.privacyFlags,
+        contactable: schema.burnerBios.contactable,
+        listedInCampPeople: schema.burnerBios.listedInCampPeople,
+      })
+      .from(schema.burnerBios)
+      .where(where)
+      .limit(1)
+      .for("update");
+    if (!row) return false;
+
+    const current = readCampmateSettings(row);
+    const next = readCampmateSettings({
+      contactable: patch.contactable ?? current.contactable,
+      listedInCampPeople:
+        patch.listedInCampPeople ?? current.listedInCampPeople,
+    });
+    const privacyFlags =
+      patch.avatarVisibility === undefined
+        ? undefined
+        : enforcePrivacyFlags({
+            ...row.privacyFlags,
+            [AVATAR_PRIVACY_KEY]: encodeFieldVisibility(patch.avatarVisibility),
+          });
+
+    await tx
+      .update(schema.burnerBios)
+      .set({
+        ...next,
+        ...(privacyFlags ? { privacyFlags } : {}),
+        updatedAt: new Date(),
+      })
+      .where(where);
+    return true;
+  });
 }
 
 /**
@@ -619,6 +699,7 @@ export async function getBioForOnboarding(
     fields: prior.fields,
     extras: prior.extras,
     privacyFlags: prior.privacyFlags,
+    campmate: prior.campmate,
   });
 
   return {
@@ -626,6 +707,7 @@ export async function getBioForOnboarding(
     fields: carried.fields,
     extras: carried.extras,
     privacyFlags: carried.privacyFlags,
+    campmate: carried.campmate,
     responses: mapBioToResponses(carried.fields, prior.username),
     // The whole point: pre-filled, not completed.
     completedAt: null,
