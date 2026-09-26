@@ -1,9 +1,11 @@
 import "server-only";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, desc, eq, lt, ne } from "drizzle-orm";
 import {
   changedFields,
+  selectComparisonPrior,
   suggestCampCode,
+  type ComparisonBasis,
   type FieldChange,
 } from "@quagga/core";
 import { getDb, schema } from "./db";
@@ -60,7 +62,6 @@ export async function getPlacementContext(input: {
     .map((r) => r.campCode)
     .filter((c): c is string => c !== null);
 
-
   return {
     campCode: row?.campCode ?? null,
     erf: row?.erf ?? null,
@@ -71,25 +72,32 @@ export async function getPlacementContext(input: {
 export interface ReviewComparison {
   priorYear: number;
   currentYear: number;
+  basis: ComparisonBasis;
   changes: FieldChange[];
 }
 
 /**
- * The year-on-year diff for a registration that was carried forward, or null
- * when it was not (a first-time camp, or one that chose to start fresh).
+ * The year-on-year diff for a registration, or null for a first-time camp.
  *
- * Returns null rather than an empty diff when the source row has since been
- * deleted: "nothing changed" and "we can no longer tell what changed" are
- * different statements, and only the first one is safe to show a reviewer.
+ * WHICH PRIOR is @quagga/core `selectComparisonPrior`: the row the draft was
+ * carried forward from when there is one, otherwise the camp's most recent
+ * SUBMITTED earlier edition (epic #50 — the diff used to exist only for
+ * carried-forward drafts, so a returning camp that typed its answers fresh gave
+ * the reviewer nothing to compare). The camp's own "what changed" view reads the
+ * same function, so both sides see one diff.
+ *
+ * Returns null rather than an empty diff when there is no usable prior (a
+ * first-timer, or a carried source since deleted with no submitted earlier
+ * edition to fall back to): "nothing changed" and "we can no longer tell what
+ * changed" are different statements, and only the first is safe to show.
  */
 export async function getReviewComparison(
   registration: typeof schema.registrations.$inferSelect,
   currentYear: number,
 ): Promise<ReviewComparison | null> {
-  if (!registration.carriedForwardFromId) return null;
-
   const db = getDb();
-  const [prior] = await db
+  // One camp has one row per edition — a handful of rows, whole, in one trip.
+  const rows = await db
     .select({
       row: schema.registrations,
       year: schema.editions.year,
@@ -99,13 +107,34 @@ export async function getReviewComparison(
       schema.editions,
       eq(schema.editions.id, schema.registrations.editionId),
     )
-    .where(eq(schema.registrations.id, registration.carriedForwardFromId))
-    .limit(1);
-  if (!prior) return null;
+    .where(
+      and(
+        eq(schema.registrations.groupId, registration.groupId),
+        lt(schema.editions.year, currentYear),
+      ),
+    )
+    .orderBy(desc(schema.editions.year));
+
+  const picked = selectComparisonPrior({
+    current: {
+      groupId: registration.groupId,
+      editionYear: currentYear,
+      carriedForwardFromId: registration.carriedForwardFromId,
+    },
+    candidates: rows.map((r) => ({
+      registrationId: r.row.id,
+      groupId: r.row.groupId,
+      editionYear: r.year,
+      submittedAt: r.row.submittedAt,
+      row: r.row,
+    })),
+  });
+  if (!picked) return null;
 
   return {
-    priorYear: prior.year,
+    priorYear: picked.prior.editionYear,
     currentYear,
-    changes: changedFields(prior.row, registration),
+    basis: picked.basis,
+    changes: changedFields(picked.prior.row, registration),
   };
 }

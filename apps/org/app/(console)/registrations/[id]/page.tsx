@@ -52,7 +52,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { PlacementPanel } from "@/components/registration/placement-panel";
-import { CarryForwardComparison } from "@/components/registration/carry-forward-comparison";
+import { RegistrationChanges } from "@quagga/ui/components/registration-changes";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
 import {
@@ -227,10 +227,12 @@ export default async function RegistrationDetailPage({
       wranglerRefusal={wranglerRefusal}
       comparison={
         comparison ? (
-          <CarryForwardComparison
+          <RegistrationChanges
             priorYear={comparison.priorYear}
             currentYear={comparison.currentYear}
             changes={comparison.changes}
+            basis={comparison.basis}
+            audience="reviewer"
           />
         ) : null
       }

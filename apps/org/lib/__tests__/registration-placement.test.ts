@@ -80,10 +80,15 @@ describe("getPlacementContext", () => {
 });
 
 describe("getReviewComparison", () => {
+  const GROUP_ID = "33333333-3333-4333-8333-333333333333";
+  const OTHER_GROUP_ID = "44444444-4444-4444-8444-444444444444";
+  const OLDER_ID = "88888888-8888-4888-8888-888888888888";
+
   /** A registration row as the page hands it over. */
   function registration(overrides: Record<string, unknown> = {}) {
     return {
       id: REG_ID,
+      groupId: GROUP_ID,
       carriedForwardFromId: PRIOR_ID,
       s4ExpectedPopulation: 60,
       s2LntPlan: "Sweep the grid daily.",
@@ -91,16 +96,35 @@ describe("getReviewComparison", () => {
     } as never;
   }
 
-  it("returns null for a registration that was never carried forward", async () => {
+  /** A prior edition's row, as the join hands it back. */
+  function prior(
+    id: string,
+    year: number,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      row: {
+        id,
+        groupId: GROUP_ID,
+        submittedAt: new Date(`${year}-01-10T00:00:00Z`),
+        s4ExpectedPopulation: 42,
+        s2LntPlan: "Sweep the grid daily.",
+        ...overrides,
+      },
+      year,
+    };
+  }
+
+  it("returns null for a first-time camp", async () => {
+    db.seed("registrations", [[]]);
     const result = await getReviewComparison(
       registration({ carriedForwardFromId: null }),
       2027,
     );
     expect(result).toBeNull();
-    expect(db.calls).toHaveLength(0);
   });
 
-  it("returns null when the source row has since been deleted", async () => {
+  it("returns null when the source row is gone and nothing else was submitted", async () => {
     // NOT an empty diff: "nothing changed" would be a lie about a comparison we
     // can no longer make.
     db.seed("registrations", [[]]);
@@ -108,24 +132,14 @@ describe("getReviewComparison", () => {
     expect(result).toBeNull();
   });
 
-  it("diffs against the prior edition and reports its year", async () => {
-    db.seed("registrations", [
-      [
-        {
-          row: {
-            id: PRIOR_ID,
-            s4ExpectedPopulation: 42,
-            s2LntPlan: "Sweep the grid daily.",
-          },
-          year: 2026,
-        },
-      ],
-    ]);
+  it("diffs against the carried-forward source and reports its year", async () => {
+    db.seed("registrations", [[prior(PRIOR_ID, 2026)]]);
 
     const result = await getReviewComparison(registration(), 2027);
 
     expect(result?.priorYear).toBe(2026);
     expect(result?.currentYear).toBe(2027);
+    expect(result?.basis).toBe("carried_forward");
     // Only the population moved; the unchanged LNT plan is not in the list.
     expect(result?.changes.map((c) => c.field)).toEqual([
       "s4ExpectedPopulation",
@@ -134,18 +148,53 @@ describe("getReviewComparison", () => {
     expect(result?.changes[0]?.current).toBe(60);
   });
 
-  it("returns an empty change list when a carried-forward row is untouched", async () => {
+  it("prefers the chosen older source over a newer edition", async () => {
+    // PREVYR-014: the camp brought 2025 across even though 2026 exists. The
+    // diff is against what they were actually editing.
     db.seed("registrations", [
       [
-        {
-          row: {
-            id: PRIOR_ID,
-            s4ExpectedPopulation: 60,
-            s2LntPlan: "Sweep the grid daily.",
-          },
-          year: 2026,
-        },
+        prior(PRIOR_ID, 2026, { s4ExpectedPopulation: 60 }),
+        prior(OLDER_ID, 2025, { s4ExpectedPopulation: 30 }),
       ],
+    ]);
+    const result = await getReviewComparison(
+      registration({ carriedForwardFromId: OLDER_ID }),
+      2027,
+    );
+    expect(result?.priorYear).toBe(2025);
+    expect(result?.changes[0]?.prior).toBe(30);
+  });
+
+  it("diffs a NOT-carried registration against the previous submitted edition", async () => {
+    // Epic #50: the reviewer used to get nothing unless the camp pressed
+    // "bring last year across". A camp that retyped is still a returning camp.
+    db.seed("registrations", [
+      [
+        // 2026 was started and abandoned — never submitted, never reviewed.
+        prior(PRIOR_ID, 2026, { submittedAt: null, s4ExpectedPopulation: 1 }),
+        prior(OLDER_ID, 2025),
+      ],
+    ]);
+    const result = await getReviewComparison(
+      registration({ carriedForwardFromId: null }),
+      2027,
+    );
+    expect(result?.basis).toBe("previous_edition");
+    expect(result?.priorYear).toBe(2025);
+    expect(result?.changes[0]?.prior).toBe(42);
+  });
+
+  it("never diffs against another camp's row, whatever the pointer says", async () => {
+    db.seed("registrations", [
+      [prior(PRIOR_ID, 2026, { groupId: OTHER_GROUP_ID })],
+    ]);
+    const result = await getReviewComparison(registration(), 2027);
+    expect(result).toBeNull();
+  });
+
+  it("returns an empty change list when a carried-forward row is untouched", async () => {
+    db.seed("registrations", [
+      [prior(PRIOR_ID, 2026, { s4ExpectedPopulation: 60 })],
     ]);
 
     const result = await getReviewComparison(registration(), 2027);
