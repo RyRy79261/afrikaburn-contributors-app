@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { CAMP_DESCRIPTION_WORD_LIMIT, isWithinWordLimit } from "@quagga/core";
+import {
+  CAMP_DESCRIPTION_WORD_LIMIT,
+  SafetyDocumentList,
+  WorkAccessPassRequest,
+  isWithinWordLimit,
+  type SafetyDocumentInput,
+} from "@quagga/core";
 import { MAX_LAYOUT_UPLOADS, type QuestionnaireResponses } from "@quagga/types";
 import { ARTWORK_POWER_KEYS } from "./copy";
 
@@ -41,6 +47,10 @@ export const ArtworkRegistrationInput = z.object({
   buildPlan: wordLimited("The build plan"),
   strikePlan: wordLimited("The strike & Leave No Trace plan"),
   grantInterest: z.boolean().default(false),
+  /** Work Access Passes requested (CREATIVE-014) — same meaning as a camp's. */
+  workAccessPasses: WorkAccessPassRequest,
+  /** Safety documents with expiry (CREATIVE-017). Private; see @quagga/core. */
+  safetyDocuments: SafetyDocumentList,
   submit: z.boolean().default(false),
   confirmWarnings: z.boolean().default(false),
 });
@@ -100,8 +110,10 @@ export function buildArtworkPayload(input: ArtworkRegistrationValues): {
     placementNotes: string | null;
     lntPlan: string | null;
     grantsInterest: boolean;
+    workAccessPasses: number | null;
   };
   answers: QuestionnaireResponses;
+  safetyDocuments: SafetyDocumentInput[];
 } {
   return {
     description: input.description ?? null,
@@ -115,6 +127,7 @@ export function buildArtworkPayload(input: ArtworkRegistrationValues): {
       placementNotes: input.placementNotes ?? null,
       lntPlan: input.strikePlan ?? null,
       grantsInterest: input.grantInterest,
+      workAccessPasses: input.workAccessPasses,
     },
     answers: {
       artist_or_collective: input.artist ?? "",
@@ -129,6 +142,8 @@ export function buildArtworkPayload(input: ArtworkRegistrationValues): {
       build_plan: input.buildPlan ?? "",
       strike_plan: input.strikePlan ?? "",
       grant_interest: input.grantInterest,
+      work_access_passes: input.workAccessPasses,
     },
+    safetyDocuments: input.safetyDocuments,
   };
 }

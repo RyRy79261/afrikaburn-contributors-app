@@ -1,15 +1,27 @@
 import "server-only";
 
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { resolveCampAction } from "@quagga/core";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  buildProjectCarryForwardAnswers,
+  canManageProjectSafetyDocuments,
+  carriedSafetyDocuments,
+  mergeProjectCarryForward,
+  projectCarriedColumns,
+  resolveCampAction,
+  type SafetyDocumentInput,
+} from "@quagga/core";
 import type {
   MembershipRole,
   QuestionnaireResponses,
   RegistrationStatus,
 } from "@quagga/types";
-import { db, schema, withTransaction } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 import { prepareCampCreate, createCampWrites } from "./groups-store";
-import { EDITABLE_STATUSES } from "./registration-store";
+import {
+  EDITABLE_STATUSES,
+  findCarryForwardSource,
+  type CarryForwardSource,
+} from "./registration-store";
 
 // Mutant-vehicle + art-project registration persistence (build-spec §"Status
 // board KPI row": MUTANT VEHICLES / ARTWORKS are counted from `groups.kind` ×
@@ -84,6 +96,10 @@ export interface ProjectRegistrationColumns {
   lntPlan?: string | null;
   /** Grant interest — the `art_grant_requesters` / `mv_grant_requesters` flag. */
   grantsInterest?: boolean | null;
+  /** Work Access Passes requested (CREATIVE-014) — the same
+   * `s4_work_access_passes` column a camp's Form 2 writes, so WAP allocation
+   * reads one column whatever kind of group asked. */
+  workAccessPasses?: number | null;
 }
 
 export interface ProjectRegistrationInput {
@@ -98,6 +114,8 @@ export interface ProjectRegistrationInput {
   submit: boolean;
   columns: ProjectRegistrationColumns;
   answers: QuestionnaireResponses;
+  /** Safety documents (CREATIVE-017). Private to leads/admins + org staff. */
+  safetyDocuments?: readonly SafetyDocumentInput[];
 }
 
 export type ProjectRegistrationResult =
@@ -132,7 +150,7 @@ export async function createProjectRegistration(
     const slug = await withTransaction(async (tx) => {
       const { groupId, slug } = await createCampWrites(tx, prep.prepared);
 
-      await tx
+      const [registration] = await tx
         .insert(schema.registrations)
         .values({
           groupId,
@@ -140,6 +158,7 @@ export async function createProjectRegistration(
           status: input.submit ? "submitted" : "draft",
           s1ContactEmail: input.creatorEmail,
           s2LntPlan: input.columns.lntPlan ?? null,
+          s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
           s4AreaDimensions: input.columns.areaDimensions ?? null,
           s4LayoutUploadUrls: input.columns.imageUrls,
           s5AmplifiedMusic: input.columns.soundLevel ?? null,
@@ -155,7 +174,23 @@ export async function createProjectRegistration(
             schema.registrations.groupId,
             schema.registrations.editionId,
           ],
-        });
+        })
+        .returning({ id: schema.registrations.id });
+
+      // The group was created in this same transaction, so the registration
+      // row cannot already exist — but a missing id must never silently drop
+      // the documents the registrant attached.
+      const documents = input.safetyDocuments ?? [];
+      if (registration) {
+        await syncSafetyDocuments(
+          tx,
+          registration.id,
+          documents,
+          input.creatorId,
+        );
+      } else if (documents.length > 0) {
+        throw new Error("registration row missing for safety documents");
+      }
 
       await tx
         .insert(schema.questionnaireResponses)
@@ -228,6 +263,22 @@ export interface ProjectRegistrationEditContext {
   editable: boolean;
   /** The prior answer payload (the self-describing record) to prefill the form. */
   answers: QuestionnaireResponses | null;
+  /** Work Access Passes requested for this edition (null = not asked). */
+  workAccessPasses: number | null;
+  /** This edition's safety documents — ONLY loaded for the project's
+   * structural lead/admin (`canManageProjectSafetyDocuments`); an empty list
+   * for anyone else, so no caller can render them to the wrong person. */
+  safetyDocuments: StoredSafetyDocument[];
+  /** True once this edition's draft has been seeded from a prior year. */
+  carriedForward: boolean;
+}
+
+/** A persisted safety document, as the edit form and review views read it. */
+export interface StoredSafetyDocument {
+  id: string;
+  title: string;
+  url: string;
+  expiresOn: string;
 }
 
 /**
@@ -267,7 +318,12 @@ export async function getProjectRegistrationForEdit(
     .limit(1);
 
   const [registration] = await db()
-    .select({ status: schema.registrations.status })
+    .select({
+      id: schema.registrations.id,
+      status: schema.registrations.status,
+      workAccessPasses: schema.registrations.s4WorkAccessPasses,
+      carriedForwardAt: schema.registrations.carriedForwardAt,
+    })
     .from(schema.registrations)
     .where(
       and(
@@ -284,6 +340,13 @@ export async function getProjectRegistrationForEdit(
     editionId,
   );
 
+  // Safety documents are private to the structural lead/admin. The decision is
+  // taken HERE, before the read, so a stranger's context never holds them.
+  const safetyDocuments =
+    registration && canManageProjectSafetyDocuments(membership?.role)
+      ? await listSafetyDocuments(registration.id)
+      : [];
+
   return {
     group: {
       id: group.id,
@@ -295,6 +358,9 @@ export async function getProjectRegistrationForEdit(
     status,
     editable: EDITABLE_STATUSES.includes(status),
     answers,
+    workAccessPasses: registration?.workAccessPasses ?? null,
+    safetyDocuments,
+    carriedForward: Boolean(registration?.carriedForwardAt),
   };
 }
 
@@ -305,10 +371,14 @@ export interface ProjectRegistrationUpdateInput {
   /** The editor's user id — used only when NO answer row exists yet (fallback
    * insert); an existing row is updated in place regardless of who authored it. */
   editorUserId: string;
+  /** The editor's account email — the contact email when this edition's row is
+   * created here (a returning project's first save of a new year). */
+  editorEmail: string | null;
   description: string | null;
   submit: boolean;
   columns: ProjectRegistrationColumns;
   answers: QuestionnaireResponses;
+  safetyDocuments?: readonly SafetyDocumentInput[];
 }
 
 /**
@@ -328,6 +398,7 @@ export async function updateProjectRegistration(
   const now = new Date();
   const [current] = await db()
     .select({
+      id: schema.registrations.id,
       status: schema.registrations.status,
       slug: schema.groups.slug,
     })
@@ -344,7 +415,14 @@ export async function updateProjectRegistration(
     )
     .limit(1);
   if (!current) {
-    return { ok: false, error: "This registration hasn't been started yet." };
+    // A RETURNING PROJECT IN A NEW EDITION. The create path writes the first
+    // edition's row together with the group, so an absent row used to mean
+    // "something is wrong" and this refused. It also means "a vehicle that
+    // registered for 2027 opening its 2028 registration" — and refusing that
+    // left every project unable to register a second year at all (the edit
+    // page opened, and every save said it hadn't been started). The caller has
+    // already resolved the group, its kind and the editor's lead/admin role.
+    return startProjectRegistrationEdition(input, now);
   }
   if (!EDITABLE_STATUSES.includes(current.status)) {
     return {
@@ -375,6 +453,7 @@ export async function updateProjectRegistration(
       .set({
         status: nextStatus,
         s2LntPlan: input.columns.lntPlan ?? null,
+        s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
         s4AreaDimensions: input.columns.areaDimensions ?? null,
         s4LayoutUploadUrls: input.columns.imageUrls,
         s5AmplifiedMusic: input.columns.soundLevel ?? null,
@@ -426,9 +505,402 @@ export async function updateProjectRegistration(
         completedAt: input.submit ? now : null,
       });
     }
+
+    await syncSafetyDocuments(
+      tx,
+      current.id,
+      input.safetyDocuments ?? [],
+      input.editorUserId,
+    );
   });
 
   return { ok: true, slug: current.slug };
+}
+
+/**
+ * Open a returning project's registration for a new edition: this edition's
+ * `registrations` row, its answer payload and its safety documents, in one
+ * transaction. The status still comes from the shared state machine — a first
+ * save that is also a submit goes `draft → submitted` via `resolveCampAction`,
+ * never written as submitted by a local string.
+ */
+async function startProjectRegistrationEdition(
+  input: ProjectRegistrationUpdateInput,
+  now: Date,
+): Promise<ProjectRegistrationResult> {
+  const status: RegistrationStatus = input.submit
+    ? resolveCampAction("draft", "submit")
+    : "draft";
+
+  return withTransaction(async (tx): Promise<ProjectRegistrationResult> => {
+    const [group] = await tx
+      .select({ slug: schema.groups.slug })
+      .from(schema.groups)
+      .where(eq(schema.groups.id, input.groupId))
+      .limit(1);
+    if (!group) return { ok: false, error: "This project no longer exists." };
+
+    await tx
+      .update(schema.groups)
+      .set({ description: input.description, updatedAt: now })
+      .where(eq(schema.groups.id, input.groupId));
+
+    const [registration] = await tx
+      .insert(schema.registrations)
+      .values({
+        groupId: input.groupId,
+        editionId: input.editionId,
+        status,
+        s1ContactEmail: input.editorEmail,
+        s2LntPlan: input.columns.lntPlan ?? null,
+        s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
+        s4AreaDimensions: input.columns.areaDimensions ?? null,
+        s4LayoutUploadUrls: input.columns.imageUrls,
+        s5AmplifiedMusic: input.columns.soundLevel ?? null,
+        s5PlacementFirstChoice: input.columns.placementNotes ?? null,
+        grantsInterest: input.columns.grantsInterest ?? null,
+        completedSections: [],
+        submittedAt: input.submit ? now : null,
+      })
+      // Two co-leads opening the new year at once: the second loses the
+      // unique-index race and is told to reload, rather than overwriting.
+      .onConflictDoNothing({
+        target: [schema.registrations.groupId, schema.registrations.editionId],
+      })
+      .returning({ id: schema.registrations.id });
+    if (!registration) {
+      return {
+        ok: false,
+        error:
+          "This registration changed while you were editing — reload and try again.",
+      };
+    }
+
+    await tx.insert(schema.questionnaireResponses).values({
+      userId: input.editorUserId,
+      definitionKey: projectRegistrationAnswerKey(input.groupId, input.kind),
+      editionId: input.editionId,
+      definitionVersion: PROJECT_REGISTRATION_VERSION,
+      responses: input.answers,
+      completedAt: input.submit ? now : null,
+    });
+
+    await syncSafetyDocuments(
+      tx,
+      registration.id,
+      input.safetyDocuments ?? [],
+      input.editorUserId,
+    );
+
+    return { ok: true, slug: group.slug };
+  });
+}
+
+// --- Safety documents (CREATIVE-017) -------------------------------------
+// Private evidence attached to one registration. Reads here are UNGATED — the
+// callers (`getProjectRegistrationForEdit`, the actions) decide who may see
+// them through `canManageProjectSafetyDocuments` before calling.
+
+/** This registration's safety documents, oldest first. */
+export async function listSafetyDocuments(
+  registrationId: string,
+): Promise<StoredSafetyDocument[]> {
+  return db()
+    .select({
+      id: schema.registrationSafetyDocuments.id,
+      title: schema.registrationSafetyDocuments.title,
+      url: schema.registrationSafetyDocuments.url,
+      expiresOn: schema.registrationSafetyDocuments.expiresOn,
+    })
+    .from(schema.registrationSafetyDocuments)
+    .where(
+      eq(schema.registrationSafetyDocuments.registrationId, registrationId),
+    )
+    .orderBy(
+      asc(schema.registrationSafetyDocuments.createdAt),
+      asc(schema.registrationSafetyDocuments.id),
+    );
+}
+
+/** Identity of a document for diffing: the same file, title and expiry. */
+function documentIdentity(d: {
+  title: string;
+  url: string;
+  expiresOn: string;
+}): string {
+  return JSON.stringify([d.title.trim(), d.url.trim(), d.expiresOn]);
+}
+
+/**
+ * Make this registration's documents exactly `next`, inside the caller's
+ * transaction. The form sends the whole list, so this is a replace — but an
+ * UNCHANGED document keeps its row (and so its original uploader and upload
+ * time) instead of being deleted and re-inserted under whoever saved last.
+ */
+export async function syncSafetyDocuments(
+  tx: Tx,
+  registrationId: string,
+  next: readonly SafetyDocumentInput[],
+  editorUserId: string,
+): Promise<void> {
+  const existing = await tx
+    .select({
+      id: schema.registrationSafetyDocuments.id,
+      title: schema.registrationSafetyDocuments.title,
+      url: schema.registrationSafetyDocuments.url,
+      expiresOn: schema.registrationSafetyDocuments.expiresOn,
+    })
+    .from(schema.registrationSafetyDocuments)
+    .where(
+      eq(schema.registrationSafetyDocuments.registrationId, registrationId),
+    );
+
+  const unmatched = new Map<string, string[]>();
+  for (const row of existing) {
+    const key = documentIdentity(row);
+    unmatched.set(key, [...(unmatched.get(key) ?? []), row.id]);
+  }
+
+  const toInsert: SafetyDocumentInput[] = [];
+  for (const doc of next) {
+    const ids = unmatched.get(documentIdentity(doc));
+    if (ids && ids.length > 0) ids.shift();
+    else toInsert.push(doc);
+  }
+  const toDelete = [...unmatched.values()].flat();
+
+  if (toDelete.length > 0) {
+    await tx
+      .delete(schema.registrationSafetyDocuments)
+      .where(
+        and(
+          eq(schema.registrationSafetyDocuments.registrationId, registrationId),
+          inArray(schema.registrationSafetyDocuments.id, toDelete),
+        ),
+      );
+  }
+  if (toInsert.length > 0) {
+    await tx.insert(schema.registrationSafetyDocuments).values(
+      toInsert.map((d) => ({
+        registrationId,
+        title: d.title.trim(),
+        url: d.url.trim(),
+        expiresOn: d.expiresOn,
+        uploadedByUserId: editorUserId,
+      })),
+    );
+  }
+}
+
+// --- Previous-year duplication (CREATIVE-019) -----------------------------
+// The camp feature (registration-store `carryForwardRegistration`), for a
+// project. POLICY is @quagga/core `project-registration`: an allow-list of
+// answers that carry, everything new-every-year starting empty, intents and
+// consents never copied, and safety documents copied only while still valid
+// through the new edition's end. This layer finds the prior year and applies it.
+
+export type ProjectCarryForwardResult =
+  | { ok: true; filled: number; documents: number; source: CarryForwardSource }
+  | { ok: false; error: string };
+
+/**
+ * Seed this edition's draft from the project's most recent prior registration.
+ *
+ * NEVER A SUBMISSION. The row it creates (or finds) stays a draft, the answer
+ * payload's `completedAt` is written null, and the kind's submit gate still
+ * needs answers that deliberately never carry — so a returning project cannot
+ * carry forward and submit in one breath. Only EMPTY answers are filled, so a
+ * lead's typing this year survives, and the read-decide-write happens in one
+ * transaction with a compare-and-set on the facts the decision rested on.
+ */
+export async function carryForwardProjectRegistration(input: {
+  groupId: string;
+  kind: ProjectRegistrationKind;
+  editionId: string;
+  editionYear: number;
+  editionEndDate: string;
+  editorUserId: string;
+  editorEmail: string | null;
+}): Promise<ProjectCarryForwardResult> {
+  const source = await findCarryForwardSource(input.groupId, input.editionYear);
+  if (!source) {
+    return {
+      ok: false,
+      error: "We can't find an earlier registration for this project.",
+    };
+  }
+
+  const priorAnswers = await getProjectRegistrationAnswers(
+    input.groupId,
+    input.kind,
+    source.editionId,
+  );
+  const priorDocuments = await db()
+    .select({
+      title: schema.registrationSafetyDocuments.title,
+      url: schema.registrationSafetyDocuments.url,
+      expiresOn: schema.registrationSafetyDocuments.expiresOn,
+      uploadedByUserId: schema.registrationSafetyDocuments.uploadedByUserId,
+    })
+    .from(schema.registrationSafetyDocuments)
+    .where(
+      eq(
+        schema.registrationSafetyDocuments.registrationId,
+        source.registrationId,
+      ),
+    )
+    .orderBy(asc(schema.registrationSafetyDocuments.createdAt));
+
+  const patch = buildProjectCarryForwardAnswers(input.kind, priorAnswers);
+  const documents = carriedSafetyDocuments(priorDocuments, {
+    endDate: input.editionEndDate,
+  });
+  const answerKey = projectRegistrationAnswerKey(input.groupId, input.kind);
+
+  return withTransaction(async (tx): Promise<ProjectCarryForwardResult> => {
+    const [existing] = await tx
+      .select({
+        id: schema.registrations.id,
+        status: schema.registrations.status,
+        carriedForwardAt: schema.registrations.carriedForwardAt,
+      })
+      .from(schema.registrations)
+      .where(
+        and(
+          eq(schema.registrations.groupId, input.groupId),
+          eq(schema.registrations.editionId, input.editionId),
+        ),
+      )
+      .limit(1);
+
+    if (existing && !EDITABLE_STATUSES.includes(existing.status)) {
+      return {
+        ok: false,
+        error: "This registration is locked while AfrikaBurn reviews it.",
+      };
+    }
+    if (existing?.carriedForwardAt) {
+      return {
+        ok: false,
+        error: "Last year's answers have already been brought across.",
+      };
+    }
+
+    const [currentAnswers] = await tx
+      .select({
+        id: schema.questionnaireResponses.id,
+        responses: schema.questionnaireResponses.responses,
+      })
+      .from(schema.questionnaireResponses)
+      .where(
+        and(
+          eq(schema.questionnaireResponses.definitionKey, answerKey),
+          eq(schema.questionnaireResponses.editionId, input.editionId),
+        ),
+      )
+      .orderBy(asc(schema.questionnaireResponses.id))
+      .limit(1);
+
+    const { answers, filled } = mergeProjectCarryForward(
+      currentAnswers?.responses ?? null,
+      patch,
+    );
+    if (filled.length === 0 && documents.length === 0) {
+      return {
+        ok: false,
+        error:
+          "There's nothing to bring across — everything last year's registration could fill is already answered.",
+      };
+    }
+
+    const now = new Date();
+    const columns = {
+      ...projectCarriedColumns(input.kind, answers),
+      carriedForwardFromId: source.registrationId,
+      carriedForwardAt: now,
+      updatedAt: now,
+    };
+    const conflict = {
+      ok: false,
+      error:
+        "This registration changed while you were reading it — reload and try again.",
+    } as const;
+
+    let registrationId: string;
+    if (existing) {
+      const updated = await tx
+        .update(schema.registrations)
+        .set(columns)
+        .where(
+          and(
+            eq(schema.registrations.id, existing.id),
+            eq(schema.registrations.status, existing.status),
+            isNull(schema.registrations.carriedForwardAt),
+          ),
+        )
+        .returning({ id: schema.registrations.id });
+      if (updated.length === 0) return conflict;
+      registrationId = existing.id;
+    } else {
+      const [inserted] = await tx
+        .insert(schema.registrations)
+        .values({
+          groupId: input.groupId,
+          editionId: input.editionId,
+          status: "draft",
+          s1ContactEmail: input.editorEmail,
+          completedSections: [],
+          ...columns,
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.registrations.groupId,
+            schema.registrations.editionId,
+          ],
+        })
+        .returning({ id: schema.registrations.id });
+      if (!inserted) return conflict;
+      registrationId = inserted.id;
+    }
+
+    // PRE-FILLED IS NOT COMPLETE: `completedAt` is written null on both paths.
+    if (currentAnswers) {
+      await tx
+        .update(schema.questionnaireResponses)
+        .set({ responses: answers, completedAt: null, updatedAt: now })
+        .where(eq(schema.questionnaireResponses.id, currentAnswers.id));
+    } else {
+      await tx.insert(schema.questionnaireResponses).values({
+        userId: input.editorUserId,
+        definitionKey: answerKey,
+        editionId: input.editionId,
+        definitionVersion: PROJECT_REGISTRATION_VERSION,
+        responses: answers,
+        completedAt: null,
+      });
+    }
+
+    // New rows, so this year's list can change without touching last year's
+    // evidence. The original uploader is kept — they supplied it.
+    if (documents.length > 0) {
+      await tx.insert(schema.registrationSafetyDocuments).values(
+        documents.map((d) => ({
+          registrationId,
+          title: d.title,
+          url: d.url,
+          expiresOn: d.expiresOn,
+          uploadedByUserId: d.uploadedByUserId,
+        })),
+      );
+    }
+
+    return {
+      ok: true,
+      filled: filled.length,
+      documents: documents.length,
+      source,
+    };
+  });
 }
 
 /**

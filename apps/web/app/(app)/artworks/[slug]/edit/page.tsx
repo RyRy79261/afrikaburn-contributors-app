@@ -10,7 +10,12 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { getProjectRegistrationForEdit } from "@/lib/project-registration-store";
+import {
+  getProjectRegistrationForEdit,
+  type ProjectRegistrationEditContext,
+} from "@/lib/project-registration-store";
+import { findCarryForwardSource } from "@/lib/registration-store";
+import { ProjectCarryForwardBanner } from "@/components/registration/project-carry-forward-banner";
 import { PreviewNotice } from "@/components/preview-notice";
 import {
   ArtworkRegistrationForm,
@@ -20,7 +25,10 @@ import {
   ARTWORK_POWER_KEYS,
   type ArtworkPowerKey,
 } from "@/app/(app)/artworks/new/copy";
-import { updateArtworkRegistrationAction } from "./actions";
+import {
+  carryForwardArtworkRegistrationAction,
+  updateArtworkRegistrationAction,
+} from "./actions";
 
 // /artworks/[slug]/edit — re-open an Art Project registration to edit and
 // resubmit (roadmap M4-10). Editable only while draft / changes_requested; once
@@ -55,9 +63,12 @@ function asBoolOrNull(
 /** Map the stored answer payload back to the form's prefill shape. */
 function toInitialValues(
   name: string,
-  answers: QuestionnaireResponses | null,
+  ctx: Pick<
+    ProjectRegistrationEditContext,
+    "answers" | "workAccessPasses" | "safetyDocuments"
+  >,
 ): ArtworkFormInitialValues {
-  const a = answers ?? {};
+  const a = ctx.answers ?? {};
   const powerNeeds = asStringArray(a.power_needs).filter(
     (k): k is ArtworkPowerKey =>
       (ARTWORK_POWER_KEYS as readonly string[]).includes(k),
@@ -76,6 +87,13 @@ function toInitialValues(
     buildPlan: asString(a.build_plan),
     strikePlan: asString(a.strike_plan),
     grantInterest: asBoolOrNull(a.grant_interest) ?? false,
+    workAccessPasses: ctx.workAccessPasses,
+    // Only ever non-empty for a lead/admin — the store decides before reading.
+    safetyDocuments: ctx.safetyDocuments.map(({ title, url, expiresOn }) => ({
+      title,
+      url,
+      expiresOn,
+    })),
   };
 }
 
@@ -152,10 +170,26 @@ export default async function EditArtworkPage({
     );
   }
 
+  // The carry-forward offer, only while it is still an offer: an editable
+  // draft for this edition that has not already been seeded, from a project
+  // that registered in an earlier edition.
+  const carryForwardSource = ctx.carriedForward
+    ? null
+    : await findCarryForwardSource(ctx.group.id, edition.year);
+
   return (
     <>
       {header}
       <div className="mx-auto max-w-3xl">
+        {carryForwardSource ? (
+          <ProjectCarryForwardBanner
+            slug={slug}
+            sourceYear={carryForwardSource.editionYear}
+            editionYear={edition.year}
+            startsEmpty="Your footprint, placement notes, burn intent, Work Access Passes and grant interest all start empty — those are new every year."
+            action={carryForwardArtworkRegistrationAction}
+          />
+        ) : null}
         <header className="mb-6 flex flex-col gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             Edit {ctx.group.name}
@@ -173,7 +207,9 @@ export default async function EditArtworkPage({
         <ArtworkRegistrationForm
           action={updateArtworkRegistrationAction.bind(null, slug)}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
-          initialValues={toInitialValues(ctx.group.name, ctx.answers)}
+          initialValues={toInitialValues(ctx.group.name, ctx)}
+          editionEndDate={edition.endDate}
+          today={new Date().toISOString().slice(0, 10)}
           nameLocked
           submitLabel={
             ctx.status === "changes_requested"

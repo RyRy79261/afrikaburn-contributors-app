@@ -19,6 +19,8 @@ const EMPTY_VIEW: ProjectRegistrationView = {
   placementNotes: null,
   lntPlan: null,
   grantsInterest: null,
+  workAccessPasses: null,
+  safetyDocuments: null,
 };
 
 describe("answer coercers — malformed jsonb degrades, never throws", () => {
@@ -224,5 +226,66 @@ describe("per-kind vocabulary", () => {
     );
     expect(officersCopy("artwork").title.toLowerCase()).not.toContain("camp");
     expect(officersCopy("theme_camp").title).toBe("Camp officers");
+  });
+});
+
+describe("creative-project parity on the review (epic #52)", () => {
+  const DOC = {
+    title: "Structural sign-off",
+    url: "https://blob.example/structural.pdf",
+    expiresOn: "2027-12-31",
+    validity: "valid" as const,
+  };
+
+  function fieldsOf(
+    kind: "mutant_vehicle" | "artwork",
+    view: ProjectRegistrationView,
+  ) {
+    return buildProjectSections(kind, "X", view, null).flatMap((s) => s.fields);
+  }
+
+  it.each(["mutant_vehicle", "artwork"] as const)(
+    "%s shows the WAP request, and an unasked one as absent",
+    (kind) => {
+      const asked = fieldsOf(kind, { ...EMPTY_VIEW, workAccessPasses: 6 }).find(
+        (f) => f.label === "Work Access Passes requested",
+      )!;
+      expect(asked.value).toEqual({ type: "text", value: "6" });
+      // Zero is an answer ("none needed"), not a blank.
+      const zero = fieldsOf(kind, { ...EMPTY_VIEW, workAccessPasses: 0 }).find(
+        (f) => f.label === "Work Access Passes requested",
+      )!;
+      expect(zero.value).toEqual({ type: "text", value: "0" });
+      const unasked = fieldsOf(kind, EMPTY_VIEW).find(
+        (f) => f.label === "Work Access Passes requested",
+      )!;
+      expect(unasked.value).toEqual({ type: "text", value: null });
+    },
+  );
+
+  it.each(["mutant_vehicle", "artwork"] as const)(
+    "%s carries the safety documents, or null when withheld",
+    (kind) => {
+      const shown = fieldsOf(kind, {
+        ...EMPTY_VIEW,
+        safetyDocuments: [DOC],
+      }).find((f) => f.value.type === "documents")!;
+      expect(shown.value).toEqual({ type: "documents", docs: [DOC] });
+      const withheld = fieldsOf(kind, EMPTY_VIEW).find(
+        (f) => f.value.type === "documents",
+      )!;
+      expect(withheld.value).toEqual({ type: "documents", docs: null });
+    },
+  );
+
+  it("a vehicle still uses six distinct section keys", () => {
+    const keys = buildProjectSections(
+      "mutant_vehicle",
+      "X",
+      EMPTY_VIEW,
+      null,
+    ).map((s) => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).toContain("suppliers_commerce");
   });
 });
