@@ -7,6 +7,9 @@ import {
   isValidCampCode,
   suggestCampCode,
   parsePlacementAssignment,
+  campPlacementOf,
+  canViewCampPlacement,
+  isPlacementAllocated,
   MAX_ERF_LENGTH,
   MAX_CAMP_CODE_LENGTH,
 } from "../placement-codes";
@@ -144,5 +147,53 @@ describe("parsePlacementAssignment", () => {
     expect(() =>
       parsePlacementAssignment({ erf: "X".repeat(MAX_ERF_LENGTH + 1) }),
     ).toThrow(/at most/);
+  });
+});
+
+describe("campPlacementOf — the one read shape (epic #48, ERF-019)", () => {
+  it("shows nothing when there is no registration or nothing assigned", () => {
+    expect(campPlacementOf(null)).toBeNull();
+    expect(campPlacementOf(undefined)).toBeNull();
+    expect(campPlacementOf({ campCode: null, erf: null })).toBeNull();
+    expect(campPlacementOf({ campCode: " ", erf: "  " })).toBeNull();
+  });
+
+  it("a camp code alone is not a placement", () => {
+    expect(campPlacementOf({ campCode: "MAH", erf: null })).toEqual({
+      campCode: "MAH",
+      erf: null,
+      placementAllocated: false,
+    });
+  });
+
+  it("an erf is the placement, derived — never a stored status", () => {
+    expect(campPlacementOf({ campCode: "MAH", erf: "K12" })).toEqual({
+      campCode: "MAH",
+      erf: "K12",
+      placementAllocated: true,
+    });
+  });
+
+  it("re-normalises on the way out, whatever the writer stored", () => {
+    expect(
+      campPlacementOf({ campCode: "mah-1", erf: " k12   north " }),
+    ).toEqual({ campCode: "MAH1", erf: "K12 NORTH", placementAllocated: true });
+  });
+});
+
+describe("isPlacementAllocated", () => {
+  it("is true only for a non-blank erf", () => {
+    expect(isPlacementAllocated("K12")).toBe(true);
+    expect(isPlacementAllocated("")).toBe(false);
+    expect(isPlacementAllocated("   ")).toBe(false);
+    expect(isPlacementAllocated(null)).toBe(false);
+    expect(isPlacementAllocated(undefined)).toBe(false);
+  });
+});
+
+describe("canViewCampPlacement", () => {
+  it("lets members read their camp's placement and nobody else", () => {
+    expect(canViewCampPlacement(true)).toBe(true);
+    expect(canViewCampPlacement(false)).toBe(false);
   });
 });
