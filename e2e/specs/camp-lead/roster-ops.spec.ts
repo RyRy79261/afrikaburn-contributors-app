@@ -141,16 +141,26 @@ test.describe("camp lead — roster operations", () => {
     await expect(card).toBeVisible();
 
     // A departure before the arrival is refused with a human message.
-    await card.getByLabel("Arrival").fill("2027-04-24");
-    await card.getByLabel("Departure").fill("2027-04-23");
-    await card.getByRole("button", { name: /save plans/i }).click();
+    // FILLED UNTIL REACT HOLDS IT. The card is server-rendered; typed into
+    // before hydration, the controlled inputs are reset when React attaches —
+    // seen on mobile-360 locally, where Arrival came back blank and a
+    // departure-only save "succeeded". "Save plans" enables only once React's
+    // state carries the edit, so an enabled button proves the values stuck.
+    const save = card.getByRole("button", { name: /save plans/i });
+    await expect(async () => {
+      await card.getByLabel("Arrival").fill("2027-04-24");
+      await card.getByLabel("Departure").fill("2027-04-23");
+      await expect(save).toBeEnabled({ timeout: 2_000 });
+      await expect(card.getByLabel("Arrival")).toHaveValue("2027-04-24");
+    }).toPass({ timeout: 30_000 });
+    await save.click();
     await expect(
       card.getByText(/can't leave before you arrive/i),
     ).toBeVisible();
 
     await card.getByLabel("Departure").fill("2027-05-03");
     await card.getByRole("switch", { name: "Joining build" }).click();
-    await card.getByRole("button", { name: /save plans/i }).click();
+    await save.click();
     await expect(card.getByRole("status")).toHaveText("Saved.");
 
     // It survives a reload (a real write, not client state).
@@ -193,9 +203,14 @@ test.describe("camp lead — roster operations", () => {
 
     await memberPage.goto(`/camps/${camp.slug}`);
     const card = memberPage.getByTestId("my-logistics");
-    await card.getByLabel("Arrival").fill("2027-04-25");
+    // Filled until React holds it — see the hydration note in the test above.
+    const save = card.getByRole("button", { name: /save plans/i });
+    await expect(async () => {
+      await card.getByLabel("Arrival").fill("2027-04-25");
+      await expect(save).toBeEnabled({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await card.getByRole("switch", { name: "Joining strike" }).click();
-    await card.getByRole("button", { name: /save plans/i }).click();
+    await save.click();
     await expect(card.getByRole("status")).toHaveText("Saved.");
 
     await gotoRoster(leadPage, camp.slug);
