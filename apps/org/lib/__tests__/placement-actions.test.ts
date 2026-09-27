@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { fakeDb, type FakeDb } from "./support/fake-db";
+import { fakeDb, whereParams, type FakeDb } from "./support/fake-db";
 
 /**
  * THE R1 WRITE ON THE REVIEW SCREEN: the staff-assigned placement handles.
@@ -227,9 +227,14 @@ describe("assignPlacement", () => {
         linkApp: "web",
         bulletinId: null,
       });
-      // The leads read comes from the camp's own structural roles.
+      // The leads read is THIS camp's structural roles, and nobody else: a
+      // dropped camp filter would tell every camp's leads about this placement.
       const leadsRead = db.recorded("select", "memberships")[0];
-      expect(leadsRead?.where).toBeDefined();
+      expect(whereParams(leadsRead?.where)).toEqual([
+        GROUP_ID,
+        "lead",
+        "admin",
+      ]);
     });
 
     it("a change notifies, and says it changed", async () => {

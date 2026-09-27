@@ -49,7 +49,8 @@ const AssignInput = z.object({
  * immediate email is reserved for registration decisions and blocking
  * questionnaires (docs/notifications-spec.md §Email), so this deliberately
  * does NOT consult `shouldSendImmediateEmail("registration")`, which would say
- * yes for the kind and email every revision. The daily digest picks it up.
+ * yes for the kind and email every revision. No email reaches the lead for
+ * this until the daily digest is built (its route is still a stub).
  *
  * Best-effort, after commit — the wrangler and registration-decision pattern: a
  * notification failure must never roll back a placement that is already true.
