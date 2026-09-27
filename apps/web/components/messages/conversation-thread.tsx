@@ -275,9 +275,9 @@ export function ConversationThread({
                   />
                 }
               >
-                <div
+                <span
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
+                    "block max-w-[80%] rounded-2xl px-3 py-2 text-sm",
                     m.mine
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground",
@@ -286,11 +286,15 @@ export function ConversationThread({
                       "ring-2 ring-primary ring-offset-2 ring-offset-background",
                   )}
                 >
-                  <p className="sr-only">{m.mine ? "You" : m.senderName}:</p>
-                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                  <p
+                  <span className="sr-only">
+                    {m.mine ? "You" : m.senderName}:
+                  </span>
+                  <span className="block whitespace-pre-wrap break-words">
+                    {m.body}
+                  </span>
+                  <span
                     className={cn(
-                      "mt-1 text-[11px]",
+                      "mt-1 block text-[11px]",
                       m.mine
                         ? "text-primary-foreground/80"
                         : "text-muted-foreground",
@@ -300,8 +304,8 @@ export function ConversationThread({
                     {m.expiresAt && (
                       <> · disappears {TIME.format(new Date(m.expiresAt))}</>
                     )}
-                  </p>
-                </div>
+                  </span>
+                </span>
               </ReportRow>
             </li>
           ),
@@ -490,6 +494,7 @@ function ReportRow({
     mine ? "flex-row-reverse" : "flex-row",
   );
   if (!reporting) return <div className={row}>{children}</div>;
+  // A <label> takes phrasing content only, so the bubble is built of spans.
   return (
     <label
       className={cn(

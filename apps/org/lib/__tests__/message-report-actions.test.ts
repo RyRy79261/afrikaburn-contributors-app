@@ -98,7 +98,7 @@ describe("resolveMessageReportAction", () => {
     txDb.seed("message_reports", [{ id: REPORT }]);
     await resolveMessageReportAction({ reportId: REPORT });
     const where = txDb.recorded("update", "message_reports")[0]!.where;
-    expect(whereParams(where)).toEqual([REPORT, "open"]);
+    expect(whereParams(where)).toEqual([REPORT, "open", expect.any(Date)]);
   });
 
   it("reports an already-resolved report honestly", async () => {
@@ -149,7 +149,11 @@ describe("reopenMessageReportAction", () => {
       resolvedBy: null,
     });
     // Only a RESOLVED report can be reopened.
-    expect(whereParams(update.where)).toEqual([REPORT, "resolved"]);
+    expect(whereParams(update.where)).toEqual([
+      REPORT,
+      "resolved",
+      expect.any(Date),
+    ]);
     expect(txDb.inserted("audit_events")).toMatchObject({
       action: MESSAGE_REPORT_REOPEN_AUDIT_ACTION,
       subject: REPORT,

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import {
@@ -81,6 +81,9 @@ async function setReportStatus(
           and(
             eq(schema.messageReports.id, parsed.data.reportId),
             eq(schema.messageReports.status, from),
+            // An expired copy is hidden from every page and awaits the sweep;
+            // it is not something to act on either.
+            gt(schema.messageReports.expiresAt, new Date()),
           ),
         )
         .returning({ id: schema.messageReports.id });
