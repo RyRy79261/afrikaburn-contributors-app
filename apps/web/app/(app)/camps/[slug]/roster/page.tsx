@@ -64,6 +64,8 @@ function StatsCard({ stats }: { stats: CampRosterStats }) {
       label: "Bios complete",
       value: `${stats.biosComplete} / ${stats.total}`,
     },
+    { label: "Joining build", value: String(stats.joiningBuild) },
+    { label: "Joining strike", value: String(stats.joiningStrike) },
     {
       label: "Officers",
       value: stats.officers.applies
@@ -83,7 +85,7 @@ function StatsCard({ stats }: { stats: CampRosterStats }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {tiles.map((t) => (
             <div
               key={t.label}

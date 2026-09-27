@@ -563,6 +563,9 @@ export interface CampRosterStats {
   unknown: number;
   /** Bios confirmed this edition (STATS-022). */
   biosComplete: number;
+  /** Members who said they are joining build / strike (STATS-024, -025). */
+  joiningBuild: number;
+  joiningStrike: number;
   officers: {
     /** False for a camp whose registration is not approved or in flight —
      * requirements do not apply yet (./officers `outstandingOfficers`). */
@@ -583,14 +586,18 @@ export interface CampRosterStats {
  * choice, and it never leaves this function except as a count.
  */
 export function deriveCampRosterStats(
-  members: readonly Pick<RosterMemberInput, "bio">[],
+  members: readonly Pick<RosterMemberInput, "bio" | "logistics">[],
   officers: OutstandingOfficers | null,
 ): CampRosterStats {
   let newcomers = 0;
   let returning = 0;
   let unknown = 0;
   let biosComplete = 0;
+  let joiningBuild = 0;
+  let joiningStrike = 0;
   for (const m of members) {
+    if (m.logistics?.joiningBuild) joiningBuild += 1;
+    if (m.logistics?.joiningStrike) joiningStrike += 1;
     if (!m.bio) {
       unknown += 1;
       continue;
@@ -605,6 +612,8 @@ export function deriveCampRosterStats(
     returning,
     unknown,
     biosComplete,
+    joiningBuild,
+    joiningStrike,
     officers: officers?.applies
       ? {
           applies: true,

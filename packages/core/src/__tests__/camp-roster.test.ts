@@ -626,8 +626,28 @@ describe("deriveCampRosterStats", () => {
       returning: 1,
       unknown: 1,
       biosComplete: 2,
+      joiningBuild: 0,
+      joiningStrike: 0,
       officers: { applies: false, filled: 0, required: 0 },
     });
+  });
+
+  it("counts build and strike from members' own logistics", () => {
+    const withPlans = ROSTER.map((m, i) => ({
+      ...m,
+      logistics:
+        i === 3
+          ? null
+          : {
+              joiningBuild: i !== 2,
+              joiningStrike: i === 0,
+              arrivalDate: null,
+              departureDate: null,
+            },
+    }));
+    const stats = deriveCampRosterStats(withPlans, null);
+    expect(stats.joiningBuild).toBe(2);
+    expect(stats.joiningStrike).toBe(1);
   });
 
   it("moves when the fixture moves (a returning member becomes new)", () => {
@@ -670,6 +690,8 @@ describe("deriveCampRosterStats", () => {
       returning: 0,
       unknown: 0,
       biosComplete: 0,
+      joiningBuild: 0,
+      joiningStrike: 0,
       officers: { applies: false, filled: 0, required: 0 },
     });
   });
@@ -687,6 +709,8 @@ describe("deriveCampRosterStats", () => {
       stats.returning,
       stats.unknown,
       stats.biosComplete,
+      stats.joiningBuild,
+      stats.joiningStrike,
       stats.officers.filled,
       stats.officers.required,
     ];
