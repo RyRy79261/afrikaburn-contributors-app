@@ -19,6 +19,7 @@ const {
   listPastRegistrations,
   getPastRegistration,
   getRegistrationComparison,
+  getCampPlacement,
 } = await import("../registration-store");
 
 const GROUP = "11111111-1111-4111-8111-111111111111";
@@ -360,6 +361,37 @@ describe("saveRegistrationDraft", () => {
         .writesTo(schema.supplierDeclarations)
         .filter((q) => q.kind === "insert"),
     ).toHaveLength(0);
+  });
+});
+
+describe("getCampPlacement (epic #48)", () => {
+  it("reads ONLY the camp code and erf — nothing else of the registration", async () => {
+    dbMock.queue([{ campCode: "MAH", erf: "K12" }]);
+    expect(await getCampPlacement(GROUP, EDITION)).toEqual({
+      campCode: "MAH",
+      erf: "K12",
+      placementAllocated: true,
+    });
+    const select = dbMock.onlyQuery("select");
+    expect(Object.keys(select.arg("select") as object).sort()).toEqual([
+      "campCode",
+      "erf",
+    ]);
+    expect(select.arg("from")).toBe(schema.registrations);
+  });
+
+  it("is null before a registration exists, and when nothing is assigned", async () => {
+    dbMock.queue([]);
+    expect(await getCampPlacement(GROUP, EDITION)).toBeNull();
+    dbMock.queue([{ campCode: null, erf: null }]);
+    expect(await getCampPlacement(GROUP, EDITION)).toBeNull();
+  });
+
+  it("a camp code without an erf is not an allocated placement", async () => {
+    dbMock.queue([{ campCode: "MAH", erf: null }]);
+    expect((await getCampPlacement(GROUP, EDITION))?.placementAllocated).toBe(
+      false,
+    );
   });
 });
 

@@ -17,6 +17,8 @@ import {
   type ComparisonBasis,
   type FieldChange,
   type RegistrationSectionData,
+  campPlacementOf,
+  type CampPlacement,
 } from "@quagga/core";
 import type {
   MembershipRole,
@@ -121,6 +123,32 @@ export async function getRegistration(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * The camp's placement for an edition — camp code and erf, read from the ONE
+ * place they live (epic #48, ERF-019: propagation means reading this, never
+ * copying it). Selects those two columns only. Null when there is nothing to
+ * show. Callers check `canViewCampPlacement` first: this is a read, not a gate.
+ */
+export async function getCampPlacement(
+  groupId: string,
+  editionId: string,
+): Promise<CampPlacement | null> {
+  const [row] = await db()
+    .select({
+      campCode: schema.registrations.campCode,
+      erf: schema.registrations.erf,
+    })
+    .from(schema.registrations)
+    .where(
+      and(
+        eq(schema.registrations.groupId, groupId),
+        eq(schema.registrations.editionId, editionId),
+      ),
+    )
+    .limit(1);
+  return campPlacementOf(row);
 }
 
 /** One camp-or-org reply threaded under a section review (design frame P0Tcl). */

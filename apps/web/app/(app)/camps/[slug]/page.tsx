@@ -43,7 +43,11 @@ import {
   getMemberPermissions,
   pendingOfficerConsents,
 } from "@/lib/roles-store";
-import { hasProjectPermission, projectQuestionnairesPath } from "@quagga/core";
+import {
+  canViewCampPlacement,
+  hasProjectPermission,
+  projectQuestionnairesPath,
+} from "@quagga/core";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
@@ -52,6 +56,8 @@ import { OfficerConsentBanner } from "@/components/roles/officer-consent-banner"
 import { PendingQuestionnaires } from "@/components/questionnaire/pending-questionnaires";
 import { LeaveCampButton } from "@/components/leave-camp-button";
 import { MemberRefCode } from "@/components/member-ref-code";
+import { CampPlacementCard } from "@/components/camp-placement";
+import { getCampPlacement } from "@/lib/registration-store";
 import {
   createInviteAction,
   leaveCampAction,
@@ -128,11 +134,11 @@ export default async function CampPage({
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
   const isMember = camp.viewerRole !== null;
 
-  // Eight independent reads, issued together rather than one after another.
+  // Nine independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
-  // before the slowest path through all eight, in series. Nothing here feeds
+  // before the slowest path through all of them, in series. Nothing here feeds
   // anything else here — every one keys off `camp.id`, `campUser.id` or
   // `edition.id`, all of which are already known — so the ordering bought
   // nothing. The authorisation flags are UNCHANGED: each query is still scoped
@@ -147,6 +153,7 @@ export default async function CampPage({
     officerConsents,
     pending,
     pinnedBulletins,
+    placement,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -166,6 +173,11 @@ export default async function CampPage({
     campUser ? pendingOfficerConsents(campUser.id) : [],
     campUser ? listPendingQuestionnaires(campUser.id) : [],
     campUser ? getPinnedBulletinsForCurrentUser(camp.id) : [],
+    // Epic #48: the camp code and erf, for members only — never loaded for a
+    // stranger, so nothing below can render it for one.
+    canViewCampPlacement(isMember)
+      ? getCampPlacement(camp.id, edition.id)
+      : null,
   ]);
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
@@ -281,6 +293,8 @@ export default async function CampPage({
         )}
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
+
+        {placement && <CampPlacementCard placement={placement} />}
 
         {myOfficerRoles.length > 0 && (
           <OfficerConsentBanner
