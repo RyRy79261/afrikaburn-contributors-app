@@ -309,7 +309,7 @@ artifact. When map data exists, that pattern is reusable rather than rebuilt.
 
 ## 14. Annual registration and placement submission ✅
 
-**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-014, REG-018, REG-021, REG-022–REG-028 · 🚧 REG-006, REG-013, REG-015, REG-020 · ❌ REG-003, REG-008, REG-009, REG-010, REG-016, REG-017, REG-019, REG-029, REG-030 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029/030 placement-allocation states are not, since placement itself is blocked per §11/§13)*
+**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-014, REG-018, REG-021, REG-022–REG-028, REG-029 · 🚧 REG-006, REG-013, REG-015, REG-020 · ❌ REG-003, REG-008, REG-009, REG-010, REG-016, REG-017, REG-019, REG-030 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029 "placement allocated" is derived from the staff-assigned erf and shown to the camp's members (epic #48); REG-030 "final layout approved" waits on the layout tool, §11/§13)*
 
 Built, and the most complete part of the platform.
 
