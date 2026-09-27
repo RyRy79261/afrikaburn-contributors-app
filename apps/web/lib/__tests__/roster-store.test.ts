@@ -454,6 +454,15 @@ describe("saveOwnLogistics", () => {
     expect(dbMock.writesTo(schema.membershipLogistics)).toHaveLength(0);
   });
 
+  it("refuses an org membership and writes nothing — roster logistics exist only on project kinds", async () => {
+    dbMock.queue([{ id: "m-org", userId: REN, groupKind: ORG }]);
+    expect(await save(PLAN)).toEqual({
+      ok: false,
+      error: "You're not a member of this camp.",
+    });
+    expect(dbMock.writesTo(schema.membershipLogistics)).toHaveLength(0);
+  });
+
   it("refuses dates outside the edition window with a human message", async () => {
     dbMock.queue([{ id: "m-ren", userId: REN, groupKind: THEME_CAMP }]);
     const result = await save({ ...PLAN, arrivalDate: "2027-01-01" });
