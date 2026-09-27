@@ -33,8 +33,8 @@ verbatim primary source and stays that way.
 
 | # | Decision | Status | Spec section |
 | --- | --- | --- | --- |
-| [007](decision-007-application-boundary.md) | Application boundary: org vs camp flows | Open | §1 Development Direction |
-| [008](decision-008-camper-data-model.md) | Canonical camper data model | Open | §4 Camper Database |
+| [007](decision-007-application-boundary.md) | Application boundary: org vs camp flows | **Resolved 2026-09-27** | §1 Development Direction |
+| [008](decision-008-camper-data-model.md) | Canonical camper data model | **Resolved 2026-09-27** | §4 Camper Database |
 | [009](decision-009-payment-direction.md) | Payment direction: tracking vs gateway | **Resolved 2026-08-12** | §8 Camp Fees and Payment Gateway |
 | [010](decision-010-ticketing-scope.md) | Ticketing scope: Quicket vs camp module | Open | §10 Ticket Allocation |
 | [011](decision-011-layout-tool-strategy.md) | Theme-camp layout tool strategy | Open — deferred | §11 Layout Tool |
