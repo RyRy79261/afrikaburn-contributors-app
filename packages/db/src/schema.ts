@@ -891,6 +891,56 @@ export const memberships = pgTable(
   }),
 );
 
+// --- Membership logistics (epic #55) --------------------------------------
+// A member's own plans for one edition with one project: joining build,
+// joining strike, arrival and departure (App Spec CDB-011..014).
+//
+// SELF-OWNED. Only the member writes their row (Decision 008 keeps records
+// self-owned; @quagga/core `canEditOwnLogistics`). Their project's roster
+// viewers — holders of `view_member_details` — read it; nobody else does, and
+// it is never public.
+//
+// PER EDITION, keyed by membership. `memberships` is not edition-scoped (it is
+// the current state of a person's camp), so a returning member's 2027 plans
+// never overwrite their 2026 ones. `cascade` on the membership: leaving a camp
+// takes your plans with it — a lead has no use for a departed member's dates.
+// Account sanitisation keeps memberships on purpose, so it deletes these rows
+// itself (lib/account-sanitize.ts).
+//
+// Dates are calendar dates (`mode: "string"`, `YYYY-MM-DD`) — "arriving on the
+// 20th" has no time and no zone. Both nullable: "not sure yet" is an honest
+// answer, and a guessed date on a lead's spreadsheet is worse than a blank.
+// The window check (30 days before the edition to 14 after) is enforced in
+// @quagga/core `validateMemberLogistics`; the CHECK below is the one rule that
+// can never depend on which edition it is.
+export const membershipLogistics = pgTable(
+  "membership_logistics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    joiningBuild: boolean("joining_build").notNull().default(false),
+    joiningStrike: boolean("joining_strike").notNull().default(false),
+    arrivalDate: date("arrival_date", { mode: "string" }),
+    departureDate: date("departure_date", { mode: "string" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (l) => ({
+    membershipEditionUniq: uniqueIndex(
+      "membership_logistics_membership_edition_idx",
+    ).on(l.membershipId, l.editionId),
+    arrivalNotAfterDeparture: check(
+      "membership_logistics_arrival_before_departure",
+      sql`${l.arrivalDate} is null or ${l.departureDate} is null or ${l.arrivalDate} <= ${l.departureDate}`,
+    ),
+  }),
+);
+
 // --- Org departments -----------------------------------------------------
 // DATA, NOT CODE (migration 0018). AfrikaBurn's departments — suppliers, theme
 // camps, safety, … — are rows a System manager creates, because the org has said
