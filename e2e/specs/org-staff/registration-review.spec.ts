@@ -154,6 +154,55 @@ test.describe("org staff · registration review loop", () => {
     await expect(staff.org.getByLabel("Camp code")).toHaveValue(shown);
   });
 
+  test("an assigned erf reaches the camp's members, and nobody else (epic #48)", async ({
+    makeAppPage,
+  }) => {
+    skipUnlessGod();
+    // THREE PEOPLE: a lead who registers a camp, a staff member who places it,
+    // and a stranger who signs up and onboards. Each is a full sign-up against
+    // a dev server, so the default 90s is spent before the stranger arrives —
+    // measured locally (both projects timed out on the stranger, with the
+    // lead's card already correct). Same reason, same fix, as
+    // camp-announcements.spec.ts.
+    test.setTimeout(240_000);
+    const camp = await createSubmittedCamp(makeAppPage);
+    const staff = await provisionOrgStaff(makeAppPage);
+    await openDetailFromQueue(staff.org, camp.campName);
+
+    // Approved, so the camp page is public and a stranger's render is a real
+    // page — not a not-found that would hide the card for the wrong reason.
+    await staff.org.getByRole("button", { name: /^approve$/i }).click();
+    await expect(staff.org.getByText(/approve applied/i)).toBeVisible();
+
+    const code = `Q${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    await staff.org.getByLabel("Camp code").fill(code);
+    await staff.org.getByLabel("Erf").fill("k12 north");
+    await staff.org
+      .getByRole("button", { name: "Save placement details" })
+      .click();
+    await expect(staff.org.getByText("Placement details saved.")).toBeVisible();
+
+    // The lead (a member) reads it on the camp page, in its stored form.
+    await camp.web.goto(`/camps/${camp.slug}`);
+    const card = camp.web.getByRole("region", { name: "Placement" });
+    await expect(card).toBeVisible();
+    await expect(card.getByText("Placement allocated")).toBeVisible();
+    await expect(card.getByText("K12 NORTH")).toBeVisible();
+    await expect(card.getByText(code)).toBeVisible();
+
+    // A signed-in stranger sees the camp — PRESENT first — and no placement.
+    const stranger = await makeAppPage("web");
+    await signUpBurner(stranger, { onboard: true });
+    await stranger.goto(`/camps/${camp.slug}`);
+    await expect(
+      stranger.getByRole("heading", { name: camp.campName }),
+    ).toBeVisible();
+    await expect(
+      stranger.getByRole("region", { name: "Placement" }),
+    ).toHaveCount(0);
+    await expect(stranger.getByText("K12 NORTH")).toHaveCount(0);
+  });
+
   test("a section review comment is audited and the camp sees it", async ({
     makeAppPage,
   }) => {
