@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, ShieldAlert } from "lucide-react";
+import { ChevronRight, Lock, ShieldAlert } from "lucide-react";
 import {
   MESSAGE_REPORT_STATUSES,
   REPORT_COPY_RETENTION_DAYS,
@@ -127,6 +127,10 @@ export default async function SafetyReportsPage({
                         {r.messageCount === 1 ? "message" : "messages"}
                       </Badge>
                       {DATE.format(r.createdAt)}
+                      <ChevronRight
+                        className="ml-auto h-4 w-4 sm:ml-0"
+                        aria-hidden
+                      />
                     </span>
                   </Link>
                 </li>

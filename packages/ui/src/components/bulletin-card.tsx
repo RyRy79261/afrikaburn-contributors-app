@@ -24,6 +24,8 @@ export interface BulletinCardProps extends Omit<
   audience?: React.ReactNode;
   /** Footer meta, e.g. "Sent 12 Feb 2027" or "Draft". */
   meta?: React.ReactNode;
+  /** Kicker label. A camp's own broadcast reads "Announcement". */
+  kicker?: React.ReactNode;
   /** Pinned bulletins show a pin in the kicker row. */
   pinned?: boolean;
   /** Org list only: read counts → renders the read-rate bar. */
@@ -35,6 +37,7 @@ export function BulletinCard({
   preview,
   audience,
   meta,
+  kicker = "Bulletin",
   pinned = false,
   readRate: readRateProp,
   className,
@@ -50,7 +53,7 @@ export function BulletinCard({
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Megaphone className="h-3.5 w-3.5" aria-hidden />
-            Bulletin
+            {kicker}
           </span>
           {pinned ? (
             <span
