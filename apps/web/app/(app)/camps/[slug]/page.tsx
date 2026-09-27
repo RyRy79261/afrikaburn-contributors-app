@@ -10,6 +10,7 @@ import {
   Megaphone,
   CheckCircle2,
   ClipboardList,
+  ListChecks,
   UserCog,
   Users,
 } from "lucide-react";
@@ -45,9 +46,14 @@ import {
 } from "@/lib/roles-store";
 import {
   canViewCampPlacement,
+  canViewCampRoster,
+  emptyMemberLogistics,
   hasProjectPermission,
+  logisticsWindow,
   projectQuestionnairesPath,
 } from "@quagga/core";
+import { getOwnLogistics } from "@/lib/roster-store";
+import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
@@ -65,6 +71,7 @@ import {
   setMemberRolesAction,
   respondToOfficerAction,
 } from "./actions";
+import { saveMyLogisticsAction } from "./logistics-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +161,7 @@ export default async function CampPage({
     pending,
     pinnedBulletins,
     placement,
+    myLogistics,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -178,6 +186,15 @@ export default async function CampPage({
     canViewCampPlacement(isMember)
       ? getCampPlacement(camp.id, edition.id)
       : null,
+    // The member's OWN plans (epic #55). `undefined` when they may hold none
+    // here; the store re-derives whose from the session user + slug.
+    campUser && isMember
+      ? getOwnLogistics({
+          slug: camp.slug,
+          userId: campUser.id,
+          editionId: edition.id,
+        })
+      : undefined,
   ]);
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
@@ -210,6 +227,13 @@ export default async function CampPage({
     !!viewerPerms && hasProjectPermission(viewerPerms, "manage_roles");
   const canViewDetails =
     !!viewerPerms && hasProjectPermission(viewerPerms, "view_member_details");
+  // Epic #55: the roster (search, filter, stats, export). Linked only for a
+  // viewer @quagga/core lets in; the roster page and the export route re-check
+  // on every request, so this is a convenience, never the boundary.
+  const canSeeRoster = canViewCampRoster({
+    groupKind: camp.kind,
+    viewerMembership: viewerPerms,
+  });
   const canPostAnnouncements =
     !!viewerPerms && hasProjectPermission(viewerPerms, "post_announcements");
 
@@ -335,6 +359,19 @@ export default async function CampPage({
                   <Link href={`/camps/${camp.slug}/people`}>
                     <Users className="h-4 w-4" aria-hidden />
                     People in this camp
+                  </Link>
+                </Button>
+              )}
+              {canSeeRoster && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-fit"
+                >
+                  <Link href={`/camps/${camp.slug}/roster`}>
+                    <ListChecks className="h-4 w-4" aria-hidden />
+                    Roster &amp; plans
                   </Link>
                 </Button>
               )}
@@ -510,6 +547,17 @@ export default async function CampPage({
               )}
             </CardContent>
           </Card>
+
+          {/* The member's own build/strike/arrival/departure (epic #55). */}
+          {myLogistics !== undefined && (
+            <MyLogisticsCard
+              slug={camp.slug}
+              campName={camp.name}
+              initial={myLogistics ?? emptyMemberLogistics()}
+              window={logisticsWindow(edition)}
+              saveAction={saveMyLogisticsAction}
+            />
+          )}
 
           {/* Questionnaires — lead/admin only */}
           {isAdmin && (
