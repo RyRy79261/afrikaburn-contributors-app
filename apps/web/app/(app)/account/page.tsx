@@ -150,7 +150,14 @@ export default async function AccountPage() {
                 </span>
               )
             }
-            help={`How you sign in, and where security notices go. When changing it lands, we'll confirm from the new address, warn the old one, and give you ${EMAIL_CHANGE_REVOCATION_HOURS} hours to undo it before the change sticks.`}
+            help={
+              // Google-only accounts (issue #34): the address is the Google
+              // account's, so say where it came from before anything talks
+              // about changing it.
+              google && !password
+                ? "You sign in with Google, so this is your Google account's address. It's also where security notices go."
+                : `How you sign in, and where security notices go. When changing it lands, we'll confirm from the new address, warn the old one, and give you ${EMAIL_CHANGE_REVOCATION_HOURS} hours to undo it before the change sticks.`
+            }
             action={
               <Button
                 variant="outline"
