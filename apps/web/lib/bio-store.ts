@@ -26,6 +26,7 @@ import {
   type Contactability,
   type FieldVisibility,
   type PrivacyFlags,
+  saIdNumberError,
 } from "@quagga/core";
 import {
   BioExtrasInput,
@@ -250,6 +251,11 @@ export async function saveBio(input: {
   if (!validated.ok) return { ok: false, errors: validated.errors };
 
   const fields = mapResponsesToBio(validated.responses);
+
+  // An SA ID's check digit (issue #32). Refused before anything is written, and
+  // keyed on the question so it lands under the number the burner typed.
+  const idError = saIdNumberError(fields.idType, fields.idNumber);
+  if (idError) return { ok: false, errors: { "id.number": idError } };
 
   // The username is the one answer that does NOT belong to `burner_bios` — it
   // is account-level (see @quagga/core `username.ts`). Validate it here, before

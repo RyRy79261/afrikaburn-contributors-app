@@ -184,6 +184,7 @@ export * from "./campmates";
 export * from "./messaging";
 export * from "./avatar";
 export * from "./username";
+export * from "./sa-id";
 export * from "./questionnaire-engine";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
