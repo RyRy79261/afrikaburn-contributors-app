@@ -141,7 +141,7 @@ export default async function CampPage({
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
   const isMember = camp.viewerRole !== null;
 
-  // Nine independent reads, issued together rather than one after another.
+  // Ten independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
