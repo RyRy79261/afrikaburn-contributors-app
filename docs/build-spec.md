@@ -128,6 +128,8 @@ without ever printing a value.
 - `audit_events` — actor_id, action, subject, meta jsonb. Written on: elevation, approval/rejection, payment reconciliation.
 - **Direct messaging (epic #69)** — `conversations` (unique sorted `pair_key`, `timer` enum `off|24h|7d|90d`, `last_message_at`), `conversation_participants` (conversation × user, `last_read_at`, `hidden_at`), `messages` (sender, `kind` `text|system`, body, **`expires_at` fixed at send time** from the timer then in force), `user_blocks` (blocker × blocked), `message_reports` (+ `message_report_items`: **copies** of only the selected messages; `expires_at` = report + 180 days), and `users.default_message_timer`. Rules live in `@quagga/core` `messaging.ts`: only participants read a conversation — **no role bypass, god included**; starting a chat requires the target's `contactable` setting (`canContact`) and no block either way; the org sees only report copies (`canReviewMessageReports` = personal information in `registrations`, the medical safety tier), each detail read audited (`dm.report.view`). No platform retention period: expired messages are filtered on every read and hard-deleted by `/api/messages/expiry-sweep` (daily cron); account sanitization deletes the account's sent messages and blocks, but not report copies (their own retention). No push; the email digest is still a stub, so there is no "N new messages" email yet.
 
+- **Membership logistics (epic #55)** — `membership_logistics` (membership FK cascade × edition FK, unique per pair; `joining_build`, `joining_strike`, nullable `arrival_date`/`departure_date` calendar dates, CHECK arrival ≤ departure). Self-owned: written only by the member, read by the member and their project's `view_member_details` holders. Deleted explicitly on account sanitization (memberships are preserved, so the cascade never fires). See §"Camp roster operations".
+
 ## apps/web routes
 
 `/` landing (works env-less) · `/auth/*` (our own branded Better Auth screens —
@@ -143,8 +145,9 @@ tile, **disabled hint tiles**: Containers "separate app — for large camps" · 
 Budget/Layout "topics under exploration") · `/camps/[slug]/registration` (six-section
 wizard: any order, autosave drafts, 60-word counter, Blob layout uploads, supplier
 picker from repository, submit enabled only when all six sections complete; post-submit:
-status + per-section feedback + resubmit) · `/profile` (bio edit, privacy toggles,
-key fingerprint display).
+status + per-section feedback + resubmit) · `/camps/[slug]/roster` (roster search,
+filter, stats; `view_member_details` only) + `/camps/[slug]/roster/export` (CSV) ·
+`/profile` (bio edit, privacy toggles, key fingerprint display).
 
 ## apps/org routes
 
@@ -495,6 +498,50 @@ visible without scrolling.
   `/new`, `/[id]`; job `/api/announcements/dispatch`. Immediate email also for a
   must-acknowledge announcement. Full model: docs/notifications-spec.md §Camp
   announcements.
+
+## Camp roster operations (epic #55)
+
+App Spec CDB-011..014, CDB-030..033, STATS-017..019, STATS-022..025. All logic
+is pure in `@quagga/core` `camp-roster.ts` (Decision 007 may move camp-planning
+tools to another app); `apps/web/lib/roster-store.ts` only loads rows.
+
+- **Who.** The roster, its stats and the export are served to a member of the
+  project holding the `view_member_details` project permission —
+  `canViewCampRoster` / `canExportCampRoster`; structural lead/admin always
+  (the irrevocable backstop). Checked server-side in the page loader and in the
+  export route on every request. A non-member, a member without the permission
+  and a lead of another camp all get the same not-found as a camp that does not
+  exist (the export route answers a uniform 404). The camp page links the
+  roster only for viewers the predicate lets in.
+- **Search and filter** (CDB-031..033). URL params, applied server-side so a
+  filtered roster is a link: `q` (name / burner name, case- and
+  accent-insensitive), `role` (`lead` | `admin` | `member` | `role:<project role
+  id>` of this camp — held means an ACCEPTED assignment), `bio` (`complete` |
+  `incomplete`, the latter including "no bio this edition"). Unknown values are
+  ignored, not refused.
+- **Stats card** — aggregates only, never a per-person breakdown, over the whole
+  camp regardless of the filter: members, new (bio's first-time flag), returning,
+  unknown (no bio this edition), bios complete, joining build, joining strike,
+  officer slots filled / required (from the same officer status the Roles &
+  Officers page derives; "—" until requirements apply).
+- **Logistics** (CDB-011..014) — joining build, joining strike, arrival, departure,
+  per membership per edition. **Set only by the member** from the "Your plans"
+  card on the camp page (Decision 008: records are self-owned — a lead has a READ
+  grant, no write path). Validated by `validateMemberLogistics`: real calendar
+  dates, arrival ≤ departure, and each date within 30 days before the edition
+  starts to 14 days after it ends. The action's body is parsed strictly, so a
+  request naming a membership or user is refused; whose row is written comes
+  from the session and the slug. Visible to the member and the roster's
+  audience; never public, never to camp-mates generally.
+- **Export** (CDB-030) — `GET /camps/[slug]/roster/export`, carrying the page's
+  filter. Columns: Name, Burner name, Roles, Arrival, Departure, Joining build,
+  Joining strike. Built by the pure `rosterExportRow` projection, which has no
+  slot for any hard-locked field or medical notes (a test pins it); every cell
+  goes through the CSV formula-injection guard (`=`, `+`, `-`, `@`, tab, CR).
+- **Not built here:** admin add/edit/import of other people's records (blocked on
+  Decision 008), archiving former members (needs a decision on whether archiving
+  revokes access — every membership predicate would change), fee/ticket/WAP
+  statistics.
 
 ## Platform/database separation
 
