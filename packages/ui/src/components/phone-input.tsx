@@ -3,6 +3,7 @@
 import * as React from "react";
 import PhoneInputBase, {
   getCountryCallingCode,
+  parsePhoneNumber,
   type Country,
 } from "react-phone-number-input";
 import flags from "react-phone-number-input/flags";
@@ -61,7 +62,12 @@ function CountrySelect({
       </SelectTrigger>
       <SelectContent className="max-h-72">
         {countries.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
+          // `textValue` IS WHAT TYPE-AHEAD MATCHES (issue #30). Without it Radix
+          // reads the item's text content, which starts with the flag SVG's
+          // <title> — the ISO code — so typing "S" skipped South Africa ("ZA…")
+          // and "G" landed on the United Kingdom ("GB…"). The name alone makes
+          // "sou" find South Africa, the way people actually type.
+          <SelectItem key={o.value} value={o.value} textValue={o.label}>
             <span className="flex items-center gap-2">
               <FlagIcon country={o.value} />
               <span className="truncate">{o.label}</span>
@@ -99,6 +105,31 @@ export interface PhoneInputProps {
   className?: string;
 }
 
+/**
+ * The E.164 form of a pasted phone number, or `null` to let the paste through
+ * untouched (issue #31).
+ *
+ * Only a COMPLETE, possible number is taken over. A fragment pasted into the
+ * middle of a number is the browser's to insert, not ours to rewrite. A number
+ * written with its country code (`+44 …`, or `0044 …`) keeps that code, which
+ * replaces the country picked in the selector; one without is read as a number
+ * of the selected country, so "082 123 4567" under South Africa is
+ * +27821234567 and not the "+0821234567" a raw paste produced.
+ */
+export function phoneFromPaste(
+  text: string,
+  country: Country | undefined,
+): string | null {
+  const compact = text.trim().replace(/^00(?=[1-9])/, "+");
+  if (!/\d/.test(compact)) return null;
+  try {
+    const parsed = parsePhoneNumber(compact, country);
+    return parsed?.isPossible() ? parsed.number : null;
+  } catch {
+    return null;
+  }
+}
+
 export function PhoneInput({
   value,
   onChange,
@@ -110,6 +141,19 @@ export function PhoneInput({
   describedBy,
   className,
 }: PhoneInputProps) {
+  // The library owns the selected country; mirrored here only so a paste
+  // without a country code is read against what the burner has selected.
+  const [country, setCountry] = React.useState<Country | undefined>(
+    defaultCountry,
+  );
+
+  function handlePaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = phoneFromPaste(event.clipboardData.getData("text"), country);
+    if (pasted === null) return;
+    event.preventDefault();
+    onChange(pasted);
+  }
+
   return (
     <PhoneInputBase
       international
@@ -119,6 +163,8 @@ export function PhoneInput({
       inputComponent={PhoneNumberInput}
       value={value || undefined}
       onChange={(v) => onChange(v ?? "")}
+      onCountryChange={setCountry}
+      onPaste={handlePaste}
       id={id}
       placeholder={placeholder}
       disabled={disabled}

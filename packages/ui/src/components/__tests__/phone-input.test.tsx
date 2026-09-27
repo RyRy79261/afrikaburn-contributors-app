@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-import { PhoneInput } from "../phone-input";
+import * as React from "react";
+import { PhoneInput, phoneFromPaste } from "../phone-input";
 
 // Phone is a HARD-LOCKED private field (@quagga/core `privacy.ts`): never
 // publicly exposable, with no reveal path of any kind. This component is where
@@ -87,7 +88,8 @@ describe("the value contract", () => {
     // which is not a valid number anywhere. Typing the same digits (the case
     // above) is correct, so this is a paste-shaped input only. Recorded here so
     // the behaviour is visible; raised as a finding rather than endorsed, and
-    // the server-side check is what must refuse it.
+    // the server-side check is what must refuse it. A real PASTE no longer
+    // arrives here as a raw change: see "pasting a number" below (issue #31).
     expect(onChange).toHaveBeenLastCalledWith("+0821234567");
   });
 });
@@ -132,5 +134,96 @@ describe("wiring", () => {
   it("takes the caller's placeholder", () => {
     const { field } = renderPhone({ placeholder: "Mobile number" });
     expect(field.getAttribute("placeholder")).toBe("Mobile number");
+  });
+});
+
+/** A controlled field whose value moves, as a real form's does. */
+function StatefulPhone({ initial = "" }: { initial?: string }) {
+  const [value, setValue] = React.useState(initial);
+  return (
+    <>
+      <PhoneInput value={value} onChange={setValue} id="phone" />
+      <output data-testid="value">{value}</output>
+    </>
+  );
+}
+
+/** Paste `text`; true when the component took the paste over. */
+function paste(field: HTMLInputElement, text: string): boolean {
+  // fireEvent returns false when a handler called preventDefault.
+  return !fireEvent.paste(field, {
+    clipboardData: { getData: () => text },
+  });
+}
+
+describe("pasting a number (issue #31)", () => {
+  it("reads a pasted local number against the selected country", () => {
+    const { field, onChange } = renderPhone();
+    expect(paste(field, "082 123 4567")).toBe(true);
+    // Not the "+0821234567" a raw paste used to produce.
+    expect(onChange).toHaveBeenLastCalledWith("+27821234567");
+  });
+
+  it("lets a pasted country code replace the selected country", () => {
+    render(<StatefulPhone />);
+    const field = document.querySelector("#phone") as HTMLInputElement;
+    expect(paste(field, "+44 20 7946 0958")).toBe(true);
+
+    expect(screen.getByTestId("value").textContent).toBe("+442079460958");
+    expect(field.value).toBe("+44 20 7946 0958");
+    // The flag follows the number: the selector now shows the United Kingdom.
+    const trigger = screen.getByRole("combobox", { name: "Country" });
+    expect(trigger.querySelector("title")?.textContent).toBe("GB");
+  });
+
+  it("accepts the 00 international prefix as well as +", () => {
+    const { field, onChange } = renderPhone();
+    expect(paste(field, "0044 20 7946 0958")).toBe(true);
+    expect(onChange).toHaveBeenLastCalledWith("+442079460958");
+  });
+
+  it("leaves a fragment to the browser rather than rewriting the field", () => {
+    const { field, onChange } = renderPhone();
+    expect(paste(field, "123")).toBe(false);
+    expect(paste(field, "call me")).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("phoneFromPaste", () => {
+  it("returns null for anything that is not a complete, possible number", () => {
+    expect(phoneFromPaste("", "ZA")).toBeNull();
+    expect(phoneFromPaste("   ", "ZA")).toBeNull();
+    expect(phoneFromPaste("abc", "ZA")).toBeNull();
+    expect(phoneFromPaste("12", "ZA")).toBeNull();
+  });
+
+  it("reads a number without a country code only when a country is known", () => {
+    expect(phoneFromPaste("(082) 123-4567", "ZA")).toBe("+27821234567");
+    expect(phoneFromPaste("082 123 4567", undefined)).toBeNull();
+  });
+});
+
+describe("finding a country by typing its name (issue #30)", () => {
+  /** Type into the CLOSED country picker, as a keyboard user does. */
+  function typeIntoPicker(text: string) {
+    const trigger = screen.getByRole("combobox", { name: "Country" });
+    trigger.focus();
+    for (const key of text) fireEvent.keyDown(trigger, { key });
+  }
+
+  it("types the name, not the flag's ISO code: 'sou' finds South Africa", () => {
+    const { field } = renderPhone({ defaultCountry: "NA" });
+    expect(field.value).toBe("+264");
+    typeIntoPicker("sou");
+    // Before the fix the match ran on "ZA South Africa+27", so no item starting
+    // with "S" was South Africa.
+    expect(field.value).toBe("+27");
+  });
+
+  it("'ger' finds Germany, not the United Kingdom (whose ISO code is GB)", () => {
+    const { field } = renderPhone();
+    typeIntoPicker("ger");
+    expect(field.value).toBe("+49");
   });
 });
