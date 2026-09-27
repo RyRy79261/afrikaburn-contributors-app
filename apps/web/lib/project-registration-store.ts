@@ -16,6 +16,7 @@ import type {
   QuestionnaireResponses,
   RegistrationStatus,
 } from "@quagga/types";
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
 import { prepareCampCreate, createCampWrites } from "./groups-store";
 import {
@@ -314,6 +315,7 @@ export async function getProjectRegistrationForEdit(
       and(
         eq(schema.memberships.userId, viewerId),
         eq(schema.memberships.groupId, group.id),
+        activeMembership(),
       ),
     )
     .limit(1);

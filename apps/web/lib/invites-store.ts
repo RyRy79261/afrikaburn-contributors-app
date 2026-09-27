@@ -5,11 +5,17 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   canRedeemInviteAs,
   inviteRejectionMessage,
+  MEMBER_RESTORE_AUDIT_ACTION,
   type InviteLike,
 } from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction } from "./db";
-import { getViewerRole, ensureMembershipWithRefCode } from "./groups-store";
+import {
+  getViewerRole,
+  ensureMembershipWithRefCode,
+  isFormerMember,
+} from "./groups-store";
 
 export interface InviteRow {
   id: string;
@@ -229,6 +235,11 @@ export async function redeemInvite(
   if (!invite) return { ok: false, error: "This invite link is not valid." };
 
   const currentRole = await getViewerRole(userId, invite.groupId);
+  // A FORMER member (CDB-036) reads as not a member above, so their invite
+  // proceeds — and `ensureMembershipWithRefCode` restores their archived row
+  // rather than creating a second one. Known here so the restore is audited.
+  const restoringFormer =
+    currentRole === null && (await isFormerMember(userId, invite.groupId));
   const check = canRedeemInviteAs(
     {
       kind: invite.kind,
@@ -279,6 +290,7 @@ export async function redeemInvite(
           and(
             eq(schema.memberships.groupId, invite.groupId),
             eq(schema.memberships.role, "lead"),
+            activeMembership(),
           ),
         );
       if (currentRole) {
@@ -290,6 +302,7 @@ export async function redeemInvite(
             and(
               eq(schema.memberships.groupId, invite.groupId),
               eq(schema.memberships.userId, userId),
+              activeMembership(),
             ),
           );
       } else {
@@ -306,6 +319,21 @@ export async function redeemInvite(
         groupId: invite.groupId,
         groupName: group.name,
         role: "member",
+      });
+    }
+
+    if (restoringFormer) {
+      await tx.insert(schema.auditEvents).values({
+        actorId: userId,
+        action: MEMBER_RESTORE_AUDIT_ACTION,
+        subject: userId,
+        meta: {
+          groupId: invite.groupId,
+          via: "invite",
+          inviteId: invite.id,
+          invitedByUserId: invite.createdByUserId,
+          role: invite.kind === "lead_transfer" ? "lead" : "member",
+        },
       });
     }
 

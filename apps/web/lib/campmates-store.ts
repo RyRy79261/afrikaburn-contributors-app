@@ -18,6 +18,7 @@ import {
   type CampmateMembership,
   type PublicBioView,
 } from "@quagga/core";
+import { activeMembership } from "@quagga/db";
 import { db, schema } from "./db";
 
 // Camp-mate read paths (epic #68). EVERY decision here is made by a
@@ -134,7 +135,14 @@ export async function loadCampmateMemberships(
     })
     .from(schema.memberships)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
-    .where(inArray(schema.memberships.userId, [...new Set(userIds)]));
+    .where(
+      and(
+        inArray(schema.memberships.userId, [...new Set(userIds)]),
+        // A former member is nobody's camp-mate there any more (CDB-036):
+        // no shared-camp profile, photo or messaging reach through it.
+        activeMembership(),
+      ),
+    );
   for (const row of rows) {
     out.get(row.userId)?.push({
       groupId: row.groupId,
@@ -334,6 +342,7 @@ export async function listCampPeople(input: {
     .where(
       and(
         eq(schema.memberships.groupId, group.id),
+        activeMembership(),
         eq(schema.burnerBios.listedInCampPeople, true),
         // Confirmed this edition only — a carried, unconfirmed opt-in is inert.
         isNotNull(schema.burnerBios.completedAt),

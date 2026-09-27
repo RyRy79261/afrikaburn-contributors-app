@@ -177,6 +177,8 @@ export async function sanitizeAccount(
 
   const farewellAddress = user.email;
 
+  // former members: the plan counts every row the account holds, archived ones
+  // included — they are kept by sanitization exactly like current ones.
   const [{ memberships } = { memberships: 0 }] = await handle
     .select({ memberships: sql<number>`count(*)::int` })
     .from(schema.memberships)
@@ -259,17 +261,17 @@ export async function sanitizeAccount(
     //     schema's cascade never fires here — the rows go explicitly, every
     //     edition's. Where a person will be and when is theirs, and a departed
     //     account's dates on a lead's roster help nobody.
-    await tx
-      .delete(schema.membershipLogistics)
-      .where(
-        inArray(
-          schema.membershipLogistics.membershipId,
-          tx
-            .select({ id: schema.memberships.id })
-            .from(schema.memberships)
-            .where(eq(schema.memberships.userId, userId)),
-        ),
-      );
+    await tx.delete(schema.membershipLogistics).where(
+      inArray(
+        schema.membershipLogistics.membershipId,
+        // former members: erased too — a former camp's copy of where this
+        // person would be is no more the camp's to keep than a current one.
+        tx
+          .select({ id: schema.memberships.id })
+          .from(schema.memberships)
+          .where(eq(schema.memberships.userId, userId)),
+      ),
+    );
 
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
@@ -368,6 +370,7 @@ export async function sanitizeAccount(
     //    that grants nothing.
     //    `org_role_assignments` is keyed by MEMBERSHIP, not by user, so the
     //    memberships have to be resolved first.
+    // former members: the org group is never archived, and every org row goes.
     const orgMemberships = await tx
       .select({ id: schema.memberships.id })
       .from(schema.memberships)
@@ -391,6 +394,7 @@ export async function sanitizeAccount(
         )
         .returning({ orgRoleId: schema.orgRoleAssignments.orgRoleId });
       releasedOrgRoleIds = revoked.map((r) => r.orgRoleId);
+      // former members: the org rows resolved above, never archived.
       await tx
         .update(schema.memberships)
         .set({ role: "member" })

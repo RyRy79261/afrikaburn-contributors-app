@@ -14,7 +14,7 @@ import {
   type MedicalAccessContext,
 } from "@quagga/core";
 import type { MembershipRole } from "@quagga/types";
-import { liveOrgRoleAssignment } from "@quagga/db";
+import { liveOrgRoleAssignment, activeMembership } from "@quagga/db";
 import { db, schema } from "./db";
 import { decryptField } from "./crypto-guard";
 
@@ -130,7 +130,15 @@ async function buildMedicalAccessContext(
       role: schema.memberships.role,
     })
     .from(schema.memberships)
-    .where(inArray(schema.memberships.userId, [viewerUserId, subjectUserId]));
+    .where(
+      and(
+        inArray(schema.memberships.userId, [viewerUserId, subjectUserId]),
+        // Archiving revokes camp access (CDB-036): a former member's medical
+        // notes are no longer their old camp leads' to read, and a lead who
+        // was archived is nobody's lead there.
+        activeMembership(),
+      ),
+    );
 
   const actorLeadCampIds: string[] = [];
   const subjectCampIds: string[] = [];

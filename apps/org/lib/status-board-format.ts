@@ -4,7 +4,11 @@
 // derivation here is unit-testable (lib/__tests__/status-board-format.test.ts).
 // The DB reads that feed these live in lib/status-board.ts.
 
-import { MEDICAL_VIEW_AUDIT_ACTION } from "@quagga/core";
+import {
+  MEDICAL_VIEW_AUDIT_ACTION,
+  MEMBER_ARCHIVE_AUDIT_ACTION,
+  MEMBER_RESTORE_AUDIT_ACTION,
+} from "@quagga/core";
 
 /** Human label for an audit action. Unknown actions fall back to the key. */
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -44,6 +48,9 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "org.role.delete": "deleted an org role",
   "org.roles.assign": "changed which org roles someone holds",
   [MEDICAL_VIEW_AUDIT_ACTION]: "read a burner's medical notes",
+  // Former camp members (CDB-036).
+  [MEMBER_ARCHIVE_AUDIT_ACTION]: "archived a camp member",
+  [MEMBER_RESTORE_AUDIT_ACTION]: "restored a former camp member",
 };
 
 export function activityLabel(action: string): string {

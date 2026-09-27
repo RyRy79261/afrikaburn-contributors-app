@@ -25,6 +25,7 @@ import {
 } from "@quagga/core";
 import { OrgCapabilityKey, RoleColor } from "@quagga/types";
 
+import { activeMembership } from "@quagga/db";
 import { schema, withTransaction } from "@/lib/db";
 import { requireSystemManager } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
@@ -629,6 +630,7 @@ export async function setAccountOrgRoles(
           and(
             eq(schema.memberships.userId, input.userId),
             eq(schema.memberships.groupId, session.orgGroupId),
+            activeMembership(),
           ),
         )
         .limit(1);

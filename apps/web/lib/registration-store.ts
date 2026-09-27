@@ -26,6 +26,7 @@ import type {
   SectionReviewStatus,
   SupplierStanding,
 } from "@quagga/types";
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
 
 // Camp-side data access + mutations for the registration wizard. Server-only;
@@ -85,6 +86,7 @@ export async function getRegistrationCampContext(
         and(
           eq(schema.memberships.userId, viewerId),
           eq(schema.memberships.groupId, group.id),
+          activeMembership(),
         ),
       )
       .limit(1);
@@ -286,6 +288,7 @@ async function resolveReplyAuthors(
           eq(schema.memberships.groupId, org.id),
           inArray(schema.memberships.userId, authorIds),
           inArray(schema.memberships.role, ["god", "org_staff"]),
+          activeMembership(),
         ),
       );
     for (const m of orgMembers) orgStaff.add(m.userId);

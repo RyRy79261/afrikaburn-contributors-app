@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { boundStrings, dbMock } from "@/test/db-mock";
+import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
@@ -46,11 +46,14 @@ function inviteRow(overrides: Record<string, unknown> = {}) {
 function queueRedemption(input: {
   invite?: Record<string, unknown> | null;
   viewerRole?: string | null;
+  /** A FORMER member of the camp (CDB-036) — only asked when not a current one. */
+  former?: boolean;
   group?: { name: string; slug: string } | null;
 }) {
   dbMock.queue(input.invite === null ? [] : [inviteRow(input.invite)]);
   if (input.invite === null) return;
   dbMock.queue(input.viewerRole ? [{ role: input.viewerRole }] : []);
+  if (!input.viewerRole) dbMock.queue(input.former ? [{ id: "m-former" }] : []);
   dbMock.queue(
     input.group === null
       ? []
@@ -360,6 +363,78 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
       role: "lead",
       refCode: "MAH-M002",
     });
+  });
+
+  // --- Former members (CDB-036) --------------------------------------------
+
+  it("a FORMER member's invite RESTORES their archived row, as a member, and audits it", async () => {
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert */ [],
+      /* the audit row */ [],
+    );
+
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: true,
+      slug: "mad-hatters",
+    });
+
+    const upsert = dbMock
+      .writesTo(schema.memberships)
+      .find((q) => q.kind === "insert")!;
+    // One row per (user, camp): the conflict UPDATES the archived row back to
+    // life rather than failing or leaving them archived with a spent invite…
+    expect(upsert.called("onConflictDoNothing")).toBe(false);
+    const conflict = upsert.arg("onConflictDoUpdate") as {
+      set: Record<string, unknown>;
+      setWhere: unknown;
+    };
+    expect(conflict.set).toEqual({
+      archivedAt: null,
+      archivedByUserId: null,
+      // …and grants exactly what THIS invite grants, never the role they held.
+      role: "member",
+    });
+    // …but only when the row IS archived: a current member's row is untouched.
+    expect(
+      nullChecksOn(
+        { calls: [{ method: "x", args: [conflict.setWhere] }] } as never,
+        schema.memberships.archivedAt,
+      ),
+    ).toEqual(["is not null"]);
+
+    const audit = dbMock.writesTo(schema.auditEvents);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.tx).toBe(true);
+    expect(audit[0]!.arg("values")).toMatchObject({
+      actorId: USER,
+      action: "camp.member.restore",
+      subject: USER,
+      meta: { groupId: GROUP, via: "invite", inviteId: INVITE_ID },
+    });
+  });
+
+  it("a brand-new member's join writes no restore audit", async () => {
+    queueRedemption({ viewerRole: null, former: false });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], []);
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: true,
+      slug: "mad-hatters",
+    });
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("looks the redeemer up as a CURRENT member, so a former one is not waved through as already-in", async () => {
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], [], []);
+    await redeemInvite(TOKEN, USER);
+    const roleLookup = dbMock.queries[1]!;
+    expect(roleLookup.arg("from")).toBe(schema.memberships);
+    expect(nullChecksOn(roleLookup, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
   });
 
   it("a lead_transfer is NOT refused for someone already in the camp", async () => {

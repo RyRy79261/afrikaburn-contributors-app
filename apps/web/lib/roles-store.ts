@@ -35,6 +35,7 @@ import type {
   RoleAssignmentConsent,
   RoleColor,
 } from "@quagga/types";
+import { activeMembership, formerMembership } from "@quagga/db";
 import { db, schema, withTransaction } from "./db";
 import { insertNotifications } from "./notifications";
 
@@ -182,6 +183,10 @@ export interface RoleAssignmentRow {
  */
 export async function getRoleAssignments(
   groupId: string,
+  /** Whose assignments: the camp's current members (default — every
+   * decision and count), or its FORMER members, whose roles held are history
+   * the "Former members" roster shows (CDB-036). */
+  status: "current" | "former" = "current",
 ): Promise<Map<string, RoleAssignmentRow[]>> {
   const rows = await db()
     .select({
@@ -195,7 +200,12 @@ export async function getRoleAssignments(
       schema.memberships,
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
-    .where(eq(schema.memberships.groupId, groupId));
+    .where(
+      and(
+        eq(schema.memberships.groupId, groupId),
+        status === "former" ? formerMembership() : activeMembership(),
+      ),
+    );
   const map = new Map<string, RoleAssignmentRow[]>();
   for (const r of rows) {
     const list = map.get(r.membershipId) ?? [];
@@ -410,6 +420,7 @@ export async function setMemberRoles(
       and(
         eq(schema.memberships.id, membershipId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -536,6 +547,7 @@ export async function assignOfficer(
       and(
         eq(schema.memberships.id, membershipId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -574,7 +586,7 @@ export async function assignOfficer(
     const [m] = await db()
       .select({ userId: schema.memberships.userId })
       .from(schema.memberships)
-      .where(eq(schema.memberships.id, membershipId))
+      .where(and(eq(schema.memberships.id, membershipId), activeMembership()))
       .limit(1);
     const camp = await campNameAndSlug(groupId);
     if (m && camp) {
@@ -628,6 +640,7 @@ export async function unassignOfficer(
       and(
         eq(schema.memberships.id, membershipId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -700,6 +713,7 @@ export async function pendingOfficerConsents(
     .where(
       and(
         eq(schema.memberships.userId, userId),
+        activeMembership(),
         inArray(schema.memberRoleAssignments.consentStatus, [
           "pending",
           "accepted",
@@ -743,6 +757,7 @@ export async function respondToOfficer(
       and(
         eq(schema.memberships.userId, userId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -877,6 +892,7 @@ export async function getMemberPermissions(
       and(
         eq(schema.memberships.userId, userId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -1052,6 +1068,7 @@ export async function membershipIdsWithRoles(
     .where(
       and(
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
         eq(schema.memberRoleAssignments.consentStatus, "accepted"),
         inArray(schema.memberRoleAssignments.projectRoleId, [...roleIds]),
       ),

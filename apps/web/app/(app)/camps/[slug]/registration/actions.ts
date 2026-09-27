@@ -11,6 +11,7 @@ import {
 } from "@quagga/types";
 import { requireCampUser, getOrgGroup } from "@/lib/session";
 import { getActiveEdition } from "@/lib/edition";
+import { activeMembership } from "@quagga/db";
 import { db, schema } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import {
@@ -190,6 +191,7 @@ async function requireCampAdmin(slug: string): Promise<
       and(
         eq(schema.memberships.userId, user.id),
         eq(schema.memberships.groupId, group.id),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -357,6 +359,7 @@ export async function replyToSectionReviewAction(
       and(
         eq(schema.memberships.userId, user.id),
         eq(schema.memberships.groupId, target.groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -374,6 +377,7 @@ export async function replyToSectionReviewAction(
           eq(schema.memberships.userId, user.id),
           eq(schema.memberships.groupId, org.id),
           inArray(schema.memberships.role, ["god", "org_staff"]),
+          activeMembership(),
         ),
       )
       .limit(1);

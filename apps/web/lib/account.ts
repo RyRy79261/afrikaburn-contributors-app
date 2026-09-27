@@ -28,6 +28,7 @@ import {
   type AccountSession as SharedAccountSession,
   type LinkedAccount as SharedLinkedAccount,
 } from "@quagga/auth/account";
+import { activeMembership } from "@quagga/db";
 import { db, schema } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 
@@ -172,6 +173,7 @@ export async function buildDeletionGuardContext(
         where m2.group_id = ${schema.groups.id}
           and m2.role = 'lead'
           and u2.sanitized_at is null
+          and m2.archived_at is null
       )`,
     })
     .from(schema.memberships)
@@ -180,6 +182,7 @@ export async function buildDeletionGuardContext(
       and(
         eq(schema.memberships.userId, userId),
         eq(schema.memberships.role, "lead"),
+        activeMembership(),
       ),
     );
 
@@ -200,6 +203,7 @@ export async function buildDeletionGuardContext(
   let orgGodCount = 0;
   let mineRole: string | null = null;
   if (orgGroup) {
+    // former members: the org group is never archived.
     const [mine] = await handle
       .select({ role: schema.memberships.role })
       .from(schema.memberships)
@@ -227,6 +231,7 @@ export async function buildDeletionGuardContext(
     // GOD_EMAILS gets a NEW users row and a NEW god membership on their next
     // sign-in while the tombstone's membership stays, so every cycle inflated
     // the count by one and made the guard progressively more permissive.
+    // former members: the org group is never archived.
     const [{ count } = { count: 0 }] = await handle
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.memberships)

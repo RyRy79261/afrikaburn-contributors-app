@@ -26,6 +26,7 @@ import { loadCampRoster } from "@/lib/roster-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { RosterFilters } from "@/components/roster/roster-filters";
 import { RosterTable } from "@/components/roster/roster-table";
+import { archiveMemberAction, restoreMemberAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,12 @@ function StatsCard({ stats }: { stats: CampRosterStats }) {
     },
     { label: "Joining build", value: String(stats.joiningBuild) },
     { label: "Joining strike", value: String(stats.joiningStrike) },
+    // CDB-036. NEEDS DESIGN REVIEW — a tile on the existing card, no frame.
+    {
+      label: "Former members",
+      value: String(stats.former),
+      hint: "Archived, history kept",
+    },
     {
       label: "Officers",
       value: stats.officers.applies
@@ -141,7 +148,8 @@ export default async function CampRosterPage({
   });
   if (!result) notFound();
 
-  const { camp, roster, stats, filter, roleOptions } = result;
+  const { camp, roster, stats, filter, roleOptions, actions } = result;
+  const former = filter.status === "former";
   const filterQuery = rosterFilterQuery(filter);
   const exportHref = `/camps/${camp.slug}/roster/export${
     filterQuery ? `?${filterQuery}` : ""
@@ -180,6 +188,7 @@ export default async function CampRosterPage({
           q: firstParam(query.q).slice(0, ROSTER_QUERY_MAX),
           role: filter.role ? rosterRoleParam(filter.role) : "",
           bio: filter.bio ?? "",
+          status: former ? "former" : "",
         }}
         roleOptions={roleOptions.map((r) => ({
           value: rosterRoleParam({ kind: "project", roleId: r.id }),
@@ -190,17 +199,36 @@ export default async function CampRosterPage({
       <p className="text-sm text-muted-foreground" aria-live="polite">
         {isRosterFiltered(filter)
           ? `Showing ${roster.rows.length} of ${roster.total}`
-          : `${roster.total} ${roster.total === 1 ? "person" : "people"}`}
+          : former
+            ? `${roster.total} former ${roster.total === 1 ? "member" : "members"} — they no longer have access to the camp`
+            : `${roster.total} ${roster.total === 1 ? "person" : "people"}`}
       </p>
 
       {roster.rows.length === 0 ? (
-        <EmptyState
-          icon={<Users className="h-5 w-5" aria-hidden />}
-          title="Nobody matches"
-          description="Try a different name, or clear a filter."
-        />
+        former && !isRosterFiltered(filter) ? (
+          <EmptyState
+            icon={<Users className="h-5 w-5" aria-hidden />}
+            title="No former members"
+            description="People you archive show up here, with their history. You can restore them any time."
+          />
+        ) : (
+          <EmptyState
+            icon={<Users className="h-5 w-5" aria-hidden />}
+            title="Nobody matches"
+            description="Try a different name, or clear a filter."
+          />
+        )
       ) : (
-        <RosterTable rows={roster.rows} />
+        <RosterTable
+          rows={roster.rows}
+          label={former ? "Former members" : "Camp roster"}
+          actions={{
+            slug: camp.slug,
+            byMembership: actions,
+            archive: archiveMemberAction,
+            restore: restoreMemberAction,
+          }}
+        />
       )}
     </div>
   );

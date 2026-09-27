@@ -23,6 +23,7 @@ import {
   type QuestionnaireResponses,
   type SaveResult,
 } from "@quagga/types";
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
@@ -196,7 +197,7 @@ async function resolveProjectTargets(
       role: schema.memberships.role,
     })
     .from(schema.memberships)
-    .where(eq(schema.memberships.groupId, groupId));
+    .where(and(eq(schema.memberships.groupId, groupId), activeMembership()));
 
   const roleAssignments = await db()
     .select({
@@ -209,7 +210,7 @@ async function resolveProjectTargets(
       schema.memberships,
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
-    .where(eq(schema.memberships.groupId, groupId));
+    .where(and(eq(schema.memberships.groupId, groupId), activeMembership()));
 
   // Project_roles are needed for baseline derivation (the "everyone" role).
   const projectRoles = await db()

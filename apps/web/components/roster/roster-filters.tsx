@@ -32,6 +32,8 @@ export interface RosterFilterValues {
   role: string;
   /** "complete" | "incomplete" | "" */
   bio: string;
+  /** "former" for the camp's former members (CDB-036), "" for the camp. */
+  status: string;
 }
 
 export function RosterFilters({
@@ -52,6 +54,7 @@ export function RosterFilters({
       if (next.q.trim()) params.set("q", next.q.trim());
       if (next.role) params.set("role", next.role);
       if (next.bio) params.set("bio", next.bio);
+      if (next.status === "former") params.set("status", "former");
       const query = params.toString();
       startTransition(() => {
         router.replace(query ? `${pathname}?${query}` : pathname, {
@@ -132,6 +135,28 @@ export function RosterFilters({
         <ToggleGroupItem value={ALL}>All bios</ToggleGroupItem>
         <ToggleGroupItem value="complete">Bio complete</ToggleGroupItem>
         <ToggleGroupItem value="incomplete">Bio not complete</ToggleGroupItem>
+      </ToggleGroup>
+
+      {/* Former members (CDB-036). Not a narrowing of the list above: the
+          server reads a different set of rows for each. */}
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        aria-label="Current or former members"
+        value={initial.status === "former" ? "former" : "current"}
+        onValueChange={(value) => {
+          // Radix sends "" when the pressed item is pressed again.
+          if (!value) return;
+          navigate({
+            ...initial,
+            q,
+            status: value === "former" ? "former" : "",
+          });
+        }}
+      >
+        <ToggleGroupItem value="current">Current</ToggleGroupItem>
+        <ToggleGroupItem value="former">Former members</ToggleGroupItem>
       </ToggleGroup>
     </form>
   );

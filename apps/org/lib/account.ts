@@ -17,6 +17,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { getAuthenticatedUser } from "@/lib/auth";
+import { activeMembership } from "@quagga/db";
 import { getDb, schema } from "@/lib/db";
 
 // The console's account surface (roadmap M4-21) — everything a staff member
@@ -142,10 +143,12 @@ export async function getOrgAccountHoldings(
         and(
           eq(schema.memberships.userId, userId),
           eq(schema.memberships.groupId, orgGroup.id),
+          activeMembership(),
         ),
       )
       .limit(1);
 
+    // former members: the org group, never archived.
     const [{ count: gods } = { count: 0 }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.memberships)

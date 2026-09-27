@@ -77,6 +77,8 @@ async function bootstrapGod(
   }
   const org = await getOrgGroup();
   if (!org) return;
+  // former members: this is the ORG group, which is never archived (archiving
+  // is a camp operation — @quagga/core member-archive).
   const existing = await db()
     .select({ id: schema.memberships.id, role: schema.memberships.role })
     .from(schema.memberships)
@@ -98,6 +100,7 @@ async function bootstrapGod(
     // Only audit when the insert actually created the god row (no conflict).
     if (inserted[0]) await auditGodElevation(user);
   } else if (existing[0].role !== "god") {
+    // former members: the org group row read above, never archived.
     await db()
       .update(schema.memberships)
       .set({ role: "god" })

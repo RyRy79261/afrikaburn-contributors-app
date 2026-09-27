@@ -876,6 +876,24 @@ export const memberships = pgTable(
     // bank account). NOT an AfrikaBurn payment; the platform never moves money.
     // Nullable: org/god memberships carry none. Unique per group.
     refCode: text("ref_code"),
+    // --- Former members (App Spec CDB-036, epic #55) ----------------------
+    // Set when a camp archives this person. Decided 2026-09-27 (#55):
+    // ARCHIVING REVOKES CAMP ACCESS — an archived membership is NO membership
+    // to every access path (the `activeMembership()` predicate,
+    // src/membership-archive.ts), while the row itself, and everything hung off
+    // it (project-role assignments, per-edition logistics, questionnaire
+    // responses, audit), stays as the camp's history. Deleting the row is what
+    // `leaveCamp` does and what this deliberately is not.
+    //
+    // The row is kept rather than moved so the (user, group) unique index still
+    // holds: re-inviting a former member RESTORES this row (same ref code, same
+    // history) instead of creating a second one. Never set on an org-group row.
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    // Who archived them. SET NULL: the archiver deleting their account must not
+    // take the former member's history with it (the audit row keeps the actor).
+    archivedByUserId: uuid("archived_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (m) => ({

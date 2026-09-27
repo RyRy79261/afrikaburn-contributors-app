@@ -8,6 +8,10 @@ import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@quagga/ui/components/responsive-data-table";
+import {
+  MemberArchiveButton,
+  type MemberArchiveAction,
+} from "./member-archive-button";
 
 // The camp roster table (epic #55). NEEDS DESIGN REVIEW — built from existing
 // components without a canvas frame.
@@ -112,14 +116,61 @@ const COLUMNS: ResponsiveColumn<CampRosterRow>[] = [
   },
 ];
 
-export function RosterTable({ rows }: { rows: CampRosterRow[] }) {
+/** What the roster may offer on each row: membershipId → the ONE action this
+ * viewer may take, as the server's @quagga/core predicate decided it (a row
+ * absent from the map offers nothing). The actions re-decide on every call. */
+export interface RosterRowActions {
+  slug: string;
+  byMembership: Record<string, "archive" | "restore">;
+  archive: MemberArchiveAction;
+  restore: MemberArchiveAction;
+}
+
+function actionsColumn(
+  actions: RosterRowActions,
+): ResponsiveColumn<CampRosterRow> {
+  return {
+    id: "actions",
+    header: "Actions",
+    role: "actions",
+    hideHeader: true,
+    align: "right",
+    cell: (row) => {
+      const mode = actions.byMembership[row.membershipId];
+      if (!mode) return null;
+      return (
+        <MemberArchiveButton
+          slug={actions.slug}
+          membershipId={row.membershipId}
+          displayName={row.displayName}
+          mode={mode}
+          action={mode === "archive" ? actions.archive : actions.restore}
+        />
+      );
+    },
+  };
+}
+
+export function RosterTable({
+  rows,
+  actions,
+  label = "Camp roster",
+}: {
+  rows: CampRosterRow[];
+  actions?: RosterRowActions;
+  label?: string;
+}) {
+  const columns =
+    actions && Object.keys(actions.byMembership).length > 0
+      ? [...COLUMNS, actionsColumn(actions)]
+      : COLUMNS;
   return (
     <ResponsiveDataTable
-      columns={COLUMNS}
+      columns={columns}
       data={rows}
       getRowKey={(row) => row.membershipId}
-      mobileAriaLabel="Camp roster"
-      caption={<span className="sr-only">Camp roster</span>}
+      mobileAriaLabel={label}
+      caption={<span className="sr-only">{label}</span>}
     />
   );
 }
