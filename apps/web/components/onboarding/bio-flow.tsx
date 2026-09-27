@@ -13,6 +13,7 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_QUESTION_ID,
   validateUsername,
+  saIdNumberError,
   readFieldVisibility,
   encodeFieldVisibility,
   type BioPrivacyField,
@@ -209,6 +210,24 @@ export function BioFlow({
   const step = steps[stepIndex];
   const isLastInput = step === "privacy";
 
+  // BACK TO THE TOP ON EVERY STEP CHANGE (issue #33). The action row sits at
+  // the bottom of a long step, so without this the next step opened scrolled to
+  // ITS bottom, and the burner had to scroll up to find what they were being
+  // asked. Not on first render: arriving on the page must not jump.
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const previousStep = React.useRef(stepIndex);
+  React.useEffect(() => {
+    if (previousStep.current === stepIndex) return;
+    previousStep.current = stepIndex;
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    rootRef.current?.scrollIntoView({
+      block: "start",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [stepIndex]);
+
   // Refusals no control on this step is drawing. See the banner below.
   const unshownErrors = Object.entries(errors).filter(
     ([key]) =>
@@ -259,6 +278,10 @@ export function BioFlow({
         next[USERNAME_QUESTION_ID] = usernameState.message;
       }
     }
+    // The same SA ID check the server makes (issue #32), here so a mistyped
+    // digit is caught before the round trip. The server remains the authority.
+    const idError = saIdNumberError(str("id.type"), str("id.number"));
+    if (idError) next["id.number"] = idError;
     setErrors(next);
     focusFirstError(next, { ignore: NON_FIELD_ERROR_KEYS });
     return Object.keys(next).length === 0;
@@ -330,7 +353,7 @@ export function BioFlow({
   })();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={rootRef} className="flex scroll-mt-24 flex-col gap-6">
       <Stepper steps={steps} current={stepIndex} />
 
       {step === "welcome" && <WelcomeStep />}
