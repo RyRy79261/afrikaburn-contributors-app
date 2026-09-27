@@ -242,8 +242,7 @@ export const MemberLogisticsInput = z
   .strict();
 
 export type LogisticsValidation =
-  | { ok: true; value: MemberLogistics }
-  | { ok: false; error: string };
+  { ok: true; value: MemberLogistics } | { ok: false; error: string };
 
 /**
  * Validate a logistics save against the edition's dates. Returns the value to
@@ -296,11 +295,7 @@ export function validateMemberLogistics(
     }
     ms[label] = parsedDate;
   }
-  if (
-    ms.arrival != null &&
-    ms.departure != null &&
-    ms.arrival > ms.departure
-  ) {
+  if (ms.arrival != null && ms.departure != null && ms.arrival > ms.departure) {
     return {
       ok: false,
       error: "You can't leave before you arrive — check your dates.",
@@ -712,6 +707,9 @@ export function rosterCsvFilename(
   year: number,
   today: Date,
 ): string {
-  const safe = slug.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
+  const safe = slug
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 60);
   return `${safe || "camp"}-${year}-roster-${today.toISOString().slice(0, 10)}.csv`;
 }

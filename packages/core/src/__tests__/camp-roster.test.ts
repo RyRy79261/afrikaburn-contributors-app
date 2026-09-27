@@ -379,9 +379,9 @@ describe("validateMemberLogistics", () => {
     expect(
       validateMemberLogistics(plan({ membershipId: "m-ren" }), EDITION),
     ).toEqual({ ok: false, error: "That didn't look like a travel plan." });
-    expect(
-      validateMemberLogistics(plan({ userId: REN }), EDITION).ok,
-    ).toBe(false);
+    expect(validateMemberLogistics(plan({ userId: REN }), EDITION).ok).toBe(
+      false,
+    );
   });
 
   it("refuses a non-boolean build flag", () => {
@@ -471,9 +471,9 @@ describe("parseRosterFilter", () => {
   });
 
   it("reads this camp's project role", () => {
-    expect(parseRosterFilter({ role: `role:${KITCHEN}` }, ROLE_IDS).role).toEqual(
-      { kind: "project", roleId: KITCHEN },
-    );
+    expect(
+      parseRosterFilter({ role: `role:${KITCHEN}` }, ROLE_IDS).role,
+    ).toEqual({ kind: "project", roleId: KITCHEN });
   });
 
   it("ignores another camp's role id, an org rank and unknown values", () => {
@@ -515,7 +515,11 @@ describe("buildCampRoster", () => {
   it("refuses a viewer who may not see it — before looking at any member", () => {
     for (const access of [plainMember, nonMember]) {
       expect(
-        buildCampRoster({ access, members: ROSTER, filter: emptyRosterFilter() }),
+        buildCampRoster({
+          access,
+          members: ROSTER,
+          filter: emptyRosterFilter(),
+        }),
       ).toBeNull();
     }
   });
@@ -768,7 +772,7 @@ describe("roster export", () => {
   });
 
   it.each([
-    ["=HYPERLINK(\"http://x\")", "'=HYPERLINK"],
+    ['=HYPERLINK("http://x")', "'=HYPERLINK"],
     ["+27 SUM", "'+27 SUM"],
     ["-1+1", "'-1+1"],
     ["@SUM(A1)", "'@SUM(A1)"],
