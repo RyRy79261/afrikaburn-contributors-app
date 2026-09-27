@@ -254,6 +254,23 @@ export async function sanitizeAccount(
         ),
       );
 
+    // 2c. CAMP LOGISTICS (epic #55). Build/strike/arrival/departure plans are
+    //     keyed by MEMBERSHIP, and memberships are preserved on purpose, so the
+    //     schema's cascade never fires here — the rows go explicitly, every
+    //     edition's. Where a person will be and when is theirs, and a departed
+    //     account's dates on a lead's roster help nobody.
+    await tx
+      .delete(schema.membershipLogistics)
+      .where(
+        inArray(
+          schema.membershipLogistics.membershipId,
+          tx
+            .select({ id: schema.memberships.id })
+            .from(schema.memberships)
+            .where(eq(schema.memberships.userId, userId)),
+        ),
+      );
+
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
     //    display name with the "Departed Burner" stub.
