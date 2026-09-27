@@ -287,7 +287,19 @@ export async function acceptOfficerRequest(
   await expect(
     page.getByRole("heading", { name: /asked to be a camp officer/i }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^accept$/i }).click();
+  // RETRIED UNTIL THE ANSWER LANDS, and only then returned. The camp page is
+  // server-rendered, so "Accept" is visible and clickable before React has
+  // hydrated it, and a click in that window is silently a no-op. Returning
+  // straight after the click let callers race on: the org reload then showed
+  // no accepted officer, deterministically once the camp page grew enough to
+  // hydrate later (epic #55's plans card) — same trap as passkeys.spec.ts.
+  const accepted = page.getByText(/you accepted this role/i);
+  await expect(async () => {
+    if ((await accepted.count()) === 0) {
+      await page.getByRole("button", { name: /^accept$/i }).click();
+    }
+    await expect(accepted.first()).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 // --- Org console (needs a god session — see elevateToGod / skipUnlessGod) ---

@@ -10,6 +10,7 @@ import {
   Megaphone,
   CheckCircle2,
   ClipboardList,
+  ListChecks,
   UserCog,
   Users,
 } from "lucide-react";
@@ -43,7 +44,16 @@ import {
   getMemberPermissions,
   pendingOfficerConsents,
 } from "@/lib/roles-store";
-import { hasProjectPermission, projectQuestionnairesPath } from "@quagga/core";
+import {
+  canViewCampPlacement,
+  canViewCampRoster,
+  emptyMemberLogistics,
+  hasProjectPermission,
+  logisticsWindow,
+  projectQuestionnairesPath,
+} from "@quagga/core";
+import { getOwnLogistics } from "@/lib/roster-store";
+import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampInvites } from "@/components/camp-invites";
@@ -52,6 +62,8 @@ import { OfficerConsentBanner } from "@/components/roles/officer-consent-banner"
 import { PendingQuestionnaires } from "@/components/questionnaire/pending-questionnaires";
 import { LeaveCampButton } from "@/components/leave-camp-button";
 import { MemberRefCode } from "@/components/member-ref-code";
+import { CampPlacementCard } from "@/components/camp-placement";
+import { getCampPlacement } from "@/lib/registration-store";
 import {
   createInviteAction,
   leaveCampAction,
@@ -59,6 +71,7 @@ import {
   setMemberRolesAction,
   respondToOfficerAction,
 } from "./actions";
+import { saveMyLogisticsAction } from "./logistics-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -128,11 +141,11 @@ export default async function CampPage({
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
   const isMember = camp.viewerRole !== null;
 
-  // Eight independent reads, issued together rather than one after another.
+  // Ten independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
-  // before the slowest path through all eight, in series. Nothing here feeds
+  // before the slowest path through all of them, in series. Nothing here feeds
   // anything else here — every one keys off `camp.id`, `campUser.id` or
   // `edition.id`, all of which are already known — so the ordering bought
   // nothing. The authorisation flags are UNCHANGED: each query is still scoped
@@ -147,6 +160,8 @@ export default async function CampPage({
     officerConsents,
     pending,
     pinnedBulletins,
+    placement,
+    myLogistics,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -166,6 +181,20 @@ export default async function CampPage({
     campUser ? pendingOfficerConsents(campUser.id) : [],
     campUser ? listPendingQuestionnaires(campUser.id) : [],
     campUser ? getPinnedBulletinsForCurrentUser(camp.id) : [],
+    // Epic #48: the camp code and erf, for members only — never loaded for a
+    // stranger, so nothing below can render it for one.
+    canViewCampPlacement(isMember)
+      ? getCampPlacement(camp.id, edition.id)
+      : null,
+    // The member's OWN plans (epic #55). `undefined` when they may hold none
+    // here; the store re-derives whose from the session user + slug.
+    campUser && isMember
+      ? getOwnLogistics({
+          slug: camp.slug,
+          userId: campUser.id,
+          editionId: edition.id,
+        })
+      : undefined,
   ]);
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
@@ -198,6 +227,13 @@ export default async function CampPage({
     !!viewerPerms && hasProjectPermission(viewerPerms, "manage_roles");
   const canViewDetails =
     !!viewerPerms && hasProjectPermission(viewerPerms, "view_member_details");
+  // Epic #55: the roster (search, filter, stats, export). Linked only for a
+  // viewer @quagga/core lets in; the roster page and the export route re-check
+  // on every request, so this is a convenience, never the boundary.
+  const canSeeRoster = canViewCampRoster({
+    groupKind: camp.kind,
+    viewerMembership: viewerPerms,
+  });
   const canPostAnnouncements =
     !!viewerPerms && hasProjectPermission(viewerPerms, "post_announcements");
 
@@ -282,6 +318,8 @@ export default async function CampPage({
 
         {myRefCode && <MemberRefCode code={myRefCode} prominent />}
 
+        {placement && <CampPlacementCard placement={placement} />}
+
         {myOfficerRoles.length > 0 && (
           <OfficerConsentBanner
             slug={camp.slug}
@@ -321,6 +359,19 @@ export default async function CampPage({
                   <Link href={`/camps/${camp.slug}/people`}>
                     <Users className="h-4 w-4" aria-hidden />
                     People in this camp
+                  </Link>
+                </Button>
+              )}
+              {canSeeRoster && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-fit"
+                >
+                  <Link href={`/camps/${camp.slug}/roster`}>
+                    <ListChecks className="h-4 w-4" aria-hidden />
+                    Roster &amp; plans
                   </Link>
                 </Button>
               )}
@@ -496,6 +547,17 @@ export default async function CampPage({
               )}
             </CardContent>
           </Card>
+
+          {/* The member's own build/strike/arrival/departure (epic #55). */}
+          {myLogistics !== undefined && (
+            <MyLogisticsCard
+              slug={camp.slug}
+              campName={camp.name}
+              initial={myLogistics ?? emptyMemberLogistics()}
+              window={logisticsWindow(edition)}
+              saveAction={saveMyLogisticsAction}
+            />
+          )}
 
           {/* Questionnaires — lead/admin only */}
           {isAdmin && (

@@ -64,7 +64,7 @@ model is ordinary work; the reverse would not have been.
 
 ## 2. Core modules — technical state 🚧
 
-**Requirement IDs:** ✅ CORE-009 · 🚧 CORE-001, CORE-005, CORE-010 · ❌ CORE-003, CORE-004, CORE-007, CORE-011 · ⚠️ CORE-002, CORE-006, CORE-008 *(App Spec §2 — one CORE-NNN id per row below, in order)*
+**Requirement IDs:** ✅ CORE-009 · 🚧 CORE-001, CORE-005, CORE-010, CORE-011 · ❌ CORE-003, CORE-004, CORE-007 · ⚠️ CORE-002, CORE-006, CORE-008 *(App Spec §2 — one CORE-NNN id per row below, in order)*
 
 | Module                                | State | What it rests on                                                                                       |
 | ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------ |
@@ -78,7 +78,7 @@ model is ordinary work; the reverse would not have been.
 | Placement and layout design           | ⚠️    | Preferences and file uploads only; blocked on map data (§11–13)                                        |
 | Annual registration and submission    | ✅    | Built, including the review loop                                                                       |
 | Previous-year records and duplication | 🚧    | Records are kept per year; copying forward is not built                                                |
-| Camp reporting and statistics         | ❌    | Needs the modules above to have data to report on                                                      |
+| Camp reporting and statistics         | 🚧    | Roster headcounts, bio completion, build/strike and officer slots built (§5); the rest needs the modules above |
 
 ## 3. Camper onboarding 🚧
 
@@ -110,7 +110,7 @@ discovered late.
 
 ## 4. Camper database and camp list ⚠️
 
-**Requirement IDs:** ✅ CDB-027, CDB-031, CDB-032, CDB-037, CDB-038, CDB-040, CDB-041, CDB-043 · 🚧 CDB-039, CDB-042 · ❌ CDB-025, CDB-026, CDB-028, CDB-029, CDB-030, CDB-033, CDB-034, CDB-035, CDB-036 · ⚠️ CDB-001–CDB-024 (captured via self-owned Burner Bio, not admin-managed records — see below) *(App Spec §4)*
+**Requirement IDs:** ✅ CDB-011–CDB-014, CDB-027, CDB-030, CDB-031, CDB-032, CDB-033, CDB-037, CDB-038, CDB-040, CDB-041, CDB-043 · 🚧 CDB-039, CDB-042 · ❌ CDB-025, CDB-026, CDB-028, CDB-029, CDB-034, CDB-035, CDB-036 · ⚠️ CDB-001–CDB-010, CDB-015–CDB-024 (captured via self-owned Burner Bio, not admin-managed records — see below) *(App Spec §4; CDB-011–CDB-014 are self-owned too — the member sets their own build/strike/arrival/departure)*
 
 **This is the section where the build and the spec genuinely differ, and the
 difference is not an oversight.**
@@ -141,25 +141,35 @@ consent position under POPIA, and it is the one place where doing what the spec
 says would require unpicking a control the current design leans on.
 
 **Built today:** invite people, roster, roles, search, member detail, audited
-medical access, POPIA-grade retention and deletion.
-**Not built:** spreadsheet import/export, duplicate detection, carry-forward
-between years, archiving, admin-only notes.
+medical access, POPIA-grade retention and deletion; and (epic #55) a lead roster
+at `/camps/[slug]/roster` — search by name, filter by role and by bio
+completion, the member's own build/strike/arrival/departure, and a CSV export
+with no slot for any hard-locked field or medical note, all behind the
+`view_member_details` permission (build-spec §"Camp roster operations").
+**Not built:** spreadsheet import, duplicate detection, carry-forward between
+years, archiving (it needs a decision on whether an archived member keeps
+access — every membership predicate would change), admin-only notes.
 
-Import/export is ordinary work. **Bulk import is the one to think about**: a
+Import is ordinary work. **Bulk import is the one to think about**: a
 spreadsheet of other people's ID numbers is exactly the shape of data the rest
 of the model is arranged to avoid.
 
-## 5. Camper statistics ❌
+## 5. Camper statistics 🚧
 
-**Requirement IDs:** ❌ STATS-001–STATS-031 *(App Spec §5 — nothing built; statistics depend on modules in §6–§10 that don't yet exist)*
+**Requirement IDs:** ✅ STATS-017–STATS-019, STATS-022–STATS-025 · ❌ STATS-001–STATS-016, STATS-020, STATS-021, STATS-026–STATS-031 *(App Spec §5 — the camp-level counts the data already supports are built; the rest depend on modules in §6–§10 that don't yet exist)*
 
-Nothing built. Not hard — it is counting — but it counts things that do not
-exist yet: shifts, fees, tickets, passes. Realistically it follows §6–§10 rather
-than leading them.
+**Built (epic #55):** a "Camp at a glance" card on the lead roster — total
+members, new (the bio's first-time flag), returning, unknown (no bio this
+edition), bios complete (so incomplete by difference), joining build, joining
+strike, and officer slots filled against required. Aggregates only, computed in
+`@quagga/core` `deriveCampRosterStats`, never a per-person breakdown.
+
+**Not built:** everything that counts things that do not exist yet — shifts,
+fees, tickets, passes. Realistically it follows §6–§10 rather than leading them.
 
 The App Spec's own caution ("should not become a public scoring system") is
-straightforward to honour technically: these numbers would live behind the same
-per-camp permission check as the roster.
+honoured the way it was planned: the numbers live behind the same per-camp
+permission check as the roster (`view_member_details`).
 
 ## 6. Shift management ❌
 
@@ -309,7 +319,7 @@ artifact. When map data exists, that pattern is reusable rather than rebuilt.
 
 ## 14. Annual registration and placement submission ✅
 
-**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-014, REG-018, REG-021, REG-022–REG-028 · 🚧 REG-006, REG-013, REG-015, REG-020 · ❌ REG-003, REG-008, REG-009, REG-010, REG-016, REG-017, REG-019, REG-029, REG-030 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029/030 placement-allocation states are not, since placement itself is blocked per §11/§13)*
+**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-014, REG-018, REG-021, REG-022–REG-028, REG-029 · 🚧 REG-006, REG-013, REG-015, REG-020 · ❌ REG-003, REG-008, REG-009, REG-010, REG-016, REG-017, REG-019, REG-030 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029 "placement allocated" is derived from the staff-assigned erf and shown to the camp's members (epic #48); REG-030 "final layout approved" waits on the layout tool, §11/§13)*
 
 Built, and the most complete part of the platform.
 

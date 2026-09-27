@@ -179,11 +179,16 @@ export * from "./bio-carry-forward";
 // Camp-mate profiles (epic #68): the camp-mate predicate + projection, photo
 // and contact rules, the opt-in people view, and the raster-only photo check.
 export * from "./campmates";
+// Camp roster operations (epic #55): roster authz, search/filter, aggregate
+// stats, self-owned build/strike/arrival/departure, and the CSV export that
+// has no slot for a hard-locked or medical field.
+export * from "./camp-roster";
 // Direct messaging (epic #69): participant-only reads, contactability-gated
 // starts, blocks, reports that copy only selected messages, user-chosen timers.
 export * from "./messaging";
 export * from "./avatar";
 export * from "./username";
+export * from "./sa-id";
 export * from "./questionnaire-engine";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";

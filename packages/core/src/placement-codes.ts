@@ -130,3 +130,55 @@ export function parsePlacementAssignment(input: {
   }
   return { campCode, erf };
 }
+
+// --- Reading a camp's placement (epic #48) ------------------------------------
+//
+// ONE SOURCE, READ — NEVER COPIED (ERF-019). The camp code and erf live on the
+// camp's registration for the edition and nowhere else. The camp page, the
+// registration summary and, later, every logistics module (container, gas,
+// water, wood) READ them through this shape; none of them keeps its own copy.
+// A copied erf is a second truth that goes stale the first time Placements
+// revises it, and erfs are revised several times before the map is final.
+
+/** A camp's placement for one edition, as every reader sees it. */
+export interface CampPlacement {
+  campCode: string | null;
+  erf: string | null;
+  /**
+   * DERIVED, not stored: an erf has been written down. There is no
+   * "placement allocated" status value — adding one would make a second
+   * source that could disagree with the erf column.
+   */
+  placementAllocated: boolean;
+}
+
+/** Whether a stored erf means the camp has a placement. */
+export function isPlacementAllocated(erf: string | null | undefined): boolean {
+  return normalizeErf(erf) !== null;
+}
+
+/**
+ * The placement to show for a registration row, or null when there is nothing
+ * to show yet (no registration, or neither field assigned). Re-normalises on
+ * the way out, so a reader never depends on how carefully a writer stored it.
+ */
+export function campPlacementOf(
+  row: { campCode: string | null; erf: string | null } | null | undefined,
+): CampPlacement | null {
+  if (!row) return null;
+  const campCode = normalizeCampCode(row.campCode);
+  const erf = normalizeErf(row.erf);
+  if (campCode === null && erf === null) return null;
+  return { campCode, erf, placementAllocated: erf !== null };
+}
+
+/**
+ * Who may read a camp's placement: its members, and nobody else in the
+ * participant app. An erf is where a camp will be on site — not something a
+ * stranger browsing the directory needs, and for a free camp not something a
+ * stranger may even learn exists. Org staff read it in the console under their
+ * own capability.
+ */
+export function canViewCampPlacement(viewerIsMember: boolean): boolean {
+  return viewerIsMember;
+}

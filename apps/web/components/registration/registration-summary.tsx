@@ -29,6 +29,8 @@ import {
 } from "./registration-answers";
 import { SectionReplyThread } from "./section-reply-thread";
 import { WithdrawRegistrationButton } from "./withdraw-registration";
+import { CampPlacementCard } from "@/components/camp-placement";
+import { campPlacementOf } from "@quagga/core";
 
 // Read-only post-submission view (build-spec §apps/web): status banner +
 // read-only sections + per-section AB feedback threads. The resubmit loop lives
@@ -183,6 +185,7 @@ export function RegistrationSummary({
 }) {
   const r = registration;
   const banner = STATUS_BANNER[r.status];
+  const placement = campPlacementOf(r);
   const completedSections = new Set(r.completedSections);
   const reviewsBySection = new Map<string, CampSectionReview[]>();
   for (const rev of reviews) {
@@ -244,6 +247,11 @@ export function RegistrationSummary({
           ) : null}
         </div>
       </div>
+
+      {/* Epic #48: the camp code and erf once Placements has set either. The
+          page is already limited to camp admins (canViewCampRegistration), a
+          subset of the members `canViewCampPlacement` allows. */}
+      {placement ? <CampPlacementCard placement={placement} /> : null}
 
       {/* Per-section review states + feedback threads (canvas `HmdmU`). Each
           section collapses to a status row; open feedback shows an AfrikaBurn

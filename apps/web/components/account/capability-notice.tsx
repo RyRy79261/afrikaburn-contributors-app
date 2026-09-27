@@ -14,7 +14,7 @@ import { AccountCapabilityNotice } from "@quagga/ui/components/account-capabilit
 //
 // The wording now lives in core's `capabilityVerdict` rather than here, because
 // the org console and the supplier portal render the same refusal and a second
-// copy of "Not finished yet" is a second copy that can drift.
+// copy of that label is a second copy that can drift.
 
 export function CapabilityNotice({
   capability,

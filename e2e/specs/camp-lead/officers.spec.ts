@@ -74,6 +74,11 @@ test.describe("camp lead — officers are consent requests", () => {
     orgPage,
   }) => {
     skipUnlessGod();
+    // THREE PEOPLE (lead, member, org reviewer), each a full sign-up against a
+    // dev server, plus a submitted registration: past the default 90s once
+    // acceptOfficerRequest waits for the answer to land instead of returning
+    // on the click. Same reason as camp-announcements.spec.ts.
+    test.setTimeout(240_000);
 
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");

@@ -225,6 +225,13 @@
       "when": 1790454686776,
       "tag": "0031_announcements_and_direct_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790469778169,
+      "tag": "0032_camp_roster_logistics",
+      "breakpoints": true
     }
   ]
 }

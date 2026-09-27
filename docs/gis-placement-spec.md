@@ -593,6 +593,17 @@ Nothing outside `allocatee_kind = registration` writes to `registrations.erf`,
 and a plan that implied otherwise would have had an importer reaching for a row
 that does not exist.
 
+**Propagation means reading the one source, never copying it** (resolves the
+§13 ambiguity about how an accepted erf reaches logistics; epic #48). Container,
+gas, water and wood modules, the camp page and the registration summary all read
+a camp's code and erf through `@quagga/core` `campPlacementOf` over
+`registrations.camp_code` / `registrations.erf` — no module keeps its own copy.
+An erf is revised several times before the map is final, and every copy would be
+a second truth that goes stale on the first revision. "Placement allocated"
+(`REG-029`) is **derived** from `erf` being set, not a status value, for the
+same reason. Only the camp's own members see it in the participant app
+(`canViewCampPlacement`).
+
 ### E.4 "Camp X wants to be near camp Y"
 
 Today this is `registrations.s5_neighbour_request` — free text, exported for

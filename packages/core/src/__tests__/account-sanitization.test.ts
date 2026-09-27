@@ -172,9 +172,10 @@ describe("buildSanitizationPlan — referential integrity", () => {
     }
   });
 
-  it("purges only the secrets-and-tokens tables, plus the account's own messages and blocks", () => {
+  it("purges only the secrets-and-tokens tables, plus the account's own messages, blocks and camp logistics", () => {
     expect([...plan.purgedTables].sort()).toEqual([
       "email_change_requests",
+      "membership_logistics",
       "messages",
       "profile_keys",
       "security_events",

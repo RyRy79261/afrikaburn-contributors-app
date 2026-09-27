@@ -206,6 +206,11 @@ export const SANITIZATION_PURGED_TABLES = [
   // deleting an account cannot erase the evidence of a report against it.
   "messages",
   "user_blocks",
+  // Camp logistics (epic #55): the account's own build/strike/arrival/
+  // departure plans. Keyed by membership, and memberships are PRESERVED, so the
+  // FK cascade never fires — the rows are deleted explicitly. Where somebody
+  // will be and when is personal; a departed account's dates help no lead.
+  "membership_logistics",
 ] as const;
 
 /**

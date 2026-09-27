@@ -103,6 +103,7 @@ function queueErasure(
     /* delete securityEvents */ [],
     /* delete messages (epic #69) */ [],
     /* delete userBlocks (epic #69) */ [],
+    /* delete membershipLogistics (epic #55) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -441,6 +442,28 @@ describe("sanitizeAccount — the erasure itself", () => {
     // The REPORT copies are the documented exception: never touched here.
     expect(dbMock.writesTo(schema.messageReportItems)).toHaveLength(0);
     expect(dbMock.writesTo(schema.messageReports)).toHaveLength(0);
+  });
+
+  it("DELETES the account's camp logistics, scoped to its own memberships, in the erasure transaction (epic #55)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const logisticsDeletes = dbMock
+      .writesTo(schema.membershipLogistics)
+      .filter((q) => q.kind === "delete");
+    expect(logisticsDeletes).toHaveLength(1);
+    expect(logisticsDeletes[0]!.tx).toBe(true);
+    // Scoped through a subquery over THIS account's memberships — never a
+    // blanket delete of everyone's plans. The memberships themselves stay.
+    const scope = dbMock
+      .queriesTouching(schema.memberships)
+      .filter((q) => q.kind === "select" && q.tx);
+    expect(scope.some((q) => boundStrings(q).includes(USER))).toBe(true);
+    expect(
+      dbMock.writesTo(schema.memberships).filter((q) => q.kind === "delete"),
+    ).toHaveLength(0);
   });
 
   it("leaves auth_user_id alone so the tombstone stays findable", async () => {

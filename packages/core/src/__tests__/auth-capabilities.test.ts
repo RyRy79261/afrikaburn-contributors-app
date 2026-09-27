@@ -3,6 +3,7 @@ import {
   AUTH_CAPABILITIES,
   assertCapability,
   capabilityUserMessage,
+  capabilityVerdict,
   isCapabilitySupported,
   isCapabilityUnavailable,
   unavailableCapabilities,
@@ -98,5 +99,29 @@ describe("assertCapability — fail closed", () => {
     for (const key of AuthCapabilityKey.options) {
       expect(assertCapability(key).ok).toBe(isCapabilitySupported(key));
     }
+  });
+});
+
+describe("capabilityVerdict — a pending feature is described, never the reader's account", () => {
+  // Issue #34: beside a burner's own email address, "Changing your sign-in
+  // email isn't finished yet" under a "Not finished yet" badge read as THEIR
+  // change being half-done, to someone who had only ever signed in with Google.
+  it("labels a supported-but-unwired capability as not built, not unfinished", () => {
+    const verdict = capabilityVerdict(AUTH_CAPABILITIES.emailChange);
+    expect(verdict.label).toBe("Not built yet");
+    expect(verdict.message).not.toMatch(/finished/i);
+    expect(verdict.message).toMatch(/still building/i);
+  });
+
+  it("says nothing at all once a capability is supported and wired", () => {
+    expect(capabilityVerdict(AUTH_CAPABILITIES.sessionList).label).toBeNull();
+  });
+
+  it("keeps the unavailable wording for a capability the provider lacks", () => {
+    const verdict = capabilityVerdict({
+      ...AUTH_CAPABILITIES.emailChange,
+      support: "unavailable",
+    });
+    expect(verdict.label).toBe("Not available yet");
   });
 });

@@ -91,7 +91,11 @@ export function capabilityVerdict(cap: AuthCapability): CapabilityVerdict {
   if (capabilityIsUsable(cap)) return { label: null, message };
   return {
     label:
-      cap.support === "supported" ? "Not finished yet" : "Not available yet",
+      // "Not built yet", not "Not finished yet": beside a burner's own email
+      // address, "not finished" read as THEIR change being half-done, to people
+      // who had never asked for one (issue #34). The notice describes the
+      // feature, never the reader's account.
+      cap.support === "supported" ? "Not built yet" : "Not available yet",
     message,
   };
 }
@@ -154,7 +158,7 @@ export const AUTH_CAPABILITIES: Readonly<
     // something neither of them could do, and the burner came away thinking the
     // failure was theirs.
     pendingMessage:
-      "Changing your sign-in email isn't finished yet \u2014 and organisers can't do it from the console either, so nobody can change it for you right now. Your current address still signs you in, and it's still where security notices go.",
+      "You can't change your sign-in email in the app yet \u2014 we're still building that. Organisers can't change it from the console either. Nothing is waiting on you: your current address still signs you in, and it's still where security notices go.",
   },
   accountDeletion: {
     key: "accountDeletion",

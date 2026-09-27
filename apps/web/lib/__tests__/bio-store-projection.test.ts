@@ -397,6 +397,40 @@ describe("saveBio", () => {
     expect(values.passportEncrypted).toBeNull();
   });
 
+  it("refuses an SA ID with a bad check digit, under the number, writing nothing (issue #32)", async () => {
+    // One digit off the valid 8001015009087 — the typo the checksum exists to
+    // catch before it reaches ticket and access allocation.
+    const result = await saveBio({
+      userId: USER,
+      editionId: EDITION,
+      rawResponses: responses({
+        "id.type": "sa_id",
+        "id.number": "8001015009088",
+      }),
+      final: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : Object.keys(result.errors)).toEqual([
+      "id.number",
+    ]);
+    expect(dbMock.queriesOfKind("insert")).toHaveLength(0);
+  });
+
+  it("does not checksum a passport number, whatever its digits (issue #32)", async () => {
+    dbMock.queue([{ username: null }], [], [], [{ userId: USER }]);
+    const result = await saveBio({
+      userId: USER,
+      editionId: EDITION,
+      rawResponses: responses({
+        "id.type": "passport",
+        "id.number": "8001015009088",
+      }),
+      final: false,
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it("REFUSES LOUDLY rather than silently dropping medical notes with no key", async () => {
     // Silently discarding special personal information while the form reports
     // "Saved" is worse than either storing or refusing it: a burner who typed
