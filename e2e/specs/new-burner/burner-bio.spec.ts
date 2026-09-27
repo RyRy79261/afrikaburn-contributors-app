@@ -142,6 +142,32 @@ test.describe("new burner · Burner Bio", () => {
   });
 });
 
+test.describe("new burner · Burner Bio step navigation", () => {
+  // Issue #33: the action row sits at the bottom of a long step, and the next
+  // step used to open scrolled to ITS bottom, so the burner had to scroll up to
+  // find what they were being asked.
+  test("a completed step opens the next one at its top", async ({
+    webPage,
+  }) => {
+    await signUpBurner(webPage);
+    await webPage.goto("/onboarding");
+    await webPage.getByRole("button", { name: "Get started" }).click();
+    await expect(webPage.getByText("Step 2 of 5")).toBeVisible();
+
+    // Reach the action row the way a burner does: at the bottom of the page.
+    // Asserted, so the test cannot pass on a page too short to scroll.
+    const next = webPage.getByRole("button", { name: "Save & continue" });
+    await next.scrollIntoViewIfNeeded();
+    await expect(webPage.getByText("Step 2 of 5")).not.toBeInViewport();
+
+    await next.click();
+
+    // PRESENT first (the burns step rendered), then where the view is.
+    await expect(webPage.getByLabel(/a bit about you/i)).toBeVisible();
+    await expect(webPage.getByText("Step 3 of 5")).toBeInViewport();
+  });
+});
+
 // --- The action row ---------------------------------------------------------
 //
 // THE BIO IS THE BLOCKING GATE, so a Save button a burner cannot press is the
