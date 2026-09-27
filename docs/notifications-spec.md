@@ -19,8 +19,10 @@ Two kinds, one inbox:
 
 - **Notification** — personal, event-generated, per-account. Sources: registration
   status changes (submitted/under review/changes requested/approved), wrangler
-  assigned, role/officer assignment + acceptance requests, questionnaire released to
-  you (blocking ones flagged), membership events (invite accepted, lead transfer),
+  assigned, placement set or changed (camp code / erf — to the camp's leads and
+  admins, in-app only, on first assignment and on every change; re-saving the same
+  values or only clearing a field sends nothing), role/officer assignment +
+  acceptance requests, questionnaire released to you (blocking ones flagged), membership events (invite accepted, lead transfer),
   supplier onboarding confirmations (deposit received, briefing confirmed, standing
   changed), account security events (mirrors the security-events feed).
 - **Bulletin** — org-authored broadcast to an **audience** (reuses the questionnaire
@@ -74,6 +76,8 @@ full page).
 Notification examples (canonical demo copy):
 
 - 🎉 "Mad Hatters has been approved — placement application is now open" (link → camp)
+- 🎉 "Your camp's placement is set: MAH · C-14" / "Your camp's placement changed:
+  MAH · C-15" (body: the camp's name; link → camp)
 - 🧑‍🚒 "Fire Safety Officer registration accepted — AfrikaBurn can now contact you"
 - 📋 "New questionnaire from AfrikaBurn: Build week availability — REQUIRED, blocks
   registration" (accent-flagged)

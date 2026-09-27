@@ -21,6 +21,7 @@ import type {
   RegistrationStatus,
 } from "@quagga/types";
 import { resolveAudience, type AudienceContext } from "./audience";
+import type { PlacementChange } from "./placement-codes";
 
 // Re-export the payload shapes so consumers can pull them (and the row type
 // below) from a single @quagga/core import.
@@ -144,6 +145,29 @@ export function wranglerAssignedNotification(input: {
     kind: "wrangler",
     title: `${input.wranglerName} from the theme camp leads team is now your wrangler`,
     body: `They'll help ${input.campName} through the process.`,
+    link: input.campSlug ? `/camps/${input.campSlug}` : null,
+  };
+}
+
+/**
+ * 🎉 AfrikaBurn set or changed a camp's placement — its camp code and/or erf
+ * (epic #48). Built from a `placementChange` result, so "nothing new" never
+ * reaches this function. Kind `registration` because the placement lives on the
+ * camp's registration; the camp name is the body so a lead of two camps knows
+ * which one moved.
+ */
+export function placementNotification(input: {
+  change: PlacementChange;
+  campName: string;
+  campSlug?: string | null;
+}): NotificationPayload {
+  return {
+    kind: "registration",
+    title:
+      input.change.verb === "set"
+        ? `Your camp's placement is set: ${input.change.line}`
+        : `Your camp's placement changed: ${input.change.line}`,
+    body: input.campName,
     link: input.campSlug ? `/camps/${input.campSlug}` : null,
   };
 }

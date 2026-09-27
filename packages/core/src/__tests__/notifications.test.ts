@@ -10,6 +10,7 @@ import {
   notificationMentionsAny,
   officerAcceptedNotification,
   officerAssignmentRequestNotification,
+  placementNotification,
   questionnaireReleasedNotification,
   registrationDecisionNotification,
   resolveBulletinAudience,
@@ -184,6 +185,11 @@ describe("preview privacy — no hard-locked fields in any payload", () => {
       wranglerName: "Sipho",
       campName: "Mad Hatters",
     }),
+    placementNotification({
+      change: { verb: "set", line: "MAH · C-14" },
+      campName: "Mad Hatters",
+      campSlug: "mad-hatters",
+    }),
     supplierStandingNotification({ standingLabel: "In Good Standing" }),
     supplierStepConfirmedNotification({ stepLabel: "Deposit received" }),
     bulletinNotification({
@@ -242,6 +248,32 @@ describe("questionnaire release blocking flag", () => {
       blocking: false,
     });
     expect(p.title).not.toMatch(/REQUIRED/);
+  });
+});
+
+describe("placementNotification (epic #48)", () => {
+  it("says `set` on a first assignment, linking to the camp page", () => {
+    expect(
+      placementNotification({
+        change: { verb: "set", line: "MAH · C-14" },
+        campName: "Mad Hatters",
+        campSlug: "mad-hatters",
+      }),
+    ).toEqual({
+      kind: "registration",
+      title: "Your camp's placement is set: MAH · C-14",
+      body: "Mad Hatters",
+      link: "/camps/mad-hatters",
+    });
+  });
+
+  it("says `changed` on a revision", () => {
+    const p = placementNotification({
+      change: { verb: "changed", line: "MAH · C-15" },
+      campName: "Mad Hatters",
+      campSlug: "mad-hatters",
+    });
+    expect(p.title).toBe("Your camp's placement changed: MAH · C-15");
   });
 });
 

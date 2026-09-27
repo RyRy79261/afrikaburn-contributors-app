@@ -1,17 +1,21 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import {
   parsePlacementAssignment,
+  placementChange,
+  placementNotification,
   type PlacementAssignment,
+  type PlacementChange,
 } from "@quagga/core";
 
 import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
+import { insertNotifications } from "@/lib/notifications";
 import { runActionWith, type ActionResultOf } from "./result";
 
 // Staff-assigned camp code + erf (roadmap R1: "Staff-assigned ERFs + camp codes
@@ -23,11 +27,12 @@ import { runActionWith, type ActionResultOf } from "./result";
 // team already owns; a separate domain would let a department review camps
 // without being able to write down where any of them go.
 //
-// NOT NOTIFIED, deliberately. A camp code appears on the camp's own page the
-// moment it is set, and an erf that will be revised three times before the map
-// is final should not fire three "your placement has changed" pushes. The camp
-// learns its erf when AfrikaBurn tells it, which is a placement announcement,
-// not an inbox event.
+// NOTIFIED ON FIRST ASSIGNMENT AND ON EVERY CHANGE (Ryan, 27 Sep 2026, epic
+// #48). This file used to refuse to notify at all, on the grounds that an erf
+// revised three times would send three pushes. The decision was that the camp
+// hearing about each revision is worth it. What still does NOT notify, and why,
+// is `placementChange` in @quagga/core: re-saving the same values, and a save
+// whose only effect is clearing a field.
 
 const AssignInput = z.object({
   registrationId: z.string().uuid(),
@@ -35,6 +40,61 @@ const AssignInput = z.object({
   campCode: z.string().max(64).nullish(),
   erf: z.string().max(128).nullish(),
 });
+
+/**
+ * Tell a camp's leads/admins that AfrikaBurn set or changed its placement.
+ *
+ * Recipients are the camp's structural `lead`/`admin` memberships — the same
+ * audience as a registration decision and a wrangler assignment. In-app only:
+ * immediate email is reserved for registration decisions and blocking
+ * questionnaires (docs/notifications-spec.md §Email), so this deliberately
+ * does NOT consult `shouldSendImmediateEmail("registration")`, which would say
+ * yes for the kind and email every revision. The daily digest picks it up.
+ *
+ * Best-effort, after commit — the wrangler and registration-decision pattern: a
+ * notification failure must never roll back a placement that is already true.
+ */
+async function notifyPlacementChanged(
+  db: ReturnType<typeof getDb>,
+  input: {
+    groupId: string;
+    campName: string;
+    campSlug: string;
+    change: PlacementChange;
+  },
+): Promise<void> {
+  try {
+    const leads = await db
+      .select({ userId: schema.memberships.userId })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.groupId, input.groupId),
+          inArray(schema.memberships.role, ["lead", "admin"]),
+        ),
+      );
+    const userIds = [...new Set(leads.map((l) => l.userId))];
+    if (userIds.length === 0) return;
+
+    const payload = placementNotification({
+      change: input.change,
+      campName: input.campName,
+      campSlug: input.campSlug,
+    });
+    await insertNotifications(
+      db,
+      userIds.map((userId) => ({
+        ...payload,
+        userId,
+        origin: "org" as const,
+        // Written by the org, read in the participant app (the camp page).
+        linkApp: "web" as const,
+      })),
+    );
+  } catch (err) {
+    console.error("[notifications] placement hook failed", err);
+  }
+}
 
 /**
  * Set (or clear) a registration's camp code and erf.
@@ -66,6 +126,7 @@ export async function assignPlacement(
         id: schema.registrations.id,
         editionId: schema.registrations.editionId,
         groupId: schema.registrations.groupId,
+        campName: schema.groups.name,
         campSlug: schema.groups.slug,
       })
       .from(schema.registrations)
@@ -105,7 +166,21 @@ export async function assignPlacement(
       }
     }
 
-    await withTransaction(async (tx) => {
+    const change = await withTransaction(async (tx) => {
+      // THE BEFORE-VALUES ARE READ UNDER THE ROW LOCK, inside the same
+      // transaction as the write. Read outside it, two staff saving at once
+      // could both compare against the same stale value — one notifying about
+      // a change the other had already made, or neither noticing the change.
+      const [current] = await tx
+        .select({
+          campCode: schema.registrations.campCode,
+          erf: schema.registrations.erf,
+        })
+        .from(schema.registrations)
+        .where(eq(schema.registrations.id, registration.id))
+        .for("update");
+      if (!current) throw new Error("That registration no longer exists.");
+
       await tx
         .update(schema.registrations)
         .set({ campCode, erf, updatedAt: new Date() })
@@ -122,7 +197,20 @@ export async function assignPlacement(
           erf,
         },
       });
+
+      return placementChange(current, { campCode, erf });
     });
+
+    // Strictly after commit: a write that threw above (clash, unique-index
+    // race, audit failure) rolled back and never reaches this line.
+    if (change) {
+      await notifyPlacementChanged(db, {
+        groupId: registration.groupId,
+        campName: registration.campName,
+        campSlug: registration.campSlug,
+        change,
+      });
+    }
 
     revalidatePath(`/registrations/${registration.id}`);
     revalidatePath("/registrations");

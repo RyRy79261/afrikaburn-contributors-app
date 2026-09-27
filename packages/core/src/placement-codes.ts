@@ -182,3 +182,59 @@ export function campPlacementOf(
 export function canViewCampPlacement(viewerIsMember: boolean): boolean {
   return viewerIsMember;
 }
+
+// --- Telling the camp its placement moved (epic #48) --------------------------
+//
+// Ryan, 27 Sep 2026: notify the camp's leads when the camp code or erf is FIRST
+// ASSIGNED, and on EVERY CHANGE. The rules below are the whole of "did it
+// change", in one pure place, so the console action cannot drift from its tests.
+
+/** What a placement save means to the camp, or null when it means nothing new. */
+export interface PlacementChange {
+  /**
+   * `set` when every field that moved was previously empty (a first
+   * assignment); `changed` when any moved field replaced or removed a value
+   * the camp already had.
+   */
+  verb: "set" | "changed";
+  /** The camp's placement AFTER the save, one line: "MAH · C-14". */
+  line: string;
+}
+
+/**
+ * Compare a registration's placement before and after a save.
+ *
+ * Returns null — no notification — when:
+ *  - nothing moved (re-saving the same values, or a value that only differs in
+ *    case/whitespace and so normalizes to the same stored form); or
+ *  - the only movement was CLEARING a field. That follows the wrangler
+ *    precedent (unassigning is audited, not notified): "your erf has been
+ *    removed" with nothing in its place gives the camp nothing to act on, and
+ *    the camp page already stops showing the value.
+ *
+ * Both fields are compared in one call, so a save that moves both produces ONE
+ * notice, not two.
+ */
+export function placementChange(
+  before: { campCode: string | null; erf: string | null },
+  after: { campCode: string | null; erf: string | null },
+): PlacementChange | null {
+  const prev = {
+    campCode: normalizeCampCode(before.campCode),
+    erf: normalizeErf(before.erf),
+  };
+  const next = {
+    campCode: normalizeCampCode(after.campCode),
+    erf: normalizeErf(after.erf),
+  };
+  const fields = ["campCode", "erf"] as const;
+  const moved = fields.filter((f) => prev[f] !== next[f]);
+  // Only a field that moved TO a value is news; a pure clear is not.
+  if (!moved.some((f) => next[f] !== null)) return null;
+
+  const verb = moved.some((f) => prev[f] !== null) ? "changed" : "set";
+  const line = [next.campCode, next.erf]
+    .filter((v): v is string => v !== null)
+    .join(" · ");
+  return { verb, line };
+}
