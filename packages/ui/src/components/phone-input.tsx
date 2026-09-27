@@ -123,7 +123,13 @@ export function phoneFromPaste(
   const compact = text.trim().replace(/^00(?=[1-9])/, "+");
   if (!/\d/.test(compact)) return null;
   try {
-    const parsed = parsePhoneNumber(compact, country);
+    // `extract: false`: the WHOLE paste must be a number. By default the parser
+    // digs one out of a sentence, which would replace the field with part of
+    // what was pasted.
+    const parsed = parsePhoneNumber(compact, {
+      defaultCountry: country,
+      extract: false,
+    });
     return parsed?.isPossible() ? parsed.number : null;
   } catch {
     return null;

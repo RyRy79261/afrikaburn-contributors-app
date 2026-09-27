@@ -198,6 +198,13 @@ describe("phoneFromPaste", () => {
     expect(phoneFromPaste("12", "ZA")).toBeNull();
   });
 
+  it("does not dig a number out of surrounding text — the WHOLE paste must be one", () => {
+    // Review on PR #75: the parser extracts by default, so a sentence holding
+    // a number used to replace the field with just the number.
+    expect(phoneFromPaste("Call me on +44 20 7946 0958", "ZA")).toBeNull();
+    expect(phoneFromPaste("+44 20 7946 0958 (work)", "ZA")).toBeNull();
+  });
+
   it("reads a number without a country code only when a country is known", () => {
     expect(phoneFromPaste("(082) 123-4567", "ZA")).toBe("+27821234567");
     expect(phoneFromPaste("082 123 4567", undefined)).toBeNull();
