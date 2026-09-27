@@ -147,7 +147,12 @@ test.describe("camp lead — roster operations", () => {
     // departure-only save "succeeded". "Save plans" enables only once React's
     // state carries the edit, so an enabled button proves the values stuck.
     const save = card.getByRole("button", { name: /save plans/i });
+    // CLEARED FIRST on every attempt: React's input tracker starts from what
+    // the DOM already shows at hydration, so re-filling the SAME value that
+    // was typed before hydration fires no change and Save never enables.
     await expect(async () => {
+      await card.getByLabel("Arrival").fill("");
+      await card.getByLabel("Departure").fill("");
       await card.getByLabel("Arrival").fill("2027-04-24");
       await card.getByLabel("Departure").fill("2027-04-23");
       await expect(save).toBeEnabled({ timeout: 2_000 });
@@ -206,6 +211,7 @@ test.describe("camp lead — roster operations", () => {
     // Filled until React holds it — see the hydration note in the test above.
     const save = card.getByRole("button", { name: /save plans/i });
     await expect(async () => {
+      await card.getByLabel("Arrival").fill("");
       await card.getByLabel("Arrival").fill("2027-04-25");
       await expect(save).toBeEnabled({ timeout: 2_000 });
     }).toPass({ timeout: 30_000 });
