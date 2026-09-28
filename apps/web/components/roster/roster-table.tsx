@@ -155,15 +155,20 @@ export function RosterTable({
   rows,
   actions,
   label = "Camp roster",
+  former = false,
 }: {
   rows: CampRosterRow[];
   actions?: RosterRowActions;
   label?: string;
+  /** The "Former members" list: no bio is loaded for them (roster-store), so
+   * the column would only ever say "Not started" — drop it. */
+  former?: boolean;
 }) {
+  const base = former ? COLUMNS.filter((c) => c.id !== "bio") : COLUMNS;
   const columns =
     actions && Object.keys(actions.byMembership).length > 0
-      ? [...COLUMNS, actionsColumn(actions)]
-      : COLUMNS;
+      ? [...base, actionsColumn(actions)]
+      : base;
   return (
     <ResponsiveDataTable
       columns={columns}

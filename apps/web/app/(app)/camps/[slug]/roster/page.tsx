@@ -222,6 +222,7 @@ export default async function CampRosterPage({
         <RosterTable
           rows={roster.rows}
           label={former ? "Former members" : "Camp roster"}
+          former={former}
           actions={{
             slug: camp.slug,
             byMembership: actions,

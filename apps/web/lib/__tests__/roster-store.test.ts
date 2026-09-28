@@ -453,6 +453,23 @@ describe("loadCampRoster — former members", () => {
     expect(page!.actions).toEqual({ "m-jabu": "restore" });
   });
 
+  it("loads NO bio for a former member — not completion, not the first-timer flag", async () => {
+    // A bio row IS returned here on purpose: only the store's own refusal can
+    // keep it off the former list (the mock does not evaluate the join).
+    const formerRow = memberRow({
+      membershipId: "m-jabu",
+      userId: JABU,
+      username: "Jabu",
+      bioId: "bio-jabu",
+      bioCompletedAt: new Date("2027-03-01"),
+      bioFirstTime: true,
+    });
+    dbMock.queue([CAMP_A], ROWS, [formerRow], [{ count: 1 }]);
+    const page = await load(ALICE, { status: "former" });
+    expect(page!.roster.rows).toHaveLength(1);
+    expect(page!.roster.rows[0]!.bioStatus).toBe("none");
+  });
+
   it("offers the lead Archive on members, never on themselves", async () => {
     dbMock.queue([CAMP_A], ROWS);
     const page = await load(ALICE);

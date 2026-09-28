@@ -75,7 +75,9 @@ export function MemberArchiveButton({
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-muted-foreground">
-        {archive ? "They lose access to the camp. Sure?" : "Sure?"}
+        {archive
+          ? "They lose access to the camp. Sure?"
+          : "They come back as a member, without their old roles. Sure?"}
       </span>
       <Button
         variant={archive ? "destructive" : "default"}

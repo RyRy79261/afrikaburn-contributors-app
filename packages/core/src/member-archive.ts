@@ -24,7 +24,9 @@
 //     archive.
 //
 // Restoring is the mirror image, with the same authority: restoring a former
-// co-lead gives back a structural role, so that is the lead's call too.
+// co-lead is the lead's call too. A restore never hands privileges back
+// (decided 2026-09-28): the person returns as a plain `member` with no custom
+// project roles, whoever restores them — the lead re-promotes deliberately.
 //
 // The permission is `manage_members` (lead/admin always, via the backstop; a
 // plain member only through a role that grants it).

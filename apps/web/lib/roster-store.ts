@@ -127,6 +127,10 @@ async function loadRosterMembers(
         and(
           eq(schema.burnerBios.userId, schema.memberships.userId),
           eq(schema.burnerBios.editionId, editionId),
+          // A FORMER member's bio this edition is none of the camp's business
+          // any more: the join matches nothing for the former list, so not
+          // even completion or the first-time flag is read.
+          status === "former" ? sql`false` : undefined,
         ),
       )
       .leftJoin(
@@ -168,8 +172,9 @@ async function loadRosterMembers(
       username: sanitized ? null : (row.username ?? null),
       structuralRole: row.role,
       projectRoles,
+      // Belt and braces with the join above: never a former member's bio.
       bio:
-        row.bioId != null
+        status !== "former" && row.bioId != null
           ? {
               completedAt: row.bioCompletedAt ?? null,
               firstTime: row.bioFirstTime ?? false,

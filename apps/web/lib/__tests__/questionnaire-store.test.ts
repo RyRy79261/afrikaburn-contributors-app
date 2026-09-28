@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
 import type { Questionnaire } from "@quagga/types";
-import { boundStrings, dbMock } from "@/test/db-mock";
+import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
@@ -84,6 +84,9 @@ const DEFINITION: Questionnaire = {
     },
   ],
 };
+
+/** The active-membership check a CAMP questionnaire makes before fill/submit. */
+const CURRENT_MEMBER = [{ id: "m-u1" }];
 
 function activationRow(over: Record<string, unknown> = {}) {
   return {
@@ -584,11 +587,9 @@ describe("getFillView", () => {
   });
 
   it("prefills from the activation's edition", async () => {
-    dbMock.queue(
-      [activationRow()],
-      [{ status: "pending" }],
-      [{ responses: { arrival: "Tuesday" } }],
-    );
+    dbMock.queue([activationRow()], [{ status: "pending" }], CURRENT_MEMBER, [
+      { responses: { arrival: "Tuesday" } },
+    ]);
 
     const view = await getFillView(ACTIVATION, "u1");
 
@@ -596,7 +597,7 @@ describe("getFillView", () => {
     // Deliberately not filtered by activation id: within one edition the person
     // sees what they said last time rather than a blank form.
     expect(view!.initialResponses).toEqual({ arrival: "Tuesday" });
-    expect(boundStrings(dbMock.queriesOfKind("select")[2]!)).toContain(
+    expect(boundStrings(dbMock.queriesOfKind("select")[3]!)).toContain(
       EDITION_2026,
     );
   });
@@ -605,6 +606,7 @@ describe("getFillView", () => {
     dbMock.queue(
       [activationRow({ editionId: null })],
       [{ status: "pending" }],
+      CURRENT_MEMBER,
       [],
     );
 
@@ -616,7 +618,11 @@ describe("getFillView", () => {
 
   it("returns an empty form rather than failing when no edition exists at all", async () => {
     getActiveEdition.mockResolvedValue(null);
-    dbMock.queue([activationRow({ editionId: null })], [{ status: "pending" }]);
+    dbMock.queue(
+      [activationRow({ editionId: null })],
+      [{ status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     const view = await getFillView(ACTIVATION, "u1");
 
@@ -700,7 +706,11 @@ describe("submitResponse", () => {
   });
 
   it("returns the validator's own errors and does not complete the action", async () => {
-    dbMock.queue([activationRow()], [{ id: "ra-1" }]);
+    dbMock.queue(
+      [activationRow()],
+      [{ id: "ra-1", status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     const result = await submit({ rawResponses: {} });
 
@@ -712,7 +722,11 @@ describe("submitResponse", () => {
   });
 
   it("persists the answer and clears the required action", async () => {
-    dbMock.queue([activationRow()], [{ id: "ra-1" }]);
+    dbMock.queue(
+      [activationRow()],
+      [{ id: "ra-1", status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     expect(await submit()).toEqual({ ok: true });
 
@@ -733,7 +747,11 @@ describe("submitResponse", () => {
   });
 
   it("repeats the partial index's predicate on the upsert", async () => {
-    dbMock.queue([activationRow()], [{ id: "ra-1" }]);
+    dbMock.queue(
+      [activationRow()],
+      [{ id: "ra-1", status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     await submit();
 
@@ -753,7 +771,11 @@ describe("submitResponse", () => {
   });
 
   it("falls back to the active edition for a pre-feature activation", async () => {
-    dbMock.queue([activationRow({ editionId: null })], [{ id: "ra-1" }]);
+    dbMock.queue(
+      [activationRow({ editionId: null })],
+      [{ id: "ra-1", status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     expect(await submit()).toEqual({ ok: true });
     expect(
@@ -767,12 +789,113 @@ describe("submitResponse", () => {
 
   it("refuses rather than writing an edition-less answer when none is set up", async () => {
     getActiveEdition.mockResolvedValue(null);
-    dbMock.queue([activationRow({ editionId: null })], [{ id: "ra-1" }]);
+    dbMock.queue(
+      [activationRow({ editionId: null })],
+      [{ id: "ra-1", status: "pending" }],
+      CURRENT_MEMBER,
+    );
 
     expect(await submit()).toEqual({
       ok: false,
       errors: { _form: "No AfrikaBurn edition is set up yet." },
     });
     expect(dbMock.writesTo(schema.questionnaireResponses)).toHaveLength(0);
+  });
+});
+
+// --- Former members (CDB-036) ----------------------------------------------
+//
+// Archiving a member waives their pending sends from that camp and removes
+// their camp access. Neither is worth anything if the fill page still renders
+// a waived send, or the submit action (reachable without the page) still
+// takes an answer.
+
+describe("a former member and their old camp's questionnaire", () => {
+  // From the real pg enum, not strings typed here.
+  const WAIVED = schema.requiredActionStatusEnum.enumValues.find(
+    (v) => v === "waived",
+  )!;
+  const COMPLETED = schema.requiredActionStatusEnum.enumValues.find(
+    (v) => v === "completed",
+  )!;
+  /** An org OUTBOUND send — not camp business, so no camp membership check. */
+  const orgActivation = () =>
+    activationRow({
+      authoredScope: "org",
+      groupId: "99999999-0000-4000-8000-000000000000",
+      audience: { kind: "org_outbound", selectors: ["all_current_burners"] },
+    });
+  const answer = () =>
+    submitResponse({
+      userId: "u1",
+      activationId: ACTIVATION,
+      rawResponses: { arrival: "Tuesday" },
+    });
+
+  it("getFillView withholds a WAIVED send, even from a current member", async () => {
+    dbMock.queue([activationRow()], [{ status: WAIVED }], CURRENT_MEMBER, [
+      { responses: { arrival: "Tuesday" } },
+    ]);
+    expect(await getFillView(ACTIVATION, "u1")).toBeNull();
+  });
+
+  it("getFillView withholds a camp's send from someone no longer a CURRENT member", async () => {
+    // Pending on purpose: only the membership check can refuse this one.
+    dbMock.queue(
+      [activationRow()],
+      [{ status: "pending" }],
+      /* no active membership */ [],
+      [{ responses: { arrival: "Tuesday" } }],
+    );
+    expect(await getFillView(ACTIVATION, "u1")).toBeNull();
+    const memberCheck = dbMock.queriesTouching(schema.memberships)[0]!;
+    expect(boundStrings(memberCheck)).toEqual(
+      expect.arrayContaining(["u1", GROUP]),
+    );
+    expect(nullChecksOn(memberCheck, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+  });
+
+  it("getFillView still serves an ORG send without asking about camp membership", async () => {
+    dbMock.queue([orgActivation()], [{ status: "pending" }], []);
+    expect(await getFillView(ACTIVATION, "u1")).toMatchObject({
+      actionStatus: "pending",
+    });
+    expect(dbMock.queriesTouching(schema.memberships)).toHaveLength(0);
+  });
+
+  it("submitResponse refuses a WAIVED send and writes nothing", async () => {
+    dbMock.queue(
+      [activationRow()],
+      [{ id: "ra-1", status: WAIVED }],
+      CURRENT_MEMBER,
+    );
+    expect(await answer()).toEqual({
+      ok: false,
+      errors: { _form: "This questionnaire is no longer open to you." },
+    });
+    expect(dbMock.writesTo(schema.questionnaireResponses)).toHaveLength(0);
+    expect(completeRequiredAction).not.toHaveBeenCalled();
+  });
+
+  it("submitResponse refuses a former member revising an answer they COMPLETED before", async () => {
+    dbMock.queue(
+      [activationRow()],
+      [{ id: "ra-1", status: COMPLETED }],
+      /* no active membership */ [],
+    );
+    expect(await answer()).toEqual({
+      ok: false,
+      errors: { _form: "This questionnaire is no longer open to you." },
+    });
+    expect(dbMock.writesTo(schema.questionnaireResponses)).toHaveLength(0);
+    expect(completeRequiredAction).not.toHaveBeenCalled();
+  });
+
+  it("submitResponse still accepts an ORG send with no camp membership at all", async () => {
+    dbMock.queue([orgActivation()], [{ id: "ra-1", status: "pending" }]);
+    expect(await answer()).toEqual({ ok: true });
+    expect(dbMock.queriesTouching(schema.memberships)).toHaveLength(0);
   });
 });

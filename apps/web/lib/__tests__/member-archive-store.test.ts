@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { GroupKind, MembershipRole } from "@quagga/types";
+import {
+  GroupKind,
+  MembershipRole,
+  RoleAssignmentConsent,
+} from "@quagga/types";
 import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 // Former camp members (CDB-036) — the archive and restore WRITES. What these
@@ -31,6 +35,7 @@ const ORG = GroupKind.enum.org;
 const LEAD = MembershipRole.enum.lead;
 const ADMIN = MembershipRole.enum.admin;
 const MEMBER = MembershipRole.enum.member;
+const ACCEPTED = RoleAssignmentConsent.enum.accepted;
 // From the real pg enum, not a string typed here.
 const WAIVED = schema.requiredActionStatusEnum.enumValues.find(
   (v) => v === "waived",
@@ -148,6 +153,7 @@ describe("archiveMember — the write", () => {
       [targetRow()],
       /* CAS update … returning */ [{ id: M_REN }],
       /* waive … returning */ [{ id: "ra-1" }, { id: "ra-2" }],
+      /* revoke their invites … returning */ [{ id: "inv-1" }],
       /* audit */ [],
     );
     expect(await archiveMember(input())).toEqual({ ok: true });
@@ -190,8 +196,45 @@ describe("archiveMember — the write", () => {
         membershipId: M_REN,
         role: MEMBER,
         waivedQuestionnaires: 2,
+        revokedInvites: 1,
       },
     });
+  });
+
+  it("revokes every unused invite to THIS camp that the archived person minted", async () => {
+    // Invites are bearer tokens. Without this, an archived co-lead holding a
+    // link they made earlier could redeem it and restore themselves.
+    dbMock.queue(
+      [targetRow({ userId: JABU, role: ADMIN })],
+      [{ id: M_REN }],
+      [],
+      [{ id: "inv-member" }, { id: "inv-lead-transfer" }],
+      [],
+    );
+    expect(await archiveMember(input())).toEqual({ ok: true });
+
+    const revokes = dbMock.writesTo(schema.invites);
+    expect(revokes).toHaveLength(1);
+    const [revoke] = revokes;
+    expect(revoke!.kind).toBe("update");
+    // Same transaction as the archive: never an archived member with live links.
+    expect(revoke!.tx).toBe(true);
+    // The existing revoke mechanism: stamp used_at (no redeemer recorded).
+    expect(Object.keys(revoke!.arg("set") as object)).toEqual(["usedAt"]);
+    expect((revoke!.arg("set") as { usedAt: unknown }).usedAt).toBeInstanceOf(
+      Date,
+    );
+    // Only THIS camp's, only the ones THEY minted, only unused ones — any
+    // kind, lead transfers included.
+    expect(boundStrings(revoke!)).toEqual(expect.arrayContaining([CAMP, JABU]));
+    expect(nullChecksOn(revoke!, schema.invites.usedAt)).toEqual(["is null"]);
+    expect(
+      (
+        dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+          meta: { revokedInvites: number };
+        }
+      ).meta.revokedInvites,
+    ).toBe(2);
   });
 
   it("deletes NOTHING — history stays", async () => {
@@ -224,6 +267,7 @@ describe("archiveMember — the write", () => {
     const result = await archiveMember(input());
     expect(result.ok).toBe(false);
     expect(dbMock.writesTo(schema.requiredActions)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.invites)).toHaveLength(0);
     expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 });
@@ -233,7 +277,7 @@ describe("restoreMember", () => {
     targetRow({ archivedAt: new Date("2027-02-01"), ...overrides });
 
   it("brings the SAME row back and audits it", async () => {
-    dbMock.queue([archived()], [{ id: M_REN }], []);
+    dbMock.queue([archived()], [{ id: M_REN }], /* no roles held */ [], []);
     expect(await restoreMember(input())).toEqual({ ok: true });
 
     const [cas] = dbMock.writesTo(schema.memberships);
@@ -241,6 +285,7 @@ describe("restoreMember", () => {
     expect(cas!.arg("set")).toEqual({
       archivedAt: null,
       archivedByUserId: null,
+      role: MEMBER,
     });
     expect(nullChecksOn(cas!, schema.memberships.archivedAt)).toEqual([
       "is not null",
@@ -252,7 +297,9 @@ describe("restoreMember", () => {
       meta: {
         groupId: CAMP,
         membershipId: M_REN,
+        previousRole: MEMBER,
         role: MEMBER,
+        droppedRoleAssignments: [],
         via: "restore",
       },
     });
@@ -260,6 +307,76 @@ describe("restoreMember", () => {
     expect(dbMock.queriesOfKind("insert").map((q) => q.arg("insert"))).toEqual([
       schema.auditEvents,
     ]);
+  });
+
+  // Decided 2026-09-28 (Ryan): a restored member comes back WITHOUT their
+  // previous privileges — plain member, no custom project roles.
+  it("drops their custom role assignments (officer consent included) and records them in the audit", async () => {
+    const dropped = [
+      {
+        projectRoleId: "role-kitchen",
+        consentStatus: ACCEPTED,
+        orgVisible: false,
+      },
+      {
+        projectRoleId: "role-safety-officer",
+        consentStatus: ACCEPTED,
+        orgVisible: true,
+      },
+    ];
+    dbMock.queue([archived()], [{ id: M_REN }], dropped, []);
+    expect(await restoreMember(input())).toEqual({ ok: true });
+
+    const deletes = dbMock.writesTo(schema.memberRoleAssignments);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.kind).toBe("delete");
+    // Same transaction as the restore: never an active row with old roles.
+    expect(deletes[0]!.tx).toBe(true);
+    // Scoped to THIS person's membership of THIS camp, now active again.
+    const scope = dbMock
+      .queriesTouching(schema.memberships)
+      .filter((q) => q.kind === "select" && q.tx);
+    expect(scope).toHaveLength(1);
+    expect(boundStrings(scope[0]!)).toEqual(
+      expect.arrayContaining([REN, CAMP]),
+    );
+    expect(nullChecksOn(scope[0]!, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+
+    // Nothing about what they held is lost: it is in the audit row.
+    const audit = dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+      meta: { droppedRoleAssignments: unknown };
+    };
+    expect(audit.meta.droppedRoleAssignments).toEqual(dropped);
+  });
+
+  it("brings a former CO-LEAD back as a plain member — the restorer hands back no structural role", async () => {
+    dbMock.queue(
+      [archived({ userId: JABU, role: ADMIN })],
+      [{ id: M_REN }],
+      [],
+      [],
+    );
+    expect(await restoreMember(input())).toEqual({ ok: true });
+    const [cas] = dbMock.writesTo(schema.memberships);
+    expect((cas!.arg("set") as { role: unknown }).role).toBe(MEMBER);
+    // Compare-and-set still judges the role that was decided on.
+    expect(boundStrings(cas!)).toContain(ADMIN);
+    expect(
+      (
+        dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+          meta: Record<string, unknown>;
+        }
+      ).meta,
+    ).toMatchObject({ previousRole: ADMIN, role: MEMBER });
+  });
+
+  it("writes no role deletion when the row changed underneath", async () => {
+    dbMock.queue([archived()], /* CAS matched nothing */ []);
+    expect((await restoreMember(input())).ok).toBe(false);
+    expect(dbMock.writesTo(schema.memberRoleAssignments)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 
   it("refuses restoring a current member", async () => {

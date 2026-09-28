@@ -10,12 +10,13 @@ import {
 } from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
-import { db, schema, withTransaction } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 import {
   getViewerRole,
   ensureMembershipWithRefCode,
   isFormerMember,
 } from "./groups-store";
+import { dropRoleAssignmentsOnRestore } from "./member-archive-store";
 
 export interface InviteRow {
   id: string;
@@ -260,85 +261,166 @@ export async function redeemInvite(
     return { ok: false, error: inviteRejectionMessage(check.reason) };
   }
 
+  // A former member may not let THEMSELVES back in with a link they minted
+  // while they were still in the camp. Archiving revokes those links
+  // (member-archive-store `archiveMember`); this is the second door, for a
+  // link that somehow survived — an invite restores access only when someone
+  // with standing in the camp chose to send it.
+  if (restoringFormer && invite.createdByUserId === userId) {
+    return { ok: false, error: OWN_INVITE_AFTER_ARCHIVE };
+  }
+
   const group = await groupNameAndSlug(invite.groupId);
   if (!group) return { ok: false, error: "Camp not found." };
 
   // The claim + the membership change are ONE transaction: an invite whose
   // `used_at` is flipped must always yield the membership it granted, and a
   // failed membership write must roll the claim back so the link stays usable.
-  return withTransaction(async (tx): Promise<RedeemResult> => {
-    // Atomic claim — only one caller can flip used_at from NULL. If another
-    // redeemer already won the race, no rows return and we abort with nothing
-    // written (the transaction commits an empty change).
-    const claimed = await tx
-      .update(schema.invites)
-      .set({ usedByUserId: userId, usedAt: new Date() })
-      .where(
-        and(eq(schema.invites.id, invite.id), isNull(schema.invites.usedAt)),
-      )
-      .returning({ id: schema.invites.id });
-    if (!claimed[0]) {
-      return { ok: false, error: inviteRejectionMessage("already_used") };
+  try {
+    return await withTransaction((tx) =>
+      redeemInTransaction(tx, {
+        invite,
+        userId,
+        currentRole,
+        restoringFormer,
+        group,
+      }),
+    );
+  } catch (err) {
+    // The lead transfer found nobody to hand the lead to — the transaction
+    // rolled back (the demotion AND the claim), so the link stays usable.
+    if (err instanceof LeadTransferLost) {
+      return { ok: false, error: LEAD_TRANSFER_LOST };
     }
+    throw err;
+  }
+}
 
-    if (invite.kind === "lead_transfer") {
-      // Demote existing leads to admin, then make the redeemer the lead.
-      await tx
+const OWN_INVITE_AFTER_ARCHIVE =
+  "You can't use an invite you created to rejoin this camp — ask a camp lead for one.";
+
+const LEAD_TRANSFER_LOST =
+  "Your membership of this camp changed while the lead was being handed over — nothing was changed. Try the link again.";
+
+/** Thrown inside the redeem transaction to roll it back when a lead transfer
+ * would otherwise commit with the old lead demoted and no new one. */
+class LeadTransferLost extends Error {
+  constructor() {
+    super("lead transfer: the redeemer's membership row was not promoted");
+  }
+}
+
+async function redeemInTransaction(
+  tx: Tx,
+  input: {
+    invite: typeof schema.invites.$inferSelect;
+    userId: string;
+    currentRole: string | null;
+    restoringFormer: boolean;
+    group: { name: string; slug: string };
+  },
+): Promise<RedeemResult> {
+  const { invite, userId, currentRole, restoringFormer, group } = input;
+  // Atomic claim — only one caller can flip used_at from NULL. If another
+  // redeemer already won the race, no rows return and we abort with nothing
+  // written (the transaction commits an empty change).
+  const claimed = await tx
+    .update(schema.invites)
+    .set({ usedByUserId: userId, usedAt: new Date() })
+    .where(and(eq(schema.invites.id, invite.id), isNull(schema.invites.usedAt)))
+    .returning({ id: schema.invites.id });
+  if (!claimed[0]) {
+    return { ok: false, error: inviteRejectionMessage("already_used") };
+  }
+
+  if (invite.kind === "lead_transfer") {
+    // Demote existing leads to admin, then make the redeemer the lead.
+    await tx
+      .update(schema.memberships)
+      .set({ role: "admin" })
+      .where(
+        and(
+          eq(schema.memberships.groupId, invite.groupId),
+          eq(schema.memberships.role, "lead"),
+          activeMembership(),
+        ),
+      );
+    // `currentRole` was read BEFORE this transaction. If the redeemer was
+    // archived (or left) in between, the promotion below matches no row —
+    // and committing then would leave the camp with its lead demoted and no
+    // lead at all, which the no-lockout rule forbids. So the promotion must
+    // be SEEN to land, or the whole transaction (demotion and claim
+    // included) rolls back.
+    if (currentRole) {
+      // Already a member (keeps their existing ref code) — just take the lead.
+      const promoted = await tx
         .update(schema.memberships)
-        .set({ role: "admin" })
+        .set({ role: "lead" })
         .where(
           and(
             eq(schema.memberships.groupId, invite.groupId),
-            eq(schema.memberships.role, "lead"),
+            eq(schema.memberships.userId, userId),
             activeMembership(),
           ),
-        );
-      if (currentRole) {
-        // Already a member (keeps their existing ref code) — just take the lead.
-        await tx
-          .update(schema.memberships)
-          .set({ role: "lead" })
-          .where(
-            and(
-              eq(schema.memberships.groupId, invite.groupId),
-              eq(schema.memberships.userId, userId),
-              activeMembership(),
-            ),
-          );
-      } else {
-        await ensureMembershipWithRefCode(tx, {
-          userId,
-          groupId: invite.groupId,
-          groupName: group.name,
-          role: "lead",
-        });
-      }
+        )
+        .returning({ id: schema.memberships.id });
+      if (!promoted[0]) throw new LeadTransferLost();
     } else {
       await ensureMembershipWithRefCode(tx, {
         userId,
         groupId: invite.groupId,
         groupName: group.name,
-        role: "member",
+        role: "lead",
       });
+      // The upsert leaves an ACTIVE row it did not expect untouched (someone
+      // who joined between the read above and now keeps their own role), so
+      // check the row it was meant to produce actually exists.
+      const [row] = await tx
+        .select({ role: schema.memberships.role })
+        .from(schema.memberships)
+        .where(
+          and(
+            eq(schema.memberships.groupId, invite.groupId),
+            eq(schema.memberships.userId, userId),
+            activeMembership(),
+          ),
+        )
+        .limit(1);
+      if (row?.role !== "lead") throw new LeadTransferLost();
     }
+  } else {
+    await ensureMembershipWithRefCode(tx, {
+      userId,
+      groupId: invite.groupId,
+      groupName: group.name,
+      role: "member",
+    });
+  }
 
-    if (restoringFormer) {
-      await tx.insert(schema.auditEvents).values({
-        actorId: userId,
-        action: MEMBER_RESTORE_AUDIT_ACTION,
-        subject: userId,
-        meta: {
-          groupId: invite.groupId,
-          via: "invite",
-          inviteId: invite.id,
-          invitedByUserId: invite.createdByUserId,
-          role: invite.kind === "lead_transfer" ? "lead" : "member",
-        },
-      });
-    }
+  if (restoringFormer) {
+    // A restored member comes back WITHOUT the custom roles they held
+    // (decided 2026-09-28) — the invite grants its structural role and
+    // nothing else. The dropped rows are kept in the audit row.
+    const dropped = await dropRoleAssignmentsOnRestore(tx, {
+      userId,
+      groupId: invite.groupId,
+    });
+    await tx.insert(schema.auditEvents).values({
+      actorId: userId,
+      action: MEMBER_RESTORE_AUDIT_ACTION,
+      subject: userId,
+      meta: {
+        groupId: invite.groupId,
+        via: "invite",
+        inviteId: invite.id,
+        invitedByUserId: invite.createdByUserId,
+        role: invite.kind === "lead_transfer" ? "lead" : "member",
+        droppedRoleAssignments: dropped,
+      },
+    });
+  }
 
-    return { ok: true, slug: group.slug };
-  });
+  return { ok: true, slug: group.slug };
 }
 
 async function groupNameAndSlug(
