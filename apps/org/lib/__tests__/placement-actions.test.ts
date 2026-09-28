@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { fakeDb, whereParams, type FakeDb } from "./support/fake-db";
+import {
+  fakeDb,
+  whereMentions,
+  whereParams,
+  type FakeDb,
+} from "./support/fake-db";
 
 /**
  * THE R1 WRITE ON THE REVIEW SCREEN: the staff-assigned placement handles.
@@ -253,6 +258,9 @@ describe("assignPlacement", () => {
         "lead",
         "admin",
       ]);
+      // A former lead (archived, #55) has no camp access and must not hear
+      // about its placement. `activeMembership()` is `archived_at is null`.
+      expect(whereMentions(leadsRead?.where, " is null")).toBe(true);
     });
 
     it("a change notifies, and says it changed", async () => {

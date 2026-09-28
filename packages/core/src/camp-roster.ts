@@ -389,6 +389,13 @@ export type RosterStructuralFilter = (typeof ROSTER_STRUCTURAL_FILTERS)[number];
 export const ROSTER_BIO_FILTERS = ["complete", "incomplete"] as const;
 export type RosterBioFilter = (typeof ROSTER_BIO_FILTERS)[number];
 
+/** Which people the roster lists: the camp (default), or its FORMER members
+ * (CDB-036 — archived memberships, kept as history). Not a narrowing of the
+ * same list: the loader reads a different set of rows for each, so a former
+ * member can never appear on the current roster however a filter is set. */
+export const ROSTER_STATUS_FILTERS = ["current", "former"] as const;
+export type RosterStatusFilter = (typeof ROSTER_STATUS_FILTERS)[number];
+
 /** Longest search a query param may carry. */
 export const ROSTER_QUERY_MAX = 100;
 
@@ -404,10 +411,12 @@ export interface RosterFilter {
   q: string;
   role: RosterRoleFilter | null;
   bio: RosterBioFilter | null;
+  /** Current members (default) or former members. */
+  status: RosterStatusFilter;
 }
 
 export function emptyRosterFilter(): RosterFilter {
-  return { q: "", role: null, bio: null };
+  return { q: "", role: null, bio: null, status: "current" };
 }
 
 /** Lower-case, strip accents, collapse whitespace — so "Zoë" finds "zoe". */
@@ -462,6 +471,9 @@ export function parseRosterFilter(
   if (bio && (ROSTER_BIO_FILTERS as readonly string[]).includes(bio)) {
     filter.bio = bio as RosterBioFilter;
   }
+
+  // Anything but the one other value reads as the camp itself.
+  if (firstParam(params.status) === "former") filter.status = "former";
   return filter;
 }
 
@@ -479,10 +491,12 @@ export function rosterFilterQuery(filter: RosterFilter): string {
   if (filter.q) params.set("q", filter.q);
   if (filter.role) params.set("role", rosterRoleParam(filter.role));
   if (filter.bio) params.set("bio", filter.bio);
+  if (filter.status === "former") params.set("status", "former");
   return params.toString();
 }
 
-/** Is any filter applied? */
+/** Is any NARROWING filter applied? `status` is not one: it picks which list
+ * is shown, and "Showing n of m" is counted within that list. */
 export function isRosterFiltered(filter: RosterFilter): boolean {
   return filter.q !== "" || filter.role !== null || filter.bio !== null;
 }
@@ -566,6 +580,9 @@ export interface CampRosterStats {
   /** Members who said they are joining build / strike (STATS-024, -025). */
   joiningBuild: number;
   joiningStrike: number;
+  /** Former members — archived memberships kept as history (CDB-036). A
+   * count only, like everything else on the card. */
+  former: number;
   officers: {
     /** False for a camp whose registration is not approved or in flight —
      * requirements do not apply yet (./officers `outstandingOfficers`). */
@@ -588,6 +605,7 @@ export interface CampRosterStats {
 export function deriveCampRosterStats(
   members: readonly Pick<RosterMemberInput, "bio" | "logistics">[],
   officers: OutstandingOfficers | null,
+  formerCount = 0,
 ): CampRosterStats {
   let newcomers = 0;
   let returning = 0;
@@ -614,6 +632,7 @@ export function deriveCampRosterStats(
     biosComplete,
     joiningBuild,
     joiningStrike,
+    former: formerCount,
     officers: officers?.applies
       ? {
           applies: true,

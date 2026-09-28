@@ -459,7 +459,7 @@ describe("completeInviteJoin", () => {
     createdAt: new Date(),
   };
 
-  /** The seven reads/writes a successful join makes, in order. */
+  /** The eight reads/writes a successful join makes, in order. */
   function queueSuccessfulJoin() {
     dbMock.queue(
       /* getInvitePreview */ [
@@ -478,6 +478,7 @@ describe("completeInviteJoin", () => {
       ],
       /* redeemInvite: the invite row */ [inviteRow],
       /* getViewerRole: not a member yet */ [],
+      /* isFormerMember: never archived here */ [],
       /* groupNameAndSlug */ [{ name: "Mad Hatters", slug: "mad-hatters" }],
       /* the atomic claim … returning */ [{ id: "inv-1" }],
       /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],

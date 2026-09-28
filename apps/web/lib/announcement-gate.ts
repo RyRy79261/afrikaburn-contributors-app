@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db, schema } from "./db";
 
@@ -84,6 +84,15 @@ export async function firstUnacknowledgedAnnouncement(
         // The reader's published rule (lib/bulletins.ts): an unpublished row
         // 404s there, so gating on one would redirect to a 404 forever.
         isNotNull(schema.bulletins.publishedAt),
+        // A CAMP announcement gates only a current member of that camp.
+        // Archiving revokes camp access (CDB-036): a former member keeps the
+        // delivery in their inbox — it is their history — but their old camp
+        // can no longer put a full-screen gate in front of their whole app.
+        // Org bulletins (no group) are unaffected.
+        or(
+          isNull(schema.bulletins.groupId),
+          sql`exists (select 1 from ${schema.memberships} where ${schema.memberships.groupId} = ${schema.bulletins.groupId} and ${schema.memberships.userId} = ${userId} and ${schema.memberships.archivedAt} is null)`,
+        ),
       ),
     )
     .orderBy(asc(schema.notifications.createdAt))

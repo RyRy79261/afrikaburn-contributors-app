@@ -35,6 +35,7 @@ import type {
   ProjectPermissions,
 } from "@quagga/types";
 
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
 import { sendEmail } from "./email";
 import {
@@ -118,6 +119,7 @@ async function lockSenderContext(
       and(
         eq(schema.memberships.userId, userId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1)
@@ -597,7 +599,9 @@ async function fanOut(
       })
       .from(schema.memberships)
       .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-      .where(eq(schema.memberships.groupId, row.groupId)),
+      .where(
+        and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
+      ),
     tx
       .select({
         membershipId: schema.memberRoleAssignments.membershipId,
@@ -609,7 +613,9 @@ async function fanOut(
         schema.memberships,
         eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
       )
-      .where(eq(schema.memberships.groupId, row.groupId)),
+      .where(
+        and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
+      ),
     tx
       .select({
         id: schema.projectRoles.id,

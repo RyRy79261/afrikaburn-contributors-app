@@ -22,7 +22,7 @@ import type { MembershipRole } from "@quagga/types";
 
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
-import { liveOrgRoleAssignment } from "@quagga/db";
+import { liveOrgRoleAssignment, activeMembership } from "@quagga/db";
 import { getDb, schema } from "@/lib/db";
 import { canBootstrapGodEmail, isGodEmail } from "@/lib/god";
 import { writeAuditEvent } from "@/lib/audit";
@@ -195,6 +195,7 @@ export const resolveOrgSession = cache(
             and(
               eq(schema.memberships.userId, dbUser.id),
               eq(schema.memberships.groupId, orgGroup.id),
+              activeMembership(),
             ),
           )
           .limit(1);
@@ -225,6 +226,7 @@ export const resolveOrgSession = cache(
           and(
             eq(schema.memberships.userId, dbUser.id),
             eq(schema.memberships.groupId, orgGroup.id),
+            activeMembership(),
           ),
         )
         .limit(1);

@@ -7,7 +7,7 @@ import {
   RoleAssignmentConsent,
   type ProjectPermissions,
 } from "@quagga/types";
-import { boundStrings, dbMock } from "@/test/db-mock";
+import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 // The roster store (epic #55): the boundary between the database and the
 // @quagga/core roster predicates. What these tests pin is the DECISION — who
@@ -33,6 +33,8 @@ const stubs = vi.hoisted(() => ({
     officers: [],
   } as unknown,
   permCalls: [] as string[],
+  /** The `status` each getRoleAssignments call asked for. */
+  assignmentStatuses: [] as (string | undefined)[],
 }));
 
 vi.mock("../roles-store", () => ({
@@ -41,7 +43,10 @@ vi.mock("../roles-store", () => ({
     return stubs.perms.get(`${groupId}:${userId}`) ?? null;
   },
   listRoles: async () => stubs.roles,
-  getRoleAssignments: async () => stubs.assignments,
+  getRoleAssignments: async (_groupId: string, status?: string) => {
+    stubs.assignmentStatuses.push(status);
+    return stubs.assignments;
+  },
   getOfficerStatus: async () => stubs.officers,
 }));
 
@@ -196,7 +201,15 @@ beforeEach(() => {
     ],
   ]);
   stubs.permCalls = [];
+  stubs.assignmentStatuses = [];
 });
+
+/** The chains that read `memberships` (not the logistics upsert, not groups). */
+function membershipReads() {
+  return dbMock
+    .queriesTouching(schema.memberships)
+    .filter((q) => q.kind === "select");
+}
 
 describe("loadCampRoster — refusals", () => {
   const load = (viewerUserId: string, slug = CAMP_A.slug) =>
@@ -364,6 +377,141 @@ describe("loadCampRoster — an authorised viewer", () => {
   });
 });
 
+// --- Former members (CDB-036) -----------------------------------------------
+//
+// Archiving revokes camp access. On the roster that means two things the mock
+// CAN see: which rows each membership read asks for (`archived_at is null` for
+// the camp, `is not null` for the former list), and what the viewer is offered
+// on each row.
+
+describe("loadCampRoster — former members", () => {
+  const load = (
+    viewerUserId: string,
+    searchParams: Record<string, string> = {},
+  ) =>
+    loadCampRoster({
+      slug: CAMP_A.slug,
+      viewerUserId,
+      editionId: EDITION.id,
+      searchParams,
+    });
+
+  it("reads only CURRENT members for the roster, and counts former ones separately", async () => {
+    dbMock.queue([CAMP_A], ROWS, [{ count: 2 }]);
+    const page = await load(ALICE);
+    const reads = membershipReads();
+    // The roster rows, then the former-member count.
+    expect(reads).toHaveLength(2);
+    expect(nullChecksOn(reads[0]!, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+    expect(nullChecksOn(reads[1]!, schema.memberships.archivedAt)).toEqual([
+      "is not null",
+    ]);
+    expect(stubs.assignmentStatuses).toEqual(["current"]);
+    expect(page!.stats.former).toBe(2);
+    expect(page!.stats.total).toBe(3);
+  });
+
+  it("status=former lists the FORMER rows, with their roles held, and keeps stats on the camp", async () => {
+    const formerRow = memberRow({
+      membershipId: "m-jabu",
+      userId: JABU,
+      username: "Jabu",
+      bioId: null,
+      bioCompletedAt: null,
+      bioFirstTime: null,
+    });
+    stubs.assignments = new Map([
+      [
+        "m-jabu",
+        [{ projectRoleId: KITCHEN, consent: ACCEPTED, orgVisible: false }],
+      ],
+    ]);
+    dbMock.queue([CAMP_A], ROWS, [formerRow], [{ count: 1 }]);
+    const page = await load(ALICE, { status: "former" });
+
+    expect(page!.filter.status).toBe("former");
+    expect(page!.roster.rows.map((r) => r.userId)).toEqual([JABU]);
+    // History stays: the role they held is still on their row.
+    expect(page!.roster.rows[0]!.projectRoles).toEqual([
+      { id: KITCHEN, name: "Kitchen" },
+    ]);
+    // The card still describes the CURRENT camp.
+    expect(page!.stats.total).toBe(3);
+    expect(page!.stats.former).toBe(1);
+
+    const reads = membershipReads();
+    expect(nullChecksOn(reads[0]!, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+    expect(nullChecksOn(reads[1]!, schema.memberships.archivedAt)).toEqual([
+      "is not null",
+    ]);
+    expect(stubs.assignmentStatuses).toEqual(["current", "former"]);
+    // The lead may restore them.
+    expect(page!.actions).toEqual({ "m-jabu": "restore" });
+  });
+
+  it("loads NO bio for a former member — not completion, not the first-timer flag", async () => {
+    // A bio row IS returned here on purpose: only the store's own refusal can
+    // keep it off the former list (the mock does not evaluate the join).
+    const formerRow = memberRow({
+      membershipId: "m-jabu",
+      userId: JABU,
+      username: "Jabu",
+      bioId: "bio-jabu",
+      bioCompletedAt: new Date("2027-03-01"),
+      bioFirstTime: true,
+    });
+    dbMock.queue([CAMP_A], ROWS, [formerRow], [{ count: 1 }]);
+    const page = await load(ALICE, { status: "former" });
+    expect(page!.roster.rows).toHaveLength(1);
+    expect(page!.roster.rows[0]!.bioStatus).toBe("none");
+  });
+
+  it("offers the lead Archive on members, never on themselves", async () => {
+    dbMock.queue([CAMP_A], ROWS);
+    const page = await load(ALICE);
+    expect(page!.actions).toEqual({ "m-ren": "archive", "m-gone": "archive" });
+  });
+
+  it("offers nothing to a roster reader who lacks manage_members", async () => {
+    // view_member_details lets them READ the roster; it is not member
+    // management, so no row offers them an archive.
+    stubs.perms.set(`${CAMP_A.id}:${REN}`, grantedPerms);
+    dbMock.queue([CAMP_A], ROWS);
+    const page = await load(REN);
+    expect(page!.roster.total).toBe(3);
+    expect(page!.actions).toEqual({});
+  });
+
+  it("offers a manage_members holder Archive on plain members only", async () => {
+    stubs.perms.set(`${CAMP_A.id}:${REN}`, {
+      structuralRole: MEMBER,
+      rolePermissions: [
+        {},
+        { view_member_details: true, manage_members: true },
+      ],
+    });
+    dbMock.queue(
+      [CAMP_A],
+      [
+        ...ROWS,
+        memberRow({
+          membershipId: "m-colead",
+          userId: JABU,
+          role: MembershipRole.enum.admin,
+          username: "Jabu",
+        }),
+      ],
+    );
+    const page = await load(REN);
+    // Not the lead, not the co-lead (lead only), not themselves.
+    expect(page!.actions).toEqual({ "m-gone": "archive" });
+  });
+});
+
 describe("exportCampRosterCsv", () => {
   const exportAs = (viewerUserId: string, searchParams = {}) =>
     exportCampRosterCsv({
@@ -432,6 +580,14 @@ describe("getOwnLogistics", () => {
     // Looked up by the SESSION user's membership of this slug.
     expect(boundStrings(dbMock.queries[0]!)).toContain(REN);
     expect(boundStrings(dbMock.queries[1]!)).toContain("m-ren");
+  });
+
+  it("looks the membership up as a CURRENT one — a former member has no plans to edit here", async () => {
+    dbMock.queue([]);
+    await read();
+    expect(
+      nullChecksOn(dbMock.queries[0]!, schema.memberships.archivedAt),
+    ).toEqual(["is null"]);
   });
 });
 

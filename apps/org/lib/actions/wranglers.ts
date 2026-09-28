@@ -10,6 +10,7 @@ import {
   wranglerAssignedNotification,
 } from "@quagga/core";
 
+import { activeMembership } from "@quagga/db";
 import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
@@ -74,6 +75,7 @@ async function notifyWranglerAssigned(
         and(
           eq(schema.memberships.groupId, input.groupId),
           inArray(schema.memberships.role, ["lead", "admin"]),
+          activeMembership(),
         ),
       );
     const campUserIds = [...new Set(leads.map((l) => l.userId))].filter(
@@ -196,6 +198,7 @@ export async function assignWrangler(
         and(
           eq(schema.memberships.groupId, session.orgGroupId),
           eq(schema.memberships.userId, input.wranglerUserId),
+          activeMembership(),
         ),
       )
       .limit(1);

@@ -507,6 +507,25 @@ describe("ensureMembershipWithRefCode", () => {
     expect(dbMock.writesTo(schema.memberships)).toHaveLength(2);
   });
 
+  it("reports what the upsert did: inserted, restored or unchanged", async () => {
+    const ensure = () =>
+      dbMock.runTransaction(async (tx) =>
+        ensureMembershipWithRefCode(tx, {
+          userId: VIEWER,
+          groupId: MAD_HATTERS,
+          groupName: "Mad Hatters",
+          role: "member",
+        }),
+      );
+    dbMock.queue([{ refCode: "MAH-M001" }], [{ inserted: true }]);
+    expect(await ensure()).toBe("inserted");
+    dbMock.queue([{ refCode: "MAH-M001" }], [{ inserted: false }]);
+    expect(await ensure()).toBe("restored");
+    // An ACTIVE member: the conflict's `setWhere` refuses, no row comes back.
+    dbMock.queue([{ refCode: "MAH-M001" }], []);
+    expect(await ensure()).toBe("unchanged");
+  });
+
   it("gives up with an error after five attempts", async () => {
     for (let i = 0; i < 5; i++) {
       dbMock.queue([{ refCode: "MAH-M001" }], uniqueViolation());

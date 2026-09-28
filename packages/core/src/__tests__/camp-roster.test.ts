@@ -466,6 +466,7 @@ describe("parseRosterFilter", () => {
       q: "ren",
       role: { kind: "structural", role: "admin" },
       bio: "incomplete",
+      status: "current",
     });
     expect(isRosterFiltered(filter)).toBe(true);
   });
@@ -505,6 +506,39 @@ describe("parseRosterFilter", () => {
     );
     expect(again).toEqual(filter);
     expect(rosterFilterQuery(emptyRosterFilter())).toBe("");
+  });
+
+  // CDB-036: the former-members list is picked by `status`, and only by the
+  // one value — anything else is the camp itself (fail-soft, like the rest).
+  it("reads status=former, and nothing else, as the former-members list", () => {
+    expect(parseRosterFilter({ status: "former" }, ROLE_IDS).status).toBe(
+      "former",
+    );
+    for (const status of ["current", "archived", "FORMER", ""]) {
+      expect(parseRosterFilter({ status }, ROLE_IDS).status).toBe("current");
+    }
+  });
+
+  it("carries status=former through the query string (so the export matches)", () => {
+    const filter = parseRosterFilter({ status: "former", q: "ren" }, ROLE_IDS);
+    const query = rosterFilterQuery(filter);
+    expect(query).toContain("status=former");
+    expect(
+      parseRosterFilter(
+        Object.fromEntries(new URLSearchParams(query)),
+        ROLE_IDS,
+      ),
+    ).toEqual(filter);
+    // The default list adds nothing to the URL.
+    expect(rosterFilterQuery(parseRosterFilter({ q: "ren" }, ROLE_IDS))).toBe(
+      "q=ren",
+    );
+  });
+
+  it("does not count the list choice as a narrowing filter", () => {
+    expect(
+      isRosterFiltered(parseRosterFilter({ status: "former" }, ROLE_IDS)),
+    ).toBe(false);
   });
 });
 
@@ -628,8 +662,17 @@ describe("deriveCampRosterStats", () => {
       biosComplete: 2,
       joiningBuild: 0,
       joiningStrike: 0,
+      former: 0,
       officers: { applies: false, filled: 0, required: 0 },
     });
+  });
+
+  it("reports the former-member count it is given, as a number only", () => {
+    // The members passed are the CURRENT camp; former members are counted by
+    // the loader and never contribute to new/returning/bios.
+    const stats = deriveCampRosterStats(ROSTER, null, 3);
+    expect(stats.former).toBe(3);
+    expect(stats.total).toBe(4);
   });
 
   it("counts build and strike from members' own logistics", () => {
@@ -692,6 +735,7 @@ describe("deriveCampRosterStats", () => {
       biosComplete: 0,
       joiningBuild: 0,
       joiningStrike: 0,
+      former: 0,
       officers: { applies: false, filled: 0, required: 0 },
     });
   });

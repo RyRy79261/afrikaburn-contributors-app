@@ -23,6 +23,7 @@ import {
   type QuestionnaireResponses,
   type SaveResult,
 } from "@quagga/types";
+import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
@@ -196,7 +197,7 @@ async function resolveProjectTargets(
       role: schema.memberships.role,
     })
     .from(schema.memberships)
-    .where(eq(schema.memberships.groupId, groupId));
+    .where(and(eq(schema.memberships.groupId, groupId), activeMembership()));
 
   const roleAssignments = await db()
     .select({
@@ -209,7 +210,7 @@ async function resolveProjectTargets(
       schema.memberships,
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
-    .where(eq(schema.memberships.groupId, groupId));
+    .where(and(eq(schema.memberships.groupId, groupId), activeMembership()));
 
   // Project_roles are needed for baseline derivation (the "everyone" role).
   const projectRoles = await db()
@@ -547,6 +548,31 @@ export async function getActivationResults(
 
 // --- Member-side: fill + pending list ------------------------------------
 
+/**
+ * A CAMP's questionnaire (authored in a project dashboard) is answered only by
+ * a current member of that camp: a former member (CDB-036) has no access to
+ * the camp, so none to its forms either. Org-authored sends are not camp
+ * business and are unaffected.
+ */
+async function mayAnswerForCamp(
+  activation: Pick<ActivationRow, "authoredScope" | "groupId">,
+  userId: string,
+): Promise<boolean> {
+  if (activation.authoredScope !== "group" || !activation.groupId) return true;
+  const [row] = await db()
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberships.groupId, activation.groupId),
+        activeMembership(),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export interface FillView {
   activation: ActivationRow;
   /** The user's required-action status for this activation (null = not targeted). */
@@ -584,6 +610,10 @@ export async function getFillView(
     .limit(1);
   const actionStatus = actionRows[0]?.status ?? null;
   if (!actionStatus) return null;
+  // Waived = withdrawn from this person (archiving a camp member waives their
+  // pending sends from that camp). There is nothing left for them to fill.
+  if (actionStatus === "waived") return null;
+  if (!(await mayAnswerForCamp(activation, userId))) return null;
 
   // PREFILL, scoped to the activation's edition.
   //
@@ -704,7 +734,10 @@ export async function submitResponse(input: {
 
   const actionKey = activationRequiredActionKey(input.activationId);
   const actionRows = await db()
-    .select({ id: schema.requiredActions.id })
+    .select({
+      id: schema.requiredActions.id,
+      status: schema.requiredActions.status,
+    })
     .from(schema.requiredActions)
     .where(
       and(
@@ -717,6 +750,19 @@ export async function submitResponse(input: {
     return {
       ok: false,
       errors: { _form: "This questionnaire wasn't sent to you." },
+    };
+  }
+  // The same two doors as getFillView — a server action is reachable without
+  // the page. A waived send was withdrawn; a camp's questionnaire is answered
+  // only by a CURRENT member of that camp, so a former member can neither
+  // answer a waived send nor revise one they completed before being archived.
+  if (
+    actionRows[0].status === "waived" ||
+    !(await mayAnswerForCamp(activation, input.userId))
+  ) {
+    return {
+      ok: false,
+      errors: { _form: "This questionnaire is no longer open to you." },
     };
   }
 

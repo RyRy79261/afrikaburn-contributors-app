@@ -10,6 +10,7 @@ import {
   shouldSendImmediateEmail,
 } from "@quagga/core";
 
+import { activeMembership } from "@quagga/db";
 import { db, isDatabaseConfigured, schema, withTransaction } from "./db";
 import { sendEmail } from "./email";
 
@@ -93,7 +94,10 @@ export async function runDeadlineReminders(
       campSlug: schema.groups.slug,
     })
     .from(schema.registrations)
-    .innerJoin(schema.groups, eq(schema.groups.id, schema.registrations.groupId))
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
     .where(
       and(
         eq(schema.registrations.editionId, edition.id),
@@ -112,7 +116,10 @@ export async function runDeadlineReminders(
             email: schema.users.email,
           })
           .from(schema.memberships)
-          .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.memberships.userId),
+          )
           .where(
             and(
               inArray(
@@ -120,6 +127,7 @@ export async function runDeadlineReminders(
                 camps.map((c) => c.groupId),
               ),
               inArray(schema.memberships.role, ["lead", "admin"]),
+              activeMembership(),
             ),
           );
 

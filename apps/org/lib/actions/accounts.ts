@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { ORG_RANK_LABELS, defaultRoleKeyForRank } from "@quagga/core";
 
+import { activeMembership } from "@quagga/db";
 import { schema, withTransaction } from "@/lib/db";
 import { requireSystemManager } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
@@ -90,6 +91,7 @@ export async function setOrgStaffRole(
           and(
             eq(schema.memberships.userId, input.userId),
             eq(schema.memberships.groupId, session.orgGroupId),
+            activeMembership(),
           ),
         )
         .limit(1);
@@ -147,6 +149,7 @@ export async function setOrgStaffRole(
               eq(schema.memberships.userId, input.userId),
               eq(schema.memberships.groupId, session.orgGroupId),
               eq(schema.memberships.role, existing?.role ?? "org_staff"),
+              activeMembership(),
             ),
           );
       }

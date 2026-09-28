@@ -1,8 +1,11 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { activeMembership, formerMembership } from "@quagga/db";
 import {
   buildCampRoster,
+  canArchiveMember,
+  canRestoreMember,
   buildRosterCsv,
   canEditOwnLogistics,
   canExportCampRoster,
@@ -19,6 +22,7 @@ import {
   type RosterFilter,
   type RosterMemberInput,
   type RosterProjectRole,
+  type RosterStatusFilter,
 } from "@quagga/core";
 import type { GroupKind } from "@quagga/types";
 import { db, schema } from "./db";
@@ -86,11 +90,17 @@ async function loadAccess(
 }
 
 /** Every member of the group with this edition's bio completion + first-time
- * flag and logistics. Called only AFTER the viewer has been authorised. */
+ * flag and logistics. Called only AFTER the viewer has been authorised.
+ *
+ * `status` picks WHICH rows: the camp's current members, or its former
+ * (archived) members — never both, so a former member cannot surface on the
+ * current roster, its stats or its export whatever the rest of the filter
+ * says (CDB-036). */
 async function loadRosterMembers(
   group: RosterGroup,
   editionId: string,
   roles: readonly ProjectRole[],
+  status: RosterStatusFilter = "current",
 ): Promise<RosterMemberInput[]> {
   const [rows, assignments] = await Promise.all([
     db()
@@ -117,6 +127,10 @@ async function loadRosterMembers(
         and(
           eq(schema.burnerBios.userId, schema.memberships.userId),
           eq(schema.burnerBios.editionId, editionId),
+          // A FORMER member's bio this edition is none of the camp's business
+          // any more: the join matches nothing for the former list, so not
+          // even completion or the first-time flag is read.
+          status === "former" ? sql`false` : undefined,
         ),
       )
       .leftJoin(
@@ -126,8 +140,13 @@ async function loadRosterMembers(
           eq(schema.membershipLogistics.editionId, editionId),
         ),
       )
-      .where(eq(schema.memberships.groupId, group.id)),
-    getRoleAssignments(group.id),
+      .where(
+        and(
+          eq(schema.memberships.groupId, group.id),
+          status === "former" ? formerMembership() : activeMembership(),
+        ),
+      ),
+    getRoleAssignments(group.id, status),
   ]);
 
   // Roles a member HOLDS: accepted assignments, never the derived baseline
@@ -153,8 +172,9 @@ async function loadRosterMembers(
       username: sanitized ? null : (row.username ?? null),
       structuralRole: row.role,
       projectRoles,
+      // Belt and braces with the join above: never a former member's bio.
       bio:
-        row.bioId != null
+        status !== "former" && row.bioId != null
           ? {
               completedAt: row.bioCompletedAt ?? null,
               firstTime: row.bioFirstTime ?? false,
@@ -181,12 +201,55 @@ function filterableRoles(roles: readonly ProjectRole[]): RosterProjectRole[] {
     .map((r) => ({ id: r.id, name: r.name }));
 }
 
+/** How many former (archived) members the camp has — a count for the stats
+ * card, nothing more. */
+async function countFormerMembers(groupId: string): Promise<number> {
+  const [row] = await db()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.memberships)
+    .where(and(eq(schema.memberships.groupId, groupId), formerMembership()));
+  return row?.count ?? 0;
+}
+
+/** The archive/restore action each listed row offers THIS viewer, decided by
+ * the same @quagga/core predicates the server actions enforce — so the page
+ * never offers what the action would refuse. A row absent from the map
+ * offers nothing. */
+function rosterMemberActions(input: {
+  viewerUserId: string;
+  access: RosterAccessContext;
+  members: readonly RosterMemberInput[];
+  status: RosterStatusFilter;
+}): Record<string, "archive" | "restore"> {
+  const actions: Record<string, "archive" | "restore"> = {};
+  const actor = {
+    userId: input.viewerUserId,
+    membership: input.access.viewerMembership,
+  };
+  for (const m of input.members) {
+    const target = {
+      userId: m.userId,
+      role: m.structuralRole,
+      archived: input.status === "former",
+    };
+    if (input.status === "former") {
+      if (canRestoreMember(actor, target).ok)
+        actions[m.membershipId] = "restore";
+    } else if (canArchiveMember(actor, target).ok) {
+      actions[m.membershipId] = "archive";
+    }
+  }
+  return actions;
+}
+
 export interface CampRosterPage {
   camp: { id: string; name: string; slug: string; kind: GroupKind };
   roster: CampRosterView;
   stats: CampRosterStats;
   filter: RosterFilter;
   roleOptions: RosterProjectRole[];
+  /** membershipId → the one action this viewer may take on that row. */
+  actions: Record<string, "archive" | "restore">;
 }
 
 /**
@@ -208,21 +271,37 @@ export async function loadCampRoster(input: {
     listRoles(group.id),
     getOfficerStatus(group.id, input.editionId),
   ]);
-  const members = await loadRosterMembers(group, input.editionId, roles);
   const roleOptions = filterableRoles(roles);
   const filter = parseRosterFilter(
     input.searchParams,
     new Set(roleOptions.map((r) => r.id)),
   );
-  const roster = buildCampRoster({ access, members, filter });
+  // The stats card always describes the CURRENT camp, whichever list is open.
+  const current = await loadRosterMembers(group, input.editionId, roles);
+  const listed =
+    filter.status === "former"
+      ? await loadRosterMembers(group, input.editionId, roles, "former")
+      : current;
+  const formerCount = await countFormerMembers(group.id);
+  const roster = buildCampRoster({ access, members: listed, filter });
   if (!roster) return null;
   return {
     camp: group,
     roster,
     // The UNFILTERED members: the card describes the camp, not the search.
-    stats: deriveCampRosterStats(members, officerStatus.outstanding),
+    stats: deriveCampRosterStats(
+      current,
+      officerStatus.outstanding,
+      formerCount,
+    ),
     filter,
     roleOptions,
+    actions: rosterMemberActions({
+      viewerUserId: input.viewerUserId,
+      access,
+      members: listed,
+      status: filter.status,
+    }),
   };
 }
 
@@ -243,11 +322,17 @@ export async function exportCampRosterCsv(input: {
   const { group, access } = loaded;
 
   const roles = await listRoles(group.id);
-  const members = await loadRosterMembers(group, input.editionId, roles);
   const roleOptions = filterableRoles(roles);
   const filter = parseRosterFilter(
     input.searchParams,
     new Set(roleOptions.map((r) => r.id)),
+  );
+  // The export carries the page's filter, the current/former choice included.
+  const members = await loadRosterMembers(
+    group,
+    input.editionId,
+    roles,
+    filter.status,
   );
   const roster = buildCampRoster({ access, members, filter });
   if (!roster) return null;
@@ -279,7 +364,11 @@ async function ownMembership(
     .from(schema.memberships)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
     .where(
-      and(eq(schema.groups.slug, slug), eq(schema.memberships.userId, userId)),
+      and(
+        eq(schema.groups.slug, slug),
+        eq(schema.memberships.userId, userId),
+        activeMembership(),
+      ),
     )
     .limit(1);
   return row ?? null;

@@ -60,6 +60,7 @@ import {
   type SupplierOnboardingRollup,
   unownedDomains,
 } from "@quagga/core";
+import { activeMembership } from "@quagga/db";
 import { decryptField } from "@quagga/db/crypto";
 
 import { getDb, schema } from "@/lib/db";
@@ -281,6 +282,7 @@ async function loadAssignedRoles(
   const byUser = new Map<string, LoadedRole[]>();
   if (userIds.length === 0) return byUser;
   const db = getDb();
+  // former members: org-group rows only, and the org group is never archived.
   const rows = await db
     .select({
       userId: schema.memberships.userId,
@@ -446,6 +448,7 @@ export async function searchAccounts(
   // a non-hex character in it, is a name search and must not touch the id.
   const looksLikeId = /^[0-9a-f-]{8,}$/i.test(q);
 
+  // former members: the org-group row only, never archived.
   const rows = await db
     .select({
       userId: schema.users.id,
@@ -599,6 +602,7 @@ export async function getOrgRolesOverview(
         eq(schema.orgDepartments.id, schema.orgRoles.departmentId),
       )
       .orderBy(asc(schema.orgRoles.sort), asc(schema.orgRoles.name)),
+    // former members: org-group rows only, never archived.
     db
       .select({
         orgRoleId: schema.orgRoleAssignments.orgRoleId,
@@ -748,6 +752,7 @@ export async function getOrgRoleImpacts(
     throw new Error(systemManagerRefusal("see who would lose access"));
   }
   const db = getDb();
+  // former members: org-group rows only, never archived.
   const rows = await db
     .select({
       userId: schema.memberships.userId,
@@ -816,6 +821,7 @@ export async function getOrgAccessRoster(
   // `runsDeployment`. Page access must never imply the personal columns.
   const personal = seesPersonalInformation(actor, "accounts");
 
+  // former members: org-group rows only, never archived.
   const rows = await db
     .select({
       userId: schema.users.id,
@@ -1227,6 +1233,7 @@ async function getSectionReviewReplies(
       .where(eq(schema.groups.kind, "org"))
       .limit(1);
     if (org) {
+      // former members: the org group, never archived.
       const orgMembers = await db
         .select({ userId: schema.memberships.userId })
         .from(schema.memberships)
@@ -1327,6 +1334,9 @@ export async function getRegistrationOfficers(
     .where(
       and(
         eq(schema.memberships.groupId, groupId),
+        // A former member is not this camp's officer any more (CDB-036), and
+        // their contact is no longer the camp's to disclose.
+        activeMembership(),
         eq(schema.projectRoles.kind, "officer"),
         eq(schema.memberRoleAssignments.consentStatus, "accepted"),
         eq(schema.memberRoleAssignments.orgVisible, true),
@@ -1392,7 +1402,7 @@ export async function getRegistrationRoster(
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(eq(schema.memberships.groupId, groupId))
+    .where(and(eq(schema.memberships.groupId, groupId), activeMembership()))
     .orderBy(asc(schema.users.username));
 
   return rows.map((r) => ({
@@ -1465,6 +1475,7 @@ export async function getRosterMemberDetail(
       and(
         eq(schema.memberships.groupId, groupId),
         eq(schema.memberships.userId, userId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -1814,7 +1825,8 @@ export async function getStatusBoard(
       schema.memberships,
       eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
     )
-    .where(eq(schema.projectRoles.kind, "officer"));
+    // A former member's slot is vacant (CDB-036).
+    .where(and(eq(schema.projectRoles.kind, "officer"), activeMembership()));
 
   const assignedByGroup = new Map<string, Set<OfficerKey>>();
   for (const row of officerAssignmentRows) {
@@ -1983,6 +1995,7 @@ export async function getWranglerCandidates(
   orgGroupId: string,
 ): Promise<WranglerCandidate[]> {
   const db = getDb();
+  // former members: org-group rows only, never archived.
   const rows = await db
     .select({
       userId: schema.users.id,

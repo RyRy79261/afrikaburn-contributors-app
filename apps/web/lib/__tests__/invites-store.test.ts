@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { boundStrings, dbMock } from "@/test/db-mock";
+import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
@@ -18,6 +18,12 @@ const EDITION = "eeeeeeee-0000-4000-8000-000000000000";
 const USER = "aaaaaaaa-0000-4000-8000-000000000001";
 const INVITE_ID = "44444444-4444-4444-4444-444444444444";
 const TOKEN = "abcdefghijklmnopqrstuvwx";
+/** The camp's sitting lead — the only person who can mint a lead transfer. */
+const LEAD_USER = "aaaaaaaa-0000-4000-8000-0000000000aa";
+/** A lead-transfer invite, minted by the sitting lead. */
+const LEAD_TRANSFER = { kind: "lead_transfer", createdByUserId: LEAD_USER };
+/** The locked read of the camp's current lead row(s): still the minter. */
+const SITTING_LEAD = [{ id: "m-lead", userId: LEAD_USER }];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Clock is frozen here so a TTL can be asserted exactly, not as a bound. */
@@ -46,11 +52,14 @@ function inviteRow(overrides: Record<string, unknown> = {}) {
 function queueRedemption(input: {
   invite?: Record<string, unknown> | null;
   viewerRole?: string | null;
+  /** A FORMER member of the camp (CDB-036) — only asked when not a current one. */
+  former?: boolean;
   group?: { name: string; slug: string } | null;
 }) {
   dbMock.queue(input.invite === null ? [] : [inviteRow(input.invite)]);
   if (input.invite === null) return;
   dbMock.queue(input.viewerRole ? [{ role: input.viewerRole }] : []);
+  if (!input.viewerRole) dbMock.queue(input.former ? [{ id: "m-former" }] : []);
   dbMock.queue(
     input.group === null
       ? []
@@ -312,13 +321,14 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
 
   it("a lead_transfer demotes the sitting lead(s) and promotes an EXISTING member", async () => {
     queueRedemption({
-      invite: { kind: "lead_transfer" },
+      invite: LEAD_TRANSFER,
       viewerRole: "member",
     });
     dbMock.queue(
       [{ id: INVITE_ID }],
+      /* lock the current lead row */ SITTING_LEAD,
       /* demote the current leads */ [],
-      /* promote the redeemer */ [],
+      /* promote the redeemer … returning */ [{ id: "m-redeemer" }],
     );
 
     expect(await redeemInvite(TOKEN, USER)).toEqual({
@@ -338,12 +348,14 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
   });
 
   it("a lead_transfer to a NON-member mints the membership with a ref code", async () => {
-    queueRedemption({ invite: { kind: "lead_transfer" }, viewerRole: null });
+    queueRedemption({ invite: LEAD_TRANSFER, viewerRole: null });
     dbMock.queue(
       [{ id: INVITE_ID }],
+      /* lock the current lead row */ SITTING_LEAD,
       /* demote the current leads */ [],
       /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
       /* the membership insert */ [],
+      /* the new lead is really there */ [{ role: "lead" }],
     );
 
     expect(await redeemInvite(TOKEN, USER)).toEqual({
@@ -362,17 +374,313 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
     });
   });
 
+  // --- Former members (CDB-036) --------------------------------------------
+
+  it("a FORMER member's invite RESTORES their archived row, as a member, and audits it", async () => {
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert: it restored the archived row */ [
+        { inserted: false },
+      ],
+      /* the audit row */ [],
+    );
+
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: true,
+      slug: "mad-hatters",
+    });
+
+    const upsert = dbMock
+      .writesTo(schema.memberships)
+      .find((q) => q.kind === "insert")!;
+    // One row per (user, camp): the conflict UPDATES the archived row back to
+    // life rather than failing or leaving them archived with a spent invite…
+    expect(upsert.called("onConflictDoNothing")).toBe(false);
+    const conflict = upsert.arg("onConflictDoUpdate") as {
+      set: Record<string, unknown>;
+      setWhere: unknown;
+    };
+    expect(conflict.set).toEqual({
+      archivedAt: null,
+      archivedByUserId: null,
+      // …and grants exactly what THIS invite grants, never the role they held.
+      role: "member",
+    });
+    // …but only when the row IS archived: a current member's row is untouched.
+    expect(
+      nullChecksOn(
+        { calls: [{ method: "x", args: [conflict.setWhere] }] } as never,
+        schema.memberships.archivedAt,
+      ),
+    ).toEqual(["is not null"]);
+
+    const audit = dbMock.writesTo(schema.auditEvents);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.tx).toBe(true);
+    expect(audit[0]!.arg("values")).toMatchObject({
+      actorId: USER,
+      action: "camp.member.restore",
+      subject: USER,
+      meta: { groupId: GROUP, via: "invite", inviteId: INVITE_ID },
+    });
+  });
+
+  it("a brand-new member's join writes no restore audit", async () => {
+    queueRedemption({ viewerRole: null, former: false });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], []);
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: true,
+      slug: "mad-hatters",
+    });
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("looks the redeemer up as a CURRENT member, so a former one is not waved through as already-in", async () => {
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], [], []);
+    await redeemInvite(TOKEN, USER);
+    const roleLookup = dbMock.queries[1]!;
+    expect(roleLookup.arg("from")).toBe(schema.memberships);
+    expect(nullChecksOn(roleLookup, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+  });
+
   it("a lead_transfer is NOT refused for someone already in the camp", async () => {
     // `self_member` only applies to plain `member` invites — refusing a
     // lead_transfer for a member would make transferring the lead to an
     // existing member impossible, which is the normal case.
     queueRedemption({
-      invite: { kind: "lead_transfer" },
+      invite: LEAD_TRANSFER,
       viewerRole: "admin",
     });
-    dbMock.queue([{ id: INVITE_ID }], [], []);
+    dbMock.queue([{ id: INVITE_ID }], SITTING_LEAD, [], [{ id: "m-redeemer" }]);
 
     expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+  });
+
+  // --- Lead transfer race: never a camp without a lead ----------------------
+
+  it("a lead_transfer ROLLS BACK when the redeemer stopped being a member before the promotion", async () => {
+    // `currentRole` is read before the transaction. If they were archived in
+    // between, the promotion matches no row — committing then would leave the
+    // sitting lead demoted and nobody holding the lead.
+    queueRedemption({
+      invite: LEAD_TRANSFER,
+      viewerRole: "admin",
+    });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* lock the current lead row */ SITTING_LEAD,
+      /* demote the current leads */ [],
+      /* promote the redeemer … returning: nothing matched */ [],
+    );
+
+    const result = await redeemInvite(TOKEN, USER);
+    expect(result.ok).toBe(false);
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringContaining("nothing was changed"),
+    });
+    // The promotion asked for its rows back — that is what can see the miss.
+    const promote = dbMock
+      .writesTo(schema.memberships)
+      .find(
+        (q) => (q.arg("set") as { role?: string } | undefined)?.role === "lead",
+      )!;
+    expect(promote.called("returning")).toBe(true);
+  });
+
+  it("a lead_transfer to a non-member ROLLS BACK when the upsert did not make them lead", async () => {
+    // They joined by another route between the read and the transaction: the
+    // upsert leaves their active row alone, so they are not the lead.
+    queueRedemption({ invite: LEAD_TRANSFER, viewerRole: null });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* lock the current lead row */ SITTING_LEAD,
+      /* demote the current leads */ [],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert (no-op) */ [],
+      /* their active row */ [{ role: "member" }],
+    );
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: false,
+      error: expect.stringContaining("Your membership of this camp changed"),
+    });
+  });
+
+  // --- Two lead transfers at once: never two leads --------------------------
+  //
+  // Two DIFFERENT lead-transfer links for one camp redeemed at the same moment
+  // used to both commit: each demotion only matched the lead IT saw, so
+  // neither demoted the other's new lead. The redeem now locks the camp's lead
+  // row(s) FOR UPDATE before demoting and re-checks them. What the mock can
+  // show is the lock being taken, in the transaction, BEFORE the demotion, and
+  // what each post-lock state does; the blocking itself is Postgres's.
+
+  it("a lead_transfer LOCKS the camp's current lead row(s) before demoting anyone", async () => {
+    queueRedemption({ invite: LEAD_TRANSFER, viewerRole: "member" });
+    dbMock.queue([{ id: INVITE_ID }], SITTING_LEAD, [], [{ id: "m-redeemer" }]);
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+
+    const locks = dbMock.queries.filter(
+      (q) => q.kind === "select" && q.called("for"),
+    );
+    expect(locks).toHaveLength(1);
+    const [lock] = locks;
+    expect(lock!.tx).toBe(true);
+    expect(lock!.arg("for")).toBe("update");
+    expect(lock!.arg("from")).toBe(schema.memberships);
+    // This camp's ACTIVE lead rows.
+    expect(boundStrings(lock!)).toEqual(
+      expect.arrayContaining([GROUP, "lead"]),
+    );
+    expect(nullChecksOn(lock!, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+    // Taken BEFORE the demotion — a lock after it would serialise nothing.
+    const demote = dbMock
+      .writesTo(schema.memberships)
+      .find(
+        (q) =>
+          (q.arg("set") as { role?: string } | undefined)?.role === "admin",
+      )!;
+    expect(dbMock.queries.indexOf(lock!)).toBeLessThan(
+      dbMock.queries.indexOf(demote),
+    );
+  });
+
+  it.each([
+    [
+      "the concurrent transfer committed first (the locked lead row is no longer a lead)",
+      [],
+    ],
+    [
+      "the lead changed since the link was minted",
+      [{ id: "m-new-lead", userId: "aaaaaaaa-0000-4000-8000-0000000000bb" }],
+    ],
+    [
+      "the camp somehow has two leads",
+      [...SITTING_LEAD, { id: "m-other", userId: "other-lead" }],
+    ],
+  ])(
+    "a lead_transfer ROLLS BACK, demoting and promoting nobody, when %s",
+    async (_label, lockedLeads) => {
+      queueRedemption({ invite: LEAD_TRANSFER, viewerRole: "member" });
+      dbMock.queue([{ id: INVITE_ID }], lockedLeads, [], [{ id: "m-x" }]);
+
+      expect(await redeemInvite(TOKEN, USER)).toEqual({
+        ok: false,
+        error: expect.stringContaining("nothing was changed"),
+      });
+      // Thrown before any role write, inside the transaction — so the claim
+      // above rolls back with it and the link stays usable.
+      expect(dbMock.writesTo(schema.memberships)).toHaveLength(0);
+      expect(dbMock.transactions).toBe(1);
+    },
+  );
+
+  it("REFUSES a lead_transfer whose minter is unknown (account gone)", async () => {
+    queueRedemption({
+      invite: { kind: "lead_transfer", createdByUserId: null },
+      viewerRole: "member",
+    });
+    dbMock.queue([{ id: INVITE_ID }], SITTING_LEAD, [], [{ id: "m-x" }]);
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: false });
+    expect(dbMock.writesTo(schema.memberships)).toHaveLength(0);
+  });
+
+  // --- A former member and a link they minted themselves --------------------
+
+  it("REFUSES a former member redeeming an invite THEY created, before any write", async () => {
+    queueRedemption({
+      invite: { createdByUserId: USER },
+      viewerRole: null,
+      former: true,
+    });
+    expect(await redeemInvite(TOKEN, USER)).toEqual({
+      ok: false,
+      error: expect.stringContaining("invite you created"),
+    });
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.writesTo(schema.invites)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.memberships)).toHaveLength(0);
+  });
+
+  it("still lets a former member back in on an invite SOMEONE ELSE created", async () => {
+    queueRedemption({
+      invite: { createdByUserId: "the-lead" },
+      viewerRole: null,
+      former: true,
+    });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], [], [], []);
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+  });
+
+  it("a FORMER member restored by invite comes back WITHOUT their old custom roles", async () => {
+    // Decided 2026-09-28: the invite grants its structural role and nothing
+    // else. Officer consent goes too — it must be given afresh.
+    const dropped = [
+      {
+        projectRoleId: "role-kitchen",
+        consentStatus: "accepted",
+        orgVisible: false,
+      },
+    ];
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert: it restored the archived row */ [
+        { inserted: false },
+      ],
+      /* drop role assignments … returning */ dropped,
+      /* the audit row */ [],
+    );
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+
+    const deletes = dbMock.writesTo(schema.memberRoleAssignments);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.kind).toBe("delete");
+    expect(deletes[0]!.tx).toBe(true);
+    expect(
+      (
+        dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+          meta: { droppedRoleAssignments: unknown };
+        }
+      ).meta.droppedRoleAssignments,
+    ).toEqual(dropped);
+  });
+
+  it("a restore that LOST a race drops no roles and writes no restore audit", async () => {
+    // Two redemptions for one former member both read "former" before their
+    // transactions. The first restores the row; the second's upsert then
+    // meets an ACTIVE row and changes nothing (no row returned). It must not
+    // delete the custom roles on that now-live membership — including any
+    // assigned after the restore, and the officer consent on them — nor
+    // write a second, false restore audit row.
+    queueRedemption({
+      invite: { createdByUserId: "the-lead" },
+      viewerRole: null,
+      former: true,
+    });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert: the row was already active */ [],
+    );
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+    expect(dbMock.writesTo(schema.memberRoleAssignments)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("a brand-new member's join deletes no role assignments", async () => {
+    queueRedemption({ viewerRole: null, former: false });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], []);
+    await redeemInvite(TOKEN, USER);
+    expect(dbMock.writesTo(schema.memberRoleAssignments)).toHaveLength(0);
   });
 
   it("REFUSES a self_member redemption when the camp row has vanished", async () => {

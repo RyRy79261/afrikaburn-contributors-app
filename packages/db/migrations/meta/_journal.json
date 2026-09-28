@@ -232,6 +232,13 @@
       "when": 1790469778169,
       "tag": "0032_camp_roster_logistics",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790551031056,
+      "tag": "0033_archive_former_members",
+      "breakpoints": true
     }
   ]
 }

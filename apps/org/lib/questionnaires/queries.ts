@@ -21,6 +21,7 @@ import {
   type QuestionnaireResponses,
 } from "@quagga/types";
 
+import { activeMembership } from "@quagga/db";
 import { getDb, schema } from "@/lib/db";
 
 // Read models for the console's questionnaire surfaces. Every function is
@@ -431,7 +432,11 @@ export async function buildAudienceContext(
         groupId: schema.memberships.groupId,
         role: schema.memberships.role,
       })
-      .from(schema.memberships),
+      .from(schema.memberships)
+      // A former member is in no camp's audience (CDB-036): an org
+      // questionnaire or bulletin aimed at "leads of registered camps" or a
+      // camp's members does not reach someone that camp has archived.
+      .where(activeMembership()),
     db
       .select({ id: schema.groups.id, kind: schema.groups.kind })
       .from(schema.groups),

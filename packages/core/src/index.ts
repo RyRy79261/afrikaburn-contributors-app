@@ -183,6 +183,9 @@ export * from "./campmates";
 // stats, self-owned build/strike/arrival/departure, and the CSV export that
 // has no slot for a hard-locked or medical field.
 export * from "./camp-roster";
+// Former members (CDB-036): who may archive/restore whom — archiving revokes
+// camp access, never the lead, co-leads only by the lead.
+export * from "./member-archive";
 // Direct messaging (epic #69): participant-only reads, contactability-gated
 // starts, blocks, reports that copy only selected messages, user-chosen timers.
 export * from "./messaging";

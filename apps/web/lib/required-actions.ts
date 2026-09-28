@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { RequiredActionLike } from "@quagga/core";
 import {
   BURNER_BIO_ACTION_KEY,
@@ -99,6 +99,11 @@ export async function completeRequiredAction(
         eq(schema.requiredActions.userId, userId),
         eq(schema.requiredActions.editionId, editionId),
         eq(schema.requiredActions.actionKey, actionKey),
+        // A WAIVED action stays waived. Archiving a camp member waives their
+        // pending questionnaires from that camp (CDB-036); an answer that
+        // still reaches here must not flip it to "completed" and so read, in
+        // the camp's results, as a former member having taken part.
+        ne(schema.requiredActions.status, "waived"),
       ),
     );
 }

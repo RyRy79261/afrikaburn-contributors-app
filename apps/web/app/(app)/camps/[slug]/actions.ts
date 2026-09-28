@@ -31,6 +31,11 @@ import {
   getMemberPermissions,
   type RoleMutationResult,
 } from "@/lib/roles-store";
+import {
+  archiveMember,
+  restoreMember,
+  type MemberArchiveResult,
+} from "@/lib/member-archive-store";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 
@@ -136,6 +141,54 @@ export async function leaveCampAction(
   const result = await leaveCamp(user.id, groupId);
   if (result.ok) revalidatePath(`/camps/${parsed.data.slug}`);
   return result;
+}
+
+// --- Former members (App Spec CDB-036, epic #55) --------------------------
+// Archiving revokes camp access; history stays. The ONLY input is the
+// membership id — who may act on it, and whether they may, is decided by
+// @quagga/core `canArchiveMember` / `canRestoreMember` over facts the store
+// loads from the database for the camp named by `slug`.
+
+const MemberArchiveInput = z
+  .object({
+    slug: z.string().min(1).max(200),
+    membershipId: z.string().uuid(),
+  })
+  .strict();
+
+async function runMemberArchive(
+  raw: unknown,
+  run: typeof archiveMember,
+): Promise<MemberArchiveResult> {
+  const parsed = MemberArchiveInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  const user = await requireCampUser();
+  const groupId = await groupIdForSlug(parsed.data.slug);
+  if (!groupId) return { ok: false, error: "Camp not found." };
+  const result = await run({
+    actorUserId: user.id,
+    groupId,
+    membershipId: parsed.data.membershipId,
+  });
+  if (result.ok) {
+    revalidatePath(`/camps/${parsed.data.slug}`);
+    revalidatePath(`/camps/${parsed.data.slug}/roster`);
+  }
+  return result;
+}
+
+/** Make a member a former member of the camp (CDB-036). */
+export async function archiveMemberAction(
+  raw: unknown,
+): Promise<MemberArchiveResult> {
+  return runMemberArchive(raw, archiveMember);
+}
+
+/** Bring a former member back into the camp (CDB-036). */
+export async function restoreMemberAction(
+  raw: unknown,
+): Promise<MemberArchiveResult> {
+  return runMemberArchive(raw, restoreMember);
 }
 
 // --- Custom project roles (questionnaire-spec §"Custom project roles") ----

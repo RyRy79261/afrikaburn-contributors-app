@@ -15,6 +15,9 @@ export { cancelPendingDeletion, type CancelDeletionResult } from "./deletion";
 // Access expiry for org role assignments — the one SQL predicate every
 // capability-resolving loader filters through.
 export { liveOrgRoleAssignment } from "./org-role-expiry";
+// Former camp members (CDB-036): the one SQL predicate every membership query
+// that decides access filters through.
+export { activeMembership, formerMembership } from "./membership-archive";
 // Server actions that call `auth.api.*` in-process skip Better Auth's HTTP
 // limiter entirely; this is the counter that covers them.
 export {

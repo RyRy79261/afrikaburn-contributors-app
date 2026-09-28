@@ -29,6 +29,7 @@ import type {
   MembershipRole,
   RegistrationStatus,
 } from "@quagga/types";
+import { activeMembership, formerMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
 
 /** One category chip on a directory card (org-defined per-edition taxonomy). */
@@ -90,7 +91,9 @@ async function memberCounts(groupIds: string[]): Promise<Map<string, number>> {
       count: sql<number>`count(*)::int`,
     })
     .from(schema.memberships)
-    .where(inArray(schema.memberships.groupId, groupIds))
+    .where(
+      and(inArray(schema.memberships.groupId, groupIds), activeMembership()),
+    )
     .groupBy(schema.memberships.groupId);
   return new Map(rows.map((r) => [r.groupId, r.count]));
 }
@@ -139,7 +142,9 @@ export async function listDirectory(input: {
         role: schema.memberships.role,
       })
       .from(schema.memberships)
-      .where(eq(schema.memberships.userId, input.viewerId));
+      .where(
+        and(eq(schema.memberships.userId, input.viewerId), activeMembership()),
+      );
     for (const m of memberships) viewerRoles.set(m.groupId, m.role);
   }
 
@@ -228,6 +233,9 @@ export async function nextMemberRefCode(
   groupId: string,
   groupName: string,
 ): Promise<string> {
+  // former members: an archived member KEEPS their ref code (a re-invite
+  // restores it), so the sequence must count them or it would hand out a code
+  // that is already taken.
   const rows = await db()
     .select({ refCode: schema.memberships.refCode })
     .from(schema.memberships)
@@ -239,6 +247,7 @@ export async function nextMemberRefCode(
   let prefix = establishedCampPrefix(existing);
   if (!prefix) {
     // First coded member of this camp — pick a prefix distinct from all others.
+    // former members: prefixes are camp identity, archived rows included.
     const otherRows = await db()
       .select({ refCode: schema.memberships.refCode })
       .from(schema.memberships)
@@ -267,6 +276,15 @@ export async function nextMemberRefCode(
  * poison the whole enclosing transaction — the savepoint lets a colliding
  * attempt roll back on its own and the loop recompute the next sequence.
  */
+/**
+ * What {@link ensureMembershipWithRefCode} actually did to the row, read from
+ * the write itself. A caller must decide restore-only side effects (dropping
+ * custom roles, the restore audit) from THIS, not from a read taken before
+ * its transaction: two redemptions racing for one former member both see
+ * "former" up front, but only one of them restores the row.
+ */
+export type EnsureMembershipOutcome = "inserted" | "restored" | "unchanged";
+
 export async function ensureMembershipWithRefCode(
   tx: Tx,
   input: {
@@ -275,12 +293,12 @@ export async function ensureMembershipWithRefCode(
     groupName: string;
     role: MembershipRole;
   },
-): Promise<void> {
+): Promise<EnsureMembershipOutcome> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const refCode = await nextMemberRefCode(input.groupId, input.groupName);
     try {
-      await tx.transaction(async (sp) => {
-        await sp
+      return await tx.transaction(async (sp) => {
+        const [row] = await sp
           .insert(schema.memberships)
           .values({
             userId: input.userId,
@@ -288,11 +306,25 @@ export async function ensureMembershipWithRefCode(
             role: input.role,
             refCode,
           })
-          .onConflictDoNothing({
+          // An ACTIVE member: nothing changes (the old do-nothing). A FORMER
+          // member (CDB-036): the invite restores their archived row — same
+          // ref code, same history — rather than failing on the (user, group)
+          // unique index or leaving them archived with a spent invite. The
+          // role is the one THIS invite grants, never the one they held when
+          // archived: a plain member invite must not quietly hand a former
+          // co-lead their structural role back.
+          .onConflictDoUpdate({
             target: [schema.memberships.userId, schema.memberships.groupId],
-          });
+            set: { archivedAt: null, archivedByUserId: null, role: input.role },
+            setWhere: formerMembership(),
+          })
+          // No row: an ACTIVE member, left alone. A row: inserted, or the
+          // archived row restored — Postgres's `xmax = 0` holds only for a
+          // freshly inserted tuple, never for one the conflict updated.
+          .returning({ inserted: sql<boolean>`(xmax = 0)` });
+        if (!row) return "unchanged";
+        return row.inserted ? "inserted" : "restored";
       });
-      return;
     } catch (err) {
       // A ref-code collision (different unique index) — the savepoint rolled
       // back, so recompute and retry without poisoning the outer transaction.
@@ -368,7 +400,7 @@ export async function getCampBySlug(
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(eq(schema.memberships.groupId, group.id));
+    .where(and(eq(schema.memberships.groupId, group.id), activeMembership()));
 
   const members: CampMember[] = memberRows.map((m) => ({
     membershipId: m.membershipId,
@@ -498,6 +530,7 @@ export async function searchCampDirectory(
         and(
           eq(schema.memberships.userId, viewerId),
           inArray(schema.memberships.groupId, matchIds),
+          activeMembership(),
         ),
       );
     for (const m of memberships) memberSet.add(m.groupId);
@@ -717,7 +750,11 @@ export async function getPublicBurnerProfile(
     .from(schema.memberships)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
     .where(
-      and(eq(schema.memberships.userId, userId), ne(schema.groups.kind, "org")),
+      and(
+        eq(schema.memberships.userId, userId),
+        ne(schema.groups.kind, "org"),
+        activeMembership(),
+      ),
     );
 
   const groupIds = membershipRows.map((r) => r.groupId);
@@ -961,6 +998,7 @@ export async function getViewerRole(
       and(
         eq(schema.memberships.userId, userId),
         eq(schema.memberships.groupId, groupId),
+        activeMembership(),
       ),
     )
     .limit(1);
@@ -983,6 +1021,7 @@ export async function leaveCamp(
         and(
           eq(schema.memberships.groupId, groupId),
           ne(schema.memberships.userId, userId),
+          activeMembership(),
         ),
       );
     if ((others[0]?.count ?? 0) > 0) {
@@ -1004,6 +1043,29 @@ export async function leaveCamp(
   return { ok: true };
 }
 
+/**
+ * Is `userId` a FORMER member of `groupId`? Read before an invite is redeemed
+ * so the restore it performs (groups-store `ensureMembershipWithRefCode`)
+ * gets its own audit row.
+ */
+export async function isFormerMember(
+  userId: string,
+  groupId: string,
+): Promise<boolean> {
+  const [row] = await db()
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, userId),
+        eq(schema.memberships.groupId, groupId),
+        formerMembership(),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /** Groups the user is a member of (for the nav / home). */
 export async function listMyCamps(
   userId: string,
@@ -1019,6 +1081,6 @@ export async function listMyCamps(
     })
     .from(schema.memberships)
     .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
-    .where(eq(schema.memberships.userId, userId));
+    .where(and(eq(schema.memberships.userId, userId), activeMembership()));
   return rows.filter((r) => r.kind !== "org");
 }

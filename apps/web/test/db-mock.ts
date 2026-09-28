@@ -242,6 +242,45 @@ export function boundStrings(query: RecordedQuery): string[] {
   return found;
 }
 
+/**
+ * How a chain filters on a nullable column, read off the drizzle SQL objects
+ * it was built from: `"is null"` / `"is not null"` for every `isNull(column)`
+ * / `isNotNull(column)` (or `activeMembership()` / `formerMembership()`) found
+ * anywhere in its arguments, in order. Identity comparison against the REAL
+ * schema column, so a predicate on some other `archived_at` does not count.
+ *
+ * This is the one WHERE-clause fact the mock CAN see, and it is the one the
+ * former-member rule hangs on (CDB-036): a membership read that decides access
+ * must carry `archived_at is null`.
+ */
+export function nullChecksOn(query: RecordedQuery, column: object): string[] {
+  const found: string[] = [];
+  const seen = new WeakSet<object>();
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 16) return;
+    if (typeof value !== "object" || value === null) return;
+    if (value === column) return;
+    if (seen.has(value)) return;
+    seen.add(value);
+    const chunks = (value as { queryChunks?: unknown[] }).queryChunks;
+    if (Array.isArray(chunks)) {
+      const at = chunks.indexOf(column);
+      if (at !== -1) {
+        const after = chunks[at + 1] as { value?: unknown } | undefined;
+        const text = Array.isArray(after?.value)
+          ? (after.value as string[]).join("").trim()
+          : "";
+        // A raw sql`` fragment continues past the check (`… is null)`).
+        if (text.startsWith("is not null")) found.push("is not null");
+        else if (text.startsWith("is null")) found.push("is null");
+      }
+    }
+    for (const inner of Object.values(value)) walk(inner, depth + 1);
+  };
+  for (const call of query.calls) walk(call.args, 0);
+  return found;
+}
+
 /** A Postgres unique-violation, the shape drizzle/pg surfaces it in. Queue one
  * to drive the `23505` → graceful-message branches. */
 export function uniqueViolation(constraint = "some_unique_idx"): Error {
