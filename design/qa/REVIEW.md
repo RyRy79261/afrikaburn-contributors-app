@@ -17,7 +17,13 @@ defects that coordinate math then found in one run (145 of them). So reviews her
   that guess is wrong — a non-default install location, or a WSL setup where the
   Windows username can't be read back through `cmd.exe` — set `PENCIL_MCP_BRIDGE`
   to the absolute path of the MCP server executable and it is used verbatim.
-- `audit.py` — the checker. Modes:
+- `audit.py` — the checker. It reads the canvas through the bridge's `execute`
+  tool, **read-only**: one `Get` visitor per frame with `resolveInstances: true`
+  returns computed bounds and live props in a single call (`snapshot_layout` and
+  `batch_get` no longer exist in the Pencil MCP API). It audits the app's
+  **active canvas** (from `get_app_state`) and refuses to run unless that is
+  `ab-initial-app.pen`; set `PEN_FILE` to the bridge's path form
+  (`/Ubuntu/home/…/ab-initial-app.pen` under WSL) to override. Modes:
   - `python3 audit.py --sections <frameId>` → the frame's **component manifest**
     (every node: type, name, which library component it instances, disabled state, size)
   - `python3 audit.py <frameId>` → all checks for one frame
@@ -71,12 +77,23 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
 
 ## Known measurement gotchas
 
-- The layout snapshot reports **disabled nodes' ghost geometry**. audit.py filters
-  these using live props (source `enabled:false` AND instance descendants overrides),
-  so a fresh run has no ghost false-positives. If you see a finding on a node you
-  believe is hidden, check the manifest's `[disabled]` marker before "fixing" it.
-- `snapshot_layout` ignores nodeId scoping — audit.py always snapshots the whole doc.
-- `batch_get` elides deep children on big requests — audit.py crawls in 15-id chunks.
+- The layout read reports **disabled nodes' ghost geometry**. audit.py filters
+  these using live props: with instances resolved, every `instanceId/childId`
+  carries its effective `enabled` (source value with the instance's overrides
+  applied), so a fresh run has no ghost false-positives. If you see a finding on
+  a node you believe is hidden, check the manifest's `[disabled]` marker before
+  "fixing" it.
+- **Component instances are measured inside and out.** Resolved instances come
+  back as ordinary frames (the root keeps the instance id; internals are
+  `instanceId/childId` paths) with real names and types, so name/type-based
+  checks apply to them — a 31px "Button outline" instance on a mobile frame is a
+  `TOUCH-TARGET` warning. The old `batch_get` crawl saw an instance only as
+  `type: "ref"`, so these were never measured before; they are not new defects.
+  Fix them at the component or per frame, or whitelist with a reason — don't
+  read them as noise. The manifest recovers which component each instance uses
+  (`-> component <id>(<name>)`), since resolved nodes drop their `ref`.
+- `audit.py <id>` accepts any node id, not only top-level frames — `Get` scopes
+  to that subtree.
 - Phantom "+50px partially clipped" on fit-content bodies and
   "fill_container not inside flexbox" on disabled nodes: known tool noise.
 - **A brand-new frame does not settle.** Freshly created nodes come back from
@@ -90,6 +107,10 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
   correctly and audits truthfully — **then delete the original and Update the
   copy's x/y/name.** Expect the surviving frame to carry a different node id
   than the one you built; update any notes that cite it.
+  _(Observed under the old tools, `snapshot_layout`/`batch_design`. Under
+  `execute`, building at a scratch position and doing `Copy` + `Delete(original)`
+  in the same call has given frames that render and audit correctly first time —
+  see `design/pen-lessons.md`.)_
 - **Never delete children to restructure a container.** Removing children from an
   existing frame genuinely corrupts that frame's layout in this app (an in-place
   rebuild of one card left it rendering as an empty coloured box — not a

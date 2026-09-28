@@ -502,8 +502,9 @@ visible without scrolling.
 ## Camp roster operations (epic #55)
 
 App Spec CDB-011..014, CDB-030..033, STATS-017..019, STATS-022..025. All logic
-is pure in `@quagga/core` `camp-roster.ts` (Decision 007 may move camp-planning
-tools to another app); `apps/web/lib/roster-store.ts` only loads rows.
+is pure in `@quagga/core` `camp-roster.ts` (Decision 007 keeps camp-planning
+tools in `apps/web`; pure logic keeps that cheap to revisit);
+`apps/web/lib/roster-store.ts` only loads rows.
 
 - **Who.** The roster, its stats and the export are served to a member of the
   project holding the `view_member_details` project permission —
@@ -538,10 +539,14 @@ tools to another app); `apps/web/lib/roster-store.ts` only loads rows.
   Joining strike. Built by the pure `rosterExportRow` projection, which has no
   slot for any hard-locked field or medical notes (a test pins it); every cell
   goes through the CSV formula-injection guard (`=`, `+`, `-`, `@`, tab, CR).
-- **Not built here:** admin add/edit/import of other people's records (blocked on
-  Decision 008), archiving former members (needs a decision on whether archiving
-  revokes access — every membership predicate would change), fee/ticket/WAP
-  statistics.
+- **Never built:** admin add/edit/import of other people's records (CDB-026,
+  CDB-028, CDB-029). Decision 008 (resolved 2026-09-27): the camper owns their
+  record; leads invite and read.
+- **Not built yet:** archiving former members (CDB-036). Decided 2026-09-27
+  (Ryan, #55): **archiving revokes camp access** — the person becomes a former
+  member and their history stays. Every membership predicate must treat an
+  archived membership as no membership.
+- **Not built here:** fee/ticket/WAP statistics.
 
 ## Platform/database separation
 

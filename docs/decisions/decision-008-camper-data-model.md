@@ -2,9 +2,22 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Raised** | 2026-07-29 (App Spec change record) |
+| **Decided** | 2026-09-27 |
+| **Decided by** | Ryan Noble |
 | **Spec section** | §4 Camper Database and Camp List (`CDB-*`) |
+
+## The decision
+
+**The camper owns their record.** A camp lead cannot add, edit or import other
+people's records. Leads invite people, and each person fills in their own bio.
+CDB-026, CDB-028 and CDB-029 (admin add, edit and import) are not built.
+
+A lead keeps the read access the roster already gives through the
+`view_member_details` permission.
+
+The rest of this record is the question as it stood before the decision.
 
 ## The question
 
