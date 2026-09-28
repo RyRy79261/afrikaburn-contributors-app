@@ -13,6 +13,7 @@ import {
   type PlacementChange,
 } from "@quagga/core";
 
+import { activeMembership } from "@quagga/db";
 import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
@@ -76,6 +77,7 @@ async function notifyPlacementChanged(
         and(
           eq(schema.memberships.groupId, input.groupId),
           inArray(schema.memberships.role, ["lead", "admin"]),
+          activeMembership(),
         ),
       );
     const userIds = [...new Set(leads.map((l) => l.userId))];
