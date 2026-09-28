@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       e2e: ${{ steps.classify.outputs.e2e }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -94,6 +95,48 @@ jobs:
             echo "Product-touching change — e2e required. Non-meta path(s):"
             printf '  %s\n' "${product[@]}"
           fi
+
+      # THE E2E MATRIX, BUILT HERE SO A SKIP STILL HAS A NAME.
+      #
+      # A job-level `if:` that skips a matrix job skips it BEFORE the matrix
+      # expands, so GitHub lists it by its raw template —
+      # "e2e · ${{ matrix.label }}" — on every docs or design PR. So the e2e job
+      # never skips itself: on a meta-only change it gets ONE leg, named for
+      # what happened, whose only step says so and exits.
+      #
+      # SPLIT BY PERSONA, NOT BY `--shard=n/8`. A mechanical slice cannot be
+      # named: "shard 2 of 8 failed" tells you nothing about what broke, and you
+      # have to open the log to learn even which app was involved. The persona
+      # directories already ARE the split, they are well balanced (6-27 tests),
+      # and the job name then says what the failure means.
+      #
+      # `side` marks which app each persona exercises. org-staff and god are the
+      # console — the surface where a mistake exposes personal information,
+      # destroys a supplier or approves the wrong thing — so they are the two
+      # worth reading first when the board goes red.
+      - name: Build the e2e matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.classify.outputs.e2e }}" = "false" ]; then
+            matrix='[{"persona":"none","label":"not needed (docs or design only)","side":"none","skip":true}]'
+          else
+            matrix=$(jq -c . <<'JSON'
+          [
+            {"persona":"anon","label":"anon · signed-out surfaces + privacy","side":"web"},
+            {"persona":"new-burner","label":"new burner · sign-up, bio, the blocking gate","side":"web"},
+            {"persona":"camp-member","label":"camp member · a member of someone else's camp","side":"web"},
+            {"persona":"camp-lead","label":"camp lead · camp lifecycle, invites, registration","side":"web"},
+            {"persona":"officer","label":"officer · assignment consent + phone disclosure","side":"web"},
+            {"persona":"org-staff","label":"ORG staff · review queue, department scoping","side":"org"},
+            {"persona":"god","label":"ORG system manager · anti-lockout, escalation refusals","side":"org"},
+            {"persona":"supplier","label":"supplier · onboarding, documents, standing","side":"suppliers"}
+          ]
+          JSON
+            )
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq -r '.[].label'
 
   # Conventional Commits with a workspace scope (CONTRIBUTING.md,
   # commitlint.config.mjs). BOTH halves are checked, because this repo MERGES
@@ -190,12 +233,13 @@ jobs:
   # It reuses scripts/e2e-local.sh rather than reimplementing it, so the thing
   # CI runs and the thing a developer runs cannot drift apart.
   #
-  # Skipped on meta-only PRs (see `scope` job). `ci-pass` accepts that skip.
+  # On meta-only PRs the matrix is a single "not needed" leg (see `scope`),
+  # which reports success without building anything.
   # Fail-safe: only an explicit `e2e=false` skips — empty/missing runs the fleet.
   e2e:
     name: e2e · ${{ matrix.label }}
     needs: [scope]
-    if: needs.scope.result == 'success' && needs.scope.outputs.e2e != 'false'
+    if: needs.scope.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -203,63 +247,40 @@ jobs:
       # is far less useful than the whole one, and this suite is the only thing
       # that exercises the product end to end.
       fail-fast: false
-      # SPLIT BY PERSONA, NOT BY `--shard=n/8`. A mechanical slice cannot be
-      # named: "shard 2 of 8 failed" tells you nothing about what broke, and you
-      # have to open the log to learn even which app was involved. The persona
-      # directories already ARE the split, they are well balanced (6-27 tests),
-      # and the job name then says what the failure means.
-      #
-      # `side` marks which app each persona exercises. org-staff and god are the
-      # console — the surface where a mistake exposes personal information,
-      # destroys a supplier or approves the wrong thing — so they are the two
-      # worth reading first when the board goes red.
+      # The persona list and why it is split this way: see `scope`.
       matrix:
-        include:
-          - persona: anon
-            label: "anon · signed-out surfaces + privacy"
-            side: web
-          - persona: new-burner
-            label: "new burner · sign-up, bio, the blocking gate"
-            side: web
-          - persona: camp-member
-            label: "camp member · a member of someone else's camp"
-            side: web
-          - persona: camp-lead
-            label: "camp lead · camp lifecycle, invites, registration"
-            side: web
-          - persona: officer
-            label: "officer · assignment consent + phone disclosure"
-            side: web
-          - persona: org-staff
-            label: "ORG staff · review queue, department scoping"
-            side: org
-          - persona: god
-            label: "ORG system manager · anti-lockout, escalation refusals"
-            side: org
-          - persona: supplier
-            label: "supplier · onboarding, documents, standing"
-            side: suppliers
+        include: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
+      - name: Nothing to run
+        if: matrix.skip
+        run: echo "Docs or design only — the persona suite is not needed for this change."
+
       - uses: actions/checkout@v7
+        if: ${{ !matrix.skip }}
 
       - name: Install pnpm
+        if: ${{ !matrix.skip }}
         uses: pnpm/action-setup@v6
         with:
           version: 10.30.0
 
       - name: Install Node.js
+        if: ${{ !matrix.skip }}
         uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
+        if: ${{ !matrix.skip }}
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
+        if: ${{ !matrix.skip }}
         run: pnpm --filter @quagga/e2e exec playwright install --with-deps chromium
 
       - name: Run the persona suite
+        if: ${{ !matrix.skip }}
         # E2E_RESET_DB=1 so the run starts from a known-empty database. The
         # 27 Jul audit found the local suite running against 179 users of
         # accumulated state, which made four failures look like product bugs
@@ -369,11 +390,11 @@ jobs:
       # rebuilding the whole stack locally to read a log CI already had and threw
       # away. It costs one step and a few hundred KB.
       - name: Collect the app server log
-        if: always()
+        if: ${{ always() && !matrix.skip }}
         run: cp "${TMPDIR:-/tmp}/quagga-e2e/dev.log" server.log 2>/dev/null || true
 
       - name: Upload the report
-        if: always()
+        if: ${{ always() && !matrix.skip }}
         uses: actions/upload-artifact@v7
         with:
           # Per persona, or eight uploads collide on one name.
@@ -393,9 +414,9 @@ jobs:
   # required is a shard that can go red without blocking a merge. The failure
   # mode is silent, which is the worst kind.
   #
-  # So protection requires exactly one: `CI pass`. `ci` must SUCCEED; `e2e`
-  # must SUCCEED when the change is product-touching, and may be `skipped` on
-  # meta-only PRs (see `scope`); `commitlint` may also be `skipped`, because it
+  # So protection requires exactly one: `CI pass`. `ci` and `e2e` must SUCCEED
+  # (on meta-only PRs `e2e` is one "not needed" leg that succeeds — see
+  # `scope`); `commitlint` may be `skipped`, because it
   # is pull-request-only and does not run on a push to main. Nothing else is
   # tolerated — see the step below.
   #
@@ -629,20 +650,13 @@ jobs:
             fi
           done
 
-          # GATED — e2e is skipped on meta-only PRs (`scope.outputs.e2e=false`)
-          # and on nothing else. When required, `needs.e2e.result` covers the
+          # e2e must SUCCEED on every change. On a meta-only PR
+          # (`scope.outputs.e2e=false`) that is its one "not needed" leg, which
+          # succeeds without building. Otherwise `needs.e2e.result` covers the
           # WHOLE matrix: with fail-fast disabled every shard runs, and the
           # aggregate is `failure` if any single one failed. That is the
           # property that makes this maintenance-free.
-          if [ "${{ needs.scope.outputs.e2e }}" = "false" ]; then
-            case "${{ needs.e2e.result }}" in
-              skipped) ;;
-              *)
-                echo "::error::e2e should be skipped on meta-only PRs (result: ${{ needs.e2e.result }})"
-                exit 1
-                ;;
-            esac
-          elif [ "${{ needs.e2e.result }}" != "success" ]; then
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
             echo "::error::e2e did not pass (result: ${{ needs.e2e.result }})"
             exit 1
           fi
