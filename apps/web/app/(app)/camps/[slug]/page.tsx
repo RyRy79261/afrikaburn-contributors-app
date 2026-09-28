@@ -552,7 +552,6 @@ export default async function CampPage({
           {myLogistics !== undefined && (
             <MyLogisticsCard
               slug={camp.slug}
-              campName={camp.name}
               initial={myLogistics ?? emptyMemberLogistics()}
               window={logisticsWindow(edition)}
               saveAction={saveMyLogisticsAction}

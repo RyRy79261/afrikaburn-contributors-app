@@ -179,6 +179,9 @@ export const MESSAGE_REPORT_VIEW_AUDIT_ACTION = "dm.report.view";
 /** The audit action written when a report is resolved. */
 export const MESSAGE_REPORT_RESOLVE_AUDIT_ACTION = "dm.report.resolve";
 
+/** The audit action written when a resolved report is reopened. */
+export const MESSAGE_REPORT_REOPEN_AUDIT_ACTION = "dm.report.reopen";
+
 export const MESSAGE_REPORT_STATUSES = ["open", "resolved"] as const;
 export type MessageReportStatus = (typeof MESSAGE_REPORT_STATUSES)[number];
 

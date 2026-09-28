@@ -210,7 +210,7 @@ export function ConversationThread({
             id="dm-timer-label"
             className="flex items-center gap-2 text-sm font-medium"
           >
-            <Timer className="h-4 w-4 text-accent" aria-hidden />
+            <Timer className="h-4 w-4 text-primary" aria-hidden />
             Disappearing messages
           </p>
           <ToggleGroup
@@ -261,45 +261,52 @@ export function ConversationThread({
               {m.mine ? "You" : m.senderName} {m.body}
             </li>
           ) : (
-            <li
-              key={m.id}
-              className={cn(
-                "flex items-start gap-2",
-                m.mine ? "flex-row-reverse" : "flex-row",
-              )}
-            >
-              {reporting && (
-                <Checkbox
-                  className="mt-3"
-                  checked={selected.has(m.id)}
-                  onChange={(e) => toggle(m.id, e.target.checked)}
-                  aria-label={`Select message from ${m.mine ? "you" : m.senderName}: ${m.body.slice(0, 40)}`}
-                />
-              )}
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
-                  m.mine
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground",
-                )}
+            <li key={m.id}>
+              <ReportRow
+                reporting={reporting}
+                mine={m.mine}
+                picked={selected.has(m.id)}
+                checkbox={
+                  <Checkbox
+                    className="mt-3"
+                    checked={selected.has(m.id)}
+                    onChange={(e) => toggle(m.id, e.target.checked)}
+                    aria-label={`Select message from ${m.mine ? "you" : m.senderName}: ${m.body.slice(0, 40)}`}
+                  />
+                }
               >
-                <p className="sr-only">{m.mine ? "You" : m.senderName}:</p>
-                <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                <p
+                <span
                   className={cn(
-                    "mt-1 text-[11px]",
+                    "block max-w-[80%] rounded-2xl px-3 py-2 text-sm",
                     m.mine
-                      ? "text-primary-foreground/80"
-                      : "text-muted-foreground",
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-foreground",
+                    reporting &&
+                      selected.has(m.id) &&
+                      "ring-2 ring-primary ring-offset-2 ring-offset-background",
                   )}
                 >
-                  {TIME.format(new Date(m.createdAt))}
-                  {m.expiresAt && (
-                    <> · disappears {TIME.format(new Date(m.expiresAt))}</>
-                  )}
-                </p>
-              </div>
+                  <span className="sr-only">
+                    {m.mine ? "You" : m.senderName}:
+                  </span>
+                  <span className="block whitespace-pre-wrap break-words">
+                    {m.body}
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 block text-[11px]",
+                      m.mine
+                        ? "text-primary-foreground/80"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {TIME.format(new Date(m.createdAt))}
+                    {m.expiresAt && (
+                      <> · disappears {TIME.format(new Date(m.expiresAt))}</>
+                    )}
+                  </span>
+                </span>
+              </ReportRow>
             </li>
           ),
         )}
@@ -460,5 +467,44 @@ export function ConversationThread({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * One message row. In report mode the WHOLE row is a <label> around the tick
+ * box, so tapping anywhere on the message picks it — an 18px box alone is too
+ * small a target on a phone (canvas cKyLt / Nk5tw). A picked row is tinted
+ * and its bubble ringed.
+ */
+function ReportRow({
+  reporting,
+  mine,
+  picked,
+  checkbox,
+  children,
+}: {
+  reporting: boolean;
+  mine: boolean;
+  picked: boolean;
+  checkbox: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const row = cn(
+    "flex items-start gap-2",
+    mine ? "flex-row-reverse" : "flex-row",
+  );
+  if (!reporting) return <div className={row}>{children}</div>;
+  // A <label> takes phrasing content only, so the bubble is built of spans.
+  return (
+    <label
+      className={cn(
+        row,
+        "-mx-2 cursor-pointer rounded-xl p-2 transition-colors hover:bg-muted/40",
+        picked && "bg-primary/10 hover:bg-primary/15",
+      )}
+    >
+      {checkbox}
+      {children}
+    </label>
   );
 }
