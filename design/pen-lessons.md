@@ -1514,7 +1514,7 @@ Exports: /home/ryan/quagga-board/review-night/*.png (scale 1.5).
 | 1 | New Questionnaire · Starting point | /camps/[slug]/questionnaires/new | **Dydjn** | **s0Pk0w** | 76372 / 77772 | 1070 / 1186 |
 | 2 | Onboarding Builder | /camps/[slug]/questionnaires/new?preset=onboarding | **FKv08** | **ZohC3** | 78392 / 79792 | 1705 / 2536 |
 | 3 | Onboarding Completion (lead) | /camps/[slug]/questionnaires/[activationId] | **oBuPo** | **d60hfO** | 80412 / 81812 | 1326 / 1483 |
-| 4 | Onboarding Runner (member) + pending list state | /questionnaires/[activationId] | **Dl9rE** | **x6L35** | 82432 / 83832 | 1737 / 2063 |
+| 4 | Onboarding Runner (member) + pending list state | /questionnaires/[activationId] | **U7Z0oJ** (was Dl9rE) | **kfGIQ** (was x6L35) | 82432 / 83832 | 1737 / 2063 |
 | 5 | Onboarding · Carry Forward (new edition) | /camps/[slug]/questionnaires | **fF0hx** | **k1uEU** | 84452 / 85852 | 1340 / 1614 |
 
 Next free desktop slot in the participant band: x=86472. Tallest new frame ZohC3 ends at y=7796,
@@ -1605,8 +1605,8 @@ Participant app (teal), per Decision 007: shifts live in apps/web. PNGs: /home/r
 |---|------|-------|---------|--------|----------------------|---------|
 | 1 | Shifts · Lead overview (+ camp-page entry tile state) | /camps/[slug]/shifts | **gAQnT** | **BPuki** | 86472 / 87872 | 1340 / 1873 |
 | 2 | Shifts · New shift (template) (+ "needs a skill" state) | /camps/[slug]/shifts/new | **Y1tKxt** | **Ebxs3** | 88492 / 89892 | 1884 / 2371 |
-| 3 | Shifts · Member: My shifts + Open shifts (+ notifications state = item 5) | /camps/[slug]/shifts | **FH3rq** | **poliL** | 90512 / 91912 | 1584 / 1875 |
-| 4 | Shifts · Offer or swap (+ pending-approval and lead-approval states) | /camps/[slug]/shifts/[shiftId]/swap | **Mg6j2** | **vJxkW** | 92532 / 93932 | 1627 / 2840 |
+| 3 | Shifts · Member: My shifts + Open shifts (+ notifications state = item 5) | /camps/[slug]/shifts | **M3rNVI** (was FH3rq) | **pf8nm** (was poliL) | 90512 / 91912 | 1584 / 1875 |
+| 4 | Shifts · Offer or swap (+ pending-approval and lead-approval states) | /camps/[slug]/shifts/[shiftId]/swap | **UkKb6** (was Mg6j2) | **iS0Nv** (was vJxkW) | 92532 / 93932 | 1627 / 2840 |
 
 Item 5 (notification examples) is the "① IN-APP NOTIFICATIONS" block in frame 3. It uses 2 × Notification
 Item · Unread (H9bn7) and 1 × Read (IDy9A) for a reminder, a change by the lead and an approved swap. Next free
@@ -1668,3 +1668,81 @@ desktop slot: x=94552. Tallest frame is vJxkW, which ends at y=8100, clear of th
    notification.
 10. **Tile wording:** frame 1 shows the lead the fill status ("3 of 4 · 1 GAP"). Members never see who is
     missing, only the spots left.
+
+## Morning changes 28 Sep 2026 (Ryan's answers applied)
+
+PNGs: /home/ryan/quagga-board/review-morning/ (scale 1.5; `audit-all.txt` is the full-canvas audit).
+
+### Frame ids that CHANGED (Copy trick) — old → new
+
+| Frame | Old desktop / mobile | New desktop / mobile |
+|-------|----------------------|----------------------|
+| Onboarding Runner (now stepped) | Dl9rE / x6L35 | **U7Z0oJ** / **kfGIQ** |
+| Shifts · Member (sign up + my shifts) | FH3rq / poliL | **M3rNVI** / **pf8nm** |
+| Shifts · Hand on a shift (was "Offer or swap") | Mg6j2 / vJxkW | **UkKb6** / **iS0Nv** |
+
+Same x/y as before. The tables above (and pen-lessons.md on design-onboarding-shifts-frames, lines ~1517 and ~1608-1613) still cite the old ids.
+Unchanged ids (Update/Replace in place): FKv08, ZohC3, oBuPo, d60hfO, fF0hx, k1uEU, srY69, TEuVC, Y1tKxt, Ebxs3.
+
+### What changed
+
+- **a. New vs returning** is now labelled as camp membership: builder chips "New to Mad Hatters" / "Returning to Mad Hatters" (two rows, because they don't fit side by side in the 288/296 card). Completion tiles use the same labels (mobile labels wrap; tile rows re-equalised at 101). The desktop table column "Membership" is now "At Mad Hatters". Carry-forward audience line reads "new and returning to Mad Hatters, every role except Lead and Co-lead".
+- **b. Lead / Co-lead** are unselected Role Chips (TPGOi) in the builder's Camp role group: row 1 is Lead, Co-lead, Member; row 2 is Team lead, Kitchen wizard. A help line under them says "Lead and Co-lead are off by default. Tap either to include them." Reach split: "5 new · 13 returning to Mad Hatters, leads not included."
+- **c. Member runner split into steps** (6 steps, matching the builder's 6 sections). The main state is step 3 of 6 (Camp rules). It has a Runner v2 progress card: desktop is a 6-circle stepper where only the current step is labelled, plus "Page 3 of 6" and a track; mobile uses the v2 compact card "SECTION 3 OF 6 · CAMP RULES" plus a track. Below that are the section header, the one block, and Back / Saved / Next. OTHER STATES ① is the last step (6 of 6, "Before you arrive"): the acknowledgements card with 2 of 3 ticked and Back + a disabled "Finish onboarding" ("tick all three to finish"). ② is the pending-list block, kept as it was.
+- Camp rule text "Swap on the roster if you need to" → "Hand one on in Shifts if you can't make it." (runner + builder editor).
+- **Bio phone help (srY69):** "Only you. Shared with AfrikaBurn only if you agree as a camp officer." ID stays "Only you can see this."
+- **Profile ••• menu (TEuVC):** "Report alice_hatter" (flag icon, foreground), a separator, then "Block alice_hatter" (destructive). The caption now says "Report and Block live here".
+- **d. Edit teams:** a ghost "Edit teams" (pencil) at the right of the Team label in the new-shift frames (desktop 6/8 padding, mobile 14/8 = 44px).
+- **f. Swaps need no approval:**
+  - The "Swaps need my approval" tick box is deleted from both new-shift frames.
+  - The swap frames are rebuilt as "Hand on a shift". There are two Option Buttons: "Hand to someone" (selected, with a "Hand to" select set to Lerato Dlamini) and "Needs a replacement". The info callout says no approval is needed and Alice gets a notice. The button is "Send to Lerato".
+  - States: ① SENT, waiting for Lerato to accept ("HANDING ON" badge, Withdraw). ② What Lerato sees: "Jabu wants to hand you Kitchen · Thu lunch", Accept / Decline. ③ "Needs a replacement" chosen: "IN OPEN SHIFTS" badge, "the first person to take it gets it", Take it back.
+  - Member "Offer or swap" buttons now read "Hand on". The "Swap approved…" notification is now "Lerato Dlamini accepted your Kitchen · lunch on Thu 29 Apr — it's hers now". The note under it now describes the lead's own "changed hands" notice.
+- **g. Open shifts show every day:** the description now says "Every day of the burn is listed, build and strike included". The "Build days … are hidden" line is deleted. A new last row, "MON 3 · Build & strike · strike crew · 09:00–13:00 · 2 spots left · You're not on site this day", shows the subtle hint and matches the lead overview's "Mon 3 May · 2 gaps".
+
+### Audit
+
+Every changed frame had 0 findings. The full canvas (`--all`) gave 155 frames, 104 findings and 2 defects, the same totals as the night baseline. Both defects are pre-existing: the Head OVERLAP and "Request a feature" overflow.
+
+### Lessons
+
+- **Scratch-copy rebuild of an existing frame works well.** One execute call per pair does it all: `Copy(frame, document, {x, y:23000})`, then find nodes by name in the copy, Insert/Move/Replace/Delete, then `Copy(scratch, document, {x, y:5260})`, then Delete the scratch and the original. Both runner and both swap frames audited clean on the first run.
+- **Rebuilding a sub-tree as data is simpler than patching instance overrides.** Strip the ids from `Get(node)`, change fields found by a recursive name search (it walks both `children` and `descendants`), then `Replace(node, data)`. It also handled the label and icon swaps inside replaced button slots.
+- **Replace alone, and Delete alone, do not trigger the +50px bias** (FKv08, ZohC3, TEuVC, Y1tKxt, Ebxs3 all audited clean without the Copy trick). Only Insert into an existing frame did.
+- **`Get(document, visitor)` over the whole canvas times out** ("InternalError: interrupted"). To read frame x/y/height, visit each frame with `c.depth===0` and `skipChildren`.
+- An instance's `height:"fit_content"` is accepted. Use it to measure a wrapped Stat Tile, then set the equal fixed height back on.
+
+### Guesses
+
+1. The hand-on recipient is **Lerato Dlamini**, not Ren as in your example: Ren is already on that Kitchen · lunch shift, so he can't be handed it.
+2. With Lead and Co-lead off, "Reaches 18 members" still says 18, with "leads not included" added. The roster says "18 people" including Alice. So either the camp is 20 with 2 leads, or the reach should be 16. I didn't ripple the numbers through the completion frames. Tell me which you want.
+3. The runner's main state is step 3 rather than step 1, so it shows both Back and Next. Step 1 would have no Back.
+4. The member can still **Sign up** on a day they're not on site. The hint only informs.
+5. When a shift changes hands, the lead's notice is described in text under the notifications block, not drawn as its own notification item.
+6. "Take it back" (withdraw a "needs a replacement" post) and "Withdraw" (cancel a hand-on) are my additions.
+
+### Follow-up 28 Sep: cast names as data only, and reach counts that include leads
+
+**Rule (Ryan):** cast names (Mad Hatters, Alice…) may appear only as DATA. That means the camp's page heading, the back link to the camp, member rows, the author and actor in a notice, message bodies, and content the lead writes (the questionnaire title "Welcome to Mad Hatters" and its sections). Names must never appear in chrome that would be a fixed string in code: chips, column headers, help lines, buttons, badges, empty states, or the fixed text of callouts and notices.
+
+**Changes.** All were plain Updates, so **no ids changed**.
+
+- **Builder, completion and carry-forward:**
+  - Chips and tiles now say "New to the camp" / "Returning to the camp". The column header is "At this camp". The help line says "first edition with the camp".
+  - The carry-forward audience line is now "new and returning to the camp, every role except Lead and Co-lead".
+  - The starting-point subtitle has dropped "Mad Hatters ·".
+- **New shift:** the subtitle has dropped "Mad Hatters ·".
+- **Hand on:**
+  - The callout, notes and captions now say "they" / "your camp lead" instead of Lerato or Alice.
+  - The button reads "Send request".
+  - "Decline and nothing changes."
+- **Member notifications note:** "the camp lead".
+- **Profile ••• menu:** the items are plain "Report" and "Block".
+- **Counts:** member counts include leads. The camp has 18 members, including 2 leads (Alice as lead, Ren as co-lead).
+  - Builder: "Reaches 16 of 18 members right now · 5 new · 11 returning to the camp".
+  - Completion is based on 16 recipients. It says "Sent … to 16 of 18 members" and "10 of 16" complete (63%, bar 610/976 and 185/296). The split is new 4 of 5 and returning 6 of 11, with 6 still to finish (4 started, 2 not opened). The names list shows 6 of 16 and is unchanged.
+  - Carry-forward's "16 of 17 finished" is about the 2026 run, so I left it.
+
+**Left as data on purpose:** back links "Mad Hatters", the questionnaire title and body, "From Alice Hatter", the "· Mad Hatters" source line on notifications, "Alice Hatter moved…" and "(moved by Alice)", the recipient name in "Sent to Lerato Dlamini…" and "Jabu wants to hand you…", and the people cells.
+
+**Audit:** 15 frames, 0 findings. Exports in review-morning/ were overwritten.
