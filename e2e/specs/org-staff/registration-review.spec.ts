@@ -12,11 +12,14 @@
 // (harness factories) and its own org_staff (god-elevated) — no shared state.
 
 import { test, expect, skipUnlessGod } from "../../fixtures";
+import type { Locator } from "@playwright/test";
 import {
   signUpBurner,
   signInAs,
   createCamp,
   submitRegistration,
+  inviteToCamp,
+  joinByInvite,
 } from "../../personas/factories";
 import { provisionOrgStaff, type MakeAppPage } from "./_helpers";
 
@@ -75,6 +78,56 @@ async function openDetailFromQueue(
   throw new Error(
     `[org-staff] "${campName}" never appeared in the registrations queue within ${MAX_PAGES} pages.`,
   );
+}
+
+/** Any placement notice, whichever verb — the title's fixed middle. */
+const PLACEMENT_NOTICE = /placement (set|changed|removed)/;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Fill the placement panel and save, settling on the SERVER ACTION's response
+ * — not the toast. Toasts stack across saves, so "Placement details saved." is
+ * already on screen from the previous one and would settle nothing. The
+ * notice is written inside the action before it returns, so once the POST
+ * resolves the inbox can be read.
+ */
+async function savePlacement(
+  org: Awaited<ReturnType<MakeAppPage>>,
+  values: { code: string; erf: string },
+): Promise<void> {
+  await org.getByLabel("Camp code").fill(values.code);
+  await org.getByLabel("Erf").fill(values.erf);
+  const save = org.getByRole("button", { name: "Save placement details" });
+  await expect(save).toBeEnabled();
+  const action = org.waitForResponse(
+    (r) =>
+      r.request().method() === "POST" &&
+      r.request().headers()["next-action"] !== undefined,
+  );
+  await save.click();
+  expect((await action).ok()).toBe(true);
+  // A refused save leaves the draft dirty and Save enabled; a stored one
+  // adopts the server's values and has nothing left to save.
+  await expect(save).toBeDisabled();
+}
+
+/**
+ * Open a web user's inbox and return its placement-notice titles. The page
+ * heading is asserted FIRST: it is rendered by the page itself (the loading
+ * skeleton has none), in the same server render as the list, so a zero count
+ * read after it is a real zero, not an unpainted document.
+ */
+async function placementNotices(
+  web: Awaited<ReturnType<MakeAppPage>>,
+): Promise<Locator> {
+  await web.goto("/notifications");
+  await expect(
+    web.getByRole("heading", { level: 1, name: "Notifications" }),
+  ).toBeVisible();
+  return web.getByText(PLACEMENT_NOTICE);
 }
 
 test.describe("org staff · registration review loop", () => {
@@ -201,6 +254,105 @@ test.describe("org staff · registration review loop", () => {
       stranger.getByRole("region", { name: "Placement" }),
     ).toHaveCount(0);
     await expect(stranger.getByText("K12 NORTH")).toHaveCount(0);
+  });
+
+  test("placement set, changed and removed notify the camp's leads — not on a no-op re-save, not its plain members (epic #48)", async ({
+    makeAppPage,
+  }) => {
+    skipUnlessGod();
+    // Four full sign-ups' worth of setup (lead, member, staff) plus five
+    // inbox reads — the sibling test above measured 90s as too short for three.
+    test.setTimeout(300_000);
+    const camp = await createSubmittedCamp(makeAppPage);
+
+    // A PLAIN MEMBER of the same camp — the control. A hook that resolved
+    // "everyone in the camp" instead of its leads/admins would pass every
+    // lead assertion below and fail only here.
+    const invite = await inviteToCamp(camp.web, camp.slug);
+    const member = await makeAppPage("web");
+    await signUpBurner(member, { onboard: true });
+    await joinByInvite(member, invite.url);
+
+    const staff = await provisionOrgStaff(makeAppPage);
+    await openDetailFromQueue(staff.org, camp.campName);
+    await staff.org.getByRole("button", { name: /^approve$/i }).click();
+    await expect(staff.org.getByText(/approve applied/i)).toBeVisible();
+
+    // The edition's name as the product shows it to this camp — read, not
+    // restated from the seed, so a renamed edition does not break the test
+    // and a notice naming the WRONG edition does.
+    await camp.web.goto(`/camps/${camp.slug}`);
+    const registered = camp.web.getByText(
+      /^Registered for .+ — your entitlements are/,
+    );
+    await expect(registered).toBeVisible();
+    const editionName = (await registered.textContent())!
+      .match(/^Registered for (.+?) — /)![1]!
+      .trim();
+    expect(editionName).not.toBe("");
+    const edition = escapeRegExp(editionName);
+
+    // --- SET -------------------------------------------------------------
+    const code = `Q${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    await savePlacement(staff.org, { code, erf: "k12 north" });
+
+    let notices = await placementNotices(camp.web);
+    await expect(notices).toHaveCount(1);
+    const setNotice = camp.web.getByText(
+      new RegExp(`^${edition} placement set: ${code} · K12 NORTH$`),
+    );
+    await expect(setNotice).toBeVisible();
+
+    // It links to the camp page.
+    await setNotice.click();
+    await expect(camp.web).toHaveURL(new RegExp(`/camps/${camp.slug}$`));
+    await expect(
+      camp.web.getByRole("region", { name: "Placement" }),
+    ).toBeVisible();
+
+    // --- RE-SAVE, SAME STORED VALUES → NO NOTICE --------------------------
+    // Typed differently (case, spacing) so the panel is dirty and Save is
+    // enabled, but it normalizes to exactly what is stored.
+    await savePlacement(staff.org, {
+      code: code.toLowerCase(),
+      erf: "  K12   north ",
+    });
+    notices = await placementNotices(camp.web);
+    await expect(
+      camp.web.getByText(new RegExp(`^${edition} placement set: `)),
+    ).toBeVisible();
+    await expect(notices).toHaveCount(1);
+
+    // --- CHANGE ----------------------------------------------------------
+    await savePlacement(staff.org, { code, erf: "k14 south" });
+    notices = await placementNotices(camp.web);
+    await expect(
+      camp.web.getByText(
+        new RegExp(`^${edition} placement changed: ${code} · K14 SOUTH$`),
+      ),
+    ).toBeVisible();
+    await expect(notices).toHaveCount(2);
+
+    // The plain member really IS in the camp — PRESENT first: the member-only
+    // placement card renders for them, with the new erf. Checked while a
+    // placement exists, because a cleared one renders no card for anybody.
+    await member.goto(`/camps/${camp.slug}`);
+    const memberCard = member.getByRole("region", { name: "Placement" });
+    await expect(memberCard).toBeVisible();
+    await expect(memberCard.getByText("K14 SOUTH")).toBeVisible();
+
+    // --- REMOVE (both cleared) --------------------------------------------
+    await savePlacement(staff.org, { code: "", erf: "" });
+    notices = await placementNotices(camp.web);
+    await expect(
+      camp.web.getByText(new RegExp(`^${edition} placement removed$`)),
+    ).toBeVisible();
+    await expect(notices).toHaveCount(3);
+
+    // --- THE PLAIN MEMBER HEARD NONE OF IT --------------------------------
+    // Three notices went to the lead; a member of the same camp (proved
+    // above) has none of them. `placementNotices` asserts the inbox rendered.
+    await expect(await placementNotices(member)).toHaveCount(0);
   });
 
   test("a section review comment is audited and the camp sees it", async ({
