@@ -16,6 +16,7 @@ import {
 import { guardConsole } from "@/lib/gate";
 import { getMessageReport } from "@/lib/message-reports";
 import { PageHeading } from "@/components/page-heading";
+import { ReopenReportButton } from "@/components/safety/reopen-report-button";
 import { ResolveReportButton } from "@/components/safety/resolve-report-button";
 
 // /safety/[id] — one direct-message report (epic #69). NEEDS DESIGN REVIEW.
@@ -54,6 +55,7 @@ export default async function SafetyReportPage({
     parsed.data.id,
   );
   if (!report) notFound();
+  const canResolve = canResolveMessageReports(guard.session.actor);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -68,13 +70,19 @@ export default async function SafetyReportPage({
         title={`${report.reporterName} reported ${report.reportedName}`}
         description={`Reported ${DATE.format(report.createdAt)}. This copy is deleted ${DATE.format(report.expiresAt)}. Opening this report is recorded in the audit log.`}
         actions={
-          report.status === "open" &&
-          canResolveMessageReports(guard.session.actor) ? (
+          report.status === "open" && canResolve ? (
             <ResolveReportButton reportId={report.id} />
           ) : (
-            <Badge variant={report.status === "open" ? "default" : "secondary"}>
-              {report.status === "open" ? "Open" : "Resolved"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={report.status === "open" ? "default" : "secondary"}
+              >
+                {report.status === "open" ? "Open" : "Resolved"}
+              </Badge>
+              {report.status === "resolved" && canResolve && (
+                <ReopenReportButton reportId={report.id} />
+              )}
+            </div>
           )
         }
       />

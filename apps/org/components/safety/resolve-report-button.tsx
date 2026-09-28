@@ -7,7 +7,7 @@ import { Button } from "@quagga/ui/components/button";
 import { resolveMessageReportAction } from "@/lib/actions/message-reports";
 
 /** Mark a direct-message report resolved. The server re-checks the safety
- * capability; this button decides nothing. NEEDS DESIGN REVIEW. */
+ * capability; this button decides nothing. Canvas: dp5Yd / zsnrZ. */
 export function ResolveReportButton({ reportId }: { reportId: string }) {
   const [pending, startTransition] = useTransition();
   return (

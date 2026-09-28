@@ -263,3 +263,28 @@ export function whereMentions(condition: unknown, literal: string): boolean {
   };
   return walk(condition);
 }
+
+/**
+ * The values a drizzle condition actually BINDS (its `Param` chunks), in
+ * order. Stricter than `whereMentions`: that walk also descends into column
+ * objects, so it finds an enum column's own `enumValues` and says a status
+ * condition mentions "open" and "resolved" whichever one it compares to.
+ */
+export function whereParams(condition: unknown): unknown[] {
+  const out: unknown[] = [];
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): void => {
+    if (node === null || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (
+      (node as { constructor?: { name?: string } }).constructor?.name ===
+      "Param"
+    ) {
+      out.push((node as { value: unknown }).value);
+      return;
+    }
+    Object.values(node as Record<string, unknown>).forEach(walk);
+  };
+  walk(condition);
+  return out;
+}

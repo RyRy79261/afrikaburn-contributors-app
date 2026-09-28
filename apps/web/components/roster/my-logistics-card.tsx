@@ -29,13 +29,11 @@ type SaveResult =
 
 export function MyLogisticsCard({
   slug,
-  campName,
   initial,
   window,
   saveAction,
 }: {
   slug: string;
-  campName: string;
   initial: MemberLogistics;
   window: { earliest: string; latest: string } | null;
   saveAction: (raw: unknown) => Promise<SaveResult>;
@@ -72,12 +70,12 @@ export function MyLogisticsCard({
     <Card data-testid="my-logistics">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
+          <CalendarDays className="h-4 w-4 text-primary" aria-hidden />
           Your plans
         </CardTitle>
         <CardDescription>
           When you&apos;re arriving and leaving, and whether you&apos;re joining
-          build and strike. Only you and {campName}&apos;s organisers see this.
+          build and strike. Only you and your camp&apos;s organisers see this.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

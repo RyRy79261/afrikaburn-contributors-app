@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MESSAGE_REPORT_RESOLVE_AUDIT_ACTION } from "@quagga/core";
+import {
+  MESSAGE_REPORT_REOPEN_AUDIT_ACTION,
+  MESSAGE_REPORT_RESOLVE_AUDIT_ACTION,
+} from "@quagga/core";
 import type * as QuaggaDb from "@quagga/db";
 
-import { fakeDb, whereMentions, type FakeDb } from "./support/fake-db";
+import { fakeDb, whereParams, type FakeDb } from "./support/fake-db";
 import { CAMPS_LEAD, PERSONAL_READER } from "./support/actors";
 
 // Resolving a direct-message report (epic #69): the safety tier's reading
@@ -26,7 +29,7 @@ vi.mock("@/lib/session", () => ({
   requireOrgSession: (options?: unknown) => requireOrgSession(options),
 }));
 
-const { resolveMessageReportAction } =
+const { reopenMessageReportAction, resolveMessageReportAction } =
   await import("@/lib/actions/message-reports");
 
 const REPORT = "11111111-1111-4111-8111-111111111111";
@@ -95,8 +98,7 @@ describe("resolveMessageReportAction", () => {
     txDb.seed("message_reports", [{ id: REPORT }]);
     await resolveMessageReportAction({ reportId: REPORT });
     const where = txDb.recorded("update", "message_reports")[0]!.where;
-    expect(whereMentions(where, "open")).toBe(true);
-    expect(whereMentions(where, REPORT)).toBe(true);
+    expect(whereParams(where)).toEqual([REPORT, "open", expect.any(Date)]);
   });
 
   it("reports an already-resolved report honestly", async () => {
@@ -114,5 +116,58 @@ describe("resolveMessageReportAction", () => {
     const result = await resolveMessageReportAction({ reportId: "nope" });
     expect(result.ok).toBe(false);
     expect(requireOrgSession).not.toHaveBeenCalled();
+  });
+});
+
+// Reopen is the undo for a resolve made by mistake (canvas dp5Yd): the same
+// capability, the same one-transaction write, the compare-and-set flipped.
+describe("reopenMessageReportAction", () => {
+  it("refuses a reader of personal information who lacks update", async () => {
+    requireOrgSession.mockResolvedValue({
+      dbUserId: "u1",
+      actor: PERSONAL_READER,
+    });
+    const result = await reopenMessageReportAction({ reportId: REPORT });
+    expect(result.ok).toBe(false);
+    expect(requireOrgSession).toHaveBeenCalledWith({
+      capability: "personal_information",
+      domain: "registrations",
+    });
+    expect(txDb.recorded("update")).toHaveLength(0);
+  });
+
+  it("reopens a resolved report, clears who resolved it, and audits the reopen", async () => {
+    requireOrgSession.mockResolvedValue({ dbUserId: "u1", actor: CAMPS_LEAD });
+    txDb.seed("message_reports", [{ id: REPORT }]);
+    await expect(
+      reopenMessageReportAction({ reportId: REPORT }),
+    ).resolves.toEqual({ ok: true });
+    const update = txDb.recorded("update", "message_reports")[0]!;
+    expect(update.values).toEqual({
+      status: "open",
+      resolvedAt: null,
+      resolvedBy: null,
+    });
+    // Only a RESOLVED report can be reopened.
+    expect(whereParams(update.where)).toEqual([
+      REPORT,
+      "resolved",
+      expect.any(Date),
+    ]);
+    expect(txDb.inserted("audit_events")).toMatchObject({
+      action: MESSAGE_REPORT_REOPEN_AUDIT_ACTION,
+      subject: REPORT,
+    });
+    expect(db.calls).toHaveLength(0);
+  });
+
+  it("reports an already-open report honestly and writes no audit row", async () => {
+    requireOrgSession.mockResolvedValue({ dbUserId: "u1", actor: CAMPS_LEAD });
+    const result = await reopenMessageReportAction({ reportId: REPORT });
+    expect(result).toEqual({
+      ok: false,
+      error: "That report is already open or no longer exists.",
+    });
+    expect(txDb.recorded("insert", "audit_events")).toHaveLength(0);
   });
 });

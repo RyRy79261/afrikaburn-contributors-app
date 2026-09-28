@@ -103,6 +103,7 @@ export default async function CampAnnouncementsPage({
           {drafts.map((a) => (
             <Link key={a.id} href={`${base}/${a.id}`} className="block">
               <BulletinCard
+                kicker="Announcement"
                 title={a.title}
                 preview={plainPreview(a.bodyMd, 160)}
                 audience={audienceLabel(a)}
@@ -127,6 +128,7 @@ export default async function CampAnnouncementsPage({
           published.map((a) => (
             <Link key={a.id} href={`${base}/${a.id}`} className="block">
               <BulletinCard
+                kicker="Announcement"
                 title={a.title}
                 preview={plainPreview(a.bodyMd, 160)}
                 audience={audienceLabel(a)}
