@@ -2,9 +2,26 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | Open |
+| **Status** | **Resolved** |
 | **Raised** | 2026-07-29 (App Spec change record) |
+| **Decided** | 2026-09-27 |
+| **Decided by** | Ryan Noble |
 | **Spec section** | §1 Development Direction (`PURPOSE-001`, `PURPOSE-002`) |
+
+## The decision
+
+**Camp-planning tools live in `apps/web`, not in a fourth application.** The
+first one this settles is shifts (#57). The boundary stays by audience:
+participants and camps in `apps/web`, AfrikaBurn staff in `apps/org`, suppliers
+in `apps/suppliers`.
+
+Camp-planning logic keeps living in pure `@quagga/core` functions, as the
+roster already does, so the choice stays cheap to revisit.
+
+This does not settle whether camp leads want shifts at all. Demand is still
+validated before shifts are built (the roadmap graduation rule).
+
+The rest of this record is the question as it stood before the decision.
 
 ## The question
 

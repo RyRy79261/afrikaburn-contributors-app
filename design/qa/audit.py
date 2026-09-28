@@ -8,6 +8,19 @@ Usage:
   python3 audit.py --json out.json ...   # also write machine-readable report
 
 Requires the Pen app running with the doc open (talks to it via penctl.py).
+The file is the app's active canvas editor (read from `get_app_state`, and
+refused unless it is ab-initial-app.pen); set PEN_FILE to the bridge's path
+form (e.g. /Ubuntu/home/.../ab-initial-app.pen) to override.
+
+Data comes from the bridge's `execute` tool, READ-ONLY: one `Get` visitor per
+frame, with `resolveInstances:true`, returns computed bounds (`ctx.bounds`,
+parent-relative) and live props in a single call. (`snapshot_layout` and
+`batch_get` no longer exist in the Pencil MCP API.) Resolving instances means
+a component instance comes back as an ordinary frame (root keeps the instance
+id, internals are `instanceId/childId` paths) with per-instance overrides
+applied, so name/type checks such as TOUCH-TARGET apply to instances too — the
+old batch_get crawl only ever saw them as type "ref". Resolved nodes drop
+`ref`, so it is recovered per frame for the manifest's `-> component` column.
 
 What it checks (per frame, on COMPUTED geometry + LIVE node props):
   GEOMETRY
@@ -23,9 +36,10 @@ What it checks (per frame, on COMPUTED geometry + LIVE node props):
   CONTENT
   - FORBIDDEN: payment/reconcil/yoco strings (never-holds-funds law), lorem/TODO
 
-Disabled nodes are excluded using LIVE props: source-level enabled:false AND
-instance descendants overrides ({shadowId:{enabled:false}}) are both honored,
-so ghost geometry of hidden nodes does not create false positives.
+Disabled nodes are excluded using LIVE props: with instances resolved, each
+`instanceId/childId` carries its effective `enabled` (source-level
+enabled:false AND per-instance descendants overrides already applied), so
+ghost geometry of hidden nodes does not create false positives.
 Verified-intentional exceptions live in whitelist.json ({nodeId: reason} or
 {frameId/nodeId: reason}); every entry must state WHY.
 """
@@ -55,80 +69,88 @@ def load_whitelist():
     p = os.path.join(HERE, "whitelist.json")
     return json.load(open(p)) if os.path.exists(p) else {}
 
+# Props copied off each node. Objects are skipped (descendants maps, gradients)
+# except fill/stroke, which the RAW-HEX check reads when they are plain strings.
+PROP_KEYS = ["type", "name", "layout", "clip", "enabled", "textGrowth", "content", "ref",
+             "justifyContent", "alignItems", "fill", "stroke", "fontFamily", "fontSize",
+             "cornerRadius", "width", "layoutPosition"]
+MARK = "@@JSON@@"
+
+# Top-level frames: ids + boxes, children skipped.
+TOP_JS = ("const r=[];Get(document,(n,c)=>{if(c.depth===0){r.push({id:n.id,x:c.bounds.x,"
+          "y:c.bounds.y,width:c.bounds.width,height:c.bounds.height});c.skipChildren();}});"
+          "Print('%s'+JSON.stringify(r));" % MARK)
+
+
+def frame_js(fid):
+    """One read-only Get pass over a subtree: nested geometry + a flat props map."""
+    return ("const K=%s;const P={};const M={};let root=null;"
+            "Get(%s,(n,c)=>{const g={id:n.id,x:c.bounds.x,y:c.bounds.y,width:c.bounds.width,"
+            "height:c.bounds.height,children:[]};const p={};for(const k of K){"
+            "if(n[k]!==undefined&&(typeof n[k]!=='object'||k==='fill'||k==='stroke'))p[k]=n[k];}"
+            "if(n.type==='frame'){try{const o=Get(n.id.split('/').pop(),{depth:0});"
+            "if(o.type==='ref'){p.ref=o.ref;p.refName=Get(o.ref,{depth:0}).name;}}catch(e){}}"
+            "P[n.id]=p;M[n.id]=g;const pp=c.parentCtx&&M[c.parentCtx.node.id];"
+            "if(pp)pp.children.push(g);else if(!root)root=g;},{resolveInstances:true});"
+            "Print('%s'+JSON.stringify({root,P}));") % (json.dumps(PROP_KEYS), json.dumps(fid), MARK)
+
+
+class NotFound(Exception):
+    pass
+
+
 class Auditor:
     def __init__(self):
         self.pen = Pen()
+        self.file = self.resolve_file()
         self.props = {}
         self.whitelist = load_whitelist()
 
-    # ---------- data collection ----------
-    def snapshot(self):
-        """Top-level frames only (ids + boxes).
+    # ---------- data collection (execute tool, read-only) ----------
+    def resolve_file(self):
+        """The .pen path in the bridge's own form (the WSL `/Ubuntu/...` prefix
+        varies by distro), so ask the app which canvas is active."""
+        if os.environ.get("PEN_FILE"):
+            return os.environ["PEN_FILE"]
+        state = self.pen.tool("get_app_state", {}, timeout=60)
+        m = re.search(r"active canvas editor:\s*`([^`]+)`", state)
+        if not m or not m.group(1).endswith("ab-initial-app.pen"):
+            sys.exit("audit.py: the Pen app's active canvas is not ab-initial-app.pen "
+                     f"({m.group(1) if m else 'none open'}). Open it, or set PEN_FILE.")
+        return m.group(1)
 
-        A full-depth dump of the whole document now exceeds the Pen bridge's
-        own 60s budget and comes back as the misleading error "you are probably
-        referencing the wrong .pen file". Deep geometry is therefore fetched one
-        frame at a time via `snapshot_frame` (fast, ~0.4s each).
-        """
-        raw = self.pen.tool("snapshot_layout", {"maxDepth": 0}, timeout=300)
-        return json.loads(raw)
+    def run(self, js):
+        out = self.pen.tool("execute", {"filePath": self.file, "input": js}, timeout=300)
+        m = re.search(re.escape(MARK) + r"(.*)", out)
+        if not m:
+            raise RuntimeError(out[:1500])
+        return json.loads(m.group(1))
+
+    def snapshot(self):
+        """Top-level frames only (ids + boxes)."""
+        return self.run(TOP_JS)
 
     def snapshot_frame(self, fid):
-        """Full-depth geometry for one top-level frame."""
-        raw = self.pen.tool("snapshot_layout", {"parentId": fid, "maxDepth": 200}, timeout=300)
-        node = json.loads(raw)
-        return node[0] if isinstance(node, list) else node
-
-    def crawl_props(self, root_ids):
-        """BFS batch_get; records props by id, disabled overrides from ref descendants."""
-        pending, seen = list(root_ids), set(root_ids)
-        while pending:
-            batch, pending = pending[:15], pending[15:]
-            try:
-                res = json.loads(self.pen.tool("batch_get", {"nodeIds": batch, "depth": 3}, timeout=180))
-            except Exception as e:
-                print(f"  ! batch_get failed for {batch[:3]}...: {e}", file=sys.stderr)
-                continue
-            stack = res if isinstance(res, list) else [res]
-            while stack:
-                n = stack.pop()
-                if not isinstance(n, dict) or "id" not in n:
-                    continue
-                nid = n["id"]
-                rec = {k: n.get(k) for k in ("type", "name", "layout", "clip", "enabled",
-                                             "textGrowth", "content", "ref", "justifyContent",
-                                             "alignItems", "fill", "stroke", "fontFamily",
-                                             "fontSize", "cornerRadius", "width", "layoutPosition") if k in n}
-                self.props.setdefault(nid, {}).update(rec)
-                desc = n.get("descendants")
-                if isinstance(desc, dict):
-                    for sid, override in desc.items():
-                        if isinstance(override, dict):
-                            self.props.setdefault(f"{nid}/{sid}", {}).update(
-                                {k: v for k, v in override.items() if not isinstance(v, dict)})
-                kids = n.get("children")
-                if isinstance(kids, list):
-                    stack.extend(kids)
-                elif kids == "..." and nid not in seen:
-                    seen.add(nid)
-                    pending.append(nid)
+        """Full-depth geometry for one node (any id, not only top-level frames),
+        instances resolved; records every node's live props as a side effect."""
+        try:
+            d = self.run(frame_js(fid))
+        except RuntimeError as e:
+            if "find node" in str(e):
+                raise NotFound(fid)
+            raise
+        for k, v in d["P"].items():
+            self.props.setdefault(k, {}).update(v)
+        return d["root"]
 
     # ---------- helpers ----------
     def P(self, nid):
-        p = self.props.get(nid)
-        if p is None and "/" in nid:
-            p = self.props.get(nid.split("/")[-1])
-        return p or {}
+        return self.props.get(nid) or {}
 
     def enabled(self, nid):
-        exact = self.props.get(nid)
-        if exact is not None and exact.get("enabled") is False:
-            return False
-        if "/" in nid:  # shadow: source-level disable
-            base = self.props.get(nid.split("/")[-1])
-            if base is not None and base.get("enabled") is False:
-                return False
-        return True
+        # Resolved instance paths carry their effective `enabled` (source value
+        # with the instance's overrides applied), so the exact entry is the truth.
+        return self.P(nid).get("enabled") is not False
 
     def allowed(self, frame, nid):
         return nid in self.whitelist or f"{frame}/{nid}" in self.whitelist
@@ -220,26 +242,13 @@ class Auditor:
         p = self.P(nid)
         kind = p.get("type", "?")
         nm = p.get("name") or (str(p.get("content"))[:40] if p.get("content") else "")
-        ref = f" -> component {p.get('ref')}({(self.props.get(p.get('ref')) or {}).get('name','')})" if p.get("ref") else ""
+        ref = f" -> component {p.get('ref')}({p.get('refName', '')})" if p.get("ref") else ""
         dis = "" if self.enabled(nid) else "  [disabled]"
         lines.append(f"{'  '*depth}{nid} [{kind}] {nm}{ref}{dis}  {node.get('width')}x{node.get('height')}")
         for c in node.get("children", []) if isinstance(node.get("children"), list) else []:
             if isinstance(c, dict) and "id" in c:
                 self.manifest(c, depth + 1, lines)
         return lines
-
-
-def find(nid, nodes):
-    for n in nodes:
-        if isinstance(n, dict):
-            if n.get("id") == nid:
-                return n
-            kids = n.get("children")
-            if isinstance(kids, list):
-                r = find(nid, kids)
-                if r:
-                    return r
-    return None
 
 
 def main():
@@ -253,23 +262,30 @@ def main():
     if sections_mode:
         args.remove("--sections")
 
+    if not args:
+        print(__doc__)
+        return
     a = Auditor()
-    print("snapshotting document geometry...", file=sys.stderr)
-    doc = a.snapshot()
-    tops = [n for n in doc if isinstance(n, dict) and "id" in n]
-    targets = [n["id"] for n in tops if n["id"] not in ARCHIVE] if "--all" in args else args
+    if "--all" in args:
+        print("listing top-level frames...", file=sys.stderr)
+        targets = [n["id"] for n in a.snapshot() if isinstance(n, dict) and "id" in n
+                   and n["id"] not in ARCHIVE]
+    else:
+        targets = args
     if not targets:
         print(__doc__)
         return
 
     report = {}
     for fid in targets:
-        node = a.snapshot_frame(fid) if any(t["id"] == fid for t in tops) else find(fid, doc)
+        print(f"reading {fid}...", file=sys.stderr)
+        try:
+            node = a.snapshot_frame(fid)
+        except NotFound:
+            node = None
         if node is None or "id" not in node:
             print(f"== {fid}: NOT FOUND")
             continue
-        print(f"crawling {fid}...", file=sys.stderr)
-        a.crawl_props([fid])
         fname = (a.props.get(fid) or {}).get("name", "")
         if sections_mode:
             print(f"== {fid} ({fname}) — component manifest")
