@@ -292,6 +292,11 @@ export async function redeemInvite(
     if (err instanceof LeadTransferLost) {
       return { ok: false, error: LEAD_TRANSFER_LOST };
     }
+    // The camp's lead changed underneath (or a concurrent transfer won) —
+    // rolled back whole, link still unused.
+    if (err instanceof LeadTransferStale) {
+      return { ok: false, error: LEAD_TRANSFER_STALE };
+    }
     throw err;
   }
 }
@@ -301,6 +306,18 @@ const OWN_INVITE_AFTER_ARCHIVE =
 
 const LEAD_TRANSFER_LOST =
   "Your membership of this camp changed while the lead was being handed over — nothing was changed. Try the link again.";
+
+const LEAD_TRANSFER_STALE =
+  "The camp's lead changed while this handover was being accepted — nothing was changed. Try the link again, or ask the current lead for a new one.";
+
+/** Thrown inside the redeem transaction when, with the camp's lead row(s)
+ * locked, the camp does not have exactly one lead or that lead is not the
+ * person who minted the transfer. Rolls the whole redeem back. */
+class LeadTransferStale extends Error {
+  constructor() {
+    super("lead transfer: the camp's lead is no longer the one who offered it");
+  }
+}
 
 /** Thrown inside the redeem transaction to roll it back when a lead transfer
  * would otherwise commit with the old lead demoted and no new one. */
@@ -334,7 +351,38 @@ async function redeemInTransaction(
   }
 
   if (invite.kind === "lead_transfer") {
-    // Demote existing leads to admin, then make the redeemer the lead.
+    // SERIALISE LEAD TRANSFERS PER CAMP. Two DIFFERENT lead-transfer links for
+    // the same camp redeemed at the same moment used to both succeed: each
+    // transaction's demotion matched only the lead IT saw (the old one), so
+    // neither demoted the other's newly promoted redeemer — two leads.
+    //
+    // Lock the camp's current lead row(s) before touching them. A concurrent
+    // transfer blocks here until this one commits; Postgres then re-checks
+    // the locked row, which is no longer a lead, so the loser reads NO lead
+    // (or, if it started after the commit, the NEW lead) and fails the check
+    // below. The check itself: exactly one lead, and it is the person who
+    // offered the handover (only the lead may mint a lead transfer). If the
+    // lead has changed since, this link's handover no longer exists — roll
+    // back (the claim included) rather than take the lead from someone the
+    // minter never had it from.
+    const leads = await tx
+      .select({
+        id: schema.memberships.id,
+        userId: schema.memberships.userId,
+      })
+      .from(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.groupId, invite.groupId),
+          eq(schema.memberships.role, "lead"),
+          activeMembership(),
+        ),
+      )
+      .for("update");
+    if (leads.length !== 1 || leads[0]!.userId !== invite.createdByUserId) {
+      throw new LeadTransferStale();
+    }
+    // Demote the (locked) lead to admin, then make the redeemer the lead.
     await tx
       .update(schema.memberships)
       .set({ role: "admin" })

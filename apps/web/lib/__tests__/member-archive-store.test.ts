@@ -3,6 +3,8 @@ import { schema } from "@quagga/db";
 import {
   GroupKind,
   MembershipRole,
+  OrgOutboundSelector,
+  RegistrationStatus,
   RoleAssignmentConsent,
 } from "@quagga/types";
 import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
@@ -181,7 +183,11 @@ describe("archiveMember — the write", () => {
     expect(boundStrings(waive!)).toEqual(
       expect.arrayContaining([REN, "pending"]),
     );
-    const activations = dbMock.queriesTouching(schema.questionnaireActivations);
+    // (the camp's own activations — the subquery FROM activations; the org
+    // lookup joins them instead)
+    const activations = dbMock
+      .queriesTouching(schema.questionnaireActivations)
+      .filter((q) => q.arg("from") === schema.questionnaireActivations);
     expect(activations).toHaveLength(1);
     expect(boundStrings(activations[0]!)).toContain(CAMP);
 
@@ -196,6 +202,7 @@ describe("archiveMember — the write", () => {
         membershipId: M_REN,
         role: MEMBER,
         waivedQuestionnaires: 2,
+        waivedOrgQuestionnaires: 0,
         revokedInvites: 1,
       },
     });
@@ -269,6 +276,151 @@ describe("archiveMember — the write", () => {
     expect(dbMock.writesTo(schema.requiredActions)).toHaveLength(0);
     expect(dbMock.writesTo(schema.invites)).toHaveLength(0);
     expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+});
+
+// Decided 2026-09-28 (Ryan): archiving also waives the person's pending ORG
+// questionnaires that reached them through their role in THIS camp. The rule
+// itself is @quagga/core `orgActionsLostByArchive` (tested there against the
+// real resolver); these pin the wiring — what is loaded, in the archive
+// transaction, and exactly which rows are waived and counted.
+describe("archiveMember — org questionnaires reached through this camp", () => {
+  const EDITION = "eeeeeeee-0000-4000-8000-000000000027";
+  const OTHER_CAMP = "11111111-0000-4000-8000-00000000000b";
+  const M_OTHER = "22222222-0000-4000-8000-00000000000b";
+  const APPROVED = RegistrationStatus.enum.approved;
+  const leadsForm = {
+    id: "ra-org-leads",
+    editionId: EDITION,
+    audience: {
+      kind: "org_outbound",
+      selectors: [OrgOutboundSelector.enum.registered_camp_leads],
+    },
+  };
+  const burnersOrLeadsForm = {
+    id: "ra-org-burners-or-leads",
+    editionId: EDITION,
+    audience: {
+      kind: "org_outbound",
+      selectors: [
+        OrgOutboundSelector.enum.all_current_burners,
+        OrgOutboundSelector.enum.camp_leads,
+      ],
+    },
+  };
+  const coLeadHere = {
+    membershipId: M_REN,
+    userId: JABU,
+    groupId: CAMP,
+    role: ADMIN,
+    kind: THEME_CAMP,
+  };
+  const registered = (groupId: string) => ({
+    groupId,
+    editionId: EDITION,
+    status: APPROVED,
+    grantsInterest: false,
+  });
+
+  /** Archive Jabu (co-lead) up to the org lookup; the rest is per test. */
+  function queueArchiveOfCoLead(...rest: unknown[]) {
+    dbMock.queue(
+      [targetRow({ userId: JABU, role: ADMIN })],
+      /* CAS */ [{ id: M_REN }],
+      /* camp waive */ [],
+      /* revoke invites */ [],
+      ...rest,
+    );
+  }
+
+  it("waives a 'registered camp leads' form that reached them only as this camp's co-lead, and counts it", async () => {
+    queueArchiveOfCoLead(
+      /* pending camp-role org actions */ [leadsForm, burnersOrLeadsForm],
+      /* their memberships (current + this one) */ [coLeadHere],
+      /* registrations */ [registered(CAMP)],
+      /* bios — still a current burner */ [
+        { userId: JABU, editionId: EDITION },
+      ],
+      /* role assignments */ [],
+      /* project roles */ [],
+      /* waive … returning */ [{ id: "ra-org-leads" }],
+      /* audit */ [],
+    );
+    expect(await archiveMember(input())).toEqual({ ok: true });
+
+    // The lookup: this person's PENDING actions from ORG-authored activations
+    // with a camp-role audience — in the archive transaction.
+    const lookup = dbMock
+      .queriesOfKind("select")
+      .find((q) => q.arg("from") === schema.requiredActions)!;
+    expect(lookup.tx).toBe(true);
+    expect(boundStrings(lookup)).toEqual(
+      expect.arrayContaining([JABU, "pending", "org_outbound", "org_officer"]),
+    );
+    expect(boundStrings(lookup)).not.toContain("org_internal");
+    expect(
+      nullChecksOn(lookup, schema.questionnaireActivations.groupId),
+    ).toEqual(["is null"]);
+
+    // Their memberships: the current ones, plus the one just archived.
+    const own = dbMock
+      .queriesOfKind("select")
+      .find((q) => q.arg("from") === schema.memberships && q.tx)!;
+    expect(boundStrings(own)).toEqual(expect.arrayContaining([JABU, M_REN]));
+    expect(nullChecksOn(own, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+
+    // Exactly the lost form is waived — the one they still get as a burner
+    // is not.
+    const waives = dbMock.writesTo(schema.requiredActions);
+    expect(waives).toHaveLength(2); // camp waive + org waive
+    const orgWaive = waives[1]!;
+    expect(orgWaive.tx).toBe(true);
+    expect(orgWaive.arg("set")).toEqual({ status: WAIVED });
+    expect(boundStrings(orgWaive)).toContain("ra-org-leads");
+    expect(boundStrings(orgWaive)).not.toContain("ra-org-burners-or-leads");
+    expect(boundStrings(orgWaive)).toContain("pending");
+
+    const audit = dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+      meta: Record<string, unknown>;
+    };
+    expect(audit.meta).toMatchObject({
+      waivedQuestionnaires: 0,
+      waivedOrgQuestionnaires: 1,
+    });
+  });
+
+  it("keeps the form when they are still a co-lead of ANOTHER registered camp", async () => {
+    queueArchiveOfCoLead(
+      [leadsForm],
+      [
+        coLeadHere,
+        { ...coLeadHere, membershipId: M_OTHER, groupId: OTHER_CAMP },
+      ],
+      [registered(CAMP), registered(OTHER_CAMP)],
+      [],
+      [],
+      [],
+      /* audit */ [],
+    );
+    expect(await archiveMember(input())).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.requiredActions)).toHaveLength(1); // camp only
+    const audit = dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
+      meta: Record<string, unknown>;
+    };
+    expect(audit.meta).toMatchObject({ waivedOrgQuestionnaires: 0 });
+  });
+
+  it("loads nothing more when no camp-role org form is pending", async () => {
+    queueArchiveOfCoLead(/* pending */ [], /* audit */ []);
+    expect(await archiveMember(input())).toEqual({ ok: true });
+    expect(
+      dbMock
+        .queriesOfKind("select")
+        .filter((q) => q.tx && q.arg("from") === schema.memberships),
+    ).toHaveLength(0);
+    expect(dbMock.writesTo(schema.requiredActions)).toHaveLength(1);
   });
 });
 

@@ -1,15 +1,18 @@
 import "server-only";
 
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
+  CAMP_ROLE_ORG_AUDIENCE_KINDS,
   canArchiveMember,
   canRestoreMember,
   MEMBER_ARCHIVE_AUDIT_ACTION,
   MEMBER_RESTORE_AUDIT_ACTION,
   memberArchiveRefusalMessage,
+  orgActionsLostByArchive,
   type ArchiveTarget,
   type MemberArchiveDecision,
 } from "@quagga/core";
+import type { OfficerKey } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
 import { getMemberPermissions } from "./roles-store";
@@ -113,7 +116,9 @@ const STALE =
  *      they were archived and walk straight back in. Lead-transfer links are
  *      included. The schema records who MINTED an invite, never who it was
  *      addressed to, so the creator is the only link to them there is;
- *   4. the audit row.
+ *   4. their PENDING org questionnaires that reached them through their role
+ *      in THIS camp are waived too ({@link waiveOrgActionsReachedThroughCamp});
+ *   5. the audit row.
  *
  * Nothing else is touched: roles held, logistics, answers already given and
  * the audit trail are the camp's history.
@@ -175,6 +180,11 @@ export async function archiveMember(input: {
       )
       .returning({ id: schema.invites.id });
 
+    const waivedOrg = await waiveOrgActionsReachedThroughCamp(tx, {
+      userId: target.userId,
+      membershipId: target.id,
+    });
+
     await tx.insert(schema.auditEvents).values({
       actorId: input.actorUserId,
       action: MEMBER_ARCHIVE_AUDIT_ACTION,
@@ -184,11 +194,159 @@ export async function archiveMember(input: {
         membershipId: target.id,
         role: target.role,
         waivedQuestionnaires: waived.length,
+        waivedOrgQuestionnaires: waivedOrg,
         revokedInvites: revoked.length,
       },
     });
     return { ok: true };
   });
+}
+
+/**
+ * Waive the archived person's PENDING org questionnaires that reached them
+ * BECAUSE of their role in this camp (decided 2026-09-28). Runs inside the
+ * archive transaction, after the row is archived; returns how many it waived.
+ *
+ * `required_actions` records the activation, not the membership an audience
+ * found the person through, so the reason is re-derived: the decision is
+ * @quagga/core `orgActionsLostByArchive` — resolve each camp-role audience
+ * (`org_outbound`, `org_officer`) for this person with and without this
+ * membership, and waive only where the archive is what took them out. Org
+ * forms sent to all burners, to the org or to suppliers are never loaded; a
+ * co-lead of another registered camp keeps a "registered camp leads" form.
+ *
+ * Only THIS person's rows are loaded — every camp-role selector is a predicate
+ * over one membership (or one bio), so a context narrowed to them resolves
+ * them exactly as the full edition context would.
+ */
+async function waiveOrgActionsReachedThroughCamp(
+  tx: Tx,
+  where: { userId: string; membershipId: string },
+): Promise<number> {
+  const pending = await tx
+    .select({
+      id: schema.requiredActions.id,
+      editionId: schema.requiredActions.editionId,
+      audience: schema.questionnaireActivations.audience,
+    })
+    .from(schema.requiredActions)
+    .innerJoin(
+      schema.questionnaireActivations,
+      eq(
+        schema.questionnaireActivations.id,
+        schema.requiredActions.activationId,
+      ),
+    )
+    .where(
+      and(
+        eq(schema.requiredActions.userId, where.userId),
+        eq(schema.requiredActions.status, "pending"),
+        // Org-authored: a camp's own activations carry its group id.
+        isNull(schema.questionnaireActivations.groupId),
+        inArray(
+          sql<string>`${schema.questionnaireActivations.audience}->>'kind'`,
+          [...CAMP_ROLE_ORG_AUDIENCE_KINDS],
+        ),
+      ),
+    );
+  if (pending.length === 0) return 0;
+
+  // former members: their CURRENT memberships plus the one archived a moment
+  // ago in this transaction — the "before" side of the comparison.
+  const memberships = await tx
+    .select({
+      membershipId: schema.memberships.id,
+      userId: schema.memberships.userId,
+      groupId: schema.memberships.groupId,
+      role: schema.memberships.role,
+      kind: schema.groups.kind,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
+    .where(
+      and(
+        eq(schema.memberships.userId, where.userId),
+        or(activeMembership(), eq(schema.memberships.id, where.membershipId)),
+      ),
+    );
+  if (memberships.length === 0) return 0;
+  const groupIds = [...new Set(memberships.map((m) => m.groupId))];
+  const membershipIds = memberships.map((m) => m.membershipId);
+
+  const registrations = await tx
+    .select({
+      groupId: schema.registrations.groupId,
+      editionId: schema.registrations.editionId,
+      status: schema.registrations.status,
+      grantsInterest: schema.registrations.grantsInterest,
+    })
+    .from(schema.registrations)
+    .where(inArray(schema.registrations.groupId, groupIds));
+  const bios = await tx
+    .select({
+      userId: schema.burnerBios.userId,
+      editionId: schema.burnerBios.editionId,
+    })
+    .from(schema.burnerBios)
+    .where(eq(schema.burnerBios.userId, where.userId));
+  const roleAssignments = await tx
+    .select({
+      membershipId: schema.memberRoleAssignments.membershipId,
+      projectRoleId: schema.memberRoleAssignments.projectRoleId,
+      consent: schema.memberRoleAssignments.consentStatus,
+    })
+    .from(schema.memberRoleAssignments)
+    .where(inArray(schema.memberRoleAssignments.membershipId, membershipIds));
+  const projectRoles = await tx
+    .select({
+      id: schema.projectRoles.id,
+      groupId: schema.projectRoles.groupId,
+      kind: schema.projectRoles.kind,
+      officerKey: schema.projectRoles.officerKey,
+    })
+    .from(schema.projectRoles)
+    .where(inArray(schema.projectRoles.groupId, groupIds));
+
+  const lost = orgActionsLostByArchive(
+    where.userId,
+    where.membershipId,
+    pending,
+    {
+      // Overridden per action (each carries the edition it is owed for).
+      editionId: "",
+      // No camp-role audience reads the org group.
+      orgGroupId: "",
+      memberships: memberships.map((m) => ({
+        membershipId: m.membershipId,
+        userId: m.userId,
+        groupId: m.groupId,
+        role: m.role,
+      })),
+      groups: memberships.map((m) => ({ id: m.groupId, kind: m.kind })),
+      registrations,
+      bios,
+      roleAssignments,
+      projectRoles: projectRoles.map((r) => ({
+        id: r.id,
+        groupId: r.groupId,
+        kind: r.kind,
+        officerKey: (r.officerKey as OfficerKey | null) ?? null,
+      })),
+    },
+  );
+  if (lost.length === 0) return 0;
+
+  const waived = await tx
+    .update(schema.requiredActions)
+    .set({ status: "waived" })
+    .where(
+      and(
+        inArray(schema.requiredActions.id, lost),
+        eq(schema.requiredActions.status, "pending"),
+      ),
+    )
+    .returning({ id: schema.requiredActions.id });
+  return waived.length;
 }
 
 /** What the restore audit keeps of each assignment once the row is gone. */

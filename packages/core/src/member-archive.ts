@@ -31,7 +31,8 @@
 // The permission is `manage_members` (lead/admin always, via the backstop; a
 // plain member only through a role that grants it).
 
-import type { MembershipRole } from "@quagga/types";
+import type { AudienceSpec, MembershipRole } from "@quagga/types";
+import { resolveAudience, type AudienceContext } from "./audience";
 import {
   hasProjectPermission,
   type PermissionMembership,
@@ -137,4 +138,73 @@ export function memberArchiveRefusalMessage(
     case "not_archived":
       return "They're still a current member.";
   }
+}
+
+// ── ORG QUESTIONNAIRES REACHED THROUGH THE CAMP ─────────────────────────────
+//
+// Decided 2026-09-28 (Ryan): archiving also waives the person's pending ORG
+// questionnaires that reached them BECAUSE of their role in this camp — an
+// AfrikaBurn form sent to "leads of registered camps" that found them as this
+// camp's co-lead, or to "all registered Safety Officers" that found them
+// through an officer role here.
+//
+// `required_actions` does not record WHICH membership an audience reached a
+// person through (the fan-out stores user ids only). So the reason is
+// RE-DERIVED: resolve the activation's stored audience spec for this one
+// person twice, from the same live rows — once as if this camp's membership
+// were still active, once without it. Waive exactly when they were in the
+// first and are not in the second: the archive is what took them out.
+//
+// What that rule leaves alone, by construction:
+//   · org questionnaires sent to all burners, to the org, or to suppliers —
+//     those audiences are not camp roles (and are not even loaded);
+//   · a camp-role audience they still qualify for through ANOTHER current
+//     membership (a co-lead of two registered camps keeps the form);
+//   · a form they already did not qualify for before this archive — something
+//     else changed, and it is not this action's business;
+//   · every other camp's own questionnaires (project audiences).
+
+/** Org audience kinds whose resolution depends on camp memberships (lead/
+ * admin of a kind of camp, or an officer role in a registered camp). */
+export const CAMP_ROLE_ORG_AUDIENCE_KINDS = [
+  "org_outbound",
+  "org_officer",
+] as const satisfies readonly AudienceSpec["kind"][];
+
+/** A pending required action from an ORG-authored activation. */
+export interface PendingOrgAction {
+  id: string;
+  /** The edition the action is owed for (edition-relative selectors). */
+  editionId: string;
+  audience: AudienceSpec | null;
+}
+
+/**
+ * Which of `actions` the archive of `archivedMembershipId` takes `userId` out
+ * of. `ctx` holds this person's rows: their CURRENT memberships PLUS the one
+ * being archived (as it was), and the groups, registrations, bio, role
+ * assignments and project roles those resolve through. `ctx.editionId` is
+ * overridden per action.
+ */
+export function orgActionsLostByArchive(
+  userId: string,
+  archivedMembershipId: string,
+  actions: readonly PendingOrgAction[],
+  ctx: AudienceContext,
+): string[] {
+  const own = ctx.memberships.filter((m) => m.userId === userId);
+  const before = own;
+  const after = own.filter((m) => m.membershipId !== archivedMembershipId);
+  const kinds: readonly string[] = CAMP_ROLE_ORG_AUDIENCE_KINDS;
+  const lost: string[] = [];
+  for (const action of actions) {
+    const spec = action.audience;
+    if (!spec || !kinds.includes(spec.kind)) continue;
+    const at = { ...ctx, editionId: action.editionId };
+    const was = resolveAudience(spec, { ...at, memberships: before });
+    if (!was.includes(userId)) continue;
+    const still = resolveAudience(spec, { ...at, memberships: after });
+    if (!still.includes(userId)) lost.push(action.id);
+  }
+  return lost;
 }
