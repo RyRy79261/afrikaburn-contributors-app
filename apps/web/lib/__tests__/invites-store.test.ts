@@ -381,7 +381,9 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
     dbMock.queue(
       [{ id: INVITE_ID }],
       /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
-      /* the membership upsert */ [],
+      /* the membership upsert: it restored the archived row */ [
+        { inserted: false },
+      ],
       /* the audit row */ [],
     );
 
@@ -631,7 +633,9 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
     dbMock.queue(
       [{ id: INVITE_ID }],
       /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
-      /* the membership upsert */ [],
+      /* the membership upsert: it restored the archived row */ [
+        { inserted: false },
+      ],
       /* drop role assignments … returning */ dropped,
       /* the audit row */ [],
     );
@@ -648,6 +652,28 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
         }
       ).meta.droppedRoleAssignments,
     ).toEqual(dropped);
+  });
+
+  it("a restore that LOST a race drops no roles and writes no restore audit", async () => {
+    // Two redemptions for one former member both read "former" before their
+    // transactions. The first restores the row; the second's upsert then
+    // meets an ACTIVE row and changes nothing (no row returned). It must not
+    // delete the custom roles on that now-live membership — including any
+    // assigned after the restore, and the officer consent on them — nor
+    // write a second, false restore audit row.
+    queueRedemption({
+      invite: { createdByUserId: "the-lead" },
+      viewerRole: null,
+      former: true,
+    });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert: the row was already active */ [],
+    );
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+    expect(dbMock.writesTo(schema.memberRoleAssignments)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 
   it("a brand-new member's join deletes no role assignments", async () => {

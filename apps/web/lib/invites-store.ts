@@ -238,7 +238,9 @@ export async function redeemInvite(
   const currentRole = await getViewerRole(userId, invite.groupId);
   // A FORMER member (CDB-036) reads as not a member above, so their invite
   // proceeds — and `ensureMembershipWithRefCode` restores their archived row
-  // rather than creating a second one. Known here so the restore is audited.
+  // rather than creating a second one. This read only gates the
+  // own-invite refusal below; whether a restore HAPPENED (and so the role
+  // drop and the audit) is decided inside the transaction, from the write.
   const restoringFormer =
     currentRole === null && (await isFormerMember(userId, invite.groupId));
   const check = canRedeemInviteAs(
@@ -282,7 +284,6 @@ export async function redeemInvite(
         invite,
         userId,
         currentRole,
-        restoringFormer,
         group,
       }),
     );
@@ -333,11 +334,12 @@ async function redeemInTransaction(
     invite: typeof schema.invites.$inferSelect;
     userId: string;
     currentRole: string | null;
-    restoringFormer: boolean;
     group: { name: string; slug: string };
   },
 ): Promise<RedeemResult> {
-  const { invite, userId, currentRole, restoringFormer, group } = input;
+  const { invite, userId, currentRole, group } = input;
+  // Set only when THIS transaction's upsert brought an archived row back.
+  let restored = false;
   // Atomic claim — only one caller can flip used_at from NULL. If another
   // redeemer already won the race, no rows return and we abort with nothing
   // written (the transaction commits an empty change).
@@ -414,12 +416,13 @@ async function redeemInTransaction(
         .returning({ id: schema.memberships.id });
       if (!promoted[0]) throw new LeadTransferLost();
     } else {
-      await ensureMembershipWithRefCode(tx, {
-        userId,
-        groupId: invite.groupId,
-        groupName: group.name,
-        role: "lead",
-      });
+      restored =
+        (await ensureMembershipWithRefCode(tx, {
+          userId,
+          groupId: invite.groupId,
+          groupName: group.name,
+          role: "lead",
+        })) === "restored";
       // The upsert leaves an ACTIVE row it did not expect untouched (someone
       // who joined between the read above and now keeps their own role), so
       // check the row it was meant to produce actually exists.
@@ -437,15 +440,16 @@ async function redeemInTransaction(
       if (row?.role !== "lead") throw new LeadTransferLost();
     }
   } else {
-    await ensureMembershipWithRefCode(tx, {
-      userId,
-      groupId: invite.groupId,
-      groupName: group.name,
-      role: "member",
-    });
+    restored =
+      (await ensureMembershipWithRefCode(tx, {
+        userId,
+        groupId: invite.groupId,
+        groupName: group.name,
+        role: "member",
+      })) === "restored";
   }
 
-  if (restoringFormer) {
+  if (restored) {
     // A restored member comes back WITHOUT the custom roles they held
     // (decided 2026-09-28) — the invite grants its structural role and
     // nothing else. The dropped rows are kept in the audit row.

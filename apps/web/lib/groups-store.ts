@@ -276,6 +276,15 @@ export async function nextMemberRefCode(
  * poison the whole enclosing transaction — the savepoint lets a colliding
  * attempt roll back on its own and the loop recompute the next sequence.
  */
+/**
+ * What {@link ensureMembershipWithRefCode} actually did to the row, read from
+ * the write itself. A caller must decide restore-only side effects (dropping
+ * custom roles, the restore audit) from THIS, not from a read taken before
+ * its transaction: two redemptions racing for one former member both see
+ * "former" up front, but only one of them restores the row.
+ */
+export type EnsureMembershipOutcome = "inserted" | "restored" | "unchanged";
+
 export async function ensureMembershipWithRefCode(
   tx: Tx,
   input: {
@@ -284,12 +293,12 @@ export async function ensureMembershipWithRefCode(
     groupName: string;
     role: MembershipRole;
   },
-): Promise<void> {
+): Promise<EnsureMembershipOutcome> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const refCode = await nextMemberRefCode(input.groupId, input.groupName);
     try {
-      await tx.transaction(async (sp) => {
-        await sp
+      return await tx.transaction(async (sp) => {
+        const [row] = await sp
           .insert(schema.memberships)
           .values({
             userId: input.userId,
@@ -308,9 +317,14 @@ export async function ensureMembershipWithRefCode(
             target: [schema.memberships.userId, schema.memberships.groupId],
             set: { archivedAt: null, archivedByUserId: null, role: input.role },
             setWhere: formerMembership(),
-          });
+          })
+          // No row: an ACTIVE member, left alone. A row: inserted, or the
+          // archived row restored — Postgres's `xmax = 0` holds only for a
+          // freshly inserted tuple, never for one the conflict updated.
+          .returning({ inserted: sql<boolean>`(xmax = 0)` });
+        if (!row) return "unchanged";
+        return row.inserted ? "inserted" : "restored";
       });
-      return;
     } catch (err) {
       // A ref-code collision (different unique index) — the savepoint rolled
       // back, so recompute and retry without poisoning the outer transaction.
