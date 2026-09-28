@@ -150,23 +150,28 @@ export function wranglerAssignedNotification(input: {
 }
 
 /**
- * 🎉 AfrikaBurn set or changed a camp's placement — its camp code and/or erf
- * (epic #48). Built from a `placementChange` result, so "nothing new" never
- * reaches this function. Kind `registration` because the placement lives on the
- * camp's registration; the camp name is the body so a lead of two camps knows
- * which one moved.
+ * 🎉 AfrikaBurn set, changed or removed a camp's placement — its camp code
+ * and/or erf (epic #48). Built from a `placementChange` result, so "nothing
+ * new" never reaches this function. Kind `registration` because the placement
+ * lives on the camp's registration — which is also what earns it an immediate
+ * email (`shouldSendImmediateEmail("registration")`). The EDITION leads the
+ * title (Ryan, 28 Sep 2026) so a notice about an old edition's placement can
+ * never read as the current one; the camp name is the body so a lead of two
+ * camps knows which one moved.
  */
 export function placementNotification(input: {
   change: PlacementChange;
+  editionName: string;
   campName: string;
   campSlug?: string | null;
 }): NotificationPayload {
+  const { verb, line } = input.change;
   return {
     kind: "registration",
     title:
-      input.change.verb === "set"
-        ? `Your camp's placement is set: ${input.change.line}`
-        : `Your camp's placement changed: ${input.change.line}`,
+      verb === "removed"
+        ? `${input.editionName} placement removed`
+        : `${input.editionName} placement ${verb}: ${line}`,
     body: input.campName,
     link: input.campSlug ? `/camps/${input.campSlug}` : null,
   };
@@ -336,8 +341,9 @@ export function buildBulletinNotifications(
 // --- Email gating --------------------------------------------------------
 
 /**
- * Immediate transactional email is sent ONLY for registration decisions and
- * BLOCKING questionnaire releases (docs/notifications-spec.md §Email). Every
+ * Immediate transactional email is sent ONLY for registration decisions (and
+ * placement changes, which share the `registration` kind) and BLOCKING
+ * questionnaire releases (docs/notifications-spec.md §Email). Every
  * other notification waits for the daily unread digest. In-app is the source of
  * truth (offline law) — email is a courtesy nudge.
  */

@@ -261,14 +261,47 @@ describe("placementChange (epic #48 — notify on first assignment and every cha
     ).toBeNull();
   });
 
-  it("clearing a field on its own is not news", () => {
+  // Ryan, 28 Sep 2026: clearing notifies too.
+  it("clearing both fields is `removed`, with nothing left to show", () => {
+    expect(placementChange({ campCode: "MAH", erf: "C-14" }, NONE)).toEqual({
+      verb: "removed",
+      line: "",
+    });
+  });
+
+  it("clearing the only assigned field is `removed`", () => {
+    expect(placementChange({ campCode: "MAH", erf: null }, NONE)).toEqual({
+      verb: "removed",
+      line: "",
+    });
+    expect(placementChange({ campCode: null, erf: "C-14" }, NONE)).toEqual({
+      verb: "removed",
+      line: "",
+    });
+  });
+
+  it("clearing one field while the other stays is `changed`, showing what remains", () => {
     expect(
       placementChange(
         { campCode: "MAH", erf: "C-14" },
         { campCode: "MAH", erf: null },
       ),
-    ).toBeNull();
-    expect(placementChange({ campCode: "MAH", erf: "C-14" }, NONE)).toBeNull();
+    ).toEqual({ verb: "changed", line: "MAH" });
+    expect(
+      placementChange(
+        { campCode: "MAH", erf: "C-14" },
+        { campCode: null, erf: "C-14" },
+      ),
+    ).toEqual({ verb: "changed", line: "C-14" });
+  });
+
+  it("blank strings count as empty — a clear, not a new value", () => {
+    expect(
+      placementChange(
+        { campCode: "MAH", erf: "C-14" },
+        { campCode: "", erf: " " },
+      ),
+    ).toEqual({ verb: "removed", line: "" });
   });
 
   it("a clear alongside a new value is `changed`, showing only what remains", () => {

@@ -187,6 +187,7 @@ describe("preview privacy — no hard-locked fields in any payload", () => {
     }),
     placementNotification({
       change: { verb: "set", line: "MAH · C-14" },
+      editionName: "AfrikaBurn 2027",
       campName: "Mad Hatters",
       campSlug: "mad-hatters",
     }),
@@ -252,16 +253,17 @@ describe("questionnaire release blocking flag", () => {
 });
 
 describe("placementNotification (epic #48)", () => {
-  it("says `set` on a first assignment, linking to the camp page", () => {
+  it("says `set` on a first assignment, naming the edition, linking to the camp page", () => {
     expect(
       placementNotification({
         change: { verb: "set", line: "MAH · C-14" },
+        editionName: "AfrikaBurn 2027",
         campName: "Mad Hatters",
         campSlug: "mad-hatters",
       }),
     ).toEqual({
       kind: "registration",
-      title: "Your camp's placement is set: MAH · C-14",
+      title: "AfrikaBurn 2027 placement set: MAH · C-14",
       body: "Mad Hatters",
       link: "/camps/mad-hatters",
     });
@@ -270,10 +272,40 @@ describe("placementNotification (epic #48)", () => {
   it("says `changed` on a revision", () => {
     const p = placementNotification({
       change: { verb: "changed", line: "MAH · C-15" },
+      editionName: "AfrikaBurn 2027",
       campName: "Mad Hatters",
       campSlug: "mad-hatters",
     });
-    expect(p.title).toBe("Your camp's placement changed: MAH · C-15");
+    expect(p.title).toBe("AfrikaBurn 2027 placement changed: MAH · C-15");
+  });
+
+  it("says `removed` when the placement was cleared, with no dangling colon", () => {
+    const p = placementNotification({
+      change: { verb: "removed", line: "" },
+      editionName: "AfrikaBurn 2027",
+      campName: "Mad Hatters",
+      campSlug: "mad-hatters",
+    });
+    expect(p.title).toBe("AfrikaBurn 2027 placement removed");
+    expect(p.body).toBe("Mad Hatters");
+  });
+
+  it("names whichever edition it is given — an old edition never reads as current", () => {
+    const p = placementNotification({
+      change: { verb: "changed", line: "MAH · C-15" },
+      editionName: "AfrikaBurn 2026",
+      campName: "Mad Hatters",
+    });
+    expect(p.title).toBe("AfrikaBurn 2026 placement changed: MAH · C-15");
+  });
+
+  it("is a kind that emails immediately (Ryan, 28 Sep 2026)", () => {
+    const p = placementNotification({
+      change: { verb: "removed", line: "" },
+      editionName: "AfrikaBurn 2027",
+      campName: "Mad Hatters",
+    });
+    expect(shouldSendImmediateEmail(p.kind)).toBe(true);
   });
 });
 

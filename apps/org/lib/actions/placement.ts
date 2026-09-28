@@ -8,6 +8,7 @@ import {
   parsePlacementAssignment,
   placementChange,
   placementNotification,
+  shouldSendImmediateEmail,
   type PlacementAssignment,
   type PlacementChange,
 } from "@quagga/core";
@@ -16,6 +17,7 @@ import { getDb, schema, withTransaction } from "@/lib/db";
 import { requireOrgSession } from "@/lib/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { insertNotifications } from "@/lib/notifications";
+import { sendEmail } from "@/lib/email";
 import { runActionWith, type ActionResultOf } from "./result";
 
 // Staff-assigned camp code + erf (roadmap R1: "Staff-assigned ERFs + camp codes
@@ -27,12 +29,12 @@ import { runActionWith, type ActionResultOf } from "./result";
 // team already owns; a separate domain would let a department review camps
 // without being able to write down where any of them go.
 //
-// NOTIFIED ON FIRST ASSIGNMENT AND ON EVERY CHANGE (Ryan, 27 Sep 2026, epic
-// #48). This file used to refuse to notify at all, on the grounds that an erf
-// revised three times would send three pushes. The decision was that the camp
-// hearing about each revision is worth it. What still does NOT notify, and why,
-// is `placementChange` in @quagga/core: re-saving the same values, and a save
-// whose only effect is clearing a field.
+// NOTIFIED ON FIRST ASSIGNMENT, ON EVERY CHANGE AND ON REMOVAL — in-app AND by
+// immediate email (Ryan, 27 + 28 Sep 2026, epic #48). This file used to refuse
+// to notify at all, on the grounds that an erf revised three times would send
+// three pushes. The decision was that the camp hearing about each revision is
+// worth it. What still does NOT notify is `placementChange` in @quagga/core
+// returning null: re-saving the same values.
 
 const AssignInput = z.object({
   registrationId: z.string().uuid(),
@@ -42,23 +44,25 @@ const AssignInput = z.object({
 });
 
 /**
- * Tell a camp's leads/admins that AfrikaBurn set or changed its placement.
+ * Tell a camp's leads/admins that AfrikaBurn set, changed or removed its
+ * placement.
  *
  * Recipients are the camp's structural `lead`/`admin` memberships — the same
- * audience as a registration decision and a wrangler assignment. In-app only:
- * immediate email is reserved for registration decisions and blocking
- * questionnaires (docs/notifications-spec.md §Email), so this deliberately
- * does NOT consult `shouldSendImmediateEmail("registration")`, which would say
- * yes for the kind and email every revision. No email reaches the lead for
- * this until the daily digest is built (its route is still a stub).
+ * audience as a registration decision and a wrangler assignment. In-app, plus
+ * an immediate email (docs/notifications-spec.md §Email): the payload's kind is
+ * `registration`, which `shouldSendImmediateEmail` passes — the same path a
+ * registration decision emails through. Env-less, `sendEmail` logs instead of
+ * sending.
  *
  * Best-effort, after commit — the wrangler and registration-decision pattern: a
- * notification failure must never roll back a placement that is already true.
+ * notification or email failure must never roll back a placement that is
+ * already true.
  */
 async function notifyPlacementChanged(
   db: ReturnType<typeof getDb>,
   input: {
     groupId: string;
+    editionName: string;
     campName: string;
     campSlug: string;
     change: PlacementChange;
@@ -79,6 +83,7 @@ async function notifyPlacementChanged(
 
     const payload = placementNotification({
       change: input.change,
+      editionName: input.editionName,
       campName: input.campName,
       campSlug: input.campSlug,
     });
@@ -92,6 +97,29 @@ async function notifyPlacementChanged(
         linkApp: "web" as const,
       })),
     );
+
+    // Immediate email — the registration-decision path. One call per save;
+    // `sendEmail` fans out one message per recipient, so no lead sees another's
+    // address.
+    if (shouldSendImmediateEmail(payload.kind)) {
+      const recipients = await db
+        .select({ email: schema.users.email })
+        .from(schema.users)
+        .where(inArray(schema.users.id, userIds));
+      const to = recipients
+        .map((r) => r.email)
+        .filter((e): e is string => Boolean(e));
+      if (to.length > 0) {
+        const sent = await sendEmail({
+          to,
+          subject: payload.title,
+          text: `${payload.title}${payload.body ? `\n\n${payload.body}` : ""}\n\nOpen the Contributors app to see details.`,
+        });
+        if (!sent.ok) {
+          console.error("[notifications] placement email failed", sent.error);
+        }
+      }
+    }
   } catch (err) {
     console.error("[notifications] placement hook failed", err);
   }
@@ -129,11 +157,17 @@ export async function assignPlacement(
         groupId: schema.registrations.groupId,
         campName: schema.groups.name,
         campSlug: schema.groups.slug,
+        // Named in the notice, so an old edition's change never reads as current.
+        editionName: schema.editions.name,
       })
       .from(schema.registrations)
       .innerJoin(
         schema.groups,
         eq(schema.groups.id, schema.registrations.groupId),
+      )
+      .innerJoin(
+        schema.editions,
+        eq(schema.editions.id, schema.registrations.editionId),
       )
       .where(eq(schema.registrations.id, input.registrationId))
       .limit(1);
@@ -207,6 +241,7 @@ export async function assignPlacement(
     if (change) {
       await notifyPlacementChanged(db, {
         groupId: registration.groupId,
+        editionName: registration.editionName,
         campName: registration.campName,
         campSlug: registration.campSlug,
         change,

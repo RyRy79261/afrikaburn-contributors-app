@@ -30,6 +30,13 @@ vi.mock("@/lib/session", () => ({
   requireOrgSession: (options?: unknown) => requireOrgSession(options),
 }));
 
+// The mail seam. Env-less the real one logs instead of sending; mocked here so a
+// test can see that the email was asked for, and make it fail.
+const sendEmail = vi.fn();
+vi.mock("@/lib/email", () => ({
+  sendEmail: (input: unknown) => sendEmail(input),
+}));
+
 import { assignPlacement } from "@/lib/actions/placement";
 
 const REG_ID = "11111111-1111-4111-8111-111111111111";
@@ -41,6 +48,8 @@ beforeEach(() => {
   db = fakeDb();
   requireOrgSession.mockReset();
   requireOrgSession.mockResolvedValue(SESSION);
+  sendEmail.mockReset();
+  sendEmail.mockResolvedValue({ ok: true, id: null, delivered: false });
 });
 
 describe("assignPlacement", () => {
@@ -53,10 +62,14 @@ describe("assignPlacement", () => {
     options: {
       before?: { campCode: string | null; erf: string | null };
       settingCode?: boolean;
+      editionName?: string;
     } = {},
   ) {
-    const { before = { campCode: null, erf: null }, settingCode = true } =
-      options;
+    const {
+      before = { campCode: null, erf: null },
+      settingCode = true,
+      editionName = "AfrikaBurn 2027",
+    } = options;
     db.seed("registrations", [
       [
         {
@@ -65,12 +78,17 @@ describe("assignPlacement", () => {
           groupId: GROUP_ID,
           campName: "Mad Hatters",
           campSlug: "mad-hatters",
+          editionName,
         },
       ],
       ...(settingCode ? [[]] : []), // no camp already holding the code
       [before],
     ]);
     db.seed("memberships", [{ userId: "lead-1" }, { userId: "admin-1" }]);
+    db.seed("users", [
+      { email: "alice@example.com" },
+      { email: "ren@example.com" },
+    ]);
   }
 
   /** Every notification row written, across every insert. */
@@ -219,7 +237,7 @@ describe("assignPlacement", () => {
       expect(rows[0]).toEqual({
         userId: rows[0]!.userId,
         kind: "registration",
-        title: "Your camp's placement is set: MAH · C-14",
+        title: "AfrikaBurn 2027 placement set: MAH · C-14",
         body: "Mad Hatters",
         link: "/camps/mad-hatters",
         origin: "org",
@@ -246,7 +264,7 @@ describe("assignPlacement", () => {
       });
 
       const titles = [...new Set(notificationRows().map((r) => r.title))];
-      expect(titles).toEqual(["Your camp's placement changed: MAH · C-15"]);
+      expect(titles).toEqual(["AfrikaBurn 2027 placement changed: MAH · C-15"]);
     });
 
     it("re-saving the same values notifies nobody", async () => {
@@ -279,15 +297,67 @@ describe("assignPlacement", () => {
       expect(rows.every((r) => r.title.endsWith("HAT · D-2"))).toBe(true);
     });
 
-    it("clearing the placement notifies nobody (the wrangler-unassign precedent)", async () => {
+    // Ryan, 28 Sep 2026: clearing notifies too.
+    it("clearing both fields tells every lead the placement was removed", async () => {
       seedRegistration({
         before: { campCode: "MAH", erf: "C-14" },
         settingCode: false,
       });
-      await assignPlacement({ registrationId: REG_ID, campCode: "", erf: "" });
+      const result = await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "",
+        erf: "",
+      });
 
+      expect(result.ok).toBe(true);
       expect(db.recorded("update", "registrations")).toHaveLength(1);
-      expect(db.recorded("insert", "notifications")).toHaveLength(0);
+      const rows = notificationRows();
+      expect(rows.map((r) => r.userId).sort()).toEqual(["admin-1", "lead-1"]);
+      expect([...new Set(rows.map((r) => r.title))]).toEqual([
+        "AfrikaBurn 2027 placement removed",
+      ]);
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it("clearing one field while the other stays is a change showing what remains", async () => {
+      seedRegistration({
+        before: { campCode: "MAH", erf: "C-14" },
+        settingCode: true,
+      });
+      await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "",
+      });
+
+      const rows = notificationRows();
+      expect(rows).toHaveLength(2); // one notice per lead, not one per field
+      expect([...new Set(rows.map((r) => r.title))]).toEqual([
+        "AfrikaBurn 2027 placement changed: MAH",
+      ]);
+    });
+
+    it("names the registration's OWN edition, read from its edition row", async () => {
+      // Not the seeded current edition: the name must come from the row, so an
+      // old edition's change never reads as this year's.
+      seedRegistration({ editionName: "AfrikaBurn 2026" });
+      await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "C-14",
+      });
+
+      const registrationRead = db.recorded("select", "registrations")[0];
+      expect(registrationRead?.columns).toContain("editionName");
+      expect(
+        registrationRead?.methods.filter((m) => m === "innerJoin"),
+      ).toHaveLength(2);
+      expect([...new Set(notificationRows().map((r) => r.title))]).toEqual([
+        "AfrikaBurn 2026 placement set: MAH · C-14",
+      ]);
+      expect(sendEmail.mock.calls[0]?.[0]).toMatchObject({
+        subject: "AfrikaBurn 2026 placement set: MAH · C-14",
+      });
     });
 
     it("a write that fails inside the transaction notifies nobody", async () => {
@@ -362,6 +432,98 @@ describe("assignPlacement", () => {
 
       expect(result).toEqual({ ok: true, campCode: "MAH", erf: "C-14" });
       expect(db.recorded("update", "registrations")).toHaveLength(1);
+      error.mockRestore();
+    });
+  });
+
+  // --- Immediate email (Ryan, 28 Sep 2026): the registration-decision path. ---
+
+  describe("emailing the camp's leads", () => {
+    it("sends ONE email per save, to the leads' addresses, with the notice as subject", async () => {
+      seedRegistration({ before: { campCode: "MAH", erf: "C-14" } });
+      await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "HAT",
+        erf: "D-2",
+      });
+
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      const email = sendEmail.mock.calls[0]?.[0] as {
+        to: string[];
+        subject: string;
+        text: string;
+      };
+      expect(email.to).toEqual(["alice@example.com", "ren@example.com"]);
+      expect(email.subject).toBe(
+        "AfrikaBurn 2027 placement changed: HAT · D-2",
+      );
+      expect(email.text).toContain("Mad Hatters");
+      // The addresses read is exactly the leads just notified — nobody else.
+      const usersRead = db.recorded("select", "users")[0];
+      expect(usersRead?.columns).toEqual(["email"]);
+      expect(whereParams(usersRead?.where)).toEqual(["lead-1", "admin-1"]);
+    });
+
+    it("sends no email when re-saving the same values", async () => {
+      seedRegistration({ before: { campCode: "MAH", erf: "C-14" } });
+      await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "C-14",
+      });
+
+      expect(sendEmail).not.toHaveBeenCalled();
+      expect(db.recorded("select", "users")).toHaveLength(0);
+    });
+
+    it("sends no email when the write fails", async () => {
+      seedRegistration();
+      db.fail("audit_events", "audit insert failed");
+
+      const result = await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "C-14",
+      });
+
+      expect(result.ok).toBe(false);
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("an email that throws does not break the save or the in-app notice", async () => {
+      seedRegistration();
+      sendEmail.mockRejectedValue(new Error("Resend is down"));
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const result = await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "C-14",
+      });
+
+      expect(result).toEqual({ ok: true, campCode: "MAH", erf: "C-14" });
+      expect(db.recorded("update", "registrations")).toHaveLength(1);
+      expect(notificationRows()).toHaveLength(2);
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      error.mockRestore();
+    });
+
+    it("an email the provider refuses does not break the save, and is logged", async () => {
+      seedRegistration();
+      sendEmail.mockResolvedValue({ ok: false, error: "Resend responded 500" });
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const result = await assignPlacement({
+        registrationId: REG_ID,
+        campCode: "MAH",
+        erf: "C-14",
+      });
+
+      expect(result).toEqual({ ok: true, campCode: "MAH", erf: "C-14" });
+      expect(error).toHaveBeenCalledWith(
+        "[notifications] placement email failed",
+        "Resend responded 500",
+      );
       error.mockRestore();
     });
   });
