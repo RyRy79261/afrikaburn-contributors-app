@@ -361,7 +361,7 @@ export function AnnouncementComposer({
         )}
 
         <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
           <p className="text-sm text-foreground">
             Once published, an announcement can&apos;t be edited or deleted. If
             you need answers from people, send a questionnaire instead.

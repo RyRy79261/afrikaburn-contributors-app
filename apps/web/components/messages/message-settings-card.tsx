@@ -62,7 +62,7 @@ export function MessageSettingsCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <MessageCircle className="h-4 w-4 text-accent" aria-hidden />
+          <MessageCircle className="h-4 w-4 text-primary" aria-hidden />
           Messages
         </CardTitle>
         <CardDescription>

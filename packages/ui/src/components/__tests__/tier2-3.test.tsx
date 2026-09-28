@@ -85,6 +85,15 @@ describe("readRate maths", () => {
       "40",
     );
   });
+
+  it("BulletinCard kicker defaults to Bulletin and takes a camp label", () => {
+    const { unmount } = render(<BulletinCard title="Gate hours" />);
+    expect(screen.getByText("Bulletin")).toBeDefined();
+    unmount();
+    render(<BulletinCard kicker="Announcement" title="Build week" />);
+    expect(screen.getByText("Announcement")).toBeDefined();
+    expect(screen.queryByText("Bulletin")).toBeNull();
+  });
 });
 
 describe("wizard state derivation", () => {

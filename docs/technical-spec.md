@@ -392,8 +392,10 @@ whether it pays performers, its suppliers, its expected budget, and explicitly
 acknowledges the plug-and-play policy (`s6PlugAndPlayAck`). There is a supplier
 repository, and camps declare which suppliers they use.
 
-**Not built:** automatic triggers on the thresholds (more than 20 participants,
-more than R100,000 collected), and the risk-indicator dashboard.
+**Not built:** automatic triggers on the thresholds (more than 40 participants,
+more than R100,000 collected), and the risk-indicator dashboard. The App Spec's
+PNP-009 says more than 20; Ryan set it to more than 40 on 2026-09-27 (#51). The
+epic is parked until AfrikaBurn confirms it will act on the flags.
 
 **What it would take:** the thresholds are checks against numbers we already
 collect, so the trigger itself is easy. The harder question is what a trigger

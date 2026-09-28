@@ -182,3 +182,60 @@ export function campPlacementOf(
 export function canViewCampPlacement(viewerIsMember: boolean): boolean {
   return viewerIsMember;
 }
+
+// --- Telling the camp its placement moved (epic #48) --------------------------
+//
+// Ryan, 27 Sep 2026: notify the camp's leads when the camp code or erf is FIRST
+// ASSIGNED, and on EVERY CHANGE. Ryan, 28 Sep 2026: CLEARING notifies too — a
+// camp that planned around an erf needs to hear that it is gone. The rules
+// below are the whole of "did it change", in one pure place, so the console
+// action cannot drift from its tests.
+
+/** What a placement save means to the camp, or null when it means nothing new. */
+export interface PlacementChange {
+  /**
+   * `set` when every field that moved was previously empty (a first
+   * assignment); `removed` when the save left the camp with neither a code
+   * nor an erf; `changed` otherwise — a moved field replaced or cleared a value
+   * the camp already had, and something is still assigned.
+   */
+  verb: "set" | "changed" | "removed";
+  /** The camp's placement AFTER the save, one line: "MAH · C-14". Empty for `removed`. */
+  line: string;
+}
+
+/**
+ * Compare a registration's placement before and after a save.
+ *
+ * Returns null — no notification — only when nothing moved: re-saving the same
+ * values, or a value that only differs in case/whitespace and so normalizes to
+ * the same stored form.
+ *
+ * Both fields are compared in one call, so a save that moves both produces ONE
+ * notice, not two. Clearing one field while the other stays is a `changed`
+ * showing what remains; clearing everything is `removed`.
+ */
+export function placementChange(
+  before: { campCode: string | null; erf: string | null },
+  after: { campCode: string | null; erf: string | null },
+): PlacementChange | null {
+  const prev = {
+    campCode: normalizeCampCode(before.campCode),
+    erf: normalizeErf(before.erf),
+  };
+  const next = {
+    campCode: normalizeCampCode(after.campCode),
+    erf: normalizeErf(after.erf),
+  };
+  const fields = ["campCode", "erf"] as const;
+  const moved = fields.filter((f) => prev[f] !== next[f]);
+  if (moved.length === 0) return null;
+
+  const line = [next.campCode, next.erf]
+    .filter((v): v is string => v !== null)
+    .join(" · ");
+  if (line === "") return { verb: "removed", line };
+
+  const verb = moved.some((f) => prev[f] !== null) ? "changed" : "set";
+  return { verb, line };
+}

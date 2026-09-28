@@ -1192,3 +1192,557 @@ maxDepth:0` as `nb3iV` and deleted. Always re-snapshot the root after a failed b
 - `audit.py --all`: 108 frames, 0 defects. The 28 remaining `[STYLE]` findings are
   pre-existing on other agents' supplier/notification frames (raw `#17191B` on sage tags,
   one 9px label) — none on these six.
+
+## CAMP ANNOUNCEMENTS batch (27 Sep 2026) — 4 participant pairs + the tool API changed
+
+### Frames (participant band y=5260, 2020 pitch after C0QfA8)
+
+- Camp Announcements — /camps/[slug]/announcements = **UExWL** (x=55624) · mobile **E3coBk** (x=57024)
+- New Announcement — /camps/[slug]/announcements/new = **ujN92** (x=57644) · mobile **qSpfA** (x=59044)
+- Announcement Detail — /camps/[slug]/announcements/[id] = **zXAx8** (x=59664) · mobile **SlFAI** (x=61064)
+- Announcement Acknowledge Gate — /bulletins/[id] = **bdEac** (x=61684) · mobile **S1l4tY** (x=63084)
+- Tallest is qSpfA (1537) → band bottom y=6797, well clear of the org title (8540). No band shift.
+
+### 🔴 The Pencil MCP API changed: one `execute` tool, no batch_design/batch_get/snapshot_layout
+
+- Tools now: `get_app_state`, `execute` (JS snippet: Insert/Copy/Update/Replace/Delete/Get/
+  TakeScreenshot/Export…), `read_skill`, `get_style`, `browser`. Read `read_skill` + `read_skill
+  {path:"execute.md"}` first. filePath is still the `/Ubuntu/...` form.
+- Geometry now comes from a `Get(id, visitor)` pass: `ctx.bounds` (parent-relative, same space
+  as the old snapshot) + `ctx.problems`. Pass `{resolveInstances:true}` to walk component
+  internals — ids come back as `instanceId/childId` paths with overrides already applied
+  (so `enabled:false` descendants are visible as such).
+- **`design/qa/audit.py` is broken against this bridge**: `snapshot_layout` → "tool not found".
+  I did not edit it (out of scope); I ran its checks unchanged through a throwaway shim in
+  /tmp that subclasses `Auditor` and replaces `snapshot`/`snapshot_frame`/`crawl_props` with
+  one `execute` call each (Get visitor, resolveInstances, `Print("@@JSON@@"+…)`). Proven
+  non-vacuous: a probe frame with a 320px child in a 200px frame and a 20px-wide wrapped text
+  produced H-OVERFLOW, V-OVERFLOW and LETTER-STACK; known pre-existing RAW-HEX/FORBIDDEN
+  findings still show. Porting audit.py for real is a small job (same three methods).
+- Side effect of resolving instances: the audit now sees INSIDE component refs, so
+  `--all` reports ~68 TOUCH-TARGET warnings on mobile frames whose button *components*
+  (e.g. "Button outline/default/default", 31px) were invisible to the old crawl. Not new
+  defects — newly measured ones. `--all` on 27 Sep: 121 frames, 95 findings, 2 defects,
+  both pre-existing (U6ixd OVERLAP in a Head row; C0QfA8 "Request a feature" title
+  overflowing its Text column).
+- TOUCH-TARGET matches on the NAME ("button"/"btn"/"cta") of any frame — an inner label
+  group named "Btn Label" got flagged at 17px. Name inner groups "Label Group".
+- Fresh-frame render: the first frame (built with `placeholder:true`) screenshotted with a
+  BLANK body while its Copy'd header/footer painted. `Copy(frame, document, {x,y})` then
+  `Delete(original)` **in the same execute call** gave frames that rendered and measured
+  correctly immediately — I built every later frame at a scratch y (23000) and copied it
+  into place in the same call. Can't say whether the blank was the old fresh-insert lag
+  or the placeholder flag; the copy trick covers both.
+
+### Recipes used (all verified rendering)
+
+- Participant desktop header = `Copy("aDU5E")` (Quilt Edge) + `Copy("B2auK", pg,
+  {width:"fill_container", descendants:{…}})` — B2auK is R6l2G's AppShell (logo swapped,
+  bell). Copy descendants REPLACE the instance's overrides, so re-list them all:
+  sKVum off, C1y2Qr→logo image frame, PO6BC off, vYaMu/R31TIN muted, T9YLN ("My camps")
+  `$primary`/700 for camp pages. Footer = `Copy("i6tFWH")`. Mobile = `Copy("Q3ZxIE",
+  {descendants:{gbocZ:{content:"AH"}}})`. Gate (no nav): `Copy("v5pzsJ")` / `Copy("zEiJS")`
+  (qKG3g/TOUE1 minimal headers: band + logo + Sign out).
+- Buttons WITH icons = descendant replacement of the label with a frame:
+  `{type:"ref",ref:"lY5QH",descendants:{ZAdHf:{type:"frame",name:"Label Group",gap:8,
+  children:[icon, text]}}}` (same for CCccR→WT0Vx, l524ck→sZAW7, uB4hE→y0dvxQ). Ghost back
+  link = l524ck + arrow-left, padding [6,8] desktop / [14,8] mobile (44px).
+- Bulletin Card fulVI as a camp announcement: o1D9hA → lucide `megaphone` icon;
+  qddZ0 fill `$muted-foreground`; imQG5 → frame [pin icon + "Pinned"] in `$primary` (or
+  `enabled:false`); qp8HU (Footer) → replacement frame holding the meta row + the read-rate
+  block ("n of m read" / "p%" + a fill_container 6px track with a FIXED-px Fill =
+  round(innerWidth·pct)). Inner width = card − 36 (768→732, 328→292). This puts the
+  read-rate INSIDE the card, as the shipped component does (the org list QqnNq draws it
+  outside).
+- Field with a red required star: `UIcOu` with `eO4OD` replaced by a frame [label text,
+  "*" `$destructive`]. Markdown editor (no component): `t8imVt` with `b4X0E` replaced by
+  [Toolbar (bold/italic/heading-2/link/list/list-ordered, bottom stroke) + Editor Area].
+- Toggle-group chips (no component): 36px (44 mobile) frames, on = stroke `$primary` +
+  `#2D76961A`, off = `$input` stroke, disabled = opacity 0.5. Flexbox doesn't wrap, so mobile
+  uses manual rows. Disabled-chip tooltip = `gnTtE` in flow above the chip row, Trigger
+  gg8Zb off, Bubble v4ROqw widened to 300 (262 wraps "Outside your announcement
+  permission"), Arrow Wrap vsgFu padding-left tuned so the arrow sits over the chip. Not
+  drawn on mobile (a `title` tooltip never shows on touch).
+- Mixed-weight sentence (bold "14 members"): text has no runs — a row of text nodes on
+  desktop; on mobile a short first row + a wrapping second line.
+- lucide names confirmed this batch: megaphone, pin, pin-off, send, external-link, lock,
+  info, heading-2, list-ordered, bold, italic, link, list, arrow-left, plus.
+
+## DIRECT MESSAGES batch (27 Sep 2026) — 3 participant pairs + 1 card study
+
+### Frames (participant band y=5260, 2020 pitch after S1l4tY)
+
+- Messages — /messages = **G4UZb** (x=63704) · mobile **YRuNo** (x=65104)
+- Conversation — /messages/[id] = **zbh7g** (x=65724) · mobile **C8kXLV** (x=67124)
+- Conversation · Report mode — /messages/[id] = **rshu9** (x=67744) · mobile **DgBFE** (x=69144)
+  (report mode on top; "STATE 2 — BLOCK DIALOG OPEN" drawn in flow below it, as a scrim panel
+  holding the dialog — not an absolute overlay, so the audit measures it)
+- Messaging controls — card study = **lOabv** (x=69764, w=1024, no mobile — exempt like H7aIdg).
+  Next free desktop slot: x=71048.
+- Tallest is DgBFE (1912) → band bottom y=7172, clear of the org title (8540). No band shift.
+- Audit (the /tmp wrapper): 0 findings on all 7. `--all`: 128 frames, 95 findings, 2 defects —
+  identical to the announcement batch's totals (the same two pre-existing defects, U6ixd and C0QfA8).
+
+### Recipes (all verified by export)
+
+- Built each frame at scratch (0, 23000) and `Copy(frame, document, {x,y}) + Delete(original)` in
+  the SAME execute call, as the announcement batch did: every frame rendered, audited clean first run.
+- **Execute globals keep strings, not functions.** `fn = function(){}` is `undefined` in the next
+  call. To build desktop+mobile+variants from one builder, put all of them in ONE execute call
+  (I built the four conversation frames with one `build(mobile, report, name, x)` function).
+- **Section screenshots of transparent containers are unreadable**: TakeScreenshot of a Content
+  frame with no fill composites light text onto white. Reliable readable review:
+  `Export([...], "png", "/tmp/penqa/exp", {scale:1.5})` — on this WSL setup it lands in
+  **`/mnt/c/tmp/penqa/exp`** (the bridge writes to the Windows C: drive) — then crop with
+  `ffmpeg -vf crop=W:H:X:Y` (no PIL here) and Read the crops.
+- Messages nav item: AppShell `T9YLN` replaced with a frame [My camps (muted) + Messages ($primary/700
+  + a $primary count pill)] — the real header has a Messages link with an unread count; the canvas
+  AppShell had no slot for it. Unread count agrees across frames: inbox 3 (2 Ren + 1 Jabu),
+  conversation 1 (Ren's read).
+- Toggle group (shipped ToggleGroup outline/sm): separate 36px items (44 on mobile, fill_container
+  so the four fit in 296px), gap 4, on = stroke `$primary` + `#2D769626` (primary/15, which is the
+  shipped on-state), off = `$input` stroke on `$background`. Timer/settings icons are `$accent`
+  (the code uses `text-accent`, which is apricot).
+- Chat bubble: row `justifyContent end|start`; bubble radius 16, padding [8,12], fill `$primary`
+  (mine) / `$muted` (theirs). Max width = 80% (614 desktop, 262 mobile; 588/236 in report mode
+  because the checkbox shares the row). Long messages get the fixed max width + wrapping text,
+  short ones hug with auto text. Time line 11px; on mine `$primary-foreground` at opacity 0.8.
+- Checkbox with no label = `o6q8RQ`/`OirYR` with `width:"fit_content"` and the label (`OsGrm`/
+  `hvwng`) disabled, wrapped in a frame with padding-top 12 (the code's `mt-3`). Theirs: checkbox
+  left; mine: checkbox right (the shipped `flex-row-reverse`).
+- Outline small button = `bOc9x` with padding [7,13], radius 7, `Z2mNr9` replaced by a
+  Label Group (14px icon + 12.5 text). Ghost small = `l524ck` with the same. Primary small =
+  `uB4hE` with `y0dvxQ` replaced. Destructive = `BVJfB` (`XU2P9` label).
+- `destructive/40` border = `#C2443866` (8-digit alpha, audit-accepted). `bg-muted/40` boxes
+  drawn as solid `$muted` (a variable can't take an alpha).
+- Burner-profile header in the study = `Copy("oSnKL")` (mm31G hero card) with `alignItems:"start"`,
+  then Update the copied nodes found by name (avatar → RN, name/city/burns), and append an
+  Action Row as its last child — matches ProfileHero's top-right `action` slot.
+- Cast addition: two inbox rows needed people beyond the cast's three humans; used the fictional
+  "Lerato Dlamini" and "Pieter van Wyk" rather than turning camp names into people.
+
+## ORG SAFETY QUEUE batch (27 Sep 2026) — 2 org pairs (message reports)
+
+### Frames (org band y=8660, 2020 pitch after gsiE0)
+
+- Org Message Reports — /safety · Org Dark = **ERfTm** (x=40400) · mobile **A2jsfk** (x=41800)
+  (Open tab, 4 rows; a "STATES" band below holds the REFUSED card and the EMPTY state side by side —
+  stacked on mobile — in flow, so the audit measures them)
+- Org Message Report — /safety/[id] · Org Dark = **iD07m** (x=42420) · mobile **XFr4w** (x=43820)
+  (open report, viewer can resolve; a small STATES band shows the two other action-slot outcomes:
+  secondary "RESOLVED" badge, default "OPEN" badge)
+- Next free desktop slot: x=44440. Tallest is XFr4w (1296) → bottom 9956, far clear of the SUPPLIER
+  title (13440). No band shift. (Note: qhCyJ/gsiE0 already run to ~17060, but they sit at x≥37760,
+  right of every supplier frame, so there is no actual overlap.)
+- Audit (the /tmp wrapper): 0 findings on all 4. `--all`: 132 frames, 95 findings, 2 defects — the
+  same two pre-existing defects as the last two batches (Head-row OVERLAP; "Request a feature" overflow).
+
+### 🐛 Copy of an INSTANCE does not take a `descendants` override for a slot the instance already overrides
+
+`Copy("j5StH", header, {descendants:{VU2a3:{type:"frame", …Accounts/Audit/Safety/System…}}})` silently
+kept j5StH's existing VU2a3 replacement (Accounts/Audit/System-active) — no error, and the new frame's
+nav said "System" active. (This contradicts the announcement batch's "Copy descendants REPLACE the
+instance's overrides" — for a slot that was already REPLACED by a subtree, the source's version won.)
+Fix that worked: `Replace(instId, {type:"ref", ref:"jgbtP", width:"fill_container", descendants:{…full
+map…}})` — replace the whole instance with a fresh ref. Verify with `Get(newId).descendants` AND an
+export; the name-map in the response looks fine either way.
+
+### Recipes (verified by export)
+
+- Desktop org header with a Safety item: Header frame = `Copy("VVfFq")` (quilt band) + a fresh
+  `jgbtP` ref with descendants `{S8mXNg off, dwrhE off, LmFjj → 197×28 logo image frame, p9ddJ/yxXDq
+  muted/600, VU2a3 → Nav Tail frame [Accounts, Audit, Safety ($accent/700), System]}` — the shipped
+  order (console-header.tsx: …Accounts, Audit, Safety, System). Mobile = `Copy("R2JA4")`.
+- Status tabs (link nav, no component): 14/500 labels, active = fill `#F4B67226` (accent/15, the same
+  8-digit tint as the CONSOLE pill) + `$accent` text, inactive muted; padding [6,12] desktop,
+  [14,14] mobile (45px).
+- Divided bordered list: outer frame stroke `$border` radius 12 clip; rows after the first get
+  `stroke:"$border", strokeWidth:{top:1}`. Mobile rows go vertical (sentence, then badge+date).
+  Mixed-weight "**A** reported **B**" = a row of three texts, gap 4; at 13px the longest
+  ("Lerato Dlamini reported Ren Notfound") is 262px of a 296 inner width.
+- EmptyState `Auvjk` with the shipped icon: `zbx9Y` (Quilt Art) replaced by a lucide `shield-alert`
+  icon via descendants, `g9zN74` body width → `fill_container` (its fixed 360 overflows at 360),
+  `xiVed` CTA row off, padding [32,20] on mobile.
+- Org primary small button with icon = `f8Vlv` with padding [7,13], radius 7, `MK2Fb` replaced by a
+  Label Group [lucide `circle-check`, "Mark resolved" 12.5/700 `$accent-foreground`]. Mobile:
+  full-width, padding [14,17] (45px; [13,17] measured 43).
+- Report item meta on mobile: sender row [name 12/600 + "(reported)" muted] then the date on its own
+  line — the one-line "Name (reported) · date" is ~290px against a 262px inner width.
+- Detail dates follow the code's Intl format (`day month year, HH:mm`), so the description reads
+  "Reported 14 Apr 2027, 09:12. This copy is deleted 11 Oct 2027, 09:12. …" (180 days).
+- Cast additions reused from the DM batch: "Lerato Dlamini", "Pieter van Wyk".
+
+## CAMP PEOPLE + ROSTER batch (27 Sep 2026) — 2 participant pairs + 1 card study
+
+### Frames (participant band y=5260, 2020 pitch after lOabv)
+
+- Camp People — /camps/[slug]/people = **kZAVt** (x=71048) · mobile **egwFc** (x=72448)
+  (5 person cards, Alice with the "YOU" badge; an "OTHER STATES" band below holds the
+  not-listed notice and the "Nobody's listed yet" empty state, in flow)
+- Camp Roster — /camps/[slug]/roster = **O4p2vz** (x=73068) · mobile **cvkdX** (x=74468)
+  (lead view: stats card, filter bar, "18 people", 6-row table; mobile = stacked card per row
+  per the ResponsiveDataTable projection: Name title + Bio badge, then a dt/dd list)
+- Camp page cards — Your plans + Placement — card study = **sJ7DX** (x=75088, w=1024, no mobile).
+  Next free desktop slot: x=76372.
+- Tallest is cvkdX (2548) → band bottom y=7808, clear of the org title (8540). No band shift.
+- Audit (the /tmp wrapper): 0 findings on all 5. `--all`: 137 frames, 95 findings, 2 defects —
+  the same two pre-existing defects as the last three batches.
+
+### Recipes / findings
+
+- **Globals set in one execute call did NOT survive to the next** this session (`pD` was
+  undefined one call later, despite the "(= variable)" note in the response). Pass ids as
+  string literals, or do build + Copy-into-place + Delete in the same call.
+- **`underline:true` on text is accepted without error but not persisted** (Get shows no
+  `underline`). Links are drawn as `$foreground` 600 against `$muted-foreground` body text.
+- Equal-height cards in a manual 2-col grid row: build, read `ctx.bounds.height` of each card in
+  the SAME call (layout is computed), then `Update(id,{height:max})` on the shorter one. A fixed
+  height on a vertical frame keeps content top-aligned, like the shipped `h-full` card.
+- Badges: the shipped Badge is `uppercase tracking-wide`, so label content is written in capitals
+  ("YOU", "COMPLETE", "ERF NOT ASSIGNED YET"). success = `jlLBa`, secondary = `fKBVV`,
+  outline = `mLUBB`, default = `doQqT`.
+- Search input = `SVgkj` with `piinX` replaced by [lucide `search` + placeholder]. Select without a
+  label = `nn6iK` with `O71i4` off; on mobile `k56Xp` padding [13,13] clears 44px.
+- Mobile 3-item toggle group: `fill_container` items squeezed "Bio not complete" (106px label) into
+  a 106px item; switched the items to `fit_content` with padding [0,10] (65+102+126+gaps = 301 of 328).
+- Date input (no component) = `UIcOu` with `piinX` replaced by [date text + lucide `calendar`],
+  `Tk86T` help off. Full-width Switch row = `K86ztM` with `KU1by`/`v7feRE` off and `R5v5G1` as the
+  label; OFF look = `A2cKQy:{fill:"$input",justifyContent:"start"}`.
+- Placement `dl` (grid auto/1fr) = rows [Term Cell width 84 + value]; "Camp code" at 14px measures
+  82, so 72 was too narrow. Values in JetBrains Mono 700; unassigned = sans 400 muted.
+- Cast addition: "Thandi Mokoena" (fictional) as a sixth roster row.
+
+## Ryan's 27 Sep review decisions applied + CAMP COMPOSER & STATS components (27 Sep 2026)
+
+### Frame ids that CHANGED (Copy trick) — old → new
+
+- Org Message Reports `ERfTm` → **`XWuZZ`** · mobile `A2jsfk` → **`h6YX9`** (row chevrons)
+- Org Message Report `iD07m` → **`dp5Yd`** · mobile `XFr4w` → **`zsnrZ`** (Reopen)
+- Conversation · Report mode `rshu9` → **`cKyLt`** · mobile `DgBFE` → **`Nk5tw`** (bubble selection)
+- New Announcement `ujN92` → **`ShbcC`** · mobile `qSpfA` → **`l4ji5P`** (component swap)
+- Announcement Detail `zXAx8` → **`ObAvd`** · mobile `SlFAI` → **`y3COB`** (Stat Tile swap)
+- Camp Roster `O4p2vz` → **`n6AgY`** · mobile `cvkdX` → **`lenTB`** (Stat Tile swap)
+- Unchanged ids (pure Updates): UExWL, E3coBk, zbh7g, C8kXLV, lOabv, sJ7DX.
+
+### Decisions as drawn
+
+1. Camp announcement cards (UExWL/E3coBk, 8 Bulletin Card instances): kicker `qddZ0` →
+   "ANNOUNCEMENT" (capitals: the shipped kicker is `uppercase`). Set per instance via
+   `Update("<inst>/qddZ0",{content})` — that path form merges into the existing descendants
+   override instead of replacing it. Component default and the org bulletin frames untouched.
+2. Report mode: each message row is `Select Row — …` (padding [6,8], radius 14, whole row = tap
+   target, ≥71px tall). The bubble sits in a `Selection Ring` frame (padding 3, radius 19);
+   selected = ring stroke `$primary` 2 + row fill `#2D76961A` + a 12px lucide `circle-check`
+   leading the bubble's time line (`$primary` on theirs, `$primary-foreground` on mine — a plain
+   $primary stroke is invisible on a $primary bubble, the 3px gap is what makes the ring read).
+   Checkbox kept as the indicator. Helper text unchanged, no caption added.
+   Rebuilt via `Replace(messageListId, strippedSchema)` (Get → strip ids → transform → Replace
+   keeps the sibling position, no Move), then the frame Copy trick.
+3. Report detail STATES band: resolved state = [RESOLVED badge + "Reopen" outline small button
+   (`bOc9x`, lucide `rotate-ccw`, padding [7,13] desktop / [15,13] mobile = 45px)]. The old badge
+   is `enabled:false` in place; the new row was inserted after it.
+4. Safety list rows: 16px lucide `chevron-right` `$muted-foreground` appended to the desktop Meta
+   row; on mobile (vertical rows) it is `layoutPosition:"absolute"` at x=296, y=26.
+5. "Your plans" description (sJ7DX, both copies — the only occurrences) → "…Only you and your
+   camp's organisers see this."
+6. Apricot → `$primary`: timer icons (zbh7g, C8kXLV, report pair), lOabv message-circle title
+   icon, sJ7DX calendar-days ×2 + map-pin ×3, composer info icons. Composer Info Callouts →
+   teal info recipe: fill `#2D76961A`, stroke `#2D769666`. Left alone on purpose: the AppShell
+   bell's unread badge (`$accent`, shared by every participant frame, pre-dates today) and the
+   gate kicker text in bdEac/S1l4tY (mono `text-accent` kicker — text, same as other kickers
+   in the code).
+
+### New components — kv6ot "Section — Camp Composer & Stats" (`cExY9`)
+
+| Component | id | internal child ids |
+| --- | --- | --- |
+| Markdown Editor | **`xixa1`** | Toolbar `ehHXp`, Editor Area `owbZt` (set `height` per use) |
+| Role Chip · Selected | **`nPImb`** | Chip Label `n7XFX` |
+| Role Chip · Unselected | **`TPGOi`** | Chip Label `v4UNc` |
+| Role Chip · Disabled | **`SKYdK`** | Chip Label `Kw3pi` |
+| Option Button · Selected | **`MC3V8`** | Option Title `OPba9`, Option Sub `zHABv` |
+| Option Button · Unselected | **`m3alK4`** | Option Title `K33U4`, Option Sub `ki69b` |
+| Stat Tile (filled, roster) | **`ojdX3`** | Label `m61Cb`, Value `a89Rz`, Hint `jKW3x` |
+| Stat Tile · Outline (announcement detail) | **`q2r0s`** | Label `sge94`, Value `h9hriB`, Hint `jjScM` (off by default) |
+
+Single-line option (composer "Everyone in this camp | By role"): Sub `enabled:false`, Title
+`fontWeight:"500"` (+ `fill:"$muted-foreground"` when unselected). Markdown Editor goes in a
+Textarea `t8imVt` via `descendants:{b4X0E:{type:"ref",ref:"xixa1",width:"fill_container",
+descendants:{owbZt:{height:160}}}}`. Mobile chips: instance `height:44`. No annotation text inside
+any of them — the labels live in the section's SubLabels.
+
+### 🐛 Components can't go through the Copy trick — build them non-reusable, copy, then promote
+
+Inserting the section straight into kv6ot gave the +50px bias (15 phantom V-OVERFLOW defects).
+Copying a reusable node makes an INSTANCE, so the frame-level trick is off the table for a
+library sheet. What worked: `Get(section)` → strip `id` and `reusable` → Insert into a scratch
+frame → `Copy(section, "kv6ot")` (measures clean at once) → `Update(copy, {reusable:true})` on
+each → re-point every instance with `Replace(inst, {...strippedInst, ref:newId,
+descendants: remapped})` (old→new child ids paired by traversal order) → Delete the first
+section → frame Copy trick on the instance frames. Deleting that child section from kv6ot did
+NOT corrupt it (audit 0, renders fine).
+
+- A descendant slot that was already REPLACED inside an instance (t8imVt's `b4X0E` → Markdown
+  Editor frame) is addressed by the replacement's OWN id: `Replace(inst + "/" +
+  Get(inst).descendants.b4X0E.id, {type:"ref", ref:"xixa1", …})`. `inst/b4X0E` says "no such node".
+- `Get(id,{depth:0}).descendants` holds "…" placeholders — spread it and you get "Cannot create
+  property 'id' on string". Use `Get(id)` (no depth) when you need real override data.
+
+### Swapped to instances
+
+ShbcC/l4ji5P: 4+4 Option Buttons, 3+3 Role Chips, 2 Markdown Editors (Editor Area height
+160 desktop / 140 mobile via the Editor Area child override). ObAvd/y3COB: 3+3 Stat Tile ·
+Outline. n6AgY/lenTB: 8+8 Stat Tile (height 86 kept per instance for the equal-height grid).
+NOT swapped (not in scope, same recipe as the chips but a different on-tint `#2D769626`): the
+timer toggle groups (zbh7g, C8kXLV, cKyLt, Nk5tw, lOabv) and the roster bio toggle group.
+
+### Audit
+
+Every touched frame 0 findings. `--all`: 137 frames, 95 findings, 2 defects — the identical
+finding set to the pre-session baseline (U6ixd Head OVERLAP, C0QfA8 "Request a feature").
+
+
+## Pen lessons — night session 28 Sep 2026 (design agent)
+
+Canvas: design/ab-initial-app.pen (saved by Ryan 28 Sep 01:59).
+Exports: /home/ryan/quagga-board/review-night/*.png (scale 1.5).
+
+### New frames — Epic #54 camp-authored onboarding (participant band, y=5260, 2020 pitch after sJ7DX)
+
+| # | Name | Route | Desktop | Mobile | x (desktop / mobile) | Heights |
+|---|------|-------|---------|--------|----------------------|---------|
+| 1 | New Questionnaire · Starting point | /camps/[slug]/questionnaires/new | **Dydjn** | **s0Pk0w** | 76372 / 77772 | 1070 / 1186 |
+| 2 | Onboarding Builder | /camps/[slug]/questionnaires/new?preset=onboarding | **FKv08** | **ZohC3** | 78392 / 79792 | 1705 / 2536 |
+| 3 | Onboarding Completion (lead) | /camps/[slug]/questionnaires/[activationId] | **oBuPo** | **d60hfO** | 80412 / 81812 | 1326 / 1483 |
+| 4 | Onboarding Runner (member) + pending list state | /questionnaires/[activationId] | **U7Z0oJ** (was Dl9rE) | **kfGIQ** (was x6L35) | 82432 / 83832 | 1737 / 2063 |
+| 5 | Onboarding · Carry Forward (new edition) | /camps/[slug]/questionnaires | **fF0hx** | **k1uEU** | 84452 / 85852 | 1340 / 1614 |
+
+Next free desktop slot in the participant band: x=86472. Tallest new frame ZohC3 ends at y=7796,
+clear of the ORGANISER CONSOLE title (8540). No band shift.
+
+### Existing frames changed (Work B)
+
+| Change | Frame | Id |
+|--------|-------|----|
+| B1 Message button + ••• menu (Block inside), plus "OTHER STATES ① ••• MENU OPEN" | Burner Profile — mobile 360 | `lYUEe` → **TEuVC** (Copy trick; same x/y 9480,5260). Header avatar changed AH → RN so the page isn't a self-view. Stale id is cited in apps/web/app/(app)/burners/[id]/page.tsx:41, apps/web/components/profile-public/profile-hero.tsx:4, docs/component-spec.md:82 |
+| B2 camp code + erf on one line: "Camp · erf  MAH · C-14"; code-only state "MAH · erf not assigned yet"; nothing state "Not assigned yet"; the separate Erf rows disabled | Camp page cards card study | sJ7DX (id unchanged) |
+| B3 privacy switch label "Public" / "Private" + right-aligned 11.5px $muted-foreground help line under it | Onboarding — mobile 360 (Burner Bio step 2) | srY69 (id unchanged) |
+| B4 read-rate per bulletin | Org Bulletins QqnNq / laWqH | NOT changed — already true (a read-rate strip sits directly under each of the 3 sent cards, desktop and mobile) |
+
+Only sJ7DX showed camp code / erf anywhere on the canvas (searched every text node incl. resolved
+instances for MAH, C-14, erf, camp code). The roster and camp dashboard don't show placement.
+
+### Audit
+
+Every new/changed frame: 0 findings. `--all`: 147 frames, 95 findings, 2 defects — the same two
+pre-existing defects as the last batches (U6ixd Head OVERLAP; C0QfA8 "Request a feature" overflow).
+Audit = PR #77's audit.py (branch fix-design-qa-audit-pencil-api) copied to /tmp/penqa with its penctl.py.
+
+### Lessons
+
+- **One builder call per desktop+mobile pair works well.** A ~25-line helper prelude (F/T/I/Btn/Bdg/
+  Card/Back/Page/Done) pasted into each execute call; `build(m, X)` builds at scratch (0|1400, 23000),
+  then `Copy(pg, document, {x, y:5260, placeholder:false})` + `Delete(pg)` in the same call. All ten
+  frames audited clean or with only real (fixable) findings on the first run — no +50px phantom bias.
+- **Inserting into an EXISTING frame later still triggers the +50px bias** (a badge added to the
+  builder's Kicker Row: V-OVERFLOW "by 50px" on both frames). The frame Copy trick cleared it at once.
+  Ids changed (L9Bs4M→FKv08, DIFu1→ZohC3) — the table above has the final ones.
+- **Insert + Move within the same parent + Copy trick** (TEuVC) worked cleanly for adding a row at
+  a specific index.
+- **Replace to wrap an existing node** (no Copy trick needed): `Replace(id, {type:"frame", children:
+  [{...strip(Get(id)), name:"Head Row"}, helpText]})` where strip removes every `id` key recursively
+  (including inside instance `descendants` maps). srY69 audited clean and rendered right away; id kept.
+- `Update(instanceId, {descendants:{...}})` REPLACES the instance's descendant overrides — re-list
+  every existing override (A40wYB width, iaJYv off) alongside the new one.
+- `$accent-muted` is not a variable (the call succeeded silently with an unknown token). Check
+  `GetVariables()` before using a token name you haven't seen on the canvas.
+- Option Buttons side by side don't auto-equalise height; read `ctx.bounds.height` and set the max.
+- Mobile section kickers like "SECTION 6 OF 6 · ACKNOWLEDGEMENTS" + a 3-icon tool row overflow 296px;
+  drop the "· KIND" suffix on mobile. Collapsed-row titles need fixed-width + fill_container.
+- The /tmp audit bridge occasionally times out on the first `get_app_state`; just rerun.
+- Participant OPTIONAL badge = `mLUBB` with the label replaced by [lucide `circle` 12px + "OPTIONAL"],
+  mirroring the shipped BlockingBadge (outline + Circle). Required = `qCpIG` + `triangle-alert`.
+- Pending list = the shipped "Pending questionnaires (n)" card (clipboard-list icon, OPTIONAL badge +
+  "Due …", secondary "Answer" button) that renders on the camp page and the directory.
+
+### Guesses parked for Ryan (product questions)
+
+1. **New vs returning** is drawn as camp membership history ("new to the camp" = first edition with
+   Mad Hatters), per issue #54's "from membership history". That is a different axis from the roster's
+   bio-based New 5 / Returning 11 / Unknown 2, so the completion view's 5 new / 13 returning does not
+   match the roster. Confirm the axis, or tell me to align the numbers.
+2. **Audience targeting UI** reuses Role Chips for both the membership chips (New / Returning) and the
+   camp-role chips (Member, Team lead, Kitchen wizard), all selected (so it reaches 18). Whether "Lead" /
+   "Co-lead" should appear as targetable roles is open.
+3. **Who can see privacy help copy (B3)**: Years attended "Every signed-in burner can see this.";
+   Phone and Identity document "Only you can see this." Is that the right audience wording for the
+   hard-locked fields, given the officer-registration path for phone?
+4. **Profile menu (B1)**: the ••• menu holds only "Block alice_hatter". Report / Unblock states in the
+   menu weren't drawn. Desktop mm31G still has no Message/Block (the actions exist only in the lOabv
+   study). I changed the mobile header avatar to RN so it isn't a self-view.
+5. **Placement label (B2)**: I kept a term label "Camp · erf" in front of "MAH · C-14". Drop it if the
+   value should stand alone.
+6. **Carry forward**: shown as a card on the questionnaires list, with "What came across" (sections,
+   video, acks, audience, blocking carried; due date cleared; answers never carried) and a warning on
+   last year's build dates. The 2026 dates in the draft ("23–26 April, strike 3–4 May") and "16 of 17
+   finished" are invented. Whether the due date should carry (shifted by a year) is a guess.
+7. **Runner layout**: single page (all info blocks, then the acknowledgement card), not multi-page like
+   Runner v2. "Finish onboarding" is disabled until all acknowledgements are ticked.
+8. **B4**: the org list draws the read-rate as a strip under each card, but UExWL puts it inside the
+   card's footer. I left it as is. Say if you want the org list to match UExWL.
+9. Cast additions: "Sipho Nkosi" and "Mia Fourie" (fictional) are the extra returning members in the
+   completion list.
+
+---
+
+# Shifts & rota — Epic #57 (night session, 28 Sep 2026)
+
+Participant app (teal), per Decision 007: shifts live in apps/web. PNGs: /home/ryan/quagga-board/review-night/shifts/.
+
+### Frames (participant band, y=5260, 2020 pitch after k1uEU)
+
+| # | Name | Route | Desktop | Mobile | x (desktop / mobile) | Heights |
+|---|------|-------|---------|--------|----------------------|---------|
+| 1 | Shifts · Lead overview (+ camp-page entry tile state) | /camps/[slug]/shifts | **gAQnT** | **BPuki** | 86472 / 87872 | 1340 / 1873 |
+| 2 | Shifts · New shift (template) (+ "needs a skill" state) | /camps/[slug]/shifts/new | **Y1tKxt** | **Ebxs3** | 88492 / 89892 | 1884 / 2371 |
+| 3 | Shifts · Member: My shifts + Open shifts (+ notifications state = item 5) | /camps/[slug]/shifts | **M3rNVI** (was FH3rq) | **pf8nm** (was poliL) | 90512 / 91912 | 1584 / 1875 |
+| 4 | Shifts · Offer or swap (+ pending-approval and lead-approval states) | /camps/[slug]/shifts/[shiftId]/swap | **UkKb6** (was Mg6j2) | **iS0Nv** (was vJxkW) | 92532 / 93932 | 1627 / 2840 |
+
+Item 5 (notification examples) is the "① IN-APP NOTIFICATIONS" block in frame 3. It uses 2 × Notification
+Item · Unread (H9bn7) and 1 × Read (IDy9A) for a reminder, a change by the lead and an approved swap. Next free
+desktop slot: x=94552. Tallest frame is vJxkW, which ends at y=8100, clear of the org title at 8540.
+
+### Audit
+
+- **Frames with 0 findings:** all 8 except BPuki.
+- **BPuki:** 9 `[SCROLL?]` warnings, all intended. The mobile week strip is a horizontally swipeable row that is
+  clipped mid-chip, per the mobile-360 convention.
+- **`--all`:** 155 frames, 104 findings, 2 defects. Those are the same two older defects (U6ixd, C0QfA8), and
+  104 is the 95 baseline plus the 9 SCROLL? warnings above. I did not edit whitelist.json because the repo is
+  read-only.
+
+### Lessons
+
+- **A WSL crash lost the last execute call even though it had returned OK.** Frame 4 (first built as CkWtz/pkNUP)
+  disappeared, along with a text Update made after frame 3. Pencil recovered the document to an earlier state.
+  After any crash, re-list the top-level frames and re-check small follow-up edits, not just whole frames.
+- **The crash also wiped /tmp**, including the audit tooling in /tmp/penqa. I re-fetched it from
+  `origin/fix-design-qa-audit-pencil-api`. Keep a copy somewhere persistent for long sessions.
+- **Instance text on a copied AppShell** can be changed by path, which is how the member frames use Jabu's
+  avatar: `Update(copiedAppShellId + "/axOeJ/b5sb0Z", {content:"JA"})`. For the mobile header copy, find the
+  text whose content is "AH" and Update it.
+- **Warning badge = `j9JR1`** (label `HLgCy`), used here for "1 GAP" and "11 OPEN SPOTS". **Pending badge =
+  `RXzgC`** (label `xhS1h`), used for "SWAP PENDING". A select's value text is `b7Bq8` inside `nn6iK`.
+- **Mobile rows that pair a title with a badge overflow at 296px.** Make that Title Row vertical, or move the
+  badge to its own line.
+- **Mobile week strip:** 12 fixed-width day cells in a clipped row. Cells need 80px for "Mon 3 May"; 66px
+  overflowed.
+- **The 2027 calendar:** 22 Apr is a Thursday, 26 Apr a Monday, 29 Apr a Thursday and 3 May a Monday.
+
+### Product guesses parked for Ryan (shifts)
+
+1. **Teams** are fixed chips on the template: Kitchen, Tea bar, Sound, Meal rota, Build & strike, MOOP. I
+   assumed a lead-editable team list and did not draw its management screen.
+2. **"Required skill" reuses camp roles**, including officer roles such as Sound Officer, rather than a new
+   skills list (derive over ask). People without the role still see the shift, locked, with "Needs Sound
+   Officer". Issue #57 says "skill", so this needs confirming.
+3. **Sign-up mode is per template:** "Open sign-up" (the default) or "You assign". Lead assignment is drawn only
+   as an "Assign" button on gap rows; the assign picker itself isn't drawn.
+4. **Swap approval is a per-template tick box**, "Swaps need my approval". When it is on, the other member says
+   yes first and then the lead approves. The member stays on the shift until approval. Whether the setting
+   should be camp-wide instead is open.
+5. **Open shifts only shows the days the member is on site**, taken from their travel plans (Jabu: 26 Apr –
+   2 May). The hidden build and strike days are named in a note. The "Their shift" list in the swap form only
+   offers shifts that don't clash.
+6. **Reminders are set per template** (e.g. "2 hours before") and arrive as in-app notifications. Changes a
+   lead makes notify everyone on the shift automatically. There is no email, WhatsApp or SMS, and nothing about
+   attendance or no-shows is drawn.
+7. **The swap approval card** sits "at the top of the lead's Shifts page". I haven't drawn it in the lead
+   overview frame itself.
+8. **Camp-page entry point:** drawn as the live "Shifts" tile, with a warning badge for "11 OPEN SPOTS" and an
+   "Open shifts" link. It is a state block in frame 1; the camp page frame RGcNS is unchanged. Members may want
+   "Your next shift" on that tile instead of the open-spot count.
+9. **All numbers are invented but add up across frames:** 64 shifts, 118 of 129 spots filled, 11 open spots,
+   the per-day gaps sum to 11, and 16 of 18 people are on a shift. The member frames use Jabu as the viewer.
+   The Tea bar · afternoon shift on Sat 1 May is shown as moved to 16:00–19:00, matching the "change"
+   notification.
+10. **Tile wording:** frame 1 shows the lead the fill status ("3 of 4 · 1 GAP"). Members never see who is
+    missing, only the spots left.
+
+## Morning changes 28 Sep 2026 (Ryan's answers applied)
+
+PNGs: /home/ryan/quagga-board/review-morning/ (scale 1.5; `audit-all.txt` is the full-canvas audit).
+
+### Frame ids that CHANGED (Copy trick) — old → new
+
+| Frame | Old desktop / mobile | New desktop / mobile |
+|-------|----------------------|----------------------|
+| Onboarding Runner (now stepped) | Dl9rE / x6L35 | **U7Z0oJ** / **kfGIQ** |
+| Shifts · Member (sign up + my shifts) | FH3rq / poliL | **M3rNVI** / **pf8nm** |
+| Shifts · Hand on a shift (was "Offer or swap") | Mg6j2 / vJxkW | **UkKb6** / **iS0Nv** |
+
+Same x/y as before. The tables above (and pen-lessons.md on design-onboarding-shifts-frames, lines ~1517 and ~1608-1613) still cite the old ids.
+Unchanged ids (Update/Replace in place): FKv08, ZohC3, oBuPo, d60hfO, fF0hx, k1uEU, srY69, TEuVC, Y1tKxt, Ebxs3.
+
+### What changed
+
+- **a. New vs returning** is now labelled as camp membership: builder chips "New to Mad Hatters" / "Returning to Mad Hatters" (two rows, because they don't fit side by side in the 288/296 card). Completion tiles use the same labels (mobile labels wrap; tile rows re-equalised at 101). The desktop table column "Membership" is now "At Mad Hatters". Carry-forward audience line reads "new and returning to Mad Hatters, every role except Lead and Co-lead".
+- **b. Lead / Co-lead** are unselected Role Chips (TPGOi) in the builder's Camp role group: row 1 is Lead, Co-lead, Member; row 2 is Team lead, Kitchen wizard. A help line under them says "Lead and Co-lead are off by default. Tap either to include them." Reach split: "5 new · 13 returning to Mad Hatters, leads not included."
+- **c. Member runner split into steps** (6 steps, matching the builder's 6 sections). The main state is step 3 of 6 (Camp rules). It has a Runner v2 progress card: desktop is a 6-circle stepper where only the current step is labelled, plus "Page 3 of 6" and a track; mobile uses the v2 compact card "SECTION 3 OF 6 · CAMP RULES" plus a track. Below that are the section header, the one block, and Back / Saved / Next. OTHER STATES ① is the last step (6 of 6, "Before you arrive"): the acknowledgements card with 2 of 3 ticked and Back + a disabled "Finish onboarding" ("tick all three to finish"). ② is the pending-list block, kept as it was.
+- Camp rule text "Swap on the roster if you need to" → "Hand one on in Shifts if you can't make it." (runner + builder editor).
+- **Bio phone help (srY69):** "Only you. Shared with AfrikaBurn only if you agree as a camp officer." ID stays "Only you can see this."
+- **Profile ••• menu (TEuVC):** "Report alice_hatter" (flag icon, foreground), a separator, then "Block alice_hatter" (destructive). The caption now says "Report and Block live here".
+- **d. Edit teams:** a ghost "Edit teams" (pencil) at the right of the Team label in the new-shift frames (desktop 6/8 padding, mobile 14/8 = 44px).
+- **f. Swaps need no approval:**
+  - The "Swaps need my approval" tick box is deleted from both new-shift frames.
+  - The swap frames are rebuilt as "Hand on a shift". There are two Option Buttons: "Hand to someone" (selected, with a "Hand to" select set to Lerato Dlamini) and "Needs a replacement". The info callout says no approval is needed and Alice gets a notice. The button is "Send to Lerato".
+  - States: ① SENT, waiting for Lerato to accept ("HANDING ON" badge, Withdraw). ② What Lerato sees: "Jabu wants to hand you Kitchen · Thu lunch", Accept / Decline. ③ "Needs a replacement" chosen: "IN OPEN SHIFTS" badge, "the first person to take it gets it", Take it back.
+  - Member "Offer or swap" buttons now read "Hand on". The "Swap approved…" notification is now "Lerato Dlamini accepted your Kitchen · lunch on Thu 29 Apr — it's hers now". The note under it now describes the lead's own "changed hands" notice.
+- **g. Open shifts show every day:** the description now says "Every day of the burn is listed, build and strike included". The "Build days … are hidden" line is deleted. A new last row, "MON 3 · Build & strike · strike crew · 09:00–13:00 · 2 spots left · You're not on site this day", shows the subtle hint and matches the lead overview's "Mon 3 May · 2 gaps".
+
+### Audit
+
+Every changed frame had 0 findings. The full canvas (`--all`) gave 155 frames, 104 findings and 2 defects, the same totals as the night baseline. Both defects are pre-existing: the Head OVERLAP and "Request a feature" overflow.
+
+### Lessons
+
+- **Scratch-copy rebuild of an existing frame works well.** One execute call per pair does it all: `Copy(frame, document, {x, y:23000})`, then find nodes by name in the copy, Insert/Move/Replace/Delete, then `Copy(scratch, document, {x, y:5260})`, then Delete the scratch and the original. Both runner and both swap frames audited clean on the first run.
+- **Rebuilding a sub-tree as data is simpler than patching instance overrides.** Strip the ids from `Get(node)`, change fields found by a recursive name search (it walks both `children` and `descendants`), then `Replace(node, data)`. It also handled the label and icon swaps inside replaced button slots.
+- **Replace alone, and Delete alone, do not trigger the +50px bias** (FKv08, ZohC3, TEuVC, Y1tKxt, Ebxs3 all audited clean without the Copy trick). Only Insert into an existing frame did.
+- **`Get(document, visitor)` over the whole canvas times out** ("InternalError: interrupted"). To read frame x/y/height, visit each frame with `c.depth===0` and `skipChildren`.
+- An instance's `height:"fit_content"` is accepted. Use it to measure a wrapped Stat Tile, then set the equal fixed height back on.
+
+### Guesses
+
+1. The hand-on recipient is **Lerato Dlamini**, not Ren as in your example: Ren is already on that Kitchen · lunch shift, so he can't be handed it.
+2. With Lead and Co-lead off, "Reaches 18 members" still says 18, with "leads not included" added. The roster says "18 people" including Alice. So either the camp is 20 with 2 leads, or the reach should be 16. I didn't ripple the numbers through the completion frames. Tell me which you want.
+3. The runner's main state is step 3 rather than step 1, so it shows both Back and Next. Step 1 would have no Back.
+4. The member can still **Sign up** on a day they're not on site. The hint only informs.
+5. When a shift changes hands, the lead's notice is described in text under the notifications block, not drawn as its own notification item.
+6. "Take it back" (withdraw a "needs a replacement" post) and "Withdraw" (cancel a hand-on) are my additions.
+
+### Follow-up 28 Sep: cast names as data only, and reach counts that include leads
+
+**Rule (Ryan):** cast names (Mad Hatters, Alice…) may appear only as DATA. That means the camp's page heading, the back link to the camp, member rows, the author and actor in a notice, message bodies, and content the lead writes (the questionnaire title "Welcome to Mad Hatters" and its sections). Names must never appear in chrome that would be a fixed string in code: chips, column headers, help lines, buttons, badges, empty states, or the fixed text of callouts and notices.
+
+**Changes.** All were plain Updates, so **no ids changed**.
+
+- **Builder, completion and carry-forward:**
+  - Chips and tiles now say "New to the camp" / "Returning to the camp". The column header is "At this camp". The help line says "first edition with the camp".
+  - The carry-forward audience line is now "new and returning to the camp, every role except Lead and Co-lead".
+  - The starting-point subtitle has dropped "Mad Hatters ·".
+- **New shift:** the subtitle has dropped "Mad Hatters ·".
+- **Hand on:**
+  - The callout, notes and captions now say "they" / "your camp lead" instead of Lerato or Alice.
+  - The button reads "Send request".
+  - "Decline and nothing changes."
+- **Member notifications note:** "the camp lead".
+- **Profile ••• menu:** the items are plain "Report" and "Block".
+- **Counts:** member counts include leads. The camp has 18 members, including 2 leads (Alice as lead, Ren as co-lead).
+  - Builder: "Reaches 16 of 18 members right now · 5 new · 11 returning to the camp".
+  - Completion is based on 16 recipients. It says "Sent … to 16 of 18 members" and "10 of 16" complete (63%, bar 610/976 and 185/296). The split is new 4 of 5 and returning 6 of 11, with 6 still to finish (4 started, 2 not opened). The names list shows 6 of 16 and is unchanged.
+  - Carry-forward's "16 of 17 finished" is about the 2026 run, so I left it.
+
+**Left as data on purpose:** back links "Mad Hatters", the questionnaire title and body, "From Alice Hatter", the "· Mad Hatters" source line on notifications, "Alice Hatter moved…" and "(moved by Alice)", the recipient name in "Sent to Lerato Dlamini…" and "Jabu wants to hand you…", and the people cells.
+
+**Audit:** 15 frames, 0 findings. Exports in review-morning/ were overwritten.

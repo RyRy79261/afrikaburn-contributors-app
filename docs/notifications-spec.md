@@ -1,12 +1,12 @@
 # Notifications & Bulletins — Feature Spec
 
-| Field | Value |
-|---|---|
-| **Category** | Engineering Spec |
-| **Doc status** | Active |
-| **Normative language** | Descriptive only |
-| **Requirement IDs** | N/A — no dedicated App Spec section; implements communication needs that are implied by §6, §9 and §14 rather than a named requirement set |
-| **Owner / Updated** | Ryan, 2026-08-05 |
+| Field                  | Value                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Category**           | Engineering Spec                                                                                                                           |
+| **Doc status**         | Active                                                                                                                                     |
+| **Normative language** | Descriptive only                                                                                                                           |
+| **Requirement IDs**    | N/A — no dedicated App Spec section; implements communication needs that are implied by §6, §9 and §14 rather than a named requirement set |
+| **Owner / Updated**    | Ryan, 2026-08-05                                                                                                                           |
 
 _Ryan, 25 Jul 2026. Every account gets an in-app notification stream; the org gets a
 bulletin system to broadcast to audiences. "Your camp has been approved", "Wrangler
@@ -19,8 +19,11 @@ Two kinds, one inbox:
 
 - **Notification** — personal, event-generated, per-account. Sources: registration
   status changes (submitted/under review/changes requested/approved), wrangler
-  assigned, role/officer assignment + acceptance requests, questionnaire released to
-  you (blocking ones flagged), membership events (invite accepted, lead transfer),
+  assigned, placement set, changed or removed (camp code / erf — to the camp's
+  leads and admins, in-app plus immediate email, on first assignment, every change
+  and removal, naming the edition; re-saving the same values sends nothing),
+  role/officer assignment +
+  acceptance requests, questionnaire released to you (blocking ones flagged), membership events (invite accepted, lead transfer),
   supplier onboarding confirmations (deposit received, briefing confirmed, standing
   changed), account security events (mirrors the security-events feed).
 - **Bulletin** — org-authored broadcast to an **audience** (reuses the questionnaire
@@ -46,7 +49,8 @@ Laws:
   standing changes are visible only to that supplier; org-internal events never reach
   participant inboxes.
 - **Email**: Resend digest for unread (max 1/day) + immediate email ONLY for blocking
-  questionnaires and registration decisions. In-app is the source of truth
+  questionnaires, registration decisions and placement changes (a camp code / erf
+  set, changed or removed — Ryan, 28 Sep 2026; one email per save). In-app is the source of truth
   (zero on-site connectivity — anything on-site queues for lazy sync, same as
   everything else).
 
@@ -74,6 +78,9 @@ full page).
 Notification examples (canonical demo copy):
 
 - 🎉 "Mad Hatters has been approved — placement application is now open" (link → camp)
+- 🎉 "AfrikaBurn 2027 placement set: MAH · C-14" / "AfrikaBurn 2027 placement
+  changed: MAH · C-15" / "AfrikaBurn 2027 placement removed" (body: the camp's
+  name; link → camp; also emailed immediately)
 - 🧑‍🚒 "Fire Safety Officer registration accepted — AfrikaBurn can now contact you"
 - 📋 "New questionnaire from AfrikaBurn: Build week availability — REQUIRED, blocks
   registration" (accent-flagged)

@@ -11,6 +11,40 @@ methods work**.
 the maintainer has since named the consumer and asked for it. The review is kept for its
 technical findings, which stand; its scheduling verdict does not.
 
+## Direction update — 27 Sep 2026 (Ryan)
+
+The maintainer set the scope. Where this and the documents below disagree, this wins until
+they are re-specced. The epic is #60.
+
+- **Full feature parity.** Every feature a person can control in the app is reachable, and
+  buildable, through the SDK, **writes included**. A camp, art project or mutant vehicle
+  can build its own app for all of its projects instead of using ours. This replaces the
+  read-first tranches in `00-decision.md` §8 as the destination. The phasing may stay; the
+  end state is parity.
+- **Split by purpose, not one package.** A shared `@afrikaburn/sdk-core` holds sign-in,
+  session, the capability manifest, transport, errors and the scope vocabulary. Domain
+  packages build on it: `sdk-projects`, `sdk-registration`, `sdk-questionnaires`,
+  `sdk-comms`, `sdk-people`, `sdk-suppliers`, and a small **`sdk-org`**, so the org can
+  connect its existing systems rather than migrate into this app. This supersedes the
+  single `@afrikaburn/sdk` in `05-publishing-and-licensing.md`.
+- **Sign-in belongs to the SDK.** "Sign in with AfrikaBurn" means this platform acts as
+  the OAuth 2.1 / OIDC provider for SDK apps: authorization code with PKCE, and a consent
+  screen we render. When #59 lands, AfrikaBurn's TMI Identity is federated in upstream, so
+  an app integrates once and never changes. The relay-ticket model in `delegation/` is the
+  in-product form of the same guarantee: the burner is proven present, never asserted.
+- **An app can ask what the signed-in account may do.** The capability manifest is already
+  the design (`01`, `02`, `03`). Parity means it covers every module.
+
+**Unchanged, and binding on every package:**
+
+- An API key is a ceiling, never a principal.
+- No caller-supplied subject identifier, ever.
+- `org:*` is not delegable by a burner. The org SDK uses org-issued keys.
+- Hard-locked fields are unreachable through any scope.
+- Medical notes follow `delegation/02-audit-and-the-medical-path.md`.
+- Direct messages are readable only by their participants, through their own consent.
+- No runtime community plugins.
+
 ## Read in this order
 
 | Document                                                                     | What it settles                                                                                       |
