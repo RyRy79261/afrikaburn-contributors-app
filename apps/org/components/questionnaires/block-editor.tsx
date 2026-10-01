@@ -285,7 +285,7 @@ export function BlockEditor({
               placeholder="Heading (optional)"
               aria-label="Info heading"
             />
-          ) : (
+          ) : block.kind === "image_block" ? (
             <Input
               value={block.caption ?? ""}
               onChange={(e) =>
@@ -294,6 +294,10 @@ export function BlockEditor({
               placeholder="Caption (optional)"
               aria-label="Image caption"
             />
+          ) : (
+            // A video link card (camp onboarding) — not on the console's
+            // palette; shown read-only if one is ever loaded here.
+            <Input value={block.title} readOnly aria-label="Video link title" />
           )}
           <Select
             value={paletteKind}

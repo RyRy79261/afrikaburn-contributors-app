@@ -7,6 +7,8 @@ import {
   type RedeemResult,
 } from "./invites-store";
 import { sendEmail } from "./email";
+import { getActiveEdition } from "./edition";
+import { deliverOpenOnboardingsToNewMember } from "./onboarding-store";
 import type { CampUser } from "./session";
 
 /**
@@ -28,6 +30,24 @@ export async function completeInviteJoin(
   const preview = await getInvitePreview(token);
   const result = await redeemInvite(token, user.id);
   if (!result.ok) return result;
+
+  // "People who join later get it too" (camp onboarding, epic #54): an OPEN
+  // onboarding whose audience reaches the newcomer is delivered now. After the
+  // join has committed and best-effort — a failure here never fails the join.
+  if (preview) {
+    try {
+      const edition = await getActiveEdition();
+      if (edition) {
+        await deliverOpenOnboardingsToNewMember({
+          groupId: preview.groupId,
+          userId: user.id,
+          editionId: edition.id,
+        });
+      }
+    } catch (err) {
+      console.error("[onboarding] late-joiner delivery failed", err);
+    }
+  }
 
   if (user.email && preview) {
     await sendEmail({

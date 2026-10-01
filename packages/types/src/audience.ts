@@ -124,11 +124,32 @@ export type OrgSuppliersAudience = z.infer<typeof OrgSuppliersAudience>;
  * custom project role. `groupId` is the project group; `roleIds` are
  * `project_roles.id` values (ignored when `mode` is `everyone`).
  */
+/** How long someone has been with THIS camp (epic #54, Ryan 28 Sep 2026):
+ * `new` = no earlier edition with the camp; `returning` = has been with it
+ * before. Relative to the camp, never to AfrikaBurn — a ten-burn veteran who
+ * joined this camp this year is new to it. */
+export const CampTenure = z.enum(["new", "returning"]);
+export type CampTenure = z.infer<typeof CampTenure>;
+
+/** The structural roles a project audience may be narrowed to. `admin` is the
+ * co-lead. */
+export const ProjectStructuralRole = z.enum(["lead", "admin", "member"]);
+export type ProjectStructuralRole = z.infer<typeof ProjectStructuralRole>;
+
 export const ProjectAudience = z.object({
   kind: z.literal("project"),
   groupId: z.string().min(1),
   mode: z.enum(["everyone", "roles"]),
   roleIds: z.array(z.string().min(1)).default([]),
+  // --- Narrowing filters (camp onboarding, epic #54) ----------------------
+  // Both OPTIONAL and both only ever SUBTRACT from what mode/roleIds reach:
+  // absent means "no filter", which is exactly how every audience written
+  // before them resolves, so no stored row changes meaning. Because they can
+  // only narrow, the send-scope check on mode/roleIds stays sufficient.
+  /** Only people new to / returning to the camp. Absent = both. */
+  tenure: z.array(CampTenure).min(1).max(2).optional(),
+  /** Only people holding one of these structural roles. Absent = all three. */
+  structuralRoles: z.array(ProjectStructuralRole).min(1).max(3).optional(),
 });
 export type ProjectAudience = z.infer<typeof ProjectAudience>;
 

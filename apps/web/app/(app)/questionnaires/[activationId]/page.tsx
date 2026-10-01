@@ -10,12 +10,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@quagga/ui/components/card";
-import { INVITE_RESUME_PATH } from "@quagga/core";
+import { INVITE_RESUME_PATH, isOnboardingDefinition } from "@quagga/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { readPendingInvite } from "@/lib/pending-invite";
 import { requireCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getFillView, type ActivationRow } from "@/lib/questionnaire-store";
+import { getOwnOnboardingTicks } from "@/lib/onboarding-store";
 import { db, schema } from "@/lib/db";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
@@ -61,7 +62,32 @@ export default async function QuestionnaireFillPage({
   const view = await getFillView(activationId, user.id);
   if (!view) notFound();
 
-  const { activation, actionStatus, initialResponses } = view;
+  const { activation, actionStatus } = view;
+  // A camp onboarding (epic #54) walks the same runner, one section per step;
+  // only the framing differs — it says what it is, who it's from, and (when it
+  // is optional) that it blocks nothing.
+  const onboarding = isOnboardingDefinition(activation.definition);
+  // Boxes ticked on another device come back ticked here (partial progress,
+  // Ryan 1 Oct 2026). Only `true`s are ever stored, never answers.
+  const initialResponses =
+    onboarding && actionStatus === "pending"
+      ? {
+          ...view.initialResponses,
+          ...Object.fromEntries(
+            (await getOwnOnboardingTicks(activationId, user.id)).map((id) => [
+              id,
+              true,
+            ]),
+          ),
+        }
+      : view.initialResponses;
+  const due = activation.dueAt
+    ? activation.dueAt.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
 
   if (actionStatus === "completed") {
     return (
@@ -74,7 +100,17 @@ export default async function QuestionnaireFillPage({
                 Already submitted
               </CardTitle>
               <CardDescription>
-                Thanks — you&apos;ve completed &ldquo;{activation.title}&rdquo;.
+                {onboarding ? (
+                  <>
+                    You&apos;ve finished &ldquo;{activation.title}&rdquo; —
+                    thanks.
+                  </>
+                ) : (
+                  <>
+                    Thanks — you&apos;ve completed &ldquo;{activation.title}
+                    &rdquo;.
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -85,6 +121,30 @@ export default async function QuestionnaireFillPage({
           </Card>
         </div>
       </>
+    );
+  }
+
+  // Closed (recalled) by its author: nothing left to answer, and the submit
+  // action refuses it too — say so rather than render a form that can't save.
+  if (actionStatus === "expired") {
+    return (
+      <div className="mx-auto flex max-w-xl flex-col gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">This was closed</CardTitle>
+            <CardDescription>
+              &ldquo;{activation.title}&rdquo; was closed by whoever sent it, so
+              it can&apos;t be answered any more. There&apos;s nothing you need
+              to do.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="secondary">
+              <Link href="/directory">Back to the directory</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -124,6 +184,11 @@ export default async function QuestionnaireFillPage({
               <p className="mt-1 text-sm text-muted-foreground">
                 {asker} asks:
               </p>
+              {onboarding && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your camp&apos;s leads can see how far you&apos;ve got.
+                </p>
+              )}
             </div>
             {activation.description && (
               <p className="text-sm text-muted-foreground">
@@ -139,8 +204,11 @@ export default async function QuestionnaireFillPage({
                 questionnaire={activation.definition}
                 initialResponses={initialResponses}
                 redirectTo={afterGate}
-                submitLabel="Submit answers"
+                submitLabel={
+                  onboarding ? "Finish onboarding" : "Submit answers"
+                }
                 gate
+                reportProgress={onboarding}
                 respondentSeed={user.id}
                 blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
               />
@@ -153,6 +221,43 @@ export default async function QuestionnaireFillPage({
             couple of minutes.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (onboarding) {
+    const asker = await authorName(activation);
+    return (
+      <div className="mx-auto max-w-xl">
+        <div className="mb-6 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <BlockingBadge blocking={activation.blocking} />
+            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              {asker} · Onboarding
+            </span>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {activation.title}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            From {asker}
+            {due ? ` · due ${due}` : ""}. It doesn&apos;t block anything — keep
+            using the app and come back whenever you like.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Your camp&apos;s leads can see how far you&apos;ve got.
+          </p>
+        </div>
+        <QuestionnaireFill
+          activationId={activationId}
+          questionnaire={activation.definition}
+          initialResponses={initialResponses}
+          redirectTo="/directory"
+          submitLabel="Finish onboarding"
+          reportProgress
+          respondentSeed={user.id}
+          blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+        />
       </div>
     );
   }

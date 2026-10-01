@@ -1,9 +1,21 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ClipboardList, Plus, CheckCircle2, Clock, Lock } from "lucide-react";
 import {
+  ClipboardList,
+  Plus,
+  CheckCircle2,
+  Clock,
+  Lock,
+  History,
+} from "lucide-react";
+import {
+  canAuthorOnboarding,
   canAuthorProjectQuestionnaire,
+  defaultOnboardingAudience,
+  describeOnboardingAudience,
   hasProjectPermission,
+  isOnboardingDefinition,
+  ONBOARDING_GROUP_KINDS,
 } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -23,6 +35,7 @@ import { getActiveEdition } from "@/lib/edition";
 import { getCampBySlug } from "@/lib/groups-store";
 import {
   listProjectQuestionnaires,
+  getActivation,
   getActivationResults,
 } from "@/lib/questionnaire-store";
 import {
@@ -35,6 +48,13 @@ import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { CloseQuestionnaireButton } from "@/components/questionnaire/close-questionnaire-button";
 import { closeQuestionnaireAction } from "@/app/(app)/camps/[slug]/questionnaires/actions";
+import { carryForwardOnboardingAction } from "@/app/(app)/camps/[slug]/questionnaires/onboarding-actions";
+import { CarryForwardButton } from "@/components/questionnaire/carry-forward-button";
+import {
+  findOnboardingCarrySource,
+  getOnboardingCompletion,
+  listOnboardingsForEdition,
+} from "@/lib/onboarding-store";
 import {
   resolveQuestionnaireRoute,
   type QuestionnaireRouteKind,
@@ -128,16 +148,75 @@ export async function ProjectQuestionnairesList({
   }
 
   // Per-questionnaire completion detail (member rows + resolved audience).
+  // An ONBOARDING is resolved without its respondents: its card shows totals
+  // only and names are loaded on demand on its completion view (ONBOARD-020).
   const details = await Promise.all(
-    questionnaires.map((q) => getActivationResults(q.activationId, edition.id)),
+    questionnaires.map(async (q) => {
+      const activation = await getActivation(q.activationId);
+      if (activation && isOnboardingDefinition(activation.definition)) {
+        return { activation, respondents: [] };
+      }
+      return getActivationResults(q.activationId, edition.id);
+    }),
   );
   const detailById = new Map(
     questionnaires.map((q, i) => [q.activationId, details[i]] as const),
   );
 
+  // Camp onboarding (epic #54). Its card shows TOTALS ONLY — names live
+  // behind "Show names" on its completion view (ONBOARD-020) — and counts the
+  // camp's current members, exactly as that view does.
+  const onboardingIds = new Set(
+    questionnaires
+      .filter((q) =>
+        isOnboardingDefinition(detailById.get(q.activationId)?.activation.definition),
+      )
+      .map((q) => q.activationId),
+  );
+  const onboardingTotals = new Map(
+    await Promise.all(
+      questionnaires
+        .filter((q) => onboardingIds.has(q.activationId) && q.status !== "draft")
+        .map(
+          async (q) =>
+            [
+              q.activationId,
+              (
+                await getOnboardingCompletion({
+                  activationId: q.activationId,
+                  groupId: camp.id,
+                  names: null,
+                })
+              )?.totals ?? null,
+            ] as const,
+        ),
+    ),
+  );
+  const roleNameById = new Map(roles.map((r) => [r.id, r.name]));
+
+  // Carry forward (ONBOARD-022): offered when this edition has no onboarding
+  // yet and an earlier edition's was sent — to someone who may author one.
+  const offersOnboarding =
+    ONBOARDING_GROUP_KINDS.includes(camp.kind) &&
+    canAuthorOnboarding(
+      viewerPerms,
+      camp.kind,
+      defaultOnboardingAudience(camp.id),
+      false,
+      baselineRole?.id ?? null,
+    );
+  const carrySource =
+    offersOnboarding &&
+    (await listOnboardingsForEdition(camp.id, edition.id)).length === 0
+      ? await findOnboardingCarrySource(camp.id, edition.year)
+      : null;
+
   function audienceLabel(activationId: string): string {
     const aud = detailById.get(activationId)?.activation.audience;
     if (!aud || aud.kind !== "project") return "the camp";
+    if (onboardingIds.has(activationId)) {
+      return describeOnboardingAudience(aud, roleNameById);
+    }
     if (aud.mode === "everyone") return "everyone";
     const names = aud.roleIds
       .map((id) => roleById.get(id)?.name)
@@ -223,6 +302,35 @@ export async function ProjectQuestionnairesList({
           )}
         </div>
 
+        {carrySource && (
+          <Card className="border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4 text-accent" aria-hidden />
+                Last year&apos;s onboarding is ready to reuse
+              </CardTitle>
+              <CardDescription>
+                &ldquo;{carrySource.title}&rdquo; ran for{" "}
+                {carrySource.editionName} — {carrySource.complete} of{" "}
+                {carrySource.sent} finished it. Carry it forward and it comes
+                back as a draft you can edit. Nothing is sent until you press
+                Send.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-3">
+              <CarryForwardButton
+                slug={slug}
+                sourceActivationId={carrySource.activationId}
+                editionName={carrySource.editionName}
+                action={carryForwardOnboardingAction}
+              />
+              <Button asChild variant="ghost">
+                <Link href={`${base}/new`}>Start fresh</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {questionnaires.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="h-6 w-6" />}
@@ -232,6 +340,83 @@ export async function ProjectQuestionnairesList({
         ) : (
           <div className="flex flex-col gap-4">
             {questionnaires.map((q) => {
+              if (onboardingIds.has(q.activationId)) {
+                const totals = onboardingTotals.get(q.activationId) ?? null;
+                const isDraft = q.status === "draft";
+                const meta = isDraft
+                  ? "Draft — not sent yet. Nobody sees it until you press Send."
+                  : [
+                      `Sent to ${audienceLabel(q.activationId)}`,
+                      q.dueAt ? `due ${fmtDate(q.dueAt)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+                return (
+                  <Card key={q.activationId} data-testid="onboarding-card">
+                    <CardHeader>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle className="text-base">{q.title}</CardTitle>
+                            <Badge variant="secondary">Onboarding</Badge>
+                            {q.status !== "open" && (
+                              <Badge variant="outline">
+                                {STATUS_LABEL[q.status] ?? q.status}
+                              </Badge>
+                            )}
+                          </div>
+                          <CardDescription>{meta}</CardDescription>
+                        </div>
+                        <BlockingBadge blocking={q.blocking} />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      {totals && (
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>
+                              {totals.complete} of {totals.total} complete
+                            </span>
+                            <span>{totals.percent}%</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${totals.percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isDraft ? (
+                          <Button asChild size="sm">
+                            <Link href={`${base}/onboarding/${q.activationId}`}>
+                              Continue editing
+                            </Link>
+                          </Button>
+                        ) : (
+                          isAdmin && (
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`${base}/${q.activationId}`}>
+                                View completion
+                              </Link>
+                            </Button>
+                          )
+                        )}
+                        {q.status === "open" && (
+                          <CloseQuestionnaireButton
+                            slug={slug}
+                            activationId={q.activationId}
+                            blocking={q.blocking}
+                            refusal={closeRefusalById.get(q.activationId)}
+                            action={closeQuestionnaireAction}
+                          />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
               const pct =
                 q.sent > 0 ? Math.round((q.completed / q.sent) * 100) : 0;
               const respondents =

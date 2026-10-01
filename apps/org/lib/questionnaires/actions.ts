@@ -93,8 +93,11 @@ function normalizeDefinition(
   title: string,
   description: string | undefined,
 ): Questionnaire {
+  // A preset marker is written ONLY by the camp onboarding actions (epic #54),
+  // which enforce what an onboarding may contain. The console never writes one.
+  const { preset: _preset, ...rest } = definition;
   return {
-    ...definition,
+    ...rest,
     version,
     pages: definition.pages.map((page, index) =>
       page.kind === "questions" && index === 0

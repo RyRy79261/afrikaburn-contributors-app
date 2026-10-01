@@ -832,6 +832,19 @@ describe("a former member and their old camp's questionnaire", () => {
       rawResponses: { arrival: "Tuesday" },
     });
 
+  it("submitResponse refuses an EXPIRED (closed) send and writes nothing", async () => {
+    const EXPIRED = schema.requiredActionStatusEnum.enumValues.find(
+      (v) => v === "expired",
+    )!;
+    dbMock.queue([activationRow()], [{ id: "ra-1", status: EXPIRED }], CURRENT_MEMBER);
+    expect(await answer()).toEqual({
+      ok: false,
+      errors: { _form: "This questionnaire is no longer open to you." },
+    });
+    expect(dbMock.writesTo(schema.questionnaireResponses)).toHaveLength(0);
+    expect(completeRequiredAction).not.toHaveBeenCalled();
+  });
+
   it("getFillView withholds a WAIVED send, even from a current member", async () => {
     dbMock.queue([activationRow()], [{ status: WAIVED }], CURRENT_MEMBER, [
       { responses: { arrival: "Tuesday" } },

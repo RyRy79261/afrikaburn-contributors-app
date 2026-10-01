@@ -1765,6 +1765,41 @@ export const requiredActions = pgTable(
   }),
 );
 
+// Camp onboarding PROGRESS (epic #54, Ryan 1 Oct 2026: leads see partial
+// progress). One row per (onboarding send, person): when they first opened
+// it and the acknowledgements they have ticked so far. It exists so a lead's
+// completion view can say "Opened 6 Apr · 1 of 3 ticked" (canvas A3 `oBuPo`)
+// instead of only Complete / Not complete, and so a member's ticks follow
+// them to another device.
+//
+// Deliberately NOT a half-written `questionnaire_responses` row: every reader
+// of that table (results, exports, carry-forward, the Form 2 mirror) treats a
+// row as an answer. Progress is not an answer, so it lives apart and nothing
+// that reads answers can see it. It holds no personal data beyond "ticked
+// box X", and it goes when the activation or the account goes.
+export const onboardingProgress = pgTable(
+  "onboarding_progress",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    activationId: uuid("activation_id")
+      .notNull()
+      .references(() => questionnaireActivations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** When the member first opened it. Never moved by a later report. */
+    openedAt: timestamp("opened_at", { mode: "date" }).notNull().defaultNow(),
+    /** Acknowledgement question ids ticked so far (never `false`s). */
+    acknowledged: jsonb("acknowledged").$type<string[]>().notNull().default([]),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    activationUserIdx: uniqueIndex(
+      "onboarding_progress_activation_user_idx",
+    ).on(p.activationId, p.userId),
+  }),
+);
+
 // --- Suppliers -----------------------------------------------------------
 // Supplier model v2 (docs/supplier-spec.md). `source`/`vetting_status` are
 // gone; the org sees three things only — did they onboard (derived from

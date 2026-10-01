@@ -88,8 +88,12 @@ model is ordinary work; the reverse would not have been.
 and it can be made a hard gate — the app refuses to show anything else until it
 is done.
 
-**Not built:** camps authoring their own onboarding — culture, rules, build and
-strike duties, acknowledgements.
+**Built since (epic #54):** camps authoring their own onboarding — culture,
+rules, what the camp provides, build and strike, acknowledgements and a video
+link card — as a preset on camp questionnaires, with new/returning-to-the-camp
+targeting, totals-first completion and per-edition carry-forward. See
+[`questionnaire-spec.md`](questionnaire-spec.md) §"Camp onboarding". The
+requirement-ID line above predates it and has not been re-audited.
 
 **What it would take: less than it looks.** The questionnaire engine that
 already runs the Burner Bio is generic: AfrikaBurn staff build a questionnaire

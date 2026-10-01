@@ -223,6 +223,9 @@ function aggregateOne(
       return { ...base, chart: "choice", options, other };
     }
 
+    // An acknowledgement is a tick (true) or nothing — tallied as a yes/no
+    // split so "how many ticked" reads like every other boolean.
+    case "acknowledgement":
     case "boolean": {
       let yes = 0;
       let no = 0;

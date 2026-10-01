@@ -322,6 +322,20 @@ export const CheckboxGridQuestion = z.object({
 });
 export type CheckboxGridQuestion = z.infer<typeof CheckboxGridQuestion>;
 
+// Acknowledgement — a tick box that must be TICKED (camp onboarding, epic #54).
+// Not a `boolean`: a required boolean accepts `false` ("No" is an answer), and
+// an acknowledgement that can be answered "no" acknowledges nothing. The only
+// valid value is `true`; unticked is "missing", and it is always required.
+export const AcknowledgementQuestion = z.object({
+  id: z.string().min(1),
+  kind: z.literal("acknowledgement"),
+  prompt: z.string().min(1).max(300),
+  helper: z.string().optional(),
+  // Always treated as required (validateOne); the flag exists for shape parity.
+  required: z.boolean().default(true),
+});
+export type AcknowledgementQuestion = z.infer<typeof AcknowledgementQuestion>;
+
 export const Question = z.discriminatedUnion("kind", [
   SingleSelectQuestion,
   MultiSelectQuestion,
@@ -338,6 +352,7 @@ export const Question = z.discriminatedUnion("kind", [
   FileLinkQuestion,
   MultiChoiceGridQuestion,
   CheckboxGridQuestion,
+  AcknowledgementQuestion,
 ]);
 export type Question = z.infer<typeof Question>;
 
@@ -365,9 +380,24 @@ export const ImageBlock = z.object({
 });
 export type ImageBlock = z.infer<typeof ImageBlock>;
 
+/** An `https://` URL — the only scheme a video link card may carry. */
+const HTTPS_URL_RE = /^https:\/\/[^\s/$.?#][^\s]*$/i;
+
+// Video link card (ONBOARD-016). A LINK, never an embed: nothing is fetched,
+// framed or hosted — the respondent opens it in a new tab if they choose to.
+// Zero on-site connectivity and "we never host video" are both served by that.
+export const VideoLinkBlock = z.object({
+  id: z.string().min(1),
+  kind: z.literal("video_link"),
+  url: z.string().max(2000).regex(HTTPS_URL_RE, "Use a link starting with https://"),
+  title: z.string().min(1).max(140),
+});
+export type VideoLinkBlock = z.infer<typeof VideoLinkBlock>;
+
 export const ContentBlock = z.discriminatedUnion("kind", [
   InfoBlock,
   ImageBlock,
+  VideoLinkBlock,
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 
@@ -393,6 +423,7 @@ const ANSWERABLE_KINDS: ReadonlySet<string> = new Set([
   "file_link",
   "multi_choice_grid",
   "checkbox_grid",
+  "acknowledgement",
 ]);
 
 /** True when a block takes an answer (i.e. is a Question, not an info/image
@@ -438,9 +469,17 @@ export const QuestionnairePage = z.discriminatedUnion("kind", [
 ]);
 export type QuestionnairePage = z.infer<typeof QuestionnairePage>;
 
+/** A named starting point a questionnaire was built from. `onboarding` is the
+ * camp onboarding preset (epic #54) — a camp questionnaire like any other,
+ * marked so the list, the builder, the runner and the completion view can
+ * present it as onboarding. Optional: every earlier definition has none. */
+export const QuestionnairePreset = z.enum(["onboarding"]);
+export type QuestionnairePreset = z.infer<typeof QuestionnairePreset>;
+
 export const Questionnaire = z.object({
   version: z.string().min(1),
   pages: z.array(QuestionnairePage).min(1),
+  preset: QuestionnairePreset.optional(),
 });
 export type Questionnaire = z.infer<typeof Questionnaire>;
 
@@ -583,6 +622,9 @@ export function validateOne(
   | { ok: false; error: string } {
   const isMissing = raw === undefined || raw === null || raw === "";
   if (isMissing) {
+    if (q.kind === "acknowledgement") {
+      return { ok: false, error: "Tick this to finish" };
+    }
     if ("required" in q && q.required) {
       return { ok: false, error: "This question is required" };
     }
@@ -590,6 +632,12 @@ export function validateOne(
   }
 
   switch (q.kind) {
+    case "acknowledgement": {
+      // Unticked is not an answer — an acknowledgement is always required and
+      // only `true` satisfies it (`false` is how an unticked box arrives).
+      if (raw !== true) return { ok: false, error: "Tick this to finish" };
+      return { ok: true, value: true };
+    }
     case "boolean": {
       if (typeof raw !== "boolean")
         return { ok: false, error: "Expected yes or no" };

@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { canViewActivationResults } from "@quagga/core";
+import {
+  canViewActivationResults,
+  isOnboardingDefinition,
+  type OnboardingNamesFilter,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -15,7 +19,12 @@ import { requireCampUser, enforceGate } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
 import { getCampBySlug, getViewerRole } from "@/lib/groups-store";
-import { getActivationResults } from "@/lib/questionnaire-store";
+import {
+  getActivation,
+  getActivationResults,
+} from "@/lib/questionnaire-store";
+import { getOnboardingCompletion } from "@/lib/onboarding-store";
+import { OnboardingCompletion } from "./onboarding-completion";
 import {
   resolveQuestionnaireRoute,
   type QuestionnaireRouteKind,
@@ -33,10 +42,13 @@ export async function ProjectQuestionnaireResults({
   slug,
   activationId,
   routeKind,
+  names = null,
 }: {
   slug: string;
   activationId: string;
   routeKind: QuestionnaireRouteKind;
+  /** Camp onboarding only: which names to load (null = totals only). */
+  names?: OnboardingNamesFilter | null;
 }) {
   const authUser = await getAuthenticatedUser();
   if (!authUser) redirect("/auth/sign-in");
@@ -61,11 +73,14 @@ export async function ProjectQuestionnaireResults({
     `/${encodeURIComponent(activationId)}`,
   );
 
-  const results = await getActivationResults(activationId, edition.id);
+  // The activation alone first — no respondent is read until we know what
+  // this page will show. (An onboarding's completion view loads names only on
+  // demand, so loading every respondent up front would make that untrue.)
+  const activation = await getActivation(activationId);
   // The activation must belong to THIS camp, and the viewer must be its
   // lead/admin — the results-visibility boundary (never cross-project, never
   // org). Enforced through the core predicate.
-  if (!results || results.activation.groupId !== camp.id) notFound();
+  if (!activation || activation.groupId !== camp.id) notFound();
 
   const role = await getViewerRole(user.id, camp.id);
   const memberships = role ? [{ groupId: camp.id, role }] : [];
@@ -73,14 +88,40 @@ export async function ProjectQuestionnaireResults({
     !canViewActivationResults(
       memberships,
       {
-        authoredScope: results.activation.authoredScope,
-        groupId: results.activation.groupId,
+        authoredScope: activation.authoredScope,
+        groupId: activation.groupId,
       },
       "",
     )
   ) {
     notFound();
   }
+
+  // Camp onboarding (epic #54): an unsent draft opens in its builder; a sent
+  // one gets the totals-first completion view instead of the per-person
+  // response table (ONBOARD-020 — names only on demand).
+  if (isOnboardingDefinition(activation.definition)) {
+    if (activation.status === "draft") {
+      redirect(`${base}/onboarding/${encodeURIComponent(activationId)}`);
+    }
+    const view = await getOnboardingCompletion({
+      activationId,
+      groupId: camp.id,
+      names,
+    });
+    if (!view) notFound();
+    return (
+      <OnboardingCompletion
+        view={view}
+        slug={slug}
+        base={`${base}/${encodeURIComponent(activationId)}`}
+        names={names}
+      />
+    );
+  }
+
+  const results = await getActivationResults(activationId, edition.id);
+  if (!results) notFound();
 
   const completed = results.respondents.filter(
     (r) => r.status === "completed",

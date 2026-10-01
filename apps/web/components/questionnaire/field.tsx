@@ -11,6 +11,7 @@ import {
   type QuestionOption,
   type QuestionnaireResponseValue,
 } from "@quagga/types";
+import { AckRow } from "@quagga/ui/components/checkbox";
 import { FileUpload } from "@quagga/ui/components/file-upload";
 import { Input } from "@quagga/ui/components/input";
 import { Textarea } from "@quagga/ui/components/textarea";
@@ -93,6 +94,40 @@ export function QuestionField({
   const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
   const required = "required" in question && question.required === true;
   const labelable = isLabelableControl(question);
+
+  // An acknowledgement IS its own label: one tick box whose text is the
+  // statement being acknowledged (camp onboarding, epic #54). The whole row is
+  // the <label>, so the accessible name is the statement itself.
+  if (question.kind === "acknowledgement") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <AckRow
+          id={question.id}
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error) || undefined}
+          aria-required
+        >
+          {question.prompt}
+        </AckRow>
+        {question.helper && (
+          <p id={helpId ?? undefined} className="text-xs text-muted-foreground">
+            {question.helper}
+          </p>
+        )}
+        {error && (
+          <p
+            id={errorId ?? undefined}
+            role="alert"
+            className="text-xs text-destructive"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   const prompt = (
     <>

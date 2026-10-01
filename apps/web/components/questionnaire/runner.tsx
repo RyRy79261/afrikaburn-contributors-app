@@ -45,6 +45,8 @@ const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again in a moment.";
 const DRAFT_PREFIX = "quagga:questionnaire-draft:";
 const AUTOSAVE_DEBOUNCE_MS = 700;
+/** How long the respondent must settle before progress is reported. */
+const PROGRESS_DEBOUNCE_MS = 800;
 
 export type RunnerAction = (
   responses: QuestionnaireResponses,
@@ -86,6 +88,10 @@ interface RunnerProps {
   /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
    *  uploader instead of only the URL-paste field. */
   blobConfigured?: boolean;
+  /** Camp onboarding (epic #54): told, debounced, the acknowledgement boxes
+   * ticked so far (once on opening, then on every change), so the lead can
+   * see partial progress. Fire-and-forget — the runner never waits on it. */
+  onProgress?: (report: { acknowledged: string[] }) => void;
 }
 
 type Step =
@@ -107,6 +113,7 @@ export function QuestionnaireRunner({
   shuffleSeed = "",
   draftKey,
   blobConfigured = false,
+  onProgress,
 }: RunnerProps) {
   const router = useRouter();
   const firstPageId = questionnaire.pages[0]?.id ?? null;
@@ -202,6 +209,33 @@ export function QuestionnaireRunner({
       : step?.kind === "burns"
         ? progress.pageCount + 1
         : progress.pageCount + tailSteps;
+
+  // Partial progress for the lead (onboarding only): reported once on
+  // opening, then after the respondent settles whenever the ticks change.
+  const ackIds = React.useMemo(
+    () =>
+      questionnaire.pages.flatMap((p) =>
+        pageQuestions(p)
+          .filter((q) => q.kind === "acknowledgement")
+          .map((q) => q.id),
+      ),
+    [questionnaire],
+  );
+  const tickedIds = ackIds.filter((id) => responses[id] === true);
+  const progressKey = JSON.stringify(tickedIds);
+  const lastReported = React.useRef<string | null>(null);
+  const onProgressRef = React.useRef(onProgress);
+  onProgressRef.current = onProgress;
+  React.useEffect(() => {
+    if (!onProgressRef.current || step?.kind !== "page") return;
+    if (lastReported.current === progressKey) return;
+    const acknowledged = JSON.parse(progressKey) as string[];
+    const timer = window.setTimeout(() => {
+      lastReported.current = progressKey;
+      onProgressRef.current?.({ acknowledged });
+    }, PROGRESS_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [progressKey, step?.kind]);
 
   const percent =
     answeredProgress && progress.total > 0
@@ -329,6 +363,15 @@ export function QuestionnaireRunner({
   const page =
     step.kind === "page" ? pageById(questionnaire, step.pageId) : null;
 
+  // Acknowledgement tick boxes (camp onboarding, epic #54): the step can't be
+  // left until every box on it is ticked, and the button says so instead of
+  // sitting there disabled without a reason.
+  const acks = page
+    ? pageQuestions(page).filter((q) => q.kind === "acknowledgement")
+    : [];
+  const ticked = acks.filter((q) => responses[q.id] === true).length;
+  const acksOutstanding = acks.length > 0 && ticked < acks.length;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -445,6 +488,12 @@ export function QuestionnaireRunner({
               </p>
             )}
           </div>
+          {acks.length > 0 && (
+            <p className="text-sm text-muted-foreground" role="status">
+              Tick each one to {isLast ? "finish" : "continue"} · {ticked} of{" "}
+              {acks.length} ticked
+            </p>
+          )}
           <div className="flex flex-col gap-5">
             {presentationBlocks(page, shuffleSeed).map((block) =>
               isAnswerableBlock(block) ? (
@@ -471,43 +520,60 @@ export function QuestionnaireRunner({
         </p>
       )}
 
-      <div
-        className={`flex items-center gap-3 border-t border-border pt-4 ${
-          soloSubmit ? "" : "justify-between"
-        }`}
-      >
-        {!soloSubmit && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setTrail((prev) => prev.slice(0, -1))}
-            disabled={trail.length <= 1 || isPending}
-          >
-            Back
-          </Button>
-        )}
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
         <div
           className={cn(
             "flex items-center gap-3",
-            soloSubmit && "w-full flex-col-reverse sm:flex-row",
+            soloSubmit ? "" : "justify-between",
           )}
         >
-          {draftKey && <AutosaveIndicator state={saveState} />}
+          {!soloSubmit && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setTrail((prev) => prev.slice(0, -1))}
+              disabled={trail.length <= 1 || isPending}
+            >
+              Back
+            </Button>
+          )}
           {isLast ? (
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={isPending}
+              disabled={isPending || acksOutstanding}
               className={soloSubmit ? "w-full" : ""}
             >
               {isPending ? "Saving…" : submitLabel}
             </Button>
           ) : (
-            <Button type="button" onClick={handleNext} disabled={isPending}>
+            <Button
+              type="button"
+              onClick={handleNext}
+              disabled={isPending || acksOutstanding}
+            >
               {isPending ? "Saving…" : "Next"}
             </Button>
           )}
         </div>
+        {/* The notes sit on their own line under the buttons, so on a phone
+            they never squeeze the primary button off the screen. */}
+        {((draftKey && saveState !== "idle") || acksOutstanding) && (
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-x-3 gap-y-1",
+              soloSubmit ? "justify-center" : "justify-end",
+            )}
+          >
+            {draftKey && <AutosaveIndicator state={saveState} />}
+            {acksOutstanding && (
+              <span className="text-xs text-muted-foreground">
+                Tick {acks.length === 1 ? "the box" : `all ${acks.length}`} to{" "}
+                {isLast ? "finish" : "continue"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

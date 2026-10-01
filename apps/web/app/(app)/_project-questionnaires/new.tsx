@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import {
+  canAuthorOnboarding,
   canAuthorProjectQuestionnaire,
+  defaultOnboardingAudience,
   hasProjectPermission,
+  ONBOARDING_GROUP_KINDS,
 } from "@quagga/core";
 import type { ProjectAudience } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
@@ -21,6 +24,8 @@ import {
 import { PreviewNotice } from "@/components/preview-notice";
 import { QuestionnaireBuilder } from "@/components/questionnaire/builder";
 import { createQuestionnaireAction } from "@/app/(app)/camps/[slug]/questionnaires/actions";
+import { startOnboardingAction } from "@/app/(app)/camps/[slug]/questionnaires/onboarding-actions";
+import { QuestionnaireStartChooser } from "@/components/questionnaire/start-chooser";
 import {
   resolveQuestionnaireRoute,
   type QuestionnaireRouteKind,
@@ -106,6 +111,27 @@ export async function NewProjectQuestionnaire({
       : null;
   const mayBlock = blockingProbe ? mayAuthor(blockingProbe, true) : false;
 
+  const builder = (
+    <QuestionnaireBuilder
+      slug={slug}
+      roles={roles.map((r) => ({ id: r.id, name: r.name }))}
+      members={members}
+      scope={{ canTargetEveryone, targetableRoleIds, mayBlock }}
+      action={createQuestionnaireAction}
+      returnHref={base}
+    />
+  );
+  // The onboarding preset (epic #54) is a camp's: offered on theme camps only,
+  // and gated by the same predicate its actions enforce.
+  const offersOnboarding = ONBOARDING_GROUP_KINDS.includes(camp.kind);
+  const canStartOnboarding = canAuthorOnboarding(
+    viewerPerms,
+    camp.kind,
+    defaultOnboardingAudience(camp.id),
+    false,
+    baselineRoleId,
+  );
+
   return (
     <>
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -119,15 +145,29 @@ export async function NewProjectQuestionnaire({
           <h1 className="text-2xl font-semibold tracking-tight">
             New questionnaire
           </h1>
+          {offersOnboarding && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {edition.name}. Pick a starting point — you can change every
+              word afterwards.
+            </p>
+          )}
         </div>
-        <QuestionnaireBuilder
-          slug={slug}
-          roles={roles.map((r) => ({ id: r.id, name: r.name }))}
-          members={members}
-          scope={{ canTargetEveryone, targetableRoleIds, mayBlock }}
-          action={createQuestionnaireAction}
-          returnHref={base}
-        />
+        {offersOnboarding ? (
+          <QuestionnaireStartChooser
+            slug={slug}
+            canStartOnboarding={canStartOnboarding}
+            refusal={
+              canStartOnboarding
+                ? null
+                : "Your questionnaire permission doesn't cover the whole camp — a lead or co-lead can start one."
+            }
+            startOnboarding={startOnboardingAction}
+          >
+            {builder}
+          </QuestionnaireStartChooser>
+        ) : (
+          builder
+        )}
       </div>
     </>
   );
