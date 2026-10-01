@@ -4,7 +4,6 @@ import {
   Boxes,
   Droplets,
   MapPin,
-  CalendarClock,
   LayoutGrid,
   FileCheck2,
   Megaphone,
@@ -45,6 +44,7 @@ import {
   pendingOfficerConsents,
 } from "@/lib/roles-store";
 import {
+  canManageShifts,
   canViewCampPlacement,
   canViewCampRoster,
   emptyMemberLogistics,
@@ -53,6 +53,8 @@ import {
   projectQuestionnairesPath,
 } from "@quagga/core";
 import { getOwnLogistics } from "@/lib/roster-store";
+import { getShiftTileSummary } from "@/lib/shifts-store";
+import { ShiftsTile } from "@/components/shifts/shifts-tile";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -140,8 +142,16 @@ export default async function CampPage({
 
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
   const isMember = camp.viewerRole !== null;
+  // One answer for the Shifts tile's summary AND its label, from the same
+  // source: a separate permissions read can come back null for a lead.
+  const viewerManagesShifts =
+    isMember &&
+    canManageShifts({
+      structuralRole: camp.viewerRole!,
+      rolePermissions: [],
+    });
 
-  // Ten independent reads, issued together rather than one after another.
+  // Eleven independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
@@ -162,6 +172,7 @@ export default async function CampPage({
     pinnedBulletins,
     placement,
     myLogistics,
+    shiftSummary,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -195,6 +206,12 @@ export default async function CampPage({
           editionId: edition.id,
         })
       : undefined,
+    // Camp shifts (epic #57): counts for the tile, members only.
+    isMember
+      ? getShiftTileSummary(camp.id, edition.id, {
+          canManage: viewerManagesShifts,
+        })
+      : null,
   ]);
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
@@ -665,12 +682,14 @@ export default async function CampPage({
               tag="Separate app"
               icon={<Boxes className="h-4 w-4" />}
             />
-            <DisabledHintTile
-              title="Shifts"
-              hint="Topic under exploration with camp leads."
-              tag="Exploring"
-              icon={<CalendarClock className="h-4 w-4" />}
-            />
+            {/* Shifts (epic #57) — the way in, for the camp's members. */}
+            {shiftSummary && (
+              <ShiftsTile
+                slug={camp.slug}
+                canManage={viewerManagesShifts}
+                summary={shiftSummary}
+              />
+            )}
             {/*
               The "Budget" hint tile was REMOVED (Ryan, 26 Jul 2026): it sat in
               tension with the product law that AfrikaBurn never runs camp

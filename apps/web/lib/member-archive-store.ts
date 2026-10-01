@@ -27,7 +27,9 @@ import { getMemberPermissions } from "./roles-store";
 // (@quagga/db — pinned for the whole monorepo by
 // lib/__tests__/membership-archive-guard.test.ts). Nothing hung off the row is
 // deleted at archive: project-role assignments, logistics, questionnaire
-// responses and audit rows all stay as the camp's record of them.
+// responses and audit rows all stay as the camp's record of them. The one
+// exception is camp SHIFT spots (epic #57): those are future commitments the
+// camp must refill, so the archive frees them.
 //
 // What does NOT come back on restore (decided 2026-09-28, Ryan): their custom
 // project-role assignments. A restored member returns as a plain member (or
@@ -118,7 +120,10 @@ const STALE =
  *      addressed to, so the creator is the only link to them there is;
  *   4. their PENDING org questionnaires that reached them through their role
  *      in THIS camp are waived too ({@link waiveOrgActionsReachedThroughCamp});
- *   5. the audit row.
+ *   5. their camp SHIFT spots are freed, and hand-on requests made to them
+ *      are cancelled (epic #57) — a spot is a commitment the camp has to
+ *      refill, not history;
+ *   6. the audit row.
  *
  * Nothing else is touched: roles held, logistics, answers already given and
  * the audit trail are the camp's history.
@@ -185,6 +190,18 @@ export async function archiveMember(input: {
       membershipId: target.id,
     });
 
+    // 5. CAMP SHIFTS (epic #57). A shift spot is a future commitment, not
+    //    history: a former member's spots go back to the camp, and any
+    //    hand-on request made TO them is cancelled (the holder keeps it).
+    const freedShifts = await tx
+      .delete(schema.shiftAssignments)
+      .where(eq(schema.shiftAssignments.membershipId, target.id))
+      .returning({ id: schema.shiftAssignments.id });
+    await tx
+      .update(schema.shiftAssignments)
+      .set({ handoverToMembershipId: null })
+      .where(eq(schema.shiftAssignments.handoverToMembershipId, target.id));
+
     await tx.insert(schema.auditEvents).values({
       actorId: input.actorUserId,
       action: MEMBER_ARCHIVE_AUDIT_ACTION,
@@ -196,6 +213,7 @@ export async function archiveMember(input: {
         waivedQuestionnaires: waived.length,
         waivedOrgQuestionnaires: waivedOrg,
         revokedInvites: revoked.length,
+        freedShiftSpots: freedShifts.length,
       },
     });
     return { ok: true };
@@ -401,6 +419,43 @@ export async function dropRoleAssignmentsOnRestore(
 }
 
 /**
+ * Clear any camp SHIFT state still keyed to a membership that is being
+ * restored (epic #57, review M1) — {@link restoreMember} and an invite redeemed
+ * by a former member, after the row is active again, in the same transaction.
+ *
+ * The archive already frees their spots and cancels requests made to them, so
+ * normally this deletes nothing. It exists because every shift read ignores a
+ * former member's rows: anything written for them around the archive (an
+ * assignment that raced it, before the store locked the target) would sit
+ * invisible while they were former and then come BACK on restore — a spot on
+ * a shift that may have been refilled since (over capacity), or a request the
+ * holder long forgot. A restored member starts with no shifts, like a new one.
+ */
+export async function clearShiftsOnRestore(
+  tx: Tx,
+  where: { userId: string; groupId: string },
+): Promise<void> {
+  const restored = tx
+    .select({ id: schema.memberships.id })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.userId, where.userId),
+        eq(schema.memberships.groupId, where.groupId),
+        // Restored earlier in this same transaction, so active now.
+        activeMembership(),
+      ),
+    );
+  await tx
+    .delete(schema.shiftAssignments)
+    .where(inArray(schema.shiftAssignments.membershipId, restored));
+  await tx
+    .update(schema.shiftAssignments)
+    .set({ handoverToMembershipId: null })
+    .where(inArray(schema.shiftAssignments.handoverToMembershipId, restored));
+}
+
+/**
  * Restore a former member to the camp — the mirror of {@link archiveMember},
  * with the same authority. The SAME row comes back (same ref code, same
  * history) but as a plain `member` holding no custom project roles: what they
@@ -434,6 +489,10 @@ export async function restoreMember(input: {
     if (!restored[0]) return { ok: false, error: STALE };
 
     const dropped = await dropRoleAssignmentsOnRestore(tx, {
+      userId: target.userId,
+      groupId: input.groupId,
+    });
+    await clearShiftsOnRestore(tx, {
       userId: target.userId,
       groupId: input.groupId,
     });

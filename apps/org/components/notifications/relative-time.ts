@@ -38,4 +38,7 @@ export const NOTIFICATION_SOURCE_LABELS: Record<NotificationKind, string> = {
   supplier: "Suppliers",
   security: "Security",
   bulletin: "Bulletins",
+  // Never written to an org inbox (camp shifts are a participant-app
+  // feature); present because the map is exhaustive over the kind.
+  shift: "Shifts",
 };
