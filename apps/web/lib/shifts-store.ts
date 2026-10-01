@@ -1222,6 +1222,11 @@ export async function respondToHandOn(input: {
     const me = memberFactsFor(locked, actor.membershipId);
     const decision = decideAcceptHandover(locked.facts, me?.facts ?? null);
     if (!decision.ok) {
+      // In the first person, as sign-up and take do: a lead may have put the
+      // accepter on this shift after the request was made.
+      if (decision.reason === "already_on") {
+        return { ok: false, error: "You're already on that shift." };
+      }
       if (decision.reason === "needs_role") {
         return {
           ok: false,

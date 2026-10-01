@@ -1748,3 +1748,20 @@ describe("shift teams — lead only, one name per camp", () => {
     );
   });
 });
+
+describe("respondToHandOn — accepting a shift you are already on", () => {
+  it("a campmate a lead put on the shift after the request hears it in the first person", async () => {
+    // Jabu asked Lerato to take his spot; a lead then put Lerato on the same
+    // shift. Accepting would give her two spots, so it is refused — and the
+    // message is to HER, not about a third person.
+    queueLocked({
+      actor: LERATO,
+      assignments: [assignment(JABU, { handoverTo: M[LERATO] }), assignment(LERATO)],
+    });
+    dbMock.queue([CAMP_ROW]);
+    expect(
+      await respondToHandOn({ userId: LERATO, accept: true, ...base }),
+    ).toEqual({ ok: false, error: "You're already on that shift." });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+});
