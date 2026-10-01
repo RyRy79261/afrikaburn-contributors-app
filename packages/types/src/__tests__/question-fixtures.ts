@@ -161,6 +161,14 @@ export const CB_GRID: CheckboxGridQuestion = {
   required: false,
 };
 
+/** A camp-onboarding tick box (epic #54): only a tick (`true`) answers it. */
+export const ACKNOWLEDGEMENT: Question = {
+  id: "ack_rules",
+  kind: "acknowledgement",
+  prompt: "I've read the camp rules and I'll follow them.",
+  required: true,
+};
+
 /** Every question kind with an answer it accepts. */
 export const KIND_SAMPLES: readonly { question: Question; answer: unknown }[] =
   [
@@ -179,4 +187,5 @@ export const KIND_SAMPLES: readonly { question: Question; answer: unknown }[] =
     { question: FILE_LINK, answer: "https://example.com/layout.pdf" },
     { question: MC_GRID, answer: { mon: ["am"], tue: ["pm"] } },
     { question: CB_GRID, answer: { kitchen: ["am", "pm"] } },
+    { question: ACKNOWLEDGEMENT, answer: true },
   ];

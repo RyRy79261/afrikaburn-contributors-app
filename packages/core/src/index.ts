@@ -202,6 +202,9 @@ export * from "./officers";
 export * from "./audience";
 export * from "./questionnaire-activation";
 export * from "./questionnaire-authz";
+// Camp onboarding (epic #54): the preset, new-vs-returning to the camp, the
+// default audience, completion totals, carry-forward (./camp-onboarding)
+export * from "./camp-onboarding";
 export * from "./invite";
 export * from "./invite-view";
 export * from "./god-emails";

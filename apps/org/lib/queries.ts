@@ -1898,8 +1898,11 @@ export async function getStatusBoard(
       ),
     );
 
-  // Questionnaire completion — open activations for the edition + their
-  // required-action statuses.
+  // Questionnaire completion — open ORG activations for the edition + their
+  // required-action statuses. Org-authored only: a camp's questionnaire (and
+  // its onboarding, epic #54) is the camp's business — its title and how many
+  // of its members finished are visible to that camp's leads, never the
+  // console (questionnaire-spec §Guardrails: results never cross scope).
   const activationRows = await db
     .select({
       id: schema.questionnaireActivations.id,
@@ -1910,6 +1913,7 @@ export async function getStatusBoard(
       and(
         eq(schema.questionnaireActivations.editionId, edition.id),
         eq(schema.questionnaireActivations.status, "open"),
+        eq(schema.questionnaireActivations.authoredScope, "org"),
       ),
     );
   const activationIds = activationRows.map((a) => a.id);

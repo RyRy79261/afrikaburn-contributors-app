@@ -329,6 +329,15 @@ export function QuestionnaireRunner({
   const page =
     step.kind === "page" ? pageById(questionnaire, step.pageId) : null;
 
+  // Acknowledgement tick boxes (camp onboarding, epic #54): the step can't be
+  // left until every box on it is ticked, and the button says so instead of
+  // sitting there disabled without a reason.
+  const acks = page
+    ? pageQuestions(page).filter((q) => q.kind === "acknowledgement")
+    : [];
+  const ticked = acks.filter((q) => responses[q.id] === true).length;
+  const acksOutstanding = acks.length > 0 && ticked < acks.length;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -445,6 +454,12 @@ export function QuestionnaireRunner({
               </p>
             )}
           </div>
+          {acks.length > 0 && (
+            <p className="text-sm text-muted-foreground" role="status">
+              Tick each one to {isLast ? "finish" : "continue"} · {ticked} of{" "}
+              {acks.length} ticked
+            </p>
+          )}
           <div className="flex flex-col gap-5">
             {presentationBlocks(page, shuffleSeed).map((block) =>
               isAnswerableBlock(block) ? (
@@ -493,17 +508,27 @@ export function QuestionnaireRunner({
           )}
         >
           {draftKey && <AutosaveIndicator state={saveState} />}
+          {acksOutstanding && (
+            <span className="text-xs text-muted-foreground">
+              Tick {acks.length === 1 ? "the box" : `all ${acks.length}`} to{" "}
+              {isLast ? "finish" : "continue"}
+            </span>
+          )}
           {isLast ? (
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={isPending}
+              disabled={isPending || acksOutstanding}
               className={soloSubmit ? "w-full" : ""}
             >
               {isPending ? "Saving…" : submitLabel}
             </Button>
           ) : (
-            <Button type="button" onClick={handleNext} disabled={isPending}>
+            <Button
+              type="button"
+              onClick={handleNext}
+              disabled={isPending || acksOutstanding}
+            >
               {isPending ? "Saving…" : "Next"}
             </Button>
           )}

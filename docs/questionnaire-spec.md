@@ -318,3 +318,72 @@ themes (brand is fixed) · prefilled-link generation · add-ons/scripts · embed
 Implementation queues behind Roles v2 (same code surfaces). Design pass required:
 builder v2 (block palette, section/page rails, branching UI, validation editors),
 runner multi-page states, and the response-summary charts view.
+
+## Camp onboarding — a preset, not a feature (epic #54)
+
+_Ryan, 27–28 Sep 2026. Design: canvas frames A1–A5 (PR #83)._
+
+An onboarding is an ordinary **camp questionnaire** built from the **onboarding
+preset**: its definition carries `preset: "onboarding"`. It rides the same
+definition → activation → `required_actions` → responses spine, so the gate,
+the pending list, the runner and Close/recall need nothing new. No schema
+change: the marker, the new block kinds and the audience filters all live in
+jsonb (`definition`, `audience`).
+
+- **Theme camps only.** Authored by a lead/co-lead or a `manage_questionnaires`
+  holder within their scope (`canAuthorOnboarding`, @quagga/core). Never gates
+  AfrikaBurn registration: nothing in the registration flow reads it.
+- **The preset** (A1): Welcome · Our culture · Camp rules · What the camp
+  provides · Build & strike (info blocks) · Before you arrive
+  (acknowledgements). One section = one page = **one step** in the runner.
+  Payment terms (ONBOARD-013) are out under the money law.
+- **Block kinds.** An onboarding may hold only `info_block`, `video_link` and
+  `acknowledgement` (`validateOnboardingDefinition`); no branching, no intro
+  pages, ≤12 sections, ≤20 acknowledgements. A camp that needs answers sends
+  an ordinary questionnaire.
+  - `acknowledgement` — a tick box whose only valid answer is `true`
+    (a `boolean` accepts `false`, which acknowledges nothing). Always required.
+    The runner will not leave a step with an unticked box, and says why.
+  - `video_link` — ONBOARD-016: an `https://` link rendered as a card that
+    opens in a new tab. Never an iframe, never a fetched thumbnail, never
+    hosted.
+- **Not blocking by default.** The lead can switch blocking on; it is then an
+  ordinary blocking questionnaire (hard gate on the whole participant app) and
+  is labelled "Required · blocks until done" everywhere, per the law above.
+- **Drafts.** Starting from the preset, autosave and carry-forward all write an
+  activation in status `draft` with no `required_actions` — it reaches nobody.
+  **Send** is a compare-and-set `draft → open` in the transaction that writes
+  the actions. A sent onboarding is immutable (its snapshot is what members
+  were shown); recall it with Close. An unsent draft can be discarded.
+- **Audience** (A2). `ProjectAudience` gains two optional NARROWING filters —
+  absent means "no filter", so every earlier audience resolves as before, and
+  because they only subtract, the send-scope check on `mode`/`roleIds` stays
+  sufficient:
+  - `tenure: ("new" | "returning")[]` — **new to THIS camp**, not to
+    AfrikaBurn. Returning = the membership began on or before the last day of
+    the most recent earlier edition, or holds logistics with the camp for an
+    earlier edition (`classifyCampTenure`). Only camp-held records are read,
+    never the burner's own bio. A tenure filter fails closed on unknown tenure.
+  - `structuralRoles: ("lead" | "admin" | "member")[]` — **leads and co-leads
+    are off by default** and can be switched on.
+  - Custom roles narrow further ("only people holding …"). The builder shows
+    "Reaches N of M members right now" through the same resolver the send runs;
+    member counts include leads.
+- **Late joiners.** Someone who joins the camp while an onboarding is open, and
+  whom its audience reaches, gets it on joining — a former member let back in
+  has the row archiving waived restored (best-effort, after the join
+  commits).
+- **Completion** (A3, ONBOARD-020): **totals first** — complete, new to the camp,
+  returning, still to finish — counted over the camp's CURRENT members. Names
+  are **not loaded** until "Show names" (`?names=all|complete|incomplete`).
+  Lead/co-lead only (`canViewActivationResults`). No per-person progress while
+  unfinished: a member's in-progress ticks stay on their device (the runner's
+  draft is local by design), so the view says Complete / Not complete only.
+- **Carry forward** (A5, ONBOARD-022): when this edition has no onboarding and
+  an earlier edition's was sent, the list offers it. Carrying makes a new DRAFT
+  for this edition with the sections, video links, acknowledgements, audience
+  and blocking choice; the due date is cleared; nobody's answers or ticks come
+  across (answers belong to their edition). Deleted custom roles drop out of
+  the audience; if that empties a role narrowing, it reaches nobody (never
+  silently everyone) until the lead picks a role or clears it. One onboarding
+  per edition: carrying is refused once this edition has one.

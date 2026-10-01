@@ -5,6 +5,7 @@ import {
   activationRequiredActionKey,
   buildActivationRequiredActions,
   isParticipantFacingActivation,
+  onboardingReleasedNotification,
   parseActivationActionKey,
   publicMemberName,
   questionnaireReleasedNotification,
@@ -24,11 +25,12 @@ import {
   type SaveResult,
 } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
-import { db, schema, withTransaction } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 import { completeRequiredAction } from "./required-actions";
 import { sendEmail } from "./email";
 import { getActiveEdition } from "./edition";
 import { insertNotifications } from "./notifications";
+import { loadCampTenure } from "./camp-tenure";
 
 // Persistence + activation service for the questionnaire builder
 // (questionnaire-spec §"Engine mechanics"). Project questionnaires are stored
@@ -128,48 +130,23 @@ export async function createAndActivateProjectQuestionnaire(
       .returning({ id: schema.questionnaireActivations.id });
     const newActivationId = inserted[0]!.id;
 
-    const rows = buildActivationRequiredActions(
+    await insertActivationActions(
+      tx,
       {
         id: newActivationId,
         title: input.title,
         blocking: input.blocking,
         dueAt: input.dueAt,
+        editionId: input.editionId,
       },
       userIds,
     );
-    if (rows.length > 0) {
-      await tx
-        .insert(schema.requiredActions)
-        .values(
-          rows.map((r) => ({
-            userId: r.userId,
-            // Per-edition (migration 0024): the uniqueness key is
-            // (user, edition, action_key), so the same action key can be raised
-            // again in a later burn instead of being permanently spent.
-            editionId: input.editionId,
-            type: r.type,
-            actionKey: r.actionKey,
-            activationId: r.activationId,
-            title: r.title,
-            blocking: r.blocking,
-            status: r.status,
-            dueAt: r.dueAt,
-          })),
-        )
-        .onConflictDoNothing({
-          target: [
-            schema.requiredActions.userId,
-            schema.requiredActions.editionId,
-            schema.requiredActions.actionKey,
-          ],
-        });
-    }
 
     return newActivationId;
   });
 
   // Best-effort delivery, AFTER the rows are durably committed.
-  const emailDelivered = await notifyTargets(userIds, {
+  const emailDelivered = await notifyQuestionnaireTargets(userIds, {
     activationId,
     title: input.title,
     blocking: input.blocking,
@@ -180,11 +157,69 @@ export async function createAndActivateProjectQuestionnaire(
 }
 
 /**
+ * One `required_actions` row per target for an activation, inside the caller's
+ * transaction. Returns the user ids that got a NEW row — `ON CONFLICT DO
+ * NOTHING` makes a repeat delivery (a late joiner reached twice, a retried
+ * send) a no-op, and the caller notifies only who was actually added.
+ */
+export async function insertActivationActions(
+  tx: Tx,
+  activation: {
+    id: string;
+    title: string;
+    blocking: boolean;
+    dueAt: Date | null;
+    editionId: string;
+  },
+  userIds: readonly string[],
+): Promise<string[]> {
+  const rows = buildActivationRequiredActions(
+    {
+      id: activation.id,
+      title: activation.title,
+      blocking: activation.blocking,
+      dueAt: activation.dueAt,
+    },
+    userIds,
+  );
+  if (rows.length === 0) return [];
+  const inserted = await tx
+    .insert(schema.requiredActions)
+    .values(
+      rows.map((r) => ({
+        userId: r.userId,
+        // Per-edition (migration 0024): the uniqueness key is
+        // (user, edition, action_key), so the same action key can be raised
+        // again in a later burn instead of being permanently spent.
+        editionId: activation.editionId,
+        type: r.type,
+        actionKey: r.actionKey,
+        activationId: r.activationId,
+        title: r.title,
+        blocking: r.blocking,
+        status: r.status,
+        dueAt: r.dueAt,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [
+        schema.requiredActions.userId,
+        schema.requiredActions.editionId,
+        schema.requiredActions.actionKey,
+      ],
+    })
+    .returning({ userId: schema.requiredActions.userId });
+  return inserted.map((r) => r.userId);
+}
+
+/**
  * Resolve a project audience to user ids using the pure core resolver. Only the
  * group's own memberships + custom-role assignments are loaded — a project
- * audience never reads org/registration/bio rows.
+ * audience never reads org/registration/bio rows. When the audience narrows by
+ * tenure (camp onboarding), each membership is tagged new/returning to the
+ * camp first; without that tag a tenure filter matches nobody (fails closed).
  */
-async function resolveProjectTargets(
+export async function resolveProjectTargets(
   groupId: string,
   editionId: string,
   audience: ProjectAudience,
@@ -198,6 +233,9 @@ async function resolveProjectTargets(
     })
     .from(schema.memberships)
     .where(and(eq(schema.memberships.groupId, groupId), activeMembership()));
+  const tenure = audience.tenure
+    ? await loadCampTenure(groupId, editionId)
+    : null;
 
   const roleAssignments = await db()
     .select({
@@ -226,7 +264,9 @@ async function resolveProjectTargets(
   const ctx: AudienceContext = {
     editionId,
     orgGroupId: "",
-    memberships,
+    memberships: tenure
+      ? memberships.map((m) => ({ ...m, tenure: tenure.get(m.membershipId) }))
+      : memberships,
     groups: [],
     registrations: [],
     bios: [],
@@ -243,13 +283,15 @@ async function resolveProjectTargets(
 
 /** Email each targeted user their pending-questionnaire notice (console
  * fallback when Resend is unset). Returns whether delivery actually happened. */
-async function notifyTargets(
+export async function notifyQuestionnaireTargets(
   userIds: readonly string[],
   activation: {
     activationId: string;
     title: string;
     blocking: boolean;
     groupId: string;
+    /** A camp onboarding (epic #54) — says "onboarding", never "registration". */
+    onboarding?: boolean;
   },
 ): Promise<boolean> {
   if (userIds.length === 0) return false;
@@ -265,12 +307,19 @@ async function notifyTargets(
     .where(eq(schema.groups.id, activation.groupId))
     .limit(1);
 
-  const payload = questionnaireReleasedNotification({
-    title: activation.title,
-    blocking: activation.blocking,
-    activationId: activation.activationId,
-    from: group?.name,
-  });
+  const payload = activation.onboarding
+    ? onboardingReleasedNotification({
+        title: activation.title,
+        blocking: activation.blocking,
+        activationId: activation.activationId,
+        campName: group?.name ?? "",
+      })
+    : questionnaireReleasedNotification({
+        title: activation.title,
+        blocking: activation.blocking,
+        activationId: activation.activationId,
+        from: group?.name,
+      });
   try {
     await insertNotifications(
       db(),
@@ -300,11 +349,12 @@ async function notifyTargets(
   const urgency = activation.blocking
     ? "It's required — it blocks the app until you complete it."
     : "It's optional, but the camp would appreciate your answer.";
+  const noun = activation.onboarding ? "onboarding" : "questionnaire";
   const result = await sendEmail({
     to: emails,
     subject: `Please complete: ${activation.title}`,
     text:
-      `A camp questionnaire is waiting for you: "${activation.title}".\n\n` +
+      `A camp ${noun} is waiting for you: "${activation.title}".\n\n` +
       `${urgency}\n\n` +
       `Open it here: /questionnaires/${activation.activationId}\n\n` +
       `Every question is one someone in the desert has to answer — thanks for taking the time.`,
@@ -756,8 +806,11 @@ export async function submitResponse(input: {
   // the page. A waived send was withdrawn; a camp's questionnaire is answered
   // only by a CURRENT member of that camp, so a former member can neither
   // answer a waived send nor revise one they completed before being archived.
+  // An EXPIRED row is a closed (recalled) send: the author's confirm says
+  // "nobody will be able to answer after this", so the action must agree.
   if (
     actionRows[0].status === "waived" ||
+    actionRows[0].status === "expired" ||
     !(await mayAnswerForCamp(activation, input.userId))
   ) {
     return {

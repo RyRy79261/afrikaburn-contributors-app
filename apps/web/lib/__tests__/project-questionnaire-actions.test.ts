@@ -123,3 +123,47 @@ describe("closeQuestionnaireAction on a creative project", () => {
     expect(dbMock.queries).toHaveLength(1);
   });
 });
+
+describe("closeQuestionnaireAction on an unsent draft (camp onboarding)", () => {
+  it("refuses — a draft reached nobody, and 'closed' would say it was sent", async () => {
+    dbMock.queue(
+      [{ id: "grp-1", kind: "theme_camp" }],
+      [
+        {
+          status: "draft",
+          authoredScope: "group",
+          groupId: "grp-1",
+          audience: { kind: "project", groupId: "grp-1", mode: "everyone", roleIds: [] },
+          blocking: false,
+        },
+      ],
+    );
+
+    const result = await closeQuestionnaireAction({
+      slug: "the-camp",
+      activationId: "aaaaaaaa-0000-4000-8000-000000000001",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(dbMock.queriesOfKind("update")).toHaveLength(0);
+  });
+});
+
+describe("createQuestionnaireAction and the onboarding preset (epic #54)", () => {
+  it("refuses a definition marked as an onboarding — only the onboarding actions write that", async () => {
+    dbMock.queue([{ id: "grp-1", kind: "artwork" }]);
+
+    const result = await createQuestionnaireAction({
+      slug: "baobab",
+      title: "Not really onboarding",
+      definition: { ...DEFINITION, preset: "onboarding" },
+      mode: "everyone",
+      roleIds: [],
+      blocking: false,
+      dueAt: null,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(stubs.created).toHaveLength(0);
+  });
+});

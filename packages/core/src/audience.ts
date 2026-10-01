@@ -10,6 +10,7 @@
 
 import type {
   AudienceSpec,
+  CampTenure,
   GroupKind,
   MembershipRole,
   OfficerKey,
@@ -25,6 +26,10 @@ export interface AudienceMembership {
   userId: string;
   groupId: string;
   role: MembershipRole;
+  /** New to / returning to THIS membership's camp (./camp-tenure). Only a
+   * project audience with a `tenure` filter reads it; a membership without
+   * one never matches such a filter (fails closed). */
+  tenure?: CampTenure;
 }
 
 /** A group row, trimmed to what audience resolution needs. */
@@ -190,14 +195,28 @@ function resolveOutboundSelector(
   }
 }
 
-/** Resolve a PROJECT audience (everyone, or by custom role) to user ids. */
+/**
+ * Resolve a PROJECT audience (everyone, or by custom role) to user ids, then
+ * narrow by the optional filters (tenure, structural role). The filters are
+ * applied to the membership set FIRST, so every branch below — the baseline
+ * shortcut included — only ever sees the narrowed set.
+ */
 function resolveProjectAudience(
   ctx: AudienceContext,
-  groupId: string,
-  mode: "everyone" | "roles",
-  roleIds: readonly string[],
+  spec: Extract<AudienceSpec, { kind: "project" }>,
 ): string[] {
-  const inGroup = ctx.memberships.filter((m) => m.groupId === groupId);
+  const { groupId, mode, roleIds } = spec;
+  const tenure = spec.tenure ? new Set<CampTenure>(spec.tenure) : null;
+  const structural = spec.structuralRoles
+    ? new Set<MembershipRole>(spec.structuralRoles)
+    : null;
+  const inGroup = ctx.memberships.filter(
+    (m) =>
+      m.groupId === groupId &&
+      (structural === null || structural.has(m.role)) &&
+      // Fails closed: a tenure filter never matches an unknown tenure.
+      (tenure === null || (m.tenure !== undefined && tenure.has(m.tenure))),
+  );
   if (mode === "everyone") return inGroup.map((m) => m.userId);
 
   const wanted = new Set(roleIds);
@@ -305,9 +324,7 @@ export function resolveAudience(
       return finalize((ctx.suppliers ?? []).map((s) => s.userId));
     }
     case "project": {
-      return finalize(
-        resolveProjectAudience(ctx, spec.groupId, spec.mode, spec.roleIds),
-      );
+      return finalize(resolveProjectAudience(ctx, spec));
     }
   }
 }
