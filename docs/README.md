@@ -72,6 +72,7 @@ without restating it:
 | [`questionnaire-spec.md`](questionnaire-spec.md)         | Engineering Spec | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
 | [`notifications-spec.md`](notifications-spec.md)         | Engineering Spec | Active         | N/A — no dedicated App Spec section                                                           |
 | [`supplier-spec.md`](supplier-spec.md)                   | Engineering Spec | Active         | Partial — `PNP-005`, `REG-011`                                                                |
+| [`shifts-spec.md`](shifts-spec.md)                       | Engineering Spec | Active         | Partial — `SHIFT-*` (App Spec §6)                                                             |
 | [`gis-placement-spec.md`](gis-placement-spec.md)         | Engineering Spec | **Draft**      | Partial — `LAYOUT-*`, `TENT-*`, `ERF-*`; research plan for work that is **not built**         |
 | [`flows.md`](flows.md)                                   | Architecture     | Active         | Partial — `ONBOARD-*`, `REG-*`, `SEC-*`                                                       |
 | [`triage.md`](triage.md)                                 | Operational      | Active         | N/A — operational, not spec-derived                                                           |

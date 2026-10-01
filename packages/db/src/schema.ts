@@ -271,6 +271,21 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   "supplier",
   "security",
   "bulletin",
+  // Camp shifts (epic #57, migration 0034).
+  "shift",
+]);
+
+// How a camp shift is FIRST FILLED (epic #57). `open` = members sign
+// themselves up (a lead can still assign); `assign` = only a lead puts people
+// on it, and its empty spots never show in a member's Open shifts.
+// It governs that first fill and nothing after: once someone holds a spot on
+// either kind, they may hand it to a campmate or offer it up, and an offered
+// spot shows in Open shifts for any eligible member to take — swaps need no
+// lead approval (Ryan, #57). The required camp role and the clash rule still
+// apply to whoever takes it. Mirrors `ShiftSignupMode` in @quagga/core.
+export const shiftSignupModeEnum = pgEnum("shift_signup_mode", [
+  "open",
+  "assign",
 ]);
 
 // How a bulletin/announcement LANDS (epic #56). `feed` = an ordinary inbox
@@ -833,6 +848,11 @@ export const groups = pgTable(
       .default("invite_only"),
     // Reserved column — see groupVisibilityEnum.
     visibility: groupVisibilityEnum("visibility").notNull().default("default"),
+    // CAMP SHIFTS (epic #57, migration 0034): when this camp's starter list of
+    // shift teams was written. Null = never. The list is written ONCE — the
+    // first time a lead opens Shifts — by a compare-and-set on this column, so
+    // a lead who later removes every team is not handed the starter list again.
+    shiftTeamsSeededAt: timestamp("shift_teams_seeded_at", { mode: "date" }),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -2555,5 +2575,145 @@ export const messageReportItems = pgTable(
   },
   (i) => ({
     reportIdx: index("message_report_items_report_idx").on(i.reportId),
+  }),
+);
+
+// --- Camp shifts (epic #57, migration 0034) ------------------------------
+// A camp's shifts and rotas for one edition: who is on the kitchen, the tea
+// bar, sound, MOOP. Decided with Ryan (27–28 Sep 2026, #57): shifts live on
+// the camp in apps/web; teams are a starter list the lead edits; a shift's
+// optional required skill is a CAMP ROLE; swapping needs no lead approval.
+// Every rule is in @quagga/core shifts.ts; the store is apps/web/lib/
+// shifts-store.ts. Attendance / no-show recording is deliberately NOT here
+// (it needs its own privacy review).
+
+// The lead-edited team list ("Kitchen", "Tea bar", …). Unique per camp,
+// case-insensitive (normalised by @quagga/core `normalizeTeamName`).
+export const shiftTeams = pgTable(
+  "shift_teams",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    nameNormalized: text("name_normalized").notNull(),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    groupNameUniq: uniqueIndex("shift_teams_group_name_idx").on(
+      t.groupId,
+      t.nameNormalized,
+    ),
+  }),
+);
+
+// One shift on one day. Time is a calendar date + minutes after midnight +
+// length — no zone (see @quagga/core shifts.ts "TIME"). A repeating shift is
+// simply several rows, one per picked day, each editable on its own.
+//
+// `team_id` SET NULL: removing a team keeps its shifts (they read "No team").
+// `required_role_id` SET NULL: deleting a camp role lifts the restriction
+// rather than deleting the shifts that needed it.
+export const shifts = pgTable(
+  "shifts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").references(() => shiftTeams.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    shiftDate: date("shift_date", { mode: "string" }).notNull(),
+    startMinute: integer("start_minute").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    capacity: integer("capacity").notNull(),
+    requiredRoleId: uuid("required_role_id").references(() => projectRoles.id, {
+      onDelete: "set null",
+    }),
+    signupMode: shiftSignupModeEnum("signup_mode").notNull().default("open"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    groupEditionDateIdx: index("shifts_group_edition_date_idx").on(
+      s.groupId,
+      s.editionId,
+      s.shiftDate,
+    ),
+    startInDay: check(
+      "shifts_start_minute_in_day",
+      sql`${s.startMinute} >= 0 and ${s.startMinute} < 1440`,
+    ),
+    durationBounds: check(
+      "shifts_duration_bounds",
+      sql`${s.durationMinutes} >= 15 and ${s.durationMinutes} <= 1440`,
+    ),
+    capacityBounds: check(
+      "shifts_capacity_bounds",
+      sql`${s.capacity} >= 1 and ${s.capacity} <= 50`,
+    ),
+  }),
+);
+
+// Who is on a shift. Keyed by MEMBERSHIP (cascade: leaving a camp takes your
+// spots with it). Archiving a member deletes their assignments in the archive
+// transaction (a spot is a future commitment, not history), and every read
+// joins `memberships` through `activeMembership()` regardless.
+//
+// Hand-on state lives on the holder's own row — the holder stays on the shift
+// until the moment it moves:
+//   · `offered_at` — offered up as "needs a replacement"; any eligible member
+//     may take it (compare-and-set on the row, first one wins);
+//   · `handover_to_membership_id` — a pending hand-to request to one campmate,
+//     who accepts or declines. SET NULL, never cascade: the target leaving the
+//     camp must cancel the request, not delete the holder's spot.
+// At most one of the two at a time (CHECK).
+export const shiftAssignments = pgTable(
+  "shift_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shiftId: uuid("shift_id")
+      .notNull()
+      .references(() => shifts.id, { onDelete: "cascade" }),
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "cascade" }),
+    // Null = they signed themselves up (or took it on from a campmate).
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    offeredAt: timestamp("offered_at", { mode: "date" }),
+    handoverToMembershipId: uuid("handover_to_membership_id").references(
+      (): AnyPgColumn => memberships.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    shiftMembershipUniq: uniqueIndex(
+      "shift_assignments_shift_membership_idx",
+    ).on(a.shiftId, a.membershipId),
+    membershipIdx: index("shift_assignments_membership_idx").on(a.membershipId),
+    handoverIdx: index("shift_assignments_handover_idx").on(
+      a.handoverToMembershipId,
+    ),
+    oneHandOnAtATime: check(
+      "shift_assignments_one_hand_on",
+      sql`${a.offeredAt} is null or ${a.handoverToMembershipId} is null`,
+    ),
+    notToSelf: check(
+      "shift_assignments_not_to_self",
+      sql`${a.handoverToMembershipId} is null or ${a.handoverToMembershipId} <> ${a.membershipId}`,
+    ),
   }),
 );

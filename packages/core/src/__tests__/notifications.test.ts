@@ -331,6 +331,7 @@ describe("shouldSendImmediateEmail", () => {
       "supplier",
       "security",
       "wrangler",
+      "shift",
     ] as const) {
       expect(shouldSendImmediateEmail(kind)).toBe(false);
     }

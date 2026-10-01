@@ -239,6 +239,13 @@
       "when": 1790551031056,
       "tag": "0033_archive_former_members",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790827334617,
+      "tag": "0034_camp_shifts",
+      "breakpoints": true
     }
   ]
 }

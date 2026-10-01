@@ -204,6 +204,7 @@ describe("archiveMember — the write", () => {
         waivedQuestionnaires: 2,
         waivedOrgQuestionnaires: 0,
         revokedInvites: 1,
+        freedShiftSpots: 0,
       },
     });
   });
@@ -244,10 +245,23 @@ describe("archiveMember — the write", () => {
     ).toBe(2);
   });
 
-  it("deletes NOTHING — history stays", async () => {
+  it("deletes NOTHING but their shift spots — history stays", async () => {
     dbMock.queue([targetRow()], [{ id: M_REN }], [], []);
     await archiveMember(input());
-    expect(dbMock.queriesOfKind("delete")).toHaveLength(0);
+    // The ONE delete is their camp shift spots (epic #57): a future
+    // commitment the camp must refill, not history.
+    const deletes = dbMock.queriesOfKind("delete");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.arg("delete")).toBe(schema.shiftAssignments);
+    expect(deletes[0]!.tx).toBe(true);
+    expect(boundStrings(deletes[0]!)).toContain(M_REN);
+    // …and hand-on requests made TO them are cancelled, not deleted.
+    const cleared = dbMock
+      .writesTo(schema.shiftAssignments)
+      .filter((q) => q.kind === "update");
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
+    expect(boundStrings(cleared[0]!)).toContain(M_REN);
     // Nothing hung off the membership is written at all.
     for (const table of [
       schema.memberRoleAssignments,
@@ -485,22 +499,55 @@ describe("restoreMember", () => {
     // Same transaction as the restore: never an active row with old roles.
     expect(deletes[0]!.tx).toBe(true);
     // Scoped to THIS person's membership of THIS camp, now active again.
+    // (Every restore-time sub-select — roles here, shifts below — is.)
     const scope = dbMock
       .queriesTouching(schema.memberships)
       .filter((q) => q.kind === "select" && q.tx);
-    expect(scope).toHaveLength(1);
-    expect(boundStrings(scope[0]!)).toEqual(
-      expect.arrayContaining([REN, CAMP]),
-    );
-    expect(nullChecksOn(scope[0]!, schema.memberships.archivedAt)).toEqual([
-      "is null",
-    ]);
+    expect(scope.length).toBeGreaterThanOrEqual(1);
+    for (const q of scope) {
+      expect(boundStrings(q)).toEqual(expect.arrayContaining([REN, CAMP]));
+      expect(nullChecksOn(q, schema.memberships.archivedAt)).toEqual([
+        "is null",
+      ]);
+    }
 
     // Nothing about what they held is lost: it is in the audit row.
     const audit = dbMock.writesTo(schema.auditEvents)[0]!.arg("values") as {
       meta: { droppedRoleAssignments: unknown };
     };
     expect(audit.meta.droppedRoleAssignments).toEqual(dropped);
+  });
+
+  it("comes back on NO camp shifts: leftover spots deleted, requests to them cancelled, same transaction (epic #57)", async () => {
+    dbMock.queue([archived()], [{ id: M_REN }], /* no roles held */ [], []);
+    expect(await restoreMember(input())).toEqual({ ok: true });
+
+    const writes = dbMock.writesTo(schema.shiftAssignments);
+    const deletes = writes.filter((q) => q.kind === "delete");
+    const cleared = writes.filter((q) => q.kind === "update");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.tx).toBe(true);
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]!.tx).toBe(true);
+    expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
+    // Both are keyed by a sub-select of THIS person's now-active membership
+    // of THIS camp (the roles' sub-select is the other one).
+    const scope = dbMock
+      .queriesTouching(schema.memberships)
+      .filter((q) => q.kind === "select" && q.tx);
+    expect(scope).toHaveLength(2);
+    for (const q of scope) {
+      expect(boundStrings(q)).toEqual(expect.arrayContaining([REN, CAMP]));
+      expect(nullChecksOn(q, schema.memberships.archivedAt)).toEqual([
+        "is null",
+      ]);
+    }
+  });
+
+  it("touches no shift rows when the restore lost its compare-and-set", async () => {
+    dbMock.queue([archived()], /* CAS matched nothing */ []);
+    expect((await restoreMember(input())).ok).toBe(false);
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
   });
 
   it("brings a former CO-LEAD back as a plain member — the restorer hands back no structural role", async () => {

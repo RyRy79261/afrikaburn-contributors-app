@@ -16,7 +16,10 @@ import {
   ensureMembershipWithRefCode,
   isFormerMember,
 } from "./groups-store";
-import { dropRoleAssignmentsOnRestore } from "./member-archive-store";
+import {
+  clearShiftsOnRestore,
+  dropRoleAssignmentsOnRestore,
+} from "./member-archive-store";
 
 export interface InviteRow {
   id: string;
@@ -457,6 +460,8 @@ async function redeemInTransaction(
       userId,
       groupId: invite.groupId,
     });
+    // …and with no camp shifts: nothing left over from before (epic #57).
+    await clearShiftsOnRestore(tx, { userId, groupId: invite.groupId });
     await tx.insert(schema.auditEvents).values({
       actorId: userId,
       action: MEMBER_RESTORE_AUDIT_ACTION,

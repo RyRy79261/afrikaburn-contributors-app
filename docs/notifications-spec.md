@@ -25,7 +25,10 @@ Two kinds, one inbox:
   role/officer assignment +
   acceptance requests, questionnaire released to you (blocking ones flagged), membership events (invite accepted, lead transfer),
   supplier onboarding confirmations (deposit received, briefing confirmed, standing
-  changed), account security events (mirrors the security-events feed).
+  changed), account security events (mirrors the security-events feed), camp
+  shifts (kind `shift`, in-app only: assigned or taken off by a lead, moved or
+  cancelled, a hand-on request and its answer, an offered shift taken, and —
+  to the camp's leads — a shift changing hands; [`shifts-spec.md`](shifts-spec.md)).
 - **Bulletin** — org-authored broadcast to an **audience** (reuses the questionnaire
   audience machinery verbatim: all current burners / camp leads / registered camp
   leads / MV leads / art leads / grant requesters / suppliers / registered <role>).

@@ -171,17 +171,20 @@ The App Spec's own caution ("should not become a public scoring system") is
 honoured the way it was planned: the numbers live behind the same per-camp
 permission check as the roster (`view_member_details`).
 
-## 6. Shift management ❌
+## 6. Shift management 🚧
 
-**Requirement IDs:** ❌ SHIFT-001–SHIFT-029 *(App Spec §6 — nothing built)*
+**Requirement IDs:** ✅ SHIFT-001–SHIFT-005, SHIFT-007, SHIFT-008, SHIFT-010, SHIFT-012, SHIFT-013, SHIFT-017–SHIFT-022, SHIFT-025, SHIFT-026 · ❌ SHIFT-006, SHIFT-009, SHIFT-011, SHIFT-014–SHIFT-016, SHIFT-024, SHIFT-027–SHIFT-029 · ⚠️ SHIFT-023 *(decided against: swaps need no lead approval)*
 
-Nothing exists — no shifts, no sign-ups, no attendance.
+Built (epic #57, [`shifts-spec.md`](shifts-spec.md)): camp shifts with
+lead-edited teams, repeat-on-days, capacity, an optional required camp role,
+open sign-up or lead assignment, members' own schedules, and hand-on without
+approval (hand to a campmate who accepts, or offer it up for anyone eligible).
+In-app notices when a shift is assigned, handed on, changed or cancelled.
 
-**What it would take:** new tables for shifts, assignments and attendance; a
-sign-up and swap flow with approval; and reminders. The permission model and the
-roster it needs are already there.
+Not built: attendance and no-shows (need their own privacy review), scheduled
+reminders and email, WhatsApp/SMS, village-wide shifts.
 
-Two technical notes for planning:
+The original planning notes, kept for context:
 
 - **Swaps are the awkward part.** "Nobody may drop a shift until a qualified
   replacement accepts it" is a rule with a race condition in it — two people

@@ -21,6 +21,8 @@ export const NotificationKind = z.enum([
   "supplier",
   "security",
   "bulletin",
+  // Camp shifts (epic #57): assigned, handed on, changed or cancelled.
+  "shift",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 

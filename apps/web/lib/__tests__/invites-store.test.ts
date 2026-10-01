@@ -654,6 +654,44 @@ describe("redeemInvite — the authorisation boundary for the whole round trip",
     ).toEqual(dropped);
   });
 
+  it("a FORMER member restored by invite comes back on NO camp shifts, and with no hand-on requests pending to them (epic #57)", async () => {
+    queueRedemption({ viewerRole: null, former: true });
+    dbMock.queue(
+      [{ id: INVITE_ID }],
+      /* nextMemberRefCode */ [{ refCode: "MAH-M001" }],
+      /* the membership upsert: it restored the archived row */ [
+        { inserted: false },
+      ],
+    );
+    expect(await redeemInvite(TOKEN, USER)).toMatchObject({ ok: true });
+
+    const writes = dbMock.writesTo(schema.shiftAssignments);
+    const deletes = writes.filter((q) => q.kind === "delete");
+    const cleared = writes.filter((q) => q.kind === "update");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.tx).toBe(true);
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]!.tx).toBe(true);
+    expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
+    // Scoped (by sub-select) to THIS person's now-active membership of THIS
+    // camp: the last membership read in the transaction is that sub-select.
+    const sub = dbMock
+      .queriesTouching(schema.memberships)
+      .filter((q) => q.kind === "select" && q.tx)
+      .at(-1)!;
+    expect(boundStrings(sub)).toEqual(expect.arrayContaining([USER, GROUP]));
+    expect(nullChecksOn(sub, schema.memberships.archivedAt)).toEqual([
+      "is null",
+    ]);
+  });
+
+  it("a brand-new member's join touches no shift rows", async () => {
+    queueRedemption({ viewerRole: null, former: false });
+    dbMock.queue([{ id: INVITE_ID }], [{ refCode: "MAH-M001" }], []);
+    await redeemInvite(TOKEN, USER);
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
   it("a restore that LOST a race drops no roles and writes no restore audit", async () => {
     // Two redemptions for one former member both read "former" before their
     // transactions. The first restores the row; the second's upsert then

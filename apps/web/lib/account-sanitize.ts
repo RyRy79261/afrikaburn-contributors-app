@@ -273,6 +273,33 @@ export async function sanitizeAccount(
       ),
     );
 
+    // 2d. CAMP SHIFTS (epic #57). Spots are keyed by membership too, so they
+    //     go explicitly: a "Departed Burner" holding the tea bar on Thursday
+    //     is a gap nobody can see. Hand-on requests to them are cancelled.
+    await tx.delete(schema.shiftAssignments).where(
+      inArray(
+        schema.shiftAssignments.membershipId,
+        // former members: a former camp's spots are released too.
+        tx
+          .select({ id: schema.memberships.id })
+          .from(schema.memberships)
+          .where(eq(schema.memberships.userId, userId)),
+      ),
+    );
+    await tx
+      .update(schema.shiftAssignments)
+      .set({ handoverToMembershipId: null })
+      .where(
+        inArray(
+          schema.shiftAssignments.handoverToMembershipId,
+          // former members: requests to a former membership are cancelled too.
+          tx
+            .select({ id: schema.memberships.id })
+            .from(schema.memberships)
+            .where(eq(schema.memberships.userId, userId)),
+        ),
+      );
+
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
     //    display name with the "Departed Burner" stub.

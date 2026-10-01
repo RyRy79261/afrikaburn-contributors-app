@@ -104,6 +104,8 @@ function queueErasure(
     /* delete messages (epic #69) */ [],
     /* delete userBlocks (epic #69) */ [],
     /* delete membershipLogistics (epic #55) */ [],
+    /* delete shiftAssignments (epic #57) */ [],
+    /* cancel hand-on requests to them (epic #57) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -464,6 +466,22 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(
       dbMock.writesTo(schema.memberships).filter((q) => q.kind === "delete"),
     ).toHaveLength(0);
+  });
+
+  it("RELEASES the account's camp shift spots and cancels hand-ons to them, in the erasure transaction (epic #57)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const writes = dbMock.writesTo(schema.shiftAssignments);
+    const deletes = writes.filter((q) => q.kind === "delete");
+    const cleared = writes.filter((q) => q.kind === "update");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.tx).toBe(true);
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]!.tx).toBe(true);
+    expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
   });
 
   it("leaves auth_user_id alone so the tombstone stays findable", async () => {
