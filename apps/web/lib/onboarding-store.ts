@@ -557,8 +557,10 @@ export interface OnboardingNameRow {
   tenure: CampTenure;
   status: string;
   completedAt: Date | null;
-  /** Furthest step reached, or null when their runner never reported. */
-  furthestStep: number | null;
+  /** When they first opened it, or null when they never have. */
+  openedAt: Date | null;
+  /** How many acknowledgement boxes they have ticked so far. */
+  ticked: number;
 }
 
 export interface OnboardingCompletionView {
@@ -603,7 +605,8 @@ export async function getOnboardingCompletion(input: {
       status: schema.requiredActions.status,
       completedAt: schema.requiredActions.completedAt,
       membershipId: schema.memberships.id,
-      furthestStep: schema.onboardingProgress.furthestStep,
+      openedAt: schema.onboardingProgress.openedAt,
+      acknowledged: schema.onboardingProgress.acknowledged,
     })
     .from(schema.requiredActions)
     .innerJoin(
@@ -630,7 +633,7 @@ export async function getOnboardingCompletion(input: {
   const tagged = rows.map((r) => ({
     ...r,
     tenure: tenure.get(r.membershipId) ?? ("new" as CampTenure),
-    started: typeof r.furthestStep === "number",
+    started: r.openedAt instanceof Date,
   }));
   const totals = tallyOnboardingCompletion(tagged);
 
@@ -677,7 +680,8 @@ export async function getOnboardingCompletion(input: {
           tenure: r.tenure,
           status: r.status,
           completedAt: r.completedAt,
-          furthestStep: r.furthestStep,
+          openedAt: r.openedAt ?? null,
+          ticked: r.acknowledged?.length ?? 0,
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -788,15 +792,14 @@ export async function deliverOpenOnboardingsToNewMember(input: {
 // --- Partial progress (Ryan, 1 Oct 2026) -----------------------------------
 
 /**
- * Record how far a member has got through an onboarding they were SENT. Only
- * moves forward (`greatest`), so a stale tab reporting an earlier step never
- * winds anyone back; the ticks are the latest report, since unticking a box
- * is a real change of mind.
+ * Record how far a member has got through an onboarding they were SENT: the
+ * first report marks it opened (that time is never moved), and the ticks are
+ * the latest report, since unticking a box is a real change of mind.
  *
  * Refuses (returns false, writes nothing) unless the activation is an OPEN
  * onboarding and this person holds a PENDING action for it — the same
  * "were you sent this, and is it still live" test the submit action applies.
- * The report is clamped to the onboarding's own sections and boxes first.
+ * The report is clamped to the onboarding's own boxes first.
  */
 export async function saveOnboardingProgress(input: {
   activationId: string;
@@ -830,8 +833,8 @@ export async function saveOnboardingProgress(input: {
     .values({
       activationId: input.activationId,
       userId: input.userId,
-      furthestStep: clamped.step,
       acknowledged: clamped.acknowledged,
+      openedAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -840,7 +843,6 @@ export async function saveOnboardingProgress(input: {
         schema.onboardingProgress.userId,
       ],
       set: {
-        furthestStep: sql`greatest(${schema.onboardingProgress.furthestStep}, excluded.furthest_step)`,
         acknowledged: clamped.acknowledged,
         updatedAt: now,
       },

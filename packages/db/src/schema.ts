@@ -1766,10 +1766,11 @@ export const requiredActions = pgTable(
 );
 
 // Camp onboarding PROGRESS (epic #54, Ryan 1 Oct 2026: leads see partial
-// progress). One row per (onboarding send, person): the furthest step they
-// reached and the acknowledgements they have ticked so far. It exists so a
-// lead's completion view can say "Step 3 of 6" instead of only Complete / Not
-// complete, and so a member's ticks follow them to another device.
+// progress). One row per (onboarding send, person): when they first opened
+// it and the acknowledgements they have ticked so far. It exists so a lead's
+// completion view can say "Opened 6 Apr · 1 of 3 ticked" (canvas A3 `oBuPo`)
+// instead of only Complete / Not complete, and so a member's ticks follow
+// them to another device.
 //
 // Deliberately NOT a half-written `questionnaire_responses` row: every reader
 // of that table (results, exports, carry-forward, the Form 2 mirror) treats a
@@ -1786,8 +1787,8 @@ export const onboardingProgress = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** 1-based: the furthest step reached. Only ever moves forward. */
-    furthestStep: integer("furthest_step").notNull().default(1),
+    /** When the member first opened it. Never moved by a later report. */
+    openedAt: timestamp("opened_at", { mode: "date" }).notNull().defaultNow(),
     /** Acknowledgement question ids ticked so far (never `false`s). */
     acknowledged: jsonb("acknowledged").$type<string[]>().notNull().default([]),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),

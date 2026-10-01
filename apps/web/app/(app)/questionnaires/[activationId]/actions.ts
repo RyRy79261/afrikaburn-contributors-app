@@ -31,7 +31,6 @@ export async function submitQuestionnaireAction(
 
 const ProgressInput = z.object({
   activationId: z.string().uuid(),
-  step: z.number().int().min(1).max(100),
   acknowledged: z.array(z.string().min(1).max(200)).max(50),
 });
 
@@ -51,10 +50,7 @@ export async function saveOnboardingProgressAction(
   const ok = await saveOnboardingProgress({
     activationId: parsed.data.activationId,
     userId: user.id,
-    report: {
-      step: parsed.data.step,
-      acknowledged: parsed.data.acknowledged,
-    },
+    report: { acknowledged: parsed.data.acknowledged },
   });
   return { ok };
 }

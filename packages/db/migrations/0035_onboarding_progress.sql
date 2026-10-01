@@ -2,7 +2,7 @@ CREATE TABLE "onboarding_progress" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"activation_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
-	"furthest_step" integer DEFAULT 1 NOT NULL,
+	"opened_at" timestamp DEFAULT now() NOT NULL,
 	"acknowledged" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );

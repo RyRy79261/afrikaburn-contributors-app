@@ -1,5 +1,5 @@
 {
-  "id": "1cc57a2a-7490-4738-b892-88bf31e5f418",
+  "id": "1f8f8e56-e81d-4ea1-90cb-12b13fa86462",
   "prevId": "b44d8554-28c4-445d-93a9-441d5b8cc304",
   "version": "7",
   "dialect": "postgresql",
@@ -2909,12 +2909,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "furthest_step": {
-          "name": "furthest_step",
-          "type": "integer",
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "default": 1
+          "default": "now()"
         },
         "acknowledged": {
           "name": "acknowledged",

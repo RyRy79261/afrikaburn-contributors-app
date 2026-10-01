@@ -94,20 +94,6 @@ test.describe("camp lead — onboarding", () => {
     }
     await expect(memberPage.getByText("Page 6 of 6")).toBeVisible();
 
-    // --- 3b. Partial progress: the lead sees how far they got -------------
-    // The runner reports the step after the member settles (debounced).
-    await expect(async () => {
-      await leadPage.goto(
-        `/camps/${camp.slug}/questionnaires/${activationId}?names=incomplete`,
-      );
-      await expect(
-        leadPage.getByRole("row").filter({ hasText: memberName }),
-      ).toContainText("Step 6 of 6", { timeout: 2_000 });
-    }).toPass({ timeout: 20_000 });
-    // The lead (on the audience by default) never opened it.
-    await expect(leadPage.getByText("Not started")).toBeVisible();
-    await expect(leadPage.getByText(/1 part-way through/i)).toBeVisible();
-
     const finish = memberPage.getByRole("button", {
       name: /finish onboarding/i,
     });
@@ -118,6 +104,27 @@ test.describe("camp lead — onboarding", () => {
     await expect(boxes).toHaveCount(2);
     await boxes.nth(0).check();
     await expect(finish).toBeDisabled();
+    // --- 3b. Partial progress: the lead sees how far they got -------------
+    // One box ticked. The runner reports after the member settles.
+    await expect(async () => {
+      await leadPage.goto(
+        `/camps/${camp.slug}/questionnaires/${activationId}?names=incomplete`,
+      );
+      // One visible entry per person: a table row on desktop, a stacked row
+      // on a phone.
+      const row = leadPage
+        .getByTestId("onboarding-person")
+        .filter({ hasText: memberName })
+        .locator("visible=true");
+      await expect(row).toContainText("In progress", { timeout: 2_000 });
+      await expect(row).toContainText("1 of 2 ticked", { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+    // The lead (on the audience by default) never opened it.
+    await expect(
+      leadPage.getByText(/not opened yet/i).locator("visible=true"),
+    ).toBeVisible();
+    await expect(leadPage.getByText(/1 started · 1 not opened/i)).toBeVisible();
+
     await boxes.nth(1).check();
     await expect(finish).toBeEnabled();
     await finish.click();
@@ -134,7 +141,10 @@ test.describe("camp lead — onboarding", () => {
       leadPage.getByRole("link", { name: /hide names/i }),
     ).toBeVisible();
     await expect(
-      leadPage.getByRole("cell", { name: memberName }),
+      leadPage
+        .getByTestId("onboarding-person")
+        .filter({ hasText: memberName })
+        .locator("visible=true"),
     ).toBeVisible();
 
     // --- 5. Someone who joins later gets it too -------------------------------

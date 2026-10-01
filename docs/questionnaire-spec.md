@@ -378,16 +378,18 @@ jsonb (`definition`, `audience`).
   returning, still to finish — counted over the camp's CURRENT members. Names
   are **not loaded** until "Show names" (`?names=all|complete|incomplete`).
   Lead/co-lead only (`canViewActivationResults`). **Partial progress** (Ryan,
-  1 Oct 2026): the runner reports, debounced and best-effort, the step a member
-  is on and the acknowledgements ticked so far (`onboarding_progress`, one row
-  per send and person; the step only moves forward). The view counts who is
-  "part-way through" and, behind "Show names", says "Step 3 of 6" or "Not
-  started" for each person not finished. The member is told on the page that
+  1 Oct 2026; canvas A3 `oBuPo`): the runner reports, debounced and
+  best-effort, that a member opened it and which acknowledgements they have
+  ticked so far (`onboarding_progress`, one row per send and person; "opened"
+  is set once and never moved). "Still to finish" says "N started · M not
+  opened", and behind "Show names" each person not finished has a status (In
+  progress / Not started) and a progress line ("Opened 6 Apr 2027 · 1 of 3
+  ticked", or "Not opened yet"). The member is told on the page that
   their camp's leads can see how far they've got. Progress is NOT an answer: it
   lives apart from `questionnaire_responses`, so no results view, export or
   carry-forward can see it; the server refuses a report from anyone not sent
   the onboarding or no longer pending, and clamps it to the onboarding's own
-  steps and boxes (`clampOnboardingProgress`). Ticks also follow the member to
+  boxes (`clampOnboardingProgress`). Ticks also follow the member to
   another device. Answers themselves still reach the server only on submit.
 - **Carry forward** (A5, ONBOARD-022): when this edition has no onboarding and
   an earlier edition's was sent, the list offers it. Carrying makes a new DRAFT

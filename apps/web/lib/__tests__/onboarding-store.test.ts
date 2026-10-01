@@ -94,21 +94,6 @@ beforeEach(() => {
 
 const STAMP = new Date("2027-03-01T10:00:00.000Z");
 
-/** Every literal SQL chunk in a drizzle SQL tree, joined. */
-function sqlText(tree: unknown): string {
-  const seen = new WeakSet<object>();
-  const out: string[] = [];
-  const walk = (v: unknown, depth: number): void => {
-    if (typeof v === "string") out.push(v);
-    if (depth > 16 || typeof v !== "object" || v === null || seen.has(v))
-      return;
-    seen.add(v);
-    Object.values(v).forEach((inner) => walk(inner, depth + 1));
-  };
-  walk(tree, 0);
-  return out.join(" ");
-}
-
 /** Does a drizzle SQL tree carry this exact value as a bound parameter? */
 function bindsValue(tree: unknown, wanted: unknown): boolean {
   const seen = new WeakSet<object>();
@@ -284,21 +269,24 @@ describe("getOnboardingCompletion — partial progress", () => {
           status: "completed",
           completedAt: new Date(),
           membershipId: "m1",
-          furthestStep: 6,
+          openedAt: new Date("2027-04-06T10:00:00Z"),
+          acknowledged: ["a1", "a2"],
         },
         {
           userId: "u2",
           status: "pending",
           completedAt: null,
           membershipId: "m2",
-          furthestStep: 3,
+          openedAt: new Date("2027-04-09T10:00:00Z"),
+          acknowledged: ["a1"],
         },
         {
           userId: "u3",
           status: "pending",
           completedAt: null,
           membershipId: "m2",
-          furthestStep: null,
+          openedAt: null,
+          acknowledged: null,
         },
       ],
       [{ n: 3 }],
@@ -314,9 +302,11 @@ describe("getOnboardingCompletion — partial progress", () => {
     });
     expect(view?.totals.inProgress).toBe(1);
     expect(view?.totals.outstanding).toBe(2);
-    expect(view?.names?.map((n) => [n.displayName, n.furthestStep])).toEqual([
-      ["jabu", 3],
-      ["lerato", null],
+    expect(
+      view?.names?.map((n) => [n.displayName, n.openedAt !== null, n.ticked]),
+    ).toEqual([
+      ["jabu", true, 1],
+      ["lerato", false, 0],
     ]);
   });
 });
@@ -492,25 +482,24 @@ describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () =>
     .flatMap((p) => (p.kind === "questions" ? p.questions : []))
     .find((q) => q.kind === "acknowledgement")!.id;
 
-  it("records the step and ticks for someone sent it, clamped to the onboarding", async () => {
+  it("records the ticks for someone sent it, clamped to the onboarding", async () => {
     stubs.activation = activation({ status: "open" });
     dbMock.queue([{ status: "pending" }], undefined);
     const ok = await saveOnboardingProgress({
       activationId: ACT,
       userId: "u-a",
-      report: { step: 99, acknowledged: [firstAck, "made-up-box"] },
+      report: { acknowledged: [firstAck, "made-up-box"] },
     });
     expect(ok).toBe(true);
     const [write] = dbMock.writesTo(schema.onboardingProgress);
     const values = write!.arg("values") as Record<string, unknown>;
-    expect(values.furthestStep).toBe(preset.pages.length);
     expect(values.acknowledged).toEqual([firstAck]);
-    // The step only ever moves forward: a stale tab can't wind it back.
-    expect(write!.called("onConflictDoUpdate")).toBe(true);
+    // A later report updates the ticks but never moves "opened".
     const set = (
       write!.arg("onConflictDoUpdate") as { set: Record<string, unknown> }
     ).set;
-    expect(sqlText(set.furthestStep)).toContain("greatest(");
+    expect(set.acknowledged).toEqual([firstAck]);
+    expect(set).not.toHaveProperty("openedAt");
   });
 
   it("writes nothing for someone who was never sent it", async () => {
@@ -520,7 +509,7 @@ describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () =>
       await saveOnboardingProgress({
         activationId: ACT,
         userId: "stranger",
-        report: { step: 2, acknowledged: [] },
+        report: { acknowledged: [] },
       }),
     ).toBe(false);
     expect(dbMock.writesTo(schema.onboardingProgress)).toHaveLength(0);
@@ -533,7 +522,7 @@ describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () =>
       await saveOnboardingProgress({
         activationId: ACT,
         userId: "u-a",
-        report: { step: 2, acknowledged: [] },
+        report: { acknowledged: [] },
       }),
     ).toBe(false);
 
@@ -543,7 +532,7 @@ describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () =>
         await saveOnboardingProgress({
           activationId: ACT,
           userId: "u-a",
-          report: { step: 2, acknowledged: [] },
+          report: { acknowledged: [] },
         }),
       ).toBe(false);
     }
@@ -559,7 +548,7 @@ describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () =>
       await saveOnboardingProgress({
         activationId: ACT,
         userId: "u-a",
-        report: { step: 2, acknowledged: [] },
+        report: { acknowledged: [] },
       }),
     ).toBe(false);
     expect(dbMock.queries).toHaveLength(0);

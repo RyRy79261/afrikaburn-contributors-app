@@ -88,10 +88,10 @@ interface RunnerProps {
   /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
    *  uploader instead of only the URL-paste field. */
   blobConfigured?: boolean;
-  /** Camp onboarding (epic #54): told, debounced, the step the respondent is
-   * on and the acknowledgement boxes ticked so far, so the lead can see
-   * partial progress. Fire-and-forget — the runner never waits on it. */
-  onProgress?: (report: { step: number; acknowledged: string[] }) => void;
+  /** Camp onboarding (epic #54): told, debounced, the acknowledgement boxes
+   * ticked so far (once on opening, then on every change), so the lead can
+   * see partial progress. Fire-and-forget — the runner never waits on it. */
+  onProgress?: (report: { acknowledged: string[] }) => void;
 }
 
 type Step =
@@ -210,8 +210,8 @@ export function QuestionnaireRunner({
         ? progress.pageCount + 1
         : progress.pageCount + tailSteps;
 
-  // Partial progress for the lead (onboarding only). Reported after the
-  // respondent settles, and only when something changed since the last report.
+  // Partial progress for the lead (onboarding only): reported once on
+  // opening, then after the respondent settles whenever the ticks change.
   const ackIds = React.useMemo(
     () =>
       questionnaire.pages.flatMap((p) =>
@@ -222,20 +222,17 @@ export function QuestionnaireRunner({
     [questionnaire],
   );
   const tickedIds = ackIds.filter((id) => responses[id] === true);
-  const progressKey = JSON.stringify([stepNumber, tickedIds]);
+  const progressKey = JSON.stringify(tickedIds);
   const lastReported = React.useRef<string | null>(null);
   const onProgressRef = React.useRef(onProgress);
   onProgressRef.current = onProgress;
   React.useEffect(() => {
     if (!onProgressRef.current || step?.kind !== "page") return;
     if (lastReported.current === progressKey) return;
-    const [reportStep, acknowledged] = JSON.parse(progressKey) as [
-      number,
-      string[],
-    ];
+    const acknowledged = JSON.parse(progressKey) as string[];
     const timer = window.setTimeout(() => {
       lastReported.current = progressKey;
-      onProgressRef.current?.({ step: reportStep, acknowledged });
+      onProgressRef.current?.({ acknowledged });
     }, PROGRESS_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [progressKey, step?.kind]);
@@ -523,33 +520,22 @@ export function QuestionnaireRunner({
         </p>
       )}
 
-      <div
-        className={`flex items-center gap-3 border-t border-border pt-4 ${
-          soloSubmit ? "" : "justify-between"
-        }`}
-      >
-        {!soloSubmit && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setTrail((prev) => prev.slice(0, -1))}
-            disabled={trail.length <= 1 || isPending}
-          >
-            Back
-          </Button>
-        )}
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
         <div
           className={cn(
             "flex items-center gap-3",
-            soloSubmit && "w-full flex-col-reverse sm:flex-row",
+            soloSubmit ? "" : "justify-between",
           )}
         >
-          {draftKey && <AutosaveIndicator state={saveState} />}
-          {acksOutstanding && (
-            <span className="text-xs text-muted-foreground">
-              Tick {acks.length === 1 ? "the box" : `all ${acks.length}`} to{" "}
-              {isLast ? "finish" : "continue"}
-            </span>
+          {!soloSubmit && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setTrail((prev) => prev.slice(0, -1))}
+              disabled={trail.length <= 1 || isPending}
+            >
+              Back
+            </Button>
           )}
           {isLast ? (
             <Button
@@ -570,6 +556,24 @@ export function QuestionnaireRunner({
             </Button>
           )}
         </div>
+        {/* The notes sit on their own line under the buttons, so on a phone
+            they never squeeze the primary button off the screen. */}
+        {((draftKey && saveState !== "idle") || acksOutstanding) && (
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-x-3 gap-y-1",
+              soloSubmit ? "justify-center" : "justify-end",
+            )}
+          >
+            {draftKey && <AutosaveIndicator state={saveState} />}
+            {acksOutstanding && (
+              <span className="text-xs text-muted-foreground">
+                Tick {acks.length === 1 ? "the box" : `all ${acks.length}`} to{" "}
+                {isLast ? "finish" : "continue"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

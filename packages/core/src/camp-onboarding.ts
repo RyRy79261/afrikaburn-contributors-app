@@ -311,27 +311,21 @@ export function summarizeOnboarding(definition: Questionnaire): {
 
 // --- Partial progress (Ryan, 1 Oct 2026) -----------------------------------
 
-/** What a member's runner reports as they go: the step they are on and the
- * acknowledgements ticked so far. */
+/** What a member's runner reports as they go: the acknowledgement boxes
+ * ticked so far. The first report is also what marks it "opened". */
 export interface OnboardingProgressReport {
-  step: number;
   acknowledged: readonly string[];
 }
 
 /**
- * Clamp a client's progress report to the onboarding it is about. The step is
- * cut to 1..sections, and only ids of THIS onboarding's acknowledgement boxes
- * survive (deduplicated, in definition order) — the client is never trusted to
- * say how long the onboarding is or what is in it.
+ * Clamp a client's progress report to the onboarding it is about: only ids of
+ * THIS onboarding's acknowledgement boxes survive, deduplicated, in definition
+ * order. The client is never trusted to say what is in the onboarding.
  */
 export function clampOnboardingProgress(
   definition: Questionnaire,
   report: OnboardingProgressReport,
-): { step: number; acknowledged: string[] } {
-  const steps = Math.max(definition.pages.length, 1);
-  const step = Number.isFinite(report.step)
-    ? Math.min(Math.max(Math.trunc(report.step), 1), steps)
-    : 1;
+): { acknowledged: string[] } {
   const ticked = new Set(report.acknowledged);
   const acknowledged: string[] = [];
   for (const page of definition.pages) {
@@ -342,16 +336,13 @@ export function clampOnboardingProgress(
       }
     }
   }
-  return { step, acknowledged };
+  return { acknowledged };
 }
 
-/** "Step 3 of 6" for someone part-way; "Not started" when nothing came back. */
-export function onboardingProgressLabel(
-  furthestStep: number | null,
-  steps: number,
-): string {
-  if (furthestStep === null) return "Not started";
-  return `Step ${Math.min(furthestStep, steps)} of ${steps}`;
+/** "1 of 3 ticked", or "none ticked" (canvas A3 `oBuPo`). */
+export function onboardingTickText(ticked: number, boxes: number): string {
+  if (ticked <= 0) return "none ticked";
+  return `${Math.min(ticked, boxes)} of ${boxes} ticked`;
 }
 
 // --- New to the camp vs returning -----------------------------------------

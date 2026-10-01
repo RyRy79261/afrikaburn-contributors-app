@@ -13,7 +13,7 @@ import {
   summarizeOnboarding,
   tallyOnboardingCompletion,
   clampOnboardingProgress,
-  onboardingProgressLabel,
+  onboardingTickText,
   validateOnboardingDefinition,
 } from "../camp-onboarding";
 import { resolveAudience, type AudienceContext } from "../audience";
@@ -366,45 +366,27 @@ describe("partial progress (Ryan, 1 Oct 2026)", () => {
       : [],
   );
 
-  it("keeps a sane report as it is", () => {
-    expect(
-      clampOnboardingProgress(def, { step: 3, acknowledged: [ackIds[0]!] }),
-    ).toEqual({ step: 3, acknowledged: [ackIds[0]] });
-  });
-
-  it("cuts the step to the onboarding's own length — never the client's", () => {
-    const steps = def.pages.length;
-    expect(
-      clampOnboardingProgress(def, { step: 99, acknowledged: [] }).step,
-    ).toBe(steps);
-    expect(
-      clampOnboardingProgress(def, { step: 0, acknowledged: [] }).step,
-    ).toBe(1);
-    expect(
-      clampOnboardingProgress(def, { step: -4, acknowledged: [] }).step,
-    ).toBe(1);
-    expect(
-      clampOnboardingProgress(def, { step: Number.NaN, acknowledged: [] }).step,
-    ).toBe(1);
-    expect(
-      clampOnboardingProgress(def, { step: 2.7, acknowledged: [] }).step,
-    ).toBe(2);
-  });
-
-  it("drops ids that aren't this onboarding's tick boxes, and duplicates", () => {
+  it("keeps this onboarding's ticked boxes, in order, once each", () => {
     expect(
       clampOnboardingProgress(def, {
-        step: 1,
-        acknowledged: ["not-a-box", ackIds[1]!, ackIds[1]!, ackIds[0]!],
-      }).acknowledged,
-    ).toEqual([ackIds[0], ackIds[1]]);
+        acknowledged: [ackIds[1]!, ackIds[1]!, ackIds[0]!],
+      }),
+    ).toEqual({ acknowledged: [ackIds[0], ackIds[1]] });
   });
 
-  it("labels progress for the lead", () => {
-    expect(onboardingProgressLabel(null, 6)).toBe("Not started");
-    expect(onboardingProgressLabel(3, 6)).toBe("Step 3 of 6");
-    // An onboarding cannot shrink once sent, but never print "Step 9 of 6".
-    expect(onboardingProgressLabel(9, 6)).toBe("Step 6 of 6");
+  it("drops ids that aren't this onboarding's tick boxes", () => {
+    expect(
+      clampOnboardingProgress(def, {
+        acknowledged: ["not-a-box", "welcome-text"],
+      }).acknowledged,
+    ).toEqual([]);
+  });
+
+  it("says how many boxes are ticked, for the lead", () => {
+    expect(onboardingTickText(0, 3)).toBe("none ticked");
+    expect(onboardingTickText(1, 3)).toBe("1 of 3 ticked");
+    // An onboarding can't shrink once sent, but never print "5 of 3".
+    expect(onboardingTickText(5, 3)).toBe("3 of 3 ticked");
   });
 });
 

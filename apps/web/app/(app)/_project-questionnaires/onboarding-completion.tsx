@@ -1,9 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
-import {
-  onboardingProgressLabel,
-  type OnboardingNamesFilter,
-} from "@quagga/core";
+import { onboardingTickText, type OnboardingNamesFilter } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -22,7 +19,10 @@ import {
   TableRow,
 } from "@quagga/ui/components/table";
 import { cn } from "@quagga/ui/lib/utils";
-import type { OnboardingCompletionView } from "@/lib/onboarding-store";
+import type {
+  OnboardingCompletionView,
+  OnboardingNameRow,
+} from "@/lib/onboarding-store";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
 import { CloseQuestionnaireButton } from "@/components/questionnaire/close-questionnaire-button";
 import { closeQuestionnaireAction } from "@/app/(app)/camps/[slug]/questionnaires/actions";
@@ -34,6 +34,34 @@ import { closeQuestionnaireAction } from "@/app/(app)/camps/[slug]/questionnaire
 // link (`?names=…`) — so the names are not merely folded away in the page,
 // they are not LOADED until asked for (onboarding-store `getOnboardingCompletion`
 // runs no names query without it).
+
+/** Complete / Closed / In progress / Not started (canvas A3 `oBuPo`). */
+function StatusBadge({ n }: { n: OnboardingNameRow }) {
+  if (n.status === "completed") {
+    return (
+      <Badge variant="success">
+        Complete{n.completedAt ? ` · ${fmt(n.completedAt)}` : ""}
+      </Badge>
+    );
+  }
+  if (n.status === "expired") return <Badge variant="outline">Closed</Badge>;
+  return n.openedAt ? (
+    <Badge>In progress</Badge>
+  ) : (
+    <Badge variant="outline">Not started</Badge>
+  );
+}
+
+/** "Opened 6 Apr · 1 of 3 ticked", "Not opened yet", or "Done". */
+function progressText(n: OnboardingNameRow, boxes: number): string {
+  if (n.status === "completed") return "Done";
+  if (!n.openedAt) return "Not opened yet";
+  return `Opened ${shortDate(n.openedAt)} · ${onboardingTickText(n.ticked, boxes)}`;
+}
+
+function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 function fmt(d: Date | null): string | null {
   if (!d) return null;
@@ -102,7 +130,7 @@ export function OnboardingCompletion({
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <dl
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
             data-testid="onboarding-totals"
           >
             <div className={tile}>
@@ -139,7 +167,9 @@ export function OnboardingCompletion({
               <dd className="text-xs text-muted-foreground">
                 {recalled
                   ? "closed — nobody still owes it"
-                  : `${totals.inProgress} part-way through`}
+                  : `${totals.inProgress} started · ${
+                      totals.outstanding - totals.inProgress
+                    } not opened`}
               </dd>
             </div>
           </dl>
@@ -219,42 +249,56 @@ export function OnboardingCompletion({
               Showing {view.names.length} of {totals.total}
             </p>
             {view.names.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>At this camp</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                {/* A phone gets one stacked row per person (canvas A3
+                    `d60hfO`); four columns don't fit in 360px. */}
+                <ul className="flex flex-col divide-y divide-border rounded-lg border border-border md:hidden">
                   {view.names.map((n) => (
-                    <TableRow key={n.userId}>
-                      <TableCell>{n.displayName}</TableCell>
-                      <TableCell>
-                        {n.tenure === "new" ? "New" : "Returning"}
-                      </TableCell>
-                      <TableCell>
-                        {n.status === "completed" ? (
-                          <Badge variant="success">
-                            Complete
-                            {n.completedAt ? ` · ${fmt(n.completedAt)}` : ""}
-                          </Badge>
-                        ) : n.status === "expired" ? (
-                          <Badge variant="outline">Closed</Badge>
-                        ) : (
-                          <Badge variant="outline">
-                            {onboardingProgressLabel(
-                              n.furthestStep,
-                              view.summary.sections,
-                            )}
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                    <li
+                      key={n.userId}
+                      data-testid="onboarding-person"
+                      className="flex flex-col gap-1 px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate font-medium">
+                          {n.displayName}
+                        </span>
+                        <StatusBadge n={n} />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {n.tenure === "new" ? "New" : "Returning"} ·{" "}
+                        {progressText(n, view.summary.acknowledgements)}
+                      </p>
+                    </li>
                   ))}
-                </TableBody>
-              </Table>
+                </ul>
+                <Table className="hidden md:table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>At this camp</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Progress</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {view.names.map((n) => (
+                      <TableRow key={n.userId} data-testid="onboarding-person">
+                        <TableCell>{n.displayName}</TableCell>
+                        <TableCell>
+                          {n.tenure === "new" ? "New" : "Returning"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge n={n} />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {progressText(n, view.summary.acknowledgements)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             )}
           </CardContent>
         )}
