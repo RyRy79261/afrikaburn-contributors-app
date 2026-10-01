@@ -58,6 +58,10 @@ const {
   sendOnboardingDraft,
   getOnboardingCompletion,
   deliverOpenOnboardingsToNewMember,
+  createOnboardingDraft,
+  getOnboardingDraft,
+  saveOnboardingDraft,
+  discardOnboardingDraft,
 } = await import("../onboarding-store");
 
 function activation(overrides: Record<string, unknown> = {}) {
@@ -140,7 +144,10 @@ describe("sendOnboardingDraft", () => {
   it("refuses a draft written for an earlier edition, and says what to do", async () => {
     stubs.activation = activation({ editionId: "ed-2026" });
     const r = await send();
-    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/discard it/) });
+    expect(r).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/discard it/),
+    });
     expect(dbMock.queries).toHaveLength(0);
     expect(stubs.inserted).toHaveLength(0);
   });
@@ -167,8 +174,18 @@ describe("getOnboardingCompletion — totals first, names only on demand", () =>
   it("does not query anybody's name without a names filter", async () => {
     dbMock.queue(
       [
-        { userId: "u1", status: "completed", completedAt: new Date(), membershipId: "m1" },
-        { userId: "u2", status: "pending", completedAt: null, membershipId: "m2" },
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: new Date(),
+          membershipId: "m1",
+        },
+        {
+          userId: "u2",
+          status: "pending",
+          completedAt: null,
+          membershipId: "m2",
+        },
       ],
       [{ n: 3 }],
     );
@@ -193,8 +210,18 @@ describe("getOnboardingCompletion — totals first, names only on demand", () =>
   it("loads names when asked, filtered", async () => {
     dbMock.queue(
       [
-        { userId: "u1", status: "completed", completedAt: new Date(), membershipId: "m1" },
-        { userId: "u2", status: "pending", completedAt: null, membershipId: "m2" },
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: new Date(),
+          membershipId: "m1",
+        },
+        {
+          userId: "u2",
+          status: "pending",
+          completedAt: null,
+          membershipId: "m2",
+        },
       ],
       [{ n: 2 }],
       [{ id: "u2", username: "jabu", sanitizedAt: null }],
@@ -245,7 +272,9 @@ describe("deliverOpenOnboardingsToNewMember", () => {
     });
     expect(n).toBe(1);
     expect(stubs.inserted).toEqual([{ userIds: ["newcomer"] }]);
-    expect(stubs.notified).toEqual([{ userIds: ["newcomer"], onboarding: true }]);
+    expect(stubs.notified).toEqual([
+      { userIds: ["newcomer"], onboarding: true },
+    ]);
   });
 
   it("delivers nothing when the audience doesn't reach them (e.g. a new co-lead, leads off)", async () => {
@@ -288,9 +317,8 @@ describe("deliverOpenOnboardingsToNewMember — a former member let back in", ()
       // …and the waived → pending update brings it back.
       [{ userId: "returner" }],
     );
-    const { deliverOpenOnboardingsToNewMember: deliver } = await import(
-      "../onboarding-store"
-    );
+    const { deliverOpenOnboardingsToNewMember: deliver } =
+      await import("../onboarding-store");
     // Make the mocked insert report "nothing new" for this case.
     const qs = await import("../questionnaire-store");
     const spy = vi
@@ -305,6 +333,91 @@ describe("deliverOpenOnboardingsToNewMember — a former member let back in", ()
     expect(n).toBe(1);
     const revive = dbMock.writesTo(schema.requiredActions)[0]!;
     expect(revive.arg("set")).toMatchObject({ status: "pending" });
-    expect(stubs.notified).toEqual([{ userIds: ["returner"], onboarding: true }]);
+    expect(stubs.notified).toEqual([
+      { userIds: ["returner"], onboarding: true },
+    ]);
+  });
+});
+
+describe("drafts — create, read, autosave, discard", () => {
+  it("creates a NON-blocking draft from the preset with leads off the audience", async () => {
+    dbMock.queue(undefined, [{ id: ACT }]);
+    const id = await createOnboardingDraft({
+      groupId: CAMP,
+      editionId: "ed-2027",
+      createdByUserId: "u-lead",
+      campName: "Camp 404",
+    });
+    expect(id).toBe(ACT);
+    const [act] = dbMock.writesTo(schema.questionnaireActivations);
+    const values = act!.arg("values") as Record<string, unknown>;
+    expect(values.status).toBe("draft");
+    expect(values.blocking).toBe(false);
+    expect(values.audience).toEqual(defaultOnboardingAudience(CAMP));
+    // A draft reaches nobody: no required_actions are written.
+    expect(dbMock.writesTo(schema.requiredActions)).toHaveLength(0);
+  });
+
+  it("reads back this camp's draft with its version stamp", async () => {
+    dbMock.queue([{ updatedAt: STAMP }]);
+    const row = await getOnboardingDraft(ACT, CAMP);
+    expect(row?.updatedAt).toBe(STAMP);
+  });
+
+  it("returns null for another camp's, a sent one, or a plain questionnaire", async () => {
+    stubs.activation = activation({ groupId: "other-camp" });
+    expect(await getOnboardingDraft(ACT, CAMP)).toBeNull();
+    stubs.activation = activation({ status: "open" });
+    expect(await getOnboardingDraft(ACT, CAMP)).toBeNull();
+    stubs.activation = activation({ definition: { pages: [] } });
+    expect(await getOnboardingDraft(ACT, CAMP)).toBeNull();
+    // None of them got as far as the stamp read.
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  const saveInput = {
+    activationId: ACT,
+    groupId: CAMP,
+    title: "Welcome to the camp",
+    description: null,
+    definition: buildOnboardingPreset(),
+    audience: defaultOnboardingAudience(CAMP),
+    blocking: false,
+    dueAt: null,
+  };
+
+  it("autosaves a draft into both the activation and its definition", async () => {
+    dbMock.queue([{ key: `proj:${CAMP}:abc` }], undefined);
+    expect(await saveOnboardingDraft(saveInput)).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.questionnaireActivations)).toHaveLength(1);
+    expect(dbMock.writesTo(schema.questionnaireDefinitions)).toHaveLength(1);
+  });
+
+  it("refuses to edit a sent onboarding and leaves the definition alone", async () => {
+    dbMock.queue([]);
+    const res = await saveOnboardingDraft(saveInput);
+    expect(res).toMatchObject({ ok: false, reason: "not_draft" });
+    expect(dbMock.writesTo(schema.questionnaireDefinitions)).toHaveLength(0);
+  });
+
+  it("refuses an invalid definition without writing", async () => {
+    const res = await saveOnboardingDraft({
+      ...saveInput,
+      definition: { pages: [] } as never,
+    });
+    expect(res).toMatchObject({ ok: false, reason: "invalid" });
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("discards a draft and its definition", async () => {
+    dbMock.queue([{ key: `proj:${CAMP}:abc` }], undefined);
+    expect(await discardOnboardingDraft(ACT, CAMP)).toBe(true);
+    expect(dbMock.writesTo(schema.questionnaireDefinitions)).toHaveLength(1);
+  });
+
+  it("discards nothing once sent (only Close recalls a sent one)", async () => {
+    dbMock.queue([]);
+    expect(await discardOnboardingDraft(ACT, CAMP)).toBe(false);
+    expect(dbMock.writesTo(schema.questionnaireDefinitions)).toHaveLength(0);
   });
 });
