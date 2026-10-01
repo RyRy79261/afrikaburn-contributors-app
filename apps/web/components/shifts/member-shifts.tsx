@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowLeftRight,
@@ -38,6 +37,7 @@ import type {
 } from "@/lib/shifts-store";
 import { DateBlock } from "./date-block";
 import { ShiftActionButton } from "./shift-action-button";
+import { TeamFilter } from "./team-filter";
 import { scheduleSummary, todayIso } from "./view-model";
 
 // The member's Shifts view (canvas S3 `M3rNVI` / `pf8nm`): requests handed to
@@ -206,7 +206,11 @@ export function MemberShifts({
                       <div className="min-w-0">
                         <p className="flex flex-wrap items-center gap-2 font-medium">
                           {s.name}
-                          {s.id === nextId && <Badge>Next</Badge>}
+                          {s.id === nextId && (
+                            <Badge className="bg-primary text-primary-foreground">
+                              Next
+                            </Badge>
+                          )}
                           {a.handoverTo && (
                             <Badge variant="secondary">Handing on</Badge>
                           )}
@@ -234,8 +238,8 @@ export function MemberShifts({
                               className="h-4 w-4 text-primary"
                               aria-hidden
                             />
-                            Posted to Open shifts · the first person to take
-                            it gets it
+                            Posted to Open shifts · the first person to take it
+                            gets it
                           </p>
                         )}
                       </div>
@@ -276,20 +280,15 @@ export function MemberShifts({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {openTeams.length > 0 && (
-            <nav aria-label="Filter by team" className="flex flex-wrap gap-2">
-              <TeamChip href={basePath} active={!teamFilter}>
-                All teams
-              </TeamChip>
-              {openTeams.map(([id, name]) => (
-                <TeamChip
-                  key={id}
-                  href={`${basePath}?team=${id}`}
-                  active={teamFilter === id}
-                >
-                  {name}
-                </TeamChip>
-              ))}
-            </nav>
+            <TeamFilter
+              teams={openTeams.map(([id, name]) => ({
+                id,
+                name,
+                href: `${basePath}?team=${id}`,
+              }))}
+              allHref={basePath}
+              active={teamFilter}
+            />
           )}
           {shownOpen.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -375,30 +374,5 @@ export function MemberShifts({
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-export function TeamChip({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "true" : undefined}
-      className={cn(
-        "inline-flex h-9 items-center rounded-md border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active
-          ? "border-primary bg-primary/15 text-foreground"
-          : "border-input hover:bg-muted",
-      )}
-    >
-      {children}
-    </Link>
   );
 }

@@ -17,7 +17,7 @@ import { EmptyState } from "@quagga/ui/components/empty-state";
 import { cn } from "@quagga/ui/lib/utils";
 import type { ShiftBoard } from "@/lib/shifts-store";
 import { AssignDialog } from "./assign-dialog";
-import { TeamChip } from "./member-shifts";
+import { TeamFilter } from "./team-filter";
 import { candidatesFor, namesOn, shiftLabel } from "./view-model";
 
 // The lead's Shifts overview (canvas S1 `gAQnT` / `BPuki`): headline numbers,
@@ -140,7 +140,7 @@ export function LeadOverview({
         </h2>
         <nav
           aria-label="Days"
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-flow-col lg:auto-cols-fr lg:overflow-visible lg:px-0"
         >
           {week.map((d) => {
             const label = dayGapLabel(d);
@@ -151,7 +151,7 @@ export function LeadOverview({
                 href={q(d.date, teamFilter)}
                 aria-current={active ? "date" : undefined}
                 className={cn(
-                  "flex min-w-[6.5rem] shrink-0 flex-col rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex min-w-[6.5rem] shrink-0 flex-col rounded-md border px-3 py-2 lg:min-w-0 lg:px-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active
                     ? "border-primary bg-primary/10"
                     : "border-border hover:bg-muted",
@@ -160,7 +160,9 @@ export function LeadOverview({
                 <span
                   className={cn(
                     "text-[11px] font-semibold uppercase tracking-wide",
-                    d.phase === "event" ? "text-muted-foreground" : "text-primary",
+                    d.phase === "event"
+                      ? "text-muted-foreground"
+                      : "text-primary",
                   )}
                 >
                   {PHASE_LABEL[d.phase]}
@@ -184,23 +186,23 @@ export function LeadOverview({
             );
           })}
         </nav>
+        {week.length > 4 && (
+          <p className="text-xs text-muted-foreground lg:hidden">
+            Swipe for more days →
+          </p>
+        )}
       </section>
 
       {board.teams.length > 0 && (
-        <nav aria-label="Filter by team" className="flex flex-wrap gap-2">
-          <TeamChip href={q(selectedDay, null)} active={!teamFilter}>
-            All teams
-          </TeamChip>
-          {board.teams.map((t) => (
-            <TeamChip
-              key={t.id}
-              href={q(selectedDay, t.id)}
-              active={teamFilter === t.id}
-            >
-              {t.name}
-            </TeamChip>
-          ))}
-        </nav>
+        <TeamFilter
+          teams={board.teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            href: q(selectedDay, t.id),
+          }))}
+          allHref={q(selectedDay, null)}
+          active={teamFilter}
+        />
       )}
 
       <section
@@ -231,20 +233,35 @@ export function LeadOverview({
               );
               const sub = s.requiredRoleName
                 ? `Needs ${s.requiredRoleName}`
-                : (s.teamName ?? (s.signupMode === "assign" ? "Leads assign" : null));
+                : (s.teamName ??
+                  (s.signupMode === "assign" ? "Leads assign" : null));
               return (
                 <li
                   key={s.id}
                   data-testid="lead-shift-row"
                   className={cn(
-                    "grid gap-2 px-5 py-4 md:grid-cols-[7.5rem_1fr_1fr_auto_auto] md:items-center md:gap-4",
+                    "flex flex-col gap-1.5 px-5 py-4 md:grid md:grid-cols-[7.5rem_1fr_1fr_auto_auto] md:items-center md:gap-4",
                     gaps > 0 && "bg-warning/5",
                   )}
                 >
-                  <span className="font-mono text-sm">
-                    {formatShiftTime(s.startMinute, s.durationMinutes)}
-                  </span>
-                  <div className="min-w-0">
+                  {/* On a phone the time and the count share the top line
+                      (canvas `BPuki`); from md up they are grid columns. */}
+                  <div className="flex items-center justify-between gap-2 md:contents">
+                    <span className="font-mono text-sm md:order-1">
+                      {formatShiftTime(s.startMinute, s.durationMinutes)}
+                    </span>
+                    <span className="flex items-center gap-2 text-sm font-medium md:order-4">
+                      {s.assignments.length} of {s.capacity}
+                      {gaps === 0 ? (
+                        <Badge variant="success">Full</Badge>
+                      ) : (
+                        <Badge variant="warning">
+                          {gaps} gap{gaps === 1 ? "" : "s"}
+                        </Badge>
+                      )}
+                    </span>
+                  </div>
+                  <div className="min-w-0 md:order-2">
                     <p className="font-medium">{s.name}</p>
                     {sub && (
                       <p className="text-sm text-muted-foreground">{sub}</p>
@@ -252,7 +269,7 @@ export function LeadOverview({
                   </div>
                   <p
                     className={cn(
-                      "text-sm",
+                      "text-sm md:order-3",
                       s.assignments.length === 0 && "text-muted-foreground",
                     )}
                   >
@@ -270,17 +287,7 @@ export function LeadOverview({
                       </span>
                     )}
                   </p>
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    {s.assignments.length} of {s.capacity}
-                    {gaps === 0 ? (
-                      <Badge variant="success">Full</Badge>
-                    ) : (
-                      <Badge variant="warning">
-                        {gaps} gap{gaps === 1 ? "" : "s"}
-                      </Badge>
-                    )}
-                  </span>
-                  <span className="flex items-center gap-2 md:justify-end">
+                  <span className="mt-1 flex items-center justify-end gap-2 md:order-5 md:mt-0">
                     {gaps > 0 && (
                       <AssignDialog
                         slug={slug}
@@ -288,6 +295,8 @@ export function LeadOverview({
                         shiftLabel={shiftLabel(s)}
                         candidates={candidates}
                         excludedNote={excludedNote}
+                        fullWidth="mobile"
+                        className="flex-1 md:flex-none"
                       />
                     )}
                     <Button

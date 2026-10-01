@@ -99,7 +99,7 @@ export default async function HandOnPage({
           confirm="Take me off"
           successMessage="You're off the shift."
           redirectTo={back}
-          className="w-fit"
+          className="-ml-3 w-fit"
         >
           Take me off this shift
         </ShiftActionButton>

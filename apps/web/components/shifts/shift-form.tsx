@@ -177,9 +177,7 @@ export function ShiftForm({
           ? "Shift saved."
           : `Created ${sortedDates.length} shift${sortedDates.length === 1 ? "" : "s"}.`,
       );
-      router.push(
-        sortedDates[0] ? `${base}?day=${sortedDates[0]}` : base,
-      );
+      router.push(sortedDates[0] ? `${base}?day=${sortedDates[0]}` : base);
       router.refresh();
     });
   }
@@ -251,7 +249,11 @@ export function ShiftForm({
                 </label>
                 <Input
                   id="shift-start"
-                  type="time"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="HH:MM"
+                  pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
+                  maxLength={5}
                   className="w-36"
                   value={allDay ? "00:00" : startText}
                   disabled={allDay}
@@ -285,7 +287,11 @@ export function ShiftForm({
                   </label>
                   <Input
                     id="shift-end"
-                    type="time"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="HH:MM"
+                    pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
+                    maxLength={5}
                     className="w-36"
                     value={endText}
                     onChange={(e) => setEndText(e.target.value)}

@@ -50,7 +50,9 @@ export function AssignDialog({
   /** Why some members are not listed, when any are not. */
   excludedNote: string | null;
   className?: string;
-  fullWidth?: boolean;
+  /** `true`: always full width. `"mobile"`: full width ("Assign someone") on
+   * a phone, a compact "Assign" from md up (canvas `BPuki` / `gAQnT`). */
+  fullWidth?: boolean | "mobile";
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -86,10 +88,23 @@ export function AssignDialog({
           type="button"
           variant="outline"
           size="sm"
-          className={cn(fullWidth && "w-full", className)}
+          className={cn(
+            fullWidth === true && "w-full",
+            fullWidth === "mobile" && "w-full md:w-auto",
+            className,
+          )}
         >
           <UserPlus className="h-4 w-4" aria-hidden />
-          {fullWidth ? "Assign someone" : "Assign"}
+          {fullWidth === "mobile" ? (
+            <>
+              <span className="md:hidden">Assign someone</span>
+              <span className="hidden md:inline">Assign</span>
+            </>
+          ) : fullWidth ? (
+            "Assign someone"
+          ) : (
+            "Assign"
+          )}
         </Button>
       </DialogTrigger>
       <DialogContent>
