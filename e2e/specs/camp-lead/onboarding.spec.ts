@@ -4,16 +4,16 @@
 // end through the real UI:
 //
 //   1. the lead starts an onboarding from the PRESET, and the builder shows
-//      who it reaches — leads and co-leads OFF by default, so a camp of lead +
-//      one member "Reaches 1 of 2";
+//      who it reaches — everyone by default, leads included, so a camp of
+//      lead + one member "Reaches 2 of 2";
 //   2. the lead sends it; the completion view shows TOTALS, and NO names until
 //      "Show names" is asked for (ONBOARD-020);
 //   3. the member walks it ONE STEP AT A TIME, and can't finish until every
 //      acknowledgement is ticked;
-//   4. the lead's total moves to "1 of 1" and the member's name appears only
+//   4. the lead's total moves to "1 of 2" and the member's name appears only
 //      behind "Show names";
 //   5. someone who joins AFTER the send gets it too, and the total becomes
-//      "1 of 2".
+//      "1 of 3".
 
 import { test, expect } from "../../fixtures";
 import {
@@ -53,9 +53,9 @@ test.describe("camp lead — onboarding", () => {
     await leadPage.waitForURL(/\/questionnaires\/onboarding\/[0-9a-f-]{36}$/);
     const activationId = leadPage.url().split("/").pop()!;
 
-    // Leads are OFF by default: lead + one member → reaches the member only.
+    // Everyone by default, leads included: lead + one member → both.
     await expect(leadPage.getByTestId("onboarding-reach")).toHaveText(
-      /reaches 1 of 2 members/i,
+      /reaches 2 of 2 members/i,
     );
     await expect(leadPage.getByText(/^optional$/i).first()).toBeVisible();
 
@@ -73,7 +73,7 @@ test.describe("camp lead — onboarding", () => {
       new RegExp(`/camps/${camp.slug}/questionnaires/${activationId}$`),
     );
     await expect(leadPage.getByTestId("onboarding-complete")).toHaveText(
-      /0 of 1/,
+      /0 of 2/,
     );
     // Totals first: the "Show names" control is there, the member's name is not.
     await expect(
@@ -109,7 +109,7 @@ test.describe("camp lead — onboarding", () => {
     // --- 4. The lead's total moves; names only on demand ----------------------
     await leadPage.reload();
     await expect(leadPage.getByTestId("onboarding-complete")).toHaveText(
-      /1 of 1/,
+      /1 of 2/,
     );
     await expect(leadPage.getByText(memberName)).toHaveCount(0);
     await leadPage.getByRole("link", { name: /show names/i }).click();
@@ -130,7 +130,7 @@ test.describe("camp lead — onboarding", () => {
 
     await leadPage.goto(`/camps/${camp.slug}/questionnaires/${activationId}`);
     await expect(leadPage.getByTestId("onboarding-complete")).toHaveText(
-      /1 of 2/,
+      /1 of 3/,
     );
   });
 });

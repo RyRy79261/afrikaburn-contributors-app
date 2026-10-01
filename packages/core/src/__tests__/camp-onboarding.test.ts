@@ -19,7 +19,7 @@ import type { PermissionMembership } from "../project-permissions";
 
 // Camp onboarding (epic #54). The rules Ryan set, each pinned here:
 //   - a PRESET on camp questionnaires (info blocks, a video LINK, tick boxes);
-//   - NOT blocking by default; leads and co-leads OFF the audience by default;
+//   - NOT blocking by default; leads and co-leads ON the audience by default;
 //   - "new" = new to THIS camp, never to AfrikaBurn;
 //   - totals first (ONBOARD-020); last edition's carried as a DRAFT
 //     (ONBOARD-022) with the due date cleared.
@@ -243,19 +243,8 @@ describe("defaultOnboardingAudience + resolution", () => {
     ],
   };
 
-  it("leaves leads and co-leads OUT by default, reaches new and returning members", () => {
+  it("reaches everyone in the camp by default, leads and co-leads included", () => {
     expect(resolveAudience(defaultOnboardingAudience(GROUP), ctx)).toEqual([
-      "newbie",
-      "vet",
-    ]);
-  });
-
-  it("reaches leads and co-leads when the lead switches them on", () => {
-    const aud: ProjectAudience = {
-      ...defaultOnboardingAudience(GROUP),
-      structuralRoles: ["lead", "admin", "member"],
-    };
-    expect(resolveAudience(aud, ctx)).toEqual([
       "colead",
       "lead",
       "newbie",
@@ -263,17 +252,31 @@ describe("defaultOnboardingAudience + resolution", () => {
     ]);
   });
 
+  it("leaves leads and co-leads out when the lead switches them off", () => {
+    const aud: ProjectAudience = {
+      ...defaultOnboardingAudience(GROUP),
+      structuralRoles: ["member"],
+    };
+    expect(resolveAudience(aud, ctx)).toEqual(["newbie", "vet"]);
+  });
+
   it("narrows to new to the camp only", () => {
     const aud: ProjectAudience = {
       ...defaultOnboardingAudience(GROUP),
       tenure: ["new"],
     };
-    expect(resolveAudience(aud, ctx)).toEqual(["newbie"]);
+    expect(resolveAudience(aud, ctx)).toEqual(["colead", "newbie"]);
   });
 
   it("describes the default audience in generic words", () => {
     expect(
       describeOnboardingAudience(defaultOnboardingAudience(GROUP), new Map()),
+    ).toBe("new and returning to the camp · Everyone");
+    expect(
+      describeOnboardingAudience(
+        { ...defaultOnboardingAudience(GROUP), structuralRoles: ["member"] },
+        new Map(),
+      ),
     ).toBe("new and returning to the camp · Member");
   });
 });

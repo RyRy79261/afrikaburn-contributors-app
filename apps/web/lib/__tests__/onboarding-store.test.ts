@@ -277,7 +277,7 @@ describe("deliverOpenOnboardingsToNewMember", () => {
     ]);
   });
 
-  it("delivers nothing when the audience doesn't reach them (e.g. a new co-lead, leads off)", async () => {
+  it("delivers nothing when the audience doesn't reach them (e.g. a new co-lead, leads switched off)", async () => {
     stubs.targets = ["u-a"];
     dbMock.queue([{ id: ACT }], [{ status: "open" }]);
     const n = await deliverOpenOnboardingsToNewMember({
@@ -340,7 +340,7 @@ describe("deliverOpenOnboardingsToNewMember — a former member let back in", ()
 });
 
 describe("drafts — create, read, autosave, discard", () => {
-  it("creates a NON-blocking draft from the preset with leads off the audience", async () => {
+  it("creates a NON-blocking draft from the preset with the default audience", async () => {
     dbMock.queue(undefined, [{ id: ACT }]);
     const id = await createOnboardingDraft({
       groupId: CAMP,

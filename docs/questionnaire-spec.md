@@ -364,8 +364,9 @@ jsonb (`definition`, `audience`).
     the most recent earlier edition, or holds logistics with the camp for an
     earlier edition (`classifyCampTenure`). Only camp-held records are read,
     never the burner's own bio. A tenure filter fails closed on unknown tenure.
-  - `structuralRoles: ("lead" | "admin" | "member")[]` — **leads and co-leads
-    are off by default** and can be switched on.
+  - `structuralRoles: ("lead" | "admin" | "member")[]` — **everyone is on by
+    default, leads and co-leads included** (Ryan, 1 Oct 2026); the lead can
+    switch any of them off.
   - Custom roles narrow further ("only people holding …"). The builder shows
     "Reaches N of M members right now" through the same resolver the send runs;
     member counts include leads.

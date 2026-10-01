@@ -13,7 +13,7 @@
 //     onboarding definition may contain (`validateOnboardingDefinition`);
 //   - "new to the camp" vs "returning" (`classifyCampTenure`) — relative to
 //     THIS camp, never to AfrikaBurn (Ryan, 28 Sep 2026);
-//   - the default audience (leads and co-leads OFF, new and returning ON);
+//   - the default audience (everyone in the camp, leads included);
 //   - the lead's completion totals (`tallyOnboardingCompletion`) — totals
 //     first, names only on demand (ONBOARD-020);
 //   - carrying last edition's onboarding forward as a DRAFT (ONBOARD-022).
@@ -363,9 +363,9 @@ export function classifyCampTenure(
 // --- Audience -----------------------------------------------------------
 
 /**
- * The audience an onboarding starts with: everyone in the camp who is not a
- * lead or co-lead, new and returning alike. Leads and co-leads CAN be an
- * audience but are OFF by default (Ryan, 28 Sep 2026) — they wrote it.
+ * The audience an onboarding starts with: everyone in the camp, leads and
+ * co-leads included, new and returning alike (Ryan, 1 Oct 2026 — this
+ * replaced "leads off by default"). The lead can switch any of them off.
  */
 export function defaultOnboardingAudience(groupId: string): ProjectAudience {
   return {
@@ -374,7 +374,7 @@ export function defaultOnboardingAudience(groupId: string): ProjectAudience {
     mode: "everyone",
     roleIds: [],
     tenure: ["new", "returning"],
-    structuralRoles: ["member"],
+    structuralRoles: ["lead", "admin", "member"],
   };
 }
 
@@ -402,7 +402,11 @@ export function describeOnboardingAudience(
         ? "new to the camp"
         : "returning to the camp";
   const structural = audience.structuralRoles ?? ["lead", "admin", "member"];
-  const roles = structural.map((r) => STRUCTURAL_ROLE_LABELS[r]).join(", ");
+  // All three is the whole camp — say so instead of listing every rank.
+  const roles =
+    structural.length === 3
+      ? "Everyone"
+      : structural.map((r) => STRUCTURAL_ROLE_LABELS[r]).join(", ");
   const custom =
     audience.mode === "roles"
       ? audience.roleIds
