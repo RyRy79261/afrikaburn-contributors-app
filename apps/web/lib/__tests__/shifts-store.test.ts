@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@quagga/db";
 import { MembershipRole, NotificationKind } from "@quagga/types";
-import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
+import {
+  boundStrings,
+  dbMock,
+  nullChecksOn,
+  uniqueViolation,
+} from "@/test/db-mock";
 
 // Camp shifts (epic #57) — the store's WRITES. What these pin is the decision
 // (who is refused, and that a refusal writes nothing), that the facts come
@@ -18,14 +23,21 @@ const {
   assignToShift,
   createShifts,
   deleteShift,
+  ensureStarterTeams,
   getShiftTileSummary,
   handShiftTo,
+  leaveShift,
+  listShiftTeams,
+  loadShiftBoard,
+  offerShift,
   removeShiftTeam,
   renameShiftTeam,
   respondToHandOn,
   signUpForShift,
   takeOfferedShift,
+  unassignFromShift,
   updateShift,
+  withdrawHandOn,
 } = await import("../shifts-store");
 
 // Values from the real vocabularies (AGENTS.md "Verification"). Ids fictional.
@@ -113,6 +125,8 @@ function queueLocked(input: {
   held?: { userId: string; roleId: string }[];
   shift?: Record<string, unknown> | null;
   assignments?: ReturnType<typeof assignment>[];
+  /** More of the camp's shifts this edition (for the clash checks). */
+  otherShifts?: Record<string, unknown>[];
 }) {
   const members = input.members ?? [ALICE, JABU, LERATO, REN];
   const parties = input.parties ?? (input.actor ? [input.actor] : []);
@@ -128,7 +142,7 @@ function queueLocked(input: {
       membershipId: M[h.userId as keyof typeof M],
       projectRoleId: h.roleId,
     })),
-    [shiftRow(input.shift ?? {})],
+    [shiftRow(input.shift ?? {}), ...(input.otherShifts ?? []).map(shiftRow)],
     input.assignments ?? [],
   );
 }
@@ -907,5 +921,830 @@ describe("getShiftTileSummary — the camp page tile", () => {
     expect(
       boundStrings(dbMock.queries[0]!).filter((v) => v === CAMP).length,
     ).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// --- Coverage of the remaining store paths (PR #86) -------------------------
+// Each block pins a decision the store owns: the refusal a caller sees, and
+// that a refusal writes nothing.
+
+const OTHER_SHIFT = "55555555-0000-4000-8000-000000000002";
+const TEAM = "7e7e7e7e-0000-4000-8000-000000000009";
+const CAMP_ROW = { name: "Camp 404", slug: "camp-404" };
+const burn = { id: EDITION, startDate: "2027-04-26", endDate: "2027-05-02" };
+
+/** An assignment on the camp's OTHER shift (for the clash checks). */
+const onOther = (userId: string) => ({
+  ...assignment(userId),
+  id: `other-${NAME[userId]}`,
+  shiftId: OTHER_SHIFT,
+});
+
+/** Overlaps Kitchen · lunch (12:00–15:00) on the same day. */
+const overlapping = {
+  id: OTHER_SHIFT,
+  name: "Tea bar",
+  startMinute: 780,
+  durationMinutes: 120,
+};
+
+describe("loadShiftBoard — what the Shifts pages render", () => {
+  it("lists active members with their camp roles, and hides assignments and requests naming anyone outside them", async () => {
+    const FORMER = "22222222-0000-4000-8000-0000000000ff";
+    dbMock.queue(
+      /* members */ [actorRow(LERATO), actorRow(ALICE), actorRow(JABU)],
+      /* teams */ [{ id: TEAM, name: "Kitchen" }],
+      /* held roles */ [{ membershipId: M[JABU], projectRoleId: SOUND }],
+      /* shifts */ [shiftRow()],
+      /* assignments */ [
+        assignment(JABU, { handoverTo: M[LERATO] }),
+        // A former member's spot: not in the active list, so not on the board.
+        { ...assignment(REN), membershipId: FORMER },
+        // A request to someone no longer a member reads as no request.
+        assignment(ALICE, { handoverTo: FORMER }),
+      ],
+    );
+    const board = await loadShiftBoard(CAMP, EDITION);
+
+    expect(board.teams).toEqual([{ id: TEAM, name: "Kitchen" }]);
+    // Sorted by display name; held roles only where held.
+    expect(board.members.map((m) => [m.displayName, m.heldRoleIds])).toEqual([
+      ["alice", []],
+      ["jabu", [SOUND]],
+      ["lerato", []],
+    ]);
+    const [shift] = board.shifts;
+    expect(shift!.assignments).toEqual([
+      {
+        id: "a-jabu",
+        membershipId: M[JABU],
+        userId: JABU,
+        displayName: "jabu",
+        offered: false,
+        handoverTo: { membershipId: M[LERATO], displayName: "lerato" },
+      },
+      expect.objectContaining({ id: "a-alice", handoverTo: null }),
+    ]);
+  });
+
+  it("a camp with no members and no shifts reads nothing further", async () => {
+    dbMock.queue([], [], []);
+    expect(await loadShiftBoard(CAMP, EDITION)).toEqual({
+      shifts: [],
+      members: [],
+      teams: [],
+    });
+    // members + teams + shifts; no held-roles read, no assignments read.
+    expect(dbMock.queries).toHaveLength(3);
+  });
+
+  it("listShiftTeams reads this camp's teams only", async () => {
+    dbMock.queue([{ id: TEAM, name: "Sound" }]);
+    expect(await listShiftTeams(CAMP)).toEqual([{ id: TEAM, name: "Sound" }]);
+    expect(boundStrings(dbMock.queries[0]!)).toContain(CAMP);
+  });
+});
+
+describe("ensureStarterTeams — seeded once per camp", () => {
+  it("a camp already seeded is never handed the list again", async () => {
+    dbMock.queue([{ seededAt: new Date("2027-01-01") }]);
+    await ensureStarterTeams(CAMP);
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("an unknown camp gets nothing", async () => {
+    dbMock.queue([]);
+    await ensureStarterTeams(CAMP);
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("the lead who wins the compare-and-set writes the starter list, in order", async () => {
+    dbMock.queue([{ seededAt: null }], /* claimed */ [{ id: CAMP }]);
+    await ensureStarterTeams(CAMP);
+    const [claim] = dbMock.writesTo(schema.groups);
+    expect(nullChecksOn(claim!, schema.groups.shiftTeamsSeededAt)).toEqual([
+      "is null",
+    ]);
+    const [insert] = dbMock.writesTo(schema.shiftTeams);
+    expect(insert!.tx).toBe(true);
+    expect(insert!.called("onConflictDoNothing")).toBe(true);
+    const values = insert!.arg("values") as {
+      groupId: string;
+      name: string;
+      nameNormalized: string;
+      sort: number;
+    }[];
+    expect(values[0]).toEqual({
+      groupId: CAMP,
+      name: "Kitchen",
+      nameNormalized: "kitchen",
+      sort: 0,
+    });
+    expect(values.map((v) => v.sort)).toEqual(values.map((_, i) => i));
+  });
+
+  it("the lead who loses the compare-and-set writes nothing", async () => {
+    dbMock.queue([{ seededAt: null }], /* another lead claimed it */ []);
+    await ensureStarterTeams(CAMP);
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+});
+
+describe("createShifts", () => {
+  const fields = {
+    name: "Kitchen · lunch",
+    teamId: TEAM,
+    dates: ["2027-04-29", "2027-04-30", "2027-04-29"],
+    startMinute: 720,
+    durationMinutes: 180,
+    capacity: 2,
+    requiredRoleId: SOUND,
+    signupMode: OPEN,
+  };
+
+  it("creates one shift per distinct day and audits the ids", async () => {
+    dbMock.queue(
+      [actorRow(ALICE)],
+      /* team is this camp's */ [{ id: TEAM }],
+      /* role is this camp's */ [{ id: SOUND }],
+      /* inserted */ [{ id: "s1" }, { id: "s2" }],
+    );
+    expect(
+      await createShifts({ actorUserId: ALICE, groupId: CAMP, edition: burn, fields }),
+    ).toEqual({ ok: true, created: 2 });
+    const [insert] = dbMock.writesTo(schema.shifts);
+    const rows = insert!.arg("values") as { shiftDate: string; groupId: string }[];
+    expect(rows.map((r) => r.shiftDate)).toEqual(["2027-04-29", "2027-04-30"]);
+    expect(rows.every((r) => r.groupId === CAMP)).toBe(true);
+    const [audit] = dbMock.writesTo(schema.auditEvents);
+    expect(audit!.arg("values")).toMatchObject({
+      action: "camp.shift.create",
+      meta: { groupId: CAMP, shiftIds: ["s1", "s2"] },
+    });
+  });
+
+  it("refuses a day outside the burn before touching the database", async () => {
+    const result = await createShifts({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields: { ...fields, dates: ["2027-06-01"] },
+    });
+    expect(result).toEqual({ ok: false, error: "Pick at least one day of the burn." });
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("refuses a plain member, and writes nothing", async () => {
+    dbMock.queue([actorRow(JABU)]);
+    const result = await createShifts({
+      actorUserId: JABU,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Only the camp's leads can change shifts.",
+    });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+});
+
+describe("updateShift — refusals after the lock", () => {
+  const fields = {
+    id: SHIFT,
+    name: "Kitchen · lunch",
+    teamId: TEAM,
+    date: "2027-04-29",
+    startMinute: 720,
+    durationMinutes: 180,
+    capacity: 2,
+    requiredRoleId: SOUND,
+    signupMode: OPEN,
+  };
+
+  it("refuses a plain member", async () => {
+    dbMock.queue([actorRow(JABU)]);
+    const result = await updateShift({
+      actorUserId: JABU,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result.ok).toBe(false);
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("a shift that is not this camp's answers as missing", async () => {
+    queueLocked({ actor: ALICE, shift: null });
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result).toEqual({ ok: false, error: "That shift doesn't exist." });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("refuses moving it onto another camp's team", async () => {
+    queueLocked({ actor: ALICE });
+    dbMock.queue(/* team not in this camp */ []);
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result).toEqual({ ok: false, error: "That team doesn't exist any more." });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("refuses requiring another camp's role", async () => {
+    queueLocked({ actor: ALICE });
+    dbMock.queue([{ id: TEAM }], /* role not in this camp */ []);
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "That camp role doesn't exist any more.",
+    });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("a failed notice never fails the change", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    queueLocked({ actor: ALICE, assignments: [assignment(JABU)] });
+    dbMock.queue(
+      [{ id: TEAM }],
+      [{ id: SOUND }],
+      /* update */ [],
+      /* audit */ [],
+      [CAMP_ROW],
+      /* notification insert */ new Error("notifications down"),
+    );
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields: { ...fields, startMinute: 960 },
+    });
+    expect(result).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(1);
+    expect(spy).toHaveBeenCalledWith(
+      "[notifications] shift notice failed",
+      expect.any(Error),
+    );
+    spy.mockRestore();
+  });
+});
+
+describe("deleteShift", () => {
+  const input = {
+    actorUserId: ALICE,
+    groupId: CAMP,
+    editionId: EDITION,
+    shiftId: SHIFT,
+  };
+
+  it("deletes inside this camp, audits it, and tells everyone on it but the lead", async () => {
+    queueLocked({
+      actor: ALICE,
+      assignments: [assignment(JABU), assignment(ALICE)],
+    });
+    dbMock.queue(/* delete */ [], /* audit */ [], [CAMP_ROW]);
+    expect(await deleteShift(input)).toEqual({ ok: true });
+    const [del] = dbMock.writesTo(schema.shifts);
+    expect(del!.kind).toBe("delete");
+    expect(boundStrings(del!)).toEqual(expect.arrayContaining([SHIFT, CAMP]));
+    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject({
+      action: "camp.shift.delete",
+      meta: { shiftId: SHIFT },
+    });
+    expect(notices().map((n) => n.userId)).toEqual([JABU]);
+  });
+
+  it("a shift that is not this camp's answers as missing, and deletes nothing", async () => {
+    queueLocked({ actor: ALICE, shift: null });
+    expect(await deleteShift(input)).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("the lock found the row but the shift is not in this edition's list: missing", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ id: SHIFT }], [actorRow(ALICE)], [], /* no shifts */ []);
+    expect(await deleteShift(input)).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+});
+
+describe("unassignFromShift", () => {
+  const input = (assignmentId: string, actorUserId = ALICE) => ({
+    actorUserId,
+    groupId: CAMP,
+    editionId: EDITION,
+    shiftId: SHIFT,
+    assignmentId,
+  });
+
+  it("refuses a plain member, and deletes nothing", async () => {
+    queueLocked({ actor: JABU, assignments: [assignment(LERATO)] });
+    expect(await unassignFromShift(input("a-lerato", JABU))).toEqual({
+      ok: false,
+      error: "Only the camp's leads can change shifts.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("a shift that is not this camp's answers as missing", async () => {
+    queueLocked({ actor: ALICE, shift: null });
+    expect(await unassignFromShift(input("a-jabu"))).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
+  });
+
+  it("an assignment no longer on the shift is a stale page, and deletes nothing", async () => {
+    queueLocked({ actor: ALICE, assignments: [assignment(JABU)] });
+    expect(await unassignFromShift(input("a-lerato"))).toEqual({
+      ok: false,
+      error: "That shift changed while you were looking — refresh and try again.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("takes the member off (scoped to the shift), audits it, and tells them", async () => {
+    queueLocked({ actor: ALICE, assignments: [assignment(JABU)] });
+    dbMock.queue(/* delete */ [], /* audit */ [], [CAMP_ROW]);
+    expect(await unassignFromShift(input("a-jabu"))).toEqual({ ok: true });
+    const [del] = dbMock.writesTo(schema.shiftAssignments);
+    expect(del!.kind).toBe("delete");
+    expect(del!.tx).toBe(true);
+    expect(boundStrings(del!)).toEqual(expect.arrayContaining(["a-jabu", SHIFT]));
+    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject({
+      actorId: ALICE,
+      action: "camp.shift.unassign",
+      subject: JABU,
+      meta: { membershipId: M[JABU] },
+    });
+    expect(notices()).toEqual([
+      expect.objectContaining({ userId: JABU, kind: SHIFT_KIND }),
+    ]);
+  });
+
+  it("a lead taking themselves off is not notified about it", async () => {
+    queueLocked({ actor: ALICE, assignments: [assignment(ALICE)] });
+    dbMock.queue([], [], [CAMP_ROW]);
+    expect(await unassignFromShift(input("a-alice"))).toEqual({ ok: true });
+    expect(notices()).toHaveLength(0);
+  });
+});
+
+describe("leave, offer and withdraw — the holder's own spot", () => {
+  const input = (userId: string) => ({ userId, ...base });
+
+  for (const [name, run] of [
+    ["leaveShift", leaveShift],
+    ["offerShift", offerShift],
+    ["withdrawHandOn", withdrawHandOn],
+  ] as const) {
+    it(`${name}: refuses a caller with no active membership`, async () => {
+      dbMock.queue(/* lockActor finds nobody */ []);
+      expect(await run(input(LERATO))).toEqual({
+        ok: false,
+        error: "Only members of this camp can be on its shifts.",
+      });
+      expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+    });
+
+    it(`${name}: a shift that is not this camp's answers as missing`, async () => {
+      queueLocked({ actor: LERATO, shift: null });
+      expect(await run(input(LERATO))).toEqual({
+        ok: false,
+        error: "That shift doesn't exist.",
+      });
+    });
+
+    it(`${name}: refuses someone who is not on the shift — even with someone else's spot there`, async () => {
+      queueLocked({ actor: LERATO, assignments: [assignment(JABU)] });
+      expect(await run(input(LERATO))).toEqual({
+        ok: false,
+        error: "You're not on that shift.",
+      });
+      expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+    });
+  }
+
+  it("leaveShift deletes only the caller's own row, and tells nobody", async () => {
+    queueLocked({ actor: JABU, assignments: [assignment(LERATO), assignment(JABU)] });
+    expect(await leaveShift(input(JABU))).toEqual({ ok: true });
+    const [del] = dbMock.writesTo(schema.shiftAssignments);
+    expect(del!.kind).toBe("delete");
+    expect(boundStrings(del!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+    expect(boundStrings(del!)).not.toContain("a-lerato");
+    expect(notices()).toHaveLength(0);
+  });
+
+  it("offerShift marks the caller's spot offered and clears any pending hand-to", async () => {
+    queueLocked({
+      actor: JABU,
+      assignments: [assignment(JABU, { handoverTo: M[LERATO] })],
+    });
+    expect(await offerShift(input(JABU))).toEqual({ ok: true });
+    const [update] = dbMock.writesTo(schema.shiftAssignments);
+    const set = update!.arg("set") as { offeredAt: unknown; handoverToMembershipId: unknown };
+    expect(set.offeredAt).toBeInstanceOf(Date);
+    expect(set.handoverToMembershipId).toBeNull();
+    expect(boundStrings(update!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+  });
+
+  it("withdrawHandOn clears both the offer and the request on the caller's own row", async () => {
+    queueLocked({
+      actor: JABU,
+      assignments: [assignment(JABU, { offeredAt: new Date("2027-04-20") })],
+    });
+    expect(await withdrawHandOn(input(JABU))).toEqual({ ok: true });
+    const [update] = dbMock.writesTo(schema.shiftAssignments);
+    expect(update!.arg("set")).toEqual({
+      offeredAt: null,
+      handoverToMembershipId: null,
+    });
+    expect(boundStrings(update!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+  });
+});
+
+describe("signUpForShift — the remaining refusals", () => {
+  it("someone already on it hears it in the first person", async () => {
+    queueLocked({ actor: LERATO, assignments: [assignment(LERATO)] });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: false,
+      error: "You're already on that shift.",
+    });
+    expect(shiftInserts()).toHaveLength(0);
+  });
+
+  it("a lead-assigned shift is not open for sign-up", async () => {
+    queueLocked({ actor: LERATO, shift: { signupMode: ASSIGN } });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: false,
+      error: "The camp's leads assign this shift — it isn't open for sign-up.",
+    });
+    expect(shiftInserts()).toHaveLength(0);
+  });
+
+  it("a required role whose name is gone still refuses, generically", async () => {
+    queueLocked({
+      actor: LERATO,
+      shift: { requiredRoleId: SOUND, requiredRoleName: null },
+    });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: false,
+      error: "This shift needs a camp role you don't hold.",
+    });
+  });
+
+  it("refuses a shift that overlaps one the caller is already on", async () => {
+    queueLocked({
+      actor: LERATO,
+      otherShifts: [overlapping],
+      assignments: [onOther(LERATO)],
+    });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: false,
+      error: "That clashes with another shift at the same time.",
+    });
+    expect(shiftInserts()).toHaveLength(0);
+  });
+
+  it("another shift that does NOT overlap is no clash", async () => {
+    queueLocked({
+      actor: LERATO,
+      otherShifts: [{ ...overlapping, startMinute: 900 }],
+      assignments: [onOther(LERATO)],
+    });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({ ok: true });
+    expect(shiftInserts()).toHaveLength(1);
+  });
+
+  it("a caller the lock returned but who is no longer in the member list is no member", async () => {
+    // Locked, then (sanitised) missing from the active member read.
+    queueLocked({ actor: LERATO, members: [ALICE, JABU] });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: false,
+      error: "Only members of this camp can be on its shifts.",
+    });
+    expect(shiftInserts()).toHaveLength(0);
+  });
+});
+
+describe("takeOfferedShift — the remaining refusals", () => {
+  const offeredBy = (userId: string) =>
+    assignment(userId, { offeredAt: new Date("2027-04-20T00:00:00Z") });
+  const take = (userId: string) =>
+    takeOfferedShift({ userId, assignmentId: "a-jabu", ...base });
+
+  it("a shift that is not this camp's answers as missing", async () => {
+    queueLocked({ actor: LERATO, shift: null });
+    expect(await take(LERATO)).toEqual({ ok: false, error: "That shift doesn't exist." });
+  });
+
+  it("refuses a caller with no active membership", async () => {
+    queueLocked({ actor: null, assignments: [offeredBy(JABU)] });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "Only members of this camp can be on its shifts.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("someone already on the shift cannot take a second spot on it", async () => {
+    queueLocked({ actor: LERATO, assignments: [offeredBy(JABU), assignment(LERATO)] });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "You're already on that shift.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("refuses a taker without the required role, naming it", async () => {
+    queueLocked({
+      actor: LERATO,
+      shift: { requiredRoleId: SOUND, requiredRoleName: "Sound Officer" },
+      assignments: [offeredBy(JABU)],
+    });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "This shift needs the Sound Officer role.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("refuses generically when the required role's name is gone", async () => {
+    queueLocked({
+      actor: LERATO,
+      shift: { requiredRoleId: SOUND, requiredRoleName: null },
+      assignments: [offeredBy(JABU)],
+    });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "This shift needs a camp role you don't hold.",
+    });
+  });
+
+  it("refuses a taker already on an overlapping shift", async () => {
+    queueLocked({
+      actor: LERATO,
+      otherShifts: [overlapping],
+      assignments: [offeredBy(JABU), onOther(LERATO)],
+    });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "You're on another shift at that time.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("the holder cannot take back their own offer this way", async () => {
+    queueLocked({ actor: JABU, assignments: [offeredBy(JABU)] });
+    expect(await take(JABU)).toEqual({
+      ok: false,
+      error: "Pick someone other than yourself.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+});
+
+describe("handShiftTo — the remaining refusals", () => {
+  const hand = (userId: string, to: string) =>
+    handShiftTo({ userId, toMembershipId: to, ...base });
+
+  it("refuses a caller with no active membership, before locking the shift", async () => {
+    queueLocked({ actor: null, shift: null });
+    expect(await hand(JABU, M[LERATO])).toEqual({
+      ok: false,
+      error: "Only members of this camp can be on its shifts.",
+    });
+    expect(shiftLockIndex()).toBe(-1);
+  });
+
+  it("a shift that is not this camp's answers as missing", async () => {
+    queueLocked({ actor: JABU, parties: [JABU, LERATO], shift: null });
+    expect(await hand(JABU, M[LERATO])).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
+  });
+
+  it("refuses handing it to yourself", async () => {
+    queueLocked({ actor: JABU, assignments: [assignment(JABU)] });
+    expect(await hand(JABU, M[JABU])).toEqual({
+      ok: false,
+      error: "Pick someone other than yourself.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("refuses a campmate already on an overlapping shift", async () => {
+    queueLocked({
+      actor: JABU,
+      parties: [JABU, LERATO],
+      otherShifts: [overlapping],
+      assignments: [assignment(JABU), onOther(LERATO)],
+    });
+    expect(await hand(JABU, M[LERATO])).toEqual({
+      ok: false,
+      error: "That clashes with another shift at the same time.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+});
+
+describe("respondToHandOn — the remaining refusals", () => {
+  const request = () => [assignment(JABU, { handoverTo: M[LERATO] })];
+  const respond = (accept: boolean) =>
+    respondToHandOn({ userId: LERATO, accept, ...base });
+
+  it("refuses a caller with no active membership", async () => {
+    queueLocked({ actor: null, shift: null });
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "Only members of this camp can be on its shifts.",
+    });
+  });
+
+  it("a shift that is not this camp's answers as missing", async () => {
+    queueLocked({ actor: LERATO, shift: null });
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
+  });
+
+  it("accepting is re-checked: a role taken away since the request refuses, naming it", async () => {
+    queueLocked({
+      actor: LERATO,
+      shift: { requiredRoleId: SOUND, requiredRoleName: "Sound Officer" },
+      assignments: request(),
+    });
+    dbMock.queue([CAMP_ROW]);
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "This shift needs the Sound Officer role.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+    expect(notices()).toHaveLength(0);
+  });
+
+  it("…and generically when the role's name is gone", async () => {
+    queueLocked({
+      actor: LERATO,
+      shift: { requiredRoleId: SOUND, requiredRoleName: null },
+      assignments: request(),
+    });
+    dbMock.queue([CAMP_ROW]);
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "This shift needs a camp role you don't hold.",
+    });
+  });
+
+  it("accepting is re-checked: a clash booked since the request refuses", async () => {
+    queueLocked({
+      actor: LERATO,
+      otherShifts: [overlapping],
+      assignments: [...request(), onOther(LERATO)],
+    });
+    dbMock.queue([CAMP_ROW]);
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "You're on another shift at that time — hand that one on first.",
+    });
+    expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("an accept that loses the compare-and-set (withdrawn meanwhile) is stale and notifies nobody", async () => {
+    queueLocked({ actor: LERATO, assignments: request() });
+    dbMock.queue([CAMP_ROW], /* CAS matched nothing */ []);
+    expect(await respond(true)).toEqual({
+      ok: false,
+      error: "That shift changed while you were looking — refresh and try again.",
+    });
+    expect(notices()).toHaveLength(0);
+  });
+});
+
+describe("shift teams — lead only, one name per camp", () => {
+  it("addShiftTeam refuses a plain member", async () => {
+    dbMock.queue([actorRow(JABU)]);
+    expect(
+      await addShiftTeam({ actorUserId: JABU, groupId: CAMP, name: "Sound" }),
+    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("addShiftTeam refuses a camp at the team limit", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ n: 30 }]);
+    expect(
+      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
+    ).toEqual({ ok: false, error: "A camp can have up to 30 teams." });
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("addShiftTeam sorts the new team last and marks the camp's list as edited", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ n: 3 }], [{ id: "t-new" }]);
+    expect(
+      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "  Sound " }),
+    ).toEqual({ ok: true, id: "t-new" });
+    const insert = dbMock.writesTo(schema.shiftTeams)[0]!;
+    expect(insert.arg("values")).toMatchObject({ sort: 3, nameNormalized: "sound" });
+    const [seeded] = dbMock.writesTo(schema.groups);
+    expect(nullChecksOn(seeded!, schema.groups.shiftTeamsSeededAt)).toEqual([
+      "is null",
+    ]);
+  });
+
+  it("addShiftTeam maps a duplicate name — even one wrapped as a cause — to a message", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], uniqueViolation("shift_teams_name_idx"));
+    expect(
+      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
+    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+
+    dbMock.reset();
+    const wrapped = new Error("Failed query", {
+      cause: uniqueViolation("shift_teams_name_idx"),
+    });
+    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], wrapped);
+    expect(
+      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
+    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+  });
+
+  it("addShiftTeam rethrows anything that is not a duplicate", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], new Error("connection reset"));
+    await expect(
+      addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
+    ).rejects.toThrow("connection reset");
+  });
+
+  it("renameShiftTeam refuses a plain member, and updates nothing", async () => {
+    dbMock.queue([actorRow(JABU)]);
+    expect(
+      await renameShiftTeam({ actorUserId: JABU, groupId: CAMP, teamId: TEAM, name: "Sound" }),
+    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("renameShiftTeam renames this camp's team, normalising the name", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
+    expect(
+      await renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Tea Bar" }),
+    ).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.shiftTeams)[0]!.arg("set")).toEqual({
+      name: "Tea Bar",
+      nameNormalized: "tea bar",
+    });
+  });
+
+  it("renameShiftTeam maps a duplicate name to a message, and rethrows anything else", async () => {
+    dbMock.queue([actorRow(ALICE)], uniqueViolation());
+    expect(
+      await renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Sound" }),
+    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+
+    dbMock.reset();
+    dbMock.queue([actorRow(ALICE)], new Error("connection reset"));
+    await expect(
+      renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Sound" }),
+    ).rejects.toThrow("connection reset");
+  });
+
+  it("removeShiftTeam refuses a plain member, and deletes nothing", async () => {
+    dbMock.queue([actorRow(JABU)]);
+    expect(
+      await removeShiftTeam({ actorUserId: JABU, groupId: CAMP, teamId: TEAM }),
+    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
+    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
+  });
+
+  it("removeShiftTeam removes this camp's team", async () => {
+    dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
+    expect(
+      await removeShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM }),
+    ).toEqual({ ok: true });
+    expect(boundStrings(dbMock.writesTo(schema.shiftTeams)[0]!)).toEqual(
+      expect.arrayContaining([TEAM, CAMP]),
+    );
   });
 });
