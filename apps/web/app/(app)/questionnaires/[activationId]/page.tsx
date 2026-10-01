@@ -16,6 +16,7 @@ import { readPendingInvite } from "@/lib/pending-invite";
 import { requireCampUser, pendingBlockingRoute } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getFillView, type ActivationRow } from "@/lib/questionnaire-store";
+import { getOwnOnboardingTicks } from "@/lib/onboarding-store";
 import { db, schema } from "@/lib/db";
 import { PreviewNotice } from "@/components/preview-notice";
 import { BlockingBadge } from "@/components/questionnaire/blocking-badge";
@@ -61,11 +62,25 @@ export default async function QuestionnaireFillPage({
   const view = await getFillView(activationId, user.id);
   if (!view) notFound();
 
-  const { activation, actionStatus, initialResponses } = view;
+  const { activation, actionStatus } = view;
   // A camp onboarding (epic #54) walks the same runner, one section per step;
   // only the framing differs — it says what it is, who it's from, and (when it
   // is optional) that it blocks nothing.
   const onboarding = isOnboardingDefinition(activation.definition);
+  // Boxes ticked on another device come back ticked here (partial progress,
+  // Ryan 1 Oct 2026). Only `true`s are ever stored, never answers.
+  const initialResponses =
+    onboarding && actionStatus === "pending"
+      ? {
+          ...view.initialResponses,
+          ...Object.fromEntries(
+            (await getOwnOnboardingTicks(activationId, user.id)).map((id) => [
+              id,
+              true,
+            ]),
+          ),
+        }
+      : view.initialResponses;
   const due = activation.dueAt
     ? activation.dueAt.toLocaleDateString("en-GB", {
         day: "numeric",
@@ -85,9 +100,17 @@ export default async function QuestionnaireFillPage({
                 Already submitted
               </CardTitle>
               <CardDescription>
-                {onboarding
-                  ? <>You&apos;ve finished &ldquo;{activation.title}&rdquo; — thanks.</>
-                  : <>Thanks — you&apos;ve completed &ldquo;{activation.title}&rdquo;.</>}
+                {onboarding ? (
+                  <>
+                    You&apos;ve finished &ldquo;{activation.title}&rdquo; —
+                    thanks.
+                  </>
+                ) : (
+                  <>
+                    Thanks — you&apos;ve completed &ldquo;{activation.title}
+                    &rdquo;.
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -161,6 +184,11 @@ export default async function QuestionnaireFillPage({
               <p className="mt-1 text-sm text-muted-foreground">
                 {asker} asks:
               </p>
+              {onboarding && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your camp&apos;s leads can see how far you&apos;ve got.
+                </p>
+              )}
             </div>
             {activation.description && (
               <p className="text-sm text-muted-foreground">
@@ -176,8 +204,11 @@ export default async function QuestionnaireFillPage({
                 questionnaire={activation.definition}
                 initialResponses={initialResponses}
                 redirectTo={afterGate}
-                submitLabel={onboarding ? "Finish onboarding" : "Submit answers"}
+                submitLabel={
+                  onboarding ? "Finish onboarding" : "Submit answers"
+                }
                 gate
+                reportProgress={onboarding}
                 respondentSeed={user.id}
                 blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
               />
@@ -213,6 +244,9 @@ export default async function QuestionnaireFillPage({
             {due ? ` · due ${due}` : ""}. It doesn&apos;t block anything — keep
             using the app and come back whenever you like.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Your camp&apos;s leads can see how far you&apos;ve got.
+          </p>
         </div>
         <QuestionnaireFill
           activationId={activationId}
@@ -220,6 +254,7 @@ export default async function QuestionnaireFillPage({
           initialResponses={initialResponses}
           redirectTo="/directory"
           submitLabel="Finish onboarding"
+          reportProgress
           respondentSeed={user.id}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
         />

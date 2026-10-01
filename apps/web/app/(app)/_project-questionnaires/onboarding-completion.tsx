@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
-import type { OnboardingNamesFilter } from "@quagga/core";
+import {
+  onboardingProgressLabel,
+  type OnboardingNamesFilter,
+} from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import {
@@ -104,7 +107,10 @@ export function OnboardingCompletion({
           >
             <div className={tile}>
               <dt className="text-sm text-muted-foreground">Complete</dt>
-              <dd className="text-2xl font-semibold" data-testid="onboarding-complete">
+              <dd
+                className="text-2xl font-semibold"
+                data-testid="onboarding-complete"
+              >
                 {totals.complete} of {totals.total}
               </dd>
               <dd className="text-xs text-muted-foreground">
@@ -131,7 +137,9 @@ export function OnboardingCompletion({
               <dt className="text-sm text-muted-foreground">Still to finish</dt>
               <dd className="text-2xl font-semibold">{totals.outstanding}</dd>
               <dd className="text-xs text-muted-foreground">
-                {recalled ? "closed — nobody still owes it" : "not finished yet"}
+                {recalled
+                  ? "closed — nobody still owes it"
+                  : `${totals.inProgress} part-way through`}
               </dd>
             </div>
           </dl>
@@ -229,12 +237,18 @@ export function OnboardingCompletion({
                       <TableCell>
                         {n.status === "completed" ? (
                           <Badge variant="success">
-                            Complete{n.completedAt ? ` · ${fmt(n.completedAt)}` : ""}
+                            Complete
+                            {n.completedAt ? ` · ${fmt(n.completedAt)}` : ""}
                           </Badge>
                         ) : n.status === "expired" ? (
                           <Badge variant="outline">Closed</Badge>
                         ) : (
-                          <Badge variant="outline">Not complete</Badge>
+                          <Badge variant="outline">
+                            {onboardingProgressLabel(
+                              n.furthestStep,
+                              view.summary.sections,
+                            )}
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>

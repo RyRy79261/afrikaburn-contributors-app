@@ -6,7 +6,10 @@ import type {
   SaveResult,
 } from "@quagga/types";
 import { QuestionnaireRunner } from "./runner";
-import { submitQuestionnaireAction } from "@/app/(app)/questionnaires/[activationId]/actions";
+import {
+  saveOnboardingProgressAction,
+  submitQuestionnaireAction,
+} from "@/app/(app)/questionnaires/[activationId]/actions";
 
 /**
  * Member-facing fill wrapper: binds the activation id to the shared
@@ -23,6 +26,7 @@ export function QuestionnaireFill({
   gate = false,
   respondentSeed,
   blobConfigured = false,
+  reportProgress = false,
 }: {
   activationId: string;
   questionnaire: Questionnaire;
@@ -37,6 +41,9 @@ export function QuestionnaireFill({
   /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
    *  uploader instead of only the URL-paste field. */
   blobConfigured?: boolean;
+  /** Camp onboarding: report the step and ticks as the member goes, so the
+   * lead can see partial progress (Ryan, 1 Oct 2026). */
+  reportProgress?: boolean;
 }) {
   const action = (responses: QuestionnaireResponses): Promise<SaveResult> =>
     submitQuestionnaireAction(activationId, responses);
@@ -57,6 +64,18 @@ export function QuestionnaireFill({
       shuffleSeed={seed}
       draftKey={seed}
       blobConfigured={blobConfigured}
+      onProgress={
+        reportProgress
+          ? (report) => {
+              // Best-effort: a lost report only means the lead sees an
+              // older step. It must never interrupt the member.
+              void saveOnboardingProgressAction({
+                activationId,
+                ...report,
+              }).catch(() => undefined);
+            }
+          : undefined
+      }
     />
   );
 }

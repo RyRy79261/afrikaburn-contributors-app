@@ -83,7 +83,9 @@ test.describe("camp lead — onboarding", () => {
 
     // --- 3. The member walks it, one step at a time ---------------------------
     await memberPage.goto(`/questionnaires/${activationId}`);
-    await expect(memberPage.getByText(/it doesn['’]t block anything/i)).toBeVisible();
+    await expect(
+      memberPage.getByText(/it doesn['’]t block anything/i),
+    ).toBeVisible();
     await expect(memberPage.getByText(welcomeText)).toBeVisible();
     // Sections 1–5 are information: one Next each.
     for (let step = 1; step <= 5; step++) {
@@ -91,6 +93,21 @@ test.describe("camp lead — onboarding", () => {
       await memberPage.getByRole("button", { name: /^next$/i }).click();
     }
     await expect(memberPage.getByText("Page 6 of 6")).toBeVisible();
+
+    // --- 3b. Partial progress: the lead sees how far they got -------------
+    // The runner reports the step after the member settles (debounced).
+    await expect(async () => {
+      await leadPage.goto(
+        `/camps/${camp.slug}/questionnaires/${activationId}?names=incomplete`,
+      );
+      await expect(
+        leadPage.getByRole("row").filter({ hasText: memberName }),
+      ).toContainText("Step 6 of 6", { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+    // The lead (on the audience by default) never opened it.
+    await expect(leadPage.getByText("Not started")).toBeVisible();
+    await expect(leadPage.getByText(/1 part-way through/i)).toBeVisible();
+
     const finish = memberPage.getByRole("button", {
       name: /finish onboarding/i,
     });
@@ -107,13 +124,15 @@ test.describe("camp lead — onboarding", () => {
     await memberPage.waitForURL(/\/directory\/?$/);
 
     // --- 4. The lead's total moves; names only on demand ----------------------
-    await leadPage.reload();
+    await leadPage.goto(`/camps/${camp.slug}/questionnaires/${activationId}`);
     await expect(leadPage.getByTestId("onboarding-complete")).toHaveText(
       /1 of 2/,
     );
     await expect(leadPage.getByText(memberName)).toHaveCount(0);
     await leadPage.getByRole("link", { name: /show names/i }).click();
-    await expect(leadPage.getByRole("link", { name: /hide names/i })).toBeVisible();
+    await expect(
+      leadPage.getByRole("link", { name: /hide names/i }),
+    ).toBeVisible();
     await expect(
       leadPage.getByRole("cell", { name: memberName }),
     ).toBeVisible();

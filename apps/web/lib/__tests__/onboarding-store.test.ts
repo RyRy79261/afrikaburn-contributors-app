@@ -62,6 +62,8 @@ const {
   getOnboardingDraft,
   saveOnboardingDraft,
   discardOnboardingDraft,
+  saveOnboardingProgress,
+  getOwnOnboardingTicks,
 } = await import("../onboarding-store");
 
 function activation(overrides: Record<string, unknown> = {}) {
@@ -91,6 +93,21 @@ beforeEach(() => {
 });
 
 const STAMP = new Date("2027-03-01T10:00:00.000Z");
+
+/** Every literal SQL chunk in a drizzle SQL tree, joined. */
+function sqlText(tree: unknown): string {
+  const seen = new WeakSet<object>();
+  const out: string[] = [];
+  const walk = (v: unknown, depth: number): void => {
+    if (typeof v === "string") out.push(v);
+    if (depth > 16 || typeof v !== "object" || v === null || seen.has(v))
+      return;
+    seen.add(v);
+    Object.values(v).forEach((inner) => walk(inner, depth + 1));
+  };
+  walk(tree, 0);
+  return out.join(" ");
+}
 
 /** Does a drizzle SQL tree carry this exact value as a bound parameter? */
 function bindsValue(tree: unknown, wanted: unknown): boolean {
@@ -257,6 +274,53 @@ describe("getOnboardingCompletion — totals first, names only on demand", () =>
   });
 });
 
+describe("getOnboardingCompletion — partial progress", () => {
+  it("counts who is part-way, and gives the lead each person's step", async () => {
+    stubs.activation = activation({ status: "open" });
+    dbMock.queue(
+      [
+        {
+          userId: "u1",
+          status: "completed",
+          completedAt: new Date(),
+          membershipId: "m1",
+          furthestStep: 6,
+        },
+        {
+          userId: "u2",
+          status: "pending",
+          completedAt: null,
+          membershipId: "m2",
+          furthestStep: 3,
+        },
+        {
+          userId: "u3",
+          status: "pending",
+          completedAt: null,
+          membershipId: "m2",
+          furthestStep: null,
+        },
+      ],
+      [{ n: 3 }],
+      [
+        { id: "u2", username: "jabu", sanitizedAt: null },
+        { id: "u3", username: "lerato", sanitizedAt: null },
+      ],
+    );
+    const view = await getOnboardingCompletion({
+      activationId: ACT,
+      groupId: CAMP,
+      names: "incomplete",
+    });
+    expect(view?.totals.inProgress).toBe(1);
+    expect(view?.totals.outstanding).toBe(2);
+    expect(view?.names?.map((n) => [n.displayName, n.furthestStep])).toEqual([
+      ["jabu", 3],
+      ["lerato", null],
+    ]);
+  });
+});
+
 describe("deliverOpenOnboardingsToNewMember", () => {
   beforeEach(() => {
     stubs.activation = activation({ status: "open" });
@@ -419,5 +483,91 @@ describe("drafts — create, read, autosave, discard", () => {
     dbMock.queue([]);
     expect(await discardOnboardingDraft(ACT, CAMP)).toBe(false);
     expect(dbMock.writesTo(schema.questionnaireDefinitions)).toHaveLength(0);
+  });
+});
+
+describe("saveOnboardingProgress — partial progress (Ryan, 1 Oct 2026)", () => {
+  const preset = buildOnboardingPreset();
+  const firstAck = preset.pages
+    .flatMap((p) => (p.kind === "questions" ? p.questions : []))
+    .find((q) => q.kind === "acknowledgement")!.id;
+
+  it("records the step and ticks for someone sent it, clamped to the onboarding", async () => {
+    stubs.activation = activation({ status: "open" });
+    dbMock.queue([{ status: "pending" }], undefined);
+    const ok = await saveOnboardingProgress({
+      activationId: ACT,
+      userId: "u-a",
+      report: { step: 99, acknowledged: [firstAck, "made-up-box"] },
+    });
+    expect(ok).toBe(true);
+    const [write] = dbMock.writesTo(schema.onboardingProgress);
+    const values = write!.arg("values") as Record<string, unknown>;
+    expect(values.furthestStep).toBe(preset.pages.length);
+    expect(values.acknowledged).toEqual([firstAck]);
+    // The step only ever moves forward: a stale tab can't wind it back.
+    expect(write!.called("onConflictDoUpdate")).toBe(true);
+    const set = (
+      write!.arg("onConflictDoUpdate") as { set: Record<string, unknown> }
+    ).set;
+    expect(sqlText(set.furthestStep)).toContain("greatest(");
+  });
+
+  it("writes nothing for someone who was never sent it", async () => {
+    stubs.activation = activation({ status: "open" });
+    dbMock.queue([]);
+    expect(
+      await saveOnboardingProgress({
+        activationId: ACT,
+        userId: "stranger",
+        report: { step: 2, acknowledged: [] },
+      }),
+    ).toBe(false);
+    expect(dbMock.writesTo(schema.onboardingProgress)).toHaveLength(0);
+  });
+
+  it("writes nothing once they finished, or it was closed, or it's still a draft", async () => {
+    stubs.activation = activation({ status: "open" });
+    dbMock.queue([{ status: "completed" }]);
+    expect(
+      await saveOnboardingProgress({
+        activationId: ACT,
+        userId: "u-a",
+        report: { step: 2, acknowledged: [] },
+      }),
+    ).toBe(false);
+
+    for (const status of ["closed", "draft"]) {
+      stubs.activation = activation({ status });
+      expect(
+        await saveOnboardingProgress({
+          activationId: ACT,
+          userId: "u-a",
+          report: { step: 2, acknowledged: [] },
+        }),
+      ).toBe(false);
+    }
+    expect(dbMock.writesTo(schema.onboardingProgress)).toHaveLength(0);
+  });
+
+  it("writes nothing for a plain questionnaire", async () => {
+    stubs.activation = activation({
+      status: "open",
+      definition: { ...preset, preset: undefined },
+    });
+    expect(
+      await saveOnboardingProgress({
+        activationId: ACT,
+        userId: "u-a",
+        report: { step: 2, acknowledged: [] },
+      }),
+    ).toBe(false);
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("hands back a member's own ticks, or none", async () => {
+    dbMock.queue([{ acknowledged: [firstAck] }], []);
+    expect(await getOwnOnboardingTicks(ACT, "u-a")).toEqual([firstAck]);
+    expect(await getOwnOnboardingTicks(ACT, "u-b")).toEqual([]);
   });
 });

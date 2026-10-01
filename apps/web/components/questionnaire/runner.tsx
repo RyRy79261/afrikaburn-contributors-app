@@ -45,6 +45,8 @@ const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again in a moment.";
 const DRAFT_PREFIX = "quagga:questionnaire-draft:";
 const AUTOSAVE_DEBOUNCE_MS = 700;
+/** How long the respondent must settle before progress is reported. */
+const PROGRESS_DEBOUNCE_MS = 800;
 
 export type RunnerAction = (
   responses: QuestionnaireResponses,
@@ -86,6 +88,10 @@ interface RunnerProps {
   /** Deployment has BLOB_READ_WRITE_TOKEN → file_link questions get a real
    *  uploader instead of only the URL-paste field. */
   blobConfigured?: boolean;
+  /** Camp onboarding (epic #54): told, debounced, the step the respondent is
+   * on and the acknowledgement boxes ticked so far, so the lead can see
+   * partial progress. Fire-and-forget — the runner never waits on it. */
+  onProgress?: (report: { step: number; acknowledged: string[] }) => void;
 }
 
 type Step =
@@ -107,6 +113,7 @@ export function QuestionnaireRunner({
   shuffleSeed = "",
   draftKey,
   blobConfigured = false,
+  onProgress,
 }: RunnerProps) {
   const router = useRouter();
   const firstPageId = questionnaire.pages[0]?.id ?? null;
@@ -202,6 +209,36 @@ export function QuestionnaireRunner({
       : step?.kind === "burns"
         ? progress.pageCount + 1
         : progress.pageCount + tailSteps;
+
+  // Partial progress for the lead (onboarding only). Reported after the
+  // respondent settles, and only when something changed since the last report.
+  const ackIds = React.useMemo(
+    () =>
+      questionnaire.pages.flatMap((p) =>
+        pageQuestions(p)
+          .filter((q) => q.kind === "acknowledgement")
+          .map((q) => q.id),
+      ),
+    [questionnaire],
+  );
+  const tickedIds = ackIds.filter((id) => responses[id] === true);
+  const progressKey = JSON.stringify([stepNumber, tickedIds]);
+  const lastReported = React.useRef<string | null>(null);
+  const onProgressRef = React.useRef(onProgress);
+  onProgressRef.current = onProgress;
+  React.useEffect(() => {
+    if (!onProgressRef.current || step?.kind !== "page") return;
+    if (lastReported.current === progressKey) return;
+    const [reportStep, acknowledged] = JSON.parse(progressKey) as [
+      number,
+      string[],
+    ];
+    const timer = window.setTimeout(() => {
+      lastReported.current = progressKey;
+      onProgressRef.current?.({ step: reportStep, acknowledged });
+    }, PROGRESS_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [progressKey, step?.kind]);
 
   const percent =
     answeredProgress && progress.total > 0

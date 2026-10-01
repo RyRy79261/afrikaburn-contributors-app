@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   carryForwardOnboarding,
+  clampOnboardingProgress,
   defaultOnboardingAudience,
   isOnboardingDefinition,
   onboardingTitleFor,
@@ -14,13 +15,10 @@ import {
   validateOnboardingDefinition,
   buildOnboardingPreset,
   type OnboardingCompletion,
+  type OnboardingProgressReport,
   type OnboardingNamesFilter,
 } from "@quagga/core";
-import type {
-  CampTenure,
-  ProjectAudience,
-  Questionnaire,
-} from "@quagga/types";
+import type { CampTenure, ProjectAudience, Questionnaire } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction } from "./db";
 import { loadCampTenure } from "./camp-tenure";
@@ -162,7 +160,11 @@ export async function getOnboardingDraft(
     .where(eq(schema.questionnaireActivations.id, activationId))
     .limit(1);
   if (!stamp) return null;
-  return { ...activation, audience: activation.audience, updatedAt: stamp.updatedAt };
+  return {
+    ...activation,
+    audience: activation.audience,
+    updatedAt: stamp.updatedAt,
+  };
 }
 
 export type SaveDraftResult =
@@ -555,6 +557,8 @@ export interface OnboardingNameRow {
   tenure: CampTenure;
   status: string;
   completedAt: Date | null;
+  /** Furthest step reached, or null when their runner never reported. */
+  furthestStep: number | null;
 }
 
 export interface OnboardingCompletionView {
@@ -599,6 +603,7 @@ export async function getOnboardingCompletion(input: {
       status: schema.requiredActions.status,
       completedAt: schema.requiredActions.completedAt,
       membershipId: schema.memberships.id,
+      furthestStep: schema.onboardingProgress.furthestStep,
     })
     .from(schema.requiredActions)
     .innerJoin(
@@ -609,12 +614,23 @@ export async function getOnboardingCompletion(input: {
         activeMembership(),
       ),
     )
+    .leftJoin(
+      schema.onboardingProgress,
+      and(
+        eq(
+          schema.onboardingProgress.activationId,
+          schema.requiredActions.activationId,
+        ),
+        eq(schema.onboardingProgress.userId, schema.requiredActions.userId),
+      ),
+    )
     .where(eq(schema.requiredActions.activationId, input.activationId));
 
   const tenure = await loadCampTenure(input.groupId, activation.editionId);
   const tagged = rows.map((r) => ({
     ...r,
     tenure: tenure.get(r.membershipId) ?? ("new" as CampTenure),
+    started: typeof r.furthestStep === "number",
   }));
   const totals = tallyOnboardingCompletion(tagged);
 
@@ -661,6 +677,7 @@ export async function getOnboardingCompletion(input: {
           tenure: r.tenure,
           status: r.status,
           completedAt: r.completedAt,
+          furthestStep: r.furthestStep,
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -766,4 +783,86 @@ export async function deliverOpenOnboardingsToNewMember(input: {
     });
   }
   return delivered;
+}
+
+// --- Partial progress (Ryan, 1 Oct 2026) -----------------------------------
+
+/**
+ * Record how far a member has got through an onboarding they were SENT. Only
+ * moves forward (`greatest`), so a stale tab reporting an earlier step never
+ * winds anyone back; the ticks are the latest report, since unticking a box
+ * is a real change of mind.
+ *
+ * Refuses (returns false, writes nothing) unless the activation is an OPEN
+ * onboarding and this person holds a PENDING action for it — the same
+ * "were you sent this, and is it still live" test the submit action applies.
+ * The report is clamped to the onboarding's own sections and boxes first.
+ */
+export async function saveOnboardingProgress(input: {
+  activationId: string;
+  userId: string;
+  report: OnboardingProgressReport;
+}): Promise<boolean> {
+  const activation = await getActivation(input.activationId);
+  if (
+    !activation ||
+    activation.status !== "open" ||
+    !isOnboardingDefinition(activation.definition)
+  ) {
+    return false;
+  }
+  const [action] = await db()
+    .select({ status: schema.requiredActions.status })
+    .from(schema.requiredActions)
+    .where(
+      and(
+        eq(schema.requiredActions.activationId, input.activationId),
+        eq(schema.requiredActions.userId, input.userId),
+      ),
+    )
+    .limit(1);
+  if (!action || action.status !== "pending") return false;
+
+  const clamped = clampOnboardingProgress(activation.definition, input.report);
+  const now = new Date();
+  await db()
+    .insert(schema.onboardingProgress)
+    .values({
+      activationId: input.activationId,
+      userId: input.userId,
+      furthestStep: clamped.step,
+      acknowledged: clamped.acknowledged,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.onboardingProgress.activationId,
+        schema.onboardingProgress.userId,
+      ],
+      set: {
+        furthestStep: sql`greatest(${schema.onboardingProgress.furthestStep}, excluded.furthest_step)`,
+        acknowledged: clamped.acknowledged,
+        updatedAt: now,
+      },
+    });
+  return true;
+}
+
+/** The ticks this person has already reported for an onboarding — so the
+ * boxes they ticked on one device are ticked on the next. Empty when none. */
+export async function getOwnOnboardingTicks(
+  activationId: string,
+  userId: string,
+): Promise<string[]> {
+  const [row] = await db()
+    .select({ acknowledged: schema.onboardingProgress.acknowledged })
+    .from(schema.onboardingProgress)
+    .where(
+      and(
+        eq(schema.onboardingProgress.activationId, activationId),
+        eq(schema.onboardingProgress.userId, userId),
+      ),
+    )
+    .limit(1);
+  return row?.acknowledged ?? [];
 }

@@ -12,6 +12,8 @@ import {
   parseOnboardingNamesFilter,
   summarizeOnboarding,
   tallyOnboardingCompletion,
+  clampOnboardingProgress,
+  onboardingProgressLabel,
   validateOnboardingDefinition,
 } from "../camp-onboarding";
 import { resolveAudience, type AudienceContext } from "../audience";
@@ -219,8 +221,11 @@ describe("validateOnboardingDefinition", () => {
       questions: [{ id: `i${i}`, kind: "info_block", body: "x" }],
     }));
     expect(
-      validateOnboardingDefinition({ version: "1", preset: "onboarding", pages })
-        .ok,
+      validateOnboardingDefinition({
+        version: "1",
+        preset: "onboarding",
+        pages,
+      }).ok,
     ).toBe(false);
   });
 });
@@ -235,11 +240,41 @@ describe("defaultOnboardingAudience + resolution", () => {
     bios: [],
     roleAssignments: [],
     memberships: [
-      { membershipId: "m1", userId: "lead", groupId: GROUP, role: "lead", tenure: "returning" },
-      { membershipId: "m2", userId: "colead", groupId: GROUP, role: "admin", tenure: "new" },
-      { membershipId: "m3", userId: "newbie", groupId: GROUP, role: "member", tenure: "new" },
-      { membershipId: "m4", userId: "vet", groupId: GROUP, role: "member", tenure: "returning" },
-      { membershipId: "x", userId: "elsewhere", groupId: "other", role: "member", tenure: "new" },
+      {
+        membershipId: "m1",
+        userId: "lead",
+        groupId: GROUP,
+        role: "lead",
+        tenure: "returning",
+      },
+      {
+        membershipId: "m2",
+        userId: "colead",
+        groupId: GROUP,
+        role: "admin",
+        tenure: "new",
+      },
+      {
+        membershipId: "m3",
+        userId: "newbie",
+        groupId: GROUP,
+        role: "member",
+        tenure: "new",
+      },
+      {
+        membershipId: "m4",
+        userId: "vet",
+        groupId: GROUP,
+        role: "member",
+        tenure: "returning",
+      },
+      {
+        membershipId: "x",
+        userId: "elsewhere",
+        groupId: "other",
+        role: "member",
+        tenure: "new",
+      },
     ],
   };
 
@@ -296,6 +331,7 @@ describe("tallyOnboardingCompletion — totals first", () => {
       complete: 3,
       percent: 60,
       outstanding: 2,
+      inProgress: 0,
       newTotal: 2,
       newComplete: 1,
       returningTotal: 3,
@@ -305,6 +341,70 @@ describe("tallyOnboardingCompletion — totals first", () => {
 
   it("reads 0% rather than dividing by zero", () => {
     expect(tallyOnboardingCompletion([]).percent).toBe(0);
+  });
+
+  it("counts in progress: started, not finished, not waived", () => {
+    const t = tallyOnboardingCompletion([
+      { status: "pending", tenure: "new", started: true },
+      { status: "pending", tenure: "new", started: false },
+      { status: "pending", tenure: "returning" },
+      // Finished people are complete, not "in progress", however they got there.
+      { status: "completed", tenure: "new", started: true },
+      // A former member's waived row never counts.
+      { status: "waived", tenure: "new", started: true },
+    ]);
+    expect(t.inProgress).toBe(1);
+    expect(t.outstanding).toBe(3);
+  });
+});
+
+describe("partial progress (Ryan, 1 Oct 2026)", () => {
+  const def = buildOnboardingPreset();
+  const ackIds = def.pages.flatMap((p) =>
+    p.kind === "questions"
+      ? p.questions.filter((q) => q.kind === "acknowledgement").map((q) => q.id)
+      : [],
+  );
+
+  it("keeps a sane report as it is", () => {
+    expect(
+      clampOnboardingProgress(def, { step: 3, acknowledged: [ackIds[0]!] }),
+    ).toEqual({ step: 3, acknowledged: [ackIds[0]] });
+  });
+
+  it("cuts the step to the onboarding's own length — never the client's", () => {
+    const steps = def.pages.length;
+    expect(
+      clampOnboardingProgress(def, { step: 99, acknowledged: [] }).step,
+    ).toBe(steps);
+    expect(
+      clampOnboardingProgress(def, { step: 0, acknowledged: [] }).step,
+    ).toBe(1);
+    expect(
+      clampOnboardingProgress(def, { step: -4, acknowledged: [] }).step,
+    ).toBe(1);
+    expect(
+      clampOnboardingProgress(def, { step: Number.NaN, acknowledged: [] }).step,
+    ).toBe(1);
+    expect(
+      clampOnboardingProgress(def, { step: 2.7, acknowledged: [] }).step,
+    ).toBe(2);
+  });
+
+  it("drops ids that aren't this onboarding's tick boxes, and duplicates", () => {
+    expect(
+      clampOnboardingProgress(def, {
+        step: 1,
+        acknowledged: ["not-a-box", ackIds[1]!, ackIds[1]!, ackIds[0]!],
+      }).acknowledged,
+    ).toEqual([ackIds[0], ackIds[1]]);
+  });
+
+  it("labels progress for the lead", () => {
+    expect(onboardingProgressLabel(null, 6)).toBe("Not started");
+    expect(onboardingProgressLabel(3, 6)).toBe("Step 3 of 6");
+    // An onboarding cannot shrink once sent, but never print "Step 9 of 6".
+    expect(onboardingProgressLabel(9, 6)).toBe("Step 6 of 6");
   });
 });
 
@@ -353,9 +453,18 @@ describe("carryForwardOnboarding (ONBOARD-022)", () => {
 
 describe("canAuthorOnboarding — enforced server-side by every action", () => {
   const BASELINE = "role-baseline";
-  const lead: PermissionMembership = { structuralRole: "lead", rolePermissions: [] };
-  const colead: PermissionMembership = { structuralRole: "admin", rolePermissions: [] };
-  const plain: PermissionMembership = { structuralRole: "member", rolePermissions: [] };
+  const lead: PermissionMembership = {
+    structuralRole: "lead",
+    rolePermissions: [],
+  };
+  const colead: PermissionMembership = {
+    structuralRole: "admin",
+    rolePermissions: [],
+  };
+  const plain: PermissionMembership = {
+    structuralRole: "member",
+    rolePermissions: [],
+  };
   const scoped: PermissionMembership = {
     structuralRole: "member",
     rolePermissions: [
@@ -365,18 +474,30 @@ describe("canAuthorOnboarding — enforced server-side by every action", () => {
   const aud = defaultOnboardingAudience(GROUP);
 
   it("lets a lead and a co-lead author, blocking or not", () => {
-    expect(canAuthorOnboarding(lead, "theme_camp", aud, true, BASELINE)).toBe(true);
-    expect(canAuthorOnboarding(colead, "theme_camp", aud, false, BASELINE)).toBe(true);
+    expect(canAuthorOnboarding(lead, "theme_camp", aud, true, BASELINE)).toBe(
+      true,
+    );
+    expect(
+      canAuthorOnboarding(colead, "theme_camp", aud, false, BASELINE),
+    ).toBe(true);
   });
 
   it("refuses a plain member and a non-member", () => {
-    expect(canAuthorOnboarding(plain, "theme_camp", aud, false, BASELINE)).toBe(false);
-    expect(canAuthorOnboarding(null, "theme_camp", aud, false, BASELINE)).toBe(false);
+    expect(canAuthorOnboarding(plain, "theme_camp", aud, false, BASELINE)).toBe(
+      false,
+    );
+    expect(canAuthorOnboarding(null, "theme_camp", aud, false, BASELINE)).toBe(
+      false,
+    );
   });
 
   it("holds a manage_questionnaires holder to their scope — no blocking without may_block", () => {
-    expect(canAuthorOnboarding(scoped, "theme_camp", aud, false, BASELINE)).toBe(true);
-    expect(canAuthorOnboarding(scoped, "theme_camp", aud, true, BASELINE)).toBe(false);
+    expect(
+      canAuthorOnboarding(scoped, "theme_camp", aud, false, BASELINE),
+    ).toBe(true);
+    expect(canAuthorOnboarding(scoped, "theme_camp", aud, true, BASELINE)).toBe(
+      false,
+    );
   });
 
   it("is a camp's feature — never for an artwork, a vehicle or the org", () => {

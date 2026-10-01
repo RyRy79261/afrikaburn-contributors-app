@@ -309,6 +309,51 @@ export function summarizeOnboarding(definition: Questionnaire): {
   return { sections: definition.pages.length, acknowledgements, videoLinks };
 }
 
+// --- Partial progress (Ryan, 1 Oct 2026) -----------------------------------
+
+/** What a member's runner reports as they go: the step they are on and the
+ * acknowledgements ticked so far. */
+export interface OnboardingProgressReport {
+  step: number;
+  acknowledged: readonly string[];
+}
+
+/**
+ * Clamp a client's progress report to the onboarding it is about. The step is
+ * cut to 1..sections, and only ids of THIS onboarding's acknowledgement boxes
+ * survive (deduplicated, in definition order) — the client is never trusted to
+ * say how long the onboarding is or what is in it.
+ */
+export function clampOnboardingProgress(
+  definition: Questionnaire,
+  report: OnboardingProgressReport,
+): { step: number; acknowledged: string[] } {
+  const steps = Math.max(definition.pages.length, 1);
+  const step = Number.isFinite(report.step)
+    ? Math.min(Math.max(Math.trunc(report.step), 1), steps)
+    : 1;
+  const ticked = new Set(report.acknowledged);
+  const acknowledged: string[] = [];
+  for (const page of definition.pages) {
+    if (page.kind !== "questions") continue;
+    for (const block of page.questions) {
+      if (block.kind === "acknowledgement" && ticked.has(block.id)) {
+        acknowledged.push(block.id);
+      }
+    }
+  }
+  return { step, acknowledged };
+}
+
+/** "Step 3 of 6" for someone part-way; "Not started" when nothing came back. */
+export function onboardingProgressLabel(
+  furthestStep: number | null,
+  steps: number,
+): string {
+  if (furthestStep === null) return "Not started";
+  return `Step ${Math.min(furthestStep, steps)} of ${steps}`;
+}
+
 // --- New to the camp vs returning -----------------------------------------
 
 /** The facts tenure is decided from — all camp-held records, never the
@@ -424,6 +469,8 @@ export interface OnboardingCompletionRow {
   /** The required-action status for this person. */
   status: string;
   tenure: CampTenure;
+  /** True when their runner has reported any progress (they opened it). */
+  started?: boolean;
 }
 
 export interface OnboardingCompletion {
@@ -431,6 +478,8 @@ export interface OnboardingCompletion {
   complete: number;
   percent: number;
   outstanding: number;
+  /** Not finished, but opened and part-way through. */
+  inProgress: number;
   newTotal: number;
   newComplete: number;
   returningTotal: number;
@@ -456,6 +505,7 @@ export function tallyOnboardingCompletion(
     complete,
     percent: total > 0 ? Math.round((complete / total) * 100) : 0,
     outstanding: total - complete,
+    inProgress: live.filter((r) => !done(r) && r.started === true).length,
     newTotal: of("new").length,
     newComplete: of("new").filter(done).length,
     returningTotal: of("returning").length,
