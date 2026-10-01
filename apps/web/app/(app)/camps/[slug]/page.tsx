@@ -142,6 +142,14 @@ export default async function CampPage({
 
   const isAdmin = camp.viewerRole === "lead" || camp.viewerRole === "admin";
   const isMember = camp.viewerRole !== null;
+  // One answer for the Shifts tile's summary AND its label, from the same
+  // source: a separate permissions read can come back null for a lead.
+  const viewerManagesShifts =
+    isMember &&
+    canManageShifts({
+      structuralRole: camp.viewerRole!,
+      rolePermissions: [],
+    });
 
   // Eleven independent reads, issued together rather than one after another.
   //
@@ -201,10 +209,7 @@ export default async function CampPage({
     // Camp shifts (epic #57): counts for the tile, members only.
     isMember
       ? getShiftTileSummary(camp.id, edition.id, {
-          canManage: canManageShifts({
-            structuralRole: camp.viewerRole!,
-            rolePermissions: [],
-          }),
+          canManage: viewerManagesShifts,
         })
       : null,
   ]);
@@ -681,7 +686,7 @@ export default async function CampPage({
             {shiftSummary && (
               <ShiftsTile
                 slug={camp.slug}
-                canManage={canManageShifts(viewerPerms)}
+                canManage={viewerManagesShifts}
                 summary={shiftSummary}
               />
             )}
