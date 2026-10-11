@@ -1,7 +1,7 @@
 import { MapPin } from "lucide-react";
 import { initialsFromName } from "@quagga/core";
 
-// Third-party burner profile hero (canvas `mm31G` / `lYUEe`): eyebrow, avatar,
+// Third-party burner profile hero (canvas `mm31G` / `TEuVC`): eyebrow, avatar,
 // name, and a meta row of city · burns count. Everything it renders has already
 // passed `publicBioView` server-side — a null field here means the owner chose
 // private (or the field is hard-locked and never eligible), so the component

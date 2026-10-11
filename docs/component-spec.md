@@ -79,7 +79,7 @@ that frame's component manifest.
 | Auth (sign up/in)                    | `u87N7 / HCt1i`                          |
 | Onboarding (Burner Bio)              | `iCQgd / srY69`                          |
 | Profile                              | `C313E / SdcDN`                          |
-| Burner Profile (3rd-party)           | `mm31G / lYUEe`                          |
+| Burner Profile (3rd-party)           | `mm31G / TEuVC`                          |
 | Directory                            | `u7RSIJ / D0LTCb`                        |
 | Create a camp                        | `g5Uqfw / Evh1t`                         |
 | Join a camp (invite)                 | `qhcHh / MttcT`                          |

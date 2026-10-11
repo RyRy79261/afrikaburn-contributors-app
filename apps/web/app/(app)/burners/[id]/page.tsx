@@ -38,7 +38,7 @@ import { AvatarImage } from "@/components/avatar-image";
 
 export const dynamic = "force-dynamic";
 
-// Third-party burner profile (canvas `mm31G` desktop / `lYUEe` mobile). The
+// Third-party burner profile (canvas `mm31G` desktop / `TEuVC` mobile). The
 // PRIVACY BOUNDARY IS THE SERVER: `getPublicBurnerProfile` never selects the
 // hard-locked columns (phone, emergency contacts, medical, encrypted ID) and
 // projects what it does load through `publicBioView`, which additionally gates
