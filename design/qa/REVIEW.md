@@ -124,6 +124,29 @@ missing image fills, contrast, misaligned intent, wrong copy. Rules:
   `md5sum` against `git show HEAD:design/ab-initial-app.pen` and ask the user to
   save before treating any design work as done.
 
+## Comparing a build with its frames (after implementation)
+
+Design before build is only half the loop: once a UI feature is built, compare
+the real screens with the frames they came from, desktop and mobile 360, before
+the PR is called ready. This caught six real differences on the shifts build
+(#86) that every test passed.
+
+1. **Export the frames from the committed file**, never from old PNGs:
+   `./scripts/export-frames.sh /tmp/frames <frameId> [frameId…]`
+   (`SCALE=2` for a sharper image). It uses the pen.dev CLI headless —
+   `npm install -g @pen.dev/cli`, then `pen login` once — so it needs no
+   desktop app and reads what is in git, not an unsaved canvas. It opens a
+   copy, so it cannot write to `ab-initial-app.pen`. Frame ids are in
+   `design/pen-lessons.md`.
+2. **Screenshot the build locally** with fake data (`pnpm e2e:local` — a
+   throwaway spec that calls `page.screenshot` at each state works well), on
+   both the desktop and the `mobile-360` project. Never the deployed apps.
+3. **Compare section by section** under the rules in step 4 above: layout,
+   copy, components, states present in the frame but missing in the build
+   (and the reverse), and phone overflow.
+4. **Disposition every difference:** fix it, or mark it deliberate when a later
+   decision overrides the frame (say which decision). List them in the PR.
+
 ## Definition of done for any design change
 
 1. `audit.py <touched frames>` → zero defects, warnings dispositioned

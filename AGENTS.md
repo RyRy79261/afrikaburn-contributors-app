@@ -327,6 +327,10 @@ So, in this repo:
 - **Design before build.** Every new feature gets pen.dev frames first; Ryan reviews;
   code starts after. When you create any new page frame, create its mobile 360 pair in
   the same session (pairing convention below).
+- **Design review after build.** Before a UI PR is ready, compare the built screens
+  with their frames, desktop and 360, and fix or disposition every difference.
+  Export the frames from the committed file with `scripts/export-frames.sh`
+  (pen.dev CLI, headless); the steps are in `design/qa/REVIEW.md`.
 - **No skills, and no new tooling layers, without asking.** Ryan's standing
   preference (3 Aug 2026): don't install agent skills or add abstraction on top of
   the workflow that already exists. The commands in this file are the interface.
