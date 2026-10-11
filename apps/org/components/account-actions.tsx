@@ -251,7 +251,7 @@ export function AccountActions({
           if (!open && !pending) setIntent(null);
         }}
       >
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-[520px]">
           <DialogHeader>
             <div className="flex items-start gap-3.5">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning text-warning-foreground">
