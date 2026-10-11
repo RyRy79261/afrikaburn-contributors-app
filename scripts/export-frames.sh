@@ -65,6 +65,7 @@ for id in "$@"; do
     cp "$STAGE/$id.png" "$OUT/$id.png"
     echo "$OUT/$id.png"
   else
+    rm -f "$OUT/$id.png" # an earlier run's picture must not stand in for this one
     echo "no export for $id (is it a node id in the design file?)" >&2
     missing=1
   fi
