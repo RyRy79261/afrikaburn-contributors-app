@@ -34,7 +34,15 @@ export function MarkdownView({ value, className }: MarkdownViewProps) {
     content: value,
     editable: false,
     immediatelyRender: false,
-    editorProps: { attributes: { class: cn(PROSE_CLASS, className) } },
+    editorProps: {
+      attributes: {
+        class: cn(PROSE_CLASS, className),
+        // Tiptap stamps role="textbox" on every editor, read-only ones too
+        // (kept for good since 3.31.4). A screen reader would then announce
+        // a bulletin as a field to type in. Ours wins: the spread puts it last.
+        role: "presentation",
+      },
+    },
   });
 
   // Re-render when the source markdown changes.
