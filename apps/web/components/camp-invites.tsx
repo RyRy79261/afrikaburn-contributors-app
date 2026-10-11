@@ -17,9 +17,24 @@ interface CampInvitesProps {
   revokeAction: (raw: unknown) => Promise<{ ok: boolean; error?: string }>;
 }
 
-function inviteUrl(token: string): string {
-  if (typeof window === "undefined") return `/join/${token}`;
-  return `${window.location.origin}/join/${token}`;
+function inviteUrl(origin: string, token: string): string {
+  return `${origin}/join/${token}`;
+}
+
+const noSubscribe = () => () => {};
+
+/**
+ * The page's origin: "" while hydrating, the real one after. Reading `window`
+ * during render made the server HTML (`/join/…`) and the first client render
+ * (`http://…/join/…`) disagree, so React threw the subtree away and rebuilt
+ * it. A click in that window was lost: revoking an invite did nothing.
+ */
+function useOrigin(): string {
+  return React.useSyncExternalStore(
+    noSubscribe,
+    () => window.location.origin,
+    () => "",
+  );
 }
 
 export function CampInvites({
@@ -33,6 +48,7 @@ export function CampInvites({
   const [invites, setInvites] = React.useState<InviteRow[]>(initialInvites);
   const [copied, setCopied] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const origin = useOrigin();
 
   function create(kind: "member" | "lead_transfer") {
     startTransition(async () => {
@@ -65,7 +81,9 @@ export function CampInvites({
 
   async function copy(token: string) {
     try {
-      await navigator.clipboard.writeText(inviteUrl(token));
+      await navigator.clipboard.writeText(
+        inviteUrl(window.location.origin, token),
+      );
       setCopied(token);
       setTimeout(() => setCopied((c) => (c === token ? null : c)), 1500);
     } catch {
@@ -117,7 +135,7 @@ export function CampInvites({
                 {invite.kind === "lead_transfer" ? "Lead transfer" : "Member"}
               </Badge>
               <code className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                {inviteUrl(invite.token)}
+                {inviteUrl(origin, invite.token)}
               </code>
               <button
                 type="button"

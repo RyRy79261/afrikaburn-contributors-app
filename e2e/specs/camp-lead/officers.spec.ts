@@ -64,8 +64,13 @@ test.describe("camp lead — officers are consent requests", () => {
       .filter({ visible: true })
       .first()
       .click();
+    // Visible copy only: the collapsed-row summary is `hidden sm:inline`, and
+    // at 360 the same words render inside the open row instead.
     await expect(
-      leadPage.getByText(/shared with afrikaburn/i).first(),
+      leadPage
+        .getByText(/shared with afrikaburn/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
   });
 

@@ -49,7 +49,10 @@ services:
       ALLOW_ADDR_REGEX: ".*"
       LOG_TRAFFIC: "false"
     ports:
-      - "5433:80"
+      # NEON_LOCAL_WS_PORT / NEON_LOCAL_HTTP_PORT move the proxies when another
+      # stack already holds 5433 / 4444; scripts/e2e-local.sh hands the same
+      # values to the app (packages/db/src/local-proxy.ts).
+      - "${NEON_LOCAL_WS_PORT:-5433}:80"
 
   # SQL-over-HTTP endpoint (`/sql`) for the stateless driver. wsproxy 404s here.
   httpproxy:
@@ -61,7 +64,7 @@ services:
     environment:
       PG_CONNECTION_STRING: postgres://postgres:postgres@postgres:5432/quagga
     ports:
-      - "4444:4444"
+      - "${NEON_LOCAL_HTTP_PORT:-4444}:4444"
 
 volumes:
   quagga-pgdata:

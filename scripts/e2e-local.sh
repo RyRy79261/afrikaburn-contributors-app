@@ -23,6 +23,9 @@ mkdir -p "$LOG_DIR"
 export DATABASE_URL="postgres://postgres:postgres@postgres:5432/quagga"
 export DATABASE_URL_UNPOOLED="$DATABASE_URL"
 export NEON_LOCAL_PROXY=1
+# One knob per proxy for both sides: compose publishes it, the app dials it.
+export NEON_LOCAL_WS_PORT="${NEON_LOCAL_WS_PORT:-5433}"
+export NEON_LOCAL_HTTP_PORT="${NEON_LOCAL_HTTP_PORT:-4444}"
 export PGCRYPTO_KEY="${PGCRYPTO_KEY:-local-dev-pgcrypto-key-not-a-secret}"
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-local-dev-better-auth-secret-not-a-secret-32b}"
 export ACCOUNT_SWEEP_SECRET="${ACCOUNT_SWEEP_SECRET:-local-dev-sweep}"
@@ -104,11 +107,13 @@ echo "==> apps (web:3000 org:3001 suppliers:3002) — serve mode: $E2E_SERVE"
 # ALWAYS fresh. A long-lived dev server keeps a stale module graph after a file
 # is deleted and then serves 500s while `turbo build` still passes, which once
 # produced 104 phantom E2E failures that looked like product bugs.
-pkill -f "next dev" >/dev/null 2>&1 || true
-pkill -f "next start" >/dev/null 2>&1 || true
+# Only THIS checkout's servers: a bare `pkill -f "next dev"` also killed other
+# projects' dev servers on the same machine.
+REPO_NEXT="$(pwd)/apps/[a-z]*/node_modules/\.bin/\.\./next/dist/bin/next (dev|start)"
+pkill -f "$REPO_NEXT" >/dev/null 2>&1 || true
 sleep 2
 
-# …AND THEN CHECK, because those two pkills do not do what they say.
+# …AND THEN CHECK, because that pkill does not do what it says.
 #
 # Next renames its own process to `next-server (v16.2.11)` once it boots, so the
 # pattern only ever matched the `sh -c next start --port 3001` wrapper — the
