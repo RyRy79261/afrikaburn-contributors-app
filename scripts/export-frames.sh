@@ -12,8 +12,9 @@
 # Why this exists: a post-build design review compares the built screens with
 # their frames (design/qa/REVIEW.md, "Comparing a build with its frames"). The
 # frames must come from the committed `.pen`, not from PNGs someone exported
-# weeks ago. The design file is COPIED first and the copy is opened, so this
-# can never write to design/ab-initial-app.pen.
+# weeks ago. The design file is read from HEAD (not the working tree, which
+# may hold saved but uncommitted edits) into a temp copy, so this can never
+# write to design/ab-initial-app.pen.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -29,6 +30,7 @@ cd "$(dirname "$0")/.."
 OUT="$(realpath -m "$1")"
 shift
 SCALE="${SCALE:-1}"
+[[ "$SCALE" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "SCALE must be a number: $SCALE" >&2; exit 2; }
 mkdir -p "$OUT"
 
 for id in "$@"; do
@@ -37,14 +39,19 @@ for id in "$@"; do
   [[ "$id" =~ ^[A-Za-z0-9]+$ ]] || { echo "not a frame id: $id" >&2; exit 2; }
 done
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d /tmp/export-frames.XXXXXX)" # fixed, quote-free path: it goes into JS
 trap 'rm -rf "$WORK"' EXIT
-cp design/ab-initial-app.pen "$WORK/canvas.pen"
+git show HEAD:design/ab-initial-app.pen >"$WORK/canvas.pen"
+# Export into a fresh folder of our own, never straight into $OUT: an old
+# <id>.png already in $OUT must not pass for this run's export, and $OUT's
+# name (quotes and all) then never has to survive the CLI's JS strings.
+STAGE="$WORK/out"
+mkdir "$STAGE"
 
 # One execute per frame: a bad id rolls back only its own call, not the rest.
 script=""
 for id in "$@"; do
-  script+="execute({ input: 'Export([\"$id\"], \"png\", \"$OUT\", {scale:$SCALE})' })"$'\n'
+  script+="execute({ input: 'Export([\"$id\"], \"png\", \"$STAGE\", {scale:$SCALE})' })"$'\n'
 done
 script+="exit()"
 # A bad id makes the CLI print a stack trace; keep only the line that says why.
@@ -54,7 +61,10 @@ printf '%s\n' "$script" |
 
 missing=0
 for id in "$@"; do
-  if [ -s "$OUT/$id.png" ]; then echo "$OUT/$id.png"; else
+  if [ -s "$STAGE/$id.png" ]; then
+    cp "$STAGE/$id.png" "$OUT/$id.png"
+    echo "$OUT/$id.png"
+  else
     echo "no export for $id (is it a node id in the design file?)" >&2
     missing=1
   fi
