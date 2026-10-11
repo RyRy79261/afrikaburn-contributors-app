@@ -38,8 +38,13 @@ test.describe("system manager · access expiry on org role assignments", () => {
     await elevateVisibleRow(orgPage);
     await gotoAccount(orgPage, burner.email);
     // Present first: the row has rendered its resolved grants…
+    // Visible copy only: the accounts list renders a md+ table AND a mobile
+    // card, so the first match is hidden at 360.
     await expect(
-      orgPage.getByText(/can permanently destroy records/i).first(),
+      orgPage
+        .getByText(/can permanently destroy records/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     // …and only then the absence: no end date yet.
     await expect(orgPage.getByText(LAST_DAY_TEXT)).toHaveCount(0);
@@ -70,9 +75,14 @@ test.describe("system manager · access expiry on org role assignments", () => {
     // STORED: a fresh server render shows it on the row, and the grant still
     // resolves — a future end date takes nothing away today.
     await gotoAccount(orgPage, burner.email);
-    await expect(orgPage.getByText(LAST_DAY_TEXT).first()).toBeVisible();
     await expect(
-      orgPage.getByText(/can permanently destroy records/i).first(),
+      orgPage.getByText(LAST_DAY_TEXT).filter({ visible: true }).first(),
+    ).toBeVisible();
+    await expect(
+      orgPage
+        .getByText(/can permanently destroy records/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
 
     // RE-OPENS AS THE SAME DAY, then CLEARS.
@@ -89,7 +99,10 @@ test.describe("system manager · access expiry on org role assignments", () => {
 
     await gotoAccount(orgPage, burner.email);
     await expect(
-      orgPage.getByText(/can permanently destroy records/i).first(),
+      orgPage
+        .getByText(/can permanently destroy records/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     await expect(orgPage.getByText(LAST_DAY_TEXT)).toHaveCount(0);
   });

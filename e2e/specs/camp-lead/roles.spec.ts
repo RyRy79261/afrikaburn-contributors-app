@@ -47,8 +47,18 @@ test.describe("camp lead — custom roles", () => {
     // its emoji + name, and its collapsed summary reflects the granted privilege.
     await gotoRolesSettings(webPage, camp.slug);
     await expect(webPage.getByText(roleName).first()).toBeVisible();
+    // Open the row: below sm the summary is not in the collapsed trigger
+    // (`hidden sm:inline`) but at the top of the open row (`sm:hidden`).
+    await webPage
+      .getByRole("button", { name: roleName })
+      .filter({ visible: true })
+      .first()
+      .click();
     await expect(
-      webPage.getByText(/sees member details/i).first(),
+      webPage
+        .getByText(/sees member details/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
   });
 });
