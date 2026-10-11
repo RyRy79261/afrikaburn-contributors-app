@@ -10,6 +10,9 @@ const appDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(appDir, "..", "..");
 
 const config: NextConfig = {
+  // next dev writes a managed block into <app>/AGENTS.md when it sees an AI
+  // agent; it would sit as an uncommitted change after every agent run.
+  agentRules: false,
   reactStrictMode: true,
   transpilePackages: [
     "@quagga/ui",
