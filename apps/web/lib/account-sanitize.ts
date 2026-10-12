@@ -308,6 +308,7 @@ export async function sanitizeAccount(
       .where(
         inArray(
           schema.wapAllocations.membershipId,
+          // former members: their passes are released too.
           tx
             .select({ id: schema.memberships.id })
             .from(schema.memberships)
