@@ -205,6 +205,7 @@ describe("archiveMember — the write", () => {
         waivedOrgQuestionnaires: 0,
         revokedInvites: 1,
         freedShiftSpots: 0,
+        freedWorkAccessPasses: 0,
       },
     });
   });
@@ -245,16 +246,21 @@ describe("archiveMember — the write", () => {
     ).toBe(2);
   });
 
-  it("deletes NOTHING but their shift spots — history stays", async () => {
+  it("deletes NOTHING but their shift spots and their pass — history stays", async () => {
     dbMock.queue([targetRow()], [{ id: M_REN }], [], []);
     await archiveMember(input());
-    // The ONE delete is their camp shift spots (epic #57): a future
-    // commitment the camp must refill, not history.
+    // The ONLY deletes are future commitments the camp must refill, not
+    // history: their camp shift spots (epic #57) and their Work Access Pass
+    // (epic #53).
     const deletes = dbMock.queriesOfKind("delete");
-    expect(deletes).toHaveLength(1);
+    expect(deletes).toHaveLength(2);
     expect(deletes[0]!.arg("delete")).toBe(schema.shiftAssignments);
     expect(deletes[0]!.tx).toBe(true);
     expect(boundStrings(deletes[0]!)).toContain(M_REN);
+    expect(deletes[1]!.arg("delete")).toBe(schema.wapAllocations);
+    expect(deletes[1]!.tx).toBe(true);
+    // Only THIS membership's pass — never the project's whole list.
+    expect(boundStrings(deletes[1]!)).toContain(M_REN);
     // …and hand-on requests made TO them are cancelled, not deleted.
     const cleared = dbMock
       .writesTo(schema.shiftAssignments)

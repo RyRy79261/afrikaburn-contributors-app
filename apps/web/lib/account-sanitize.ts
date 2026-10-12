@@ -300,6 +300,21 @@ export async function sanitizeAccount(
         ),
       );
 
+    // 2e. WORK ACCESS PASSES (epic #53). Keyed by membership as well: a
+    //     "Departed Burner" cannot be let onto site, so their passes go back
+    //     to the projects that held them, every edition's.
+    await tx
+      .delete(schema.wapAllocations)
+      .where(
+        inArray(
+          schema.wapAllocations.membershipId,
+          tx
+            .select({ id: schema.memberships.id })
+            .from(schema.memberships)
+            .where(eq(schema.memberships.userId, userId)),
+        ),
+      );
+
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
     //    display name with the "Departed Burner" stub.

@@ -202,6 +202,17 @@ export async function archiveMember(input: {
       .set({ handoverToMembershipId: null })
       .where(eq(schema.shiftAssignments.handoverToMembershipId, target.id));
 
+    // 6. WORK ACCESS PASSES (epic #53). A pass is a future commitment too:
+    //    a former member's pass goes back to the project. An APPROVED list
+    //    that loses a name stays approved — the org sees "1 removed since
+    //    approval" from the list's approved snapshot (docs/wap-spec.md). The
+    //    pass writes lock this membership row and re-check it is active, so
+    //    no pass can be written for them after this commits.
+    const freedPasses = await tx
+      .delete(schema.wapAllocations)
+      .where(eq(schema.wapAllocations.membershipId, target.id))
+      .returning({ id: schema.wapAllocations.id });
+
     await tx.insert(schema.auditEvents).values({
       actorId: input.actorUserId,
       action: MEMBER_ARCHIVE_AUDIT_ACTION,
@@ -214,6 +225,7 @@ export async function archiveMember(input: {
         waivedOrgQuestionnaires: waivedOrg,
         revokedInvites: revoked.length,
         freedShiftSpots: freedShifts.length,
+        freedWorkAccessPasses: freedPasses.length,
       },
     });
     return { ok: true };

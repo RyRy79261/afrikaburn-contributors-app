@@ -106,6 +106,7 @@ function queueErasure(
     /* delete membershipLogistics (epic #55) */ [],
     /* delete shiftAssignments (epic #57) */ [],
     /* cancel hand-on requests to them (epic #57) */ [],
+    /* delete wapAllocations (epic #53) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -482,6 +483,19 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(cleared).toHaveLength(1);
     expect(cleared[0]!.tx).toBe(true);
     expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
+  });
+
+  it("RELEASES the account's Work Access Passes, scoped to its memberships, in the erasure transaction (epic #53)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const deletes = dbMock
+      .writesTo(schema.wapAllocations)
+      .filter((q) => q.kind === "delete");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.tx).toBe(true);
   });
 
   it("leaves auth_user_id alone so the tombstone stays findable", async () => {
