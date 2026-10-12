@@ -728,10 +728,11 @@ interface LockedMember {
 
 /**
  * Lock the caller's membership (and, for an allocation, the member being
- * added) `FOR SHARE`, in ONE statement, before the registration. Re-checked
- * UNDER the lock: archived or erased while we waited = nobody. `FOR SHARE`
- * conflicts with the UPDATE an archive or a role change makes, which is all
- * these writes need; two lead writes never wait on each other here — they
+ * added) and their accounts `FOR SHARE`, in ONE statement, before the
+ * registration. Re-checked UNDER the lock: archived or erased while we waited
+ * = nobody. `FOR SHARE` conflicts with the UPDATE an archive or a role change
+ * makes on the membership and with the `FOR UPDATE` an erasure takes on the
+ * account, which is all these writes need; two lead writes never wait on each other here — they
  * serialise on the registration row instead.
  */
 async function lockMembers(
@@ -765,7 +766,12 @@ async function lockMembers(
       ),
     )
     .orderBy(asc(schema.memberships.id))
-    .for("share", { of: schema.memberships });
+    // The USERS row too: account erasure takes it `FOR UPDATE` before it
+    // deletes anything keyed by membership (apps/web/lib/account-sanitize.ts,
+    // step 1c) and never touches a camp membership row, so locking only the
+    // membership would not make this wait. Locking the users row does, and
+    // Postgres re-checks `sanitized_at IS NULL` on the row it waited for.
+    .for("share", { of: [schema.memberships, schema.users] });
   return {
     actor: rows.find((r) => r.userId === userId) ?? null,
     other: otherMembershipId

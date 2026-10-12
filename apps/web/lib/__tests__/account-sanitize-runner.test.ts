@@ -98,6 +98,7 @@ function queueErasure(
   dbMock.queue(
     [{ memberships: input.memberships ?? 3 }],
     [{ bios: input.bios ?? 1 }],
+    /* lock the users row FOR UPDATE (step 1c) */ [],
     /* delete profileKeys */ [],
     /* delete emailChangeRequests */ [],
     /* delete securityEvents */ [],
@@ -496,6 +497,34 @@ describe("sanitizeAccount — the erasure itself", () => {
       .filter((q) => q.kind === "delete");
     expect(deletes).toHaveLength(1);
     expect(deletes[0]!.tx).toBe(true);
+  });
+
+  it("LOCKS the account row FOR UPDATE inside the transaction before it releases a pass (epic #53)", async () => {
+    // A lead's allocate locks the member's users row FOR SHARE and re-checks
+    // `sanitized_at` under it (wap-store `lockMembers`). Erasure never updates
+    // a camp membership, so without this lock nothing made the allocate wait:
+    // it could insert a pass after step 2e's delete and commit, leaving an
+    // invisible "Departed Burner" pass that still counted against the cap.
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const lockAt = dbMock.queries.findIndex(
+      (q) =>
+        q.tx &&
+        q.kind === "select" &&
+        q.arg("from") === schema.users &&
+        q.arg("for") === "update",
+    );
+    expect(lockAt).toBeGreaterThan(-1);
+    expect(boundStrings(dbMock.queries[lockAt]!)).toContain(USER);
+    const releaseAt = dbMock.queries.findIndex(
+      (q) => q.kind === "delete" && q.arg("delete") === schema.wapAllocations,
+    );
+    expect(releaseAt).toBeGreaterThan(lockAt);
+    // The first statement of the transaction: nothing is erased unlocked.
+    expect(dbMock.queries.findIndex((q) => q.tx)).toBe(lockAt);
   });
 
   it("leaves auth_user_id alone so the tombstone stays findable", async () => {
