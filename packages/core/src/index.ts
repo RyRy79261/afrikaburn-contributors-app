@@ -230,3 +230,7 @@ export * from "./id-retention";
 export * from "./project-registration";
 // Camp shifts and rotas (epic #57). PURE — no I/O.
 export * from "./shifts";
+// Work Access Passes (epic #53): the request window, requests and grants, the
+// pass list and its review, effective dates, flags, the duplicate-holder note,
+// notifications and the CSV export. PURE — no I/O.
+export * from "./work-access-passes";
