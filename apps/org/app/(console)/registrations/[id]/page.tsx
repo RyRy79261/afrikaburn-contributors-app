@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Check, ExternalLink, X } from "lucide-react";
 import {
   SAFETY_DOCUMENT_VALIDITY_LABELS,
+  legacyWapAsk,
   orgCanInDomain,
   orgCapabilityRefusal,
 } from "@quagga/core";
@@ -496,7 +497,16 @@ function buildSectionFields(
     size_logistics: [
       { label: "Expected population", value: r.s4ExpectedPopulation ?? "—" },
       { label: "First arrival", value: formatDate(r.s4FirstArrivalDate) },
-      { label: "Work access passes", value: r.s4WorkAccessPasses ?? "—" },
+      // The OLD form's count only, and only when one was given (docs/wap-spec.md,
+      // "The old registration-form field") — the requests live in the Passes tab.
+      ...(legacyWapAsk(r.s4WorkAccessPasses) !== null
+        ? [
+            {
+              label: "Work access passes",
+              value: `Asked at registration: ${legacyWapAsk(r.s4WorkAccessPasses)}`,
+            },
+          ]
+        : []),
       { label: "Area dimensions", value: r.s4AreaDimensions },
       { label: "Layout uploads", value: layoutLinks, wide: true },
     ],

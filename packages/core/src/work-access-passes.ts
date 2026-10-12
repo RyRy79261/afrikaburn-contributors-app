@@ -176,16 +176,10 @@ export function pendingWapRequest<T extends Pick<WapRequestFacts, "status">>(
   return requests.find((r) => r.status === "pending") ?? null;
 }
 
-/**
- * A non-empty legacy count from the registration form
- * (`s4_work_access_passes`), shown to the org as "Asked at registration: N".
- * Null when nobody typed one (or typed 0).
- */
-export function legacyWapAsk(s4WorkAccessPasses: number | null): number | null {
-  return s4WorkAccessPasses != null && s4WorkAccessPasses > 0
-    ? s4WorkAccessPasses
-    : null;
-}
+// `legacyWapAsk` (the old registration-form count) lives in
+// ./registration-export, which every legacy surface — the registration review,
+// the project review and the placement CSV — already reads; this module
+// imports from that one, so defining it here would make a cycle.
 
 // --- Decisions -------------------------------------------------------------
 

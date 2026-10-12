@@ -94,6 +94,20 @@ describe("buildPlacementCsv", () => {
     expect(csv).not.toContain("T08:30");
   });
 
+  it("labels the old form's WAP count as such, and leaves an unasked one blank", () => {
+    // docs/wap-spec.md "The old registration-form field": a later edition's
+    // registration never has a count; the real requests are the passes export.
+    const col = PLACEMENT_EXPORT_HEADERS.indexOf(
+      "Work Access Passes asked at registration",
+    );
+    expect(col).toBeGreaterThan(-1);
+    const cell = (r: PlacementExportRow) =>
+      buildPlacementCsv([r]).slice(1).split("\r\n")[1]!.split(",")[col];
+    expect(cell(row({ workAccessPasses: 6 }))).toBe("6");
+    expect(cell(row({ workAccessPasses: null }))).toBe("");
+    expect(cell(row({ workAccessPasses: 0 }))).toBe("");
+  });
+
   it("joins categories with a semicolon so the comma stays the delimiter", () => {
     const csv = buildPlacementCsv([row()]);
     expect(csv).toContain("Tea; Workshops");
