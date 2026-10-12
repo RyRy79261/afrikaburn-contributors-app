@@ -927,6 +927,13 @@ export function wapPassesPath(kind: GroupKind, slug: string): string {
   return `${wapProjectBasePath(kind, slug)}/passes`;
 }
 
+/** The project's own page, where a member sees their pass. `/camps/<slug>` is
+ * every group's dashboard — `/artworks/<slug>` and `/vehicles/<slug>` hold only
+ * sub-pages (edit, questionnaires, passes) and have no page of their own. */
+export function wapProjectPagePath(slug: string): string {
+  return `/camps/${slug}`;
+}
+
 export interface WapNoticeContext {
   projectName: string;
   projectKind: GroupKind;
@@ -1004,7 +1011,7 @@ export function wapPassApprovedNotification(
   return wapNotice(
     c,
     "You have a Work Access Pass — AfrikaBurn approved the list",
-    wapProjectBasePath(c.projectKind, c.projectSlug),
+    wapProjectPagePath(c.projectSlug),
   );
 }
 

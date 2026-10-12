@@ -1026,6 +1026,10 @@ describe("notifications", () => {
 
   it("pass holders land on the project page, not the lead's page", () => {
     expect(wapPassApprovedNotification(camp).link).toBe("/camps/the-camp");
+    // An artwork or vehicle has no page at /artworks/<slug> — its dashboard is
+    // /camps/<slug> like every group's, so the holder's link goes there.
+    expect(wapPassApprovedNotification(art).link).toBe("/camps/the-art");
+    expect(wapPassApprovedNotification(mv).link).toBe("/camps/the-mv");
   });
 
   it("is in-app only — no immediate email", () => {
