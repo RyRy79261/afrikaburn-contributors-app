@@ -28,7 +28,11 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: quagga
     ports:
-      - "5432:5432"
+      # Host side overridable (QUAGGA_PG_PORT) for a machine where another
+      # stack already holds 5432. Nothing in the e2e run dials it: the apps,
+      # the migrator and the god bootstrap all go through the two proxies, and
+      # the script reaches Postgres with `docker exec`.
+      - "${QUAGGA_PG_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d quagga"]
       interval: 3s

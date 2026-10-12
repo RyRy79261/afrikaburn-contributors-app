@@ -188,7 +188,22 @@ else
   pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
   DEV_PID=$!
 fi
-trap 'kill $DEV_PID 2>/dev/null || true; pkill -f "next dev" >/dev/null 2>&1 || true; pkill -f "next start" >/dev/null 2>&1 || true' EXIT
+# STOP ONLY WHAT THIS RUN STARTED. This used to `pkill -f "next dev"` and
+# `pkill -f "next start"` — every Next server on the machine, other projects'
+# included. The ports were checked free (or freed) above before anything was
+# started, so whatever holds 3000-3002 now is this run's; take those by pid,
+# plus this checkout's own wrappers.
+stop_apps() {
+  kill "$DEV_PID" 2>/dev/null || true
+  pkill -f "$REPO_NEXT" >/dev/null 2>&1 || true
+  for port in 3000 3001 3002; do
+    holders=$(ss -ltnpH "sport = :$port" 2>/dev/null \
+      | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true)
+    # shellcheck disable=SC2086
+    [ -n "$holders" ] && kill $holders 2>/dev/null || true
+  done
+}
+trap stop_apps EXIT
 
 # FAIL IF AN APP NEVER COMES UP. This loop used to fall through silently after
 # 120s, and the suite then ran against a dead port: every spec failed on a
