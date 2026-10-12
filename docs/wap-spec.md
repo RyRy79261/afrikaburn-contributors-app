@@ -9,13 +9,25 @@
 | **Owner / Updated**    | Ryan, 2026-10-12 (epic #53)                                                              |
 
 A Work Access Pass (WAP) lets a person onto the site before the event opens,
-to build, or after it closes, to strike. AfrikaBurn grants a project a number
-of passes; the project's lead names who gets them. Today the platform stores
-only the number the project asked for (`registrations.s4_work_access_passes`),
-and leads track the names in spreadsheets.
+to build, or after it closes, to strike. The org opens WAP requests for an
+edition; each project asks for a number; the org grants passes; the project's
+lead names who gets them; the org approves the list. Today the platform stores
+only one number, asked in the registration form
+(`registrations.s4_work_access_passes`), and leads track the names in
+spreadsheets.
+
+```
+org opens requests → project requests N → org grants M ≤ N
+  → lead allocates names (≤ total granted) → submits list → org approves
+  ↺ the project may ask for more at any time requests are open
+```
 
 ## Decisions (Ryan, 12 Oct 2026, #53)
 
+- **The org opens WAP requests** for an edition. Until then no project can ask.
+  Projects then request a number of passes.
+- **Passes can be increased later.** A project may send another request for
+  more while requests are open; the org grants on top of what it already has.
 - **Every project type**: theme camps, artworks and mutant vehicles. All three
   already request a count on the same `registrations` row (#52).
 - **The org approves the whole list at once**, not each name. The lead submits
@@ -33,9 +45,16 @@ and leads track the names in spreadsheets.
 
 ## Model
 
-- `registrations.wap_granted` (int, nullable) — set by the org. Null = not
-  decided yet. Separate from `s4_work_access_passes` (what was asked for).
-  Not carried forward (same rule as the request).
+- `editions.wap_requests_open_at`, `wap_requests_close_at` (timestamps,
+  nullable) — set by the org, like `registration_opens_at`. Open = opened and
+  not closed. The org can close and reopen.
+- `wap_requests` (registration, `requested` int > 0, `reason` text?,
+  `status` `pending | granted | declined`, `granted` int?, `requested_by`,
+  `decided_by`, timestamps). One row per ask: the first request and every
+  increase. At most one `pending` per registration (partial unique index).
+  The org may grant fewer than asked, never more.
+- **Total granted** = the sum of `granted` over the registration's rows.
+  Derived, never stored. Not carried forward to next year.
 - `registrations.wap_list_status` — `draft | submitted | approved | returned`,
   default `draft`; with `wap_list_submitted_at`, `wap_list_reviewed_at`,
   `wap_list_reviewed_by`, `wap_list_return_note`.
@@ -53,14 +72,17 @@ an empty cell).
 - **Who allocates**: the project's structural lead and co-leads
   (`canManageWorkAccessPasses`). No custom-role privilege yet.
 - **Who is eligible**: current members of the project (former members are not).
-- **Cap**: allocations ≤ `wap_granted`. Allocation needs a granted number.
+- **Requests**: only while the edition's requests are open, only by the
+  project's lead and co-leads, only for a registration that has been
+  submitted, and not while another request is pending.
+- **Cap**: allocations ≤ total granted. Allocation needs a granted number.
   Checked inside a transaction that locks the registration row, so two tabs
   cannot overshoot.
 - **Editing**: allowed in `draft` and `returned`. A `submitted` list is locked
   until the org acts. Editing an `approved` list moves it back to `draft`; the
   lead must submit again, and the org sees what changed since approval.
-- **Lowering `wap_granted`** below the allocations already made is refused;
-  the org returns the list instead.
+- **Grants only go up.** A granted request is never edited down; if the org
+  needs fewer passes in use, it returns the list.
 - **Incomplete** (WAP-007, WAP-015): a pass holder is flagged when their bio is
   incomplete (`isBioComplete`) or a sent onboarding is unfinished. A flag, not
   a block.
@@ -74,29 +96,44 @@ an empty cell).
 
 ## Org (`apps/org`, domain `registrations`)
 
-- Registration review gets a **Work Access Passes** panel: requested, granted
-  (editable with `update`), list status, the names with arrival, departure,
+- **Open / close WAP requests** for the edition (`update`), next to the
+  registration window settings.
+- Registration review gets a **Work Access Passes** panel: each request with
+  Grant (a number, default the amount asked) or Decline (`update`), total
+  granted, list status, the names with arrival, departure,
   build and strike, flags, and Approve / Return with a note.
 - `/registrations/passes` — all projects for the edition: requested, granted,
-  allocated, list status; filter by status and project type; **Export CSV**
+  allocated, list status, a "pending requests" filter; filter by status and project type; **Export CSV**
   (WAP-009).
 - Names need `read`. The export needs `personal_information` because it holds
   email. It never holds a hard-locked field (phone, emergency contacts, ID).
 
 ## Notifications (kind `wap`, in-app only)
 
-- Leads and co-leads: passes granted or changed; list approved; list returned
-  (with the note).
+- Every project lead and co-lead with a submitted registration: WAP requests
+  are open.
+- Leads and co-leads: request granted (with the number) or declined; list
+  approved; list returned (with the note).
 - Pass holders: when their project's list is approved.
 - No email until Resend exists.
 
 ## Surfaces
 
 - `/camps/[slug]/passes`, `/artworks/[slug]/passes`, `/vehicles/[slug]/passes`
-  — the lead's page (frame W1): "7 of 10 allocated", the member list with
-  dates, build/strike and flags, add/remove, Submit to AfrikaBurn.
+  — the lead's page (frame W1): request passes (or ask for more), the request
+  history, "7 of 10 allocated", the member list with dates, build/strike and
+  flags, add/remove, Submit to AfrikaBurn.
 - The project page — a Passes tile for leads; the member's own pass line.
 - Org review panel (W2) and the passes overview with export (W3).
+
+## The old registration-form field
+
+The request moves out of the registration forms (camp wizard, artwork and
+vehicle forms): asking before the org has opened requests gives the org a
+number nobody can act on, and two places to type the same number is one form
+too many. The `s4_work_access_passes` column stays (append-only migrations);
+the org review shows a non-empty one as "Asked at registration: N" for the
+editions that used it. Removing the form field is a default — Ryan may keep it.
 
 ## Not built
 
