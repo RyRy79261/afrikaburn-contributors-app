@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { buildWapCsv, wapCsvFilename, type WapExportInput } from "@quagga/core";
+import { buildWapCsv, wapCsvFilename } from "@quagga/core";
 
 import { getDb } from "@/lib/db";
 import { getActiveEdition } from "@/lib/queries";
 import { requireOrgSession } from "@/lib/session";
-import { readWapExportProjects, readWapPasses } from "@/lib/wap";
+import { readWapExportProjects, readWapPasses, wapExportInputs } from "@/lib/wap";
 
 // The Work Access Pass export (WAP-009): every named pass holder in the active
 // edition, one row each — the hand-off to AfrikaBurn's gate until it says what
@@ -55,26 +55,11 @@ export async function GET(): Promise<NextResponse> {
     readWapPasses(db, edition.id, { withEmail: true }),
   ]);
 
-  const rows: WapExportInput[] = [];
-  for (const p of passes) {
-    const project = projects.get(p.registrationId);
-    if (!project) continue;
-    rows.push({
-      projectName: project.projectName,
-      projectKind: project.projectKind,
-      listStatus: project.listStatus,
-      name: p.displayName,
-      username: p.username,
-      email: p.email,
-      pass: p.effective,
-      flags: p.flags,
-    });
-  }
-  rows.sort(
-    (a, b) =>
-      a.projectName.localeCompare(b.projectName) ||
-      a.name.localeCompare(b.name),
-  );
+  // Each row carries what changed on that pass since its list was approved:
+  // a pass follows its member's roster plan, so an "Approved" list's dates can
+  // move without the list leaving "approved" — the gate must not read them as
+  // the values the org approved.
+  const rows = wapExportInputs(projects, passes);
 
   return new NextResponse(buildWapCsv(rows), {
     headers: {

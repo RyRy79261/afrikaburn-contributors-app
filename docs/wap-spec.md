@@ -91,6 +91,11 @@ an empty cell).
 - **Archiving or removing a member** deletes their allocation. An approved list
   that loses a name stays approved; the org view shows "1 removed since
   approval".
+- **A member changing their own roster plan** moves the pass's dates or
+  build/strike (where the lead did not override them) without moving the list.
+  An approved list stays approved, the org view says "Changed since approval"
+  with each change, and the export's "Changed since approval" column names
+  them, so the gate never reads moved dates as the ones the org approved.
 - **Members** see their own pass on the project page: "You have a Work Access
   Pass", with its status (draft lists show nothing).
 

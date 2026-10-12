@@ -121,7 +121,7 @@ describe("the Work Access Pass CSV", () => {
     const csv = await res.text();
     const [header, row] = csv.replace(/^\uFEFF/, "").split("\r\n");
     expect(header).toBe(
-      "Project,Project type,List status,Name,Username,Email,Arrival,Departure,Build,Strike,Flags",
+      "Project,Project type,List status,Name,Username,Email,Arrival,Departure,Build,Strike,Flags,Changed since approval",
     );
     expect(row).toContain("holder@example.com");
     expect(row).toContain("Also has a pass from Quiet Free Camp");
@@ -132,6 +132,73 @@ describe("the Work Access Pass CSV", () => {
     const [passes] = db.recorded("select", "wap_allocations");
     expect(passes?.columns).toContain("email");
     expect(passes?.columns).not.toContain("phone");
+  });
+});
+
+describe("the Work Access Pass CSV — an approved list whose plans moved", () => {
+  // A pass follows its member's roster plan, and nothing a member writes moves
+  // the list off "approved". The export is the hand-off to the gate, so a row
+  // under "Approved" must say when its dates are not the ones the org approved.
+  function seedExport(snapshot: unknown) {
+    db.seed("editions", [
+      {
+        id: EDITION_ID,
+        name: "AfrikaBurn 2027",
+        year: 2027,
+        startDate: "2027-04-26",
+        endDate: "2027-05-02",
+      },
+    ]);
+    db.seed("registrations", [
+      {
+        registrationId: REG_ID,
+        projectName: "The Camp",
+        projectKind: "theme_camp",
+        listStatus: "approved",
+        snapshot,
+      },
+    ]);
+    // The member's plan NOW: arriving 18 Apr, not joining build.
+    db.seed("wap_allocations", [
+      [pass({ arrivalDate: "2027-04-18", joiningBuild: false })],
+      [],
+    ]);
+  }
+
+  it("says what changed since approval on that person's row", async () => {
+    seedExport([
+      {
+        membershipId: "m-1",
+        userId: "holder-1",
+        arrivalDate: "2027-04-22",
+        departureDate: "2027-05-03",
+        build: true,
+        strike: false,
+      },
+    ]);
+    const csv = await (await exportPasses()).text();
+    const row = csv.replace(/^\uFEFF/, "").split("\r\n")[1]!;
+    expect(row).toContain(",Approved,");
+    expect(row).toContain("2027-04-18");
+    expect(row.endsWith(",arrival 22 Apr → 18 Apr; build Yes → No")).toBe(
+      true,
+    );
+  });
+
+  it("leaves the column blank when the pass is as approved", async () => {
+    seedExport([
+      {
+        membershipId: "m-1",
+        userId: "holder-1",
+        arrivalDate: "2027-04-18",
+        departureDate: "2027-05-03",
+        build: false,
+        strike: false,
+      },
+    ]);
+    const csv = await (await exportPasses()).text();
+    const row = csv.replace(/^\uFEFF/, "").split("\r\n")[1]!;
+    expect(row.endsWith(",")).toBe(true);
   });
 });
 

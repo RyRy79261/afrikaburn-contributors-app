@@ -763,8 +763,13 @@ export function wapRemovedSinceApprovalLabel(count: number): string {
 /**
  * The badge next to the list status, or null.
  *
- *   · An APPROVED list that lost names (a member left or was archived) stays
- *     approved and says "N removed since approval".
+ *   · An APPROVED list can change without leaving "approved" in two ways, and
+ *     neither is the lead's edit: a member leaves or is archived (their pass
+ *     goes), or a member changes their OWN roster plan, which a pass follows
+ *     for every field the lead did not override (`effectiveWapPass`). A date
+ *     or build/strike change says "Changed since approval" — the org approved
+ *     other values, and the export would otherwise hand the gate dates nobody
+ *     at AfrikaBurn saw. Removals alone say "N removed since approval".
  *   · A list approved before and changed since (now draft, submitted or
  *     returned) says "Changed since approval".
  */
@@ -774,11 +779,26 @@ export function wapSinceApprovalBadge(
 ): string | null {
   if (!changes.everApproved) return null;
   if (status === "approved") {
+    if (changes.changed.length > 0) return "Changed since approval";
     return changes.removed.length > 0
       ? wapRemovedSinceApprovalLabel(changes.removed.length)
       : null;
   }
   return changes.any ? "Changed since approval" : null;
+}
+
+/**
+ * One pass's changes since approval as one export cell ("arrival 22 Apr →
+ * 18 Apr; build Yes → No"), or "" when none. Only this pass's own changes.
+ */
+export function wapPassChangesLabel(
+  membershipId: string,
+  changes: WapChangesSinceApproval,
+): string {
+  return changes.changed
+    .filter((c) => c.membershipId === membershipId)
+    .map(wapChangeLabel)
+    .join("; ");
 }
 
 // --- Summaries -------------------------------------------------------------
@@ -1050,6 +1070,10 @@ export interface WapExportRow {
   build: boolean | null;
   strike: boolean | null;
   flags: string;
+  /** What changed on this pass since the org approved the list, or "". A
+   * pass follows the member's own roster plan, so an approved list's dates can
+   * move without the list leaving "approved". */
+  changedSinceApproval: string;
 }
 
 export const WAP_EXPORT_COLUMNS: readonly {
@@ -1067,6 +1091,7 @@ export const WAP_EXPORT_COLUMNS: readonly {
   { key: "build", header: "Build" },
   { key: "strike", header: "Strike" },
   { key: "flags", header: "Flags" },
+  { key: "changedSinceApproval", header: "Changed since approval" },
 ];
 
 const PROJECT_TYPE_LABELS: Partial<Record<GroupKind, string>> = {
@@ -1088,6 +1113,8 @@ export interface WapExportInput {
     "arrivalDate" | "departureDate" | "build" | "strike"
   >;
   flags: readonly WapPassFlag[];
+  /** `wapPassChangesLabel` for this pass; omitted = nothing changed. */
+  changedSinceApproval?: string;
 }
 
 /** The export projection. Field-by-field: whatever a caller passes in, the
@@ -1105,6 +1132,7 @@ export function wapExportRow(input: WapExportInput): WapExportRow {
     build: input.pass.build,
     strike: input.pass.strike,
     flags: input.flags.map(wapFlagLabel).join("; "),
+    changedSinceApproval: input.changedSinceApproval ?? "",
   };
 }
 

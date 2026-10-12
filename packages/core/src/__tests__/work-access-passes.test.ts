@@ -52,6 +52,7 @@ import {
   wapOverviewTotals,
   wapOwnPassLine,
   wapPassApprovedNotification,
+  wapPassChangesLabel,
   wapPassesLeftLabel,
   wapPassesPath,
   wapPassFlags,
@@ -865,6 +866,31 @@ describe("wapChangesSinceApproval", () => {
     expect(wapChangeLabel(c.changed[0]!)).toBe("arrival 22 Apr → 24 Apr");
   });
 
+  it("an APPROVED list whose member changed their own roster plan says so", () => {
+    // A pass follows the member's roster plan for every field the lead did not
+    // override, and nothing a member writes moves the list off "approved". So
+    // the change happens to an approved list, and the org must see it: the
+    // export would otherwise hand the gate dates the org never approved.
+    const c = wapChangesSinceApproval(snapshot, [
+      pass("alice", { arrivalDate: "2027-04-18", build: false }),
+      pass("sipho"),
+      pass("lerato"),
+    ]);
+    expect(wapSinceApprovalBadge("approved", c)).toBe("Changed since approval");
+    expect(wapPassChangesLabel("m-alice", c)).toBe(
+      "arrival 22 Apr → 18 Apr; build Yes → No",
+    );
+    expect(wapPassChangesLabel("m-sipho", c)).toBe("");
+    // A change and a removal together: the change is the louder fact.
+    const both = wapChangesSinceApproval(snapshot, [
+      pass("alice", { strike: true }),
+      pass("sipho"),
+    ]);
+    expect(wapSinceApprovalBadge("approved", both)).toBe(
+      "Changed since approval",
+    );
+  });
+
   it("a member who left and rejoined is a new membership: removed + added", () => {
     const c = wapChangesSinceApproval(snapshot, [
       pass("alice"),
@@ -1120,6 +1146,17 @@ describe("CSV export", () => {
     expect(line).toContain("Theme camp,Approved");
     expect(line).toContain("2027-04-23,2027-05-02,Yes,,");
     expect(line).toContain("Bio incomplete; Also has a pass from Dust Bunnies");
+  });
+
+  it("carries what changed on a pass since approval, blank when nothing did", () => {
+    const header = buildWapCsv([]).slice(1).split("\r\n")[0]!;
+    expect(header.endsWith(",Changed since approval")).toBe(true);
+    const changed = buildWapCsv([
+      { ...input, changedSinceApproval: "arrival 22 Apr → 18 Apr" },
+    ]).split("\r\n")[1]!;
+    expect(changed.endsWith(",arrival 22 Apr → 18 Apr")).toBe(true);
+    const unchanged = buildWapCsv([input]).split("\r\n")[1]!;
+    expect(unchanged.endsWith("Dust Bunnies,")).toBe(true);
   });
 
   it("names the file by edition and date", () => {

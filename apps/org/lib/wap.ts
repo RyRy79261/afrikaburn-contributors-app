@@ -12,12 +12,14 @@ import {
   WAP_PROJECT_KINDS,
   wapChangesSinceApproval,
   wapDuplicateHolders,
+  wapPassChangesLabel,
   wapPassFlags,
   wapRequestWindowState,
   wapSinceApprovalBadge,
   type EffectiveWapPass,
   type MemberLogistics,
   type WapChangesSinceApproval,
+  type WapExportInput,
   type WapHolding,
   type WapPassFlag,
   type WapProjectSummary,
@@ -659,6 +661,10 @@ export interface WapExportProject {
   projectName: string;
   projectKind: GroupKind;
   listStatus: WapListStatus;
+  /** The list as last approved (null = never approved) — the export says what
+   * changed on each pass since, because a pass follows its member's roster
+   * plan and an approved list's dates can move without leaving "approved". */
+  snapshot: readonly WapApprovedPass[] | null;
 }
 
 /** The projects whose passes the export lists, keyed by registration. */
@@ -671,6 +677,7 @@ export async function readWapExportProjects(
       projectName: schema.groups.name,
       projectKind: schema.groups.kind,
       listStatus: schema.registrations.wapListStatus,
+      snapshot: schema.registrations.wapListApprovedSnapshot,
     })
     .from(schema.registrations)
     .innerJoin(
@@ -678,5 +685,61 @@ export async function readWapExportProjects(
       eq(schema.groups.id, schema.registrations.groupId),
     )
     .where(eq(schema.registrations.editionId, editionId));
-  return new Map(rows.map((r) => [r.registrationId, r]));
+  return new Map(
+    rows.map((r) => [
+      r.registrationId,
+      {
+        ...r,
+        snapshot: (r.snapshot ?? null) as readonly WapApprovedPass[] | null,
+      },
+    ]),
+  );
+}
+
+/**
+ * The export's rows: one per live pass whose project is known, each carrying
+ * what changed on it since its list was approved. Pure.
+ */
+export function wapExportInputs(
+  projects: ReadonlyMap<string, WapExportProject>,
+  passes: readonly OrgWapPass[],
+): WapExportInput[] {
+  const byRegistration = new Map<string, OrgWapPass[]>();
+  for (const p of passes) {
+    const list = byRegistration.get(p.registrationId) ?? [];
+    list.push(p);
+    byRegistration.set(p.registrationId, list);
+  }
+  const changes = new Map<string, WapChangesSinceApproval>();
+  for (const [registrationId, list] of byRegistration) {
+    const project = projects.get(registrationId);
+    if (!project) continue;
+    changes.set(
+      registrationId,
+      wapChangesSinceApproval(project.snapshot, wapCurrentPasses(list)),
+    );
+  }
+
+  const rows: WapExportInput[] = [];
+  for (const p of passes) {
+    const project = projects.get(p.registrationId);
+    const since = changes.get(p.registrationId);
+    if (!project || !since) continue;
+    rows.push({
+      projectName: project.projectName,
+      projectKind: project.projectKind,
+      listStatus: project.listStatus,
+      name: p.displayName,
+      username: p.username,
+      email: p.email,
+      pass: p.effective,
+      flags: p.flags,
+      changedSinceApproval: wapPassChangesLabel(p.membershipId, since),
+    });
+  }
+  return rows.sort(
+    (a, b) =>
+      a.projectName.localeCompare(b.projectName) ||
+      a.name.localeCompare(b.name),
+  );
 }

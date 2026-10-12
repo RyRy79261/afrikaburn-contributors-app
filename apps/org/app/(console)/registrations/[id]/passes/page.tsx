@@ -246,20 +246,38 @@ function SinceApproval({ review, noun }: { review: WapReview; noun: string }) {
     review.removedNames.get(userId) ?? "A former member";
 
   if (list.status === "approved") {
-    // Only removals can happen to an approved list without moving it to draft.
-    if (changes.removed.length === 0) return null;
+    // Two things change an approved list without moving it to draft, and
+    // neither is the lead's edit: a member leaving (their pass goes with them)
+    // and a member changing their OWN roster plan, which a pass follows for
+    // every field the lead did not override. Both are shown — the org approved
+    // other values, and the export hands the gate what is current.
     return (
       <div className="mx-6 mb-4 rounded-lg border border-border bg-muted/30 p-3">
+        <p className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <History className="h-3.5 w-3.5" aria-hidden />
+          Since you approved it
+        </p>
         <ul className="flex flex-col gap-1.5">
           {changes.removed.map((p) => (
-            <WapChangeLine key={p.membershipId} kind="removed">
+            <WapChangeLine key={`r-${p.membershipId}`} kind="removed">
               {nameOf(p.userId)} left the {noun}, so their pass went with them.
+            </WapChangeLine>
+          ))}
+          {changes.changed.map((c) => (
+            <WapChangeLine
+              key={`c-${c.membershipId}-${c.field}`}
+              kind="changed"
+            >
+              {byMembership.get(c.membershipId)?.displayName ?? "A member"} ·{" "}
+              {wapChangeLabel(c)}
             </WapChangeLine>
           ))}
         </ul>
         <p className="mt-2 text-xs text-muted-foreground">
           The list stays approved —{" "}
           {wapAllocatedLabel(review.passes.length, review.totalGranted)}.
+          {changes.changed.length > 0 &&
+            " A pass follows the member's own plans, so its dates can move after approval; the export shows what changed."}
         </p>
       </div>
     );

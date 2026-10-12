@@ -421,7 +421,7 @@ test.describe("camp lead — work access passes", () => {
     const csv = (await res.text()).replace(/^\uFEFF/, "");
     const [header, ...lines] = csv.trimEnd().split("\r\n");
     expect(header).toBe(
-      "Project,Project type,List status,Name,Username,Email,Arrival,Departure,Build,Strike,Flags",
+      "Project,Project type,List status,Name,Username,Email,Arrival,Departure,Build,Strike,Flags,Changed since approval",
     );
     expect(header).not.toMatch(/phone|emergency|passport|\bid\b|medical/i);
     const campLines = lines.filter((l) => l.startsWith(`${camp.name},`));
