@@ -23,6 +23,9 @@ export const NotificationKind = z.enum([
   "bulletin",
   // Camp shifts (epic #57): assigned, handed on, changed or cancelled.
   "shift",
+  // Work Access Passes (epic #53): requests opened, granted or declined; a
+  // pass list approved or returned. In-app only.
+  "wap",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 

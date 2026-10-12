@@ -253,6 +253,13 @@
       "when": 1790864736463,
       "tag": "0035_onboarding_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791842780744,
+      "tag": "0036_work_access_passes",
+      "breakpoints": true
     }
   ]
 }

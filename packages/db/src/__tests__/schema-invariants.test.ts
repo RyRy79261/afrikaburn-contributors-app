@@ -189,3 +189,80 @@ describe("self-consistency across every exported table", () => {
     expect(dangling).toEqual([]);
   });
 });
+
+describe("work access passes (migration 0036)", () => {
+  type IndexConfig = {
+    name: string;
+    unique: boolean;
+    columns: { name: string }[];
+    where?: SQL;
+  };
+  const indexes = (table: string): IndexConfig[] =>
+    (byName.get(table)?.indexes ?? []).map(
+      (index) => (index as unknown as { config: IndexConfig }).config,
+    );
+
+  it("allows at most ONE pending request per registration", () => {
+    // The store asks "is there a pending request?" and inserts; two tabs
+    // racing that check must collide here, not both succeed. The predicate is
+    // the whole point — without it a project could only ever ask once.
+    const pending = indexes("wap_requests").find(
+      (i) => i.name === "wap_requests_one_pending_idx",
+    );
+    expect(pending?.unique).toBe(true);
+    expect(pending?.columns.map((c) => c.name)).toEqual(["registration_id"]);
+    expect(predicateText(pending?.where)).toBe("status = 'pending'");
+  });
+
+  it("holds one pass per person per registration", () => {
+    const uniq = indexes("wap_allocations").find(
+      (i) => i.name === "wap_allocations_registration_membership_idx",
+    );
+    expect(uniq?.unique).toBe(true);
+    expect(uniq?.columns.map((c) => c.name)).toEqual([
+      "registration_id",
+      "membership_id",
+    ]);
+  });
+
+  it("caps grants at the ask and ties `granted` to the status", () => {
+    const checks = (byName.get("wap_requests")?.checks ?? []).map(
+      (c) => c.name,
+    );
+    expect(checks.sort()).toEqual([
+      "wap_requests_granted_iff_status",
+      "wap_requests_granted_within_ask",
+      "wap_requests_requested_positive",
+    ]);
+  });
+
+  it("cascades a pass with its membership and its registration", () => {
+    // Leaving a camp takes the pass with it; an approved list then reads
+    // "1 removed since approval" from the snapshot, never a dangling row.
+    const fks = byName.get("wap_allocations")?.foreignKeys ?? [];
+    const onDelete = Object.fromEntries(
+      fks.map((fk) => [
+        getTableConfig(fk.reference().foreignTable).name +
+          "." +
+          fk.reference().foreignColumns[0]!.name,
+        fk.onDelete,
+      ]),
+    );
+    expect(onDelete["memberships.id"]).toBe("cascade");
+    expect(onDelete["registrations.id"]).toBe("cascade");
+    expect(onDelete["users.id"]).toBe("set null");
+  });
+
+  it("mirrors the status vocabularies in @quagga/types", async () => {
+    const types = await import("@quagga/types");
+    expect(schema.wapListStatusEnum.enumValues).toEqual(
+      types.WapListStatus.options,
+    );
+    expect(schema.wapRequestStatusEnum.enumValues).toEqual(
+      types.WapRequestStatus.options,
+    );
+    expect(schema.notificationKindEnum.enumValues).toEqual(
+      types.NotificationKind.options,
+    );
+  });
+});

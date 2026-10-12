@@ -24,6 +24,7 @@ import type {
   ProjectPermissions,
   CampHistoryEntry,
   SupplierOnboardingSteps,
+  WapApprovedPass,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). The R0 core (migrations
@@ -273,6 +274,9 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   "bulletin",
   // Camp shifts (epic #57, migration 0034).
   "shift",
+  // Work Access Passes (epic #53, migration 0036): requests opened, a request
+  // granted or declined, a pass list approved or returned. In-app only.
+  "wap",
 ]);
 
 // How a camp shift is FIRST FILLED (epic #57). `open` = members sign
@@ -286,6 +290,28 @@ export const notificationKindEnum = pgEnum("notification_kind", [
 export const shiftSignupModeEnum = pgEnum("shift_signup_mode", [
   "open",
   "assign",
+]);
+
+// Work Access Passes (epic #53, docs/wap-spec.md). One row in `wap_requests`
+// per ask — the first and every "ask for more". `pending` until the org acts;
+// a `granted` row is never edited (grants only go up). Mirrors
+// `WapRequestStatus` in @quagga/types.
+export const wapRequestStatusEnum = pgEnum("wap_request_status", [
+  "pending",
+  "granted",
+  "declined",
+]);
+
+// Where a project's pass LIST stands with the org (epic #53). The org approves
+// the whole list at once. `draft` and `returned` are editable; `submitted` is
+// locked until the org acts; editing an `approved` list moves it back to
+// `draft` (@quagga/core `wapListStatusAfterEdit`). Mirrors `WapListStatus` in
+// @quagga/types.
+export const wapListStatusEnum = pgEnum("wap_list_status", [
+  "draft",
+  "submitted",
+  "approved",
+  "returned",
 ]);
 
 // How a bulletin/announcement LANDS (epic #56). `feed` = an ordinary inbox
@@ -679,6 +705,23 @@ export const editions = pgTable("editions", {
     withTimezone: true,
   }),
   registrationClosesAt: timestamp("registration_closes_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
+
+  // --- Work Access Pass request window (epic #53, migration 0036) ---------
+  // The org OPENS WAP requests for an edition; until then no project can ask
+  // for passes. Open = opened and not closed (@quagga/core
+  // `wapRequestWindowState`). Both nullable — null open means "not opened
+  // yet", the honest first state. The org can close and reopen: reopening
+  // stamps a new open time later than the last close, so an old close never
+  // shuts a newer opening. Zoned for the same reason as the registration
+  // window above: these are promises compared against `now`.
+  wapRequestsOpenAt: timestamp("wap_requests_open_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
+  wapRequestsCloseAt: timestamp("wap_requests_close_at", {
     mode: "date",
     withTimezone: true,
   }),
@@ -1382,6 +1425,42 @@ export const registrations = pgTable(
       { onDelete: "set null" },
     ),
     carriedForwardAt: timestamp("carried_forward_at", { mode: "date" }),
+
+    // --- Work Access Pass list (epic #53, migration 0036) -----------------
+    // The NAMES live in `wap_allocations`; the number granted is the sum of
+    // `wap_requests.granted` (derived, never stored). What lives here is the
+    // list's standing with the org, because the org approves or returns the
+    // WHOLE list, not each name. `s4_work_access_passes` above stays (append-
+    // only) and is shown to the org as "Asked at registration: N".
+    wapListStatus: wapListStatusEnum("wap_list_status")
+      .notNull()
+      .default("draft"),
+    wapListSubmittedAt: timestamp("wap_list_submitted_at", { mode: "date" }),
+    // SET NULL: a lead deleting their account must not unsubmit the list.
+    wapListSubmittedByUserId: uuid("wap_list_submitted_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    // The org's last decision on the list (approve or return).
+    wapListReviewedAt: timestamp("wap_list_reviewed_at", { mode: "date" }),
+    wapListReviewedByUserId: uuid("wap_list_reviewed_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    // Required to return a list; the project's leads see it. Cleared on the
+    // next submit so a stale note never sits next to a fresh list.
+    wapListReturnNote: text("wap_list_return_note"),
+    // The list AS APPROVED: one entry per pass with the values the org saw
+    // (membership, user, effective dates, build, strike). Replaced on every
+    // approval and kept through edits, returns and resubmits — it is what
+    // "Changed since approval" and "1 removed since approval" are computed
+    // against (@quagga/core `wapChangesSinceApproval`). Ids and dates only:
+    // no name is copied here, so renaming or sanitising an account never
+    // leaves a stale copy behind. Null = never approved.
+    wapListApprovedAt: timestamp("wap_list_approved_at", { mode: "date" }),
+    wapListApprovedSnapshot: jsonb("wap_list_approved_snapshot").$type<
+      WapApprovedPass[]
+    >(),
 
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -2749,6 +2828,116 @@ export const shiftAssignments = pgTable(
     notToSelf: check(
       "shift_assignments_not_to_self",
       sql`${a.handoverToMembershipId} is null or ${a.handoverToMembershipId} <> ${a.membershipId}`,
+    ),
+  }),
+);
+
+// --- Work Access Passes (epic #53, docs/wap-spec.md, migration 0036) -------
+// A WAP lets a person onto site before the event opens (build) or after it
+// closes (strike). The org opens requests for an edition; a project asks for a
+// number; the org grants up to that number; the project's lead names who holds
+// them; the org approves the whole list. Every rule is in @quagga/core
+// work-access-passes.ts — these tables are storage only.
+
+// One row per ASK: the first request and every "ask for more". The total a
+// project holds is the SUM of `granted` over its rows — derived, never stored,
+// and never carried forward to next year (a new edition has new rows).
+//
+// At most ONE `pending` per registration (partial unique index): a project
+// asks again once the org has answered. The org may grant fewer than asked,
+// never more (CHECK), and a granted row is never edited down — "grants only go
+// up"; if the org needs fewer passes in use it returns the list instead.
+// `granted` is set exactly when the row is `granted` (CHECK), so the sum can
+// never count a declined or pending ask.
+export const wapRequests = pgTable(
+  "wap_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    requested: integer("requested").notNull(),
+    // The project's own words to the org ("our build crew grew"). Optional.
+    reason: text("reason"),
+    status: wapRequestStatusEnum("status").notNull().default("pending"),
+    granted: integer("granted"),
+    // SET NULL on both: an account deletion keeps the request history.
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    registrationIdx: index("wap_requests_registration_idx").on(
+      r.registrationId,
+    ),
+    onePendingPerRegistration: uniqueIndex("wap_requests_one_pending_idx")
+      .on(r.registrationId)
+      .where(sql`${r.status} = 'pending'`),
+    requestedPositive: check(
+      "wap_requests_requested_positive",
+      sql`${r.requested} > 0`,
+    ),
+    grantedWithinAsk: check(
+      "wap_requests_granted_within_ask",
+      sql`${r.granted} is null or (${r.granted} > 0 and ${r.granted} <= ${r.requested})`,
+    ),
+    grantedIffGranted: check(
+      "wap_requests_granted_iff_status",
+      sql`(${r.status} = 'granted') = (${r.granted} is not null)`,
+    ),
+  }),
+);
+
+// Who holds one of a project's passes. One row per (registration, membership).
+// Keyed by MEMBERSHIP, cascading with it: a member who leaves takes their pass
+// with them. Archiving a member deletes their allocation in the archive
+// transaction (a pass is a future commitment, not history). An APPROVED list
+// that loses a name this way stays approved; the org sees "1 removed since
+// approval" from `registrations.wap_list_approved_snapshot`.
+//
+// Dates and build/strike come from the member's own roster plans
+// (`membership_logistics`) — no new form. The four override columns are the
+// lead's correction ON THE PASS; null = use the roster plan. Arrival falls back
+// once more, to the registration's `s4_first_arrival_date`
+// (@quagga/core `effectiveWapPass`).
+//
+// The cap (allocations <= total granted) is enforced in the store, inside a
+// transaction that locks the registration row, so two tabs cannot overshoot.
+export const wapAllocations = pgTable(
+  "wap_allocations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id, { onDelete: "cascade" }),
+    // SET NULL: the lead deleting their account keeps the pass.
+    allocatedByUserId: uuid("allocated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    arrivalDate: date("arrival_date", { mode: "string" }),
+    departureDate: date("departure_date", { mode: "string" }),
+    build: boolean("build"),
+    strike: boolean("strike"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    registrationMembershipUniq: uniqueIndex(
+      "wap_allocations_registration_membership_idx",
+    ).on(a.registrationId, a.membershipId),
+    // "Also has a pass from {project}" looks a person up across projects.
+    membershipIdx: index("wap_allocations_membership_idx").on(a.membershipId),
+    arrivalNotAfterDeparture: check(
+      "wap_allocations_arrival_before_departure",
+      sql`${a.arrivalDate} is null or ${a.departureDate} is null or ${a.arrivalDate} <= ${a.departureDate}`,
     ),
   }),
 );

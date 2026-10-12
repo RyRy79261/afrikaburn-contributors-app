@@ -8,6 +8,7 @@ import {
   Package,
   PartyPopper,
   ShieldAlert,
+  Ticket,
   UserCheck,
 } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -32,7 +33,8 @@ export type NotificationKind =
   | "supplier"
   | "security"
   | "bulletin"
-  | "shift";
+  | "shift"
+  | "wap";
 
 /** kind → leading glyph. Exhaustive over NotificationKind by construction. */
 export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
@@ -44,6 +46,7 @@ export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
   security: ShieldAlert, // account security events
   bulletin: Megaphone, // 📣 org broadcast
   shift: CalendarClock, // 🗓 camp shift assigned / handed on / changed
+  wap: Ticket, // 🎫 work access passes granted / list approved or returned
 };
 
 export interface NotificationItemProps extends Omit<
