@@ -36,21 +36,11 @@ export function asProjectRegistrationKind(
 
 // ── Work Access Passes (CREATIVE-014) ─────────────────────────────────────
 //
-// A project requests WAPs exactly as a camp does: one whole number, stored on
-// `registrations.s4_work_access_passes`, allocated separately by AfrikaBurn.
-// The ceiling mirrors the camp wizard's `nullableInt(100_000)` so the column
-// has one bound whichever form wrote it.
-
-export const MAX_WORK_ACCESS_PASS_REQUEST = 100_000;
-
-/** Zod for the WAP request at a project form's boundary. Empty = not asked. */
-export const WorkAccessPassRequest = z
-  .number()
-  .int("Work Access Passes are a whole number.")
-  .min(0, "Work Access Passes can't be negative.")
-  .max(MAX_WORK_ACCESS_PASS_REQUEST)
-  .nullable()
-  .default(null);
+// No longer asked on the project forms (epic #53, docs/wap-spec.md): a project
+// asks for passes on its Passes page once AfrikaBurn opens requests, with the
+// rules in ./work-access-passes. `registrations.s4_work_access_passes` stays
+// (append-only) and the org shows a number an older form wrote as "Asked at
+// registration: N".
 
 // ── Previous-year duplication (CREATIVE-019) ─────────────────────────────
 //
@@ -102,7 +92,10 @@ const CARRIED_ANSWER_KEYS: Record<ProjectRegistrationKind, readonly string[]> =
   };
 
 /** Every answer key that deliberately starts empty in a new edition. Listed
- * for the UI copy and the tests; the carry decision reads the allow-list. */
+ * for the UI copy and the tests; the carry decision reads the allow-list.
+ * (`work_access_passes` is no longer written — the forms stopped asking in
+ * epic #53 — but an older answer that has it is still never carried: it is
+ * not on the allow-list.) */
 const NON_CARRIED_ANSWER_KEYS: Record<
   ProjectRegistrationKind,
   readonly string[]
@@ -114,14 +107,12 @@ const NON_CARRIED_ANSWER_KEYS: Record<
     "placement_notes",
     "burn_intent",
     "grant_interest",
-    "work_access_passes",
   ],
   mutant_vehicle: [
     "soop_level",
     "flame_effects",
     "night_driving",
     "acknowledgements",
-    "work_access_passes",
   ],
 };
 
