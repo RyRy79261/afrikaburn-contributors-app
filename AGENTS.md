@@ -244,7 +244,10 @@ list`, then `git worktree remove` what has finished.
     break-glass/reason-prompt design.)_
 
   - Free camps are undiscoverable to strangers (directory, profiles, type-aheads all
-    enforce this).
+    enforce this). _One narrow exception (Ryan, 12 Oct 2026, #53): a Work Access Pass
+    list shows "Also has a pass from {project}", naming the other project even when it
+    is a free camp — only to managers of a project holding the same person, only next
+    to that person, only the name (`wapDuplicateHolders`, `@quagga/core`)._
 - **Structural roles (`lead`/`admin`) hold every project permission irrevocably** — the
   no-lockout backstop. Custom-role privileges are grants on top.
 - **On the org side the same job is done by `memberships.role = 'god'`** (org roles v1,
