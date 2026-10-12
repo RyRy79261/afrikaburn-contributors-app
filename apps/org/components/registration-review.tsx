@@ -26,6 +26,7 @@ import { DecisionPanel } from "@/components/decision-panel";
 import { AssignWrangler } from "@/components/wranglers/assign-wrangler";
 import { SectionReviewThread } from "@/components/section-review-thread";
 import { MemberRoster } from "@/components/member-roster";
+import { RegistrationTabs } from "@/components/passes/registration-tabs";
 
 /** One review section as the shell renders it (fields already resolved to JSX). */
 export interface ReviewSectionView {
@@ -129,7 +130,7 @@ export function RegistrationReview({
       </nav>
 
       {/* Header — LEFT-aligned (status pill inline with the title). */}
-      <header className="mb-8">
+      <header className="mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
             {group.name}
@@ -151,6 +152,12 @@ export function RegistrationReview({
           </p>
         )}
       </header>
+
+      {/* Every registration kind holds Work Access Passes (docs/wap-spec.md). */}
+      <RegistrationTabs
+        registrationId={registration.id}
+        current="registration"
+      />
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Sections column */}
@@ -269,7 +276,7 @@ export function RegistrationReview({
               detail page, where the read is authorized AND recorded (privacy
               law: medical is never public, never in a list, roster, card or
               export, and visible only to the burner's camp leads + org staff). */}
-          <Card>
+          <Card id="members" className="scroll-mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Lock className="h-4 w-4" aria-hidden />
