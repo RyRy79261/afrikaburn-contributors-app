@@ -138,7 +138,16 @@ export function registrationFieldsBySection({
     size_logistics: [
       { label: "Expected population", value: r.s4ExpectedPopulation ?? "—" },
       { label: "First arrival", value: text(r.s4FirstArrivalDate) },
-      { label: "Work access passes", value: r.s4WorkAccessPasses ?? "—" },
+      // Asked on the old form only (epic #53 moved the request to the Passes
+      // page); shown when an earlier edition's form recorded a number.
+      ...(r.s4WorkAccessPasses
+        ? [
+            {
+              label: "Work Access Passes (asked at registration)",
+              value: r.s4WorkAccessPasses,
+            },
+          ]
+        : []),
       { label: "Area dimensions", value: text(r.s4AreaDimensions) },
       { label: "Layout uploads", value: layout, wide: true },
     ],

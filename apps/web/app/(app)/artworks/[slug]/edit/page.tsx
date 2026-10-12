@@ -63,10 +63,7 @@ function asBoolOrNull(
 /** Map the stored answer payload back to the form's prefill shape. */
 function toInitialValues(
   name: string,
-  ctx: Pick<
-    ProjectRegistrationEditContext,
-    "answers" | "workAccessPasses" | "safetyDocuments"
-  >,
+  ctx: Pick<ProjectRegistrationEditContext, "answers" | "safetyDocuments">,
 ): ArtworkFormInitialValues {
   const a = ctx.answers ?? {};
   const powerNeeds = asStringArray(a.power_needs).filter(
@@ -87,7 +84,6 @@ function toInitialValues(
     buildPlan: asString(a.build_plan),
     strikePlan: asString(a.strike_plan),
     grantInterest: asBoolOrNull(a.grant_interest) ?? false,
-    workAccessPasses: ctx.workAccessPasses,
     // Only ever non-empty for a lead/admin — the store decides before reading.
     safetyDocuments: ctx.safetyDocuments.map(({ title, url, expiresOn }) => ({
       title,
@@ -186,7 +182,7 @@ export default async function EditArtworkPage({
             slug={slug}
             sourceYear={carryForwardSource.editionYear}
             editionYear={edition.year}
-            startsEmpty="Your footprint, placement notes, burn intent, Work Access Passes and grant interest all start empty — those are new every year."
+            startsEmpty="Your footprint, placement notes, burn intent and grant interest all start empty — those are new every year."
             action={carryForwardArtworkRegistrationAction}
           />
         ) : null}

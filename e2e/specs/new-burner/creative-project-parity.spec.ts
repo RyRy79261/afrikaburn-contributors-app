@@ -7,10 +7,10 @@
 // their answers in the questionnaire spine, so everything built onto the camp
 // registration skipped them. What this walks, in a real browser:
 //
-//   1. WAP + SAFETY DOCUMENTS round-trip. A new artwork requests Work Access
-//      Passes and attaches a safety document (pasted https link — the local
+//   1. SAFETY DOCUMENTS round-trip. A new artwork attaches a safety document (pasted https link — the local
 //      stack has no Blob token, and the paste path is the one every deployment
-//      has) with an expiry. Reopening the form shows both.
+//      has) with an expiry. Reopening the form shows it. (Work Access
+//      Passes left the form in epic #53 — the form no longer asks.)
 //   2. THE DOCUMENTS ARE PRIVATE. They are not on the project's own dashboard,
 //      and a signed-in stranger sent to the edit route never sees the form.
 //   3. PROJECT-SCOPED QUESTIONNAIRES live on the kind's own route:
@@ -57,7 +57,7 @@ async function saveDraft(page: Page): Promise<string> {
 }
 
 test.describe("new burner — creative projects reach camp parity", () => {
-  test("an artwork requests WAPs and keeps a private safety document", async ({
+  test("an artwork keeps a private safety document and asks no WAP count", async ({
     webPage,
     makeAppPage,
   }) => {
@@ -73,7 +73,9 @@ test.describe("new burner — creative projects reach camp parity", () => {
     ).toBeVisible();
 
     await webPage.getByLabel("Artwork name").fill(artworkName);
-    await webPage.getByLabel(/^work access passes/i).fill("4");
+    // The WAP count moved to the Passes page (docs/wap-spec.md).
+    await expect(webPage.getByLabel("Document name")).toBeVisible();
+    await expect(webPage.getByLabel(/^work access passes/i)).toHaveCount(0);
 
     await webPage.getByLabel("Document name").fill(docTitle);
     await webPage.getByLabel("Expires on").fill("2099-12-31");
@@ -92,10 +94,9 @@ test.describe("new burner — creative projects reach camp parity", () => {
     ).toBeVisible();
     await expect(webPage.getByText(docTitle)).toHaveCount(0);
 
-    // Round trip: the WAP request and the document came back with the draft.
+    // Round trip: the document came back with the draft.
     await webPage.goto(`/artworks/${slug}/edit`);
     await expect(webPage.getByLabel("Artwork name")).toHaveValue(artworkName);
-    await expect(webPage.getByLabel(/^work access passes/i)).toHaveValue("4");
     await expect(webPage.getByRole("link", { name: docTitle })).toHaveAttribute(
       "href",
       "https://example.com/structural-sign-off.pdf",

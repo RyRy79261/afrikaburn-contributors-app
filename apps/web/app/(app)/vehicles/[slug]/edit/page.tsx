@@ -58,10 +58,7 @@ function asBoolOrNull(
 /** Map the stored answer payload back to the form's prefill shape. */
 function toInitialValues(
   name: string,
-  ctx: Pick<
-    ProjectRegistrationEditContext,
-    "answers" | "workAccessPasses" | "safetyDocuments"
-  >,
+  ctx: Pick<ProjectRegistrationEditContext, "answers" | "safetyDocuments">,
 ): VehicleFormInitialValues {
   const a = ctx.answers ?? {};
   const sound = asString(a.soop_level);
@@ -78,7 +75,6 @@ function toInitialValues(
     flameEffects: asBoolOrNull(a.flame_effects),
     nightDriving: asBoolOrNull(a.night_driving),
     acks,
-    workAccessPasses: ctx.workAccessPasses,
     // Only ever non-empty for a lead/admin — the store decides before reading.
     safetyDocuments: ctx.safetyDocuments.map(({ title, url, expiresOn }) => ({
       title,
@@ -179,7 +175,7 @@ export default async function EditVehiclePage({
             slug={slug}
             sourceYear={carryForwardSource.editionYear}
             editionYear={edition.year}
-            startsEmpty="Your SOOP level, flame effects, night driving, Work Access Passes and the three DMV acknowledgements all start empty — you give those fresh each year."
+            startsEmpty="Your SOOP level, flame effects, night driving and the three DMV acknowledgements all start empty — you give those fresh each year."
             action={carryForwardVehicleRegistrationAction}
           />
         ) : null}

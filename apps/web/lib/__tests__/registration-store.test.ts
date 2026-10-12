@@ -71,7 +71,6 @@ function values(overrides: Record<string, unknown> = {}) {
     s3GiftingFood: null,
     s4ExpectedPopulation: null,
     s4FirstArrivalDate: null,
-    s4WorkAccessPasses: null,
     s4AreaDimensions: null,
     s4LayoutUploadUrls: [],
     s5AmplifiedMusic: null,
@@ -278,6 +277,33 @@ describe("saveRegistrationDraft", () => {
     // registration with NO supplier declarations at all.
     expect(dbMock.transactions).toBe(1);
     expect(dbMock.writesTo(schema.registrations)[0]!.tx).toBe(true);
+  });
+
+  it("never writes the old Work Access Pass count, on insert or update (epic #53)", async () => {
+    // Passes are asked on the Passes page once AfrikaBurn opens requests
+    // (docs/wap-spec.md). A stale tab still posting the old field must not
+    // write it — and an UPDATE must not null out a value an earlier form
+    // wrote, which the org shows as "Asked at registration: N".
+    dbMock.queue([], [], [{ id: REGISTRATION }], []);
+    await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values({ s4WorkAccessPasses: 7 }),
+    });
+    expect(
+      dbMock.writesTo(schema.registrations)[0]!.arg("values"),
+    ).not.toHaveProperty("s4WorkAccessPasses");
+
+    dbMock.reset();
+    dbMock.queue([registration()], [], [], []);
+    await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values({ s4WorkAccessPasses: 7 }),
+    });
+    expect(
+      dbMock.writesTo(schema.registrations)[0]!.arg("set"),
+    ).not.toHaveProperty("s4WorkAccessPasses");
   });
 
   it("recomputes completedSections server-side rather than trusting the client", async () => {
