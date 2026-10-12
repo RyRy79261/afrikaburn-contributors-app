@@ -134,6 +134,34 @@ describe("allocateWorkAccessPass — the cap, under the lock", () => {
     expect(dbMock.writesTo(schema.registrations)).toHaveLength(0);
   });
 
+  it("locks the member's ACCOUNT row too, so an erasure in flight makes it wait", async () => {
+    // Account erasure locks the users row FOR UPDATE and never touches a camp
+    // membership row (account-sanitize.ts step 1c). Locking only the
+    // membership let an allocate read `sanitized_at` as NULL from its snapshot
+    // after the erasure had released the person's passes, insert one, and
+    // commit: an invisible "Departed Burner" pass that counted against the cap.
+    dbMock.queue(
+      [alice, jabu],
+      [reg()],
+      [granted(3)],
+      [{ n: 2 }],
+      [],
+      [{ id: ALLOC }],
+    );
+    expect(await allocateWorkAccessPass(input)).toEqual({ ok: true });
+    const memberLock = dbMock
+      .queriesTouching(schema.memberships)
+      .find((q) => q.kind === "select" && q.called("for"))!;
+    expect(memberLock.tx).toBe(true);
+    expect(memberLock.arg("for")).toBe("share");
+    const of = (memberLock.calls.find((c) => c.method === "for")!.args[1] as {
+      of: unknown;
+    }).of;
+    expect([of].flat()).toEqual(
+      expect.arrayContaining([schema.memberships, schema.users]),
+    );
+  });
+
   it("REFUSES the pass past the total granted — counts read under the lock", async () => {
     dbMock.queue([alice, jabu], [reg()], [granted(2)], [{ n: 2 }], []);
     expect(await allocateWorkAccessPass(input)).toEqual({
@@ -272,6 +300,13 @@ describe("removeWorkAccessPass", () => {
       error: wapRefusalMessage("not_on_list"),
     });
     expect(dbMock.writesTo(schema.wapAllocations)).toHaveLength(0);
+    // The mock answers whatever is queued, so the refusal above proves only
+    // the mapping. What makes another project's allocation read as absent is
+    // the read being scoped to THIS registration: pin that it binds REG.
+    const [read] = dbMock
+      .queriesTouching(schema.wapAllocations)
+      .filter((q) => q.kind === "select");
+    expect(boundStrings(read!)).toEqual(expect.arrayContaining([ALLOC, REG]));
   });
 });
 
@@ -303,6 +338,23 @@ describe("updateWorkAccessPass — the lead's overrides", () => {
       strike: null,
       ...o,
     },
+  });
+
+  it("answers another project's allocation as not on the list — the read binds THIS registration", async () => {
+    // The only thing standing between an allocation id from another project
+    // and an UPDATE of it is the lookup's registration predicate (the write
+    // itself is scoped by allocation id). The mock cannot evaluate a WHERE, so
+    // the binding is what is pinned.
+    dbMock.queue([alice], [reg()], /* not on THIS registration */ []);
+    expect(await updateWorkAccessPass(input({ build: false }))).toEqual({
+      ok: false,
+      error: wapRefusalMessage("not_on_list"),
+    });
+    expect(dbMock.writesTo(schema.wapAllocations)).toHaveLength(0);
+    const [read] = dbMock
+      .queriesTouching(schema.wapAllocations)
+      .filter((q) => q.kind === "select");
+    expect(boundStrings(read!)).toEqual(expect.arrayContaining([ALLOC, REG]));
   });
 
   it("stores an override equal to the roster plan as 'follow the plan' (null)", async () => {
