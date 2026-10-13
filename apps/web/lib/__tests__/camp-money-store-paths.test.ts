@@ -147,12 +147,15 @@ const auditRows = () =>
         q.arg("values") as { action: string; meta: Record<string, unknown> },
     );
 const noticeRows = () =>
-  dbMock
-    .writesTo(schema.notifications)
-    .flatMap(
-      (q) =>
-        q.arg("values") as { userId: string; kind: string; body: string }[],
-    );
+  dbMock.writesTo(schema.notifications).flatMap(
+    (q) =>
+      q.arg("values") as {
+        userId: string;
+        kind: string;
+        title: string;
+        body: string;
+      }[],
+  );
 const MONEY_TABLES = [
   schema.campBudgets,
   schema.budgetCategories,
@@ -391,12 +394,45 @@ describe("loadDuesBoard", () => {
     expect(board!.rows.find((r) => r.name === "lerato")!.reason).toBe(
       "Left in March",
     );
+    // the viewer is the lead: every row, their own included, is theirs to edit
+    expect(board!.rows.every((r) => r.canEdit)).toBe(true);
     expect(board!.summary).toMatchObject({
       memberCount: 5,
       currentCount: 2,
       formerCount: 3,
     });
     expect(dbMock.pending).toBe(0);
+  });
+
+  it("a treasurer through a custom role gets no actions on their own row", async () => {
+    const member = (userId: string, username: string) => ({
+      userId,
+      refCode: null,
+      archivedAt: null,
+      username,
+      sanitizedAt: null,
+    });
+    dbMock.queue(
+      [settingsRow()],
+      [member(ALICE, "alice"), member(JABU, "jabu")],
+      [],
+      [],
+      [],
+    );
+    const board = await store.loadDuesBoard(
+      {
+        ...access(true, JABU),
+        membership: {
+          structuralRole: MEMBER,
+          rolePermissions: [{ manage_money: true }],
+        },
+      },
+      EDITION_REF,
+    );
+    const canEdit = Object.fromEntries(
+      board!.rows.map((r) => [r.name, r.canEdit]),
+    );
+    expect(canEdit).toEqual({ alice: true, jabu: false });
   });
 });
 
@@ -526,6 +562,30 @@ describe("budget settings", () => {
       action: MONEY_AUDIT.instructions,
       meta: { cleared: false },
     });
+  });
+
+  it("a camp fee put back to R 0,00 tells members on it 'no fee set', never 'waived'", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      [],
+      [budgetRow({ defaultDuesCents: 150_000 })],
+      /* update */ [],
+      /* audit */ [],
+      /* on the camp fee */ [{ userId: JABU }, { userId: ALICE }],
+      /* notices */ [],
+    );
+    expect(
+      await store.setCampFee({
+        ...base,
+        actorUserId: ALICE,
+        defaultDuesCents: 0,
+      }),
+    ).toEqual({ ok: true });
+    const notices = noticeRows();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ userId: JABU, kind: MONEY });
+    expect(notices[0]!.title).not.toMatch(/waived/i);
+    expect(notices[0]!.title).toMatch(/hasn't set its fee/);
   });
 
   it("a camp fee that did not change writes nothing", async () => {
@@ -887,6 +947,50 @@ describe("entries", () => {
     ).toHaveLength(0);
   });
 
+  it("corrects an entry in a removed category in place; refuses moving one into it", async () => {
+    const before = {
+      id: ENTRY,
+      categoryId: OLD_CAT,
+      amountCents: 500_000,
+      status: "committed",
+      entryDate: "2027-04-10",
+    };
+    const archived = category({
+      id: OLD_CAT,
+      name: "Sound",
+      archivedAt: new Date("2027-04-01T00:00:00Z"),
+    });
+    queueActor(ALICE, LEAD);
+    dbMock.queue([before], [archived], [], []);
+    expect(
+      await store.updateBudgetEntry({
+        ...base,
+        actorUserId: ALICE,
+        fields: { entryId: ENTRY, ...fields, categoryId: OLD_CAT },
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      dbMock
+        .writesTo(schema.budgetEntries)
+        .find((q) => q.kind === "update")!
+        .arg("set"),
+    ).toMatchObject({ categoryId: OLD_CAT, status: "paid" });
+
+    dbMock.reset();
+    queueActor(ALICE, LEAD);
+    dbMock.queue([{ ...before, categoryId: KITCHEN }], [archived]);
+    expect(
+      await store.updateBudgetEntry({
+        ...base,
+        actorUserId: ALICE,
+        fields: { entryId: ENTRY, ...fields, categoryId: OLD_CAT },
+      }),
+    ).toEqual({ ok: false, error: "That category was removed. Pick another." });
+    expect(
+      dbMock.writesTo(schema.budgetEntries).filter((q) => q.kind === "update"),
+    ).toHaveLength(0);
+  });
+
   it("deletes an entry (audited) and its receipt after commit", async () => {
     const key = `camp-receipts/${CAMP}/receipt-x.pdf`;
     queueActor(ALICE, LEAD);
@@ -1092,6 +1196,55 @@ describe("setMemberDues", () => {
     expect(dbMock.writesTo(schema.memberDues)[0]!.kind).toBe("delete");
   });
 
+  it("back on a camp fee of R 0,00 reads 'no fee set', never 'waived'", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      [],
+      [budgetRow({ defaultDuesCents: 0 })],
+      [{ id: JABU, sanitizedAt: null }],
+      [{ archivedAt: null }],
+      [{ amountCents: 150_000 }],
+      /* delete */ [],
+      /* audit */ [],
+      /* notice */ [],
+    );
+    expect(await set(null)).toEqual({ ok: true });
+    const [notice] = noticeRows();
+    expect(notice!.userId).toBe(JABU);
+    expect(notice!.title).not.toMatch(/waived/i);
+
+    // an R 0,00 amount set for the member with a reason IS a waiver
+    dbMock.reset();
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      [],
+      [budgetRow({ defaultDuesCents: 0 })],
+      [{ id: JABU, sanitizedAt: null }],
+      [{ archivedAt: null }],
+      [],
+      [],
+      [],
+      [],
+    );
+    expect(await set(0, "Build crew")).toEqual({ ok: true });
+    expect(noticeRows()[0]!.title).toBe("Your camp dues were waived");
+  });
+
+  it("a lead may set their own dues — the no-lockout backstop", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      [],
+      [budgetRow()],
+      [{ id: ALICE, sanitizedAt: null }],
+      [{ archivedAt: null }],
+      [],
+      [],
+      [],
+    );
+    expect(await set(100_000, "Lead", ALICE)).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.memberDues)).toHaveLength(1);
+  });
+
   it("refuses a waiver without a reason, writing nothing", async () => {
     queueActor(ALICE, LEAD);
     dbMock.queue(
@@ -1161,7 +1314,7 @@ describe("reject and repaid", () => {
     ...o,
   });
 
-  it("rejects with the note as the claimant's notice", async () => {
+  it("rejects with the note on the claim, never copied into the claimant's notice", async () => {
     queueActor(ALICE, LEAD);
     dbMock.queue([claimRow()], [{ id: CLAIM }], [], [{ id: "m" }], []);
     expect(
@@ -1177,10 +1330,10 @@ describe("reject and repaid", () => {
       decisionNote: "We already have six bottles.",
     });
     expect(auditRows()[0]!.action).toBe(MONEY_AUDIT.claimReject);
-    expect(noticeRows()[0]).toMatchObject({
-      userId: JABU,
-      body: "We already have six bottles.",
-    });
+    // erasure clears the note from the claim and preserves notifications,
+    // so a copy in the notice would outlive it
+    expect(noticeRows()[0]).toMatchObject({ userId: JABU, kind: MONEY });
+    expect(JSON.stringify(noticeRows())).not.toContain("six bottles");
   });
 
   it("marks an approved claim repaid; a claimant who left gets no notice", async () => {

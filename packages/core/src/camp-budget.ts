@@ -33,6 +33,7 @@ import type {
 } from "@quagga/types";
 import {
   hasProjectPermission,
+  isPermissionBackstop,
   type PermissionMembership,
 } from "./project-permissions";
 
@@ -178,6 +179,7 @@ export type MoneyRefusal =
   | "not_money_person"
   | "not_member"
   | "own_claim"
+  | "own_dues"
   | "not_your_claim"
   | "claim_already_decided"
   | "claim_not_approved"
@@ -202,6 +204,8 @@ export function moneyRefusalMessage(reason: MoneyRefusal): string {
       return "You're not a member of this camp.";
     case "own_claim":
       return "You can't decide your own claim. Another money person or a lead decides it.";
+    case "own_dues":
+      return "You can't set or record your own dues. A lead does that for you.";
     case "not_your_claim":
       return "That isn't your claim.";
     case "claim_already_decided":
@@ -246,6 +250,39 @@ export function decideMoneyWrite(
 ): MoneyDecision {
   if (membership === null) return refuse("not_member");
   if (!canManageMoney(membership)) return refuse("not_money_person");
+  return { ok: true };
+}
+
+/**
+ * May this money person set the amount of, or record money in for, THIS
+ * member? Not for themselves through a custom role: a treasurer could
+ * otherwise waive their own dues or record an EFT that never arrived, and the
+ * only trace would be an audit row (the claims path refuses the same self-
+ * dealing with `own_claim`). A structural lead/admin may — they hold every
+ * project permission irrevocably, and a camp whose only money person is its
+ * lead must still be able to record the lead's own dues.
+ */
+export function canWriteDuesFor(
+  membership: PermissionMembership | null,
+  actorUserId: string,
+  subjectUserId: string | null,
+): boolean {
+  return decideDuesWriteFor(membership, actorUserId, subjectUserId).ok;
+}
+
+export function decideDuesWriteFor(
+  membership: PermissionMembership | null,
+  actorUserId: string,
+  subjectUserId: string | null,
+): MoneyDecision {
+  const gate = decideMoneyWrite(membership);
+  if (!gate.ok || membership === null) return gate;
+  if (
+    subjectUserId === actorUserId &&
+    !isPermissionBackstop(membership.structuralRole)
+  ) {
+    return refuse("own_dues");
+  }
   return { ok: true };
 }
 
@@ -294,9 +331,18 @@ export function decideCategoryRemoval(
 export function decideEntry(
   category: Pick<CategoryFacts, "kind" | "systemKey" | "archived"> | null,
   status: BudgetEntryStatus,
+  opts: {
+    /** A correction that leaves the entry in the category it is already
+     * filed under. A removed (archived) category takes no NEW entries, but
+     * the ones it kept must stay correctable — committed → paid, a wrong
+     * amount — or the books keep counting them wrong. */
+    keepsCategory?: boolean;
+  } = {},
 ): MoneyDecision {
   if (!category) return refuse("category_missing");
-  if (category.archived) return refuse("category_archived");
+  if (category.archived && !opts.keepsCategory) {
+    return refuse("category_archived");
+  }
   if (category.systemKey === DUES_CATEGORY_KEY) {
     return refuse("dues_category_entry");
   }
@@ -1031,16 +1077,21 @@ function moneyNotice(
 }
 
 /** To the member: their dues were set, changed, waived or put back to the
- * camp fee. */
+ * camp fee. `onCampFee`: the amount is the camp fee, not one set for this
+ * member — so R 0,00 there means "no fee set yet", never "waived" (waived is
+ * R 0,00 set for the member with a reason; `duesStatus`). */
 export function duesSetNotification(
   c: MoneyNoticeContext,
   owedCents: number,
+  opts: { onCampFee: boolean },
 ): NotificationPayload {
   return moneyNotice(
     c,
-    owedCents === 0
-      ? "Your camp dues were waived"
-      : `Your camp dues are now ${formatRand(owedCents)}`,
+    owedCents !== 0
+      ? `Your camp dues are now ${formatRand(owedCents)}`
+      : opts.onCampFee
+        ? "Your camp hasn't set its fee yet — you owe nothing for now"
+        : "Your camp dues were waived",
   );
 }
 
@@ -1084,16 +1135,18 @@ export function claimApprovedNotification(
   );
 }
 
-/** The decision note is the body — the claimant needs to read why. */
+/** The decision note is NOT copied here: it lives on the claim (shown to
+ * the claimant there), and account erasure clears it from the claim — a copy
+ * in `notifications`, which erasure preserves, would outlive it. The notice
+ * points at the claim instead. */
 export function claimRejectedNotification(
   c: MoneyNoticeContext,
   amountCents: number,
-  note: string,
 ): NotificationPayload {
   return moneyNotice(
     c,
     `Your ${c.campName} claim for ${formatRand(amountCents)} was rejected`,
-    note,
+    `${c.campName} · open the claim to read why`,
   );
 }
 

@@ -518,6 +518,43 @@ describe("recordDuesPayment", () => {
     expect(moneyWrites()).toHaveLength(0);
   });
 
+  it("refuses a treasurer (custom role) recording money in for themselves; writes nothing", async () => {
+    queueActor(LERATO, MEMBER, { manage_money: true, held: true });
+    expect(
+      await store.recordDuesPayment({
+        ...base,
+        actorUserId: LERATO,
+        fields: { ...fields, userId: LERATO },
+      }),
+    ).toEqual({
+      ok: false,
+      error: "You can't set or record your own dues. A lead does that for you.",
+    });
+    expect(moneyWrites()).toHaveLength(0);
+    expect(auditRows()).toHaveLength(0);
+  });
+
+  it("refuses a treasurer (custom role) setting their own dues, waived or not; writes nothing", async () => {
+    for (const amountCents of [0, 100, null]) {
+      dbMock.reset();
+      queueActor(LERATO, MEMBER, { manage_money: true, held: true });
+      expect(
+        await store.setMemberDues({
+          ...base,
+          actorUserId: LERATO,
+          userId: LERATO,
+          amountCents,
+          reason: "Treasurer",
+        }),
+      ).toEqual({
+        ok: false,
+        error:
+          "You can't set or record your own dues. A lead does that for you.",
+      });
+      expect(moneyWrites()).toHaveLength(0);
+    }
+  });
+
   it("refuses a plain member recording money for themselves", async () => {
     queueActor(JABU, MEMBER);
     expect(

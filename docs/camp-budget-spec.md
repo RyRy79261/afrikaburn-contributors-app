@@ -41,7 +41,8 @@ bank account; the app records that it did, matched by the member's ref code
   structures, transport, power, water, kitchen, sound, lighting, décor, MOOP,
   build, strike, …); income starters: camp dues, fundraising, donations,
   grants, sponsorship, other (`BUDGET-013`, `015`–`018`, `021`). Archived, never
-  deleted, once an entry uses it.
+  deleted, once an entry uses it. An archived category takes no new entries,
+  but the entries already filed under it stay correctable in place.
 - `budget_entries` (category, amount, date, description, `status`
   `committed | paid`, receipt?, entered_by) — actual income and spending
   (`BUDGET-003`–`005`). An approved claim and a paid due are **not** copied
@@ -94,6 +95,9 @@ as a download.
 - **Money people** create and edit the budget, categories, entries and dues,
   record payments, and decide claims. A claim's own author cannot approve it,
   even when they hold `manage_money` (another money person must, or a lead).
+  Likewise a money person through a custom role cannot set their own dues
+  amount or record money in for themselves (`own_dues`); a structural
+  lead/admin can, so a camp whose only money person is its lead still works.
 - **Members** see: the totals card, their own dues (owed, received, outstanding,
   ref code, the camp's payment instructions) and their own claims. They submit
   and withdraw (while `submitted`) their own claims.
@@ -112,8 +116,11 @@ as a download.
 
 ## Notifications (kind `money`, in-app only)
 
-- Member: your dues amount was set or changed; a payment was recorded; your
-  claim was approved, rejected (with the note) or marked repaid.
+- Member: your dues amount was set or changed (R 0,00 on the camp fee reads
+  "no fee set", never "waived"); a payment was recorded; your claim was
+  approved, rejected or marked repaid. A rejection notice points at the claim,
+  where the note is; the note is not copied into the notice, because account
+  erasure clears it from the claim and preserves notifications.
 - Money people: a claim was submitted.
 
 ## Surfaces

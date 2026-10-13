@@ -16,6 +16,7 @@ import {
   campReceiptPath,
   campReceiptPrefix,
   canManageMoney,
+  canWriteDuesFor,
   canSubmitClaim,
   canTransitionClaim,
   canViewMemberMoney,
@@ -31,6 +32,7 @@ import {
   decideCategoryRemoval,
   decideClaimAction,
   decideClaimCategory,
+  decideDuesWriteFor,
   decideEntry,
   decideMoneyWrite,
   deriveMoneyBooks,
@@ -535,6 +537,31 @@ describe("who may", () => {
     expect(decideMoneyWrite(TREASURER)).toEqual({ ok: true });
   });
 
+  it("a custom-role money person never writes their own dues; a lead or admin may", () => {
+    const me = "u-me";
+    const other = "u-other";
+    expect(decideDuesWriteFor(TREASURER, me, me)).toEqual({
+      ok: false,
+      reason: "own_dues",
+    });
+    expect(canWriteDuesFor(TREASURER, me, me)).toBe(false);
+    expect(decideDuesWriteFor(TREASURER, me, other)).toEqual({ ok: true });
+    // the no-lockout backstop: a camp whose only money person is its lead
+    expect(decideDuesWriteFor(LEAD, me, me)).toEqual({ ok: true });
+    expect(decideDuesWriteFor(ADMIN, me, me)).toEqual({ ok: true });
+    // deleted-account rows (no user) are someone else's
+    expect(canWriteDuesFor(TREASURER, me, null)).toBe(true);
+    expect(decideDuesWriteFor(MEMBER, me, other)).toEqual({
+      ok: false,
+      reason: "not_money_person",
+    });
+    expect(decideDuesWriteFor(null, me, me)).toEqual({
+      ok: false,
+      reason: "not_member",
+    });
+    expect(moneyRefusalMessage("own_dues")).toMatch(/own dues/);
+  });
+
   it("every current member sees the totals; a non-member sees nothing", () => {
     expect(canViewMoneyTotals(MEMBER)).toBe(true);
     expect(canViewMoneyTotals(null)).toBe(false);
@@ -865,6 +892,14 @@ describe("categories and entries", () => {
       ok: false,
       reason: "dues_category_entry",
     });
+    // a correction that keeps an entry in its (since removed) category is
+    // allowed; moving one INTO a removed category is not
+    expect(
+      decideEntry({ ...live, archived: true }, PAID, { keepsCategory: true }),
+    ).toEqual({ ok: true });
+    expect(
+      decideEntry({ ...live, archived: true }, PAID, { keepsCategory: false }),
+    ).toEqual({ ok: false, reason: "category_archived" });
     expect(decideEntry({ ...live, archived: true }, PAID)).toEqual({
       ok: false,
       reason: "category_archived",
@@ -980,11 +1015,11 @@ describe("notifications", () => {
 
   it("are kind `money`, in-app only, and link to the money page", () => {
     const all = [
-      duesSetNotification(c, R(1_500)),
+      duesSetNotification(c, R(1_500), { onCampFee: false }),
       duesPaymentRecordedNotification(c, R(1_000), R(1_500)),
       claimSubmittedNotification(c, "Ren Notfound", R(1_840)),
       claimApprovedNotification(c, R(2_380)),
-      claimRejectedNotification(c, R(600), "We're borrowing Ren's cables."),
+      claimRejectedNotification(c, R(600)),
       claimRepaidNotification(c, R(950)),
     ];
     for (const n of all) {
@@ -996,8 +1031,20 @@ describe("notifications", () => {
   });
 
   it("says what changed in plain words", () => {
-    expect(duesSetNotification(c, 0).title).toBe("Your camp dues were waived");
-    expect(duesSetNotification(c, R(1_500)).title).toBe(
+    expect(duesSetNotification(c, 0, { onCampFee: false }).title).toBe(
+      "Your camp dues were waived",
+    );
+    // R 0,00 on the camp fee is "no fee set", never "waived" (duesStatus)
+    expect(duesSetNotification(c, 0, { onCampFee: true }).title).not.toMatch(
+      /waived/i,
+    );
+    expect(duesSetNotification(c, 0, { onCampFee: true }).title).toMatch(
+      /hasn't set its fee/,
+    );
+    expect(duesSetNotification(c, R(1_500), { onCampFee: true }).title).toBe(
+      `Your camp dues are now R${NB}1${NB}500,00`,
+    );
+    expect(duesSetNotification(c, R(1_500), { onCampFee: false }).title).toBe(
       `Your camp dues are now R${NB}1${NB}500,00`,
     );
     expect(duesPaymentRecordedNotification(c, R(1_000), R(1_500)).body).toBe(
@@ -1006,8 +1053,10 @@ describe("notifications", () => {
     expect(duesPaymentRecordedNotification(c, R(1_000), 0).body).toBe(
       "Mad Hatters · your dues are paid up",
     );
-    expect(claimRejectedNotification(c, R(600), "Borrowing cables.").body).toBe(
-      "Borrowing cables.",
+    // the decision note stays on the claim: erasure clears it there, and
+    // notifications are preserved by erasure
+    expect(claimRejectedNotification(c, R(600)).body).toBe(
+      "Mad Hatters · open the claim to read why",
     );
     expect(claimSubmittedNotification(c, "Ren", R(1)).link).toBe(
       moneyPath("mad-hatters", "claims"),
@@ -1020,7 +1069,7 @@ describe("notifications", () => {
 
   it("never offers a way to pay through the app", () => {
     const text = [
-      duesSetNotification(c, R(1_500)),
+      duesSetNotification(c, R(1_500), { onCampFee: false }),
       duesPaymentRecordedNotification(c, R(1_000), R(1_500)),
       claimApprovedNotification(c, R(2_380)),
     ]

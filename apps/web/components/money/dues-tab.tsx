@@ -355,14 +355,22 @@ function RowActions({
         stacked ? "flex-wrap" : "justify-end whitespace-nowrap",
       )}
     >
-      {row.figures.status !== "waived" && (
-        <RecordMoneyDialog slug={slug} member={member} />
+      {row.canEdit ? (
+        <>
+          {row.figures.status !== "waived" && (
+            <RecordMoneyDialog slug={slug} member={member} />
+          )}
+          <SetAmountDialog
+            slug={slug}
+            member={member}
+            campFeeCents={campFeeCents}
+          />
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          A lead records your own dues.
+        </p>
       )}
-      <SetAmountDialog
-        slug={slug}
-        member={member}
-        campFeeCents={campFeeCents}
-      />
       {row.figures.receivedCents > 0 && (
         <PaymentsDialog slug={slug} member={member} />
       )}

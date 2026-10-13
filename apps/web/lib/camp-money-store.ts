@@ -7,6 +7,7 @@ import {
   canViewMemberMoney,
   canViewMoneyTotals,
   canViewReceipt,
+  canWriteDuesFor,
   checkReceiptUpload,
   claimApprovedNotification,
   claimRejectedNotification,
@@ -16,6 +17,7 @@ import {
   decideCategoryRemoval,
   decideClaimAction,
   decideClaimCategory,
+  decideDuesWriteFor,
   decideEntry,
   decideMoneyWrite,
   deriveMoneyBooks,
@@ -842,6 +844,9 @@ export interface DuesRowView {
   figures: DuesFigures;
   /** Why this member owes a different amount (or is waived). */
   reason: string | null;
+  /** May the viewer set this member's amount or record money in for them
+   * (`canWriteDuesFor` — not their own row through a custom role). */
+  canEdit: boolean;
 }
 
 export interface DuesBoard {
@@ -969,6 +974,11 @@ export async function loadDuesBoard(
       standing,
       figures: memberDuesFigures(settings.defaultDuesCents, fact),
       reason: override?.reason ?? null,
+      canEdit: canWriteDuesFor(
+        access.membership,
+        access.viewerUserId,
+        fact.userId,
+      ),
     });
   }
   rows.sort(
@@ -1549,6 +1559,7 @@ export async function setCampFee(
     const payload = duesSetNotification(
       gate.actor.camp,
       input.defaultDuesCents,
+      { onCampFee: true },
     );
     for (const m of onFee) {
       if (m.userId !== input.actorUserId)
@@ -1970,7 +1981,9 @@ export async function updateBudgetEntry(
       input.editionId,
       f.categoryId,
     );
-    const decision = decideEntry(category, f.status);
+    const decision = decideEntry(category, f.status, {
+      keepsCategory: f.categoryId === before.categoryId,
+    });
     if (!decision.ok) return refused(decision.reason);
     await tx
       .update(schema.budgetEntries)
@@ -2233,6 +2246,12 @@ export async function setMemberDues(
   const result = await withTransaction(async (tx): Promise<MoneyResult> => {
     const gate = await lockMoneyPerson(tx, input.groupId, input.actorUserId);
     if (!gate.ok) return gate;
+    const self = decideDuesWriteFor(
+      gate.actor.permissions,
+      input.actorUserId,
+      input.userId,
+    );
+    if (!self.ok) return refused(self.reason);
     const budget = await lockBudget(tx, input.groupId, input.editionId);
     const subject = await resolveDuesSubject(
       tx,
@@ -2298,6 +2317,7 @@ export async function setMemberDues(
           duesSetNotification(
             gate.actor.camp,
             input.amountCents ?? budget.defaultDuesCents,
+            { onCampFee: input.amountCents === null },
           ),
         ),
       );
@@ -2323,6 +2343,12 @@ export async function recordDuesPayment(
     async (tx): Promise<MoneyResult<{ id: string }>> => {
       const gate = await lockMoneyPerson(tx, input.groupId, input.actorUserId);
       if (!gate.ok) return gate;
+      const self = decideDuesWriteFor(
+        gate.actor.permissions,
+        input.actorUserId,
+        f.userId,
+      );
+      if (!self.ok) return refused(self.reason);
       const subject = await resolveDuesSubject(
         tx,
         input.groupId,
@@ -2737,7 +2763,7 @@ async function decideClaim(
         f.action === "approve"
           ? claimApprovedNotification(actor.camp, claim.amountCents)
           : f.action === "reject"
-            ? claimRejectedNotification(actor.camp, claim.amountCents, f.note)
+            ? claimRejectedNotification(actor.camp, claim.amountCents)
             : claimRepaidNotification(actor.camp, claim.amountCents);
       notices.push(toRow(claim.claimantUserId, payload));
     }
