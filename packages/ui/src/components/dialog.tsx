@@ -57,8 +57,11 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        // Never taller than the screen: a dialog taller than a 360 phone put
+        // its own Save button out of reach, and centring it hid the top as
+        // well. A dialog that scrolls a part of itself sets its own max-h.
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-card p-6 text-card-foreground shadow-lg outline-none sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg outline-none sm:max-w-lg",
           className,
         )}
         {...props}
