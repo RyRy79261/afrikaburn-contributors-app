@@ -1,11 +1,15 @@
 import "server-only";
 
-import { and, eq, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { activeMembership, formerMembership } from "@quagga/db";
 import {
   buildCampStats,
+  CAMP_STATS_GROUP_KINDS,
   buildMemberParticipation,
   campStatsToday,
+  canManageWorkAccessPasses,
+  canViewActivationResults,
   canViewCampStats,
   canViewMemberParticipation,
   defaultPrivacyFlags,
@@ -107,6 +111,30 @@ export interface CampStatsPage {
   camp: StatsGroup;
   edition: StatsEdition;
   stats: CampStatsView;
+  /** Which of the lists behind the figures THIS viewer may open — the
+   * spec's "except where a figure links to a page the viewer may already
+   * open". Each is that page's own predicate; the page re-checks anyway.
+   * (The roster is implied by the stats page itself; shifts are open to
+   * every member.) */
+  links: { onboardingResults: boolean; passes: boolean };
+}
+
+/** The pages behind the figures this viewer may open (see `links`). */
+export function campStatsLinks(
+  group: { id: string },
+  access: RosterAccessContext,
+): CampStatsPage["links"] {
+  const membership = access.viewerMembership;
+  return {
+    onboardingResults:
+      membership !== null &&
+      canViewActivationResults(
+        [{ groupId: group.id, role: membership.structuralRole }],
+        { authoredScope: "group", groupId: group.id },
+        "",
+      ),
+    passes: canManageWorkAccessPasses(membership),
+  };
 }
 
 /**
@@ -337,7 +365,7 @@ export async function loadCampStats(input: {
       : null,
   });
   if (!stats) return null;
-  return { camp: group, edition, stats };
+  return { camp: group, edition, stats, links: campStatsLinks(group, access) };
 }
 
 // --- One member's participation ----------------------------------------------
@@ -620,4 +648,85 @@ export async function loadMemberParticipation(input: {
         .map((p) => p.year),
     },
   });
+}
+
+// --- On a burner's profile ---------------------------------------------------
+
+export interface ProfileParticipation {
+  camp: { name: string; slug: string };
+  participation: MemberParticipation;
+}
+
+/**
+ * The participation blocks a burner's profile shows THIS viewer (frame C2):
+ * one per theme camp the subject is a current member of AND the viewer may
+ * open the roster of. Anyone else — a plain camp-mate, a lead of another
+ * camp, a stranger — gets an empty list. The member's own summary lives on
+ * the camp page ("Your participation"), so a plain member viewing their own
+ * profile gets nothing here either; a lead viewing their own does, as a roster
+ * viewer of their camp.
+ *
+ * The camps are found in ONE query (both people's active memberships of the
+ * same theme camp); each is then decided by `canViewCampStats` before
+ * `loadMemberParticipation` (which re-checks) reads anything about the
+ * subject. A burner shares a camp with a viewer once in nearly every case, so
+ * the per-camp read is bounded by that overlap, never by camp size.
+ */
+export async function loadProfileParticipation(input: {
+  viewerUserId: string;
+  subjectUserId: string;
+  edition: StatsEdition;
+  now?: Date;
+}): Promise<ProfileParticipation[]> {
+  const viewerMs = alias(schema.memberships, "viewer_membership");
+  const shared = await db()
+    .select({
+      id: schema.groups.id,
+      name: schema.groups.name,
+      slug: schema.groups.slug,
+      kind: schema.groups.kind,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.memberships.groupId))
+    .innerJoin(
+      viewerMs,
+      and(
+        eq(viewerMs.groupId, schema.memberships.groupId),
+        eq(viewerMs.userId, input.viewerUserId),
+        isNull(viewerMs.archivedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.memberships.userId, input.subjectUserId),
+        activeMembership(),
+        inArray(schema.groups.kind, [...CAMP_STATS_GROUP_KINDS]),
+      ),
+    )
+    .orderBy(schema.groups.name);
+
+  const blocks: ProfileParticipation[] = [];
+  for (const group of shared) {
+    const viewerMembership = await getMemberPermissions(
+      group.id,
+      input.viewerUserId,
+    );
+    if (!canViewCampStats({ groupKind: group.kind, viewerMembership })) {
+      continue;
+    }
+    const participation = await loadMemberParticipation({
+      slug: group.slug,
+      viewerUserId: input.viewerUserId,
+      subjectUserId: input.subjectUserId,
+      edition: input.edition,
+      now: input.now,
+    });
+    if (participation) {
+      blocks.push({
+        camp: { name: group.name, slug: group.slug },
+        participation,
+      });
+    }
+  }
+  return blocks;
 }

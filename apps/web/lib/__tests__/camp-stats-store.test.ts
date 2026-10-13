@@ -42,8 +42,12 @@ vi.mock("../campmates-store", () => ({
   loadCampmateMemberships: async () => stubs.memberships,
 }));
 
-const { loadCampStats, loadMemberParticipation } =
-  await import("../camp-stats-store");
+const {
+  campStatsLinks,
+  loadCampStats,
+  loadMemberParticipation,
+  loadProfileParticipation,
+} = await import("../camp-stats-store");
 
 // Values from the real vocabularies (AGENTS.md "Verification": a fixture
 // outside the enum is inert). Ids and people are fictional (the cast).
@@ -494,5 +498,85 @@ describe("loadMemberParticipation", () => {
     for (const column of SENSITIVE) {
       expect(allSelectedKeys()).not.toContain(column);
     }
+  });
+});
+
+// --- The lists behind the figures ----------------------------------------------
+
+describe("campStatsLinks", () => {
+  it("a lead may open the onboarding results and the passes page", () => {
+    expect(
+      campStatsLinks(CAMP_A, {
+        groupKind: THEME_CAMP,
+        viewerMembership: leadPerms as never,
+      }),
+    ).toEqual({ onboardingResults: true, passes: true });
+  });
+
+  it("a custom-role roster viewer may open neither (lead/co-lead pages)", () => {
+    const rosterViewer = {
+      structuralRole: MEMBER,
+      rolePermissions: [{ view_member_details: true }],
+    };
+    expect(
+      campStatsLinks(CAMP_A, {
+        groupKind: THEME_CAMP,
+        viewerMembership: rosterViewer as never,
+      }),
+    ).toEqual({ onboardingResults: false, passes: false });
+  });
+});
+
+// --- On a burner's profile -----------------------------------------------------
+
+describe("loadProfileParticipation", () => {
+  const subject = {
+    membershipId: "m-ren",
+    role: MEMBER,
+    createdAt: new Date("2025-02-01T00:00:00Z"),
+    sanitizedAt: null,
+  };
+  const load = (viewerUserId: string, subjectUserId = REN) =>
+    loadProfileParticipation({
+      viewerUserId,
+      subjectUserId,
+      edition: EDITION,
+      now: NOW,
+    });
+
+  it("is empty when the two share no camp, and asks about no permission", async () => {
+    dbMock.queue([]);
+    expect(await load(JABU)).toEqual([]);
+    expect(stubs.permCalls).toHaveLength(0);
+    expect(dbMock.queriesTouching(schema.burnerBios)).toHaveLength(0);
+  });
+
+  // Each refusal queues the FULL answers a summary would need, so the test
+  // goes red if the profile's own predicate is dropped (the summary loader
+  // would then find everything it needs).
+  const queueAll = (subjectRow: unknown) =>
+    dbMock.queue([CAMP_A], [CAMP_A], [subjectRow], [], [], [], [], [], []);
+
+  it("is empty for a plain camp-mate — nothing about the subject is read", async () => {
+    queueAll({ ...subject, membershipId: "m-alice", role: LEAD });
+    expect(await load(REN, ALICE)).toEqual([]);
+    expect(stubs.permCalls).toEqual([`${CAMP_A.id}:${REN}`]);
+    expect(dbMock.queriesTouching(schema.burnerBios)).toHaveLength(0);
+    expect(dbMock.queriesTouching(schema.shiftAssignments)).toHaveLength(0);
+  });
+
+  it("is empty for a plain member on their OWN profile (their card is on the camp page)", async () => {
+    queueAll(subject);
+    expect(await load(REN, REN)).toEqual([]);
+    expect(dbMock.queriesTouching(schema.burnerBios)).toHaveLength(0);
+  });
+
+  it("gives a roster viewer one block per camp they may view", async () => {
+    dbMock.queue([CAMP_A], [CAMP_A], [subject], [], [], [], [], [], []);
+    const blocks = await load(ALICE);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.camp).toEqual({ name: CAMP_A.name, slug: CAMP_A.slug });
+    expect(blocks[0]!.participation.withCampSince).toBe(2027);
+    expect(dbMock.pending).toBe(0);
   });
 });
