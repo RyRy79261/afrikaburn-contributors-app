@@ -256,11 +256,15 @@ export async function ProjectPassesPage({
                   {WAP_LIST_STATUS_LABELS[listStatus]}
                 </Badge>
                 {page.list.sinceApproval && (
+                  // A member's roster plan can move a date on an approved
+                  // list: that is a warning, not the quiet removed-note.
                   <Badge
-                    variant="outline"
+                    variant={
+                      page.list.sinceApproval.removedOnly ? "outline" : "warning"
+                    }
                     className="normal-case tracking-normal"
                   >
-                    {page.list.sinceApproval}
+                    {page.list.sinceApproval.label}
                   </Badge>
                 )}
               </div>

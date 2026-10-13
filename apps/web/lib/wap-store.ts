@@ -23,7 +23,7 @@ import {
   wapPassFlags,
   wapRefusalMessage,
   wapRequestWindowState,
-  wapSinceApprovalBadge,
+  wapSinceApprovalNote,
   type EffectiveWapPass,
   type MemberLogistics,
   type WapPassFlag,
@@ -118,8 +118,11 @@ export interface WapListView {
   reviewedAt: Date | null;
   returnNote: string | null;
   approvedAt: Date | null;
-  /** "Changed since approval" / "1 removed since approval", or null. */
-  sinceApproval: string | null;
+  /**
+   * "Changed since approval" (a warning) or "1 removed since approval" (quiet,
+   * `removedOnly`), or null. @quagga/core `wapSinceApprovalNote`.
+   */
+  sinceApproval: { label: string; removedOnly: boolean } | null;
 }
 
 export interface WapPage {
@@ -603,7 +606,7 @@ export async function loadWapPage(input: {
       reviewedAt: registration.reviewedAt,
       returnNote: registration.returnNote,
       approvedAt: registration.approvedAt,
-      sinceApproval: wapSinceApprovalBadge(registration.listStatus, changes),
+      sinceApproval: wapSinceApprovalNote(registration.listStatus, changes),
     },
     passes,
     candidates,
