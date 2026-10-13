@@ -3,7 +3,7 @@
 | Field                  | Value                                                                                                     |
 | ---------------------- | --------------------------------------------------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                                                          |
-| **Doc status**         | Draft — for review before build                                                                           |
+| **Doc status**         | Draft — built overnight 13–14 Oct at Ryan's request; review before merge                                  |
 | **Normative language** | Descriptive only                                                                                          |
 | **Requirement IDs**    | Partial — App Spec §7 `BUDGET-001`–`BUDGET-013`, `BUDGET-015`–`BUDGET-018`, `BUDGET-021`–`BUDGET-049`, `BUDGET-054`, `BUDGET-057`–`BUDGET-062`; §8 `PAY-010`–`PAY-013` (as records) |
 | **Owner / Updated**    | Ryan, 2026-10-13                                                                                          |
@@ -72,6 +72,14 @@ authorised route; never a public URL.
   camper = forecast spend ÷ current members (`010`, `059`).
 - Dues per member: owed, received, outstanding, status `awaiting | part paid |
   paid | waived`.
+- Variance per category = planned − (actual + committed): "R … left", or an
+  OVER warning when negative. On income rows: "R … to come" / "above plan".
+- Projected income / spend use max(planned, actual + committed) per category.
+- Surplus or shortfall = projected income − projected spend − contingency
+  (`contingency_pct` of planned spend).
+- Amounts render with the en-ZA formatter ("R 1 250,00"; "−R 2 025,00").
+- Copy never says "payment"/"pay now" as an action: "Record money in", "How to
+  pay the camp" (instructions only).
 
 ## Rules (`@quagga/core`, enforced server-side)
 
