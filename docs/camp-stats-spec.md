@@ -3,7 +3,7 @@
 | Field                  | Value                                                                                         |
 | ---------------------- | --------------------------------------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                                              |
-| **Doc status**         | Draft — for review before build                                                               |
+| **Doc status**         | Active                                                                                        |
 | **Normative language** | Descriptive only                                                                              |
 | **Requirement IDs**    | Partial — App Spec §5 `STATS-001`–`STATS-003`, `STATS-005`–`STATS-007`, `STATS-011`, `STATS-013`–`STATS-015`, `STATS-017`–`STATS-019`, `STATS-022`–`STATS-027`, `STATS-030`, `STATS-031` |
 | **Owner / Updated**    | Ryan, 2026-10-13                                                                              |
