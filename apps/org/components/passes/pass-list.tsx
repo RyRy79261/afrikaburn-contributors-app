@@ -46,7 +46,7 @@ function Edited() {
 
 function Value({ text, edited }: { text: string; edited: boolean }) {
   return (
-    <span className="inline-flex flex-col items-end gap-0.5 md:items-start">
+    <span className="inline-flex flex-col items-start gap-0.5">
       <span>{text}</span>
       {edited && <Edited />}
     </span>
@@ -55,8 +55,12 @@ function Value({ text, edited }: { text: string; edited: boolean }) {
 
 function Flags({ flags }: { flags: readonly WapPassFlag[] }) {
   if (flags.length === 0) {
+    // The dash fills the desktop column; a phone card simply has no flag line.
     return (
-      <span className="text-muted-foreground" aria-label="No flags">
+      <span
+        className="hidden text-muted-foreground md:inline"
+        aria-label="No flags"
+      >
         —
       </span>
     );
@@ -70,7 +74,7 @@ function Flags({ flags }: { flags: readonly WapPassFlag[] }) {
             variant="outline"
             className="normal-case tracking-normal text-foreground"
           >
-            <Ticket className="h-3 w-3" aria-hidden />
+            <Ticket className="h-3 w-3 shrink-0" aria-hidden />
             {wapFlagLabel(f)}
           </Badge>
         ) : (
@@ -79,7 +83,7 @@ function Flags({ flags }: { flags: readonly WapPassFlag[] }) {
             variant="warning"
             className="normal-case tracking-normal"
           >
-            <AlertTriangle className="h-3 w-3" aria-hidden />
+            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
             {wapFlagLabel(f)}
           </Badge>
         ),
@@ -140,6 +144,9 @@ export function ReviewPassList({ rows }: { rows: ReviewPassRow[] }) {
       {
         id: "flags",
         header: "Flags",
+        // On a phone the flags are a line of their own under the facts
+        // (frame VBA9l).
+        role: "detail",
         cell: (r) => <Flags flags={r.flags} />,
       },
     ],
@@ -152,6 +159,7 @@ export function ReviewPassList({ rows }: { rows: ReviewPassRow[] }) {
       data={rows}
       getRowKey={(r) => r.allocationId}
       caption="Work Access Pass list"
+      cardPairsLayout="grid"
       emptyState={
         <p className="m-4 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           Nobody is on the list yet.

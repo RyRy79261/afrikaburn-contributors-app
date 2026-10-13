@@ -4,6 +4,7 @@ import {
   orgCanInDomain,
   orgCapabilityRefusal,
   WAP_LIST_STATUS_LABELS,
+  wapDateLabel,
   wapOverviewTotals,
 } from "@quagga/core";
 import { GroupKind, WapListStatus } from "@quagga/types";
@@ -126,7 +127,7 @@ export default async function WapOverviewPage({
               </p>
             </div>
           ) : (
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <a href="/api/registrations/passes/export" download>
                 <Download aria-hidden />
                 Export CSV
@@ -143,8 +144,8 @@ export default async function WapOverviewPage({
               Edition
             </p>
             <p className="font-medium">
-              {edition.name} · {formatDate(edition.startDate)} –{" "}
-              {formatDate(edition.endDate)}
+              {edition.name} · {wapDateLabel(edition.startDate)} –{" "}
+              {wapDateLabel(edition.endDate)}
             </p>
           </div>
           <div className="flex-1">

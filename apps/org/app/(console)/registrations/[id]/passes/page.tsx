@@ -120,32 +120,19 @@ export default async function RegistrationPassesPage({
         current="passes"
       />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        {/* On a phone the requests come first (frame VBA9l): a pending ask is
-            the thing to act on. */}
-        <aside className="order-first flex w-full shrink-0 flex-col gap-6 lg:order-last lg:w-[380px]">
+      {/* Desktop: the list on the left, requests over the decision on the
+          right (frame P8fPT). Phone: requests, then the list, then the
+          decision (VBA9l) — a pending ask is the first thing to act on, and
+          the decision is taken after reading the names. `grid-rows-[auto_1fr]`
+          keeps the decision tucked under the requests however long the list. */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:items-start">
+        <div className="lg:col-start-2 lg:row-start-1">
           <RequestsCard review={review} refusal={refusal} noun={noun} />
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">List decision</CardTitle>
-              <CardDescription>
-                {`Approve the whole list, or return it with a note the ${noun}'s leads will see.`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ListDecision
-                registrationId={review.registration.id}
-                canDecide={review.list.status === "submitted"}
-                waitingCopy={waitingCopy(review.list.status, noun)}
-                refusal={refusal}
-                subjectNoun={noun}
-              />
-            </CardContent>
-          </Card>
-        </aside>
+        </div>
 
-        <Card className="min-w-0 flex-1 overflow-hidden">
-          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+        {/* On a phone the list is not boxed: its rows are cards already. */}
+        <Card className="min-w-0 overflow-hidden max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <CardHeader className="gap-3 max-md:px-0 max-md:pt-0 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
             <div className="flex flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-base">Pass list</CardTitle>
@@ -160,7 +147,7 @@ export default async function RegistrationPassesPage({
               <CardDescription>{listCopy(review, noun)}</CardDescription>
             </div>
             <div className="flex shrink-0 flex-col gap-1.5 sm:w-48">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground sm:text-right">
                 <span className="mr-1 text-2xl font-semibold text-foreground">
                   {allocated}
                 </span>
@@ -194,7 +181,7 @@ export default async function RegistrationPassesPage({
               }))}
             />
           </CardContent>
-          <p className="flex items-start gap-2 border-t border-border px-6 py-3 text-xs text-muted-foreground">
+          <p className="flex items-start gap-2 border-border px-6 py-3 text-xs text-muted-foreground max-md:px-0 md:border-t">
             <Pencil
               className="mt-px h-3.5 w-3.5 shrink-0 text-accent"
               aria-hidden
@@ -202,6 +189,24 @@ export default async function RegistrationPassesPage({
             edited — the {noun} changed this on the pass; the member&apos;s own
             plans say otherwise. Flags never block approval.
           </p>
+        </Card>
+
+        <Card className="lg:col-start-2 lg:row-start-2">
+          <CardHeader>
+            <CardTitle className="text-base">List decision</CardTitle>
+            <CardDescription>
+              {`Approve the whole list, or return it with a note the ${noun}'s leads will see.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ListDecision
+              registrationId={review.registration.id}
+              canDecide={review.list.status === "submitted"}
+              waitingCopy={waitingCopy(review.list.status, noun)}
+              refusal={refusal}
+              subjectNoun={noun}
+            />
+          </CardContent>
         </Card>
       </div>
     </div>
@@ -252,7 +257,7 @@ function SinceApproval({ review, noun }: { review: WapReview; noun: string }) {
     // every field the lead did not override. Both are shown — the org approved
     // other values, and the export hands the gate what is current.
     return (
-      <div className="mx-6 mb-4 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="mx-6 mb-4 rounded-lg border border-border bg-muted/30 p-3 max-md:mx-0">
         <p className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <History className="h-3.5 w-3.5" aria-hidden />
           Since you approved it

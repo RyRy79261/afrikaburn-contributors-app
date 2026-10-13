@@ -22,13 +22,24 @@ const KIND_LABELS: Record<string, string> = {
 
 function Pending({ ask }: { ask: number | null }) {
   if (ask === null) {
+    // The dash fills the desktop column; a phone card has no pending line.
     return (
-      <span className="text-muted-foreground" aria-label="No pending request">
+      <span
+        className="hidden text-muted-foreground md:inline"
+        aria-label="No pending request"
+      >
         —
       </span>
     );
   }
-  return <Badge variant="warning">{ask} asked</Badge>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Badge variant="warning">{ask} asked</Badge>
+      <span className="text-sm text-muted-foreground md:hidden">
+        waiting for a decision
+      </span>
+    </span>
+  );
 }
 
 export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
@@ -39,17 +50,24 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
         header: "Project",
         role: "title",
         cell: (r) => (
-          <Link
-            href={`/registrations/${r.registrationId}/passes`}
-            className="font-medium hover:underline"
-          >
-            {r.projectName}
-          </Link>
+          <span className="flex flex-col">
+            <Link
+              href={`/registrations/${r.registrationId}/passes`}
+              className="font-medium hover:underline"
+            >
+              {r.projectName}
+            </Link>
+            {/* The type sits under the name on a phone card (frame T0yoB). */}
+            <span className="text-sm font-normal text-muted-foreground md:hidden">
+              {KIND_LABELS[r.groupKind] ?? r.groupKind}
+            </span>
+          </span>
         ),
       },
       {
         id: "type",
         header: "Type",
+        mobileHidden: true,
         cell: (r) => (
           <span className="text-muted-foreground">
             {KIND_LABELS[r.groupKind] ?? r.groupKind}
@@ -82,6 +100,7 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
       {
         id: "pending",
         header: "Pending",
+        role: "detail",
         cell: (r) => <Pending ask={r.pendingAsk} />,
       },
       {
@@ -94,7 +113,8 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
         id: "open",
         header: "Open",
         hideHeader: true,
-        role: "actions",
+        // Beside the status chip on a phone card, last column at md+.
+        role: "badge",
         align: "right",
         cell: (r) => (
           <Link
@@ -116,6 +136,7 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
       data={rows}
       getRowKey={(r) => r.registrationId}
       caption="Work Access Passes by project"
+      cardPairsLayout="grid"
       emptyState={
         <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           No project matches these filters.
