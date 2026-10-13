@@ -20,8 +20,9 @@ derived (fewer forms).
   its small stats card and links to the page.
 - **Who sees it: roster viewers** — the structural lead and co-leads, and any
   member holding `view_member_details`. Everyone else gets the camp's 404.
-- **Per-person statistics**: a participation summary on a member's roster
-  detail, for roster viewers; **every member sees their own** on the camp page.
+- **Per-person statistics**: a participation summary on a member's profile
+  (`/burners/[id]`, where the roster's rows link), for roster viewers;
+  **every member sees their own** on the camp page.
 
 ## The camp page (`/camps/[slug]/stats`, current edition)
 
@@ -43,8 +44,9 @@ shifts day, passes page).
 
 ## Per person (participation summary)
 
-On a member's roster detail (roster viewers) and on the camp page for the
-member themself ("Your participation"):
+On a member's profile, `/burners/[id]` (roster viewers: one block per theme
+camp the viewer can see the roster of and the member currently belongs to),
+and on the camp page for the member themself ("Your participation"):
 
 - Burns attended (`STATS-001`) — from the bio, and only if the roster already
   shows it to this viewer; the member's own field privacy is never widened.
@@ -75,8 +77,9 @@ member themself ("Your participation"):
 ## Surfaces
 
 - `/camps/[slug]/stats` (frame C1, desktop + 360) — the camp page.
-- Roster: the stats card gets "All statistics →"; the member detail gets the
-  participation summary (frame C2).
+- Roster: the stats card gets "All statistics →".
+- Profile `/burners/[id]`: the participation summary, one block per shared
+  camp, for roster viewers only (frame C2).
 - Camp page: "Your participation" card for the member themself (frame C3).
 - Artworks and vehicles: not in this epic (their members have no shifts or
   onboarding yet).
