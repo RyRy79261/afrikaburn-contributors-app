@@ -64,6 +64,8 @@ import { getShiftTileSummary } from "@/lib/shifts-store";
 import { ShiftsTile } from "@/components/shifts/shifts-tile";
 import { getOwnWapPass, getWapTileSummary } from "@/lib/wap-store";
 import { OwnPassLine, PassesTile } from "@/components/passes/passes-tile";
+import { getMoneyTileSummary, loadMoneyAccess } from "@/lib/camp-money-store";
+import { MoneyTile } from "@/components/money/money-tile";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -189,6 +191,7 @@ export default async function CampPage({
     passSummary,
     ownPass,
     ownParticipation,
+    moneySummary,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -248,6 +251,19 @@ export default async function CampPage({
           subjectUserId: campUser.id,
           edition,
         })
+      : null,
+    // Camp money (docs/camp-budget-spec.md): the open-books totals and the
+    // viewer's OWN outstanding dues, for current members of a theme camp.
+    // `loadMoneyAccess` re-checks membership and kind; null hides the tile.
+    campUser && isMember
+      ? loadMoneyAccess(camp.slug, campUser.id).then((access) =>
+          access
+            ? getMoneyTileSummary(access, {
+                id: edition.id,
+                year: edition.year,
+              })
+            : null,
+        )
       : null,
   ]);
   const ownPassLine = ownPass
@@ -780,14 +796,15 @@ export default async function CampPage({
               />
             )}
             {/*
-              The "Budget" hint tile was REMOVED (Ryan, 26 Jul 2026): it sat in
-              tension with the product law that AfrikaBurn never runs camp
-              treasuries/dues (AGENTS.md §Product laws — out of scope
-              "permanently unless Ryan says otherwise"). Even as a disabled
-              "coming soon" tile it implied a treasury feature was on the roadmap,
-              which it is not. Do NOT reintroduce any budget/treasury tile or UI
-              unless Ryan explicitly reverses the no-treasuries stance.
+              Camp money (docs/camp-budget-spec.md, Ryan 13 Oct 2026): the
+              earlier "no budget tile" rule (26 Jul) predates the money-law
+              clarification of 26 Sep — the app may TRACK money like a
+              spreadsheet, never hold or move it. This tile shows totals and
+              "You owe R…"; it has no pay button and never will.
             */}
+            {moneySummary && (
+              <MoneyTile slug={camp.slug} summary={moneySummary} />
+            )}
             <DisabledHintTile
               title="Layout"
               hint="Topic under exploration with camp leads."
