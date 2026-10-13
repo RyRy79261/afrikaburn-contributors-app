@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { ArrowLeft, Download, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Users } from "lucide-react";
 import {
   isRosterFiltered,
   ROSTER_QUERY_MAX,
   rosterFilterQuery,
+  CAMP_STATS_GROUP_KINDS,
   rosterRoleParam,
   type CampRosterStats,
 } from "@quagga/core";
@@ -51,7 +52,14 @@ function firstParam(value: string | string[] | undefined): string {
   return (typeof value === "string" ? value : value?.[0]) ?? "";
 }
 
-function StatsCard({ stats }: { stats: CampRosterStats }) {
+function StatsCard({
+  stats,
+  allStatsHref,
+}: {
+  stats: CampRosterStats;
+  /** The full stats page — theme camps only (the page refuses the rest). */
+  allStatsHref: string | null;
+}) {
   const tiles: { label: string; value: string; hint?: string }[] = [
     { label: "Members", value: String(stats.total) },
     { label: "New", value: String(stats.newcomers), hint: "First burn" },
@@ -86,7 +94,20 @@ function StatsCard({ stats }: { stats: CampRosterStats }) {
   return (
     <Card data-testid="camp-stats">
       <CardHeader>
-        <CardTitle className="text-base">Camp at a glance</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <CardTitle className="text-base">Camp at a glance</CardTitle>
+          {/* The stats page shares this page's audience (canViewCampRoster),
+              so a viewer here may open it; it re-checks on the request. */}
+          {allStatsHref && (
+            <Link
+              href={allStatsHref}
+              className="inline-flex items-center gap-1 rounded-sm text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              All statistics
+              <ArrowRight className="h-4 w-4 text-accent" aria-hidden />
+            </Link>
+          )}
+        </div>
         <CardDescription>
           Totals for the whole camp this edition — never a per-person list.
         </CardDescription>
@@ -181,7 +202,14 @@ export default async function CampRosterPage({
         </Button>
       </div>
 
-      <StatsCard stats={stats} />
+      <StatsCard
+        stats={stats}
+        allStatsHref={
+          CAMP_STATS_GROUP_KINDS.includes(camp.kind)
+            ? `/camps/${camp.slug}/stats`
+            : null
+        }
+      />
 
       <RosterFilters
         initial={{

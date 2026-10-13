@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
+  BarChart3,
   Boxes,
   Droplets,
   MapPin,
@@ -48,6 +49,8 @@ import {
   canManageWorkAccessPasses,
   canViewCampPlacement,
   canViewCampRoster,
+  canViewCampStats,
+  CAMP_STATS_GROUP_KINDS,
   emptyMemberLogistics,
   hasProjectPermission,
   logisticsWindow,
@@ -55,6 +58,8 @@ import {
   wapOwnPassLine,
 } from "@quagga/core";
 import { getOwnLogistics } from "@/lib/roster-store";
+import { loadMemberParticipation } from "@/lib/camp-stats-store";
+import { ParticipationSummary } from "@/components/stats/participation-summary";
 import { getShiftTileSummary } from "@/lib/shifts-store";
 import { ShiftsTile } from "@/components/shifts/shifts-tile";
 import { getOwnWapPass, getWapTileSummary } from "@/lib/wap-store";
@@ -183,6 +188,7 @@ export default async function CampPage({
     shiftSummary,
     passSummary,
     ownPass,
+    ownParticipation,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -232,6 +238,17 @@ export default async function CampPage({
           userId: campUser.id,
         })
       : null,
+    // Camp statistics: the member's OWN participation summary ("Your
+    // participation", frame C3). Self only — the store and core re-check
+    // that the subject is the viewer or the viewer may see the roster.
+    campUser && isMember && CAMP_STATS_GROUP_KINDS.includes(camp.kind)
+      ? loadMemberParticipation({
+          slug: camp.slug,
+          viewerUserId: campUser.id,
+          subjectUserId: campUser.id,
+          edition,
+        })
+      : null,
   ]);
   const ownPassLine = ownPass
     ? wapOwnPassLine(ownPass.listStatus, ownPass.onList)
@@ -271,6 +288,12 @@ export default async function CampPage({
   // viewer @quagga/core lets in; the roster page and the export route re-check
   // on every request, so this is a convenience, never the boundary.
   const canSeeRoster = canViewCampRoster({
+    groupKind: camp.kind,
+    viewerMembership: viewerPerms,
+  });
+  // Camp statistics share the roster's audience (one predicate) — theme camps
+  // only in this epic. The page re-checks; this only decides the link.
+  const canSeeStats = canViewCampStats({
     groupKind: camp.kind,
     viewerMembership: viewerPerms,
   });
@@ -412,6 +435,19 @@ export default async function CampPage({
                   <Link href={`/camps/${camp.slug}/roster`}>
                     <ListChecks className="h-4 w-4" aria-hidden />
                     Roster &amp; plans
+                  </Link>
+                </Button>
+              )}
+              {canSeeStats && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-fit"
+                >
+                  <Link href={`/camps/${camp.slug}/stats`}>
+                    <BarChart3 className="h-4 w-4" aria-hidden />
+                    Statistics
                   </Link>
                 </Button>
               )}
@@ -598,6 +634,16 @@ export default async function CampPage({
               initial={myLogistics ?? emptyMemberLogistics()}
               window={logisticsWindow(edition)}
               saveAction={saveMyLogisticsAction}
+            />
+          )}
+
+          {/* The member's own participation summary (camp stats, frame C3) —
+              under Your plans, for them alone. */}
+          {ownParticipation && (
+            <ParticipationSummary
+              participation={ownParticipation}
+              audience="self"
+              campName={camp.name}
             />
           )}
 
