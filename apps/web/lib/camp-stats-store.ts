@@ -678,6 +678,8 @@ export async function loadProfileParticipation(input: {
   edition: StatsEdition;
   now?: Date;
 }): Promise<ProfileParticipation[]> {
+  // The viewer's side of the shared camp. Its archivedAt filter is in the
+  // join below: a former member of the camp shares nothing with anyone.
   const viewerMs = alias(schema.memberships, "viewer_membership");
   const shared = await db()
     .select({
