@@ -18,6 +18,8 @@ import {
   resolveAvatarForViewer,
 } from "@/lib/campmates-store";
 import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
+import { loadProfileParticipation } from "@/lib/camp-stats-store";
+import { ParticipationSummary } from "@/components/stats/participation-summary";
 import {
   findDirectConversation,
   viewerHasBlocked,
@@ -111,23 +113,33 @@ export default async function BurnerProfilePage({
         viewerHasBlocked(viewer.id, profile.userId),
       ]);
 
-  const [medical, campmateFields, avatarKey] = await Promise.all([
-    resolveMedicalNotesForViewer({
-      viewerUserId: viewer.id,
-      subjectUserId: profile.userId,
-      editionId: edition.id,
-    }),
-    getCampmateBioView({
-      viewerUserId: viewer.id,
-      subjectUserId: profile.userId,
-      editionId: edition.id,
-    }),
-    resolveAvatarForViewer({
-      viewerUserId: viewer.id,
-      subjectUserId: profile.userId,
-      editionId: edition.id,
-    }),
-  ]);
+  const [medical, campmateFields, avatarKey, participation] = await Promise.all(
+    [
+      resolveMedicalNotesForViewer({
+        viewerUserId: viewer.id,
+        subjectUserId: profile.userId,
+        editionId: edition.id,
+      }),
+      getCampmateBioView({
+        viewerUserId: viewer.id,
+        subjectUserId: profile.userId,
+        editionId: edition.id,
+      }),
+      resolveAvatarForViewer({
+        viewerUserId: viewer.id,
+        subjectUserId: profile.userId,
+        editionId: edition.id,
+      }),
+      // Camp statistics (frame C2): one block per camp the burner is a current
+      // member of AND the viewer may open the roster of — empty for everyone
+      // else, decided in the store by @quagga/core before anything is read.
+      loadProfileParticipation({
+        viewerUserId: viewer.id,
+        subjectUserId: profile.userId,
+        edition,
+      }),
+    ],
+  );
 
   const isOwn = profile.userId === viewer.id;
   // The camp-mate view is a SUPERSET of the public one (it includes every
@@ -202,6 +214,16 @@ export default async function BurnerProfilePage({
             You can&apos;t message {heading} right now.
           </p>
         )}
+
+        {participation.map((block) => (
+          <ParticipationSummary
+            key={block.camp.slug}
+            participation={block.participation}
+            audience="viewer"
+            campName={block.camp.name}
+            subjectName={heading}
+          />
+        ))}
 
         {medical.visible && medical.notes && (
           <ProfileSection
