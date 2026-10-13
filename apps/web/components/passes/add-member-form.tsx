@@ -53,7 +53,7 @@ export function AddMemberForm({
 
   const none = candidates.length === 0;
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 md:flex-row md:items-center">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 md:flex-row md:items-center md:rounded-none md:border-0 md:border-t md:bg-muted/20">
       <p className="text-sm font-medium md:hidden">Add a member</p>
       <div className="md:w-72">
         <Select

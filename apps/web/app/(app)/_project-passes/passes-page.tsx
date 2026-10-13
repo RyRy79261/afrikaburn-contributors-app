@@ -67,13 +67,17 @@ function Stat({
   label,
   value,
   note,
+  className,
 }: {
   label: string;
   value: string;
   note: string;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border bg-background/40 p-4">
+    <div
+      className={`flex flex-col gap-1 rounded-lg border border-border bg-background/40 p-4 ${className ?? ""}`}
+    >
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-2xl font-semibold">{value}</p>
       <p className="text-xs text-muted-foreground">{note}</p>
@@ -186,7 +190,9 @@ export async function ProjectPassesPage({
         >
           {page.requests.length > 0 && (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Two up on a phone with Allocated across both (frame rsnGI),
+                  three up from lg. */}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <Stat
                   label="Granted"
                   value={String(granted)}
@@ -205,6 +211,7 @@ export async function ProjectPassesPage({
                   label="Allocated"
                   value={`${allocated} of ${granted}`}
                   note={wapLeftToHandOut(allocated, granted)}
+                  className="col-span-2 lg:col-span-1"
                 />
               </div>
               <div className="flex flex-col gap-3">
@@ -263,7 +270,7 @@ export async function ProjectPassesPage({
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-72">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground sm:text-right">
                 <span className="mr-1.5 text-2xl font-semibold text-foreground">
                   {allocated}
                 </span>
@@ -278,7 +285,7 @@ export async function ProjectPassesPage({
                 aria-valuenow={allocated}
               >
                 <div
-                  className="h-full rounded-full bg-accent"
+                  className="h-full rounded-full bg-primary"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -343,34 +350,39 @@ export async function ProjectPassesPage({
             </p>
           )}
 
-          <PassListTable
-            slug={camp.slug}
-            editable={editable}
-            window={window}
-            rows={page.passes.map((p) => ({
-              allocationId: p.allocationId,
-              displayName: p.displayName,
-              overrides: p.overrides,
-              plan: p.plan,
-              effective: {
-                arrivalDate: p.effective.arrivalDate,
-                departureDate: p.effective.departureDate,
-                build: p.effective.build,
-                strike: p.effective.strike,
-                edited: p.effective.edited,
-              },
-              flags: p.flags,
-            }))}
-          />
-
-          {editable && (
-            <AddMemberForm
+          {/* One card at md+ — the table with "Add to the list" as its footer
+              row (frame sXjh1); on a phone the rows are cards of their own
+              and the add form is the last one (rsnGI). */}
+          <div className="flex flex-col gap-3 md:gap-0 md:overflow-hidden md:rounded-xl md:border md:border-border md:bg-card">
+            <PassListTable
               slug={camp.slug}
-              candidates={page.candidates}
-              hint={addHint}
-              disabled={!addDecision.ok}
+              editable={editable}
+              window={window}
+              rows={page.passes.map((p) => ({
+                allocationId: p.allocationId,
+                displayName: p.displayName,
+                overrides: p.overrides,
+                plan: p.plan,
+                effective: {
+                  arrivalDate: p.effective.arrivalDate,
+                  departureDate: p.effective.departureDate,
+                  build: p.effective.build,
+                  strike: p.effective.strike,
+                  edited: p.effective.edited,
+                },
+                flags: p.flags,
+              }))}
             />
-          )}
+
+            {editable && (
+              <AddMemberForm
+                slug={camp.slug}
+                candidates={page.candidates}
+                hint={addHint}
+                disabled={!addDecision.ok}
+              />
+            )}
+          </div>
 
           {(listStatus === "draft" || listStatus === "returned") && (
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
