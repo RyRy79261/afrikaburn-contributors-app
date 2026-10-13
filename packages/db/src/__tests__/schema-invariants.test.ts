@@ -266,3 +266,84 @@ describe("work access passes (migration 0036)", () => {
     );
   });
 });
+
+describe("camp money (migration 0037)", () => {
+  const MONEY_TABLES = [
+    "camp_budgets",
+    "budget_categories",
+    "budget_entries",
+    "member_dues",
+    "dues_payments",
+    "camp_claims",
+  ] as const;
+
+  const fkMap = (table: string) =>
+    (byName.get(table)?.foreignKeys ?? []).map((fk) => ({
+      column: fk.reference().columns[0]!.name,
+      target: getTableConfig(fk.reference().foreignTable).name,
+      onDelete: fk.onDelete,
+    }));
+
+  it("exists", () => {
+    for (const table of MONEY_TABLES) expect(byName.has(table)).toBe(true);
+  });
+
+  it("never hangs the books off a membership, and never cascades a person away", () => {
+    // `leaveCamp` deletes the membership row; a money row keyed by it would
+    // vanish with it, and the books must add up (spec: "former members keep
+    // their dues, payments and claims"). People are users, SET NULL.
+    for (const table of MONEY_TABLES) {
+      for (const fk of fkMap(table)) {
+        expect(fk.target).not.toBe("memberships");
+        if (fk.target === "users") {
+          expect(`${table}.${fk.column}:${fk.onDelete}`).toBe(
+            `${table}.${fk.column}:set null`,
+          );
+        }
+      }
+    }
+  });
+
+  it("lets a camp's deletion cascade through its categories (NO ACTION, not RESTRICT)", () => {
+    for (const table of ["budget_entries", "camp_claims"]) {
+      const fk = fkMap(table).find((f) => f.target === "budget_categories");
+      expect(fk?.onDelete).toBe("no action");
+    }
+  });
+
+  it("pins the amount and claim CHECKs", () => {
+    const checks = (table: string) =>
+      (byName.get(table)?.checks ?? []).map((c) => c.name).sort();
+    expect(checks("camp_claims")).toEqual([
+      "camp_claims_amount_positive",
+      "camp_claims_approved_has_category",
+      "camp_claims_decided_iff_not_submitted",
+      "camp_claims_not_decided_by_self",
+      "camp_claims_not_repaid_by_self",
+      "camp_claims_receipt_paired",
+      "camp_claims_repaid_on_iff_repaid",
+    ]);
+    expect(checks("dues_payments")).toEqual(["dues_payments_amount_positive"]);
+    expect(checks("budget_entries")).toEqual([
+      "budget_entries_amount_positive",
+      "budget_entries_receipt_paired",
+    ]);
+    expect(checks("member_dues")).toEqual(["member_dues_amount_non_negative"]);
+  });
+
+  it("mirrors the money vocabularies in @quagga/types", async () => {
+    const types = await import("@quagga/types");
+    expect(schema.campBudgetStatusEnum.enumValues).toEqual(
+      types.CampBudgetStatus.options,
+    );
+    expect(schema.budgetCategoryKindEnum.enumValues).toEqual(
+      types.BudgetCategoryKind.options,
+    );
+    expect(schema.budgetEntryStatusEnum.enumValues).toEqual(
+      types.BudgetEntryStatus.options,
+    );
+    expect(schema.campClaimStatusEnum.enumValues).toEqual(
+      types.CampClaimStatus.options,
+    );
+  });
+});

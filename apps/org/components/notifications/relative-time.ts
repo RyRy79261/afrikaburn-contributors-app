@@ -44,4 +44,7 @@ export const NOTIFICATION_SOURCE_LABELS: Record<NotificationKind, string> = {
   // Never written to an org inbox either (pass notices go to project leads
   // and pass holders in the participant app).
   wap: "Work Access Passes",
+  // Never written to an org inbox either (camp money notices go to camp
+  // members and the camp's money people in the participant app).
+  money: "Camp money",
 };

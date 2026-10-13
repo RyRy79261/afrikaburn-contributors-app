@@ -260,6 +260,13 @@
       "when": 1791842780744,
       "tag": "0036_work_access_passes",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791929844193,
+      "tag": "0037_camp_money",
+      "breakpoints": true
     }
   ]
 }

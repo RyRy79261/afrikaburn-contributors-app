@@ -10,3 +10,4 @@ export * from "./bio";
 export * from "./notifications";
 export * from "./accounts";
 export * from "./work-access-passes";
+export * from "./camp-money";
