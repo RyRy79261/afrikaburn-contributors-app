@@ -1,12 +1,12 @@
 # Work Access Passes — Feature Spec
 
-| Field                  | Value                                                                                    |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| **Category**           | Engineering Spec                                                                         |
-| **Doc status**         | Active                                                                                   |
-| **Normative language** | Descriptive only                                                                         |
+| Field                  | Value                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| **Category**           | Engineering Spec                                                                                 |
+| **Doc status**         | Active                                                                                           |
+| **Normative language** | Descriptive only                                                                                 |
 | **Requirement IDs**    | Partial — App Spec §9 `WAP-001`, `WAP-003`–`WAP-009`, `WAP-011`, `WAP-012`, `WAP-014`, `WAP-015` |
-| **Owner / Updated**    | Ryan, 2026-10-12 (epic #53)                                                              |
+| **Owner / Updated**    | Ryan, 2026-10-13 (epic #53)                                                                      |
 
 A Work Access Pass (WAP) lets a person onto the site before the event opens,
 to build, or after it closes, to strike. The org opens WAP requests for an
@@ -42,6 +42,21 @@ org opens requests → project requests N → org grants M ≤ N
 - **Dates and build/strike come from the roster plans** the member already set
   (`membership_logistics`, #55). No new form. The lead may override them on the
   pass.
+
+## Decisions (Ryan, 13 Oct 2026, #53)
+
+- **The org overview lists every project that may ask**, not only the ones that
+  have: every theme camp, artwork and mutant vehicle in the edition whose
+  registration is submitted, under review, changes requested or approved
+  (`WAP_REQUESTABLE_REGISTRATION_STATUSES`). A project that never asked shows
+  requested 0, granted 0, allocated 0 and **Not asked** — its own status on
+  the overview (filterable), never counted as a draft list. A project that
+  asked and then left those statuses stays listed while it holds requests.
+- **The CSV export holds only people on approved lists.** Draft, submitted and
+  returned lists are left out entirely: the export is the hand-off to the
+  gate, and those are lists AfrikaBurn has not agreed to. The "Changed since
+  approval" column stays, because an approved list can still move (a roster
+  plan, a removal) without leaving "approved".
 
 ## Model
 
@@ -110,11 +125,14 @@ an empty cell).
   Grant (a number, default the amount asked) or Decline (`update`), total
   granted, list status, the names with arrival, departure,
   build and strike, flags, and Approve / Return with a note.
-- `/registrations/passes` — all projects for the edition: requested, granted,
-  allocated, list status, a "pending requests" filter; filter by status and project type; **Export CSV**
-  (WAP-009).
+- `/registrations/passes` — every project for the edition that may ask
+  (asked or not): requested, granted, allocated, list status ("Not asked" for
+  a project that never asked), a "pending requests" filter; filter by status
+  and project type; the totals say how many projects have not asked yet;
+  **Export approved lists** (WAP-009).
 - Names need `read`. The export needs `personal_information` because it holds
-  email. It never holds a hard-locked field (phone, emergency contacts, ID).
+  email. It holds **approved lists only**, and never a hard-locked field
+  (phone, emergency contacts, ID).
 
 ## Notifications (kind `wap`, in-app only)
 

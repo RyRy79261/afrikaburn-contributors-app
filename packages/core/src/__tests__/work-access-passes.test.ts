@@ -62,6 +62,10 @@ import {
   wapRequestsOpenNotification,
   wapRequestWindowState,
   wapSinceApprovalBadge,
+  wapSinceApprovalNote,
+  wapOverviewStatus,
+  isWapListExported,
+  WAP_OVERVIEW_STATUSES,
   wapWindowPatch,
   type MemberLogistics,
   type WapCurrentPass,
@@ -891,6 +895,33 @@ describe("wapChangesSinceApproval", () => {
     );
   });
 
+  it("the badge's tone follows the note, not the list status", () => {
+    // CodeRabbit on #95: the org badge chose its quiet style from
+    // `status === "approved"`, so an approved list whose roster plans moved
+    // showed "Changed since approval" in the removals-only style.
+    const removed = wapChangesSinceApproval(snapshot, [
+      pass("alice"),
+      pass("sipho"),
+    ]);
+    expect(wapSinceApprovalNote("approved", removed)).toEqual({
+      label: "1 removed since approval",
+      removedOnly: true,
+    });
+    const moved = wapChangesSinceApproval(snapshot, [
+      pass("alice", { arrivalDate: "2027-04-18" }),
+      pass("sipho"),
+      pass("lerato"),
+    ]);
+    expect(wapSinceApprovalNote("approved", moved)).toEqual({
+      label: "Changed since approval",
+      removedOnly: false,
+    });
+    expect(wapSinceApprovalNote("submitted", removed)).toEqual({
+      label: "Changed since approval",
+      removedOnly: false,
+    });
+  });
+
   it("a member who left and rejoined is a new membership: removed + added", () => {
     const c = wapChangesSinceApproval(snapshot, [
       pass("alice"),
@@ -942,8 +973,30 @@ describe("labels and the org overview", () => {
     }),
   ];
 
+  // Every requestable project is listed (Ryan, 13 Oct 2026) — one that never
+  // asked has no requests, a `draft` list by default, and nothing allocated.
+  const silent = summariseWapProject({
+    registrationId: "r4",
+    projectName: "Dust Bunnies",
+    groupKind: "mutant_vehicle",
+    listStatus: "draft",
+    requests: [],
+    allocated: 0,
+  });
+  const withSilent = [...rows, silent];
+
   it("summarises one project", () => {
+    expect(silent).toMatchObject({
+      asked: false,
+      requested: 0,
+      granted: 0,
+      allocated: 0,
+      pendingAsk: null,
+    });
+    expect(wapOverviewStatus(silent)).toBe("not_asked");
+    expect(wapOverviewStatus(rows[2]!)).toBe("draft");
     expect(rows[0]).toMatchObject({
+      asked: true,
       requested: 14,
       granted: 10,
       allocated: 7,
@@ -957,14 +1010,36 @@ describe("labels and the org overview", () => {
   });
 
   it("totals the edition", () => {
-    expect(wapOverviewTotals(rows)).toEqual({
+    expect(wapOverviewTotals(withSilent)).toEqual({
       requested: 22,
       granted: 14,
       allocated: 11,
+      projects: 4,
+      projectsAsked: 3,
+      projectsNotAsked: 1,
       projectsGranted: 2,
       pendingRequests: 1,
       pendingPasses: 4,
     });
+  });
+
+  it("a project that never asked is 'not asked', never a draft", () => {
+    const none = { status: null, kind: null, pendingOnly: false };
+    expect(
+      filterWapOverview(withSilent, { ...none, status: "not_asked" }).map(
+        (r) => r.registrationId,
+      ),
+    ).toEqual(["r4"]);
+    expect(
+      filterWapOverview(withSilent, { ...none, status: "draft" }).map(
+        (r) => r.registrationId,
+      ),
+    ).toEqual(["r3"]);
+    // The status buckets add up to every project listed.
+    const buckets = WAP_OVERVIEW_STATUSES.map(
+      (status) => filterWapOverview(withSilent, { ...none, status }).length,
+    ).reduce((a, b) => a + b, 0);
+    expect(buckets).toBe(withSilent.length);
   });
 
   it("filters by status, kind and pending", () => {
@@ -1157,6 +1232,23 @@ describe("CSV export", () => {
     expect(changed.endsWith(",arrival 22 Apr → 18 Apr")).toBe(true);
     const unchanged = buildWapCsv([input]).split("\r\n")[1]!;
     expect(unchanged.endsWith("Dust Bunnies,")).toBe(true);
+  });
+
+  it("holds ONLY people on approved lists (Ryan, 13 Oct 2026)", () => {
+    expect(isWapListExported("approved")).toBe(true);
+    for (const status of ["draft", "submitted", "returned"] as const) {
+      expect(isWapListExported(status)).toBe(false);
+    }
+    const csv = buildWapCsv([
+      { ...input, name: "Approved Person" },
+      { ...input, listStatus: "draft", name: "Draft Person" },
+      { ...input, listStatus: "submitted", name: "Submitted Person" },
+      { ...input, listStatus: "returned", name: "Returned Person" },
+    ]);
+    const lines = csv.split("\r\n").filter(Boolean);
+    expect(lines).toHaveLength(2);
+    expect(csv).toContain("Approved Person");
+    expect(csv).not.toMatch(/Draft Person|Submitted Person|Returned Person/);
   });
 
   it("names the file by edition and date", () => {

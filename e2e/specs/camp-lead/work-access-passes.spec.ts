@@ -24,6 +24,12 @@
 //      not on it sees no pass line.
 //   9. The export CSV holds the names and the duplicate note, and its columns
 //      are exactly the declared set — no phone, emergency contact, ID or medical.
+//      It holds APPROVED lists only (Ryan, 13 Oct 2026): the art project's
+//      list is still a draft, so its holder appears once — on the camp's row.
+//
+// Throughout, a third project — submitted, never asks — is on the org
+// overview as "Not asked", 0 / 0 / 0 (Ryan, 13 Oct 2026: every requestable
+// project is listed, not only those that asked).
 //
 // A second test covers who is refused the lead's page: a plain member and a
 // stranger both get the project's ordinary not-found.
@@ -105,6 +111,14 @@ async function openOrgPanel(org: Page, projectName: string): Promise<string> {
     .click();
   await org.waitForURL(/\/registrations\/[0-9a-f-]{36}\/passes$/i);
   return org.url();
+}
+
+/** One project's row on the org overview (desktop table row or phone card). */
+function overviewRow(org: Page, projectName: string): Locator {
+  return org
+    .locator("table tr, ul[aria-label='Work Access Passes by project'] > li")
+    .filter({ hasText: projectName })
+    .filter({ visible: true });
 }
 
 /** Grant the pending request on an open org panel. */
@@ -211,10 +225,37 @@ test.describe("camp lead — work access passes", () => {
     const artInvite = await inviteToCamp(artPage, art.slug, "member");
     await joinByInvite(m2Page, artInvite.url);
 
+    // A submitted camp that never asks for passes.
+    const quietPage = await makeAppPage("web");
+    await signUpBurner(quietPage, { onboard: true });
+    const quiet = await createCamp(quietPage);
+    await submitRegistration(quietPage, quiet.slug);
+
     // ── 1. The org opens requests ────────────────────────────────────────
     const staff = await provisionOrgStaff(makeAppPage);
     const org = staff.org;
     await ensureRequestsOpen(org);
+
+    // Every requestable project is on the overview, asked or not.
+    const quietRow = overviewRow(org, quiet.name);
+    await expect(quietRow).toBeVisible();
+    await expect(
+      quietRow.getByText("Not asked", { exact: true }),
+    ).toBeVisible();
+    // Requested 0, granted 0, allocated 0 — no other number on the row (the
+    // name is taken out first: generated names carry digits).
+    const quietText = (await quietRow.innerText()).split(quiet.name).join("");
+    expect(quietText).toMatch(/0/);
+    expect(quietText).not.toMatch(/[1-9]/);
+    // …and the status filter finds it under "Not asked", not "Draft".
+    await org.goto("/registrations/passes?status=not_asked");
+    await expect(overviewRow(org, quiet.name)).toBeVisible();
+    await org.goto("/registrations/passes?status=draft");
+    await expect(
+      org.getByRole("heading", { name: "Work Access Passes" }),
+    ).toBeVisible();
+    await expect(org.getByText(/^\d+ projects?$/)).toBeVisible();
+    await expect(overviewRow(org, quiet.name)).toHaveCount(0);
 
     // ── 2. The lead asks for 3 ──────────────────────────────────────────
     await leadPage.goto(`/camps/${camp.slug}`);
@@ -410,7 +451,13 @@ test.describe("camp lead — work access passes", () => {
 
     // ── 9. The export ───────────────────────────────────────────────────
     await org.goto("/registrations/passes");
-    const exportLink = org.getByRole("link", { name: /export csv/i });
+    // Still listed, still not asked, after everyone else has.
+    await expect(
+      overviewRow(org, quiet.name).getByText("Not asked", { exact: true }),
+    ).toBeVisible();
+    const exportLink = org.getByRole("link", {
+      name: /export approved lists/i,
+    });
     await expect(exportLink).toHaveAttribute(
       "href",
       "/api/registrations/passes/export",
@@ -430,6 +477,11 @@ test.describe("camp lead — work access passes", () => {
     const m2Line = campLines.find((l) => l.includes(`,${m2},`));
     expect(m1Line).toContain("Approved");
     expect(m2Line).toContain(`Also has a pass from ${art.name}`);
+    // Approved lists only: the art project's list is a draft — not a row of
+    // it, so m2 is in the file once (the camp's), and m3 (no pass) never.
+    expect(lines.some((l) => l.startsWith(`${art.name},`))).toBe(false);
+    expect(lines.filter((l) => l.includes(`,${m2},`))).toHaveLength(1);
+    expect(lines.some((l) => l.includes(`,${m3},`))).toBe(false);
   });
 
   test("a plain member and a stranger get the project's not-found for Passes", async ({

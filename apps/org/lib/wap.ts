@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   effectiveWapPass,
   isBioComplete,
+  isWapListExported,
   legacyWapAsk,
   pendingWapRequest,
   publicMemberName,
@@ -15,7 +16,7 @@ import {
   wapPassChangesLabel,
   wapPassFlags,
   wapRequestWindowState,
-  wapSinceApprovalBadge,
+  wapSinceApprovalNote,
   type EffectiveWapPass,
   type MemberLogistics,
   type WapChangesSinceApproval,
@@ -24,6 +25,7 @@ import {
   type WapPassFlag,
   type WapProjectSummary,
   type WapWindowState,
+  WAP_REQUESTABLE_REGISTRATION_STATUSES,
 } from "@quagga/core";
 import type {
   GroupKind,
@@ -373,8 +375,9 @@ export interface WapReview {
     reviewedByName: string | null;
     returnNote: string | null;
     approvedAt: Date | null;
-    /** "Changed since approval" / "1 removed since approval", or null. */
-    badge: string | null;
+    /** "Changed since approval" (warning) / "1 removed since approval"
+     * (`removedOnly`, quiet), or null. */
+    badge: { label: string; removedOnly: boolean } | null;
   };
   passes: OrgWapPass[];
   changes: WapChangesSinceApproval;
@@ -528,7 +531,7 @@ export async function loadWapReview(
         : null,
       returnNote: row.returnNote,
       approvedAt: row.approvedAt,
-      badge: wapSinceApprovalBadge(row.listStatus, changes),
+      badge: wapSinceApprovalNote(row.listStatus, changes),
     },
     passes,
     changes,
@@ -539,33 +542,48 @@ export async function loadWapReview(
 // --- The overview (W3) --------------------------------------------------------
 
 /**
- * One summary row per project in the edition that has asked for passes at
- * least once. A project that never asked has nothing to show on this page —
- * it is still on the registrations pipeline.
+ * One summary row per pass-holding project in the edition whose registration
+ * may ask for passes (`WAP_REQUESTABLE_REGISTRATION_STATUSES`) — asked or not
+ * (Ryan, 13 Oct 2026): the org sees who has NOT asked as well as who has. A
+ * project that asked and has since left a requestable status (withdrawn,
+ * rejected) stays listed while it holds requests, so a grant never vanishes
+ * from the totals.
  */
 export async function loadWapOverview(
   editionId: string,
 ): Promise<WapProjectSummary[]> {
   const db = getDb();
-  const [requestRows, allocationCounts] = await Promise.all([
+  const [projectRows, requestRows, allocationCounts] = await Promise.all([
+    db
+      .select({
+        registrationId: schema.registrations.id,
+        registrationStatus: schema.registrations.status,
+        projectName: schema.groups.name,
+        groupKind: schema.groups.kind,
+        listStatus: schema.registrations.wapListStatus,
+      })
+      .from(schema.registrations)
+      .innerJoin(
+        schema.groups,
+        eq(schema.groups.id, schema.registrations.groupId),
+      )
+      .where(
+        and(
+          eq(schema.registrations.editionId, editionId),
+          inArray(schema.groups.kind, [...WAP_PROJECT_KINDS]),
+        ),
+      ),
     db
       .select({
         registrationId: schema.wapRequests.registrationId,
         requested: schema.wapRequests.requested,
         status: schema.wapRequests.status,
         granted: schema.wapRequests.granted,
-        projectName: schema.groups.name,
-        groupKind: schema.groups.kind,
-        listStatus: schema.registrations.wapListStatus,
       })
       .from(schema.wapRequests)
       .innerJoin(
         schema.registrations,
         eq(schema.registrations.id, schema.wapRequests.registrationId),
-      )
-      .innerJoin(
-        schema.groups,
-        eq(schema.groups.id, schema.registrations.groupId),
       )
       .where(eq(schema.registrations.editionId, editionId)),
     // Live passes only — the same rule as `readWapPasses`.
@@ -594,61 +612,57 @@ export async function loadWapOverview(
       .groupBy(schema.wapAllocations.registrationId),
   ]);
 
-  return summariseWapOverviewRows(requestRows, allocationCounts);
+  return summariseWapOverviewRows(projectRows, requestRows, allocationCounts);
 }
 
-/** Group the overview's flat request rows into one summary per project. Pure. */
+/**
+ * One summary per listed project. Pure. A project is listed when its
+ * registration may ask for passes OR it already has a request; a project that
+ * never asked reads requested 0 / granted 0 / allocated 0, `asked: false`.
+ */
 export function summariseWapOverviewRows(
+  projectRows: readonly {
+    registrationId: string;
+    registrationStatus: RegistrationStatus;
+    projectName: string;
+    groupKind: GroupKind;
+    listStatus: WapListStatus;
+  }[],
   requestRows: readonly {
     registrationId: string;
     requested: number;
     status: WapRequestStatus;
     granted: number | null;
-    projectName: string;
-    groupKind: GroupKind;
-    listStatus: WapListStatus;
   }[],
   allocationCounts: readonly { registrationId: string; count: number }[],
 ): WapProjectSummary[] {
   const allocated = new Map(
     allocationCounts.map((a) => [a.registrationId, Number(a.count)]),
   );
-  const byRegistration = new Map<
+  const requests = new Map<
     string,
-    {
-      projectName: string;
-      groupKind: GroupKind;
-      listStatus: WapListStatus;
-      requests: {
-        requested: number;
-        status: WapRequestStatus;
-        granted: number | null;
-      }[];
-    }
+    { requested: number; status: WapRequestStatus; granted: number | null }[]
   >();
   for (const r of requestRows) {
-    const entry = byRegistration.get(r.registrationId) ?? {
-      projectName: r.projectName,
-      groupKind: r.groupKind,
-      listStatus: r.listStatus,
-      requests: [],
-    };
-    entry.requests.push({
-      requested: r.requested,
-      status: r.status,
-      granted: r.granted,
-    });
-    byRegistration.set(r.registrationId, entry);
+    const list = requests.get(r.registrationId) ?? [];
+    list.push({ requested: r.requested, status: r.status, granted: r.granted });
+    requests.set(r.registrationId, list);
   }
-  return [...byRegistration.entries()]
-    .map(([registrationId, e]) =>
+  return projectRows
+    .filter(
+      (p) =>
+        WAP_PROJECT_KINDS.includes(p.groupKind) &&
+        (WAP_REQUESTABLE_REGISTRATION_STATUSES.includes(p.registrationStatus) ||
+          requests.has(p.registrationId)),
+    )
+    .map((p) =>
       summariseWapProject({
-        registrationId,
-        projectName: e.projectName,
-        groupKind: e.groupKind,
-        listStatus: e.listStatus,
-        requests: e.requests,
-        allocated: allocated.get(registrationId) ?? 0,
+        registrationId: p.registrationId,
+        projectName: p.projectName,
+        groupKind: p.groupKind,
+        listStatus: p.listStatus,
+        requests: requests.get(p.registrationId) ?? [],
+        allocated: allocated.get(p.registrationId) ?? 0,
       }),
     )
     .sort((a, b) => a.projectName.localeCompare(b.projectName));
@@ -667,7 +681,8 @@ export interface WapExportProject {
   snapshot: readonly WapApprovedPass[] | null;
 }
 
-/** The projects whose passes the export lists, keyed by registration. */
+/** The projects whose passes the export lists — APPROVED lists only (Ryan,
+ * 13 Oct 2026) — keyed by registration. */
 export async function readWapExportProjects(
   editionId: string,
 ): Promise<Map<string, WapExportProject>> {
@@ -684,7 +699,12 @@ export async function readWapExportProjects(
       schema.groups,
       eq(schema.groups.id, schema.registrations.groupId),
     )
-    .where(eq(schema.registrations.editionId, editionId));
+    .where(
+      and(
+        eq(schema.registrations.editionId, editionId),
+        eq(schema.registrations.wapListStatus, "approved"),
+      ),
+    );
   return new Map(
     rows.map((r) => [
       r.registrationId,
@@ -697,13 +717,18 @@ export async function readWapExportProjects(
 }
 
 /**
- * The export's rows: one per live pass whose project is known, each carrying
- * what changed on it since its list was approved. Pure.
+ * The export's rows: one per live pass on an APPROVED list, each carrying
+ * what changed on it since that approval. A pass on a draft, submitted or
+ * returned list is not handed to the gate — dropped here even if a caller's
+ * project map holds it (and again in `buildWapCsv`). Pure.
  */
 export function wapExportInputs(
-  projects: ReadonlyMap<string, WapExportProject>,
+  allProjects: ReadonlyMap<string, WapExportProject>,
   passes: readonly OrgWapPass[],
 ): WapExportInput[] {
+  const projects = new Map(
+    [...allProjects].filter(([, p]) => isWapListExported(p.listStatus)),
+  );
   const byRegistration = new Map<string, OrgWapPass[]>();
   for (const p of passes) {
     const list = byRegistration.get(p.registrationId) ?? [];

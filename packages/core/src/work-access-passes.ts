@@ -777,14 +777,32 @@ export function wapSinceApprovalBadge(
   status: WapListStatus,
   changes: WapChangesSinceApproval,
 ): string | null {
+  return wapSinceApprovalNote(status, changes)?.label ?? null;
+}
+
+/**
+ * The same badge with its TONE: `removedOnly` is true only for the quiet
+ * "N removed since approval" note. Every "Changed since approval" — on an
+ * approved list (a roster plan moved) or on one that left approval — is the
+ * warning. The tone follows the note, never the list status: an approved
+ * list can carry either.
+ */
+export function wapSinceApprovalNote(
+  status: WapListStatus,
+  changes: WapChangesSinceApproval,
+): { label: string; removedOnly: boolean } | null {
   if (!changes.everApproved) return null;
+  const changed = { label: "Changed since approval", removedOnly: false };
   if (status === "approved") {
-    if (changes.changed.length > 0) return "Changed since approval";
+    if (changes.changed.length > 0 || changes.added.length > 0) return changed;
     return changes.removed.length > 0
-      ? wapRemovedSinceApprovalLabel(changes.removed.length)
+      ? {
+          label: wapRemovedSinceApprovalLabel(changes.removed.length),
+          removedOnly: true,
+        }
       : null;
   }
-  return changes.any ? "Changed since approval" : null;
+  return changes.any ? changed : null;
 }
 
 /**
@@ -847,6 +865,9 @@ export interface WapProjectSummary {
   projectName: string;
   groupKind: GroupKind;
   listStatus: WapListStatus;
+  /** At least one request, of any outcome. The overview lists every project
+   * whose registration may ask (Ryan, 13 Oct 2026), so most rows start false. */
+  asked: boolean;
   requested: number;
   granted: number;
   allocated: number;
@@ -861,6 +882,7 @@ export function summariseWapProject(p: WapProjectFacts): WapProjectSummary {
     projectName: p.projectName,
     groupKind: p.groupKind,
     listStatus: p.listStatus,
+    asked: p.requests.length > 0,
     requested: totalWapRequested(p.requests),
     granted: totalWapGranted(p.requests),
     allocated: p.allocated,
@@ -872,6 +894,12 @@ export interface WapOverviewTotals {
   requested: number;
   granted: number;
   allocated: number;
+  /** Projects listed — every one whose registration may ask. */
+  projects: number;
+  /** Projects that have asked at least once. */
+  projectsAsked: number;
+  /** Projects that have never asked: `projects - projectsAsked`. */
+  projectsNotAsked: number;
   /** Projects with at least one granted pass. */
   projectsGranted: number;
   pendingRequests: number;
@@ -885,11 +913,17 @@ export function wapOverviewTotals(
     requested: 0,
     granted: 0,
     allocated: 0,
+    projects: 0,
+    projectsAsked: 0,
+    projectsNotAsked: 0,
     projectsGranted: 0,
     pendingRequests: 0,
     pendingPasses: 0,
   };
   for (const r of rows) {
+    t.projects += 1;
+    if (r.asked) t.projectsAsked += 1;
+    else t.projectsNotAsked += 1;
     t.requested += r.requested;
     t.granted += r.granted;
     t.allocated += r.allocated;
@@ -902,8 +936,37 @@ export function wapOverviewTotals(
   return t;
 }
 
+/**
+ * A project's status on the overview: "not asked" for a project that never
+ * asked, its list status otherwise. A project that never asked still has a
+ * `draft` list in the database (the column default), and counting it as a
+ * draft would put every silent project under "Draft" — so the overview's
+ * status column, filter and "Lists:" line all read this instead, and they add
+ * up to the number of projects shown.
+ */
+export type WapOverviewStatus = WapListStatus | "not_asked";
+
+export const WAP_OVERVIEW_STATUSES: readonly WapOverviewStatus[] = [
+  "not_asked",
+  "draft",
+  "submitted",
+  "approved",
+  "returned",
+];
+
+export const WAP_OVERVIEW_STATUS_LABELS: Record<WapOverviewStatus, string> = {
+  not_asked: "Not asked",
+  ...WAP_LIST_STATUS_LABELS,
+};
+
+export function wapOverviewStatus(
+  row: Pick<WapProjectSummary, "asked" | "listStatus">,
+): WapOverviewStatus {
+  return row.asked ? row.listStatus : "not_asked";
+}
+
 export interface WapOverviewFilter {
-  status: WapListStatus | null;
+  status: WapOverviewStatus | null;
   kind: GroupKind | null;
   pendingOnly: boolean;
 }
@@ -914,7 +977,7 @@ export function filterWapOverview(
 ): WapProjectSummary[] {
   return rows.filter(
     (r) =>
-      (filter.status === null || r.listStatus === filter.status) &&
+      (filter.status === null || wapOverviewStatus(r) === filter.status) &&
       (filter.kind === null || r.groupKind === filter.kind) &&
       (!filter.pendingOnly || r.pendingAsk !== null),
   );
@@ -1136,17 +1199,31 @@ export function wapExportRow(input: WapExportInput): WapExportRow {
   };
 }
 
+/**
+ * Whether a list's people go in the export. ONLY AN APPROVED LIST (Ryan,
+ * 13 Oct 2026): the CSV is the hand-off to the gate, and a draft, submitted
+ * or returned list is a list AfrikaBurn has not agreed to. An approved list
+ * can still move (a roster plan, a removal) without leaving "approved" — that
+ * is what the "Changed since approval" column is for.
+ */
+export function isWapListExported(status: WapListStatus): boolean {
+  return status === "approved";
+}
+
 /** CSV text: UTF-8 BOM, CRLF, every cell through `escapeCsvField` (formula
- * injection — names are typed by the public). */
+ * injection — names are typed by the public). Rows from a list that is not
+ * approved are dropped here, whatever the caller passed. */
 export function buildWapCsv(rows: readonly WapExportInput[]): string {
   const lines = [
     WAP_EXPORT_COLUMNS.map((c) => escapeCsvField(c.header)).join(","),
-    ...rows.map((r) => {
-      const out = wapExportRow(r);
-      return WAP_EXPORT_COLUMNS.map((c) => escapeCsvField(out[c.key])).join(
-        ",",
-      );
-    }),
+    ...rows
+      .filter((r) => isWapListExported(r.listStatus))
+      .map((r) => {
+        const out = wapExportRow(r);
+        return WAP_EXPORT_COLUMNS.map((c) => escapeCsvField(out[c.key])).join(
+          ",",
+        );
+      }),
   ];
   return `${CSV_BOM}${lines.join("\r\n")}\r\n`;
 }

@@ -139,8 +139,8 @@ export default async function RegistrationPassesPage({
                 <WapListStatusBadge status={review.list.status} />
                 {review.list.badge && (
                   <WapSinceApprovalBadge
-                    label={review.list.badge}
-                    status={review.list.status}
+                    label={review.list.badge.label}
+                    removedOnly={review.list.badge.removedOnly}
                   />
                 )}
               </div>

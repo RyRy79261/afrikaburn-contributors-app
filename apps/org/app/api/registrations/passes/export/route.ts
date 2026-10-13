@@ -5,11 +5,19 @@ import { buildWapCsv, wapCsvFilename } from "@quagga/core";
 import { getDb } from "@/lib/db";
 import { getActiveEdition } from "@/lib/queries";
 import { requireOrgSession } from "@/lib/session";
-import { readWapExportProjects, readWapPasses, wapExportInputs } from "@/lib/wap";
+import {
+  readWapExportProjects,
+  readWapPasses,
+  wapExportInputs,
+} from "@/lib/wap";
 
-// The Work Access Pass export (WAP-009): every named pass holder in the active
-// edition, one row each — the hand-off to AfrikaBurn's gate until it says what
-// its systems can ingest (docs/wap-spec.md, "Not built").
+// The Work Access Pass export (WAP-009): every named pass holder ON AN
+// APPROVED LIST in the active edition, one row each — the hand-off to
+// AfrikaBurn's gate until it says what its systems can ingest
+// (docs/wap-spec.md, "Not built"). Draft, submitted and returned lists are
+// left out entirely (Ryan, 13 Oct 2026): the query reads approved projects
+// only, `wapExportInputs` drops any other, and `buildWapCsv` drops any other
+// again.
 //
 // AUTHORISED AS `personal_information` ON `registrations`, not `read`: the file
 // holds each holder's EMAIL, which is how AfrikaBurn matches a pass to a person.

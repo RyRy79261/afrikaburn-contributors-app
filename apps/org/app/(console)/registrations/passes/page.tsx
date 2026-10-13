@@ -3,11 +3,14 @@ import {
   filterWapOverview,
   orgCanInDomain,
   orgCapabilityRefusal,
-  WAP_LIST_STATUS_LABELS,
+  WAP_OVERVIEW_STATUS_LABELS,
+  WAP_OVERVIEW_STATUSES,
   wapDateLabel,
+  wapOverviewStatus,
   wapOverviewTotals,
+  type WapOverviewStatus,
 } from "@quagga/core";
-import { GroupKind, WapListStatus } from "@quagga/types";
+import { GroupKind } from "@quagga/types";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -24,6 +27,10 @@ import { WapOverviewTable } from "@/components/passes/wap-overview-table";
 // edition (frame W3, mobile T0yoB): the request window, the totals, a table
 // filtered by list status, project type and pending requests, and the CSV
 // hand-off (WAP-009).
+//
+// EVERY project whose registration may ask is listed, asked or not (Ryan,
+// 13 Oct 2026): one that never asked reads 0 / 0 / 0 and "Not asked". The
+// CSV holds APPROVED lists only (same day) — the copy here says so.
 //
 // `read` on `registrations` opens it (it names projects). Opening and closing
 // requests needs `update`; the export needs `personal_information` — both are
@@ -75,10 +82,11 @@ export default async function WapOverviewPage({
   }
 
   const sp = await searchParams;
-  const statusParam = WapListStatus.safeParse(pick(sp.status));
+  const statusRaw = pick(sp.status);
+  const status = WAP_OVERVIEW_STATUSES.find((s) => s === statusRaw) ?? null;
   const kindParam = GroupKind.safeParse(pick(sp.kind));
   const filter = {
-    status: statusParam.success ? statusParam.data : null,
+    status,
     kind: kindParam.success ? kindParam.data : null,
     pendingOnly: pick(sp.pending) === "1",
   };
@@ -101,9 +109,11 @@ export default async function WapOverviewPage({
     ? null
     : orgCapabilityRefusal(actor, "personal_information", "registrations");
 
-  const statusCounts = WapListStatus.options
-    .map((s) => ({ s, n: rows.filter((r) => r.listStatus === s).length }))
-    .filter((c) => c.n > 0);
+  // Not asked + the four list statuses: adds up to every project listed.
+  const statusCounts = WAP_OVERVIEW_STATUSES.map((s: WapOverviewStatus) => ({
+    s,
+    n: rows.filter((r) => wapOverviewStatus(r) === s).length,
+  })).filter((c) => c.n > 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,7 +126,7 @@ export default async function WapOverviewPage({
             <div className="flex flex-col items-end gap-1">
               <Button variant="outline" disabled>
                 <Download aria-hidden />
-                Export CSV
+                Export approved lists
               </Button>
               <p className="flex max-w-xs items-start gap-1.5 text-xs text-muted-foreground">
                 <ShieldAlert
@@ -130,7 +140,7 @@ export default async function WapOverviewPage({
             <Button asChild variant="outline" className="w-full sm:w-auto">
               <a href="/api/registrations/passes/export" download>
                 <Download aria-hidden />
-                Export CSV
+                Export approved lists
               </a>
             </Button>
           )
@@ -171,7 +181,7 @@ export default async function WapOverviewPage({
         <Stat
           label="Requested"
           value={String(totals.requested)}
-          sub="Every ask, pending included"
+          sub={`${totals.projectsAsked} of ${totals.projects} project${totals.projects === 1 ? "" : "s"} asked · ${totals.projectsNotAsked} not asked yet`}
         />
         <Stat
           label="Granted"
@@ -204,10 +214,8 @@ export default async function WapOverviewPage({
 
       {rows.length === 0 ? (
         <Notice>
-          No project has asked for passes yet.{" "}
-          {window.state === "open"
-            ? "Requests are open — they appear here as projects ask."
-            : "Projects can ask once you open requests."}
+          No project has a submitted registration for this edition yet —
+          projects appear here once they submit theirs.
         </Notice>
       ) : (
         <div className="md:rounded-xl md:border md:bg-card md:text-card-foreground md:shadow-sm">
@@ -220,7 +228,8 @@ export default async function WapOverviewPage({
           Lists:{" "}
           {statusCounts
             .map(
-              ({ s, n }) => `${n} ${WAP_LIST_STATUS_LABELS[s].toLowerCase()}`,
+              ({ s, n }) =>
+                `${n} ${WAP_OVERVIEW_STATUS_LABELS[s].toLowerCase()}`,
             )
             .join(" · ")}
         </p>
@@ -228,9 +237,11 @@ export default async function WapOverviewPage({
 
       <p className="flex items-start gap-2 rounded-lg bg-muted/40 p-4 text-sm text-muted-foreground">
         <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        The CSV lists every named person with their email, arrival, departure,
-        build and strike. It needs the personal-information permission in
-        Registrations, and never holds a phone number, emergency contact or ID.
+        The CSV holds only people on approved lists — drafts, submitted and
+        returned lists are left out — with their email, arrival, departure,
+        build and strike, and what changed since approval. It needs the
+        personal-information permission in Registrations, and never holds a
+        phone number, emergency contact or ID.
       </p>
     </div>
   );

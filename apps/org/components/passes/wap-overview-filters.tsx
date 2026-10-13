@@ -3,8 +3,10 @@
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Hourglass } from "lucide-react";
-import { WAP_LIST_STATUS_LABELS } from "@quagga/core";
-import { WapListStatus } from "@quagga/types";
+import {
+  WAP_OVERVIEW_STATUS_LABELS,
+  WAP_OVERVIEW_STATUSES,
+} from "@quagga/core";
 import {
   Select,
   SelectContent,
@@ -17,7 +19,8 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 
-// The overview's filters (frame W3): list status, project type, pending only.
+// The overview's filters (frame W3): list status (with "Not asked" for a
+// project that never asked), project type, pending only.
 // URL search params, so a filtered view is a link the reviewer can share.
 
 const ALL = "all";
@@ -59,9 +62,9 @@ export function WapOverviewFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>All list statuses</SelectItem>
-          {WapListStatus.options.map((s) => (
+          {WAP_OVERVIEW_STATUSES.map((s) => (
             <SelectItem key={s} value={s}>
-              {WAP_LIST_STATUS_LABELS[s]}
+              {WAP_OVERVIEW_STATUS_LABELS[s]}
             </SelectItem>
           ))}
         </SelectContent>

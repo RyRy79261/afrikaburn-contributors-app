@@ -12,7 +12,8 @@ import {
 import { WapListStatusBadge } from "./wap-badges";
 
 // Every project's passes for the edition (frame W3, mobile T0yoB): a table
-// from md up, cards on a phone. Counts only — no person is named here.
+// from md up, cards on a phone. Counts only — no person is named here. Every
+// project whose registration may ask is a row, asked or not.
 
 const KIND_LABELS: Record<string, string> = {
   theme_camp: "Theme camp",
@@ -82,11 +83,8 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
       {
         id: "granted",
         header: "Granted",
-        cell: (r) => (
-          <span className="tabular-nums">
-            {r.granted > 0 ? r.granted : "—"}
-          </span>
-        ),
+        // A number, 0 included: a project that never asked reads 0 / 0 / 0.
+        cell: (r) => <span className="tabular-nums">{r.granted}</span>,
       },
       {
         id: "allocated",
@@ -107,7 +105,14 @@ export function WapOverviewTable({ rows }: { rows: WapProjectSummary[] }) {
         id: "status",
         header: "List status",
         role: "badge",
-        cell: (r) => <WapListStatusBadge status={r.listStatus} />,
+        // A project that never asked has a `draft` list by default; it reads
+        // "Not asked", not "Draft" (@quagga/core `wapOverviewStatus`).
+        cell: (r) =>
+          r.asked ? (
+            <WapListStatusBadge status={r.listStatus} />
+          ) : (
+            <Badge variant="outline">Not asked</Badge>
+          ),
       },
       {
         id: "open",

@@ -21,21 +21,25 @@ export function WapListStatusBadge({ status }: { status: WapListStatus }) {
   );
 }
 
-/** "Changed since approval" (warning) or "N removed since approval" (quiet). */
+/**
+ * "Changed since approval" (warning) or "N removed since approval" (quiet).
+ * The tone comes from `removedOnly` — @quagga/core `wapSinceApprovalNote` —
+ * never from the list status: an APPROVED list can show either note, and a
+ * roster plan that moved a date on one is a warning.
+ */
 export function WapSinceApprovalBadge({
   label,
-  status,
+  removedOnly,
 }: {
   label: string;
-  status: WapListStatus;
+  removedOnly: boolean;
 }) {
-  const removed = status === "approved";
   return (
     <Badge
-      variant={removed ? "outline" : "warning"}
+      variant={removedOnly ? "outline" : "warning"}
       className="normal-case tracking-normal"
     >
-      {removed ? (
+      {removedOnly ? (
         <UserMinus className="h-3 w-3" aria-hidden />
       ) : (
         <History className="h-3 w-3" aria-hidden />
