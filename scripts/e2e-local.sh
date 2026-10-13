@@ -261,5 +261,10 @@ if [ -n "${E2E_SHARD:-}" ]; then
   SHARD_ARGS+=("--shard=$E2E_SHARD")
 fi
 
-exec pnpm exec playwright test "${PROJECT_ARGS[@]}" "${SHARD_ARGS[@]}" \
-  --workers="${E2E_WORKERS:-2}" "$@"
+# NOT `exec`. Replacing the shell discards the EXIT trap, so `stop_apps` never
+# ran: every run left its three dev servers up, and they inherit the fd of a
+# `flock /tmp/quagga-e2e.lock` wrapper, so the NEXT locked run waited forever.
+status=0
+pnpm exec playwright test "${PROJECT_ARGS[@]}" "${SHARD_ARGS[@]}" \
+  --workers="${E2E_WORKERS:-2}" "$@" || status=$?
+exit "$status"
