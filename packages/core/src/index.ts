@@ -234,3 +234,6 @@ export * from "./shifts";
 // pass list and its review, effective dates, flags, the duplicate-holder note,
 // notifications and the CSV export. PURE — no I/O.
 export * from "./work-access-passes";
+// Camp statistics (docs/camp-stats-spec.md): the stats page's aggregates and a
+// member's participation summary, behind the roster's own predicate. PURE.
+export * from "./camp-stats";
