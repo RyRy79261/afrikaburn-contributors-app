@@ -247,10 +247,20 @@ export async function loadCampStats(input: {
           )`,
         })
         .from(schema.registrations)
+        // THE JOIN IS LOAD-BEARING. A drizzle select over ONE table renders
+        // its columns unqualified — inside the subquery above, too — so
+        // `memberships.id` and `registrations.id` both became a bare "id"
+        // and Postgres refused the query as ambiguous (caught by the local
+        // e2e, invisible to the mocked unit tests). Any join switches drizzle
+        // to table-qualified names; this one also pins the edition.
+        .innerJoin(
+          schema.editions,
+          eq(schema.editions.id, schema.registrations.editionId),
+        )
         .where(
           and(
             eq(schema.registrations.groupId, group.id),
-            eq(schema.registrations.editionId, edition.id),
+            eq(schema.editions.id, edition.id),
           ),
         )
         .limit(1),

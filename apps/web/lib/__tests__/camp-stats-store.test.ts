@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 import { schema } from "@quagga/db";
 import {
   GroupKind,
@@ -312,6 +313,39 @@ describe("loadCampStats — a roster viewer", () => {
     const keys = allSelectedKeys();
     expect(keys).toContain("bioCompletedAt");
     for (const column of SENSITIVE) expect(keys).not.toContain(column);
+  });
+
+  it("renders SQL Postgres can run: no bare, ambiguous column in a subquery", async () => {
+    // The mock cannot run SQL, but it records every builder chain — replayed
+    // onto drizzle's REAL query builder, it renders the exact SQL the page
+    // sends. A one-table select renders unqualified columns, subqueries
+    // included, so a correlated count over memberships became `"id" = "id"`
+    // and Postgres refused the whole page (found by the local e2e).
+    stubs.onboardings = [{ activationId: "act-1", title: "W", status: "open" }];
+    queuePage([memberRow(1)]);
+    await loadCampStats({
+      slug: CAMP_A.slug,
+      viewerUserId: ALICE,
+      edition: EDITION,
+      now: NOW,
+    });
+    const rendered = dbMock
+      .queriesOfKind("select")
+      .map((q) => {
+        let chain: unknown = new QueryBuilder();
+        for (const c of q.calls) {
+          chain = (chain as Record<string, (...a: unknown[]) => unknown>)[
+            c.method
+          ]!(...c.args);
+        }
+        return (chain as { toSQL(): { sql: string } }).toSQL().sql;
+      })
+      .filter((sql) => /\(\s*select count/.test(sql));
+    expect(rendered.length).toBeGreaterThanOrEqual(2);
+    for (const sql of rendered) {
+      // Every "id" is table-qualified ("memberships"."id"), never bare.
+      expect(sql).not.toMatch(/(?<!\.)"id"/);
+    }
   });
 
   it("is set-based: the same queries for 2 members as for 60", async () => {
