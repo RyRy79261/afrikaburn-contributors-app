@@ -721,12 +721,21 @@ export interface DuesFigures {
   isCampFee: boolean;
 }
 
-/** awaiting | part paid | paid | waived. Waived = owes R 0,00. */
+/**
+ * awaiting | part paid | paid | waived | no fee. Owing R 0,00 is "waived"
+ * only when that amount was SET for the member; a member on the camp fee
+ * while the camp fee is still R 0,00 has "no fee" yet — reading that as
+ * waived would tell every member of a new camp their dues were waived.
+ */
 export function duesStatus(
   owedCents: number,
   receivedCents: number,
+  onCampFee = false,
 ): DuesStatus {
-  if (owedCents === 0) return "waived";
+  if (owedCents === 0) {
+    if (!onCampFee) return "waived";
+    return receivedCents > 0 ? "paid" : "no_fee";
+  }
   if (receivedCents <= 0) return "awaiting";
   if (receivedCents < owedCents) return "part_paid";
   return "paid";
@@ -743,7 +752,7 @@ export function memberDuesFigures(
     receivedCents,
     outstandingCents: Math.max(0, owedCents - receivedCents),
     overpaidCents: Math.max(0, receivedCents - owedCents),
-    status: duesStatus(owedCents, receivedCents),
+    status: duesStatus(owedCents, receivedCents, member.overrideCents === null),
     isCampFee: member.overrideCents === null,
   };
 }
@@ -785,6 +794,7 @@ export function summariseDues(
     part_paid: 0,
     paid: 0,
     waived: 0,
+    no_fee: 0,
   };
   let owedCents = 0;
   let receivedCents = 0;
@@ -817,6 +827,7 @@ export const DUES_STATUS_LABELS: Record<DuesStatus, string> = {
   part_paid: "Part paid",
   paid: "Paid",
   waived: "Waived",
+  no_fee: "No fee set",
 };
 
 export const CLAIM_STATUS_LABELS: Record<CampClaimStatus, string> = {
@@ -898,8 +909,11 @@ export const RECEIPT_CONTENT_TYPES = [
 ] as const;
 export type ReceiptContentType = (typeof RECEIPT_CONTENT_TYPES)[number];
 
-/** A phone photo of a till slip or a PDF invoice fits comfortably. */
-export const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+/** A phone photo of a till slip or a PDF invoice fits comfortably. 4 MB, not
+ * more: the upload is one multipart POST to a Vercel function, whose request
+ * body is capped at 4.5 MB — a larger limit here would be refused by the
+ * platform before this check could explain why. */
+export const RECEIPT_MAX_BYTES = 4 * 1024 * 1024;
 
 function startsWith(bytes: Uint8Array, signature: readonly number[], at = 0) {
   if (bytes.length < at + signature.length) return false;
@@ -935,7 +949,7 @@ export function checkReceiptUpload(bytes: Uint8Array): ReceiptCheck {
     return {
       ok: false,
       status: 413,
-      error: "That receipt is larger than 5 MB. Try a smaller photo.",
+      error: "That receipt is larger than 4 MB. Try a smaller photo.",
     };
   }
   const contentType = sniffReceiptType(bytes);

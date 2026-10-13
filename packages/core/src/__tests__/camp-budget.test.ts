@@ -22,6 +22,7 @@ import {
   canViewMoneyTotals,
   canViewReceipt,
   checkReceiptUpload,
+  RECEIPT_MAX_BYTES,
   claimApprovedNotification,
   claimRejectedNotification,
   claimRepaidNotification,
@@ -392,6 +393,7 @@ describe("dues — frame M2, exactly", () => {
       part_paid: 3,
       awaiting: 3,
       waived: 1,
+      no_fee: 0,
     });
   });
 
@@ -436,8 +438,41 @@ describe("dues — frame M2, exactly", () => {
       duesStatus(100, 0),
       duesStatus(100, 50),
       duesStatus(100, 100),
+      duesStatus(0, 0, true),
     ]);
     expect([...seen].sort()).toEqual([...DuesStatus.options].sort());
+  });
+
+  // Regression (found by the money e2e, 14 Oct): with no camp fee set yet,
+  // every member of a new camp read "Waived".
+  it("never calls a member waived just because the camp fee is still R 0,00", () => {
+    const onFee = memberDuesFigures(0, {
+      overrideCents: null,
+      receivedCents: 0,
+    });
+    expect(onFee).toMatchObject({ status: "no_fee", outstandingCents: 0 });
+    // Money that arrived anyway reads as paid, not waived.
+    expect(
+      memberDuesFigures(0, { overrideCents: null, receivedCents: R(100) })
+        .status,
+    ).toBe("paid");
+    // An amount of R 0,00 SET for the member is a waiver, whatever the fee.
+    expect(
+      memberDuesFigures(0, { overrideCents: 0, receivedCents: 0 }).status,
+    ).toBe("waived");
+    expect(
+      memberDuesFigures(FEE, { overrideCents: 0, receivedCents: 0 }).status,
+    ).toBe("waived");
+    const s = summariseDues(0, [
+      {
+        userId: "a",
+        standing: "current",
+        overrideCents: null,
+        receivedCents: 0,
+      },
+      { userId: "b", standing: "current", overrideCents: 0, receivedCents: 0 },
+    ]);
+    expect(s.byStatus).toMatchObject({ no_fee: 1, waived: 1 });
   });
 
   it("lists every current member, and former ones only when the books name them", () => {
@@ -907,7 +942,13 @@ describe("receipts", () => {
       ok: false,
       status: 400,
     });
-    const big = new Uint8Array(5 * 1024 * 1024 + 1);
+    // 4 MB exactly is accepted; one byte more is refused (the platform caps
+    // a function's request body at 4.5 MB, multipart overhead included).
+    const atLimit = new Uint8Array(RECEIPT_MAX_BYTES);
+    atLimit.set(PDF_BYTES);
+    expect(RECEIPT_MAX_BYTES).toBe(4 * 1024 * 1024);
+    expect(checkReceiptUpload(atLimit)).toMatchObject({ ok: true });
+    const big = new Uint8Array(RECEIPT_MAX_BYTES + 1);
     big.set(PDF_BYTES);
     expect(checkReceiptUpload(big)).toMatchObject({ ok: false, status: 413 });
     expect(checkReceiptUpload(PDF_BYTES)).toEqual({

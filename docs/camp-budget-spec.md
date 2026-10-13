@@ -57,7 +57,11 @@ bank account; the app records that it did, matched by the member's ref code
   decision_note, repaid_on) — a member paid for something for the camp.
 
 Receipts live under a per-camp private prefix and are served only through an
-authorised route; never a public URL.
+authorised route; never a public URL. A receipt is a photo (PNG, JPEG, WebP)
+or a PDF of at most 4 MB (a Vercel function's request body is capped at
+4.5 MB); it is uploaded after its record exists (`POST /api/money/receipts`)
+and read through `GET /api/money/receipts/[kind]/[id]`, photos inline and PDFs
+as a download.
 
 ## Derived figures (`@quagga/core` `camp-budget.ts`)
 
@@ -71,7 +75,9 @@ authorised route; never a public URL.
   category (`006`), contingency (`011`), surplus or shortfall (`012`), cost per
   camper = forecast spend ÷ current members (`010`, `059`).
 - Dues per member: owed, received, outstanding, status `awaiting | part paid |
-  paid | waived`.
+  paid | waived | no fee set`. Waived is an amount of R 0,00 set for the
+  member with a reason; "no fee set" is a member on the camp fee while the
+  camp fee is still R 0,00 (a new camp), so nobody reads as waived by default.
 - Variance per category = planned − (actual + committed): "R … left", or an
   OVER warning when negative. On income rows: "R … to come" / "above plan".
 - Projected income / spend use max(planned, actual + committed) per category.

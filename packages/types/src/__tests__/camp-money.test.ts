@@ -39,6 +39,7 @@ describe("camp money vocabularies", () => {
       "part_paid",
       "paid",
       "waived",
+      "no_fee",
     ]);
   });
 

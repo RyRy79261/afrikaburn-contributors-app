@@ -36,8 +36,16 @@ export const CampClaimStatus = z.enum([
 export type CampClaimStatus = z.infer<typeof CampClaimStatus>;
 
 /** A member's dues standing — DERIVED (@quagga/core `duesStatus`), never
- * stored. */
-export const DuesStatus = z.enum(["awaiting", "part_paid", "paid", "waived"]);
+ * stored. `waived` is an amount of R 0,00 set FOR this member (with a
+ * reason); `no_fee` is a member on the camp fee while the camp has not set
+ * one yet — owing nothing, but not waived either. */
+export const DuesStatus = z.enum([
+  "awaiting",
+  "part_paid",
+  "paid",
+  "waived",
+  "no_fee",
+]);
 export type DuesStatus = z.infer<typeof DuesStatus>;
 
 /** The largest single amount any money input accepts: R10 000 000,00. A
