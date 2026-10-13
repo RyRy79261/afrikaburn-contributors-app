@@ -238,7 +238,9 @@ export interface CampStatsBuildStrike {
   joiningBuild: number;
   joiningStrike: number;
   arrivalNotSet: number;
-  /** Days with at least one arrival, in date order. */
+  /** Every day from the first arrival to the last, in date order — a day
+   * nobody arrives on is there with 0, so the chart's axis is a calendar and
+   * never skips a day (empty when nobody has set an arrival). */
   arrivalsByDay: CampStatsArrivalDay[];
 }
 
@@ -330,14 +332,34 @@ export function deriveBuildStrikeStats(
     joiningBuild: roster.joiningBuild,
     joiningStrike: roster.joiningStrike,
     arrivalNotSet,
-    arrivalsByDay: [...perDay.entries()]
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([date, count]) => ({
-        date,
-        phase: arrivalPhase(date, edition),
-        count,
-      })),
+    arrivalsByDay: fillArrivalDays(perDay).map(([date, count]) => ({
+      date,
+      phase: arrivalPhase(date, edition),
+      count,
+    })),
   };
+}
+
+/** The per-day counts with the days between the first and last arrival
+ * filled in at 0. Should a date not step as a calendar date, the counted days
+ * alone are returned, sorted — never a partial axis. */
+function fillArrivalDays(
+  perDay: ReadonlyMap<string, number>,
+): [string, number][] {
+  const sorted = [...perDay.entries()].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  if (sorted.length < 2) return sorted;
+  const last = sorted[sorted.length - 1]![0];
+  const days: [string, number][] = [];
+  // A stored arrival sits inside the roster's logistics window (~7 weeks);
+  // the cap only stops a malformed range from running on.
+  for (let d: string | null = sorted[0]![0]; d !== null && d <= last;) {
+    if (days.length >= 120) return sorted;
+    days.push([d, perDay.get(d) ?? 0]);
+    d = addDays(d, 1);
+  }
+  return days.length > 0 && days[days.length - 1]![0] === last ? days : sorted;
 }
 
 const NO_TEAM = "No team";

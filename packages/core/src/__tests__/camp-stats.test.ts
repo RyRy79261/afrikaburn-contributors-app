@@ -321,10 +321,63 @@ describe("deriveBuildStrikeStats", () => {
     expect(out.joiningBuild).toBe(3);
     expect(out.joiningStrike).toBe(2);
     expect(out.arrivalNotSet).toBe(2);
+    expect(out.arrivalsByDay[0]).toEqual({
+      date: "2027-04-22",
+      phase: "build",
+      count: 2,
+    });
+    expect(out.arrivalsByDay.find((d) => d.date === "2027-04-26")).toEqual({
+      date: "2027-04-26",
+      phase: "event",
+      count: 1,
+    });
+    expect(out.arrivalsByDay.at(-1)).toEqual({
+      date: "2027-05-03",
+      phase: "strike",
+      count: 1,
+    });
+  });
+
+  it("fills the days between the first and last arrival with 0, never skipping one", () => {
+    const out = deriveBuildStrikeStats(
+      [
+        { logistics: logistics("2027-04-24") },
+        { logistics: logistics("2027-04-22") },
+        { logistics: logistics("2027-04-22") },
+      ],
+      EDITION,
+    );
     expect(out.arrivalsByDay).toEqual([
       { date: "2027-04-22", phase: "build", count: 2 },
-      { date: "2027-04-26", phase: "event", count: 1 },
-      { date: "2027-05-03", phase: "strike", count: 1 },
+      { date: "2027-04-23", phase: "build", count: 0 },
+      { date: "2027-04-24", phase: "build", count: 1 },
+    ]);
+  });
+
+  it("crosses a month end and keeps one day per date (12 days, 22 Apr – 3 May)", () => {
+    const out = deriveBuildStrikeStats(
+      [
+        { logistics: logistics("2027-04-22") },
+        { logistics: logistics("2027-05-03") },
+      ],
+      EDITION,
+    );
+    expect(out.arrivalsByDay).toHaveLength(12);
+    expect(out.arrivalsByDay.map((d) => d.date)).toContain("2027-04-30");
+    expect(out.arrivalsByDay.map((d) => d.date)).toContain("2027-05-01");
+    expect(out.arrivalsByDay.reduce((n, d) => n + d.count, 0)).toBe(2);
+  });
+
+  it("is a single day when everyone arrives on the same day", () => {
+    const out = deriveBuildStrikeStats(
+      [
+        { logistics: logistics("2027-04-25") },
+        { logistics: logistics("2027-04-25") },
+      ],
+      EDITION,
+    );
+    expect(out.arrivalsByDay).toEqual([
+      { date: "2027-04-25", phase: "build", count: 2 },
     ]);
   });
 });
