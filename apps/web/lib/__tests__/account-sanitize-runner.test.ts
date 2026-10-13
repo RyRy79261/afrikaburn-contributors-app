@@ -30,11 +30,14 @@ const stubs = vi.hoisted(() => ({
   /** Every (groupId, key) the after-commit quiet delete was called with. */
   lateReceiptDeletes: [] as [string, string][],
   receiptDeleteFails: false,
+  /** What a failing receipt delete throws (an Error unless a test says so). */
+  receiptDeleteThrows: null as unknown,
 }));
 
 vi.mock("@/lib/camp-receipt-blob", () => ({
   deleteReceiptBlob: async (groupId: string, key: string) => {
-    if (stubs.receiptDeleteFails) throw new Error("blob store unreachable");
+    if (stubs.receiptDeleteFails)
+      throw stubs.receiptDeleteThrows ?? new Error("blob store unreachable");
     stubs.receiptDeletes.push([groupId, key]);
   },
   deleteReceiptBlobQuietly: async (groupId: string, key: string) => {
@@ -176,6 +179,7 @@ beforeEach(() => {
   stubs.receiptDeletes = [];
   stubs.lateReceiptDeletes = [];
   stubs.receiptDeleteFails = false;
+  stubs.receiptDeleteThrows = null;
   vi.stubEnv("DATABASE_URL", "postgres://test/quagga");
 });
 
@@ -425,6 +429,38 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(outcome.error).toMatch(/claim receipt/i);
     expect(dbMock.transactions).toBe(0);
     expect(dbMock.writesTo(schema.campClaims)).toHaveLength(0);
+  });
+
+  it("CAMP MONEY: skips a row with no key, and stops on a failure that is not an Error", async () => {
+    const CAMP = "dddddddd-0000-0000-0000-000000000001";
+    dbMock.queue([dueRequest()]);
+    queueErasure({
+      claimReceipts: [
+        { groupId: CAMP, receiptKey: null },
+        { groupId: CAMP, receiptKey: `camp-receipts/${CAMP}/receipt-abc.jpg` },
+      ],
+    });
+    stubs.receiptDeleteFails = true;
+    stubs.receiptDeleteThrows = "store said no";
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe(
+      "Could not delete a claim receipt, so nothing was erased: store said no",
+    );
+    expect(dbMock.transactions).toBe(0);
+  });
+
+  it("CAMP MONEY: a row with no key is never sent to the blob store", async () => {
+    const CAMP = "dddddddd-0000-0000-0000-000000000001";
+    dbMock.queue([dueRequest()]);
+    queueErasure({ claimReceipts: [{ groupId: CAMP, receiptKey: null }] });
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(true);
+    expect(stubs.receiptDeletes).toEqual([]);
   });
 
   it("CAMP MONEY: a receipt that landed before the lock is deleted after commit", async () => {
