@@ -274,6 +274,11 @@ describe("archiveMember — the write", () => {
       schema.membershipLogistics,
       schema.questionnaireResponses,
       schema.notifications,
+      // Camp money (docs/camp-budget-spec.md): a former member keeps their
+      // dues, payments and claims — the books must add up.
+      schema.memberDues,
+      schema.duesPayments,
+      schema.campClaims,
     ]) {
       expect(dbMock.writesTo(table)).toHaveLength(0);
     }

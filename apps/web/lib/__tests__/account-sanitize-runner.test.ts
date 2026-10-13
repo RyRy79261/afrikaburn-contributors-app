@@ -25,6 +25,21 @@ const stubs = vi.hoisted(() => ({
   /** Every (userId, key) the photo-blob delete was called with. */
   avatarDeletes: [] as [string, string][],
   avatarDeleteFails: false,
+  /** Every (groupId, key) a claim-receipt delete was called with. */
+  receiptDeletes: [] as [string, string][],
+  /** Every (groupId, key) the after-commit quiet delete was called with. */
+  lateReceiptDeletes: [] as [string, string][],
+  receiptDeleteFails: false,
+}));
+
+vi.mock("@/lib/camp-receipt-blob", () => ({
+  deleteReceiptBlob: async (groupId: string, key: string) => {
+    if (stubs.receiptDeleteFails) throw new Error("blob store unreachable");
+    stubs.receiptDeletes.push([groupId, key]);
+  },
+  deleteReceiptBlobQuietly: async (groupId: string, key: string) => {
+    stubs.lateReceiptDeletes.push([groupId, key]);
+  },
 }));
 
 vi.mock("@/lib/avatar-store", () => ({
@@ -87,6 +102,10 @@ function queueErasure(
     vacatedWranglers?: unknown[];
     orgMemberships?: unknown[];
     revokedOrgRoles?: unknown[];
+    /** Claim receipts read before the transaction (camp money). */
+    claimReceipts?: unknown[];
+    /** …and re-read under the lock inside it. */
+    lockedReceipts?: unknown[];
   } = {},
 ) {
   const user =
@@ -98,6 +117,7 @@ function queueErasure(
   dbMock.queue(
     [{ memberships: input.memberships ?? 3 }],
     [{ bios: input.bios ?? 1 }],
+    /* claim receipts (camp money, step 1c') */ input.claimReceipts ?? [],
     /* lock the users row FOR UPDATE (step 1c) */ [],
     /* delete profileKeys */ [],
     /* delete emailChangeRequests */ [],
@@ -108,6 +128,12 @@ function queueErasure(
     /* delete shiftAssignments (epic #57) */ [],
     /* cancel hand-on requests to them (epic #57) */ [],
     /* delete wapAllocations (epic #53) */ [],
+    /* claim receipts FOR UPDATE (camp money) */ input.lockedReceipts ??
+      input.claimReceipts ??
+      [],
+    /* clear claim descriptions, notes, receipts */ [],
+    /* clear dues reasons */ [],
+    /* clear payment notes */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -147,6 +173,9 @@ beforeEach(() => {
   stubs.delivered = true;
   stubs.avatarDeletes = [];
   stubs.avatarDeleteFails = false;
+  stubs.receiptDeletes = [];
+  stubs.lateReceiptDeletes = [];
+  stubs.receiptDeleteFails = false;
   vi.stubEnv("DATABASE_URL", "postgres://test/quagga");
 });
 
@@ -336,6 +365,82 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(dbMock.transactions).toBe(0);
     expect(dbMock.writesTo(schema.users)).toHaveLength(0);
     expect(dbMock.writesTo(schema.burnerBios)).toHaveLength(0);
+  });
+
+  it("CAMP MONEY: deletes claim receipts first, clears the words, keeps the amounts", async () => {
+    const CAMP = "dddddddd-0000-0000-0000-000000000001";
+    const key = `camp-receipts/${CAMP}/receipt-abc.jpg`;
+    dbMock.queue([dueRequest()]);
+    queueErasure({ claimReceipts: [{ groupId: CAMP, receiptKey: key }] });
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(true);
+    // The file goes BEFORE the transaction, scoped to its camp.
+    expect(stubs.receiptDeletes).toEqual([[CAMP, key]]);
+    expect(stubs.lateReceiptDeletes).toEqual([]);
+    // The words about the person go; no amount, status or row is touched.
+    const claims = dbMock.writesTo(schema.campClaims);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.tx).toBe(true);
+    expect(claims[0]!.arg("set")).toEqual({
+      description: null,
+      decisionNote: null,
+      receiptKey: null,
+      receiptContentType: null,
+      updatedAt: NOW,
+    });
+    expect(boundStrings(claims[0]!)).toContain(USER);
+    expect(dbMock.writesTo(schema.memberDues)[0]!.arg("set")).toEqual({
+      reason: null,
+      updatedAt: NOW,
+    });
+    expect(dbMock.writesTo(schema.duesPayments)[0]!.arg("set")).toEqual({
+      note: null,
+    });
+    for (const table of [
+      schema.campClaims,
+      schema.memberDues,
+      schema.duesPayments,
+    ]) {
+      expect(
+        dbMock.writesTo(table).filter((q) => q.kind !== "update"),
+      ).toHaveLength(0);
+    }
+  });
+
+  it("CAMP MONEY: erases nothing when a claim receipt cannot be deleted", async () => {
+    const CAMP = "dddddddd-0000-0000-0000-000000000001";
+    dbMock.queue([dueRequest()]);
+    queueErasure({
+      claimReceipts: [
+        { groupId: CAMP, receiptKey: `camp-receipts/${CAMP}/receipt-abc.jpg` },
+      ],
+    });
+    stubs.receiptDeleteFails = true;
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toMatch(/claim receipt/i);
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.writesTo(schema.campClaims)).toHaveLength(0);
+  });
+
+  it("CAMP MONEY: a receipt that landed before the lock is deleted after commit", async () => {
+    const CAMP = "dddddddd-0000-0000-0000-000000000001";
+    const late = `camp-receipts/${CAMP}/receipt-late.pdf`;
+    dbMock.queue([dueRequest()]);
+    queueErasure({
+      claimReceipts: [],
+      lockedReceipts: [{ groupId: CAMP, receiptKey: late }],
+    });
+
+    const outcome = await sanitizeAccount(USER, REQUEST, NOW);
+
+    expect(outcome.ok).toBe(true);
+    expect(stubs.receiptDeletes).toEqual([]);
+    expect(stubs.lateReceiptDeletes).toEqual([[CAMP, late]]);
   });
 
   it("does not touch the blob store when there is no photo", async () => {
