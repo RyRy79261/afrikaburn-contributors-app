@@ -58,9 +58,9 @@ import {
   publicBioView,
   type BioExtras,
   type BurnerBioFields,
-  type PublicBioView,
 } from "./bio";
 import { campmateBioView, type CampmateContext } from "./campmates";
+import { isVisibleToCampMates, isVisibleToPublic } from "./privacy";
 import { isoDateToMs, summariseShifts } from "./shifts";
 import {
   canManageWorkAccessPasses,
@@ -451,7 +451,8 @@ export function buildCampStats(input: CampStatsInput): CampStatsView | null {
   const live = input.current.filter((m) => !m.sanitized);
   const former = input.former.filter((m) => !m.sanitized).length;
   // The roster card's own aggregate, so the two can never disagree on build,
-  // strike, first-timers, bios or former members.
+  // strike, first-timers, bios or former members. It drops deleted accounts
+  // itself; `live` drops them for the figures computed here.
   const roster = deriveCampRosterStats(live, null, former);
 
   let newToCamp = 0;
@@ -480,14 +481,27 @@ export function buildCampStats(input: CampStatsInput): CampStatsView | null {
 
 // --- Per person --------------------------------------------------------------
 
-/** The two bio fields the summary reads, as THIS viewer may see them. */
-export type ParticipationBio = Pick<PublicBioView, "attendedYears" | "skills">;
+/**
+ * The two bio fields the summary reads, as THIS viewer may see them. `null` =
+ * the viewer may not see the field; an empty list = they may, and the bio
+ * records none (a first burn, no skills listed). The two must never be
+ * confused: "not shared" read off an empty-but-shared field reports a privacy
+ * choice the member never made.
+ */
+export interface ParticipationBio {
+  attendedYears: number[] | null;
+  skills: string[] | null;
+}
 
 /**
  * The subject's bio as the viewer may see it — the profile page's own rule:
  * the member themself sees their own; anyone else sees the camp-mate
  * projection when they share a camp and the bio is confirmed, otherwise the
  * public projection. Null when there is no bio this edition.
+ *
+ * The VALUES always come from that projection; whether a field is shown at
+ * all is the same flag predicate the projection itself applies, so this can
+ * never be wider than the profile.
  */
 export function participationBioView(input: {
   ctx: CampmateContext;
@@ -505,10 +519,16 @@ export function participationBioView(input: {
       skills: [...input.bio.fields.skills],
     };
   }
+  const flags = input.bio.privacyFlags;
+  const campmate = campmateBioView(input.ctx, input.bio);
   const view =
-    campmateBioView(input.ctx, input.bio) ??
-    publicBioView(input.bio.fields, input.bio.privacyFlags, input.bio.extras);
-  return { attendedYears: view.attendedYears, skills: view.skills };
+    campmate ?? publicBioView(input.bio.fields, flags, input.bio.extras);
+  const shown = (key: "attendedYears" | "skills") =>
+    campmate ? isVisibleToCampMates(flags, key) : isVisibleToPublic(flags, key);
+  return {
+    attendedYears: shown("attendedYears") ? view.attendedYears : null,
+    skills: shown("skills") ? view.skills : null,
+  };
 }
 
 /**
@@ -563,35 +583,61 @@ export interface MemberParticipationInput {
   /** Every spot the member holds on this camp's shifts, every edition. */
   shifts: readonly ParticipationShiftInput[];
   today: string;
-  /** The subject's row on the most recent SENT onboarding this edition: null
-   * when nothing was sent or it did not reach them. */
+  /** Whether the camp SENT an onboarding this edition at all. */
+  onboardingSent: boolean;
+  /** The subject's row on that onboarding: null when nothing was sent or it
+   * did not reach them (they joined after the send). */
   onboarding: Pick<OnboardingCompletionRow, "status" | "started"> | null;
   passes: {
     /** This edition's list status when the member is on it, else null. */
     thisEdition: WapListStatus | null;
-    /** Earlier edition years the member was on the camp's list. */
-    earlierYears: readonly number[];
+    /** The camp's earlier-edition lists the member was on, with each list's
+     * status — a list that stayed a draft never became a pass. */
+    earlier: readonly { year: number; listStatus: WapListStatus }[];
   };
 }
 
+/**
+ * The member's onboarding this edition, as the summary says it:
+ * a status when they have a live row; `waived` when the lead waived it for
+ * them; `not_targeted` when the camp sent one that did not reach them; null
+ * when the camp sent none at all. Only null may read "none sent".
+ */
+export type ParticipationOnboarding =
+  OnboardingStatus | "waived" | "not_targeted" | null;
+
 export interface MemberParticipation {
-  /** Count of AfrikaBurn years from the bio, or null when the viewer may not
-   * see them or none are recorded. */
+  /** Count of AfrikaBurn years from the bio (0 is a real answer), or null
+   * when the viewer may not see them or there is no bio this edition. */
   burnsAttended: number | null;
   withCampSince: number;
   shiftsHeldThisEdition: number;
   shiftsHeldEarlier: number;
   /** null when no plans are set this edition. */
   buildStrike: { joiningBuild: boolean; joiningStrike: boolean } | null;
-  /** null when no onboarding reached them this edition. */
-  onboarding: OnboardingStatus | null;
+  onboarding: ParticipationOnboarding;
   roles: { structural: MembershipRole; projectRoles: RosterProjectRole[] };
-  /** Skills from the bio, or null when the viewer may not see them / none. */
+  /** Skills from the bio ([] = none listed), or null when the viewer may not
+   * see them or there is no bio this edition. */
   skills: string[] | null;
   passes: {
     thisEdition: WapListStatus | null;
+    /** Whether this viewer would be shown a DRAFT list this edition. When
+     * false, a null `thisEdition` says nothing either way — the member may be
+     * on a draft — so it must never be rendered as "not on the list". About
+     * the viewer, not the subject: it reveals nothing about any list. */
+    draftsVisible: boolean;
+    /** Earlier editions the member was on a list that left draft. */
     earlierYears: number[];
   };
+}
+
+function participationOnboarding(
+  input: Pick<MemberParticipationInput, "onboardingSent" | "onboarding">,
+): ParticipationOnboarding {
+  if (!input.onboardingSent) return null;
+  if (!input.onboarding) return "not_targeted";
+  return onboardingStatusOf(input.onboarding) ?? "waived";
 }
 
 /**
@@ -621,8 +667,8 @@ export function buildMemberParticipation(
     else if (s.editionYear < input.edition.year) earlier += 1;
   }
 
-  const years = input.bio?.attendedYears ?? [];
-  const skills = input.bio?.skills ?? [];
+  const years = input.bio?.attendedYears ?? null;
+  const skills = input.bio?.skills ?? null;
 
   // A draft list is the lead's working copy, not a promise: the member never
   // sees it (`wapOwnPassLine`), and neither does a roster viewer who does not
@@ -636,7 +682,7 @@ export function buildMemberParticipation(
       : input.passes.thisEdition;
 
   return {
-    burnsAttended: years.length > 0 ? years.length : null,
+    burnsAttended: years ? years.length : null,
     withCampSince: campSinceYear({
       membershipCreatedAt: input.subject.membershipCreatedAt,
       logisticsEditionYears: input.logisticsEditionYears,
@@ -651,7 +697,7 @@ export function buildMemberParticipation(
           joiningStrike: input.logistics.joiningStrike,
         }
       : null,
-    onboarding: input.onboarding ? onboardingStatusOf(input.onboarding) : null,
+    onboarding: participationOnboarding(input),
     roles: {
       structural: input.subject.structuralRole,
       projectRoles: input.subject.projectRoles.map((r) => ({
@@ -659,12 +705,20 @@ export function buildMemberParticipation(
         name: r.name,
       })),
     },
-    skills: skills.length > 0 ? [...skills] : null,
+    skills: skills ? [...skills] : null,
     passes: {
       thisEdition: passThisEdition,
+      draftsVisible: seesDraft,
+      // An earlier list that never left draft was never a pass — for anyone,
+      // a pass manager included: that edition is over, so the working copy
+      // was never sent to AfrikaBurn.
       earlierYears: [
         ...new Set(
-          input.passes.earlierYears.filter((y) => y < input.edition.year),
+          input.passes.earlier
+            .filter(
+              (p) => p.year < input.edition.year && p.listStatus !== "draft",
+            )
+            .map((p) => p.year),
         ),
       ].sort((a, b) => a - b),
     },

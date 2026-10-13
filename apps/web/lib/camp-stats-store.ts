@@ -618,6 +618,7 @@ export async function loadMemberParticipation(input: {
 
   const thisEditionPlans = logistics.find((l) => l.editionId === edition.id);
   const thisEditionPass = passes.find((p) => p.year === edition.year);
+  const earlierPasses = passes.filter((p) => p.year < edition.year);
 
   return buildMemberParticipation({
     viewerUserId: input.viewerUserId,
@@ -644,6 +645,7 @@ export async function loadMemberParticipation(input: {
       : null,
     shifts: shiftSpots,
     today: campStatsToday(input.now ?? new Date()),
+    onboardingSent: onboarding != null,
     onboarding: onboardingRow
       ? {
           status: onboardingRow.status,
@@ -653,9 +655,7 @@ export async function loadMemberParticipation(input: {
     passes: {
       thisEdition: (thisEditionPass?.listStatus ??
         null) as WapListStatus | null,
-      earlierYears: passes
-        .filter((p) => p.year < edition.year)
-        .map((p) => p.year),
+      earlier: earlierPasses,
     },
   });
 }

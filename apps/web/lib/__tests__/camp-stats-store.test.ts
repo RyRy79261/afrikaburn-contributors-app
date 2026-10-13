@@ -59,6 +59,7 @@ const LEAD = MembershipRole.enum.lead;
 const MEMBER = MembershipRole.enum.member;
 const GRANTED = WapRequestStatus.enum.granted;
 const APPROVED = WapListStatus.enum.approved;
+const DRAFT = WapListStatus.enum.draft;
 
 const EDITION = {
   id: "eeeeeeee-0000-4000-8000-000000002027",
@@ -385,7 +386,13 @@ describe("loadMemberParticipation", () => {
   });
 
   /** Answers after the group and subject reads, in query order. */
-  function queueDetail(bio: Record<string, unknown> | null) {
+  function queueDetail(
+    bio: Record<string, unknown> | null,
+    passes: { year: number; listStatus: string }[] = [
+      { year: 2027, listStatus: APPROVED },
+      { year: 2026, listStatus: APPROVED },
+    ],
+  ) {
     dbMock.queue(
       [{ id: "r-kitchen", name: "Kitchen wizard" }], // roles
       [
@@ -407,10 +414,7 @@ describe("loadMemberParticipation", () => {
         { date: "2027-04-28", editionYear: 2027 },
         { date: "2026-04-30", editionYear: 2026 },
       ], // shift spots
-      [
-        { year: 2027, listStatus: APPROVED },
-        { year: 2026, listStatus: APPROVED },
-      ], // passes
+      passes, // passes
       bio ? [bio] : [], // bio
     );
   }
@@ -482,8 +486,33 @@ describe("loadMemberParticipation", () => {
     ]);
     expect(out!.passes).toEqual({
       thisEdition: APPROVED,
+      draftsVisible: true,
       earlierYears: [2026],
     });
+  });
+
+  it("an earlier list that stayed a draft is not reported as a pass", async () => {
+    dbMock.queue([CAMP_A], [subjectRow()]);
+    queueDetail(null, [
+      { year: 2026, listStatus: DRAFT },
+      { year: 2025, listStatus: APPROVED },
+    ]);
+    const out = await load(REN);
+    expect(out!.passes.earlierYears).toEqual([2025]);
+  });
+
+  it("an onboarding sent that missed the member, or was waived for them, is not 'none sent'", async () => {
+    stubs.onboardings = [{ activationId: "act-1", title: "W", status: "open" }];
+    dbMock.queue([CAMP_A], [subjectRow()]);
+    queueDetail(null);
+    dbMock.queue([]); // no required-action row: they joined after the send
+    expect((await load(REN))!.onboarding).toBe("not_targeted");
+
+    dbMock.reset();
+    dbMock.queue([CAMP_A], [subjectRow()]);
+    queueDetail(null);
+    dbMock.queue([{ status: "waived", openedAt: null }]);
+    expect((await load(REN))!.onboarding).toBe("waived");
   });
 
   it("a lead who shares the camp sees what the member shared with camp-mates", async () => {

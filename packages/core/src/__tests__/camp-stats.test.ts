@@ -591,7 +591,7 @@ describe("participationBioView — never wider than the profile", () => {
         confirmed: true,
       },
     });
-    expect(view).toEqual({ attendedYears: [], skills: [] });
+    expect(view).toEqual({ attendedYears: null, skills: null });
   });
 
   it("an UNCONFIRMED bio falls back to the public projection only", () => {
@@ -604,9 +604,23 @@ describe("participationBioView — never wider than the profile", () => {
       },
     });
     expect(view).toEqual({
-      attendedYears: [],
+      attendedYears: null,
       skills: ["Cooking", "Carpentry"],
     });
+  });
+
+  it("a shared field that records nothing is an empty list, not a refusal", () => {
+    // A first-timer with no skills listed, both fields shared with
+    // camp-mates: the lead may see them, and the honest answer is "none".
+    const view = participationBioView({
+      ctx: sameCamp(ALICE, REN),
+      bio: {
+        fields: { ...bioFields(), attendedYears: [], skills: [] },
+        privacyFlags: { attendedYears: "camp_mates", skills: "camp_mates" },
+        confirmed: true,
+      },
+    });
+    expect(view).toEqual({ attendedYears: [], skills: [] });
   });
 
   it("without a shared camp, only public fields show", () => {
@@ -627,7 +641,7 @@ describe("participationBioView — never wider than the profile", () => {
         confirmed: true,
       },
     });
-    expect(view).toEqual({ attendedYears: [], skills: [] });
+    expect(view).toEqual({ attendedYears: null, skills: null });
   });
 });
 
@@ -703,8 +717,12 @@ function participation(
     logistics: logistics("2027-04-26"),
     shifts: [],
     today: TODAY,
+    onboardingSent: true,
     onboarding: { status: RA.pending, started: true },
-    passes: { thisEdition: APPROVED, earlierYears: [2026] },
+    passes: {
+      thisEdition: APPROVED,
+      earlier: [{ year: 2026, listStatus: APPROVED }],
+    },
     ...overrides,
   };
 }
@@ -723,7 +741,11 @@ describe("buildMemberParticipation", () => {
         projectRoles: [{ id: "r-kitchen", name: "Kitchen wizard" }],
       },
       skills: ["Cooking"],
-      passes: { thisEdition: APPROVED, earlierYears: [2026] },
+      passes: {
+        thisEdition: APPROVED,
+        draftsVisible: true,
+        earlierYears: [2026],
+      },
     });
   });
 
@@ -782,7 +804,7 @@ describe("buildMemberParticipation", () => {
 
   it("bio figures hidden from the viewer read as null, never as a number", () => {
     const out = buildMemberParticipation(
-      participation({ bio: { attendedYears: [], skills: [] } }),
+      participation({ bio: { attendedYears: null, skills: null } }),
     )!;
     expect(out.burnsAttended).toBeNull();
     expect(out.skills).toBeNull();
@@ -791,16 +813,40 @@ describe("buildMemberParticipation", () => {
     ).toBeNull();
   });
 
+  it("a shared bio that records none reads as 0 burns and no skills, not hidden", () => {
+    const out = buildMemberParticipation(
+      participation({ bio: { attendedYears: [], skills: [] } }),
+    )!;
+    expect(out.burnsAttended).toBe(0);
+    expect(out.skills).toEqual([]);
+  });
+
   it("no plans, no onboarding sent", () => {
     const out = buildMemberParticipation(
-      participation({ logistics: null, onboarding: null }),
+      participation({
+        logistics: null,
+        onboardingSent: false,
+        onboarding: null,
+      }),
     )!;
     expect(out.buildStrike).toBeNull();
     expect(out.onboarding).toBeNull();
   });
 
+  it("an onboarding that was sent but waived or missed them is never 'none sent'", () => {
+    expect(
+      buildMemberParticipation(
+        participation({ onboarding: { status: RA.waived, started: false } }),
+      )!.onboarding,
+    ).toBe("waived");
+    // Joined after the send: the camp sent one, it did not reach them.
+    expect(
+      buildMemberParticipation(participation({ onboarding: null }))!.onboarding,
+    ).toBe("not_targeted");
+  });
+
   it("a draft pass list is shown only to someone who manages passes", () => {
-    const draft = { thisEdition: DRAFT, earlierYears: [] };
+    const draft = { thisEdition: DRAFT, earlier: [] };
     expect(
       buildMemberParticipation(participation({ passes: draft }))!.passes
         .thisEdition,
@@ -831,9 +877,60 @@ describe("buildMemberParticipation", () => {
     expect(
       buildMemberParticipation(
         participation({
-          passes: { thisEdition: null, earlierYears: [2026, 2025, 2026, 2027] },
+          passes: {
+            thisEdition: null,
+            earlier: [
+              { year: 2026, listStatus: APPROVED },
+              { year: 2025, listStatus: APPROVED },
+              { year: 2026, listStatus: APPROVED },
+              { year: 2027, listStatus: APPROVED },
+            ],
+          },
         }),
       )!.passes,
-    ).toEqual({ thisEdition: null, earlierYears: [2025, 2026] });
+    ).toEqual({
+      thisEdition: null,
+      draftsVisible: true,
+      earlierYears: [2025, 2026],
+    });
+  });
+
+  it("an earlier list that stayed a draft was never a pass, for any viewer", () => {
+    const passes = {
+      thisEdition: null,
+      earlier: [
+        { year: 2025, listStatus: APPROVED },
+        { year: 2026, listStatus: DRAFT },
+      ],
+    };
+    // The lead (manages passes), the member themself, and a roster viewer
+    // who does not manage passes all read 2025 only.
+    for (const who of [
+      {},
+      { viewerUserId: JABU, access: memberAccess },
+      { viewerUserId: REN, access: grantedAccess },
+    ]) {
+      expect(
+        buildMemberParticipation(participation({ passes, ...who }))!.passes
+          .earlierYears,
+      ).toEqual([2025]);
+    }
+  });
+
+  it("draftsVisible says whether a null this-edition list can be read as 'not on it'", () => {
+    const passes = { thisEdition: null, earlier: [] };
+    expect(
+      buildMemberParticipation(participation({ passes }))!.passes.draftsVisible,
+    ).toBe(true);
+    expect(
+      buildMemberParticipation(
+        participation({ passes, viewerUserId: JABU, access: memberAccess }),
+      )!.passes.draftsVisible,
+    ).toBe(false);
+    expect(
+      buildMemberParticipation(
+        participation({ passes, viewerUserId: REN, access: grantedAccess }),
+      )!.passes.draftsVisible,
+    ).toBe(false);
   });
 });

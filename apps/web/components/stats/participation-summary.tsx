@@ -1,5 +1,5 @@
 import { History, Info } from "lucide-react";
-import type { MembershipRole, WapListStatus } from "@quagga/types";
+import type { MembershipRole } from "@quagga/types";
 import type { MemberParticipation, OnboardingStatus } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import {
@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { cn } from "@quagga/ui/lib/utils";
+import { onboardingLine, passLine } from "@/lib/participation-lines";
 import { StatTile } from "./stat-tile";
 
 // A member's participation summary (docs/camp-stats-spec.md §Per person):
@@ -28,10 +29,11 @@ const STRUCTURAL_LABEL: Partial<Record<MembershipRole, string>> = {
   member: "Member",
 };
 
-const ONBOARDING_LABEL: Record<OnboardingStatus, string> = {
+const ONBOARDING_LABEL: Record<OnboardingStatus | "waived", string> = {
   completed: "Done",
   in_progress: "In progress",
   not_started: "Not started",
+  waived: "Waived",
 };
 
 function buildStrikeLine(
@@ -45,28 +47,6 @@ function buildStrikeLine(
   if (plans.joiningBuild) return "Joining build";
   if (plans.joiningStrike) return "Joining strike";
   return "Not joining build or strike";
-}
-
-function yearsList(years: readonly number[]): string {
-  if (years.length <= 1) return years.join("");
-  return `${years.slice(0, -1).join(", ")} and ${years[years.length - 1]}`;
-}
-
-function passLine(passes: MemberParticipation["passes"]): string {
-  const earlier = passes.earlierYears;
-  const thisEdition = passes.thisEdition as WapListStatus | null;
-  if (thisEdition) {
-    const on =
-      thisEdition === "draft"
-        ? "On the camp's draft list this edition."
-        : "On the camp's list this edition.";
-    return earlier.length > 0
-      ? `${on} Also held one in ${yearsList(earlier)}.`
-      : on;
-  }
-  if (earlier.length > 0)
-    return `Not on the camp's list this edition. Held one in ${yearsList(earlier)}.`;
-  return "None held with the camp";
 }
 
 function Row({
@@ -109,6 +89,7 @@ export function ParticipationSummary({
   const wide = !self;
   const notShared = self ? "Not in your bio" : "Not shared";
   const structural = STRUCTURAL_LABEL[p.roles.structural] ?? null;
+  const onboarding = onboardingLine(p.onboarding, self);
 
   return (
     <Card data-testid={self ? "your-participation" : "member-participation"}>
@@ -158,16 +139,16 @@ export function ParticipationSummary({
             {buildStrikeLine(p.buildStrike, self)}
           </Row>
           <Row label="Onboarding" wide={wide}>
-            {p.onboarding ? (
+            {"badge" in onboarding ? (
               <Badge
-                variant={p.onboarding === "completed" ? "success" : "secondary"}
+                variant={
+                  onboarding.badge === "completed" ? "success" : "secondary"
+                }
               >
-                {ONBOARDING_LABEL[p.onboarding]}
+                {ONBOARDING_LABEL[onboarding.badge]}
               </Badge>
             ) : (
-              <span className="text-muted-foreground">
-                None sent this edition
-              </span>
+              <span className="text-muted-foreground">{onboarding.text}</span>
             )}
           </Row>
           <Row label="Roles now" wide={wide}>
@@ -181,7 +162,11 @@ export function ParticipationSummary({
             </span>
           </Row>
           <Row label="Skills" wide={wide}>
-            {p.skills ? (
+            {p.skills === null ? (
+              <span className="text-muted-foreground">{notShared}</span>
+            ) : p.skills.length === 0 ? (
+              <span className="text-muted-foreground">None listed</span>
+            ) : (
               <span className="flex flex-wrap gap-1.5">
                 {p.skills.map((skill) => (
                   <Badge key={skill} variant="secondary">
@@ -189,8 +174,6 @@ export function ParticipationSummary({
                   </Badge>
                 ))}
               </span>
-            ) : (
-              <span className="text-muted-foreground">{notShared}</span>
             )}
           </Row>
           <Row label="Work Access Pass" wide={wide}>
