@@ -126,6 +126,9 @@ sleep 2
 # product bug.
 #
 # So: take the ports by pid, and refuse to continue if one will not come free.
+# Only a holder running from THIS checkout is ours to kill. The machine is
+# shared: another project's server on :3000 is refused, never killed.
+REPO_ROOT="$(pwd -P)"
 for port in 3000 3001 3002; do
   for attempt in 1 2 3; do
     # `|| true`: the FREE case is grep finding nothing, which under
@@ -134,6 +137,17 @@ for port in 3000 3001 3002; do
     holders=$(ss -ltnpH "sport = :$port" 2>/dev/null \
       | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true)
     [ -z "$holders" ] && break
+    for pid in $holders; do
+      cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+      case "$cwd/" in
+        "$REPO_ROOT"/*) ;;
+        *)
+          echo "!! :$port is held by pid $pid (${cwd:-unknown dir}), not this checkout."
+          echo "   Refusing to run: stop it yourself or wait for it to finish."
+          exit 1
+          ;;
+      esac
+    done
     if [ "$attempt" = 3 ]; then
       echo "!! :$port is still held by pid(s) $holders after SIGTERM/SIGKILL."
       echo "   Refusing to run: the suite would silently test that server."
