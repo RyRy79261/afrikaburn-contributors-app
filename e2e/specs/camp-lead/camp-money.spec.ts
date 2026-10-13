@@ -182,9 +182,7 @@ test.describe("camp lead — money", () => {
     await plan.getByRole("button", { name: "Save the plan" }).click();
     await expect(plan).toHaveCount(0);
     const totals = leadPage.getByTestId("money-totals");
-    await expect(figure(totals, "Projected spend")).toContainText(
-      "R 8 000,00",
-    );
+    await expect(figure(totals, "Projected spend")).toContainText("R 8 000,00");
 
     // An expense entry moves actual spend.
     await expect(figure(totals, "Actual spend")).toContainText("R 0,00");
@@ -411,6 +409,22 @@ test.describe("camp lead — money", () => {
     }
     await expect(duesRow(keeperPage, memberName)).toBeVisible();
     await expectNoPayControl(keeperPage);
+
+    // ...but not their OWN dues: a custom-role money person can neither set
+    // nor record them (a lead does). Assert the member's action first, so
+    // the absence below is checked against a rendered table.
+    await expect(
+      duesRow(keeperPage, memberName).getByRole("button", {
+        name: `Record money in from ${memberName}`,
+      }),
+    ).toBeVisible();
+    const ownRow = duesRow(keeperPage, keeperName);
+    await expect(ownRow).toContainText("A lead records your own dues.");
+    await expect(
+      ownRow.getByRole("button", {
+        name: `Record money in from ${keeperName}`,
+      }),
+    ).toHaveCount(0);
 
     // A money person's own claim is still not theirs to approve.
     await gotoMoney(keeperPage, camp.slug, "claims");
