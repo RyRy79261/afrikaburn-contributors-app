@@ -1058,6 +1058,12 @@ export async function loadClaimsBoard(
   edition: MoneyEdition,
 ): Promise<ClaimView[] | null> {
   if (!access.isMoneyPerson) return null;
+  // The claims board loads on EVERY money tab (it feeds the Claims badge), so
+  // seeding here means a money person who goes straight to Dues or Claims —
+  // never opening Budget — still gets the starter categories. Without it the
+  // New claim picker was empty, and a category-less claim could not be
+  // approved, because approving asks for a category from that same list.
+  await ensureStarterCategories(access, edition);
   const handle = db();
   const categories = await loadCategories(handle, access.camp.id, edition.id);
   const rows = await handle

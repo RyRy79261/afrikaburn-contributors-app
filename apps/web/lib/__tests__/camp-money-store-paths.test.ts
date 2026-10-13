@@ -417,6 +417,7 @@ describe("loadClaimsBoard", () => {
       createdAt: new Date(),
     });
     dbMock.queue(
+      /* seeded already */ [{ seededAt: new Date() }],
       [category()],
       [
         claim("own", ALICE, SUBMITTED),
@@ -442,6 +443,31 @@ describe("loadClaimsBoard", () => {
       mayDecide: false,
     });
     expect(by("gone").claimantName).toBe(MONEY_DELETED_ACCOUNT);
+  });
+
+  // Regression (e2e camp-money, 14 Oct 2026): a money person who went
+  // straight to Dues or Claims never opened Budget, so the camp had no
+  // categories — the New claim picker was empty and no claim could be
+  // approved. The claims board loads on every money tab, so it seeds.
+  it("writes the starter categories when no money person has opened Budget", async () => {
+    dbMock.queue(
+      /* seeded? */ [],
+      /* insert budget */ [],
+      /* CAS won */ [{ id: "b" }],
+      /* insert categories */ [],
+      /* audit */ [],
+      /* categories */ [category()],
+      /* claims */ [],
+    );
+    const claims = await store.loadClaimsBoard(access(true), EDITION_REF);
+    expect(claims).toEqual([]);
+    expect(dbMock.writesTo(schema.budgetCategories)).toHaveLength(1);
+    expect(dbMock.pending).toBe(0);
+  });
+
+  it("seeds nothing for a member who is not a money person", async () => {
+    expect(await store.loadClaimsBoard(access(false), EDITION_REF)).toBeNull();
+    expect(dbMock.queries).toHaveLength(0);
   });
 });
 
