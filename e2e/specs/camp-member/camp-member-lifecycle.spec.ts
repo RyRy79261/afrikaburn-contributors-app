@@ -52,8 +52,20 @@ test.describe("camp member — lifecycle", () => {
     // who's in their camp (a thing they're allowed to do).
     await expect(memberPage.getByText(leadName)).toBeVisible();
     await expect(memberPage.getByText(memberName)).toBeVisible();
-    await expect(memberPage.getByText("Lead", { exact: true })).toBeVisible();
-    await expect(memberPage.getByText("Member", { exact: true })).toBeVisible();
+    // Each badge scoped to its person's row: the "Your participation" card
+    // names the viewer's own role too.
+    await expect(
+      memberPage
+        .getByRole("listitem")
+        .filter({ hasText: leadName })
+        .getByText("Lead", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      memberPage
+        .getByRole("listitem")
+        .filter({ hasText: memberName })
+        .getByText("Member", { exact: true }),
+    ).toBeVisible();
   });
 
   test("the member's dashboard is read-only — no lead-only management surfaces render", async ({

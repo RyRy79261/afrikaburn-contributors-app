@@ -675,6 +675,33 @@ describe("deriveCampRosterStats", () => {
     expect(stats.total).toBe(4);
   });
 
+  it("a deleted (sanitised) account counts in nothing, like the stats page", () => {
+    // The roster still LISTS the row; the card must agree with the camp stats
+    // page, which calls this same function.
+    const withDeleted = ROSTER.map((m) =>
+      m.userId === ALICE
+        ? {
+            ...m,
+            sanitized: true,
+            logistics: {
+              joiningBuild: true,
+              joiningStrike: true,
+              arrivalDate: null,
+              departureDate: null,
+            },
+          }
+        : m,
+    );
+    const before = deriveCampRosterStats(ROSTER, null);
+    const stats = deriveCampRosterStats(withDeleted, null);
+    expect(stats.total).toBe(before.total - 1);
+    expect(stats.newcomers + stats.returning + stats.unknown).toBe(
+      before.total - 1,
+    );
+    expect(stats.joiningBuild).toBe(0);
+    expect(stats.joiningStrike).toBe(0);
+  });
+
   it("counts build and strike from members' own logistics", () => {
     const withPlans = ROSTER.map((m, i) => ({
       ...m,

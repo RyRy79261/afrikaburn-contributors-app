@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { activeMembership, formerMembership } from "@quagga/db";
 import {
   buildCampRoster,
@@ -170,6 +170,7 @@ async function loadRosterMembers(
         sanitizedAt: row.sanitizedAt,
       }),
       username: sanitized ? null : (row.username ?? null),
+      sanitized,
       structuralRole: row.role,
       projectRoles,
       // Belt and braces with the join above: never a former member's bio.
@@ -202,12 +203,20 @@ function filterableRoles(roles: readonly ProjectRole[]): RosterProjectRole[] {
 }
 
 /** How many former (archived) members the camp has — a count for the stats
- * card, nothing more. */
+ * card, nothing more. A deleted (sanitised) account counts in nothing, the
+ * same rule the camp stats page applies (`deriveCampRosterStats`). */
 async function countFormerMembers(groupId: string): Promise<number> {
   const [row] = await db()
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.memberships)
-    .where(and(eq(schema.memberships.groupId, groupId), formerMembership()));
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .where(
+      and(
+        eq(schema.memberships.groupId, groupId),
+        formerMembership(),
+        isNull(schema.users.sanitizedAt),
+      ),
+    );
   return row?.count ?? 0;
 }
 

@@ -188,7 +188,13 @@ test.describe("camp lead — structural backstop (no self-lockout)", () => {
     ).toBeVisible();
     // And on the dashboard they are still the Lead.
     await webPage.goto(`/camps/${camp.slug}`);
-    await expect(webPage.getByText("Lead", { exact: true })).toBeVisible();
+    // Scoped to the row: the "Your participation" card names the role too.
+    await expect(
+      webPage
+        .getByRole("listitem")
+        .filter({ hasText: "(you)" })
+        .getByText("Lead", { exact: true }),
+    ).toBeVisible();
     await expect(webPage.getByText("(you)")).toBeVisible();
   });
 
@@ -215,7 +221,13 @@ test.describe("camp lead — structural backstop (no self-lockout)", () => {
       leadPage.getByText(/transfer the lead role before leaving/i),
     ).toBeVisible();
     await leadPage.goto(`/camps/${camp.slug}`);
-    await expect(leadPage.getByText("Lead", { exact: true })).toBeVisible();
+    // Scoped to the row: the "Your participation" card names the role too.
+    await expect(
+      leadPage
+        .getByRole("listitem")
+        .filter({ hasText: "(you)" })
+        .getByText("Lead", { exact: true }),
+    ).toBeVisible();
     await expect(leadPage.getByText("(you)")).toBeVisible();
   });
 });

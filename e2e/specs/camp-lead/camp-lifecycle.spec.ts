@@ -39,7 +39,13 @@ test.describe("camp lead — create & become lead", () => {
     // lead, not merely that a create link existed.
     await expect(webPage.getByText(leadName)).toBeVisible();
     await expect(webPage.getByText("(you)")).toBeVisible();
-    await expect(webPage.getByText("Lead", { exact: true })).toBeVisible();
+    // Scoped to the row: the "Your participation" card names the role too.
+    await expect(
+      webPage
+        .getByRole("listitem")
+        .filter({ hasText: "(you)" })
+        .getByText("Lead", { exact: true }),
+    ).toBeVisible();
 
     // Lead-only surfaces are present for the lead (their counter-proof lives in
     // the camp-member forbidden suite): invites + role management + registration.

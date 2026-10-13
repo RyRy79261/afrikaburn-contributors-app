@@ -287,11 +287,13 @@ describe("loadCampRoster — an authorised viewer", () => {
     expect(gone.username).toBeNull();
     expect(gone.bioStatus).toBe("none");
 
+    // The departed account LISTS (above) but counts in no figure — the same
+    // rule as the camp stats page this card links to.
     expect(page!.stats).toMatchObject({
-      total: 3,
+      total: 2,
       newcomers: 1,
       returning: 1,
-      unknown: 1,
+      unknown: 0,
       biosComplete: 1,
     });
     // Baseline is not a filter option; officer and custom roles are.
@@ -337,7 +339,7 @@ describe("loadCampRoster — an authorised viewer", () => {
     });
     expect(page!.filter.bio).toBe("complete");
     expect(page!.roster.rows.map((r) => r.userId)).toEqual([ALICE]);
-    expect(page!.stats.total).toBe(3);
+    expect(page!.stats.total).toBe(2); // the departed account counts nowhere
   });
 
   it("filters by a project role of this camp", async () => {
@@ -408,9 +410,13 @@ describe("loadCampRoster — former members", () => {
     expect(nullChecksOn(reads[1]!, schema.memberships.archivedAt)).toEqual([
       "is not null",
     ]);
+    // A former member whose account was deleted is not counted as former.
+    expect(nullChecksOn(reads[1]!, schema.users.sanitizedAt)).toEqual([
+      "is null",
+    ]);
     expect(stubs.assignmentStatuses).toEqual(["current"]);
     expect(page!.stats.former).toBe(2);
-    expect(page!.stats.total).toBe(3);
+    expect(page!.stats.total).toBe(2); // the departed account counts nowhere
   });
 
   it("status=former lists the FORMER rows, with their roles held, and keeps stats on the camp", async () => {
@@ -438,7 +444,7 @@ describe("loadCampRoster — former members", () => {
       { id: KITCHEN, name: "Kitchen" },
     ]);
     // The card still describes the CURRENT camp.
-    expect(page!.stats.total).toBe(3);
+    expect(page!.stats.total).toBe(2); // the departed account counts nowhere
     expect(page!.stats.former).toBe(1);
 
     const reads = membershipReads();
