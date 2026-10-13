@@ -3,7 +3,7 @@
 | Field                  | Value                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                                         |
-| **Doc status**         | Draft — for review before build                                                          |
+| **Doc status**         | Active                                                                                   |
 | **Normative language** | Descriptive only                                                                         |
 | **Requirement IDs**    | Partial — App Spec §9 `WAP-001`, `WAP-003`–`WAP-009`, `WAP-011`, `WAP-012`, `WAP-014`, `WAP-015` |
 | **Owner / Updated**    | Ryan, 2026-10-12 (epic #53)                                                              |
@@ -101,8 +101,11 @@ an empty cell).
 
 ## Org (`apps/org`, domain `registrations`)
 
-- **Open / close WAP requests** for the edition (`update`), next to the
-  registration window settings.
+- **Open / close WAP requests** for the edition (`update`), in the edition bar
+  of `/registrations/passes` (the console has no edition-settings screen).
+  Opening notifies the leads and co-leads of every project whose registration
+  is submitted, under review, changes requested or approved — on every opening,
+  a reopen included.
 - Registration review gets a **Work Access Passes** panel: each request with
   Grant (a number, default the amount asked) or Decline (`update`), total
   granted, list status, the names with arrival, departure,
