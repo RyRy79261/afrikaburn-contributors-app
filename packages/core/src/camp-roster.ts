@@ -343,6 +343,9 @@ export interface RosterMemberInput {
   bio: { completedAt: Date | null; firstTime: boolean } | null;
   /** This edition's logistics, or null when the member has set none. */
   logistics: MemberLogistics | null;
+  /** Deleted account (`users.sanitized_at` set). The row still LISTS (as a
+   * departed account, so a lead can archive it) but counts in no aggregate. */
+  sanitized?: boolean;
 }
 
 /** One roster row, as the page and the export read it. */
@@ -601,12 +604,20 @@ export interface CampRosterStats {
  * New/returning read the first-time flag of this edition's bio row whether or
  * not it is confirmed — the flag is a fact about the person, not a privacy
  * choice, and it never leaves this function except as a count.
+ *
+ * A deleted (sanitised) account counts in nothing — here, so the roster card
+ * and the camp stats page (which both call this) can never disagree.
+ * `formerCount` must already exclude them (the loaders' count does).
  */
 export function deriveCampRosterStats(
-  members: readonly Pick<RosterMemberInput, "bio" | "logistics">[],
+  allMembers: readonly Pick<
+    RosterMemberInput,
+    "bio" | "logistics" | "sanitized"
+  >[],
   officers: OutstandingOfficers | null,
   formerCount = 0,
 ): CampRosterStats {
+  const members = allMembers.filter((m) => !m.sanitized);
   let newcomers = 0;
   let returning = 0;
   let unknown = 0;
