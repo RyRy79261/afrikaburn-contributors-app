@@ -624,32 +624,41 @@ export default async function CampPage({
             </CardContent>
           </Card>
 
-          {/* The member's own Work Access Pass (epic #53). */}
-          {ownPassLine && <OwnPassLine line={ownPassLine} />}
-
-          {/* The member's own build/strike/arrival/departure (epic #55). */}
-          {myLogistics !== undefined && (
-            <MyLogisticsCard
-              slug={camp.slug}
-              initial={myLogistics ?? emptyMemberLogistics()}
-              window={logisticsWindow(edition)}
-              saveAction={saveMyLogisticsAction}
-            />
+          {/* The member's own Work Access Pass (epic #53). Top-aligned: a
+              one-line strip, never stretched to the height of its row. */}
+          {ownPassLine && (
+            <div className="lg:self-start">
+              <OwnPassLine line={ownPassLine} />
+            </div>
           )}
 
-          {/* The member's own participation summary (camp stats, frame C3) —
-              under Your plans, for them alone. */}
-          {ownParticipation && (
-            <ParticipationSummary
-              participation={ownParticipation}
-              audience="self"
-              campName={camp.name}
-            />
+          {/* The member's own build/strike/arrival/departure (epic #55), and
+              under it their participation summary (camp stats, frame C3 —
+              for them alone). One column, so the tall summary stacks below
+              Your plans instead of stretching the cards beside it. */}
+          {(myLogistics !== undefined || ownParticipation) && (
+            <div className="flex flex-col gap-6">
+              {myLogistics !== undefined && (
+                <MyLogisticsCard
+                  slug={camp.slug}
+                  initial={myLogistics ?? emptyMemberLogistics()}
+                  window={logisticsWindow(edition)}
+                  saveAction={saveMyLogisticsAction}
+                />
+              )}
+              {ownParticipation && (
+                <ParticipationSummary
+                  participation={ownParticipation}
+                  audience="self"
+                  campName={camp.name}
+                />
+              )}
+            </div>
           )}
 
           {/* Questionnaires — lead/admin only */}
           {isAdmin && (
-            <Card>
+            <Card className="lg:self-start">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ClipboardList className="h-4 w-4 text-accent" aria-hidden />
@@ -677,7 +686,7 @@ export default async function CampPage({
 
           {/* Announcements — lead/admin, or anyone granted post_announcements */}
           {canPostAnnouncements && (
-            <Card>
+            <Card className="lg:self-start">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Megaphone className="h-4 w-4 text-accent" aria-hidden />

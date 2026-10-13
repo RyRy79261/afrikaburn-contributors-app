@@ -67,15 +67,21 @@ function SectionHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <CardHeader className="pb-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {icon}
-          {title}
-        </CardTitle>
-        {action && <div className="order-last sm:order-none">{action}</div>}
-      </div>
-      <CardDescription>{description}</CardDescription>
+    // On a phone the link follows the description (frame oaV8b); from `sm`
+    // up it sits on the title's row, right-aligned (frame b7zfxq).
+    <CardHeader className="pb-4 sm:grid sm:grid-cols-[1fr_auto] sm:items-start sm:gap-x-4 sm:gap-y-1.5 sm:space-y-0">
+      <CardTitle className="flex items-center gap-2 text-base">
+        {icon}
+        {title}
+      </CardTitle>
+      <CardDescription className="sm:col-span-2 sm:row-start-2">
+        {description}
+      </CardDescription>
+      {action && (
+        <div className="pt-2 sm:col-start-2 sm:row-start-1 sm:pt-0">
+          {action}
+        </div>
+      )}
     </CardHeader>
   );
 }
@@ -334,7 +340,7 @@ function ArrivalsChart({
   return (
     <div className="overflow-x-auto">
       <ol
-        className="flex min-w-fit items-end gap-2 border-b border-border sm:gap-3"
+        className="flex min-w-fit items-end gap-1 border-b border-border sm:gap-3"
         aria-label="Arrivals per day"
       >
         {days.map((d) => {
@@ -342,14 +348,20 @@ function ArrivalsChart({
           return (
             <li
               key={d.date}
-              className="flex min-w-12 flex-1 flex-col items-center gap-1.5"
+              className="flex min-w-10 flex-1 flex-col items-center gap-1.5 sm:min-w-12"
               aria-label={`${label.long}, ${d.phase}: ${plural(d.count, "arrival", "arrivals")}`}
             >
-              <span className="text-xs font-semibold tabular-nums" aria-hidden>
+              <span
+                className={cn(
+                  "text-xs font-semibold tabular-nums",
+                  d.count === 0 && "text-muted-foreground",
+                )}
+                aria-hidden
+              >
                 {d.count}
               </span>
               <span
-                className="w-full max-w-16 rounded-t-sm bg-primary"
+                className="w-2/3 max-w-16 rounded-t-sm bg-primary"
                 style={{ height: `${Math.round((d.count / max) * 96)}px` }}
                 aria-hidden
               />
@@ -357,13 +369,13 @@ function ArrivalsChart({
           );
         })}
       </ol>
-      <ol className="flex min-w-fit gap-2 pt-1.5 sm:gap-3" aria-hidden>
+      <ol className="flex min-w-fit gap-1 pt-1.5 sm:gap-3" aria-hidden>
         {days.map((d) => (
           <li
             key={d.date}
-            className="flex min-w-12 flex-1 flex-col items-center text-center"
+            className="flex min-w-10 flex-1 flex-col items-center text-center sm:min-w-12"
           >
-            <span className="text-xs font-medium">
+            <span className="whitespace-nowrap text-[11px] font-medium sm:text-xs">
               {shiftDateLabel(d.date).short}
             </span>
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -410,6 +422,7 @@ function BuildStrikeSection({
             label="Arrival not set"
             value={buildStrike.arrivalNotSet}
             hint="No arrival date yet"
+            className="col-span-2 sm:col-span-1"
           />
         </div>
         {buildStrike.arrivalsByDay.length > 0 && (
