@@ -45,16 +45,20 @@ import {
 } from "@/lib/roles-store";
 import {
   canManageShifts,
+  canManageWorkAccessPasses,
   canViewCampPlacement,
   canViewCampRoster,
   emptyMemberLogistics,
   hasProjectPermission,
   logisticsWindow,
   projectQuestionnairesPath,
+  wapOwnPassLine,
 } from "@quagga/core";
 import { getOwnLogistics } from "@/lib/roster-store";
 import { getShiftTileSummary } from "@/lib/shifts-store";
 import { ShiftsTile } from "@/components/shifts/shifts-tile";
+import { getOwnWapPass, getWapTileSummary } from "@/lib/wap-store";
+import { OwnPassLine, PassesTile } from "@/components/passes/passes-tile";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -150,8 +154,12 @@ export default async function CampPage({
       structuralRole: camp.viewerRole!,
       rolePermissions: [],
     });
+  // Work Access Passes (epic #53): the tile is for the project's leads and
+  // co-leads, the same rule the Passes page and its actions enforce.
+  const viewerManagesPasses =
+    isMember && canManageWorkAccessPasses({ structuralRole: camp.viewerRole! });
 
-  // Eleven independent reads, issued together rather than one after another.
+  // Thirteen independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
@@ -173,6 +181,8 @@ export default async function CampPage({
     placement,
     myLogistics,
     shiftSummary,
+    passSummary,
+    ownPass,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -212,7 +222,20 @@ export default async function CampPage({
           canManage: viewerManagesShifts,
         })
       : null,
+    // Work Access Passes (epic #53): counts for the leads' tile, and the
+    // viewer's OWN pass — never anyone else's.
+    viewerManagesPasses ? getWapTileSummary(camp.id, edition.id) : null,
+    campUser && isMember
+      ? getOwnWapPass({
+          groupId: camp.id,
+          editionId: edition.id,
+          userId: campUser.id,
+        })
+      : null,
   ]);
+  const ownPassLine = ownPass
+    ? wapOwnPassLine(ownPass.listStatus, ownPass.onList)
+    : null;
 
   const baselineRole = roles.find((r) => r.kind === "baseline");
   const memberVMs = camp.members.map((m) => {
@@ -565,6 +588,9 @@ export default async function CampPage({
             </CardContent>
           </Card>
 
+          {/* The member's own Work Access Pass (epic #53). */}
+          {ownPassLine && <OwnPassLine line={ownPassLine} />}
+
           {/* The member's own build/strike/arrival/departure (epic #55). */}
           {myLogistics !== undefined && (
             <MyLogisticsCard
@@ -688,6 +714,14 @@ export default async function CampPage({
                 slug={camp.slug}
                 canManage={viewerManagesShifts}
                 summary={shiftSummary}
+              />
+            )}
+            {/* Work Access Passes (epic #53) — leads and co-leads. */}
+            {passSummary && (
+              <PassesTile
+                slug={camp.slug}
+                kind={camp.kind}
+                summary={passSummary}
               />
             )}
             {/*

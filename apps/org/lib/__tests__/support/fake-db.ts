@@ -200,6 +200,12 @@ export class FakeDb {
     );
   }
 
+  /** `selectDistinct` records as a `select` — the fake cannot de-duplicate,
+   * and nothing here asserts on it doing so. */
+  selectDistinct(projection?: Record<string, unknown>) {
+    return this.select(projection);
+  }
+
   insert(table: Table) {
     return this.start("insert", getTableName(table));
   }

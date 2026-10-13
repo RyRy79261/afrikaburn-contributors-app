@@ -126,6 +126,9 @@ sleep 2
 # product bug.
 #
 # So: take the ports by pid, and refuse to continue if one will not come free.
+# Only a holder running from THIS checkout is ours to kill. The machine is
+# shared: another project's server on :3000 is refused, never killed.
+REPO_ROOT="$(pwd -P)"
 for port in 3000 3001 3002; do
   for attempt in 1 2 3; do
     # `|| true`: the FREE case is grep finding nothing, which under
@@ -134,6 +137,17 @@ for port in 3000 3001 3002; do
     holders=$(ss -ltnpH "sport = :$port" 2>/dev/null \
       | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true)
     [ -z "$holders" ] && break
+    for pid in $holders; do
+      cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+      case "$cwd/" in
+        "$REPO_ROOT"/*) ;;
+        *)
+          echo "!! :$port is held by pid $pid (${cwd:-unknown dir}), not this checkout."
+          echo "   Refusing to run: stop it yourself or wait for it to finish."
+          exit 1
+          ;;
+      esac
+    done
     if [ "$attempt" = 3 ]; then
       echo "!! :$port is still held by pid(s) $holders after SIGTERM/SIGKILL."
       echo "   Refusing to run: the suite would silently test that server."
@@ -144,6 +158,24 @@ for port in 3000 3001 3002; do
     sleep 2
   done
 done
+
+# THE APPS RUN IN THEIR OWN SESSION, and that session is how they are stopped.
+#
+# `setsid` makes the launched command a session (and process-group) leader, so
+# every process it spawns — pnpm, turbo, each `next`, the `next-server` that
+# renames itself and actually holds the port — carries THIS run's session id
+# for life, whoever re-parents it. Cleanup then kills that session and nothing
+# else. (No `setsid` binary, e.g. macOS: perl's POSIX::setsid does the same.)
+# `exec`, because `start_detached … &` runs in a subshell and `$!` is THAT
+# pid: the session leader has to be the subshell itself. It is not a group
+# leader (no job control here), so setsid(1) does not fork either.
+start_detached() {
+  if command -v setsid >/dev/null 2>&1; then
+    exec setsid "$@"
+  else
+    exec perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die "exec: $!"' "$@"
+  fi
+}
 
 if [ "$E2E_SERVE" = "build" ]; then
   # Each app's `build` also runs `db:migrate:deploy` first. That is three extra
@@ -161,10 +193,10 @@ if [ "$E2E_SERVE" = "build" ]; then
       echo "!! build failed:"; tail -30 "$LOG_DIR/build.log"; exit 1; }
   # `start` is not a turbo task — run each app's own script directly. One log,
   # so a failure in any of the three is visible in the same place as before.
-  ( pnpm --filter @quagga/web start & \
-    pnpm --filter @quagga/org start & \
-    pnpm --filter @quagga/suppliers start & \
-    wait ) > "$LOG_DIR/dev.log" 2>&1 &
+  start_detached bash -c 'pnpm --filter @quagga/web start &
+    pnpm --filter @quagga/org start &
+    pnpm --filter @quagga/suppliers start &
+    wait' > "$LOG_DIR/dev.log" 2>&1 &
   DEV_PID=$!
 else
   # `.next/dev` GOES TOO, and this is not housekeeping — it is damage control.
@@ -185,10 +217,40 @@ else
   # this line. Both are needed — the exclusion stops it being copied, this stops
   # it accumulating in the first place.
   rm -rf apps/*/.next/cache apps/*/.next/dev
-  pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
+  start_detached pnpm dev > "$LOG_DIR/dev.log" 2>&1 &
   DEV_PID=$!
 fi
-trap 'kill $DEV_PID 2>/dev/null || true; pkill -f "next dev" >/dev/null 2>&1 || true; pkill -f "next start" >/dev/null 2>&1 || true' EXIT
+
+# Every live pid in this run's app session (DEV_PID is its leader and id).
+session_pids() {
+  ps -eo pid=,sid= 2>/dev/null | awk -v s="$DEV_PID" '$2 == s { print $1 }'
+}
+
+# STOP ONLY WHAT THIS RUN STARTED — this session, plus the port holders
+# recorded once the apps were up (OUR_PORT_PIDS, below), each only if it is
+# still the same process (same start time).
+#
+# It used to `pkill -f "next dev"` (every Next server on the machine), and then
+# killed whoever held 3000-3002 at cleanup time. On a shared machine that is
+# whichever project grabbed a port after our server exited — not ours to kill.
+OUR_PORT_PIDS=()
+stop_apps() {
+  local pids=() p
+  mapfile -t pids < <(session_pids)
+  for p in "${OUR_PORT_PIDS[@]}"; do
+    local pid="${p%%:*}" started="${p#*:}"
+    [ "$(ps -o lstart= -p "$pid" 2>/dev/null)" = "$started" ] && pids+=("$pid")
+  done
+  [ "${#pids[@]}" -eq 0 ] && return 0
+  kill "${pids[@]}" 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    mapfile -t pids < <(session_pids)
+    [ "${#pids[@]}" -eq 0 ] && return 0
+    sleep 1
+  done
+  kill -9 "${pids[@]}" 2>/dev/null || true
+}
+trap stop_apps EXIT
 
 # FAIL IF AN APP NEVER COMES UP. This loop used to fall through silently after
 # 120s, and the suite then ran against a dead port: every spec failed on a
@@ -209,6 +271,22 @@ for port in 3000 3001 3002; do
     tail -30 "$LOG_DIR/dev.log"
     exit 1
   fi
+done
+
+# WHO ANSWERED? The ports were free before the apps started, but "something
+# answered :3000" is not "our server answered". Each holder must be in this
+# run's session; record it (with its start time, so a recycled pid is never
+# mistaken for it) for cleanup.
+for port in 3000 3001 3002; do
+  for pid in $(ss -ltnpH "sport = :$port" 2>/dev/null \
+      | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true); do
+    if [ "$(ps -o sid= -p "$pid" 2>/dev/null | tr -d ' ')" != "$DEV_PID" ]; then
+      echo "!! :$port is held by pid $pid, which this run did not start."
+      echo "   Refusing to run: the suite would silently test that server."
+      exit 1
+    fi
+    OUR_PORT_PIDS+=("$pid:$(ps -o lstart= -p "$pid")")
+  done
 done
 
 if grep -qi "module not found" "$LOG_DIR/dev.log"; then
@@ -246,5 +324,10 @@ if [ -n "${E2E_SHARD:-}" ]; then
   SHARD_ARGS+=("--shard=$E2E_SHARD")
 fi
 
-exec pnpm exec playwright test "${PROJECT_ARGS[@]}" "${SHARD_ARGS[@]}" \
-  --workers="${E2E_WORKERS:-2}" "$@"
+# NOT `exec`. Replacing the shell discards the EXIT trap, so `stop_apps` never
+# ran: every run left its three dev servers up, and they inherit the fd of a
+# `flock /tmp/quagga-e2e.lock` wrapper, so the NEXT locked run waited forever.
+status=0
+pnpm exec playwright test "${PROJECT_ARGS[@]}" "${SHARD_ARGS[@]}" \
+  --workers="${E2E_WORKERS:-2}" "$@" || status=$?
+exit "$status"

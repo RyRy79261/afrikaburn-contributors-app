@@ -88,6 +88,15 @@ describe("projectColumnsToCard", () => {
     expect(p.title).toHaveLength(0);
   });
 
+  it("routes a detail column to its own slot, never a labelled pair", () => {
+    const p = projectColumnsToCard<Row>([
+      { id: "sound", header: "Sound", cell: (r) => r.sound },
+      { id: "flags", header: "Flags", role: "detail", cell: () => "flag" },
+    ]);
+    expect(p.details.map((c) => c.id)).toEqual(["flags"]);
+    expect(p.pairs.map((c) => c.id)).toEqual(["sound"]);
+  });
+
   it("preserves declaration order within a slot", () => {
     const p = projectColumnsToCard<Row>([
       { id: "a", header: "A", cell: () => "a" },
@@ -134,6 +143,45 @@ describe("ResponsiveDataTable", () => {
     expect(within(cards).getByText("Medium")).toBeDefined();
     // Title value is present in the card list.
     expect(within(cards).getByText("Camp 404")).toBeDefined();
+  });
+
+  it("renders a detail column in the card without its header as a label", () => {
+    render(
+      <ResponsiveDataTable
+        columns={[
+          ...columns,
+          {
+            id: "flags",
+            header: "Flags",
+            role: "detail",
+            cell: (r) => `Flag for ${r.name}`,
+          },
+        ]}
+        data={rows}
+        getRowKey={(r) => r.id}
+      />,
+    );
+    const cards = screen.getByRole("list");
+    expect(within(cards).getByText("Flag for Camp 404")).toBeDefined();
+    // The header labels the desktop column only.
+    expect(within(cards).queryByText("Flags")).toBeNull();
+    expect(within(screen.getByRole("table")).getByText("Flags")).toBeDefined();
+  });
+
+  it("lays the pairs out as a grid when cardPairsLayout is grid", () => {
+    render(
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+        cardPairsLayout="grid"
+      />,
+    );
+    const cards = screen.getByRole("list");
+    // Still labelled, once per card.
+    expect(within(cards).getAllByText("Sound")).toHaveLength(rows.length);
+    const dl = within(cards).getAllByText("Sound")[0]!.closest("dl");
+    expect(dl?.getAttribute("data-layout")).toBe("grid");
   });
 
   it("omits mobileHidden columns from the card list entirely", () => {

@@ -41,4 +41,7 @@ export const NOTIFICATION_SOURCE_LABELS: Record<NotificationKind, string> = {
   // Never written to an org inbox (camp shifts are a participant-app
   // feature); present because the map is exhaustive over the kind.
   shift: "Shifts",
+  // Never written to an org inbox either (pass notices go to project leads
+  // and pass holders in the participant app).
+  wap: "Work Access Passes",
 };

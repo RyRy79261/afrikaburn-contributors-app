@@ -21,7 +21,6 @@ import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
 import {
-  NumberField,
   RadioChoiceGroup,
   YesNoField,
 } from "@/components/registration/field-kit";
@@ -57,8 +56,6 @@ export interface VehicleFormInitialValues {
   flameEffects: boolean | null;
   nightDriving: boolean | null;
   acks: VehicleAckKey[];
-  /** Work Access Passes requested (null = not asked). */
-  workAccessPasses: number | null;
   /** This edition's safety documents (lead/admin-only prefill). */
   safetyDocuments: SafetyDocumentValue[];
 }
@@ -306,9 +303,6 @@ export function VehicleRegistrationForm({
   const [acks, setAcks] = React.useState<VehicleAckKey[]>(
     initialValues?.acks ?? [],
   );
-  const [workAccessPasses, setWorkAccessPasses] = React.useState<number | null>(
-    initialValues?.workAccessPasses ?? null,
-  );
   const [safetyDocuments, setSafetyDocuments] = React.useState<
     SafetyDocumentValue[]
   >(initialValues?.safetyDocuments ?? []);
@@ -336,7 +330,6 @@ export function VehicleRegistrationForm({
         flameEffects,
         nightDriving,
         acks,
-        workAccessPasses,
         safetyDocuments,
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
@@ -476,20 +469,12 @@ export function VehicleRegistrationForm({
         <Callout>{EBIKE_NOTE}</Callout>
       </Section>
 
-      {/* 6 — Crew access & safety (CREATIVE-014, CREATIVE-017) */}
+      {/* 6 — Safety (CREATIVE-017; WAPs moved to the Passes page, epic #53) */}
       <Section
         index={6}
-        title="Crew access & safety"
-        description="Early-access passes for your build crew, and the safety paperwork that backs this vehicle."
+        title="Safety"
+        description="The safety paperwork that backs this vehicle. Work Access Passes for your build crew are asked for on the project's Passes page once AfrikaBurn opens requests."
       >
-        <NumberField
-          id="mv-waps"
-          label="Work Access Passes (optional)"
-          hint="Requested WAPs for your build crew's early access — allocated separately by AfrikaBurn, exactly as for theme camps."
-          value={workAccessPasses}
-          onChange={setWorkAccessPasses}
-          onCommit={() => undefined}
-        />
         <SafetyDocumentsField
           idPrefix="mv"
           value={safetyDocuments}

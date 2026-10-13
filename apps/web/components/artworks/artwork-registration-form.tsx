@@ -20,11 +20,7 @@ import { Field } from "@quagga/ui/components/field";
 import { Input } from "@quagga/ui/components/input";
 import { TextareaWithCount } from "@quagga/ui/components/textarea-with-count";
 import { toast } from "@quagga/ui/components/toast";
-import {
-  CheckGroup,
-  NumberField,
-  YesNoField,
-} from "@/components/registration/field-kit";
+import { CheckGroup, YesNoField } from "@/components/registration/field-kit";
 import {
   SafetyDocumentsField,
   type SafetyDocumentValue,
@@ -58,8 +54,6 @@ export interface ArtworkFormInitialValues {
   buildPlan: string;
   strikePlan: string;
   grantInterest: boolean;
-  /** Work Access Passes requested (null = not asked). */
-  workAccessPasses: number | null;
   /** This edition's safety documents (lead/admin-only prefill). */
   safetyDocuments: SafetyDocumentValue[];
 }
@@ -356,9 +350,6 @@ export function ArtworkRegistrationForm({
   const [grantInterest, setGrantInterest] = React.useState(
     initialValues?.grantInterest ?? false,
   );
-  const [workAccessPasses, setWorkAccessPasses] = React.useState<number | null>(
-    initialValues?.workAccessPasses ?? null,
-  );
   const [safetyDocuments, setSafetyDocuments] = React.useState<
     SafetyDocumentValue[]
   >(initialValues?.safetyDocuments ?? []);
@@ -385,7 +376,6 @@ export function ArtworkRegistrationForm({
         buildPlan: buildPlan.trim() || undefined,
         strikePlan: strikePlan.trim() || undefined,
         grantInterest,
-        workAccessPasses,
         safetyDocuments,
         submit: shouldSubmit,
         confirmWarnings: awaitingConfirm,
@@ -583,20 +573,12 @@ export function ArtworkRegistrationForm({
         </Field>
       </Section>
 
-      {/* 5 — Crew access & safety (CREATIVE-014, CREATIVE-017) */}
+      {/* 5 — Safety (CREATIVE-017; WAPs moved to the Passes page, epic #53) */}
       <Section
         index={5}
-        title="Crew access & safety"
-        description="Early-access passes for your build crew, and the safety paperwork that backs this artwork."
+        title="Safety"
+        description="The safety paperwork that backs this artwork. Work Access Passes for your build crew are asked for on the project's Passes page once AfrikaBurn opens requests."
       >
-        <NumberField
-          id="art-waps"
-          label="Work Access Passes (optional)"
-          hint="Requested WAPs for your build crew's early access — allocated separately by AfrikaBurn, exactly as for theme camps."
-          value={workAccessPasses}
-          onChange={setWorkAccessPasses}
-          onCommit={() => undefined}
-        />
         <SafetyDocumentsField
           idPrefix="art"
           value={safetyDocuments}

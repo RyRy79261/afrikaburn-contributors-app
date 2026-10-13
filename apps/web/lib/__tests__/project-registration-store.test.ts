@@ -584,20 +584,16 @@ describe("updateProjectRegistration", () => {
   });
 });
 
-describe("work access passes", () => {
-  it("writes the WAP request to the camp column on create", async () => {
-    await createProjectRegistration(
-      input({ columns: { ...COLUMNS, workAccessPasses: 5 } }),
-    );
+describe("work access passes (moved to the Passes page, epic #53)", () => {
+  it("never writes the old WAP count on create", async () => {
+    await createProjectRegistration(input({ columns: { ...COLUMNS } }));
     const values = dbMock
       .writesTo(schema.registrations)[0]!
       .arg("values") as Record<string, unknown>;
-    // The SAME column a camp's Form 2 writes, so WAP allocation reads one
-    // column whatever kind of group asked.
-    expect(values.s4WorkAccessPasses).toBe(5);
+    expect(values).not.toHaveProperty("s4WorkAccessPasses");
   });
 
-  it("writes the WAP request on update, and clears it when withdrawn", async () => {
+  it("never touches it on update, so an earlier form's number survives", async () => {
     dbMock.queue(
       [{ id: "reg-1", status: "draft", slug: "the-teapot" }],
       [],
@@ -612,14 +608,14 @@ describe("work access passes", () => {
       editorEmail: null,
       description: null,
       submit: false,
-      columns: { ...COLUMNS, workAccessPasses: null },
+      columns: { ...COLUMNS },
       answers: ANSWERS,
     });
     const set = dbMock.writesTo(schema.registrations)[0]!.arg("set") as Record<
       string,
       unknown
     >;
-    expect(set).toHaveProperty("s4WorkAccessPasses", null);
+    expect(set).not.toHaveProperty("s4WorkAccessPasses");
   });
 });
 
@@ -703,7 +699,6 @@ describe("safety documents", () => {
   const regRow = {
     id: "reg-1",
     status: "draft",
-    workAccessPasses: 4,
     carriedForwardAt: null,
   };
 
@@ -738,7 +733,6 @@ describe("safety documents", () => {
     );
 
     expect(ctx!.safetyDocuments).toEqual([{ id: "d", ...DOC }]);
-    expect(ctx!.workAccessPasses).toBe(4);
   });
 });
 

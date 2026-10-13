@@ -222,6 +222,25 @@ export async function sanitizeAccount(
   // POPIA erasure is all-or-nothing. Ordering within it still follows the notes
   // above (foreign keys; tombstone last).
   await withTransaction(async (tx) => {
+    // 1c. LOCK THE ACCOUNT ROW FIRST, before anything keyed by its memberships
+    //     is erased. Writers that hand this person something by MEMBERSHIP
+    //     (a Work Access Pass: apps/web/lib/wap-store.ts `lockMembers`) take
+    //     `FOR SHARE` on this same row and re-check `sanitized_at` under it.
+    //     Without this lock nothing made them wait: sanitization never UPDATEs
+    //     a camp membership row, so a lead's allocate could read `sanitized_at`
+    //     as NULL from its snapshot after step 2e had already run, insert a
+    //     pass, and commit — an invisible "Departed Burner" pass the lead could
+    //     not remove that still counted against the cap. With it, whichever
+    //     transaction locks first wins cleanly: a writer that got here first
+    //     commits and step 2e (a later statement) deletes what it wrote; a
+    //     writer that comes second waits, re-reads the tombstoned row, and is
+    //     refused.
+    await tx
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .for("update");
+
     // 2. Purge the secrets-and-context tables. Nothing references these rows.
     //    `security_events` holds captured IP/user-agent (personal data), so it is
     //    erased with the account (plan.purgedTables).
@@ -293,6 +312,22 @@ export async function sanitizeAccount(
         inArray(
           schema.shiftAssignments.handoverToMembershipId,
           // former members: requests to a former membership are cancelled too.
+          tx
+            .select({ id: schema.memberships.id })
+            .from(schema.memberships)
+            .where(eq(schema.memberships.userId, userId)),
+        ),
+      );
+
+    // 2e. WORK ACCESS PASSES (epic #53). Keyed by membership as well: a
+    //     "Departed Burner" cannot be let onto site, so their passes go back
+    //     to the projects that held them, every edition's.
+    await tx
+      .delete(schema.wapAllocations)
+      .where(
+        inArray(
+          schema.wapAllocations.membershipId,
+          // former members: their passes are released too.
           tx
             .select({ id: schema.memberships.id })
             .from(schema.memberships)

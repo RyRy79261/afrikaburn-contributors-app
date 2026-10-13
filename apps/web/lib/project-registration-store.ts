@@ -98,10 +98,10 @@ export interface ProjectRegistrationColumns {
   lntPlan?: string | null;
   /** Grant interest — the `art_grant_requesters` / `mv_grant_requesters` flag. */
   grantsInterest?: boolean | null;
-  /** Work Access Passes requested (CREATIVE-014) — the same
-   * `s4_work_access_passes` column a camp's Form 2 writes, so WAP allocation
-   * reads one column whatever kind of group asked. */
-  workAccessPasses?: number | null;
+  // No Work Access Pass count: since epic #53 a project asks for passes on
+  // its Passes page once AfrikaBurn opens requests (docs/wap-spec.md). The
+  // `s4_work_access_passes` column stays and is never written from here, so a
+  // number an earlier form recorded survives an edit.
 }
 
 export interface ProjectRegistrationInput {
@@ -160,7 +160,6 @@ export async function createProjectRegistration(
           status: input.submit ? "submitted" : "draft",
           s1ContactEmail: input.creatorEmail,
           s2LntPlan: input.columns.lntPlan ?? null,
-          s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
           s4AreaDimensions: input.columns.areaDimensions ?? null,
           s4LayoutUploadUrls: input.columns.imageUrls,
           s5AmplifiedMusic: input.columns.soundLevel ?? null,
@@ -265,8 +264,6 @@ export interface ProjectRegistrationEditContext {
   editable: boolean;
   /** The prior answer payload (the self-describing record) to prefill the form. */
   answers: QuestionnaireResponses | null;
-  /** Work Access Passes requested for this edition (null = not asked). */
-  workAccessPasses: number | null;
   /** This edition's safety documents — ONLY loaded for the project's
    * structural lead/admin (`canManageProjectSafetyDocuments`); an empty list
    * for anyone else, so no caller can render them to the wrong person. */
@@ -324,7 +321,6 @@ export async function getProjectRegistrationForEdit(
     .select({
       id: schema.registrations.id,
       status: schema.registrations.status,
-      workAccessPasses: schema.registrations.s4WorkAccessPasses,
       carriedForwardAt: schema.registrations.carriedForwardAt,
     })
     .from(schema.registrations)
@@ -361,7 +357,6 @@ export async function getProjectRegistrationForEdit(
     status,
     editable: EDITABLE_STATUSES.includes(status),
     answers,
-    workAccessPasses: registration?.workAccessPasses ?? null,
     safetyDocuments,
     carriedForward: Boolean(registration?.carriedForwardAt),
   };
@@ -456,7 +451,6 @@ export async function updateProjectRegistration(
       .set({
         status: nextStatus,
         s2LntPlan: input.columns.lntPlan ?? null,
-        s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
         s4AreaDimensions: input.columns.areaDimensions ?? null,
         s4LayoutUploadUrls: input.columns.imageUrls,
         s5AmplifiedMusic: input.columns.soundLevel ?? null,
@@ -556,7 +550,6 @@ async function startProjectRegistrationEdition(
         status,
         s1ContactEmail: input.editorEmail,
         s2LntPlan: input.columns.lntPlan ?? null,
-        s4WorkAccessPasses: input.columns.workAccessPasses ?? null,
         s4AreaDimensions: input.columns.areaDimensions ?? null,
         s4LayoutUploadUrls: input.columns.imageUrls,
         s5AmplifiedMusic: input.columns.soundLevel ?? null,

@@ -7,7 +7,8 @@ import { toast } from "@quagga/ui/components/toast";
 import type { ShiftActionResult } from "@/app/(app)/camps/[slug]/shifts/actions";
 
 // One button that runs one shift action (epic #57): sign up, take it, accept,
-// decline, withdraw, take someone off, delete. The server decides; this only
+// decline, withdraw, take someone off, delete. The Passes page (epic #53)
+// reuses it for remove and submit — the result shape is the same. The server decides; this only
 // says what happened. A `confirm` label turns it into a two-step button for
 // the destructive ones (the pattern LeaveCampButton uses).
 
@@ -55,13 +56,15 @@ export function ShiftActionButton({
   }
 
   if (confirm && confirming) {
+    // An icon-only trigger still confirms with words.
+    const confirmSize = size === "icon" ? "sm" : size;
     return (
       <span className="inline-flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Sure?</span>
         <Button
           type="button"
           variant="destructive"
-          size={size}
+          size={confirmSize}
           onClick={run}
           disabled={pending}
         >
@@ -70,7 +73,7 @@ export function ShiftActionButton({
         <Button
           type="button"
           variant="ghost"
-          size={size}
+          size={confirmSize}
           onClick={() => setConfirming(false)}
           disabled={pending}
         >

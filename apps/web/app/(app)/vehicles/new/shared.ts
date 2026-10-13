@@ -3,7 +3,6 @@ import {
   CAMP_DESCRIPTION_WORD_LIMIT,
   SOUND_SCALE_VALUES,
   SafetyDocumentList,
-  WorkAccessPassRequest,
   isWithinWordLimit,
   type SafetyDocumentInput,
 } from "@quagga/core";
@@ -41,8 +40,6 @@ export const VehicleRegistrationInput = z.object({
   flameEffects: z.boolean().nullable().default(null),
   nightDriving: z.boolean().nullable().default(null),
   acks: z.array(z.enum(VEHICLE_ACK_KEYS)).default([]),
-  /** Work Access Passes requested (CREATIVE-014) — same meaning as a camp's. */
-  workAccessPasses: WorkAccessPassRequest,
   /** Safety documents with expiry (CREATIVE-017). Private; see @quagga/core. */
   safetyDocuments: SafetyDocumentList,
   submit: z.boolean().default(false),
@@ -66,7 +63,6 @@ export function buildVehiclePayload(input: VehicleRegistrationValues): {
   columns: {
     imageUrls: string[];
     soundLevel: string | null;
-    workAccessPasses: number | null;
   };
   answers: QuestionnaireResponses;
   safetyDocuments: SafetyDocumentInput[];
@@ -76,7 +72,6 @@ export function buildVehiclePayload(input: VehicleRegistrationValues): {
     columns: {
       imageUrls: input.photoUrls,
       soundLevel: input.soundLevel ?? null,
-      workAccessPasses: input.workAccessPasses,
     },
     answers: {
       base_vehicle: input.baseVehicle ?? "",
@@ -86,7 +81,6 @@ export function buildVehiclePayload(input: VehicleRegistrationValues): {
       flame_effects: input.flameEffects,
       night_driving: input.nightDriving,
       acknowledgements: [...new Set(input.acks)],
-      work_access_passes: input.workAccessPasses,
     },
     safetyDocuments: input.safetyDocuments,
   };

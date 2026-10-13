@@ -32,9 +32,12 @@ import {
  * - `title`   — the prominent heading of the card (camp name, email, supplier).
  * - `badge`   — a status/label chip sitting beside the title.
  * - `actions` — the row's action controls, pinned to the card footer.
+ * - `detail`  — full-width content under the label/value pairs, with no label
+ *               (flags or notes that read as a line of their own, frame VBA9l).
  * - `default` — a label/value pair, the column header used as the label.
  */
-export type ResponsiveColumnRole = "title" | "badge" | "actions" | "default";
+export type ResponsiveColumnRole =
+  "title" | "badge" | "actions" | "detail" | "default";
 
 export interface ResponsiveColumn<T> {
   /** Stable identity + fallback card label. Must be unique within the set. */
@@ -70,6 +73,8 @@ export interface CardProjection<T> {
   actions: ResponsiveColumn<T>[];
   /** role default/undefined — rendered as header→value pairs. */
   pairs: ResponsiveColumn<T>[];
+  /** role === "detail" (full width, unlabelled, under the pairs). */
+  details: ResponsiveColumn<T>[];
   /** mobileHidden columns — shown at md+, excluded from the card. */
   hidden: ResponsiveColumn<T>[];
 }
@@ -87,6 +92,7 @@ export function projectColumnsToCard<T>(
     badges: [],
     actions: [],
     pairs: [],
+    details: [],
     hidden: [],
   };
 
@@ -104,6 +110,9 @@ export function projectColumnsToCard<T>(
         break;
       case "actions":
         projection.actions.push(column);
+        break;
+      case "detail":
+        projection.details.push(column);
         break;
       default:
         projection.pairs.push(column);
@@ -148,6 +157,13 @@ export interface ResponsiveDataTableProps<T> {
    * string derived from `caption` when that is a plain string.
    */
   mobileAriaLabel?: string;
+  /**
+   * How the label/value pairs sit in the mobile card. `list` (default) is one
+   * row per pair, label left and value right. `grid` sets every pair side by
+   * side in one row, label above value, spread across the card — for three or four
+   * short facts such as dates and yes/no (frames rsnGI / VBA9l / T0yoB).
+   */
+  cardPairsLayout?: "list" | "grid";
 }
 
 export function ResponsiveDataTable<T>({
@@ -160,6 +176,7 @@ export function ResponsiveDataTable<T>({
   caption,
   className,
   mobileAriaLabel,
+  cardPairsLayout = "list",
 }: ResponsiveDataTableProps<T>) {
   const expandable = Boolean(renderExpanded);
   const [open, setOpen] = React.useState<ReadonlySet<string>>(
@@ -304,7 +321,23 @@ export function ResponsiveDataTable<T>({
                   </div>
                 )}
 
-                {projection.pairs.length > 0 && (
+                {projection.pairs.length > 0 && cardPairsLayout === "grid" && (
+                  <dl
+                    data-layout="grid"
+                    className="flex justify-between gap-x-3"
+                  >
+                    {projection.pairs.map((column) => (
+                      <div key={column.id} className="flex flex-col gap-0.5">
+                        <dt className="text-[11px] font-medium uppercase text-muted-foreground">
+                          {column.header}
+                        </dt>
+                        <dd className="text-sm">{column.cell(row)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+
+                {projection.pairs.length > 0 && cardPairsLayout === "list" && (
                   <dl className="flex flex-col gap-2">
                     {projection.pairs.map((column) => (
                       <div
@@ -328,6 +361,12 @@ export function ResponsiveDataTable<T>({
                     ))}
                   </dl>
                 )}
+
+                {projection.details.map((column) => (
+                  <div key={column.id} className="min-w-0 text-sm">
+                    {column.cell(row)}
+                  </div>
+                ))}
 
                 {projection.actions.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">

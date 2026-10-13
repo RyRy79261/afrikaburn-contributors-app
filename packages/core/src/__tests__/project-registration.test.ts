@@ -6,7 +6,6 @@ import {
   SafetyDocumentInput,
   SafetyDocumentList,
   MAX_SAFETY_DOCUMENTS,
-  WorkAccessPassRequest,
   asProjectRegistrationKind,
   buildProjectCarryForwardAnswers,
   canManageProjectSafetyDocuments,
@@ -59,18 +58,6 @@ describe("asProjectRegistrationKind", () => {
     expect(asProjectRegistrationKind("theme_camp")).toBeNull();
     expect(asProjectRegistrationKind("org")).toBeNull();
     expect(asProjectRegistrationKind(undefined)).toBeNull();
-  });
-});
-
-describe("WorkAccessPassRequest", () => {
-  it("accepts a whole number and treats absence as not asked", () => {
-    expect(WorkAccessPassRequest.parse(4)).toBe(4);
-    expect(WorkAccessPassRequest.parse(null)).toBeNull();
-    expect(WorkAccessPassRequest.parse(undefined)).toBeNull();
-  });
-
-  it.each([-1, 2.5, 100_001])("refuses %s", (n) => {
-    expect(WorkAccessPassRequest.safeParse(n).success).toBe(false);
   });
 });
 

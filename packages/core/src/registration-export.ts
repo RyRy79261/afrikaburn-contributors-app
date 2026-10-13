@@ -38,6 +38,21 @@ export interface PlacementExportRow {
   submittedAt: Date | string | null;
 }
 
+/**
+ * A non-empty legacy count from the registration form
+ * (`s4_work_access_passes`), shown to the org as "Asked at registration: N".
+ * Null when nobody typed one (or typed 0). Work Access Passes are requested on
+ * the project's Passes page now (docs/wap-spec.md, "The old registration-form
+ * field"); a registration from an edition after that never has one, and every
+ * surface that shows the old number hides it rather than render an empty
+ * answer to a question nobody was asked.
+ */
+export function legacyWapAsk(s4WorkAccessPasses: number | null): number | null {
+  return s4WorkAccessPasses != null && s4WorkAccessPasses > 0
+    ? s4WorkAccessPasses
+    : null;
+}
+
 interface Column {
   header: string;
   value: (row: PlacementExportRow) => unknown;
@@ -52,7 +67,12 @@ const COLUMNS: readonly Column[] = [
   { header: "Categories", value: (r) => r.categories?.join("; ") ?? null },
   { header: "Expected population", value: (r) => r.expectedPopulation },
   { header: "Area dimensions", value: (r) => r.areaDimensions },
-  { header: "Work Access Passes", value: (r) => r.workAccessPasses },
+  // The OLD registration-form number only (blank for an edition that never
+  // asked it). The real requests and names are the passes export.
+  {
+    header: "Work Access Passes asked at registration",
+    value: (r) => legacyWapAsk(r.workAccessPasses),
+  },
   { header: "First arrival", value: (r) => r.firstArrivalDate },
   { header: "Amplified sound", value: (r) => r.amplifiedMusic },
   { header: "Placement 1st choice", value: (r) => r.placementFirstChoice },

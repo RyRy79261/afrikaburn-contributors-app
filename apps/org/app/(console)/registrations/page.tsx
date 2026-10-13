@@ -1,4 +1,5 @@
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { Download, Ticket } from "lucide-react";
 import { Card, CardContent } from "@quagga/ui/components/card";
 import { Button } from "@quagga/ui/components/button";
 import { guardConsole } from "@/lib/gate";
@@ -76,6 +77,14 @@ export default async function RegistrationsPage({
         eyebrow="Registrations"
         title="Registration pipeline"
         description="Every camp, artwork, and mutant vehicle registration for the active edition. Filter by status, sound level, and whether the group registered in a prior year."
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/registrations/passes">
+              <Ticket className="mr-1.5 h-4 w-4" aria-hidden />
+              Work Access Passes
+            </Link>
+          </Button>
+        }
       />
 
       {/* The placement export (roadmap R1). A plain link, not a button with a

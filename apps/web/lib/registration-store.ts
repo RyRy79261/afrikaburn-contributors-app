@@ -420,7 +420,6 @@ export interface RegistrationValues {
   s3GiftingFood: boolean | null;
   s4ExpectedPopulation: number | null;
   s4FirstArrivalDate: string | null;
-  s4WorkAccessPasses: number | null;
   s4AreaDimensions: string | null;
   s4LayoutUploadUrls: string[];
   s5AmplifiedMusic: string | null;
@@ -508,7 +507,11 @@ export async function saveRegistrationDraft(input: {
     s3GiftingFood: v.s3GiftingFood,
     s4ExpectedPopulation: v.s4ExpectedPopulation,
     s4FirstArrivalDate: v.s4FirstArrivalDate,
-    s4WorkAccessPasses: v.s4WorkAccessPasses,
+    // `s4_work_access_passes` is no longer written (docs/wap-spec.md §"The old
+    // registration-form field"): passes are asked on the Passes page once
+    // AfrikaBurn opens requests. Leaving it out of the upsert keeps a value an
+    // earlier edition's form wrote, which the org sees as "Asked at
+    // registration: N".
     s4AreaDimensions: v.s4AreaDimensions,
     s4LayoutUploadUrls: v.s4LayoutUploadUrls,
     s5AmplifiedMusic: v.s5AmplifiedMusic,

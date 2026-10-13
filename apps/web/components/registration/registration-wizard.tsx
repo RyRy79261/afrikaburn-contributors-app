@@ -624,14 +624,6 @@ export function RegistrationWizard(props: WizardProps) {
                     onChange={(v) => update({ s4FirstArrivalDate: v })}
                     onCommit={commit}
                   />
-                  <NumberField
-                    id="s4-waps"
-                    label="Work Access Passes (optional)"
-                    hint="Requested WAPs for early access — allocated separately."
-                    value={values.s4WorkAccessPasses}
-                    onChange={(v) => update({ s4WorkAccessPasses: v })}
-                    onCommit={commit}
-                  />
                   <TextField
                     id="s4-dimensions"
                     label="Camp area dimensions"

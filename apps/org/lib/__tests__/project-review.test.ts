@@ -245,21 +245,21 @@ describe("creative-project parity on the review (epic #52)", () => {
   }
 
   it.each(["mutant_vehicle", "artwork"] as const)(
-    "%s shows the WAP request, and an unasked one as absent",
+    "%s shows the old form's WAP count as 'Asked at registration', and an empty one not at all",
     (kind) => {
-      const asked = fieldsOf(kind, { ...EMPTY_VIEW, workAccessPasses: 6 }).find(
-        (f) => f.label === "Work Access Passes requested",
-      )!;
-      expect(asked.value).toEqual({ type: "text", value: "6" });
-      // Zero is an answer ("none needed"), not a blank.
-      const zero = fieldsOf(kind, { ...EMPTY_VIEW, workAccessPasses: 0 }).find(
-        (f) => f.label === "Work Access Passes requested",
-      )!;
-      expect(zero.value).toEqual({ type: "text", value: "0" });
-      const unasked = fieldsOf(kind, EMPTY_VIEW).find(
-        (f) => f.label === "Work Access Passes requested",
-      )!;
-      expect(unasked.value).toEqual({ type: "text", value: null });
+      // docs/wap-spec.md "The old registration-form field": passes are asked
+      // on the Passes page now, so a later edition's registration has no
+      // count. An always-present blank row read as "asked for nothing".
+      const wapRows = (view: ProjectRegistrationView) =>
+        fieldsOf(kind, view).filter((f) => /work access pass/i.test(f.label));
+      const asked = wapRows({ ...EMPTY_VIEW, workAccessPasses: 6 });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]!.value).toEqual({
+        type: "text",
+        value: "Asked at registration: 6",
+      });
+      expect(wapRows(EMPTY_VIEW)).toEqual([]);
+      expect(wapRows({ ...EMPTY_VIEW, workAccessPasses: 0 })).toEqual([]);
     },
   );
 

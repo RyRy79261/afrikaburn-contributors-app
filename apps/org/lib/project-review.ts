@@ -9,6 +9,7 @@
 // storage works unchanged (no migration). Each kind uses DISTINCT keys, and a
 // registration is only ever one kind, so threads never collide.
 
+import { legacyWapAsk } from "@quagga/core";
 import type { QuestionnaireResponses, SectionKey } from "@quagga/types";
 
 import type {
@@ -158,16 +159,23 @@ export interface ProjectRegistrationView {
   safetyDocuments: ReviewSafetyDocument[] | null;
 }
 
-/** The WAP request, rendered the same way the camp review renders it. */
-function wapField(view: ProjectRegistrationView): ProjectField {
-  return {
-    label: "Work Access Passes requested",
-    value: {
-      type: "text",
-      value:
-        view.workAccessPasses === null ? null : String(view.workAccessPasses),
+/**
+ * The OLD registration-form WAP count, as "Asked at registration: N" — and
+ * nothing at all when it is empty (docs/wap-spec.md, "The old
+ * registration-form field"). Passes are requested on the project's Passes page
+ * now, so a registration from a later edition never has one; an always-present
+ * empty row read as "this project asked for nothing" while the real requests
+ * sat in the Passes tab. Spread into a section's fields.
+ */
+function legacyWapFields(view: ProjectRegistrationView): ProjectField[] {
+  const asked = legacyWapAsk(view.workAccessPasses);
+  if (asked === null) return [];
+  return [
+    {
+      label: "Work Access Passes",
+      value: { type: "text", value: `Asked at registration: ${asked}` },
     },
-  };
+  ];
 }
 
 function safetyField(view: ProjectRegistrationView): ProjectField {
@@ -217,7 +225,7 @@ function vehicleSections(
           value: { type: "uploads", urls: view.imageUrls, noun: "Photo" },
           wide: true,
         },
-        wapField(view),
+        ...legacyWapFields(view),
       ],
     },
     {
@@ -307,7 +315,7 @@ function artworkSections(
           label: "Footprint (W × D × H)",
           value: { type: "text", value: view.areaDimensions },
         },
-        wapField(view),
+        ...legacyWapFields(view),
         {
           label: "Concept images",
           value: { type: "uploads", urls: view.imageUrls, noun: "Image" },
