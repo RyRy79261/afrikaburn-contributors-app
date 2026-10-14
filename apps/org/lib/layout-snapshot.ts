@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import {
   canOrgViewLayoutSnapshot,
   getLayoutCatalog,
@@ -71,3 +71,59 @@ export async function getLayoutSnapshotForReview(
     },
   };
 }
+
+/** A pinned layout's plot, as the placement CSV carries it. */
+export interface PinnedLayoutPlot {
+  width: number;
+  depth: number;
+  areaM2: number;
+}
+
+/**
+ * The placement CSV's plot size and area (decision 10: "add only the plot
+ * dimensions and area, never the layout itself"), from the LATEST snapshot
+ * pinned for each registration. Same capability as the review screen; an
+ * account without it gets an empty map before any query runs. A registration
+ * with no pin, or one whose stored document no longer parses, is absent.
+ *
+ * Latest is chosen here by `pinnedAt`, not trusted to the ORDER BY alone, so
+ * an older pin can never stand in for the one the camp resubmitted with.
+ */
+export async function getPinnedLayoutPlots(
+  registrationIds: readonly string[],
+  editionYear: number,
+  actor: OrgActor,
+): Promise<Map<string, PinnedLayoutPlot>> {
+  const out = new Map<string, PinnedLayoutPlot>();
+  if (!canOrgViewLayoutSnapshot(actor) || registrationIds.length === 0) {
+    return out;
+  }
+  const rows = await getDb()
+    .select({
+      registrationId: schema.campLayoutSnapshots.registrationId,
+      pinnedAt: schema.campLayoutSnapshots.pinnedAt,
+      document: schema.campLayoutSnapshots.document,
+    })
+    .from(schema.campLayoutSnapshots)
+    .where(
+      inArray(schema.campLayoutSnapshots.registrationId, [...registrationIds]),
+    )
+    .orderBy(desc(schema.campLayoutSnapshots.pinnedAt));
+
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    const seen = latest.get(row.registrationId);
+    if (!seen || row.pinnedAt > seen.pinnedAt) {
+      latest.set(row.registrationId, row);
+    }
+  }
+  const catalog = getLayoutCatalog(editionYear);
+  for (const [registrationId, row] of latest) {
+    const parsed = LayoutDocument.safeParse(row.document);
+    if (!parsed.success) continue;
+    const s = plotSummary(parsed.data, catalog);
+    out.set(registrationId, { width: s.width, depth: s.depth, areaM2: s.areaM2 });
+  }
+  return out;
+}
+

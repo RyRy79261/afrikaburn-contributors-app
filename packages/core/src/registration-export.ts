@@ -27,6 +27,12 @@ export interface PlacementExportRow {
   contactEmail: string | null;
   expectedPopulation: number | null;
   areaDimensions: string | null;
+  /**
+   * The plot from the layout PINNED at submit (docs/camp-layout-spec.md
+   * decision 10): its size and area only, never the layout itself. Null when
+   * the camp sent no layout.
+   */
+  layoutPlot?: { width: number; depth: number; areaM2: number } | null;
   workAccessPasses: number | null;
   firstArrivalDate: string | null;
   amplifiedMusic: string | null;
@@ -53,6 +59,11 @@ export function legacyWapAsk(s4WorkAccessPasses: number | null): number | null {
     : null;
 }
 
+/** Metres to at most one decimal, as every layout readout shows them. */
+function oneDecimal(v: number | undefined): number | null {
+  return v === undefined ? null : Math.round(v * 10) / 10;
+}
+
 interface Column {
   header: string;
   value: (row: PlacementExportRow) => unknown;
@@ -67,6 +78,15 @@ const COLUMNS: readonly Column[] = [
   { header: "Categories", value: (r) => r.categories?.join("; ") ?? null },
   { header: "Expected population", value: (r) => r.expectedPopulation },
   { header: "Area dimensions", value: (r) => r.areaDimensions },
+  // From the pinned layout (decision 10): numbers, so placement can sort on
+  // them, beside the camp's own free-text answer above.
+  { header: "Layout width (m)", value: (r) => oneDecimal(r.layoutPlot?.width) },
+  { header: "Layout depth (m)", value: (r) => oneDecimal(r.layoutPlot?.depth) },
+  {
+    header: "Layout area (m²)",
+    value: (r) =>
+      r.layoutPlot ? Math.round(r.layoutPlot.areaM2) : null,
+  },
   // The OLD registration-form number only (blank for an edition that never
   // asked it). The real requests and names are the passes export.
   {

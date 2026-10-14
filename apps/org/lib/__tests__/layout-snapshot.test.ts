@@ -22,7 +22,10 @@ vi.mock("@quagga/db", async (importOriginal) => ({
   createPooledDb: () => ({ db, pool: { end: async () => {} } }),
 }));
 
-import { getLayoutSnapshotForReview } from "@/lib/layout-snapshot";
+import {
+  getLayoutSnapshotForReview,
+  getPinnedLayoutPlots,
+} from "@/lib/layout-snapshot";
 
 const REG_ID = "11111111-1111-4111-8111-111111111111";
 const PINNED = new Date("2027-03-02T08:00:00Z");
@@ -92,3 +95,52 @@ describe("getLayoutSnapshotForReview", () => {
     expect(await getLayoutSnapshotForReview(REG_ID, 2027, READER)).toBeNull();
   });
 });
+
+describe("getPinnedLayoutPlots — the placement CSV's plot size (decision 10)", () => {
+  const OTHER = "44444444-4444-4444-8444-444444444444";
+
+  it("takes each registration's LATEST pin, whatever order the rows come in", async () => {
+    db.seed("camp_layout_snapshots", [
+      {
+        registrationId: REG_ID,
+        pinnedAt: new Date("2027-03-02T08:00:00Z"),
+        document: createEmptyLayoutDocument(40, 30),
+      },
+      {
+        registrationId: REG_ID,
+        pinnedAt: new Date("2027-03-20T08:00:00Z"),
+        document: createEmptyLayoutDocument(45, 30),
+      },
+      {
+        registrationId: REG_ID,
+        pinnedAt: new Date("2027-03-10T08:00:00Z"),
+        document: createEmptyLayoutDocument(20, 20),
+      },
+      {
+        registrationId: OTHER,
+        pinnedAt: new Date("2027-03-05T08:00:00Z"),
+        document: { schemaVersion: 99, plot: {} },
+      },
+    ]);
+    const plots = await getPinnedLayoutPlots([REG_ID, OTHER], 2027, READER);
+    expect(plots.get(REG_ID)).toEqual({ width: 45, depth: 30, areaM2: 1350 });
+    // A stored document that no longer parses: no plot, never half a one.
+    expect(plots.has(OTHER)).toBe(false);
+    // Size and area only — nothing of the layout itself.
+    const [call] = db.recorded("select", "camp_layout_snapshots");
+    expect(call?.columns).toEqual(["registrationId", "pinnedAt", "document"]);
+  });
+
+  it("refuses an account that cannot read registrations, before any query", async () => {
+    db.seed("camp_layout_snapshots", [
+      {
+        registrationId: REG_ID,
+        pinnedAt: PINNED,
+        document: createEmptyLayoutDocument(40, 30),
+      },
+    ]);
+    expect((await getPinnedLayoutPlots([REG_ID], 2027, NO_ROLES)).size).toBe(0);
+    expect(db.recorded("select", "camp_layout_snapshots")).toHaveLength(0);
+  });
+});
+

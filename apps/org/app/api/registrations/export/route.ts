@@ -9,6 +9,7 @@ import {
 } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
+import { getPinnedLayoutPlots } from "@/lib/layout-snapshot";
 import { getActiveEdition } from "@/lib/queries";
 import { requireOrgSession } from "@/lib/session";
 
@@ -45,7 +46,10 @@ const EXPORTABLE_STATUSES = [
 ] as const;
 
 export async function GET(): Promise<NextResponse> {
-  await requireOrgSession({ capability: "read", domain: "registrations" });
+  const session = await requireOrgSession({
+    capability: "read",
+    domain: "registrations",
+  });
 
   const edition = await getActiveEdition();
   if (!edition) {
@@ -138,6 +142,14 @@ export async function GET(): Promise<NextResponse> {
     categoriesByRegistration.set(row.registrationId, list);
   }
 
+  // The plot size and area from each camp's pinned layout (camp-layout-spec
+  // decision 10) — never the layout itself.
+  const layoutPlots = await getPinnedLayoutPlots(
+    rows.map((r) => r.registrationId),
+    edition.year,
+    session.actor,
+  );
+
   const exportRows: PlacementExportRow[] = rows.map((row) => ({
     campName: row.campName,
     campCode: row.campCode,
@@ -147,6 +159,7 @@ export async function GET(): Promise<NextResponse> {
     contactEmail: row.contactEmail,
     expectedPopulation: row.expectedPopulation,
     areaDimensions: row.areaDimensions,
+    layoutPlot: layoutPlots.get(row.registrationId) ?? null,
     workAccessPasses: row.workAccessPasses,
     firstArrivalDate: row.firstArrivalDate,
     amplifiedMusic: row.amplifiedMusic,

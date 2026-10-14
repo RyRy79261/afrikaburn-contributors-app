@@ -108,6 +108,24 @@ describe("buildPlacementCsv", () => {
     expect(cell(row({ workAccessPasses: 0 }))).toBe("");
   });
 
+  it("carries the pinned layout's plot size and area, and only those (layout decision 10)", () => {
+    const cells = (r: PlacementExportRow) => {
+      const line = buildPlacementCsv([r]).slice(1).split("\r\n")[1]!.split(",");
+      return ["Layout width (m)", "Layout depth (m)", "Layout area (m²)"].map(
+        (h) => line[PLACEMENT_EXPORT_HEADERS.indexOf(h)],
+      );
+    };
+    expect(
+      cells(row({ layoutPlot: { width: 40, depth: 30.04, areaM2: 1201.6 } })),
+    ).toEqual(["40", "30", "1202"]);
+    // No layout sent: blank, never "null" or 0.
+    expect(cells(row({ layoutPlot: null }))).toEqual(["", "", ""]);
+    expect(cells(row())).toEqual(["", "", ""]);
+    // Nothing of the layout itself: no labels, no objects.
+    const headers = PLACEMENT_EXPORT_HEADERS.join(" ").toLowerCase();
+    expect(headers).not.toMatch(/tent|object|label/);
+  });
+
   it("joins categories with a semicolon so the comma stays the delimiter", () => {
     const csv = buildPlacementCsv([row()]);
     expect(csv).toContain("Tea; Workshops");
