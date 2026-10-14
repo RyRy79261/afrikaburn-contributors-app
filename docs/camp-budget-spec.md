@@ -47,15 +47,20 @@ bank account; the app records that it did, matched by the member's ref code
   `committed | paid`, receipt?, entered_by) — actual income and spending
   (`BUDGET-003`–`005`). An approved claim and a paid due are **not** copied
   here; they are counted in by the derivation, so nothing is entered twice.
-- `member_dues` (membership, edition, `amount_cents`, `reason`? for a lower or
+- `member_dues` (camp, edition, user, `amount_cents`, `reason`? for a lower or
   higher amount, set_by) — what one member owes; absent = the camp's default.
   Waived is `amount_cents = 0` with a reason.
-- `dues_payments` (membership, edition, `amount_cents`, `received_on`, note,
+- `dues_payments` (camp, edition, user, `amount_cents`, `received_on`, note,
   recorded_by) — money a money person **saw arrive** in the camp's account. Any
   number per member: instalments need no plan. Owed − received = outstanding.
-- `camp_claims` (membership, edition, category?, amount, description, receipt,
+- `camp_claims` (camp, edition, user, category?, amount, description, receipt,
   `status` `submitted | approved | rejected | repaid`, decided_by/at,
   decision_note, repaid_on) — a member paid for something for the camp.
+
+Keyed by (camp, edition, user), not by membership: leaving a camp deletes
+the membership row, and the books must outlive it. Current vs former is read
+from the membership on load; a deleted account's user key is set null and
+shows as "Deleted account".
 
 Receipts live under a per-camp private prefix and are served only through an
 authorised route; never a public URL. A receipt is a photo (PNG, JPEG, WebP)
