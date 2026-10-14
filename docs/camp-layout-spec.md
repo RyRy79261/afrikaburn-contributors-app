@@ -33,6 +33,14 @@ year's layout"; 360 is view-only. The canvas library is the engineer's call
 (react-konva, chosen on the research in the library evaluation). The rest of
 the list below are the recommended defaults, taken as decided.
 
+Also decided on the frames (14 Oct): **warnings are shown to editors only**
+(leads, co-leads, `manage_layout`) — not to plain members and not in the
+org's snapshot view; **every current member may download (PNG) and print** the
+plan. Frames: L1 editor `f3jmCq` / `vnpZw`, L2 inside a Bedouin `LcZsE` /
+`PGk6q`, L3 read-only + tile + org snapshot + empty state `QZeG7` / `t7aOZ3`.
+Where the L3 frame shows a warning count on the org snapshot, the build leaves
+it out.
+
 ### The original proposals
 
 Each question has a recommended default. Nothing below is built until these are
