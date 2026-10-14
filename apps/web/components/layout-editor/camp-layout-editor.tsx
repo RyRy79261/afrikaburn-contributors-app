@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useWideEnough } from "./wide-only";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -79,7 +73,12 @@ import {
 } from "@/lib/layout-editor-model";
 import { saveCampLayoutAction } from "@/app/(app)/camps/[slug]/layout/actions";
 import type { StageApi, StageTheme } from "./editor-stage";
-import { LayoutInspector, LayoutPalette, LayoutWarningsPanel, MetreField } from "./editor-panels";
+import {
+  LayoutInspector,
+  LayoutPalette,
+  LayoutWarningsPanel,
+  MetreField,
+} from "./editor-panels";
 import { LayoutMiniMap } from "./mini-map";
 
 // The camp layout editor (docs/camp-layout-spec.md §Surfaces; frames L1
@@ -186,20 +185,6 @@ function useStageTheme(): StageTheme {
   return theme;
 }
 
-/** Editing needs 768 px (decision 13); below it the page shows the
- * read-only plan, and the canvas — and Konva — are never loaded. */
-function useWideEnough(): boolean {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia("(min-width: 768px)");
-      mq.addEventListener("change", cb);
-      return () => mq.removeEventListener("change", cb);
-    },
-    () => window.matchMedia("(min-width: 768px)").matches,
-    () => false,
-  );
-}
-
 function isTyping(el: Element | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
@@ -289,7 +274,9 @@ export function CampLayoutEditor({
       const raw: Vec = at ?? [dims.width / 2, dims.depth / 2];
       // A drop lands on the grid like a drag does.
       const centre =
-        at && snap ? snapCentre({ ...entry, rotationDeg: 0 }, raw, SNAP_LENGTH_M) : raw;
+        at && snap
+          ? snapCentre({ ...entry, rotationDeg: 0 }, raw, SNAP_LENGTH_M)
+          : raw;
       const o = newObjectFromEntry(
         entry,
         centre,
@@ -360,7 +347,11 @@ export function CampLayoutEditor({
     if (r.ok) {
       version.current = r.version;
       savedDoc.current = snapshot;
-      setLastSaved({ at: new Date().toISOString(), by: null, version: r.version });
+      setLastSaved({
+        at: new Date().toISOString(),
+        by: null,
+        version: r.version,
+      });
       if (latest.current !== snapshot) void flush();
       else setSave({ kind: "saved" });
       return;
@@ -464,7 +455,10 @@ export function CampLayoutEditor({
 
   const parent = current.parent;
   const parentWithChild = parent
-    ? ({ ...parent, child: parent.child ?? defaultChildArea(parent) } as LayoutObject & {
+    ? ({
+        ...parent,
+        child: parent.child ?? defaultChildArea(parent),
+      } as LayoutObject & {
         child: NonNullable<LayoutObject["child"]>;
       })
     : null;
@@ -593,7 +587,10 @@ export function CampLayoutEditor({
       </div>
 
       {save.kind === "offline" && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/50 bg-card p-4 text-sm">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/50 bg-card p-4 text-sm"
+        >
           <span className="flex-1">
             Couldn&apos;t save your last change. We&apos;ll keep trying while
             this page is open.
@@ -605,7 +602,10 @@ export function CampLayoutEditor({
         </div>
       )}
       {save.kind === "refused" && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/50 bg-card p-4 text-sm">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/50 bg-card p-4 text-sm"
+        >
           <span className="flex-1">{save.message}</span>
           <Button type="button" variant="outline" size="sm" onClick={retry}>
             <RefreshCw aria-hidden />
@@ -614,18 +614,25 @@ export function CampLayoutEditor({
         </div>
       )}
       {save.kind === "conflict" && (
-        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warning/60 bg-warning/10 p-4">
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-xl border border-warning/60 bg-warning/10 p-4"
+        >
           <p className="flex items-center gap-2 font-semibold">
             <TriangleAlert className="h-4 w-4 text-warning" aria-hidden />
             This layout changed since you opened it
           </p>
           <p className="text-sm text-muted-foreground">
             {save.byName ?? "Someone"} saved a newer version
-            {save.at ? ` at ${timeOf(save.at)}` : ""}. Reload to carry on
-            from theirs. Your last change wasn&apos;t kept.
+            {save.at ? ` at ${timeOf(save.at)}` : ""}. Reload to carry on from
+            theirs. Your last change wasn&apos;t kept.
           </p>
           <div>
-            <Button type="button" size="sm" onClick={() => window.location.reload()}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => window.location.reload()}
+            >
               <RefreshCw aria-hidden />
               Reload the layout
             </Button>
@@ -715,7 +722,12 @@ export function CampLayoutEditor({
           Fit
         </Button>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => void downloadPng()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void downloadPng()}
+          >
             <ImageDown aria-hidden />
             Download PNG
           </Button>
@@ -731,7 +743,11 @@ export function CampLayoutEditor({
       {notice && (
         <p role="status" className="text-sm text-muted-foreground">
           {notice}{" "}
-          <button type="button" className="underline" onClick={() => setNotice(null)}>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setNotice(null)}
+          >
             Dismiss
           </button>
         </p>
@@ -749,7 +765,10 @@ export function CampLayoutEditor({
           <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               {parent ? (
-                <nav aria-label="Breadcrumb" className="flex items-center gap-2 font-semibold">
+                <nav
+                  aria-label="Breadcrumb"
+                  className="flex items-center gap-2 font-semibold"
+                >
                   <button
                     type="button"
                     onClick={() => openArea(null)}
@@ -758,7 +777,10 @@ export function CampLayoutEditor({
                     <MapIcon className="h-4 w-4" aria-hidden />
                     Whole camp
                   </button>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  <ChevronRight
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden
+                  />
                   <span className="flex items-center gap-2" aria-current="page">
                     <Tent className="h-4 w-4 text-primary" aria-hidden />
                     {parentName}
@@ -772,8 +794,9 @@ export function CampLayoutEditor({
               )}
               <div className="flex items-center gap-3">
                 <span className="font-mono text-xs">
-                  {parent ? "Covered area" : "Plot"} {formatMetres(dims.width)} ×{" "}
-                  {formatMetres(dims.depth)} · {Math.round(dims.areaM2).toLocaleString("en-US")} m²
+                  {parent ? "Covered area" : "Plot"} {formatMetres(dims.width)}{" "}
+                  × {formatMetres(dims.depth)} ·{" "}
+                  {Math.round(dims.areaM2).toLocaleString("en-US")} m²
                 </span>
                 {!parent && doc.plot.boundary.kind === "rect" && (
                   <PlotSizePopover
@@ -845,7 +868,10 @@ export function CampLayoutEditor({
                 {parent ? (
                   <>
                     <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-foreground" aria-hidden />
+                      <span
+                        className="h-2 w-2 rounded-full bg-foreground"
+                        aria-hidden
+                      />
                       Pole
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -866,7 +892,11 @@ export function CampLayoutEditor({
           {parentWithChild && (
             <section className="grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="rounded-lg bg-background p-3">
-                <LayoutMiniMap doc={doc} highlightId={parentWithChild.id} className="h-auto w-full" />
+                <LayoutMiniMap
+                  doc={doc}
+                  highlightId={parentWithChild.id}
+                  className="h-auto w-full"
+                />
               </div>
               <div className="flex flex-col gap-3">
                 <h2 className="flex items-center gap-2 font-semibold">
@@ -905,7 +935,12 @@ export function CampLayoutEditor({
                   structure&apos;s footprint with its guy ropes.
                 </p>
                 <div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => openArea(null)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openArea(null)}
+                  >
                     <ArrowLeft aria-hidden />
                     Back to whole camp
                   </Button>

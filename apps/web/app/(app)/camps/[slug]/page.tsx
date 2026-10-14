@@ -5,7 +5,6 @@ import {
   Boxes,
   Droplets,
   MapPin,
-  LayoutGrid,
   FileCheck2,
   Megaphone,
   CheckCircle2,
@@ -66,6 +65,9 @@ import { getOwnWapPass, getWapTileSummary } from "@/lib/wap-store";
 import { OwnPassLine, PassesTile } from "@/components/passes/passes-tile";
 import { getMoneyTileSummary, loadMoneyAccess } from "@/lib/camp-money-store";
 import { MoneyTile } from "@/components/money/money-tile";
+import { loadCampLayout, loadLayoutAccess } from "@/lib/camp-layout-store";
+import { layoutTileView } from "@/lib/layout-view";
+import { LayoutTile } from "@/components/layout-view/layout-tile";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -192,6 +194,7 @@ export default async function CampPage({
     ownPass,
     ownParticipation,
     moneySummary,
+    layoutTile,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -262,6 +265,24 @@ export default async function CampPage({
                 id: edition.id,
                 year: edition.year,
               })
+            : null,
+        )
+      : null,
+    // Camp layout (docs/camp-layout-spec.md): the tile, for current members
+    // of a theme camp — `loadLayoutAccess` re-checks both; null hides it.
+    // The plan is never public, so a stranger never reaches this read.
+    campUser && isMember
+      ? loadLayoutAccess(camp.slug, campUser.id).then(async (access) =>
+          access
+            ? {
+                canEdit: access.canEdit,
+                view: layoutTileView(
+                  await loadCampLayout(access, {
+                    id: edition.id,
+                    year: edition.year,
+                  }),
+                ),
+              }
             : null,
         )
       : null,
@@ -805,12 +826,18 @@ export default async function CampPage({
             {moneySummary && (
               <MoneyTile slug={camp.slug} summary={moneySummary} />
             )}
-            <DisabledHintTile
-              title="Layout"
-              hint="Topic under exploration with camp leads."
-              tag="Exploring"
-              icon={<LayoutGrid className="h-4 w-4" />}
-            />
+            {/* Camp layout (docs/camp-layout-spec.md) — members only. */}
+            {layoutTile && (
+              <LayoutTile
+                slug={camp.slug}
+                editionName={edition.name}
+                editionYear={edition.year}
+                canEdit={layoutTile.canEdit}
+                canStartRegistration={isAdmin}
+                state={layoutTile.view}
+                now={new Date()}
+              />
+            )}
           </div>
         </section>
       </div>

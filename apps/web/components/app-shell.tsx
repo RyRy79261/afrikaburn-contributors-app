@@ -76,7 +76,9 @@ export async function AppShell({
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+      {/* `print:hidden` on the chrome: a printed page is the page's own
+          content (the camp layout's printable plan, /layout/print). */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur print:hidden">
         <QuiltBand />
         <nav className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold">
@@ -145,11 +147,11 @@ export async function AppShell({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
+      <div className="mx-auto w-full max-w-5xl flex-1 px-6 py-8 print:max-w-none print:p-0">
         {children}
       </div>
 
-      <footer className="border-t border-border">
+      <footer className="border-t border-border print:hidden">
         <p className="mx-auto w-full max-w-5xl px-6 py-4 text-xs text-muted-foreground">
           The platform never holds funds — where money applies, we track a
           reference and AfrikaBurn collects.
