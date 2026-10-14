@@ -62,7 +62,7 @@ describe("the tile's line", () => {
   it("plot size, count and last edit", () => {
     expect(
       layoutTileLine(
-        { width: 40, depth: 30, totalObjectCount: 13 },
+        { width: 40, depth: 30, objectCount: 13 },
         new Date("2027-03-04T12:32:00Z"),
         "Alice Hatter",
         NOW,
@@ -117,7 +117,7 @@ describe("the camp tile's state", () => {
     updatedAt: NOW,
     updatedByName: "Alice Hatter",
   };
-  const summary = { width: 40, depth: 30, totalObjectCount: 0 };
+  const summary = { width: 40, depth: 30, objectCount: 0 };
 
   it("needs a registration before anything else", () => {
     expect(

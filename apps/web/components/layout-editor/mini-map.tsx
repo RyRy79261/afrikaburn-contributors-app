@@ -1,5 +1,6 @@
 import {
   boundaryRing,
+  frontageSegment,
   nestedFootprintOnPlot,
   objectFootprint,
 } from "@quagga/core";
@@ -24,6 +25,7 @@ export function LayoutMiniMap({
   className?: string;
 }) {
   const ring = boundaryRing(doc.plot.boundary);
+  const frontage = frontageSegment(doc.plot);
   const b = bbox(ring);
   const pad = Math.max(b.maxX - b.minX, b.maxY - b.minY) * 0.04;
   const viewBox = `${b.minX - pad} ${b.minY - pad} ${b.maxX - b.minX + 2 * pad} ${b.maxY - b.minY + 2 * pad}`;
@@ -38,6 +40,15 @@ export function LayoutMiniMap({
         points={points(ring)}
         className="fill-background stroke-muted-foreground"
         strokeWidth={pad / 4}
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        x1={frontage[0][0]}
+        y1={frontage[0][1]}
+        x2={frontage[1][0]}
+        y2={frontage[1][1]}
+        className="stroke-ab-apricot"
+        strokeWidth={2}
         vectorEffect="non-scaling-stroke"
       />
       {doc.plot.objects.map((o) => {

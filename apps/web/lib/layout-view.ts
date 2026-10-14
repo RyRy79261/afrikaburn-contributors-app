@@ -79,16 +79,18 @@ export function objectCountText(n: number): string {
 }
 
 /** The camp tile's line: "Plot 40 m × 30 m · 13 objects · last edited
- * today, 14:32, by Alice Hatter". */
+ * today, 14:32, by Alice Hatter". The count is what stands on the plot — a
+ * Bedouin is one object however many tents are under it — as the editor's
+ * footer and the frame (QZeG7) count it. */
 export function layoutTileLine(
-  summary: { width: number; depth: number; totalObjectCount: number },
+  summary: { width: number; depth: number; objectCount: number },
   updatedAt: Date,
   updatedByName: string | null,
   now: Date,
 ): string {
   return [
     `Plot ${plotDimsText(summary)}`,
-    objectCountText(summary.totalObjectCount),
+    objectCountText(summary.objectCount),
     lastEditedPhrase(updatedAt, updatedByName, now),
   ].join(" · ");
 }
@@ -132,7 +134,7 @@ export type LayoutTileView =
   | {
       kind: "drawn";
       document: LayoutDocument;
-      summary: { width: number; depth: number; totalObjectCount: number };
+      summary: { width: number; depth: number; objectCount: number };
       updatedAt: Date;
       updatedByName: string | null;
     };
@@ -144,7 +146,7 @@ export function layoutTileView(view: {
     updatedAt: Date;
     updatedByName: string | null;
   } | null;
-  summary: { width: number; depth: number; totalObjectCount: number } | null;
+  summary: { width: number; depth: number; objectCount: number } | null;
 }): LayoutTileView {
   if (!view.registration) return { kind: "no_registration" };
   if (!view.layout || !view.summary) return { kind: "not_drawn" };

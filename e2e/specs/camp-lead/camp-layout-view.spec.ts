@@ -9,8 +9,9 @@
 // THE RULE UNDER TEST EVERYWHERE: warnings are for the camp's editors only.
 // Every layout here has a Kitchen two metres off the plot, which the editor
 // warns about; the member's plan, the print page and the console snapshot
-// must not say so. Each absence is asserted AFTER something on the same
-// surface is asserted present, so an unrendered page cannot pass it.
+// must not say so. (A LEAD on a phone does see them, read-only: frame
+// vnpZw.) Each absence is asserted AFTER something on the same surface is
+// asserted present, so an unrendered page cannot pass it.
 //
 // Selector provenance (verified against source on 2026-10-14):
 //   tile ............ apps/web/components/layout-view/layout-tile.tsx
@@ -119,12 +120,13 @@ test.describe("camp layout — the read-only plan", () => {
       layoutTile(webPage).getByRole("link", { name: /draw the layout/i }),
     ).toBeVisible();
 
-    // Tile 1: a plan.
+    // Tile 1: a plan. Two objects stand ON the plot (the Bedouin and the
+    // Kitchen); the tent under the Bedouin is counted on the Bedouin's row.
     await drawLayout(webPage, camp.slug);
     await webPage.goto(`/camps/${camp.slug}`);
     await expect(layoutTile(webPage)).toContainText("Members only");
     await expect(layoutTile(webPage)).toContainText(
-      /Plot 40 m × 30 m · 3 objects · last edited today, \d\d:\d\d/,
+      /Plot 40 m × 30 m · 2 objects · last edited today, \d\d:\d\d/,
     );
     await expect(
       layoutTile(webPage).getByRole("img", { name: "The camp's plan, small" }),
@@ -153,7 +155,7 @@ test.describe("camp layout — the read-only plan", () => {
     await expect(list).toContainText("Bedouin 1");
     await expect(list).toContainText("1 tent inside");
     await expect(list).toContainText("Kitchen 1");
-    await expect(member.getByText("3 objects", { exact: true })).toBeVisible();
+    await expect(member.getByText("2 objects", { exact: true })).toBeVisible();
     await expect(member.getByText(WARNING_TEXT)).toHaveCount(0);
     await expect(member.locator("canvas")).toHaveCount(0);
     await expect(member.getByRole("heading", { name: "Add to the plan" })).toHaveCount(0);
@@ -235,13 +237,18 @@ test.describe("camp layout — the read-only plan", () => {
     });
     await expect(plan).toBeVisible();
     await expect(webPage.getByText("Pinch to zoom, drag to pan")).toBeVisible();
-    await expect(webPage.getByText(WARNING_TEXT)).toHaveCount(0);
+    // The lead is an editor, so the phone shows them the plan's warnings
+    // (frame vnpZw) — read-only, with no canvas. A plain member never gets
+    // this panel (the desktop test above).
+    const warnings = webPage.getByRole("region", { name: "Warnings" });
+    await expect(warnings).toContainText("Kitchen 1 is 2.0 m outside the plot");
+    await expect(warnings).toContainText("Shown to leads and layout editors.");
     await expect(webPage.locator("canvas")).toHaveCount(0);
 
     // The object list starts folded on a phone, and opens.
     const list = webPage.getByRole("list", { name: "Objects on the plan" });
     await expect(list).toBeHidden();
-    await webPage.getByText("3 objects", { exact: true }).click();
+    await webPage.getByText("2 objects", { exact: true }).click();
     await expect(list).toBeVisible();
     await expect(list).toContainText("Bedouin 1");
 

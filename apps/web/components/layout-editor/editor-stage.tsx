@@ -5,6 +5,7 @@ import type Konva from "konva";
 import {
   Circle,
   Group,
+  Image as KonvaImage,
   Label,
   Layer,
   Line,
@@ -34,10 +35,12 @@ import {
   dimsText,
   fitScale,
   rulerStep,
+  stageHeight,
   sizeReadout,
   snapCentre,
   type AnyLayoutObject,
 } from "@/lib/layout-editor-model";
+import { layoutIcon } from "@quagga/ui/components/layout-icons";
 import { PALETTE_DRAG_TYPE } from "./palette-drag";
 
 // THE CANVAS (react-konva). This is the ONLY module that imports Konva, and
@@ -93,7 +96,10 @@ export interface EditorStageProps {
   /** Shade structures on the whole camp: how many things are under each. */
   nestedCounts: ReadonlyMap<string, number>;
   theme: StageTheme;
-  height: number;
+  /** The tallest the stage may be. It is shorter when the area, fitted to
+   * the width, needs less — so the rulers sit on the plot's edges with no
+   * empty band between them (frame f3jmCq). */
+  maxHeight: number;
   onSelect: (id: string | null) => void;
   onMove: (id: string, centre: Vec) => void;
   onTransform: (
@@ -109,6 +115,7 @@ export interface EditorStageProps {
 
 const RULER = 24;
 const MARGIN = 28;
+const MIN_HEIGHT = 320;
 
 export function withAlpha(colour: string, alpha: number): string {
   const hex = colour.trim().replace("#", "");
@@ -121,6 +128,86 @@ export function withAlpha(colour: string, alpha: number): string {
  * text only once it is drawn. */
 function chipWidth(text: string, charPx: number, padding: number): number {
   return text.length * charPx + 2 * padding;
+}
+
+/**
+ * Konva cannot draw a React icon. Each icon the plan needs (name + colour) is
+ * rendered once, hidden, as lucide's own <svg>, and handed to Konva as an
+ * image — the same icons the read-only plan draws when a label does not fit
+ * (frames f3jmCq, LcZsE).
+ */
+function useIconImages(keys: readonly string[]) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [images, setImages] = useState<ReadonlyMap<string, HTMLImageElement>>(
+    () => new Map(),
+  );
+  const started = useRef(new Set<string>());
+  const wanted = keys.join(",");
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    for (const el of host.querySelectorAll<HTMLElement>("[data-icon-key]")) {
+      const key = el.dataset.iconKey;
+      const svg = el.querySelector("svg");
+      if (!key || !svg || started.current.has(key)) continue;
+      started.current.add(key);
+      const img = new window.Image();
+      img.onload = () => {
+        setImages((prev) => new Map(prev).set(key, img));
+      };
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+        new XMLSerializer().serializeToString(svg),
+      )}`;
+    }
+  }, [wanted]);
+  const host = (
+    <div ref={hostRef} hidden aria-hidden>
+      {keys.map((key) => {
+        const [name, colour] = key.split("|");
+        const Icon = layoutIcon(name);
+        return (
+          <span key={key} data-icon-key={key}>
+            <Icon size={48} color={colour} />
+          </span>
+        );
+      })}
+    </div>
+  );
+  return { images, host };
+}
+
+type LabelFit = "full" | "name" | "icon" | "none";
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+/** Width of `text` in px, measured in the canvas's own font. */
+function measure(text: string, font: string): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return text.length * 7;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+
+/** What an object's label has room for, measured: its name and size, its
+ * name, else its icon (as the read-only plan does), else nothing. */
+function editorLabelFit(
+  wPx: number,
+  hPx: number,
+  name: string,
+  dims: string,
+  theme: StageTheme,
+): LabelFit {
+  const room = wPx - 8;
+  const nameFits = measure(name, `600 12px ${theme.font}`) <= room;
+  if (nameFits && hPx >= 34 && measure(dims, `10px ${theme.mono}`) <= room) {
+    return "full";
+  }
+  if (nameFits && hPx >= 18) return "name";
+  if (Math.min(wPx, hPx) >= 13) return "icon";
+  return "none";
+}
+
+function iconKey(icon: string | undefined, colour: string): string {
+  return `${icon ?? "box"}|${colour}`;
 }
 
 function openText(count: number): string {
@@ -179,7 +266,7 @@ export default function EditorStage(props: EditorStageProps) {
     guyZone,
     nestedCounts,
     theme,
-    height,
+    maxHeight,
     onSelect,
     onMove,
     onTransform,
@@ -203,6 +290,14 @@ export default function EditorStage(props: EditorStageProps) {
     () => unionBox(bbox(ring), guyZone ? bbox(guyZone.ring) : null),
     [ring, guyZone],
   );
+  // As tall as the area needs at this width, between MIN_HEIGHT and the
+  // cap: a wide plot gets a shorter stage, not an empty band under it.
+  const height = stageHeight(box.maxX - box.minX, box.maxY - box.minY, width, {
+    ruler: RULER,
+    margin: MARGIN,
+    min: MIN_HEIGHT,
+    max: maxHeight,
+  });
   const base = fitScale(
     box.maxX - box.minX,
     box.maxY - box.minY,
@@ -367,7 +462,37 @@ export default function EditorStage(props: EditorStageProps) {
   };
 
   const selected = objects.find((o) => o.id === selectedId) ?? null;
+  // Support poles paint last: a pole under a tent is what the warning is
+  // about, and it must stay visible and clickable (frame LcZsE).
+  const drawOrder = useMemo(() => {
+    const isPole = (o: AnyLayoutObject) =>
+      findCatalogEntry(catalog, o.catalogKey)?.role === "pole";
+    return [...objects.filter((o) => !isPole(o)), ...objects.filter(isPole)];
+  }, [objects, catalog]);
   const scaleBarM = rulerStep(scale, 60);
+
+  // What each object's label can hold at this zoom: the read-only plan's
+  // rule, so a small object shows its icon rather than a clipped name.
+  const fits = useMemo(() => {
+    const m = new Map<string, LabelFit>();
+    for (const o of objects) {
+      const w = (o.shape === "circle" ? (o.diameter ?? o.width) : o.width) * scale;
+      const l = (o.shape === "circle" ? (o.diameter ?? o.width) : o.length) * scale;
+      m.set(o.id, editorLabelFit(w, l, layoutObjectName(o, catalog), dimsText(o), theme));
+    }
+    return m;
+  }, [objects, scale, catalog, theme]);
+  const iconKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const o of objects) {
+      if (fits.get(o.id) !== "icon") continue;
+      const e = findCatalogEntry(catalog, o.catalogKey);
+      if (e?.role === "pole") continue;
+      keys.add(iconKey(e?.icon, colourFor(e, theme)));
+    }
+    return [...keys].sort();
+  }, [objects, fits, catalog, theme]);
+  const icons = useIconImages(iconKeys);
 
   return (
     <div
@@ -486,7 +611,11 @@ export default function EditorStage(props: EditorStageProps) {
                       strokeWidth={1}
                     />
                   )}
-                  {o.clearanceM > 0 && level === "plot" && (
+                  {/* Clearance only where it is the point: the selected
+                      object and any object a warning names. */}
+                  {o.clearanceM > 0 &&
+                    level === "plot" &&
+                    (o.id === selectedId || warnedIds.has(o.id)) && (
                     <Line
                       points={ringPoints(footprintRing(inflate(fp, o.clearanceM), 48), scale)}
                       closed
@@ -499,7 +628,7 @@ export default function EditorStage(props: EditorStageProps) {
               );
             })}
 
-            {objects.map((o) => {
+            {drawOrder.map((o) => {
               const e = findCatalogEntry(catalog, o.catalogKey);
               const colour = colourFor(e, theme);
               const warned = warnedIds.has(o.id);
@@ -507,8 +636,14 @@ export default function EditorStage(props: EditorStageProps) {
               const w = (o.shape === "circle" ? (o.diameter ?? o.width) : o.width) * scale;
               const l = (o.shape === "circle" ? (o.diameter ?? o.width) : o.length) * scale;
               const name = layoutObjectName(o, catalog);
-              const showText = w >= 34 && l >= 18;
-              const showDims = w >= 44 && l >= 34;
+              const fit = fits.get(o.id) ?? "none";
+              const showText = fit === "full" || fit === "name";
+              const showDims = fit === "full";
+              const iconImage =
+                fit === "icon" && e?.role !== "pole"
+                  ? icons.images.get(iconKey(e?.icon, colour))
+                  : undefined;
+              const iconPx = Math.min(12 * 1.3, Math.min(w, l) * 0.7);
               const nested = e?.nestable ? (nestedCounts.get(o.id) ?? 0) : null;
               const stroke = warned ? theme.accent : colour;
               const fill =
@@ -618,6 +753,17 @@ export default function EditorStage(props: EditorStageProps) {
                       listening={false}
                     />
                   )}
+                  {iconImage && (
+                    <KonvaImage
+                      image={iconImage}
+                      width={iconPx}
+                      height={iconPx}
+                      offsetX={iconPx / 2}
+                      offsetY={iconPx / 2}
+                      rotation={o.shape === "circle" ? 0 : -o.rotationDeg}
+                      listening={false}
+                    />
+                  )}
                   {showDims && e?.role !== "pole" && (
                     <Text
                       x={-w / 2}
@@ -632,7 +778,10 @@ export default function EditorStage(props: EditorStageProps) {
                       listening={false}
                     />
                   )}
-                  {nested !== null && w >= 90 && l >= 60 && (
+                  {/* The "open" chip on a shade that holds something, or on
+                      the selected one (an empty shade opens from the
+                      inspector too). */}
+                  {nested !== null && (nested > 0 || isSel) && w >= 90 && l >= 60 && (
                     <Label
                       x={0}
                       y={18}
@@ -758,6 +907,7 @@ export default function EditorStage(props: EditorStageProps) {
           </Group>
         </Layer>
       </Stage>
+      {icons.host}
     </div>
   );
 }

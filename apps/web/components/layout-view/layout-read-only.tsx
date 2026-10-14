@@ -1,12 +1,19 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, Hand, Map as MapIcon, Monitor } from "lucide-react";
+import {
+  ChevronRight,
+  Hand,
+  Map as MapIcon,
+  Monitor,
+  TriangleAlert,
+} from "lucide-react";
 import {
   boundaryDimensions,
   formatPlotSize,
   getLayoutCatalog,
   layoutObjectName,
   plotSummary,
+  type LayoutWarning,
 } from "@quagga/core";
 import type { LayoutDocument } from "@quagga/types";
 import { LayoutPlan } from "@quagga/ui/components/layout-plan";
@@ -41,6 +48,11 @@ export interface LayoutReadOnlyProps {
   areaId: string | null;
   /** An editor on a phone: says where editing happens. */
   editorOnPhone: boolean;
+  /** The plan's warnings — given ONLY for an editor (14 Oct decision:
+   * warnings are for leads, co-leads and `manage_layout`), who sees them
+   * below 768 px, where the editor's own panel is not mounted (frames vnpZw,
+   * PGk6q). Null for everyone else, and never rendered from 768 px. */
+  warnings?: readonly LayoutWarning[] | null;
   now: Date;
   /** The page's back link, title and subtitle. */
   header: ReactNode;
@@ -54,6 +66,7 @@ export function LayoutReadOnly({
   updatedByName,
   areaId,
   editorOnPhone,
+  warnings = null,
   now,
   header,
 }: LayoutReadOnlyProps) {
@@ -64,6 +77,24 @@ export function LayoutReadOnly({
   const child = parent?.child ?? null;
   const parentName = parent ? layoutObjectName(parent, catalog) : null;
   const summary = plotSummary(doc, catalog);
+
+  const areaName = (id: string) => {
+    const o = doc.plot.objects.find((x) => x.id === id);
+    return o ? layoutObjectName(o, catalog) : "a covered area";
+  };
+  // Inside a covered area, that area's warnings; on the whole camp, all of
+  // them, the nested ones named by their area as the editor's panel does.
+  const shownWarnings =
+    editorOnPhone && warnings
+      ? warnings.filter((w) => !areaId || w.areaId === areaId)
+      : [];
+
+  // The objects those warnings name, outlined on the phone's plan (frame
+  // vnpZw). Undefined for everyone who is not an editor.
+  const warnedIds =
+    shownWarnings.length > 0
+      ? new Set(shownWarnings.flatMap((w) => w.objectIds))
+      : undefined;
 
   const sizeLine = child
     ? `Covered ${formatPlotSize(boundaryDimensions(child.boundary))}`
@@ -155,18 +186,71 @@ export function LayoutReadOnly({
               areaId={areaId}
               variant="compact"
               title={title}
+              highlightIds={warnedIds}
             />
           </PlanViewport>
           <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <Hand className="h-4 w-4" aria-hidden />
             Pinch to zoom, drag to pan
           </p>
+          {child && (
+            <p className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-foreground" aria-hidden />
+                Pole
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-4 bg-ab-apricot" aria-hidden />
+                Guy ropes, keep clear
+              </span>
+            </p>
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground md:text-center">
           {lastEditedLine(updatedAt, updatedByName, now)}
         </p>
       </section>
+
+      {editorOnPhone && warnings && (
+        <section
+          aria-label="Warnings"
+          className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 md:hidden"
+        >
+          <h2 className="flex items-center gap-2 font-semibold">
+            <TriangleAlert className="h-4 w-4 text-warning" aria-hidden />
+            Warnings
+            <span className="rounded-full bg-warning/20 px-2 text-xs font-semibold text-warning">
+              {shownWarnings.length}
+            </span>
+          </h2>
+          {shownWarnings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No warnings on this plan.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {shownWarnings.map((w, i) => (
+                <li
+                  key={`${w.code}-${w.objectIds.join("-")}-${i}`}
+                  className="rounded-lg bg-muted/60 p-3"
+                >
+                  <span className="block text-sm font-semibold">
+                    {w.message}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {w.areaId && !areaId ? `Inside ${areaName(w.areaId)} · ` : ""}
+                    {w.detail}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="pt-1 text-xs text-muted-foreground">
+            Shown to leads and layout editors. Advice only.
+          </p>
+        </section>
+      )}
 
       <section
         aria-label="Objects"
@@ -176,9 +260,15 @@ export function LayoutReadOnly({
           slug={slug}
           catalog={catalog}
           objects={child ? child.objects : doc.plot.objects}
-          totalCount={child ? child.objects.length : summary.totalObjectCount}
+          totalCount={child ? child.objects.length : doc.plot.objects.length}
           nestedLevel={child !== null}
         />
+        {child && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Tent labels are free text. They aren&apos;t linked to anyone&apos;s
+            account.
+          </p>
+        )}
       </section>
     </div>
   );

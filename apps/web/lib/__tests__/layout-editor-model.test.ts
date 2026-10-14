@@ -38,6 +38,7 @@ import {
   rulerStep,
   setCoveredSize,
   setPlotSize,
+  stageHeight,
   sizeReadout,
   snapCentre,
   stepZoom,
@@ -386,6 +387,14 @@ describe("view maths", () => {
     expect(fitScale(40, 30, 840, 400, 20)).toBe(12);
     expect(fitScale(40, 10, 840, 400, 20)).toBe(20);
     expect(fitScale(0, 0, 10, 10, 20)).toBe(10);
+  });
+  it("sizes the stage to the plot fitted to its width, within its limits", () => {
+    const o = { ruler: 24, margin: 28, min: 320, max: 540 };
+    // 40 × 30 m across 640 px: 560 px of plot width → 14 px/m → 420 + 80.
+    expect(stageHeight(40, 30, 640, o)).toBe(500);
+    // A deep plot is capped; a shallow one never goes below the floor.
+    expect(stageHeight(30, 40, 640, o)).toBe(540);
+    expect(stageHeight(40, 5, 640, o)).toBe(320);
   });
   it("zooms in steps, within its limits", () => {
     expect(stepZoom(1, 1)).toBe(1.25);

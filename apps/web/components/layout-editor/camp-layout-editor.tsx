@@ -771,7 +771,6 @@ export function CampLayoutEditor({
               aria-label={`${parent ? parentName : "Whole camp"} plan. Select an object, then use the arrow keys to move it and Delete to remove it. Every change can also be typed in the inspector.`}
               onPointerDown={() => canvasRef.current?.focus()}
               className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              style={{ minHeight: STAGE_HEIGHT }}
             >
               {wide ? (
                 <EditorStage
@@ -788,7 +787,7 @@ export function CampLayoutEditor({
                   guyZone={guyZone}
                   nestedCounts={nestedCounts}
                   theme={theme}
-                  height={STAGE_HEIGHT}
+                  maxHeight={STAGE_HEIGHT}
                   onSelect={setSelectedId}
                   onMove={(id, centre) =>
                     commit((d) => updateObject(d, current.ref, id, { centre }))

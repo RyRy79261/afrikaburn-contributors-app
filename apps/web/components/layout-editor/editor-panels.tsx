@@ -80,7 +80,7 @@ export function LayoutPalette({
   return (
     <section
       aria-labelledby={`${searchId}-h`}
-      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
+      className="flex flex-col gap-3 self-start rounded-xl border border-border bg-card p-4"
     >
       <h2 id={`${searchId}-h`} className="font-semibold">
         Add to the plan

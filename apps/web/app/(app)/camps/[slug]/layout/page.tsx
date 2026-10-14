@@ -3,19 +3,29 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, LayoutGrid, Monitor } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
-import { canViewCampRegistration, formatPlotSize } from "@quagga/core";
+import {
+  boundaryDimensions,
+  canViewCampRegistration,
+  formatPlotSize,
+  getLayoutCatalog,
+  layoutObjectName,
+} from "@quagga/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { enforceGate, getCurrentCampUser } from "@/lib/session";
 import { isDatabaseConfigured } from "@/lib/config";
 import { getActiveEdition } from "@/lib/edition";
-import { loadCampLayout, loadLayoutAccess } from "@/lib/camp-layout-store";
+import {
+  loadCampLayout,
+  loadLayoutAccess,
+  type CampLayoutView,
+} from "@/lib/camp-layout-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { CampLayoutEditor } from "@/components/layout-editor/camp-layout-editor";
 import { LayoutStartCard } from "@/components/layout-editor/layout-start-card";
 import { WideOnly } from "@/components/layout-editor/wide-only";
 import { LayoutReadOnly } from "@/components/layout-view/layout-read-only";
 import { planArea } from "@quagga/ui/lib/layout-plan-model";
-import { parseAreaParam } from "@/lib/layout-view";
+import { layoutPath, parseAreaParam } from "@/lib/layout-view";
 
 export const dynamic = "force-dynamic";
 
@@ -194,9 +204,40 @@ export default async function CampLayoutPage({
 
   const layout = view.layout;
   // A covered area that is not in this camp's document is not found.
-  if (areaId && !planArea(layout.document, areaId)) notFound();
+  const area = areaId ? planArea(layout.document, areaId) : null;
+  if (areaId && !area) notFound();
 
-  const readOnly = (subtitle: string) => (
+  // Inside a covered area the read-only page is titled by it, and its back
+  // link goes to the whole camp (frame PGk6q).
+  const areaParent = area?.parent ?? null;
+  const areaHeader = areaParent?.child
+    ? (() => {
+        const n = areaParent.child.objects.length;
+        return (
+          <div>
+            <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
+              <Link href={layoutPath(camp.slug)}>
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Whole camp
+              </Link>
+            </Button>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {layoutObjectName(areaParent, getLayoutCatalog(edition.year))}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {`Covered area ${formatPlotSize(
+                boundaryDimensions(areaParent.child.boundary),
+              )} · ${n} inside`}
+            </p>
+          </div>
+        );
+      })()
+    : null;
+
+  const readOnly = (
+    subtitle: string,
+    warnings: CampLayoutView["warnings"] = null,
+  ) => (
     <LayoutReadOnly
       slug={camp.slug}
       editionYear={edition.year}
@@ -205,8 +246,9 @@ export default async function CampLayoutPage({
       updatedByName={layout.updatedByName}
       areaId={areaId}
       editorOnPhone={access.canEdit}
+      warnings={warnings}
       now={new Date()}
-      header={header(subtitle)}
+      header={areaHeader ?? header(subtitle)}
     />
   );
 
@@ -223,7 +265,7 @@ export default async function CampLayoutPage({
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5">
       <div className="md:hidden">
-        {readOnly(`${editionName} · view-only on a phone.`)}
+        {readOnly(`${editionName} · view-only on a phone.`, view.warnings)}
       </div>
       {/* The editor needs more room than the shell's reading column: from
           lg it widens to the viewport (up to 76rem), centred on the column. */}

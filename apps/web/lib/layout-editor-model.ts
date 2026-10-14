@@ -536,6 +536,22 @@ export function fitScale(
   return Math.max(0.01, Math.min(w / Math.max(width, 0.1), h / Math.max(depth, 0.1)));
 }
 
+/**
+ * The editor stage's height: what the area needs once fitted to the stage's
+ * width, clamped to [min, max]. A wide plot gets a shorter stage rather than
+ * an empty band between the top ruler and the plot (frame f3jmCq).
+ */
+export function stageHeight(
+  areaW: number,
+  areaD: number,
+  stageW: number,
+  o: { ruler: number; margin: number; min: number; max: number },
+): number {
+  const fit = Math.max(1, stageW - o.ruler - 2 * o.margin) / Math.max(areaW, 0.1);
+  const natural = o.ruler + 2 * o.margin + Math.max(areaD, 0.1) * fit;
+  return Math.round(Math.min(o.max, Math.max(o.min, natural)));
+}
+
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 8;
 
