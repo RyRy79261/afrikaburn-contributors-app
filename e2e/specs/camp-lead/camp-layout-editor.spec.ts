@@ -16,11 +16,12 @@
 //   4. Keyboard on the plan: → moves it 0.5 m, Ctrl+Z puts it back, Delete
 //      removes it.
 //   5. A Bedouin opens as its own covered area: the breadcrumb, the "Inside a
-//      Bedouin" palette, the covered size, a tent added inside. Back to the
-//      whole camp.
+//      Bedouin" palette, the covered size, a tent added inside and given a
+//      free-text label. Back to the whole camp.
 //   6. Two tabs: the second saves first, so the first's next save is REFUSED
 //      with "This layout changed since you opened it" and a Reload.
-//   7. A plain member gets the read-only view — no palette, no warnings.
+//   7. A plain member gets the read-only view — no palette, no warnings — and
+//      sees the tent's label inside the Bedouin.
 //   8. A stranger gets the camp's not-found.
 //
 // At 360 the same lead can neither start nor edit a plan, and gets NO canvas
@@ -49,6 +50,12 @@ import {
   submitRegistration,
 } from "../../personas/factories";
 import { expectServerNotFound } from "../camp-member/support";
+import { uniqueName, uniqueUsername } from "../../lib/identity";
+import {
+  assignRoleToMember,
+  createCustomRole,
+  revokeRoleFromMember,
+} from "./support";
 
 async function gotoLayout(page: Page, slug: string) {
   await page.goto(`/camps/${slug}/layout`);
@@ -91,6 +98,13 @@ test.describe("camp lead — the layout editor", () => {
     await expect(
       webPage.getByText(/no layout for .* yet/i).filter({ visible: true }),
     ).toBeVisible();
+    // A first-time camp in the one seeded edition has no earlier layout, so
+    // the one-click copy is not offered (its positive path is unit-tested:
+    // camp-layout-store.test.ts, @quagga/core camp-layout.test.ts).
+    await expect(webPage.getByRole("button", { name: "Create the plot" })).toBeVisible();
+    await expect(
+      webPage.getByRole("button", { name: /start from last year/i }),
+    ).toHaveCount(0);
     await webPage.getByLabel("Width", { exact: true }).fill("40");
     await webPage.getByLabel("Depth", { exact: true }).fill("30");
     await webPage.getByRole("button", { name: "Create the plot" }).click();
@@ -142,6 +156,13 @@ test.describe("camp lead — the layout editor", () => {
     await webPage.getByRole("button", { name: /^Add Tent · 2 person,/ }).click();
     await expect(webPage.getByText("inside Bedouin 1", { exact: false }).first()).toBeVisible();
     await expect(webPage.getByText(/^1 tent · /)).toBeVisible();
+    // Tents carry a free-text label, never a link to a person (decision 7).
+    const tentLabel = webPage.getByLabel("Label", { exact: true });
+    await tentLabel.fill("Ren and Jabu");
+    await tentLabel.press("Enter");
+    await expect(
+      webPage.getByRole("heading", { level: 2, name: "Ren and Jabu" }),
+    ).toBeVisible();
     await webPage.getByRole("button", { name: "Back to whole camp" }).click();
     await expect(crumbs).toHaveCount(0);
     await expectSaved(webPage);
@@ -172,6 +193,17 @@ test.describe("camp lead — the layout editor", () => {
     await expect(memberPage.getByRole("heading", { name: "Add to the plan" })).toHaveCount(0);
     await expect(memberPage.getByRole("heading", { name: /warnings/i })).toHaveCount(0);
     await expect(memberPage.locator("canvas")).toHaveCount(0);
+    // The tent's label reached the member's copy of the covered area.
+    await memberPage
+      .getByRole("list", { name: "Objects on the plan" })
+      .getByRole("link", { name: /Bedouin 1/ })
+      .click();
+    await expect(
+      memberPage.getByRole("navigation", { name: "Breadcrumb" }),
+    ).toContainText("Bedouin 1");
+    await expect(
+      memberPage.getByRole("list", { name: "Objects on the plan" }),
+    ).toContainText("Ren and Jabu");
 
     // 8. A stranger.
     const strangerPage = await makeAppPage("web");
@@ -208,5 +240,71 @@ test.describe("camp lead — the layout editor", () => {
     ).toBeHidden();
     await expect(webPage.getByRole("heading", { name: "Add to the plan" })).toBeHidden();
     await expect(webPage.locator("canvas")).toHaveCount(0);
+  });
+
+  test("a custom role with manage_layout edits; revoking it makes the plan read-only again", async ({
+    makeAppPage,
+  }) => {
+    test.skip(
+      test.info().project.name === "mobile-360",
+      "The editor needs 768 px.",
+    );
+    test.setTimeout(300_000);
+
+    const leadPage = await makeAppPage("web");
+    const plannerPage = await makeAppPage("web");
+    const plannerName = uniqueUsername("layout_ren");
+
+    await signUpBurner(leadPage, { onboard: true });
+    const camp = await createCamp(leadPage, { description: "Shade and chai." });
+    await submitRegistration(leadPage, camp.slug);
+    await gotoLayout(leadPage, camp.slug);
+    await leadPage.getByLabel("Width", { exact: true }).fill("30");
+    await leadPage.getByLabel("Depth", { exact: true }).fill("20");
+    await leadPage.getByRole("button", { name: "Create the plot" }).click();
+    await expect(leadPage.getByText("Plot 30.0 m × 20.0 m · 600 m²")).toBeVisible();
+
+    const invite = await inviteToCamp(leadPage, camp.slug, "member");
+    await signUpBurner(plannerPage, { onboard: true, username: plannerName });
+    await joinByInvite(plannerPage, invite.url);
+
+    // Before the grant: a plain member, read-only. PRESENT first.
+    await gotoLayout(plannerPage, camp.slug);
+    await expect(plannerPage.getByText(/read-only/i).first()).toBeVisible();
+    await expect(
+      plannerPage.getByRole("heading", { name: "Add to the plan" }),
+    ).toHaveCount(0);
+
+    const roleName = uniqueName("Layout Wrangler");
+    await createCustomRole(leadPage, camp.slug, {
+      name: roleName,
+      emoji: "📐",
+      colorLabel: "Teal",
+      privileges: ["Can edit the camp layout"],
+    });
+    await assignRoleToMember(leadPage, camp.slug, plannerName, roleName);
+
+    // After it: the editor, and an edit the server accepts.
+    await gotoLayout(plannerPage, camp.slug);
+    await expect(
+      plannerPage.getByRole("heading", { name: "Add to the plan" }),
+    ).toBeVisible();
+    await plannerPage.getByRole("button", { name: /^Add Stage,/ }).click();
+    await expect(
+      plannerPage.getByRole("heading", { level: 2, name: "Stage 1" }),
+    ).toBeVisible();
+    await expectSaved(plannerPage);
+
+    // Revoked: read-only again, and the Stage they drew is on the plan the
+    // server holds.
+    await revokeRoleFromMember(leadPage, camp.slug, plannerName, roleName);
+    await gotoLayout(plannerPage, camp.slug);
+    await expect(plannerPage.getByText(/read-only/i).first()).toBeVisible();
+    await expect(
+      plannerPage.getByRole("list", { name: "Objects on the plan" }),
+    ).toContainText("Stage 1");
+    await expect(
+      plannerPage.getByRole("heading", { name: "Add to the plan" }),
+    ).toHaveCount(0);
   });
 });

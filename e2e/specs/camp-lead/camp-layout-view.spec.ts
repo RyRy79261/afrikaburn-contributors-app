@@ -248,7 +248,7 @@ test.describe("camp layout — the read-only plan", () => {
 });
 
 test.describe("camp layout — AfrikaBurn's copy", () => {
-  test("the console shows the snapshot pinned at submit, under section 4, with no warnings", async ({
+  test("the console shows the snapshot pinned at submit, not later edits, under section 4, with no warnings", async ({
     webPage,
     orgPage,
   }) => {
@@ -265,6 +265,17 @@ test.describe("camp layout — AfrikaBurn's copy", () => {
     await drawLayout(webPage, camp.slug);
     await submitRegistration(webPage, camp.slug);
 
+    // After submit the camp keeps editing; AfrikaBurn's copy must not move.
+    await webPage.goto(`/camps/${camp.slug}/layout`);
+    await expect(
+      webPage.getByText(/AfrikaBurn sees the plan you sent with your registration on /),
+    ).toBeVisible();
+    await webPage.getByRole("button", { name: /^Add Stage,/ }).click();
+    await expect(
+      webPage.getByRole("heading", { level: 2, name: "Stage 1" }),
+    ).toBeVisible();
+    await expectSaved(webPage);
+
     await elevateToGod(orgPage);
     await openRegistrationInConsole(orgPage, camp.name);
     await expect(orgPage.getByText("Plot (from the layout)")).toBeVisible();
@@ -277,6 +288,8 @@ test.describe("camp layout — AfrikaBurn's copy", () => {
     });
     await expect(plan).toBeVisible();
     await expect(plan).toContainText("Kitchen 1");
+    // The Stage drawn AFTER submit is not in the pinned copy.
+    await expect(plan).not.toContainText("Stage 1");
     await expect(orgPage.getByText(/pinned when the camp submitted/i)).toBeVisible();
     const section = orgPage
       .locator("dl")
