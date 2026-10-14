@@ -174,6 +174,10 @@ export type SetBudgetPlanInput = z.infer<typeof SetBudgetPlanInput>;
 export const ApproveBudgetInput = z.object({ slug: Slug }).strict();
 export type ApproveBudgetInput = z.infer<typeof ApproveBudgetInput>;
 
+/** Move an approved budget back to draft (clears who approved it, when). */
+export const ReopenBudgetInput = z.object({ slug: Slug }).strict();
+export type ReopenBudgetInput = z.infer<typeof ReopenBudgetInput>;
+
 // --- Categories -----------------------------------------------------------
 
 export const AddBudgetCategoryInput = z
@@ -321,6 +325,18 @@ export const MarkClaimRepaidInput = z
   .object({ slug: Slug, claimId: Uuid, repaidOn: MoneyDate })
   .strict();
 export type MarkClaimRepaidInput = z.infer<typeof MarkClaimRepaidInput>;
+
+/** A money person reopens a rejected claim (→ submitted). */
+export const ReopenClaimInput = z
+  .object({ slug: Slug, claimId: Uuid })
+  .strict();
+export type ReopenClaimInput = z.infer<typeof ReopenClaimInput>;
+
+/** A money person undoes "repaid" recorded in error (→ approved). */
+export const UndoClaimRepaidInput = z
+  .object({ slug: Slug, claimId: Uuid })
+  .strict();
+export type UndoClaimRepaidInput = z.infer<typeof UndoClaimRepaidInput>;
 
 /** Which record a receipt hangs off (the receipt route's parameter). */
 export const ReceiptSubjectKind = z.enum(["claim", "entry"]);

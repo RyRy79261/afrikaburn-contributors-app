@@ -27,7 +27,10 @@ import {
   claimApprovedNotification,
   claimRejectedNotification,
   claimRepaidNotification,
+  claimRepaidUndoneNotification,
+  claimReopenedNotification,
   claimSubmittedNotification,
+  decideBudgetAction,
   decideCategoryName,
   decideCategoryRemoval,
   decideClaimAction,
@@ -629,7 +632,7 @@ const submitted = (
 });
 
 describe("claims — the state machine", () => {
-  it("allows exactly submitted→approved|rejected and approved→repaid", () => {
+  it("allows exactly the forward steps and the two corrections back", () => {
     const allowed: string[] = [];
     for (const from of CampClaimStatus.options) {
       for (const to of CampClaimStatus.options) {
@@ -638,11 +641,112 @@ describe("claims — the state machine", () => {
     }
     expect(allowed.sort()).toEqual([
       "approved->repaid",
+      "rejected->submitted",
+      "repaid->approved",
       "submitted->approved",
       "submitted->rejected",
     ]);
-    expect(CLAIM_TRANSITIONS.rejected).toEqual([]);
-    expect(CLAIM_TRANSITIONS.repaid).toEqual([]);
+    // an approval is never sent back to the queue
+    expect(CLAIM_TRANSITIONS.approved).toEqual([REPAID]);
+  });
+
+  it("every action's `next` is a transition the state machine allows", () => {
+    const actor = { userId: "alice", membership: LEAD };
+    const cases = [
+      ["approve", SUBMITTED],
+      ["reject", SUBMITTED],
+      ["repay", APPROVED],
+      ["reopen", REJECTED],
+      ["undo_repaid", REPAID],
+    ] as const;
+    for (const [action, status] of cases) {
+      const d = decideClaimAction({
+        action,
+        actor,
+        claim: { claimantUserId: "ren", status, categoryId: "kitchen" },
+        category: KITCHEN,
+      });
+      expect(d.ok).toBe(true);
+      if (d.ok && d.next) expect(canTransitionClaim(status, d.next)).toBe(true);
+    }
+  });
+
+  it("a money person reopens a rejected claim and undoes a repaid one", () => {
+    const actor = { userId: "alice", membership: TREASURER };
+    expect(
+      decideClaimAction({
+        action: "reopen",
+        actor,
+        claim: { claimantUserId: "ren", status: REJECTED, categoryId: null },
+      }),
+    ).toEqual({ ok: true, next: SUBMITTED });
+    expect(
+      decideClaimAction({
+        action: "undo_repaid",
+        actor,
+        claim: { claimantUserId: "ren", status: REPAID, categoryId: "kitchen" },
+      }),
+    ).toEqual({ ok: true, next: APPROVED });
+  });
+
+  it("never lets the claimant reopen or undo their own claim — not even a lead", () => {
+    for (const membership of [LEAD, ADMIN, TREASURER]) {
+      const actor = { userId: "alice", membership };
+      expect(
+        decideClaimAction({
+          action: "reopen",
+          actor,
+          claim: {
+            claimantUserId: "alice",
+            status: REJECTED,
+            categoryId: null,
+          },
+        }),
+      ).toEqual({ ok: false, reason: "own_claim" });
+      expect(
+        decideClaimAction({
+          action: "undo_repaid",
+          actor,
+          claim: {
+            claimantUserId: "alice",
+            status: REPAID,
+            categoryId: "kitchen",
+          },
+        }),
+      ).toEqual({ ok: false, reason: "own_claim" });
+    }
+    // and a plain member reopens nobody's
+    expect(
+      decideClaimAction({
+        action: "reopen",
+        actor: { userId: "jabu", membership: MEMBER },
+        claim: { claimantUserId: "ren", status: REJECTED, categoryId: null },
+      }),
+    ).toEqual({ ok: false, reason: "not_money_person" });
+  });
+
+  it("reopen and undo act once: the second money person sees the changed status", () => {
+    const actor = { userId: "alice", membership: LEAD };
+    // the first money person's reopen landed: the claim is submitted now
+    for (const status of [SUBMITTED, APPROVED, REPAID]) {
+      expect(
+        decideClaimAction({
+          action: "reopen",
+          actor,
+          claim: { claimantUserId: "ren", status, categoryId: "kitchen" },
+        }),
+      ).toEqual({ ok: false, reason: "claim_changed" });
+    }
+    for (const status of [SUBMITTED, APPROVED, REJECTED]) {
+      expect(
+        decideClaimAction({
+          action: "undo_repaid",
+          actor,
+          claim: { claimantUserId: "ren", status, categoryId: "kitchen" },
+        }),
+      ).toEqual({ ok: false, reason: "claim_changed" });
+    }
+    expect(moneyRefusalMessage("claim_changed")).toMatch(/refresh/);
   });
 
   it("a money person approves, rejects and marks repaid someone else's claim", () => {
@@ -820,6 +924,51 @@ describe("claims — the state machine", () => {
         claim: submitted("jabu"),
       }),
     ).toEqual({ ok: false, reason: "not_member" });
+  });
+});
+
+describe("the budget's status", () => {
+  it("a money person approves a draft and moves an approved budget back to draft", () => {
+    for (const membership of [LEAD, TREASURER]) {
+      expect(
+        decideBudgetAction({ action: "approve", membership, status: "draft" }),
+      ).toEqual({ ok: true, next: "approved" });
+      expect(
+        decideBudgetAction({
+          action: "reopen",
+          membership,
+          status: "approved",
+        }),
+      ).toEqual({ ok: true, next: "draft" });
+    }
+  });
+
+  it("refuses a member and a non-member either way", () => {
+    for (const action of ["approve", "reopen"] as const) {
+      expect(
+        decideBudgetAction({ action, membership: MEMBER, status: "approved" }),
+      ).toEqual({ ok: false, reason: "not_money_person" });
+      expect(
+        decideBudgetAction({ action, membership: null, status: "draft" }),
+      ).toEqual({ ok: false, reason: "not_member" });
+    }
+  });
+
+  it("acts once: two money people at once, the second sees the status already moved", () => {
+    expect(
+      decideBudgetAction({
+        action: "reopen",
+        membership: LEAD,
+        status: "draft",
+      }),
+    ).toEqual({ ok: false, reason: "budget_not_approved" });
+    expect(
+      decideBudgetAction({
+        action: "approve",
+        membership: LEAD,
+        status: "approved",
+      }),
+    ).toEqual({ ok: false, reason: "budget_already_approved" });
   });
 });
 
@@ -1021,6 +1170,8 @@ describe("notifications", () => {
       claimApprovedNotification(c, R(2_380)),
       claimRejectedNotification(c, R(600)),
       claimRepaidNotification(c, R(950)),
+      claimReopenedNotification(c, R(600)),
+      claimRepaidUndoneNotification(c, R(950)),
     ];
     for (const n of all) {
       expect(NotificationKind.options).toContain(n.kind);

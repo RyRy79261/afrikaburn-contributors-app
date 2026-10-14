@@ -48,6 +48,7 @@ export const MONEY_AUDIT = {
   instructions: "camp.money.payment_instructions",
   plan: "camp.money.plan",
   approve: "camp.money.budget_approve",
+  budgetReopen: "camp.money.budget_reopen",
   categoryAdd: "camp.money.category_add",
   categoryRename: "camp.money.category_rename",
   categoryDelete: "camp.money.category_delete",
@@ -64,6 +65,8 @@ export const MONEY_AUDIT = {
   claimApprove: "camp.money.claim_approve",
   claimReject: "camp.money.claim_reject",
   claimRepaid: "camp.money.claim_repaid",
+  claimReopen: "camp.money.claim_reopen",
+  claimRepaidUndo: "camp.money.claim_repaid_undo",
 } as const;
 
 /** The `system_key` of the income category dues received are counted into. */
@@ -184,6 +187,7 @@ export type MoneyRefusal =
   | "claim_already_decided"
   | "claim_not_approved"
   | "claim_needs_category"
+  | "claim_changed"
   | "category_missing"
   | "category_archived"
   | "category_not_expense"
@@ -193,6 +197,7 @@ export type MoneyRefusal =
   | "category_name_taken"
   | "too_many_categories"
   | "budget_already_approved"
+  | "budget_not_approved"
   | "unknown_member"
   | "deleted_account";
 
@@ -212,6 +217,8 @@ export function moneyRefusalMessage(reason: MoneyRefusal): string {
       return "That claim has already been decided — refresh to see it.";
     case "claim_not_approved":
       return "Only an approved claim can be marked repaid.";
+    case "claim_changed":
+      return "That claim has changed since you opened it — refresh to see it.";
     case "claim_needs_category":
       return "Pick a spending category for this claim before approving it.";
     case "category_missing":
@@ -232,6 +239,8 @@ export function moneyRefusalMessage(reason: MoneyRefusal): string {
       return "That's the most categories a budget can have.";
     case "budget_already_approved":
       return "The budget is already approved.";
+    case "budget_not_approved":
+      return "The budget is already a draft — refresh to see it.";
     case "unknown_member":
       return "That person isn't on this camp's books.";
     case "deleted_account":
@@ -365,9 +374,13 @@ export function decideClaimCategory(
 // --- Claims: the state machine ---------------------------------------------
 
 /**
- * submitted → approved | rejected; approved → repaid. Rejected and repaid
- * are final. A withdrawn claim (its author, while `submitted`) is deleted,
- * so it has no state of its own.
+ * submitted → approved | rejected; approved → repaid. Two corrections go
+ * back one step (Ryan, 14 Oct 2026, "allow reopen"): a rejected claim is
+ * reopened (→ submitted, to be decided again) and a repaid claim's "repaid"
+ * is undone (→ approved). Nothing else goes back — an approval is not
+ * reopened. Each is a correction by a money person who is not the claimant,
+ * and the audit row keeps the decision it replaced. A withdrawn claim (its
+ * author, while `submitted`) is deleted, so it has no state of its own.
  */
 export const CLAIM_TRANSITIONS: Record<
   CampClaimStatus,
@@ -375,8 +388,8 @@ export const CLAIM_TRANSITIONS: Record<
 > = {
   submitted: ["approved", "rejected"],
   approved: ["repaid"],
-  rejected: [],
-  repaid: [],
+  rejected: ["submitted"],
+  repaid: ["approved"],
 };
 
 export function canTransitionClaim(
@@ -386,7 +399,15 @@ export function canTransitionClaim(
   return CLAIM_TRANSITIONS[from].includes(to);
 }
 
-export type ClaimAction = "approve" | "reject" | "repay" | "withdraw";
+export type ClaimAction =
+  | "approve"
+  | "reject"
+  | "repay"
+  | "withdraw"
+  /** rejected → submitted: decide it again. */
+  | "reopen"
+  /** repaid → approved: the EFT was recorded in error. */
+  | "undo_repaid";
 
 export interface ClaimActor {
   userId: string;
@@ -407,7 +428,11 @@ export interface ClaimFacts {
  * The author rule comes FIRST for every money decision: a money person's own
  * claim is decided by another money person or a lead — never by its author,
  * not even to mark it repaid (they would be recording that they paid
- * themselves).
+ * themselves), and not to reopen a rejection or undo a "repaid" on it.
+ *
+ * Every refusal on status is decided from what the row says NOW (the store
+ * locks it and compare-and-sets on the status it decided from), so two money
+ * people acting at once: the second one is refused here, or loses the CAS.
  */
 export function decideClaimAction(input: {
   action: ClaimAction;
@@ -428,6 +453,16 @@ export function decideClaimAction(input: {
 
   if (!canManageMoney(actor.membership)) return refuse("not_money_person");
   if (isAuthor) return refuse("own_claim");
+
+  if (action === "reopen") {
+    if (claim.status !== "rejected") return refuse("claim_changed");
+    return { ok: true, next: "submitted" };
+  }
+
+  if (action === "undo_repaid") {
+    if (claim.status !== "repaid") return refuse("claim_changed");
+    return { ok: true, next: "approved" };
+  }
 
   if (action === "repay") {
     if (claim.status !== "approved") {
@@ -452,6 +487,32 @@ export function decideClaimAction(input: {
   const filed = decideClaimCategory(input.category);
   if (!filed.ok) return filed;
   return { ok: true, next: "approved" };
+}
+
+// --- The budget's status ------------------------------------------------------
+
+export type BudgetAction = "approve" | "reopen";
+
+/**
+ * draft → approved (sign-off) and approved → draft ("Back to draft", Ryan,
+ * 14 Oct 2026). Money people only; decided from the status the store locked,
+ * and the UPDATE compare-and-sets on it, so of two at once one wins.
+ */
+export function decideBudgetAction(input: {
+  action: BudgetAction;
+  membership: PermissionMembership | null;
+  status: CampBudgetStatus;
+}): MoneyDecision<{ next: CampBudgetStatus }> {
+  const gate = decideMoneyWrite(input.membership);
+  if (!gate.ok) return gate;
+  if (input.action === "approve") {
+    return input.status === "draft"
+      ? { ok: true, next: "approved" }
+      : refuse("budget_already_approved");
+  }
+  return input.status === "approved"
+    ? { ok: true, next: "draft" }
+    : refuse("budget_not_approved");
 }
 
 // --- Derived figures (the books) -------------------------------------------
@@ -1147,6 +1208,30 @@ export function claimRejectedNotification(
     c,
     `Your ${c.campName} claim for ${formatRand(amountCents)} was rejected`,
     `${c.campName} · open the claim to read why`,
+  );
+}
+
+/** To the claimant: their rejected claim is back in the queue. */
+export function claimReopenedNotification(
+  c: MoneyNoticeContext,
+  amountCents: number,
+): NotificationPayload {
+  return moneyNotice(
+    c,
+    `Your claim for ${formatRand(amountCents)} was reopened`,
+    `${c.campName} · it waits for a decision again`,
+  );
+}
+
+/** To the claimant: "repaid" was recorded in error; still owed to them. */
+export function claimRepaidUndoneNotification(
+  c: MoneyNoticeContext,
+  amountCents: number,
+): NotificationPayload {
+  return moneyNotice(
+    c,
+    `Your claim for ${formatRand(amountCents)} is no longer marked repaid`,
+    `${c.campName} · the camp still owes you`,
   );
 }
 
