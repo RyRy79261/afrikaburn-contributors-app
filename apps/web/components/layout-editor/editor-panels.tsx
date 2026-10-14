@@ -28,7 +28,7 @@ import {
   type AnyLayoutObject,
   type ObjectPatch,
 } from "@/lib/layout-editor-model";
-import { layoutIcon } from "./layout-icons";
+import { layoutIcon } from "@quagga/ui/components/layout-icons";
 import { PALETTE_DRAG_TYPE } from "./palette-drag";
 
 // The DOM side of the editor: the palette, the inspector and the warnings.

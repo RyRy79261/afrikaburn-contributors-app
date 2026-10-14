@@ -13,7 +13,8 @@
     "./fonts/brand": "./src/fonts/brand.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/field-errors": "./src/lib/field-errors.ts",
-    "./lib/focus-first-error": "./src/lib/focus-first-error.ts"
+    "./lib/focus-first-error": "./src/lib/focus-first-error.ts",
+    "./lib/layout-plan-model": "./src/lib/layout-plan-model.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -24,6 +25,7 @@
   },
   "dependencies": {
     "@quagga/core": "workspace:*",
+    "@quagga/geo": "workspace:*",
     "@quagga/types": "workspace:*",
     "@radix-ui/react-accordion": "^1.2.21",
     "@radix-ui/react-dialog": "^1.2.0",

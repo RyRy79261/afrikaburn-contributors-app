@@ -515,6 +515,9 @@ importers:
       '@quagga/core':
         specifier: workspace:*
         version: link:../core
+      '@quagga/geo':
+        specifier: workspace:*
+        version: link:../geo
       '@quagga/types':
         specifier: workspace:*
         version: link:../types
