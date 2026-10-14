@@ -498,6 +498,9 @@ jobs:
           - workspace: "@quagga/types"
             label: "@quagga/types"
             directory: packages/types
+          - workspace: "@quagga/geo"
+            label: "@quagga/geo"
+            directory: packages/geo
           # The three apps measure `lib/` only — the label carries that, because
           # the comment is read out of context and "@quagga/web 87%" would
           # otherwise be read as the whole app.

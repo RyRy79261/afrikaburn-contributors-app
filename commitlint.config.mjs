@@ -32,6 +32,8 @@ const SCOPES = [
   "ui",
   "auth",
   "types",
+  // pure plane geometry in metres (camp layouts, later GIS placement)
+  "geo",
   // packages/* — the published pair and its vocabulary source.
   // NOTE: `sdk` and `react` are @afrikaburn/*, not @quagga/*. The directory is
   // packages/sdk-react; the scope is `react`, matching the PACKAGE name, because

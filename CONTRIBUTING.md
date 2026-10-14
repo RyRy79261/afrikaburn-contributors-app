@@ -316,8 +316,8 @@ Three kinds, and the difference matters:
 
 - **workspace names with their npm scope dropped** — `@quagga/*` and `@afrikaburn/*`:
 
-  `web` · `org` · `suppliers` · `core` · `db` · `ui` · `auth` · `types` · `scopes` ·
-  `sdk` · `react` · `e2e`
+  `web` · `org` · `suppliers` · `core` · `db` · `ui` · `auth` · `types` · `geo` ·
+  `scopes` · `sdk` · `react` · `e2e`
 
   (`sdk` and `react` are `@afrikaburn/*`. The directory is `packages/sdk-react`; the
   scope is `react`, matching the **package** name, because that is what a reader
