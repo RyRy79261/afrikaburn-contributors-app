@@ -241,3 +241,8 @@ export * from "./camp-stats";
 // the derived books, dues standing, the claim state machine, who may, receipt
 // checks and notices. The platform never moves money (Decision 009). PURE.
 export * from "./camp-budget";
+// Camp layout (docs/camp-layout-spec.md): the edition-scoped palette, who
+// may view and edit, the catalogue check, advisory warnings, the plot
+// summary, carry-forward and snapshot pinning. Geometry is @quagga/geo. PURE.
+export * from "./layout-catalog";
+export * from "./camp-layout";

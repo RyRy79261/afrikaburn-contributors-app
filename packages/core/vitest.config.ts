@@ -114,6 +114,15 @@ export default defineConfig({
           functions: 100,
           branches: 79,
         },
+        // Camp layout: who may see and edit a camp's plan (it shows where
+        // people sleep), the catalogue check every save runs, and the
+        // advisory warnings. Pure; each warning is pinned in both directions.
+        "src/camp-layout.ts": {
+          lines: 98,
+          statements: 97,
+          functions: 100,
+          branches: 88,
+        },
         // The registration state machine: what a status may become, and who
         // may move it there.
         "src/registration-state.ts": {

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
+    "@quagga/geo": "workspace:*",
     "@quagga/types": "workspace:*",
     "zod": "^4.6.5"
   },

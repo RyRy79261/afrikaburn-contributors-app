@@ -363,6 +363,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.131.0
         version: 0.131.0(zod@4.6.5)
+      '@quagga/geo':
+        specifier: workspace:*
+        version: link:../geo
       '@quagga/types':
         specifier: workspace:*
         version: link:../types
