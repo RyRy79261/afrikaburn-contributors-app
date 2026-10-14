@@ -23,6 +23,7 @@ import type { MoneyBooksPage, MoneyEntryView } from "@/lib/camp-money-store";
 import { moneyDayLabel, plural, receiptHref } from "@/lib/money-view";
 import {
   ApproveBudgetButton,
+  BudgetBackToDraftButton,
   DeleteEntryButton,
   EditPlanDialog,
   EntryDialog,
@@ -103,7 +104,11 @@ export function BudgetTab({
         action={editPlan}
         testId="money-budget-status"
       >
-        {settings.status === "draft" && <ApproveBudgetButton slug={slug} />}
+        {settings.status === "draft" ? (
+          <ApproveBudgetButton slug={slug} />
+        ) : (
+          <BudgetBackToDraftButton slug={slug} />
+        )}
       </MoneySection>
 
       <TotalsCard totals={t} dues={dues} />

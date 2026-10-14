@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Check, CircleCheck, Plus, Send, Undo2, X } from "lucide-react";
+import {
+  Check,
+  CircleCheck,
+  Plus,
+  RotateCcw,
+  Send,
+  Undo2,
+  X,
+} from "lucide-react";
 import { formatRand } from "@quagga/core";
 import { MONEY_DESCRIPTION_MAX, MONEY_NOTE_MAX } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
@@ -29,7 +37,9 @@ import {
   approveClaimAction,
   markClaimRepaidAction,
   rejectClaimAction,
+  reopenClaimAction,
   submitClaimAction,
+  undoClaimRepaidAction,
   withdrawClaimAction,
 } from "@/app/(app)/camps/[slug]/money/actions";
 import { todayInSouthAfrica } from "@/lib/money-view";
@@ -552,6 +562,91 @@ export function MarkRepaidDialog({
           >
             <Check className="h-4 w-4" aria-hidden />
             Mark repaid
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The two corrections back (Ryan, 14 Oct 2026): reopen a rejected claim, or
+ * undo a "repaid" recorded in error. A confirm step first; the server
+ * refuses the claimant on their own claim whatever this shows, and of two
+ * money people at once only one goes through.
+ */
+export function ClaimCorrectionDialog({
+  slug,
+  claim,
+  kind,
+}: {
+  slug: string;
+  claim: DecidableClaim;
+  kind: "reopen" | "undo_repaid";
+}) {
+  const [open, setOpen] = React.useState(false);
+  const { pending, error, setError, run } = useMoneyAction();
+  const reopen = kind === "reopen";
+  const Icon = reopen ? RotateCcw : Undo2;
+  const label = reopen ? "Reopen" : "Undo repaid";
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setError(null);
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Icon className="h-4 w-4" aria-hidden />
+          {label}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {reopen
+              ? `Reopen ${claim.claimantName}'s claim?`
+              : `Undo repaid on ${claim.claimantName}'s claim?`}
+          </DialogTitle>
+          <DialogDescription>{claimSummary(claim)}</DialogDescription>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {reopen
+            ? "It goes back to waiting for a decision, and the rejection note is cleared. They are told it was reopened. The rejection stays in the record."
+            : "It goes back to approved and counts as owed to them again. They are told. The repaid date stays in the record."}
+        </p>
+        <FormError error={error} />
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setOpen(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              run(
+                () =>
+                  reopen
+                    ? reopenClaimAction({ slug, claimId: claim.id })
+                    : undoClaimRepaidAction({ slug, claimId: claim.id }),
+                {
+                  success: reopen
+                    ? `${claim.claimantName}'s claim is reopened.`
+                    : `${claim.claimantName}'s claim is approved again, not repaid.`,
+                  onDone: () => setOpen(false),
+                },
+              )
+            }
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {reopen ? "Reopen claim" : "Undo repaid"}
           </Button>
         </DialogFooter>
       </DialogContent>

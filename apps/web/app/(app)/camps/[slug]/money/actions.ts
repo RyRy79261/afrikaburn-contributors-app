@@ -13,12 +13,15 @@ import {
   RecordDuesPaymentInput,
   RejectClaimInput,
   RemoveBudgetCategoryInput,
+  ReopenBudgetInput,
+  ReopenClaimInput,
   RenameBudgetCategoryInput,
   SetBudgetPlanInput,
   SetCampFeeInput,
   SetMemberDuesInput,
   SetPaymentInstructionsInput,
   SubmitClaimInput,
+  UndoClaimRepaidInput,
   UpdateBudgetEntryInput,
   WithdrawClaimInput,
 } from "@quagga/types";
@@ -38,11 +41,14 @@ import {
   rejectClaim,
   removeBudgetCategory,
   renameBudgetCategory,
+  reopenBudget,
+  reopenClaim,
   setBudgetPlan,
   setCampFee,
   setMemberDues,
   setPaymentInstructions,
   submitClaim,
+  undoClaimRepaid,
   updateBudgetEntry,
   withdrawClaim,
   type DuesPaymentView,
@@ -175,6 +181,14 @@ export async function approveBudgetAction(
 ): Promise<MoneyActionResult> {
   return run(ApproveBudgetInput, raw, "Camp not found.", (base) =>
     approveBudget(base),
+  );
+}
+
+export async function reopenBudgetAction(
+  raw: unknown,
+): Promise<MoneyActionResult> {
+  return run(ReopenBudgetInput, raw, "Camp not found.", (base) =>
+    reopenBudget(base),
   );
 }
 
@@ -329,5 +343,21 @@ export async function markClaimRepaidAction(
 ): Promise<MoneyActionResult> {
   return run(MarkClaimRepaidInput, raw, "Check the claim.", (base, f) =>
     markClaimRepaid({ ...base, claimId: f.claimId, repaidOn: f.repaidOn }),
+  );
+}
+
+export async function reopenClaimAction(
+  raw: unknown,
+): Promise<MoneyActionResult> {
+  return run(ReopenClaimInput, raw, "Check the claim.", (base, f) =>
+    reopenClaim({ ...base, claimId: f.claimId }),
+  );
+}
+
+export async function undoClaimRepaidAction(
+  raw: unknown,
+): Promise<MoneyActionResult> {
+  return run(UndoClaimRepaidInput, raw, "Check the claim.", (base, f) =>
+    undoClaimRepaid({ ...base, claimId: f.claimId }),
   );
 }

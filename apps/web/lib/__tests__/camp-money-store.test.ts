@@ -58,6 +58,8 @@ const THEME_CAMP = GroupKind.enum.theme_camp;
 const ARTWORK = GroupKind.enum.artwork;
 const SUBMITTED = CampClaimStatus.enum.submitted;
 const APPROVED = CampClaimStatus.enum.approved;
+const REJECTED = CampClaimStatus.enum.rejected;
+const REPAID = CampClaimStatus.enum.repaid;
 const MONEY = NotificationKind.enum.money;
 
 const CAMP = "11111111-0000-4000-8000-00000000000a";
@@ -339,6 +341,73 @@ describe("money-people writes", () => {
       { ok: true },
     );
     expect(auditRows().map((a) => a.action)).toEqual([MONEY_AUDIT.approve]);
+  });
+
+  it("moves an approved budget back to draft by compare-and-set, clearing the stamps, the approval kept in the audit row", async () => {
+    const APPROVED_AT = new Date("2027-03-03T10:00:00Z");
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      /* insert budget */ [],
+      [
+        budgetRow({
+          status: "approved",
+          approvedAt: APPROVED_AT,
+          approvedByUserId: LERATO,
+        }),
+      ],
+      /* CAS */ [{ id: "b" }],
+      /* audit */ [],
+    );
+    expect(await store.reopenBudget({ ...base, actorUserId: ALICE })).toEqual({
+      ok: true,
+    });
+    const update = dbMock
+      .writesTo(schema.campBudgets)
+      .find((q) => q.kind === "update")!;
+    expect(update.tx).toBe(true);
+    expect(whereParams(update)).toContain("approved");
+    // the CHECK: approved ⇔ approved_at set
+    expect(update.arg("set")).toMatchObject({
+      status: "draft",
+      approvedAt: null,
+      approvedByUserId: null,
+    });
+    expect(auditRows()[0]).toMatchObject({
+      actorId: ALICE,
+      action: MONEY_AUDIT.budgetReopen,
+      meta: {
+        from: "approved",
+        to: "draft",
+        approvedAt: APPROVED_AT.toISOString(),
+        approvedByUserId: LERATO,
+      },
+    });
+  });
+
+  it("back to draft acts once: a draft is refused, a lost CAS audits nothing, a member is refused", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue([], [budgetRow()]);
+    expect(await store.reopenBudget({ ...base, actorUserId: ALICE })).toEqual({
+      ok: false,
+      error: "The budget is already a draft — refresh to see it.",
+    });
+    expect(moneyWrites().filter((q) => q.kind === "update")).toHaveLength(0);
+
+    dbMock.reset();
+    queueActor(ALICE, LEAD);
+    dbMock.queue([], [budgetRow({ status: "approved" })], /* CAS lost */ []);
+    expect(await store.reopenBudget({ ...base, actorUserId: ALICE })).toEqual({
+      ok: false,
+      error: "The budget is already a draft — refresh to see it.",
+    });
+    expect(auditRows()).toHaveLength(0);
+
+    dbMock.reset();
+    queueActor(JABU, MEMBER);
+    expect((await store.reopenBudget({ ...base, actorUserId: JABU })).ok).toBe(
+      false,
+    );
+    expect(moneyWrites()).toHaveLength(0);
   });
 
   it("approves a draft once, by compare-and-set, with an audit row", async () => {
@@ -748,6 +817,173 @@ describe("claim decisions", () => {
         categoryId: null,
       }),
     ).toEqual({ ok: false, error: "That claim doesn't exist." });
+  });
+});
+
+describe("reopen a rejected claim, undo repaid (Ryan, 14 Oct 2026)", () => {
+  const DECIDED_AT = new Date("2027-04-10T08:00:00Z");
+  const rejected = claimRow({
+    status: REJECTED,
+    decidedByUserId: LERATO,
+    decidedAt: DECIDED_AT,
+  });
+  const repaid = claimRow({
+    status: REPAID,
+    decidedByUserId: LERATO,
+    decidedAt: DECIDED_AT,
+    repaidOn: "2027-04-14",
+    repaidByUserId: LERATO,
+  });
+
+  it("reopens by compare-and-set on `rejected`, clears the decision, keeps it in the audit row, tells the claimant", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue(
+      [rejected],
+      /* CAS */ [{ id: CLAIM }],
+      /* audit */ [],
+      /* claimant current? */ [{ id: M_JABU }],
+      /* notification */ [],
+    );
+    expect(
+      await store.reopenClaim({ ...base, actorUserId: ALICE, claimId: CLAIM }),
+    ).toEqual({ ok: true });
+    const update = dbMock.writesTo(schema.campClaims)[0]!;
+    expect(update.tx).toBe(true);
+    expect(whereParams(update)).toEqual([CLAIM, REJECTED]);
+    // the CHECKs: submitted ⇔ decided_at null; the note goes with it
+    expect(update.arg("set")).toMatchObject({
+      status: SUBMITTED,
+      decidedByUserId: null,
+      decidedAt: null,
+      decisionNote: null,
+    });
+    expect(auditRows()[0]).toMatchObject({
+      action: MONEY_AUDIT.claimReopen,
+      meta: {
+        from: REJECTED,
+        to: SUBMITTED,
+        undoneDecidedByUserId: LERATO,
+        undoneDecidedAt: DECIDED_AT.toISOString(),
+      },
+    });
+    expect(noticeRows()).toEqual([
+      expect.objectContaining({ userId: JABU, kind: MONEY }),
+    ]);
+    expect(noticeRows()[0]!.title).toMatch(/reopened/);
+  });
+
+  it("undoes repaid by compare-and-set on `repaid`, clears the repaid stamps, keeps them in the audit row", async () => {
+    queueActor(ALICE, LEAD);
+    dbMock.queue([repaid], [{ id: CLAIM }], [], [{ id: M_JABU }], []);
+    expect(
+      await store.undoClaimRepaid({
+        ...base,
+        actorUserId: ALICE,
+        claimId: CLAIM,
+      }),
+    ).toEqual({ ok: true });
+    const update = dbMock.writesTo(schema.campClaims)[0]!;
+    expect(whereParams(update)).toEqual([CLAIM, REPAID]);
+    expect(update.arg("set")).toMatchObject({
+      status: APPROVED,
+      repaidOn: null,
+      repaidByUserId: null,
+    });
+    // the approval stands
+    expect(update.arg("set")).not.toHaveProperty("decidedAt");
+    expect(auditRows()[0]).toMatchObject({
+      action: MONEY_AUDIT.claimRepaidUndo,
+      meta: {
+        from: REPAID,
+        to: APPROVED,
+        undoneRepaidOn: "2027-04-14",
+        undoneRepaidByUserId: LERATO,
+      },
+    });
+    expect(noticeRows()[0]!.title).toMatch(/no longer marked repaid/);
+  });
+
+  it("NEVER lets the claimant reopen or undo their own claim — not even the lead", async () => {
+    for (const [run, row] of [
+      [
+        () =>
+          store.reopenClaim({ ...base, actorUserId: ALICE, claimId: CLAIM }),
+        { ...rejected, claimantUserId: ALICE },
+      ],
+      [
+        () =>
+          store.undoClaimRepaid({
+            ...base,
+            actorUserId: ALICE,
+            claimId: CLAIM,
+          }),
+        { ...repaid, claimantUserId: ALICE },
+      ],
+    ] as const) {
+      dbMock.reset();
+      queueActor(ALICE, LEAD);
+      dbMock.queue([row]);
+      expect(await run()).toEqual({
+        ok: false,
+        error:
+          "You can't decide your own claim. Another money person or a lead decides it.",
+      });
+      expect(moneyWrites()).toHaveLength(0);
+      expect(auditRows()).toHaveLength(0);
+      expect(noticeRows()).toHaveLength(0);
+    }
+  });
+
+  it("a plain member reopens nothing", async () => {
+    queueActor(JABU, MEMBER);
+    dbMock.queue([{ ...rejected, claimantUserId: LERATO }]);
+    expect(
+      (await store.reopenClaim({ ...base, actorUserId: JABU, claimId: CLAIM }))
+        .ok,
+    ).toBe(false);
+    expect(moneyWrites()).toHaveLength(0);
+  });
+
+  it("two money people at once: the second is refused on the status, or loses the CAS — nothing audited or sent", async () => {
+    // the other money person's reopen already landed
+    queueActor(ALICE, LEAD);
+    dbMock.queue([{ ...rejected, status: SUBMITTED }]);
+    expect(
+      await store.reopenClaim({ ...base, actorUserId: ALICE, claimId: CLAIM }),
+    ).toEqual({
+      ok: false,
+      error: "That claim has changed since you opened it — refresh to see it.",
+    });
+    expect(moneyWrites()).toHaveLength(0);
+
+    // …or it lands between the read and the write: the CAS updates nothing
+    for (const [run, row] of [
+      [
+        () =>
+          store.reopenClaim({ ...base, actorUserId: ALICE, claimId: CLAIM }),
+        rejected,
+      ],
+      [
+        () =>
+          store.undoClaimRepaid({
+            ...base,
+            actorUserId: ALICE,
+            claimId: CLAIM,
+          }),
+        repaid,
+      ],
+    ] as const) {
+      dbMock.reset();
+      queueActor(ALICE, LEAD);
+      dbMock.queue([row], /* CAS lost */ []);
+      expect(await run()).toEqual({
+        ok: false,
+        error:
+          "That claim has changed since you opened it — refresh to see it.",
+      });
+      expect(auditRows()).toHaveLength(0);
+      expect(noticeRows()).toHaveLength(0);
+    }
   });
 });
 

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, CircleCheck, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, CircleCheck, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 import { DUES_CATEGORY_KEY, formatRand } from "@quagga/core";
 import {
   MONEY_CONTINGENCY_MAX_PCT,
@@ -40,6 +40,7 @@ import {
   deleteBudgetEntryAction,
   removeBudgetCategoryAction,
   renameBudgetCategoryAction,
+  reopenBudgetAction,
   setBudgetPlanAction,
   updateBudgetEntryAction,
 } from "@/app/(app)/camps/[slug]/money/actions";
@@ -90,6 +91,66 @@ export function ApproveBudgetButton({ slug }: { slug: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** "Back to draft" on an approved budget, with a confirm step. Clears who
+ * approved it and when; the approval stays in the audit record. */
+export function BudgetBackToDraftButton({ slug }: { slug: string }) {
+  const [open, setOpen] = React.useState(false);
+  const { pending, error, setError, run } = useMoneyAction();
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setError(null);
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" className="w-full sm:w-fit">
+          <Undo2 className="h-4 w-4" aria-hidden />
+          Back to draft
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Move the budget back to draft?</DialogTitle>
+          <DialogDescription>
+            It is no longer approved until a money person approves it again. The
+            earlier approval stays in the record.
+          </DialogDescription>
+        </DialogHeader>
+        {error && (
+          <p className="text-sm font-medium text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setOpen(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              run(() => reopenBudgetAction({ slug }), {
+                success: "The budget is back to draft.",
+                onDone: () => setOpen(false),
+              })
+            }
+          >
+            <Undo2 className="h-4 w-4" aria-hidden />
+            Back to draft
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

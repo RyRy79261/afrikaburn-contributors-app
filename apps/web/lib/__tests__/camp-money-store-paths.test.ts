@@ -460,6 +460,9 @@ describe("loadClaimsBoard", () => {
         claim("theirs", JABU, SUBMITTED),
         claim("approved", JABU, APPROVED),
         claim("gone", null, REPAID),
+        claim("rejected", JABU, REJECTED),
+        claim("own-rejected", ALICE, REJECTED),
+        claim("own-repaid", ALICE, REPAID),
       ],
       [
         { id: ALICE, username: "alice", sanitizedAt: null },
@@ -479,6 +482,22 @@ describe("loadClaimsBoard", () => {
       mayDecide: false,
     });
     expect(by("gone").claimantName).toBe(MONEY_DELETED_ACCOUNT);
+    // the corrections: offered on someone else's, never on the viewer's own
+    expect(by("rejected")).toMatchObject({
+      mayReopen: true,
+      mayUndoRepaid: false,
+      mayDecide: false,
+    });
+    expect(by("gone")).toMatchObject({ mayUndoRepaid: true, mayReopen: false });
+    expect(by("own-rejected")).toMatchObject({ isOwn: true, mayReopen: false });
+    expect(by("own-repaid")).toMatchObject({
+      isOwn: true,
+      mayUndoRepaid: false,
+    });
+    expect(by("approved")).toMatchObject({
+      mayReopen: false,
+      mayUndoRepaid: false,
+    });
   });
 
   // Regression (e2e camp-money, 14 Oct 2026): a money person who went

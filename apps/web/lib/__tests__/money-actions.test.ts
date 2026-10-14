@@ -68,6 +68,9 @@ vi.mock("@/lib/camp-money-store", () => {
     rejectClaim: record("rejectClaim"),
     removeBudgetCategory: record("removeBudgetCategory", { action: "delete" }),
     renameBudgetCategory: record("renameBudgetCategory"),
+    reopenBudget: record("reopenBudget"),
+    reopenClaim: record("reopenClaim"),
+    undoClaimRepaid: record("undoClaimRepaid"),
     setBudgetPlan: record("setBudgetPlan"),
     setCampFee: record("setCampFee"),
     setMemberDues: record("setMemberDues"),
@@ -226,6 +229,43 @@ describe("money actions — the store gets what the server resolved", () => {
         },
       },
     });
+  });
+
+  it("reopen, undo repaid and back to draft: only the resolved camp and the claim id reach the store", async () => {
+    await actions.reopenClaimAction({ slug: "mad-hatters", claimId: CLAIM });
+    await actions.undoClaimRepaidAction({
+      slug: "mad-hatters",
+      claimId: CLAIM,
+    });
+    await actions.reopenBudgetAction({ slug: "mad-hatters" });
+    expect(stubs.calls).toEqual([
+      { fn: "reopenClaim", input: { ...BASE, claimId: CLAIM } },
+      { fn: "undoClaimRepaid", input: { ...BASE, claimId: CLAIM } },
+      { fn: "reopenBudget", input: BASE },
+    ]);
+    stubs.calls = [];
+    // a smuggled status or actor is refused before the store
+    expect(
+      await actions.reopenClaimAction({
+        slug: "mad-hatters",
+        claimId: CLAIM,
+        status: "approved",
+      }),
+    ).toMatchObject({ ok: false });
+    expect(
+      await actions.reopenBudgetAction({
+        slug: "mad-hatters",
+        actorUserId: OTHER,
+      }),
+    ).toMatchObject({ ok: false });
+    stubs.member = false;
+    expect(
+      await actions.undoClaimRepaidAction({
+        slug: "mad-hatters",
+        claimId: CLAIM,
+      }),
+    ).toEqual({ ok: false, error: "Camp not found." });
+    expect(stubs.calls).toHaveLength(0);
   });
 
   it("approve: an unset category is null (the store keeps the claim's own)", async () => {

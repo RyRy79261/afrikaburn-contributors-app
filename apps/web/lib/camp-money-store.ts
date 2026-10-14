@@ -12,7 +12,10 @@ import {
   claimApprovedNotification,
   claimRejectedNotification,
   claimRepaidNotification,
+  claimRepaidUndoneNotification,
+  claimReopenedNotification,
   claimSubmittedNotification,
+  decideBudgetAction,
   decideCategoryName,
   decideCategoryRemoval,
   decideClaimAction,
@@ -69,9 +72,11 @@ import {
   type ReceiptSubjectKind,
   type RecordDuesPaymentInput,
   type RejectClaimInput,
+  type ReopenClaimInput,
   type RenameBudgetCategoryInput,
   type SetBudgetPlanInput,
   type SubmitClaimInput,
+  type UndoClaimRepaidInput,
   type UpdateBudgetEntryInput,
 } from "@quagga/types";
 import { db, schema, withTransaction, type Tx } from "./db";
@@ -1060,6 +1065,10 @@ export interface ClaimView extends OwnClaimView {
   mayDecide: boolean;
   /** This viewer may mark it repaid (never their own). */
   mayMarkRepaid: boolean;
+  /** This viewer may reopen it, rejected → submitted (never their own). */
+  mayReopen: boolean;
+  /** This viewer may undo "repaid", repaid → approved (never their own). */
+  mayUndoRepaid: boolean;
 }
 
 /** Frame M3, for money people only (null otherwise). Newest first. */
@@ -1147,6 +1156,8 @@ export async function loadClaimsBoard(
       mayWithdraw: isOwn && r.status === "submitted",
       mayDecide: may("approve", r),
       mayMarkRepaid: may("repay", r),
+      mayReopen: may("reopen", r),
+      mayUndoRepaid: may("undo_repaid", r),
     };
   });
 }
@@ -1336,6 +1347,8 @@ async function lockBudget(tx: Tx, groupId: string, editionId: string) {
       paymentInstructions: schema.campBudgets.paymentInstructions,
       contingencyPct: schema.campBudgets.contingencyPct,
       status: schema.campBudgets.status,
+      approvedAt: schema.campBudgets.approvedAt,
+      approvedByUserId: schema.campBudgets.approvedByUserId,
     })
     .from(schema.campBudgets)
     .where(
@@ -1660,40 +1673,86 @@ export async function setBudgetPlan(
   });
 }
 
-/** Sign the plan off (compare-and-set on `draft`). */
-export async function approveBudget(input: WriteBase): Promise<MoneyResult> {
+/**
+ * Sign the plan off (draft → approved), or move it back to draft (approved →
+ * draft, clearing who approved it and when — the CHECK pairs the status with
+ * the stamp). Decided in @quagga/core from the locked row, then a compare-
+ * and-set on the status it decided from: of two money people at once, one
+ * wins and the other is refused. Going back keeps the approval it undid in
+ * the audit row.
+ */
+async function setBudgetStatus(
+  input: WriteBase,
+  action: "approve" | "reopen",
+): Promise<MoneyResult> {
   return withTransaction(async (tx): Promise<MoneyResult> => {
     const gate = await lockMoneyPerson(tx, input.groupId, input.actorUserId);
     if (!gate.ok) return gate;
     const budget = await lockBudget(tx, input.groupId, input.editionId);
-    if (budget.status === "approved") return refused("budget_already_approved");
+    const decision = decideBudgetAction({
+      action,
+      membership: gate.actor.permissions,
+      status: budget.status,
+    });
+    if (!decision.ok) return refused(decision.reason);
     const now = new Date();
     const done = await tx
       .update(schema.campBudgets)
-      .set({
-        status: "approved",
-        approvedAt: now,
-        approvedByUserId: input.actorUserId,
-        updatedAt: now,
-      })
+      .set(
+        action === "approve"
+          ? {
+              status: "approved",
+              approvedAt: now,
+              approvedByUserId: input.actorUserId,
+              updatedAt: now,
+            }
+          : {
+              status: "draft",
+              approvedAt: null,
+              approvedByUserId: null,
+              updatedAt: now,
+            },
+      )
       .where(
         and(
           eq(schema.campBudgets.id, budget.id),
-          eq(schema.campBudgets.status, "draft"),
+          eq(schema.campBudgets.status, budget.status),
         ),
       )
       .returning({ id: schema.campBudgets.id });
-    if (!done[0]) return refused("budget_already_approved");
+    if (!done[0]) {
+      return refused(
+        action === "approve"
+          ? "budget_already_approved"
+          : "budget_not_approved",
+      );
+    }
     await audit(
       tx,
       input.actorUserId,
-      MONEY_AUDIT.approve,
+      action === "approve" ? MONEY_AUDIT.approve : MONEY_AUDIT.budgetReopen,
       input.groupId,
       input.editionId,
-      {},
+      action === "approve"
+        ? {}
+        : {
+            from: "approved",
+            to: "draft",
+            approvedAt: budget.approvedAt?.toISOString() ?? null,
+            approvedByUserId: budget.approvedByUserId ?? null,
+          },
     );
     return { ok: true };
   });
+}
+
+export function approveBudget(input: WriteBase): Promise<MoneyResult> {
+  return setBudgetStatus(input, "approve");
+}
+
+/** "Back to draft" on an approved budget. */
+export function reopenBudget(input: WriteBase): Promise<MoneyResult> {
+  return setBudgetStatus(input, "reopen");
 }
 
 // --- Writes: categories -------------------------------------------------------
@@ -2555,6 +2614,10 @@ interface LockedClaim {
   categoryId: string | null;
   amountCents: number;
   receiptKey: string | null;
+  decidedByUserId?: string | null;
+  decidedAt?: Date | null;
+  repaidOn?: string | null;
+  repaidByUserId?: string | null;
 }
 
 async function lockClaim(
@@ -2571,6 +2634,10 @@ async function lockClaim(
       categoryId: schema.campClaims.categoryId,
       amountCents: schema.campClaims.amountCents,
       receiptKey: schema.campClaims.receiptKey,
+      decidedByUserId: schema.campClaims.decidedByUserId,
+      decidedAt: schema.campClaims.decidedAt,
+      repaidOn: schema.campClaims.repaidOn,
+      repaidByUserId: schema.campClaims.repaidByUserId,
     })
     .from(schema.campClaims)
     .where(
@@ -2660,10 +2727,22 @@ export async function withdrawClaim(
 type DecideFields =
   | { action: "approve"; categoryId: string | null }
   | { action: "reject"; note: string }
-  | { action: "repay"; repaidOn: string };
+  | { action: "repay"; repaidOn: string }
+  | { action: "reopen" }
+  | { action: "undo_repaid" };
+
+const CLAIM_AUDIT: Record<DecideFields["action"], string> = {
+  approve: MONEY_AUDIT.claimApprove,
+  reject: MONEY_AUDIT.claimReject,
+  repay: MONEY_AUDIT.claimRepaid,
+  reopen: MONEY_AUDIT.claimReopen,
+  undo_repaid: MONEY_AUDIT.claimRepaidUndo,
+};
 
 /**
- * Approve, reject or mark repaid. The claim row is locked `FOR UPDATE`, the
+ * Approve, reject, mark repaid — or the two corrections back: reopen a
+ * rejected claim (decision stamps and note cleared, so the CHECKs hold) and
+ * undo "repaid" (repaid stamps cleared). The claim row is locked `FOR UPDATE`, the
  * decision is taken in @quagga/core from what the row says now, and the
  * UPDATE is compare-and-set on the status it decided from — so two money
  * people deciding at once decide it once, and the claimant is never the one
@@ -2701,29 +2780,48 @@ async function decideClaim(
     if (!decision.ok) return refused(decision.reason);
     const now = new Date();
     const from = claim.status;
-    const set =
-      f.action === "approve"
-        ? {
+    const set = (() => {
+      switch (f.action) {
+        case "approve":
+          return {
             status: "approved" as const,
             categoryId,
             decidedByUserId: actor.userId,
             decidedAt: now,
             updatedAt: now,
-          }
-        : f.action === "reject"
-          ? {
-              status: "rejected" as const,
-              decidedByUserId: actor.userId,
-              decidedAt: now,
-              decisionNote: f.note,
-              updatedAt: now,
-            }
-          : {
-              status: "repaid" as const,
-              repaidOn: f.repaidOn,
-              repaidByUserId: actor.userId,
-              updatedAt: now,
-            };
+          };
+        case "reject":
+          return {
+            status: "rejected" as const,
+            decidedByUserId: actor.userId,
+            decidedAt: now,
+            decisionNote: f.note,
+            updatedAt: now,
+          };
+        case "repay":
+          return {
+            status: "repaid" as const,
+            repaidOn: f.repaidOn,
+            repaidByUserId: actor.userId,
+            updatedAt: now,
+          };
+        case "reopen":
+          return {
+            status: "submitted" as const,
+            decidedByUserId: null,
+            decidedAt: null,
+            decisionNote: null,
+            updatedAt: now,
+          };
+        case "undo_repaid":
+          return {
+            status: "approved" as const,
+            repaidOn: null,
+            repaidByUserId: null,
+            updatedAt: now,
+          };
+      }
+    })();
     const done = await tx
       .update(schema.campClaims)
       .set(set)
@@ -2734,15 +2832,17 @@ async function decideClaim(
         ),
       )
       .returning({ id: schema.campClaims.id });
-    if (!done[0]) return refused("claim_already_decided");
+    if (!done[0]) {
+      return refused(
+        f.action === "reopen" || f.action === "undo_repaid"
+          ? "claim_changed"
+          : "claim_already_decided",
+      );
+    }
     await audit(
       tx,
       input.actorUserId,
-      f.action === "approve"
-        ? MONEY_AUDIT.claimApprove
-        : f.action === "reject"
-          ? MONEY_AUDIT.claimReject
-          : MONEY_AUDIT.claimRepaid,
+      CLAIM_AUDIT[f.action],
       input.groupId,
       input.editionId,
       {
@@ -2753,18 +2853,34 @@ async function decideClaim(
         to: set.status,
         categoryId,
         ...(f.action === "repay" ? { repaidOn: f.repaidOn } : {}),
+        // What a correction undid stays in the record (ids and dates only —
+        // the note is not copied: erasure clears it, audit rows are kept).
+        ...(f.action === "reopen"
+          ? {
+              undoneDecidedByUserId: claim.decidedByUserId ?? null,
+              undoneDecidedAt: claim.decidedAt?.toISOString() ?? null,
+            }
+          : {}),
+        ...(f.action === "undo_repaid"
+          ? {
+              undoneRepaidOn: claim.repaidOn ?? null,
+              undoneRepaidByUserId: claim.repaidByUserId ?? null,
+            }
+          : {}),
       },
     );
     if (
       claim.claimantUserId &&
       (await claimantIsCurrent(tx, input.groupId, claim.claimantUserId))
     ) {
-      const payload =
-        f.action === "approve"
-          ? claimApprovedNotification(actor.camp, claim.amountCents)
-          : f.action === "reject"
-            ? claimRejectedNotification(actor.camp, claim.amountCents)
-            : claimRepaidNotification(actor.camp, claim.amountCents);
+      const notice = {
+        approve: claimApprovedNotification,
+        reject: claimRejectedNotification,
+        repay: claimRepaidNotification,
+        reopen: claimReopenedNotification,
+        undo_repaid: claimRepaidUndoneNotification,
+      }[f.action];
+      const payload = notice(actor.camp, claim.amountCents);
       notices.push(toRow(claim.claimantUserId, payload));
     }
     return { ok: true };
@@ -2801,4 +2917,18 @@ export function markClaimRepaid(
     ...input,
     fields: { action: "repay", repaidOn: input.repaidOn },
   });
+}
+
+/** A money person reopens a rejected claim: it waits for a decision again. */
+export function reopenClaim(
+  input: WriteBase & Omit<ReopenClaimInput, "slug">,
+): Promise<MoneyResult> {
+  return decideClaim({ ...input, fields: { action: "reopen" } });
+}
+
+/** A money person undoes "repaid" recorded in error: owed again. */
+export function undoClaimRepaid(
+  input: WriteBase & Omit<UndoClaimRepaidInput, "slug">,
+): Promise<MoneyResult> {
+  return decideClaim({ ...input, fields: { action: "undo_repaid" } });
 }

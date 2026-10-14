@@ -21,6 +21,7 @@ import {
 } from "@/lib/money-view";
 import {
   ApproveClaimButton,
+  ClaimCorrectionDialog,
   MarkRepaidDialog,
   NewClaimDialog,
   RejectClaimDialog,
@@ -157,7 +158,8 @@ export function ClaimsTab({
       <MoneyFootnote icon={<Lock />}>
         Receipts are private: only the claimant and the camp&apos;s money people
         can open them. Deciding a claim notifies the member, and every decision
-        is recorded.
+        is recorded. A rejected claim can be reopened and a repaid one undone;
+        the earlier decision stays in the record.
       </MoneyFootnote>
     </div>
   );
@@ -284,6 +286,20 @@ function ClaimCard({
           )}
           {c.status === "approved" && c.mayMarkRepaid && (
             <MarkRepaidDialog slug={slug} claim={decidable} />
+          )}
+          {c.status === "rejected" && c.mayReopen && (
+            <ClaimCorrectionDialog
+              slug={slug}
+              claim={decidable}
+              kind="reopen"
+            />
+          )}
+          {c.status === "repaid" && c.mayUndoRepaid && (
+            <ClaimCorrectionDialog
+              slug={slug}
+              claim={decidable}
+              kind="undo_repaid"
+            />
           )}
         </div>
       </div>
