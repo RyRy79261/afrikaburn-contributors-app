@@ -48,7 +48,7 @@ converting to Apache 2.0 two years after each release — see `LICENSE`).
 apps/web        participant app   :3000  (teal accent)
 apps/org        organiser console :3001  (apricot — .org-accent)
 apps/suppliers  supplier portal   :3002  (sage — .supplier-accent)
-packages/       @quagga/{auth,ui,db,core,types,eslint-config,typescript-config}
+packages/       @quagga/{auth,ui,db,core,types,geo,eslint-config,typescript-config}
 design/         ab-initial-app.pen (pen.dev canvas) + brand/ + pen-lessons.md
 docs/           specs (law) + sources/ (mirrored corpora: quaggapedia, afrikaburn-org)
 ```
