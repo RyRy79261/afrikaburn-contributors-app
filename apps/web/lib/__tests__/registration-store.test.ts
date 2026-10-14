@@ -237,6 +237,84 @@ describe("applyCampAction — the decision_reason invariant", () => {
   });
 });
 
+describe("applyCampAction — a submit pins the camp layout", () => {
+  const LAYOUT = "1a1a1a1a-0000-4000-8000-000000000001";
+
+  it("pins in the SAME transaction, stamped with the same submitted_at", async () => {
+    // AfrikaBurn must never see a submission without the plan sent with it,
+    // nor a plan from a submission that lost the compare-and-set.
+    dbMock.queue(
+      [registration()],
+      /* the compare-and-set … returning */ [{ id: REGISTRATION }],
+      /* the layout, FOR SHARE */ [{ id: LAYOUT, version: 7, document: {} }],
+    );
+    expect(
+      await applyCampAction({
+        groupId: GROUP,
+        editionId: EDITION,
+        action: "submit",
+        actorUserId: VIEWER,
+      }),
+    ).toMatchObject({ ok: true, status: "submitted" });
+
+    expect(dbMock.transactions).toBe(1);
+    const set = dbMock.onlyQuery("update").arg("set") as { submittedAt: Date };
+    expect(dbMock.onlyQuery("update").tx).toBe(true);
+    const snapshot = dbMock.writesTo(schema.campLayoutSnapshots)[0]!;
+    expect(snapshot.tx).toBe(true);
+    expect(snapshot.arg("values")).toMatchObject({
+      registrationId: REGISTRATION,
+      version: 7,
+      registrationSubmittedAt: set.submittedAt,
+      pinnedByUserId: VIEWER,
+    });
+  });
+
+  it("a resubmit pins again — append-only", async () => {
+    dbMock.queue(
+      [registration({ status: "changes_requested" })],
+      [{ id: REGISTRATION }],
+      [{ id: LAYOUT, version: 9, document: {} }],
+    );
+    await applyCampAction({
+      groupId: GROUP,
+      editionId: EDITION,
+      action: "resubmit",
+    });
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)).toHaveLength(1);
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)[0]!.kind).toBe("insert");
+  });
+
+  it("pins nothing when the compare-and-set loses", async () => {
+    dbMock.queue([registration()], /* nothing matched */ []);
+    expect(
+      (
+        await applyCampAction({
+          groupId: GROUP,
+          editionId: EDITION,
+          action: "submit",
+        })
+      ).ok,
+    ).toBe(false);
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)).toHaveLength(0);
+    expect(dbMock.queriesTouching(schema.campLayouts)).toHaveLength(0);
+  });
+
+  it("never pins on a withdrawal", async () => {
+    dbMock.queue(
+      [registration({ status: "submitted" })],
+      [{ id: REGISTRATION }],
+    );
+    await applyCampAction({
+      groupId: GROUP,
+      editionId: EDITION,
+      action: "withdraw",
+    });
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.queriesTouching(schema.campLayouts)).toHaveLength(0);
+  });
+});
+
 describe("saveRegistrationDraft", () => {
   it("REFUSES to write once the status is no longer editable", async () => {
     dbMock.queue([registration({ status: "under_review" })]);
