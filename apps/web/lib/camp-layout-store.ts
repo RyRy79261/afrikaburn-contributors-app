@@ -15,6 +15,7 @@ import {
   decideStartFromLastYear,
   enforceKindPermissions,
   getLayoutCatalog,
+  isRetryOfStoredLayout,
   LAYOUT_AUDIT,
   layoutAvailableForGroup,
   layoutRefusalMessage,
@@ -416,9 +417,13 @@ async function registrationFor(
 async function layoutFor(
   tx: Tx,
   registrationId: string,
-): Promise<{ id: string; version: number } | null> {
+): Promise<{ id: string; version: number; document: LayoutDocument } | null> {
   const [row] = await tx
-    .select({ id: schema.campLayouts.id, version: schema.campLayouts.version })
+    .select({
+      id: schema.campLayouts.id,
+      version: schema.campLayouts.version,
+      document: schema.campLayouts.document,
+    })
     .from(schema.campLayouts)
     .where(eq(schema.campLayouts.registrationId, registrationId))
     .limit(1)
@@ -603,6 +608,20 @@ export async function saveCampLayout(
       currentVersion: current?.version ?? null,
       expectedVersion,
     });
+    // The retry of a save that committed but whose response was lost:
+    // the stored document is exactly what was sent, so it IS saved.
+    if (
+      refusal === "stale" &&
+      current &&
+      isRetryOfStoredLayout({
+        currentVersion: current.version,
+        expectedVersion,
+        current: current.document,
+        sent: document,
+      })
+    ) {
+      return { ok: true, version: current.version };
+    }
     if (refusal || !current) return refused(refusal ?? "no_layout");
     const updated = await tx
       .update(schema.campLayouts)
@@ -622,6 +641,20 @@ export async function saveCampLayout(
     if (updated.length === 0) return refused("stale");
     return { ok: true, version: expectedVersion + 1 };
   });
+}
+
+/** Whether this registration has a layout drawn — the registration wizard's
+ * "From your layout" (decision 11). Not an authz boundary: callers have
+ * already decided the caller may see the registration. */
+export async function registrationHasLayout(
+  registrationId: string,
+): Promise<boolean> {
+  const [row] = await db()
+    .select({ id: schema.campLayouts.id })
+    .from(schema.campLayouts)
+    .where(eq(schema.campLayouts.registrationId, registrationId))
+    .limit(1);
+  return Boolean(row);
 }
 
 // --- Pinning (called from the registration submit) -----------------------------

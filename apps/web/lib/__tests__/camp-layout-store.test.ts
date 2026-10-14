@@ -308,6 +308,43 @@ describe("saveCampLayout", () => {
     expect(writes()).toHaveLength(0);
   });
 
+  it("a stale retry of a save that already committed is adopted, not a conflict", async () => {
+    // The save to 13 committed but its response was lost; the editor retries
+    // the SAME document from 12. The stored copy comes back from jsonb with
+    // its keys in another order — still the same content.
+    const stored = JSON.parse(
+      JSON.stringify(overlapping(), (_k, v: unknown) =>
+        v && typeof v === "object" && !Array.isArray(v)
+          ? Object.fromEntries(Object.entries(v).reverse())
+          : v,
+      ),
+    ) as LayoutDocument;
+    dbMock.queue([camp()]);
+    queueActor(LEAD);
+    dbMock.queue(
+      [{ id: REGISTRATION }],
+      [{ id: LAYOUT, version: 13, document: stored }],
+    );
+    expect(await save()).toEqual({ ok: true, version: 13 });
+    expect(writes()).toHaveLength(0);
+  });
+
+  it("a stale save of DIFFERENT content is still refused", async () => {
+    const theirs = overlapping();
+    theirs.plot.objects[0]!.label = "Their kitchen";
+    dbMock.queue([camp()]);
+    queueActor(LEAD);
+    dbMock.queue(
+      [{ id: REGISTRATION }],
+      [{ id: LAYOUT, version: 13, document: theirs }],
+    );
+    expect(await save()).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/changed since you opened it/),
+    });
+    expect(writes()).toHaveLength(0);
+  });
+
   it("losing the compare-and-set is stale too, never a silent success", async () => {
     dbMock.queue([camp()]);
     queueActor(LEAD);

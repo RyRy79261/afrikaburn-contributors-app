@@ -72,6 +72,10 @@ import {
   type ObjectPatch,
 } from "@/lib/layout-editor-model";
 import { saveCampLayoutAction } from "@/app/(app)/camps/[slug]/layout/actions";
+import {
+  createLayoutAutosave,
+  type AutosaveState,
+} from "@/lib/layout-autosave";
 import type { StageApi, StageTheme } from "./editor-stage";
 import {
   LayoutInspector,
@@ -108,13 +112,7 @@ const AUTOSAVE_MS = 800;
 const RETRY_MS = 10_000;
 const TZ = "Africa/Johannesburg";
 
-type SaveState =
-  | { kind: "saved" }
-  | { kind: "pending" }
-  | { kind: "saving" }
-  | { kind: "offline" }
-  | { kind: "refused"; message: string }
-  | { kind: "conflict"; byName: string | null; at: string | null };
+type SaveState = AutosaveState;
 
 function timeOf(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -312,87 +310,45 @@ export function CampLayoutEditor({
   }, [selectedId, current.ref, commit]);
 
   // --- Autosave --------------------------------------------------------------------
+  // The controller (lib/layout-autosave.ts) owns the timers, the version and
+  // the "sent but never heard back" document; this only wires it to React.
 
-  const savedDoc = useRef(initial.document);
-  const version = useRef(initial.version);
-  const latest = useRef(doc);
-  latest.current = doc;
-  const inFlight = useRef(false);
-  const blocked = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flush = useCallback(async () => {
-    if (inFlight.current || blocked.current) return;
-    const snapshot = latest.current;
-    if (snapshot === savedDoc.current) {
-      setSave({ kind: "saved" });
-      return;
-    }
-    inFlight.current = true;
-    setSave({ kind: "saving" });
-    let r: Awaited<ReturnType<typeof saveCampLayoutAction>>;
-    try {
-      r = await saveCampLayoutAction({
-        slug,
-        expectedVersion: version.current,
-        document: snapshot,
-      });
-    } catch {
-      inFlight.current = false;
-      setSave({ kind: "offline" });
-      timer.current = setTimeout(() => void flush(), RETRY_MS);
-      return;
-    }
-    inFlight.current = false;
-    if (r.ok) {
-      version.current = r.version;
-      savedDoc.current = snapshot;
-      setLastSaved({
-        at: new Date().toISOString(),
-        by: null,
-        version: r.version,
-      });
-      if (latest.current !== snapshot) void flush();
-      else setSave({ kind: "saved" });
-      return;
-    }
-    blocked.current = true;
-    setSave(
-      r.conflict
-        ? { kind: "conflict", byName: r.conflict.byName, at: r.conflict.at }
-        : { kind: "refused", message: r.error },
-    );
-  }, [slug]);
+  const [autosave] = useState(() =>
+    createLayoutAutosave<LayoutDocument>({
+      initial: initial.document,
+      version: initial.version,
+      send: (document, expectedVersion) =>
+        saveCampLayoutAction({ slug, expectedVersion, document }),
+      onState: setSave,
+      onSaved: (v) =>
+        setLastSaved({ at: new Date().toISOString(), by: null, version: v }),
+      debounceMs: AUTOSAVE_MS,
+      retryMs: RETRY_MS,
+    }),
+  );
 
   useEffect(() => {
-    if (blocked.current) return;
-    if (doc === savedDoc.current) {
-      // Undone back to what is saved: nothing to send.
-      if (!inFlight.current) setSave({ kind: "saved" });
-      return;
-    }
-    setSave((s) => (s.kind === "saving" ? s : { kind: "pending" }));
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void flush(), AUTOSAVE_MS);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [doc, flush]);
+    autosave.change(doc);
+  }, [autosave, doc]);
 
-  const retry = () => {
-    blocked.current = false;
-    if (timer.current) clearTimeout(timer.current);
-    void flush();
-  };
+  const retry = () => autosave.retry();
 
-  // Leaving with a change not yet saved asks first.
+  // Leaving sends what is unsaved instead of dropping it: on unmount (an
+  // in-app link — App Router navigation fires no beforeunload) and on
+  // pagehide. A full unload with a change still unsaved also asks first.
   useEffect(() => {
     const onLeave = (e: BeforeUnloadEvent) => {
-      if (latest.current !== savedDoc.current) e.preventDefault();
+      if (autosave.hasUnsaved()) e.preventDefault();
     };
+    const onPageHide = () => autosave.leave();
     window.addEventListener("beforeunload", onLeave);
-    return () => window.removeEventListener("beforeunload", onLeave);
-  }, []);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("beforeunload", onLeave);
+      window.removeEventListener("pagehide", onPageHide);
+      autosave.leave();
+    };
+  }, [autosave]);
 
   // --- Keyboard ---------------------------------------------------------------------
 

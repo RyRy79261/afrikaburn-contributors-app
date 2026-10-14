@@ -205,6 +205,45 @@ export function decideLayoutSave(facts: {
   return null;
 }
 
+/** JSON with object keys sorted, so two documents compare by content — a
+ * jsonb round trip does not keep key order. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/** Two layout documents with the same content, whatever their key order. */
+export function sameLayoutDocument(a: unknown, b: unknown): boolean {
+  return canonicalJson(a) === canonicalJson(b);
+}
+
+/**
+ * A stale save whose document already IS the stored one is the retry of a
+ * save that committed but whose response never arrived (a dropped
+ * connection, a timeout after commit). It is not a conflict: the caller
+ * adopts the stored version. Anything else stale stays refused — only an
+ * exact match of content is adopted, so nobody's work is overwritten.
+ */
+export function isRetryOfStoredLayout(facts: {
+  currentVersion: number;
+  expectedVersion: number;
+  current: unknown;
+  sent: unknown;
+}): boolean {
+  return (
+    facts.currentVersion > facts.expectedVersion &&
+    sameLayoutDocument(facts.current, facts.sent)
+  );
+}
+
 /**
  * The catalogue check every write runs after the Zod parse: every object is
  * a key this edition offers, in that entry's shape, at a level it may sit

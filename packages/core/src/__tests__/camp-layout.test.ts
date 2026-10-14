@@ -27,6 +27,7 @@ import {
   formatPlotSize,
   frontageSegment,
   getLayoutCatalog,
+  isRetryOfStoredLayout,
   LAYOUT_AUDIT,
   latestLayoutSnapshot,
   layoutAvailableForGroup,
@@ -37,6 +38,7 @@ import {
   nestedFootprintOnPlot,
   objectFootprint,
   plotSummary,
+  sameLayoutDocument,
   shouldPinLayoutSnapshot,
   type LayoutWarning,
   type PermissionMembership,
@@ -952,3 +954,50 @@ describe("snapshot pinning", () => {
     expect(latestLayoutSnapshot([])).toBeNull();
   });
 });
+
+describe("isRetryOfStoredLayout", () => {
+  const doc = {
+    schemaVersion: 1,
+    plot: { boundary: { kind: "rect", width: 40, depth: 30 }, objects: [] },
+  };
+  const reordered = {
+    plot: { objects: [], boundary: { depth: 30, width: 40, kind: "rect" } },
+    schemaVersion: 1,
+  };
+
+  it("adopts a stale save whose content is already stored, in any key order", () => {
+    expect(sameLayoutDocument(doc, reordered)).toBe(true);
+    expect(
+      isRetryOfStoredLayout({
+        currentVersion: 13,
+        expectedVersion: 12,
+        current: reordered,
+        sent: doc,
+      }),
+    ).toBe(true);
+  });
+
+  it("never adopts different content, or a version that is not newer", () => {
+    const wider = { ...doc, plot: { ...doc.plot, boundary: { kind: "rect", width: 41, depth: 30 } } };
+    expect(sameLayoutDocument(doc, wider)).toBe(false);
+    expect(
+      isRetryOfStoredLayout({
+        currentVersion: 13,
+        expectedVersion: 12,
+        current: wider,
+        sent: doc,
+      }),
+    ).toBe(false);
+    expect(
+      isRetryOfStoredLayout({
+        currentVersion: 12,
+        expectedVersion: 13,
+        current: doc,
+        sent: doc,
+      }),
+    ).toBe(false);
+    // Array order is content: two tents swapped are a different document.
+    expect(sameLayoutDocument([1, 2], [2, 1])).toBe(false);
+  });
+});
+
