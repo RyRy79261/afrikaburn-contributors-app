@@ -91,6 +91,10 @@ export interface LayoutPlanProps {
   /** Shade structures with a covered area get a "N inside · open" chip
    * linking here. Absent: no chip (the org snapshot, print). */
   openHref?: (objectId: string) => string;
+  /** Objects drawn with the warning outline. ONLY an editor's phone view
+   * passes this (frames vnpZw, PGk6q): warnings are for the camp's editors,
+   * so a member's plan, print, the PNG and the org snapshot never do. */
+  highlightIds?: ReadonlySet<string>;
 }
 
 function Shape({
@@ -207,6 +211,7 @@ export function LayoutPlan({
   id,
   className,
   openHref,
+  highlightIds,
 }: LayoutPlanProps) {
   const src = planArea(doc, areaId);
   if (!src) return null;
@@ -216,7 +221,9 @@ export function LayoutPlan({
   const plan = buildPlanLayout(src, catalog, {
     rulers: full,
     scaleBar: full,
-    fontPx: variant === "compact" ? 30 : 13,
+    // Inside a shade structure the guy-rope band shrinks the drawing, so
+    // its labels are set a little smaller to keep tent names (frame PGk6q).
+    fontPx: variant === "compact" ? (src.parent ? 26 : 30) : 13,
   });
   const f = plan.fontPx;
   const clipId = `${id}-clip`;
@@ -239,6 +246,29 @@ export function LayoutPlan({
           <polygon points={plan.outline} />
         </clipPath>
       </defs>
+
+      {/* Inside a shade structure: where its guy ropes run, under the
+          ground (frames LcZsE, PGk6q). */}
+      {plan.guyZone && (
+        <g aria-hidden>
+          <polygon
+            points={plan.guyZone.points}
+            className="fill-ab-apricot/10 stroke-ab-apricot/60"
+            strokeWidth={hairline * Math.max(1, f / 13)}
+            strokeDasharray={`${f * 0.5} ${f * 0.4}`}
+          />
+          {full && (
+            <text
+              x={plan.guyZone.x + f * 0.6}
+              y={plan.guyZone.y + f * 1.3}
+              className="fill-ab-apricot font-mono font-semibold"
+              fontSize={f * 0.8}
+            >
+              {`GUY ROPES · KEEP CLEAR · ${plan.guyZone.clearanceM} m (estimate)`}
+            </text>
+          )}
+        </g>
+      )}
 
       {/* The ground, then the metre grid inside the outline. */}
       <polygon points={plan.outline} className="fill-muted/50" />
@@ -301,7 +331,10 @@ export function LayoutPlan({
         <line
           {...plan.frontage}
           className="stroke-ab-apricot"
-          strokeWidth={4}
+          // In viewBox units: the compact drawing is drawn larger against
+          // the plot (fontPx 30), so its frontage is thickened to match —
+          // otherwise it shrinks to a hairline at 360 (frame vnpZw).
+          strokeWidth={4 * Math.max(1, f / 13)}
           strokeLinecap="round"
         />
       )}
@@ -323,8 +356,17 @@ export function LayoutPlan({
         <g key={it.id} data-object-id={it.id}>
           <Shape
             shape={it.shape}
-            className={PLAN_TONE_CLASSES[it.tone].shape}
-            strokeWidth={variant === "thumb" ? 2 : 1.5}
+            className={cn(
+              PLAN_TONE_CLASSES[it.tone].shape,
+              highlightIds?.has(it.id) && "stroke-ab-apricot",
+            )}
+            strokeWidth={
+              highlightIds?.has(it.id)
+                ? 2.5 * Math.max(1, f / 13)
+                : variant === "thumb"
+                  ? 2
+                  : 1.5
+            }
           />
           <ItemText item={it} fontPx={f} variant={variant} />
         </g>

@@ -215,6 +215,10 @@ export interface PlanLayout {
   gridMajor: { xs: number[]; ys: number[] };
   rulers: { x: PlanTick[]; y: PlanTick[] } | null;
   scaleBar: { metres: number; px: number; x: number; y: number } | null;
+  /** Inside a shade structure: the band its guy ropes need, the structure's
+   * footprint grown by its clearance — as the editor draws it (frames
+   * LcZsE, PGk6q). Null on the whole camp or with no clearance. */
+  guyZone: { points: string; x: number; y: number; clearanceM: number } | null;
   items: PlanItem[];
 }
 
@@ -264,7 +268,29 @@ export function buildPlanLayout(
       haloRing: halo ? footprintRing(halo, 48) : null,
     };
   });
-  const allPoints: Vec[] = [...src.ring];
+  // The structure stands centred on its covered area (the editor's rule).
+  const guyRing: Ring | null =
+    src.parent && src.parent.clearanceM > 0
+      ? (() => {
+          const p = src.parent;
+          const centre: Vec = [
+            (areaBoxM.minX + areaBoxM.maxX) / 2,
+            (areaBoxM.minY + areaBoxM.maxY) / 2,
+          ];
+          const fp: Footprint =
+            p.shape === "circle"
+              ? { kind: "circle", centre, radius: (p.diameter ?? p.width) / 2 }
+              : {
+                  kind: "rect",
+                  centre,
+                  width: p.width,
+                  length: p.length,
+                  rotationDeg: 0,
+                };
+          return footprintRing(inflate(fp, p.clearanceM), 48);
+        })()
+      : null;
+  const allPoints: Vec[] = [...src.ring, ...(guyRing ?? [])];
   for (const p of prepared) {
     allPoints.push(...p.ring);
     if (p.haloRing) allPoints.push(...p.haloRing);
@@ -299,7 +325,12 @@ export function buildPlanLayout(
   const gy = (step: number) =>
     ticks(areaBoxM.minY, areaBoxM.maxY, step).map((v) => round(Y(v)));
 
-  const items: PlanItem[] = prepared.map(
+  // Support poles paint last, so a pole under a tent stays visible.
+  const ordered = [
+    ...prepared.filter((p) => p.e?.role !== "pole"),
+    ...prepared.filter((p) => p.e?.role === "pole"),
+  ];
+  const items: PlanItem[] = ordered.map(
     ({ o, e, fp, ring, halo, haloRing }) => {
       const b = footprintBox(ring);
       const boxW = (b.maxX - b.minX) * scale;
@@ -377,6 +408,18 @@ export function buildPlanLayout(
     gridMajor: { xs: gx(major), ys: gy(major) },
     rulers,
     scaleBar,
+    guyZone:
+      guyRing && src.parent
+        ? (() => {
+            const g = bbox(guyRing);
+            return {
+              points: pts(guyRing),
+              x: round(X(g.minX)),
+              y: round(Y(g.minY)),
+              clearanceM: src.parent.clearanceM,
+            };
+          })()
+        : null,
     items,
   };
 }

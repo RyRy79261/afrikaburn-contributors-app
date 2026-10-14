@@ -266,6 +266,47 @@ describe("buildPlanLayout", () => {
     expect(inside.frontage).toBeNull();
   });
 
+  it("draws a shade structure's guy-rope band inside it, and none on the whole camp", () => {
+    // Frames LcZsE / PGk6q: the band the ropes need, around the covered
+    // area, as the editor draws it.
+    const bedouin = o("bedouin", 10, 10, {
+      clearanceM: 2,
+      child: { boundary: { kind: "rect", width: 12, depth: 8 }, objects: [] },
+    });
+    const opts = { rulers: false, scaleBar: false };
+    const whole = buildPlanLayout(planArea(doc([bedouin]), null)!, CATALOG, opts);
+    expect(whole.guyZone).toBeNull();
+    const inside = buildPlanLayout(planArea(doc([bedouin]), bedouin.id)!, CATALOG, opts);
+    expect(inside.guyZone?.clearanceM).toBe(2);
+    // 12 + 2 × 2 = 16 m wide drawn at 800 units: the area sits 2 m in.
+    expect(inside.areaBox.x - inside.guyZone!.x).toBeCloseTo(100, 0);
+    const noRopes = buildPlanLayout(
+      planArea(doc([{ ...bedouin, clearanceM: 0 }]), bedouin.id)!,
+      CATALOG,
+      opts,
+    );
+    expect(noRopes.guyZone).toBeNull();
+  });
+
+  it("paints a support pole after the tent it stands under, whatever the document order", () => {
+    // Frame LcZsE: the pole a tent sits on is drawn ON the tent. Drawn in
+    // document order it would be hidden under a tent added after it.
+    const pole = nested("support-pole", 4, 4);
+    const tent = nested("tent-2p", 4, 4);
+    const walkway = nested("walkway", 8, 4);
+    const bedouin = o("bedouin", 10, 10, {
+      child: {
+        boundary: { kind: "rect", width: 12, depth: 8 },
+        objects: [pole, tent, walkway],
+      },
+    });
+    const inside = buildPlanLayout(planArea(doc([bedouin]), bedouin.id)!, CATALOG, {
+      rulers: true,
+      scaleBar: true,
+    });
+    expect(inside.items.map((i) => i.id)).toEqual([tent.id, walkway.id, pole.id]);
+  });
+
   it("draws a rotated rectangle as its turned corners", () => {
     const flat = buildPlanLayout(
       planArea(doc([o("stage", 20, 15)]), null)!,
@@ -366,6 +407,33 @@ describe("<LayoutPlan>", () => {
       <LayoutPlan id="b" doc={d} catalog={CATALOG} variant="full" title="Plan" />,
     );
     expect(without.container.querySelector("a")).toBeNull();
+  });
+
+  it("outlines only the objects an editor's view names, and nothing by default", () => {
+    // Frame vnpZw: an editor's phone plan outlines what its warnings name.
+    // Use the vehicle tone (not apricot already) so the outline is visible.
+    const car = o("vehicle", 20, 25);
+    const dd = doc([car, stage]);
+    const shapeOf = (c: HTMLElement, oid: string) =>
+      c.querySelector(`[data-object-id="${oid}"] > *`)?.getAttribute("class") ?? "";
+    const lit = render(
+      <LayoutPlan
+        id="h"
+        doc={dd}
+        catalog={CATALOG}
+        variant="compact"
+        title="Phone"
+        highlightIds={new Set([car.id])}
+      />,
+    );
+    expect(shapeOf(lit.container, car.id)).toContain("stroke-ab-apricot");
+    expect(shapeOf(lit.container, car.id)).not.toContain("stroke-muted-foreground");
+    lit.unmount();
+    const plain = render(
+      <LayoutPlan id="p" doc={dd} catalog={CATALOG} variant="compact" title="Phone" />,
+    );
+    expect(shapeOf(plain.container, car.id)).toContain("stroke-muted-foreground");
+    expect(shapeOf(plain.container, car.id)).not.toContain("stroke-ab-apricot");
   });
 
   it("a thumbnail is shapes only", () => {
