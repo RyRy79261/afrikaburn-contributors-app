@@ -347,3 +347,58 @@ describe("camp money (migration 0037)", () => {
     );
   });
 });
+
+describe("camp layouts (migration 0038)", () => {
+  const fkMap = (table: string) =>
+    (byName.get(table)?.foreignKeys ?? []).map((fk) => ({
+      column: fk.reference().columns[0]!.name,
+      target: getTableConfig(fk.reference().foreignTable).name,
+      onDelete: fk.onDelete,
+    }));
+
+  it("is owned by the registration — one layout per registration", () => {
+    const owner = fkMap("camp_layouts").find(
+      (f) => f.column === "registration_id",
+    );
+    expect(owner).toEqual({
+      column: "registration_id",
+      target: "registrations",
+      onDelete: "cascade",
+    });
+    const unique = byName
+      .get("camp_layouts")
+      ?.indexes.find((i) => i.config.name === "camp_layouts_registration_idx");
+    expect(unique?.config.unique).toBe(true);
+    expect(unique?.config.columns.map((c) => (c as Column).name)).toEqual([
+      "registration_id",
+    ]);
+  });
+
+  it("keeps snapshots append-only: never unique on version, so a resubmit adds a row", () => {
+    for (const i of byName.get("camp_layout_snapshots")?.indexes ?? []) {
+      expect(i.config.unique).toBe(false);
+    }
+  });
+
+  it("never cascades a person away, and never hangs off a membership", () => {
+    for (const table of ["camp_layouts", "camp_layout_snapshots"]) {
+      for (const fk of fkMap(table)) {
+        expect(fk.target).not.toBe("memberships");
+        if (fk.target === "users") {
+          expect(`${table}.${fk.column}:${fk.onDelete}`).toBe(
+            `${table}.${fk.column}:set null`,
+          );
+        }
+      }
+    }
+  });
+
+  it("pins the version CHECKs", () => {
+    const checks = (table: string) =>
+      (byName.get(table)?.checks ?? []).map((c) => c.name).sort();
+    expect(checks("camp_layouts")).toEqual(["camp_layouts_version_positive"]);
+    expect(checks("camp_layout_snapshots")).toEqual([
+      "camp_layout_snapshots_version_positive",
+    ]);
+  });
+});
