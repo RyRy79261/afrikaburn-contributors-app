@@ -14,7 +14,12 @@ const config: NextConfig = {
   // agent; it would sit as an uncommitted change after every agent run.
   agentRules: false,
   reactStrictMode: true,
-  transpilePackages: ["@quagga/ui", "@quagga/types", "@quagga/core"],
+  transpilePackages: [
+    "@quagga/ui",
+    "@quagga/types",
+    "@quagga/core",
+    "@quagga/geo",
+  ],
   turbopack: { root: repoRoot },
   headers: securityHeaders,
 };
