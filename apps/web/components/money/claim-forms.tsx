@@ -42,7 +42,7 @@ import {
   undoClaimRepaidAction,
   withdrawClaimAction,
 } from "@/app/(app)/camps/[slug]/money/actions";
-import { todayInSouthAfrica } from "@/lib/money-view";
+import { approvesWithOwnCategory, todayInSouthAfrica } from "@/lib/money-view";
 import {
   AmountInput,
   RecordsOnlyNote,
@@ -287,7 +287,9 @@ function claimSummary(c: DecidableClaim): string {
 }
 
 /** Approve. A claim filed without a category asks for one first — an
- * approved claim is spending, and spending has a category. */
+ * approved claim is spending, and spending has a category. So does a claim
+ * whose category was removed after it was filed: the server refuses an
+ * archived category, so the direct button would be a dead end. */
 export function ApproveClaimButton({
   slug,
   claim,
@@ -301,7 +303,8 @@ export function ApproveClaimButton({
   const [categoryId, setCategoryId] = React.useState("");
   const { pending, error, setError, run } = useMoneyAction();
 
-  if (claim.categoryId) {
+  // `categories` holds only the live spending categories.
+  if (approvesWithOwnCategory(claim.categoryId, categories)) {
     return (
       <div className="flex flex-col items-start gap-1">
         <Button

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLAIM_STATUS_BADGE,
   DUES_STATUS_BADGE,
+  approvesWithOwnCategory,
   claimMetaLine,
   claimStatusLabel,
   duesStatusLabel,
@@ -133,5 +134,22 @@ describe("money view helpers", () => {
       "Sound · Rejected by a money person on 2 Apr 2027",
     );
     expect(moneyDayLabel("not a day")).toBe("not a day");
+  });
+});
+
+describe("approvesWithOwnCategory", () => {
+  const live = [{ id: "kitchen" }, { id: "power" }];
+
+  it("approves straight through on a live category", () => {
+    expect(approvesWithOwnCategory("kitchen", live)).toBe(true);
+  });
+
+  it("asks for a category when the claim's one was removed since", () => {
+    // Archived categories are not in the live list; the server refuses them.
+    expect(approvesWithOwnCategory("decor-removed", live)).toBe(false);
+  });
+
+  it("asks for a category when the claim was filed without one", () => {
+    expect(approvesWithOwnCategory(null, live)).toBe(false);
   });
 });

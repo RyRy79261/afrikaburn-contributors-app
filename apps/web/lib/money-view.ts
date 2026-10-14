@@ -147,3 +147,20 @@ export function duesBreakdown(byStatus: Record<DuesStatus, number>): string {
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+/**
+ * Can Approve go straight through with the claim's own category? Only when
+ * that category is still a live spending category. A category removed after
+ * the claim was filed is archived, and the server refuses it, so the approver
+ * must pick another — otherwise Approve is a dead end and Reject the only way
+ * out.
+ */
+export function approvesWithOwnCategory(
+  claimCategoryId: string | null,
+  liveCategories: readonly { id: string }[],
+): boolean {
+  return (
+    claimCategoryId !== null &&
+    liveCategories.some((c) => c.id === claimCategoryId)
+  );
+}
