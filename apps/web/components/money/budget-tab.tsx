@@ -594,36 +594,40 @@ function EntryRow({
           {income ? "+" : ""}
           {formatRand(e.amountCents)}
         </span>
-        <EntryDialog
-          slug={slug}
-          categories={categories}
-          receiptsEnabled={receiptsEnabled}
-          entry={{
-            id: e.id,
-            categoryId: e.categoryId,
-            kind: e.kind,
-            amountCents: e.amountCents,
-            entryDate: e.entryDate,
-            description: e.description,
-            status: e.status,
-          }}
-          trigger={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Correct the entry: ${e.description}`}
-            >
-              <Pencil className="h-4 w-4" aria-hidden />
-            </Button>
-          }
-        />
-        <DeleteEntryButton
-          slug={slug}
-          entryId={e.id}
-          description={e.description}
-          amountCents={e.amountCents}
-        />
+        {/* Correct and delete stay together, at the row's end on a phone
+            too, instead of wrapping one of them onto a line of its own. */}
+        <div className="ml-auto flex items-center sm:ml-0">
+          <EntryDialog
+            slug={slug}
+            categories={categories}
+            receiptsEnabled={receiptsEnabled}
+            entry={{
+              id: e.id,
+              categoryId: e.categoryId,
+              kind: e.kind,
+              amountCents: e.amountCents,
+              entryDate: e.entryDate,
+              description: e.description,
+              status: e.status,
+            }}
+            trigger={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Correct the entry: ${e.description}`}
+              >
+                <Pencil className="h-4 w-4" aria-hidden />
+              </Button>
+            }
+          />
+          <DeleteEntryButton
+            slug={slug}
+            entryId={e.id}
+            description={e.description}
+            amountCents={e.amountCents}
+          />
+        </div>
       </div>
     </li>
   );

@@ -243,22 +243,31 @@ export function MemberMoney({
                   canAttach={c.status === "submitted" && view.receiptsEnabled}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {c.description ?? "Claim"}
-                    </p>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="font-semibold tabular-nums">
+                  {/* Desktop (frame tEtgq): what it was for and its line on
+                      the left, the status then the amount on the right. At
+                      360 (YaU0P) the amount and status drop below, so the
+                      description keeps the card's width. */}
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium [overflow-wrap:anywhere]">
+                        {c.description ?? "Claim"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {claimMetaLine(c, "member")}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+                      <span className="font-semibold tabular-nums sm:order-2">
                         {formatRand(c.amountCents)}
                       </span>
-                      <Badge variant={CLAIM_STATUS_BADGE[c.status]}>
+                      <Badge
+                        variant={CLAIM_STATUS_BADGE[c.status]}
+                        className="sm:order-1"
+                      >
                         {claimStatusLabel(c.status)}
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {claimMetaLine(c, "member")}
-                  </p>
                   {c.status === "rejected" && c.decisionNote && (
                     <div className="mt-2 flex gap-2 rounded-lg bg-muted/40 p-2 text-xs">
                       <MessageSquare

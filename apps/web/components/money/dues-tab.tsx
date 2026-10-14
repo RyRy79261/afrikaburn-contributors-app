@@ -348,13 +348,50 @@ function RowActions({
     );
   }
   const member = toMember(row);
+  const history =
+    row.figures.receivedCents > 0 ? (
+      <PaymentsDialog slug={slug} member={member} />
+    ) : null;
+
+  if (stacked) {
+    // 360 (frame DooLI): the actions stretch across the card, one per line,
+    // so they are easy to hit and never wrap mid-row.
+    return (
+      <div className="flex flex-col gap-2">
+        {row.canEdit ? (
+          <>
+            {row.figures.status !== "waived" && (
+              <div className="flex items-center gap-2">
+                <RecordMoneyDialog
+                  slug={slug}
+                  member={member}
+                  triggerClassName="h-9 flex-1"
+                />
+                {history}
+              </div>
+            )}
+            <SetAmountDialog
+              slug={slug}
+              member={member}
+              campFeeCents={campFeeCents}
+              triggerClassName="h-9 w-full border border-border"
+            />
+            {row.figures.status === "waived" && history}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              A lead records your own dues.
+            </p>
+            {history}
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1",
-        stacked ? "flex-wrap" : "justify-end whitespace-nowrap",
-      )}
-    >
+    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
       {row.canEdit ? (
         <>
           {row.figures.status !== "waived" && (
@@ -371,9 +408,9 @@ function RowActions({
           A lead records your own dues.
         </p>
       )}
-      {row.figures.receivedCents > 0 && (
-        <PaymentsDialog slug={slug} member={member} />
-      )}
+      {/* Hold the history button's place on every row, so the action
+          buttons line up down the table (frame F2Chu3). */}
+      {history ?? <span className="h-8 w-8 shrink-0" aria-hidden />}
     </div>
   );
 }

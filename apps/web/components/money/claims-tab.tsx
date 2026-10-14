@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Info, Lock, MessageSquare, ReceiptText } from "lucide-react";
+import {
+  CircleCheck,
+  Info,
+  Lock,
+  MessageSquare,
+  ReceiptText,
+} from "lucide-react";
 import { formatRand } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
@@ -37,6 +43,13 @@ const FILTERS: { key: ClaimFilter; label: string }[] = [
   { key: "repaid", label: "Repaid" },
 ];
 
+const STATUS_ORDER: Record<ClaimView["status"], number> = {
+  submitted: 0,
+  approved: 1,
+  rejected: 2,
+  repaid: 3,
+};
+
 export function ClaimsTab({
   slug,
   claims,
@@ -55,8 +68,14 @@ export function ClaimsTab({
     s === "all" ? claims.length : claims.filter((c) => c.status === s).length;
   const sum = (s: ClaimFilter) =>
     claims.filter((c) => c.status === s).reduce((n, c) => n + c.amountCents, 0);
-  const shown =
-    filter === "all" ? claims : claims.filter((c) => c.status === filter);
+  // A queue: what waits for a decision first, then what is still owed, then
+  // the settled ones (frame eT62X). Newest first within each status — the
+  // loader's order, kept by the stable sort.
+  const shown = (
+    filter === "all" ? claims : claims.filter((c) => c.status === filter)
+  )
+    .slice()
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -177,17 +196,30 @@ function ClaimCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
-          <p className="flex flex-wrap items-center gap-2 font-medium">
+          <p className="flex min-w-0 flex-wrap items-center gap-2 font-medium [overflow-wrap:anywhere]">
             {c.claimantName}
             {c.isOwn && " (you)"}
-            <Badge variant={CLAIM_STATUS_BADGE[c.status]}>
+            <Badge
+              variant={CLAIM_STATUS_BADGE[c.status]}
+              className="hidden sm:inline-flex"
+            >
               {claimStatusLabel(c.status)}
             </Badge>
           </p>
-          <p className="shrink-0 font-semibold tabular-nums">
+          <p className="hidden shrink-0 font-semibold tabular-nums sm:block">
             {formatRand(c.amountCents)}
           </p>
         </div>
+        {/* 360 (frame jgNEH): the amount and status get their own line, so
+            a long name can never push the amount out of the card. */}
+        <p className="mt-1 flex flex-wrap items-center gap-2 sm:hidden">
+          <span className="text-lg font-semibold tabular-nums">
+            {formatRand(c.amountCents)}
+          </span>
+          <Badge variant={CLAIM_STATUS_BADGE[c.status]}>
+            {claimStatusLabel(c.status)}
+          </Badge>
+        </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {claimMetaLine(c, "money")}
         </p>
@@ -230,7 +262,7 @@ function ClaimCard({
           </p>
         )}
 
-        <div className="mt-3 flex flex-wrap items-start gap-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start [&_button]:w-full sm:[&_button]:w-auto">
           {c.status === "submitted" && c.mayDecide && (
             <>
               <ApproveClaimButton
@@ -244,6 +276,7 @@ function ClaimCard({
           {c.status === "submitted" && c.isOwn && (
             <>
               <Button type="button" size="sm" disabled>
+                <CircleCheck className="h-4 w-4" aria-hidden />
                 Approve
               </Button>
               <WithdrawClaimButton slug={slug} claimId={c.id} />

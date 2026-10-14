@@ -76,7 +76,7 @@ export function Figure({
       <p className="text-xs text-muted-foreground">{label}</p>
       <p
         className={cn(
-          "mt-0.5 text-lg font-semibold tabular-nums sm:text-xl",
+          "mt-0.5 text-base font-semibold tabular-nums sm:text-xl",
           tone === "warning" && "text-warning",
           tone === "success" && "text-success",
         )}
@@ -99,7 +99,11 @@ export function FigureGrid({
     <div
       className={cn(
         "grid grid-cols-2 gap-3",
-        columns === 4 ? "lg:grid-cols-4" : "sm:grid-cols-3",
+        columns === 4
+          ? "lg:grid-cols-4"
+          : // Three figures on two columns: the third takes the whole row
+            // at 360 rather than leaving a hole beside it (frame YaU0P).
+            "sm:grid-cols-3 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1",
       )}
     >
       {children}

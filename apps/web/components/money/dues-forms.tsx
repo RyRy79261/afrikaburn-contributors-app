@@ -5,6 +5,7 @@ import { Check, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { formatRand } from "@quagga/core";
 import { MONEY_INSTRUCTIONS_MAX, MONEY_NOTE_MAX } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
+import { cn } from "@quagga/ui/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -249,9 +250,12 @@ function memberLine(m: DuesMember): string {
 export function RecordMoneyDialog({
   slug,
   member,
+  triggerClassName,
 }: {
   slug: string;
   member: DuesMember;
+  /** The 360 card stretches the trigger to the card's width (frame DooLI). */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [amount, setAmount] = React.useState("");
@@ -304,7 +308,7 @@ export function RecordMoneyDialog({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 px-2.5 text-xs"
+          className={cn("h-8 px-2.5 text-xs", triggerClassName)}
           aria-label={`Record money in from ${member.name}`}
         >
           <Plus className="h-4 w-4" aria-hidden />
@@ -370,10 +374,13 @@ export function SetAmountDialog({
   slug,
   member,
   campFeeCents,
+  triggerClassName,
 }: {
   slug: string;
   member: DuesMember;
   campFeeCents: number;
+  /** The 360 card stretches the trigger to the card's width (frame DooLI). */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [amount, setAmount] = React.useState("");
@@ -442,7 +449,7 @@ export function SetAmountDialog({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 px-2.5 text-xs"
+          className={cn("h-8 px-2.5 text-xs", triggerClassName)}
           aria-label={`Set what ${member.name} owes`}
         >
           Set amount

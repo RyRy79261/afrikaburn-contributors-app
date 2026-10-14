@@ -130,7 +130,7 @@ export function NewClaimDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" size="sm">
+        <Button type="button" size="sm" className="w-full sm:w-auto">
           <Plus className="h-4 w-4" aria-hidden />
           New claim
         </Button>
@@ -149,9 +149,7 @@ export function NewClaimDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={UNSURE}>
-                  Not sure (the money people pick)
-                </SelectItem>
+                <SelectItem value={UNSURE}>Not sure yet</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
@@ -186,9 +184,9 @@ export function NewClaimDialog({
           disabled={pending}
         />
         <p className="text-xs text-muted-foreground">
-          A money person approves or rejects it. Once approved, the camp pays
-          you back by EFT and marks it repaid. You can withdraw it until
-          it&apos;s decided.
+          A money person approves or rejects it, and picks the category if you
+          weren&apos;t sure. Once approved, the camp pays you back by EFT and
+          marks it repaid. You can withdraw it until it&apos;s decided.
         </p>
         <FormError error={error} />
         <DialogFooter>
@@ -220,7 +218,7 @@ export function WithdrawClaimButton({
   const [confirm, setConfirm] = React.useState(false);
   const { pending, error, run } = useMoneyAction();
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col items-start gap-1">
       {confirm ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -295,7 +293,7 @@ export function ApproveClaimButton({
 
   if (claim.categoryId) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col items-start gap-1">
         <Button
           type="button"
           size="sm"
