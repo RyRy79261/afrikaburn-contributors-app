@@ -338,7 +338,7 @@ export function CampLayoutEditor({
   // pagehide. A full unload with a change still unsaved also asks first.
   useEffect(() => {
     const onLeave = (e: BeforeUnloadEvent) => {
-      if (autosave.hasUnsaved()) e.preventDefault();
+      if (autosave.shouldWarnOnLeave()) e.preventDefault();
     };
     const onPageHide = () => autosave.leave();
     window.addEventListener("beforeunload", onLeave);

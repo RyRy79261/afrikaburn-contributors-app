@@ -169,4 +169,23 @@ describe("layout autosave", () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(server.calls).toBe(1);
   });
+
+  it("asks before leaving with an unsaved change, but not after a conflict", async () => {
+    const { server, commit } = fakeServer();
+    const { a } = setup(commit);
+    a.change({ n: 1 });
+    // Pending, not sent yet: leaving would drop it, so ask.
+    expect(a.shouldWarnOnLeave()).toBe(true);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(a.shouldWarnOnLeave()).toBe(false);
+
+    // Someone else saves first: the editor says the change wasn't kept and
+    // offers Reload. Reloading must not hit a second "Leave site?" dialog.
+    server.version = 9;
+    server.doc = { n: 42 };
+    a.change({ n: 3 });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(a.hasUnsaved()).toBe(true);
+    expect(a.shouldWarnOnLeave()).toBe(false);
+  });
 });

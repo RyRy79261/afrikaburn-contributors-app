@@ -59,6 +59,13 @@ export interface LayoutAutosave<D> {
   leave(): void;
   /** Something the server does not hold yet. */
   hasUnsaved(): boolean;
+  /**
+   * Should leaving the page ask first? Only while there is something unsaved
+   * that is still worth keeping. After a conflict the editor has already told
+   * the user their last change wasn't kept and offers Reload — asking "Leave
+   * site?" about that change would only put a second dialog in the way.
+   */
+  shouldWarnOnLeave(): boolean;
 }
 
 export function createLayoutAutosave<D>(
@@ -154,5 +161,6 @@ export function createLayoutAutosave<D>(
       if (!blocked && !inFlight && hasUnsaved()) void flush();
     },
     hasUnsaved,
+    shouldWarnOnLeave: () => state.kind !== "conflict" && hasUnsaved(),
   };
 }
