@@ -19,7 +19,10 @@
 //   plan (svg) ...... packages/ui/src/components/layout-plan.tsx
 //   print ........... apps/web/app/(app)/camps/[slug]/layout/print/page.tsx
 //   console ......... apps/org/components/registration/layout-snapshot.tsx
+//   wizard s4 ....... apps/web/components/registration/layout-section-card.tsx
+//   placement CSV ... apps/org/app/api/registrations/export/route.ts
 
+import { readFile } from "node:fs/promises";
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import type { Page } from "@playwright/test";
 import {
@@ -247,6 +250,67 @@ test.describe("camp layout — the read-only plan", () => {
   });
 });
 
+test.describe("camp layout — registration section 4", () => {
+  test("the wizard links the layout, and a drawn layout answers the area dimensions", async ({
+    webPage,
+  }) => {
+    test.skip(
+      test.info().project.name === "mobile-360",
+      "Drawing needs 768 px.",
+    );
+    test.setTimeout(240_000);
+
+    await signUpBurner(webPage, { onboard: true });
+    const camp = await createCamp(webPage, { description: "Shade and chai." });
+    await startRegistrationDraft(webPage, camp.slug);
+
+    const openSection4 = async () => {
+      await webPage.goto(`/camps/${camp.slug}/registration`);
+      await webPage
+        .getByRole("button", { name: /Size & Logistics/i })
+        .first()
+        .click();
+      await expect(
+        webPage.getByRole("heading", { name: "Camp layout" }),
+      ).toBeVisible();
+    };
+
+    // No layout: the way in, and the dimensions still required.
+    await openSection4();
+    await webPage.getByLabel(/expected population/i).fill("45");
+    await webPage.getByLabel(/first arrival date/i).fill("2027-04-24");
+    await expect(
+      webPage.getByRole("link", { name: /draw your layout/i }),
+    ).toBeVisible();
+    await expect(
+      webPage.getByText("Required fields are marked with *."),
+    ).toBeVisible();
+    await expect(webPage.getByText(/saved just now/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    await webPage.getByRole("link", { name: /draw your layout/i }).click();
+    await expect(webPage).toHaveURL(new RegExp(`/camps/${camp.slug}/layout$`));
+
+    await drawLayout(webPage, camp.slug);
+
+    // A layout: its size beside the field, the field optional, the section
+    // complete with the dimensions left blank — and never written for them.
+    await openSection4();
+    await expect(webPage.getByTestId("s4-layout-size")).toHaveText(
+      "From your layout: 40 m × 30 m · 1,200 m²",
+    );
+    const dims = webPage.getByLabel(/camp area dimensions \(optional\)/i);
+    await expect(dims).toBeVisible();
+    await expect(dims).toHaveValue("");
+    await expect(
+      webPage.getByText("All required fields complete."),
+    ).toBeVisible();
+    await expect(
+      webPage.getByRole("link", { name: /open your layout/i }),
+    ).toBeVisible();
+  });
+});
+
 test.describe("camp layout — AfrikaBurn's copy", () => {
   test("the console shows the snapshot pinned at submit, not later edits, under section 4, with no warnings", async ({
     webPage,
@@ -296,5 +360,25 @@ test.describe("camp layout — AfrikaBurn's copy", () => {
       .filter({ hasText: "Plot (from the layout)" });
     await expect(section).toContainText("Expected population");
     await expect(section.getByText(WARNING_TEXT)).toHaveCount(0);
+
+    // The placement CSV carries the pinned plot's size and area (decision
+    // 10) beside the camp's own free-text answer — and nothing else of it.
+    await orgPage.goto("/registrations");
+    const [download] = await Promise.all([
+      orgPage.waitForEvent("download"),
+      orgPage.getByRole("link", { name: /export for placement/i }).click(),
+    ]);
+    const csv = await readFile((await download.path())!, "utf8");
+    const [header, ...lines] = csv.replace(/^\ufeff/, "").split("\r\n");
+    const cols = header!.split(",");
+    const line = lines.find((l) => l.startsWith(`${camp.name},`));
+    expect(line, "the camp's row in the export").toBeTruthy();
+    const cells = line!.split(",");
+    const cell = (h: string) => cells[cols.indexOf(h)];
+    expect(cell("Area dimensions")).toBe("20m x 15m");
+    expect(cell("Layout width (m)")).toBe("40");
+    expect(cell("Layout depth (m)")).toBe("30");
+    expect(cell("Layout area (m²)")).toBe("1200");
+    expect(csv).not.toContain("Kitchen 1");
   });
 });
