@@ -23,7 +23,8 @@
 //   7. A plain member gets the read-only view — no palette, no warnings.
 //   8. A stranger gets the camp's not-found.
 //
-// At 360 the same lead gets the view-only page and NO canvas (decision 13).
+// At 360 the same lead can neither start nor edit a plan, and gets NO canvas
+// (decision 13). The view-only plan is camp-layout-view.spec.ts.
 //
 // HONEST SCOPE NOTE. Pointer dragging, resizing and rotating on the canvas
 // are Konva's and are not driven here: the inspector inputs are the
@@ -36,7 +37,7 @@
 //   start card ...... apps/web/components/layout-editor/layout-start-card.tsx
 //   editor .......... apps/web/components/layout-editor/camp-layout-editor.tsx
 //   panels .......... apps/web/components/layout-editor/editor-panels.tsx
-//   read-only ....... apps/web/components/layout-editor/read-only-seam.tsx
+//   read-only ....... apps/web/components/layout-view/layout-read-only.tsx
 
 import { test, expect } from "../../fixtures";
 import type { Page } from "@playwright/test";
@@ -86,7 +87,10 @@ test.describe("camp lead — the layout editor", () => {
 
     // 1. Empty state → a plot.
     await gotoLayout(webPage, camp.slug);
-    await expect(webPage.getByText(/no layout for .* yet/i)).toBeVisible();
+    // The phone's start card is in the page too, hidden at this width.
+    await expect(
+      webPage.getByText(/no layout for .* yet/i).filter({ visible: true }),
+    ).toBeVisible();
     await webPage.getByLabel("Width", { exact: true }).fill("40");
     await webPage.getByLabel("Depth", { exact: true }).fill("30");
     await webPage.getByRole("button", { name: "Create the plot" }).click();
@@ -177,7 +181,7 @@ test.describe("camp lead — the layout editor", () => {
     ]);
   });
 
-  test("at 360 the lead gets the view-only plan and no canvas", async ({
+  test("at 360 the lead can neither start nor edit a plan", async ({
     webPage,
   }) => {
     test.skip(
@@ -190,10 +194,18 @@ test.describe("camp lead — the layout editor", () => {
     const camp = await createCamp(webPage, { description: "Shade and chai." });
     await submitRegistration(webPage, camp.slug);
     await gotoLayout(webPage, camp.slug);
-    // The start card is the same at every width: sizing a plot is two inputs.
-    await webPage.getByRole("button", { name: "Create the plot" }).click();
-    await expect(webPage.getByText(/edit on a larger screen/i)).toBeVisible();
-    await expect(webPage.getByText(/^Plot 40 m × 30 m/)).toBeVisible();
+    // A phone neither starts nor edits a plan (decision 13; frame t7aOZ3
+    // state 4). The view-only plan itself is covered in
+    // camp-layout-view.spec.ts.
+    await expect(
+      webPage.getByText(/no layout for .* yet/i).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      webPage.getByText(/on a tablet or computer/i).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      webPage.getByRole("button", { name: "Create the plot" }),
+    ).toBeHidden();
     await expect(webPage.getByRole("heading", { name: "Add to the plan" })).toBeHidden();
     await expect(webPage.locator("canvas")).toHaveCount(0);
   });
