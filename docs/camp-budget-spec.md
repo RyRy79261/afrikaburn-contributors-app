@@ -98,8 +98,17 @@ as a download.
 - **`manage_money`** is a new project permission (custom-role grantable).
   Structural lead/admin hold it irrevocably, like every project permission.
 - **Money people** create and edit the budget, categories, entries and dues,
-  record payments, and decide claims. A claim's own author cannot approve it,
-  even when they hold `manage_money` (another money person must, or a lead).
+  record payments, and decide claims. A claim's own author cannot approve,
+  reject or mark it repaid, even when they hold `manage_money` (another money
+  person must, or a lead).
+- **Corrections back** (Ryan, 14 Oct 2026, "allow reopen"): a money person can
+  **reopen** a rejected claim (→ `submitted`, decision and note cleared) and
+  **undo "repaid"** (→ `approved`, repaid date cleared), and move an approved
+  budget **back to draft** (approval stamp cleared). Never on their own claim.
+  Each is a compare-and-set on the current status (two money people at once:
+  one wins), writes an audit row keeping what it undid (ids and dates, never
+  the note), and a claim correction notifies the claimant. An approved claim
+  never goes back to the queue.
   Likewise a money person through a custom role cannot set their own dues
   amount or record money in for themselves (`own_dues`); a structural
   lead/admin can, so a camp whose only money person is its lead still works.
@@ -123,19 +132,21 @@ as a download.
 
 - Member: your dues amount was set or changed (R 0,00 on the camp fee reads
   "no fee set", never "waived"); a payment was recorded; your claim was
-  approved, rejected or marked repaid. A rejection notice points at the claim,
-  where the note is; the note is not copied into the notice, because account
-  erasure clears it from the claim and preserves notifications.
+  approved, rejected, marked repaid, reopened, or no longer marked repaid. A
+  rejection notice points at the claim, where the note is; the note is not
+  copied into the notice, because account erasure clears it from the claim
+  and preserves notifications.
 - Money people: a claim was submitted.
 
 ## Surfaces
 
 - `/camps/[slug]/money` — the money page. Money people: the budget (frame M1)
-  with plan vs actual by category, entries, the approve-budget action; tabs for
-  **Dues** (M2: every member, owed / received / outstanding / status, record a
-  payment, set an amount) and **Claims** (M3: queue with approve / reject /
-  mark repaid, receipts). Members: the totals card, "Your dues" and "Your
-  claims" with the claim form (M4).
+  with plan vs actual by category, entries, the approve-budget action (and
+  "Back to draft" once approved); tabs for **Dues** (M2: every member, owed /
+  received / outstanding / status, record a payment, set an amount) and
+  **Claims** (M3: queue with approve / reject / mark repaid, "Reopen" on a
+  rejected claim and "Undo repaid" on a repaid one, receipts). Members: the
+  totals card, "Your dues" and "Your claims" with the claim form (M4).
 - Camp page: a Money tile — totals for everyone; "You owe R…" for the member.
 - Roles editor: the new `manage_money` privilege.
 
