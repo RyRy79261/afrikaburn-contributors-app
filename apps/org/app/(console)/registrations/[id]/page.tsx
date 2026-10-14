@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Check, ExternalLink, X } from "lucide-react";
 import {
+  formatPlotSize,
   SAFETY_DOCUMENT_VALIDITY_LABELS,
   legacyWapAsk,
   orgCanInDomain,
@@ -58,6 +59,11 @@ import {
   CardTitle,
 } from "@quagga/ui/components/card";
 import { PlacementPanel } from "@/components/registration/placement-panel";
+import { LayoutSnapshotView } from "@/components/registration/layout-snapshot";
+import {
+  getLayoutSnapshotForReview,
+  type LayoutSnapshotForReview,
+} from "@/lib/layout-snapshot";
 import { RegistrationChanges } from "@quagga/ui/components/registration-changes";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
@@ -196,15 +202,23 @@ export default async function RegistrationDetailPage({
   // Placement and payment share the decision capability (both are the
   // registrations domain), so they reuse `decisionRefusal` rather than resolving
   // the same question a third time.
-  const [placement, comparison] = await Promise.all([
+  const [placement, comparison, layoutSnapshot] = await Promise.all([
     getPlacementContext({
       registrationId: registration.id,
       editionId: detail.edition.id,
       campName: detail.group.name,
     }),
     getReviewComparison(registration, detail.edition.year),
+    // The camp layout pinned at submit (docs/camp-layout-spec.md decision
+    // 10) — section 4, under the section's own review thread. Never the
+    // working document, never its warnings.
+    getLayoutSnapshotForReview(registration.id, detail.edition.year, actor),
   ]);
-  const fieldsBySection = buildSectionFields(detail, OPERATING_HOURS_LABELS);
+  const fieldsBySection = buildSectionFields(
+    detail,
+    OPERATING_HOURS_LABELS,
+    layoutSnapshot,
+  );
   const sections: ReviewSectionView[] = SECTION_KEYS.map((key) => ({
     key,
     label: SECTION_LABELS[key],
@@ -412,6 +426,7 @@ function renderProjectField(field: ProjectField): FieldSpec {
 function buildSectionFields(
   detail: RegistrationDetail,
   hoursLabels: Record<string, string>,
+  layoutSnapshot: LayoutSnapshotForReview | null,
 ): Record<(typeof SECTION_KEYS)[number], FieldSpec[]> {
   const r = detail.registration;
   const layoutLinks =
@@ -508,6 +523,24 @@ function buildSectionFields(
           ]
         : []),
       { label: "Area dimensions", value: r.s4AreaDimensions },
+      ...(layoutSnapshot
+        ? [
+            {
+              label: "Plot (from the layout)",
+              value: formatPlotSize(layoutSnapshot.summary),
+            },
+            {
+              label: "Layout",
+              value: (
+                <LayoutSnapshotView
+                  snapshot={layoutSnapshot}
+                  editionYear={detail.edition.year}
+                />
+              ),
+              wide: true,
+            },
+          ]
+        : []),
       { label: "Layout uploads", value: layoutLinks, wide: true },
     ],
     sound_placement: [
