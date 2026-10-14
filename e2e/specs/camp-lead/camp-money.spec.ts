@@ -34,6 +34,14 @@
 // moves with the privilege). Their own claim is still not theirs to approve,
 // and a plain member sees none of it.
 //
+// Test 3: corrections back (Ryan, 14 Oct 2026, "allow reopen"). The lead
+// rejects a member's claim with a note, then reopens it behind a confirm
+// step: it waits again, the note is gone, and the member is told. Approved
+// and marked repaid, the repaid is undone (approved again, owed again). An
+// approved budget goes back to draft behind a confirm, and can be approved
+// again. The self-rule holds in the UI: a custom-role money person whose own
+// claim the lead rejected gets no Reopen on it, while the lead does.
+//
 // Selector provenance (verified against source on 2026-10-14):
 //   tile ............ apps/web/components/money/money-tile.tsx
 //   tabs ............ apps/web/components/money/money-nav.tsx
@@ -460,5 +468,179 @@ test.describe("camp lead — money", () => {
       );
       await expect(memberPage.getByText(keeperName)).toHaveCount(0);
     }
+  });
+
+  test("reopen a rejected claim, undo repaid, and move the budget back to draft", async ({
+    makeAppPage,
+  }) => {
+    test.setTimeout(360_000);
+
+    const leadPage = await makeAppPage("web");
+    const memberPage = await makeAppPage("web");
+    const keeperPage = await makeAppPage("web");
+    const memberName = uniqueUsername("money_lerato");
+    const keeperName = uniqueUsername("money_pieter");
+    const roleName = `Treasurer ${Date.now().toString(36)}`;
+
+    await signUpBurner(leadPage, { onboard: true });
+    const camp = await createCamp(leadPage);
+    const invite = await inviteToCamp(leadPage, camp.slug, "member");
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
+    await joinByInvite(memberPage, invite.url);
+    const keeperInvite = await inviteToCamp(leadPage, camp.slug, "member");
+    await signUpBurner(keeperPage, { onboard: true, username: keeperName });
+    await joinByInvite(keeperPage, keeperInvite.url);
+
+    // ── The budget: approve, back to draft (confirmed), approve again ────
+    await gotoMoney(leadPage, camp.slug);
+    const status = leadPage.getByTestId("money-budget-status");
+    await leadPage.getByRole("button", { name: "Approve budget" }).click();
+    await expect(status).toContainText("Approved by");
+    await status.getByRole("button", { name: "Back to draft" }).click();
+    const toDraft = leadPage.getByRole("dialog", {
+      name: "Move the budget back to draft?",
+    });
+    await expect(toDraft).toContainText("The earlier approval stays");
+    // Cancel changes nothing.
+    await toDraft.getByRole("button", { name: "Cancel" }).click();
+    await expect(toDraft).toHaveCount(0);
+    await expect(status).toContainText("Approved by");
+    await status.getByRole("button", { name: "Back to draft" }).click();
+    await toDraft.getByRole("button", { name: "Back to draft" }).click();
+    await expect(toDraft).toHaveCount(0);
+    await expect(status).toContainText("Not approved yet.");
+    await expect(
+      status.getByRole("button", { name: "Approve budget" }),
+    ).toBeVisible();
+    await expect(
+      status.getByRole("button", { name: "Back to draft" }),
+    ).toHaveCount(0);
+    // The members' view says draft too.
+    await gotoMoney(memberPage, camp.slug);
+    await expect(
+      figure(memberPage.getByTestId("money-books"), "Planned spend"),
+    ).toContainText("A draft — not approved yet");
+    await gotoMoney(leadPage, camp.slug);
+    await status.getByRole("button", { name: "Approve budget" }).click();
+    await expect(status).toContainText("Approved by");
+
+    // ── A member's claim: rejected, then reopened ─────────────────────────
+    await gotoMoney(memberPage, camp.slug);
+    await submitClaim(memberPage, {
+      category: "Kitchen & food",
+      amount: "275",
+      description: "Gas bottle refill",
+    });
+    await gotoMoney(leadPage, camp.slug, "claims");
+    const card = leadPage
+      .getByTestId("claim-card")
+      .filter({ hasText: "Gas bottle refill" });
+    await card.getByRole("button", { name: "Reject with a note" }).click();
+    const reject = leadPage.getByRole("dialog", { name: /^Reject / });
+    await reject
+      .getByLabel("Tell them why. They see this note.")
+      .fill("We have two full bottles already.");
+    await reject.getByRole("button", { name: "Reject claim" }).click();
+    await expect(reject).toHaveCount(0);
+    await expect(card).toContainText("Rejected");
+    await expect(card).toContainText("We have two full bottles already.");
+
+    await card.getByRole("button", { name: "Reopen" }).click();
+    const reopen = leadPage.getByRole("dialog", { name: /^Reopen / });
+    await expect(reopen).toContainText("goes back to waiting for a decision");
+    await reopen.getByRole("button", { name: "Reopen claim" }).click();
+    await expect(reopen).toHaveCount(0);
+    await expect(card).toContainText("Submitted");
+    await expect(card).not.toContainText("We have two full bottles already.");
+    await expect(
+      card.getByRole("button", { name: "Approve", exact: true }),
+    ).toBeEnabled();
+
+    // The member sees it waiting again, and the notice says so.
+    await gotoMoney(memberPage, camp.slug);
+    const ownClaim = memberPage
+      .getByTestId("own-claim")
+      .filter({ hasText: "Gas bottle refill" });
+    await expect(ownClaim).toContainText("Submitted");
+    await expect(ownClaim).not.toContainText("two full bottles");
+    await memberPage.goto("/notifications");
+    await expect(
+      memberPage.getByRole("heading", { name: /^notifications$/i }),
+    ).toBeVisible();
+    await expect(
+      memberPage.getByText("Your claim for R 275,00 was reopened", {
+        exact: false,
+      }),
+    ).toBeVisible();
+
+    // ── Approved, repaid, and the repaid undone ──────────────────────────
+    await gotoMoney(leadPage, camp.slug, "claims");
+    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(card).toContainText("Approved");
+    await card.getByRole("button", { name: "Mark repaid" }).click();
+    const repaid = leadPage.getByRole("dialog", { name: /claim repaid$/ });
+    await repaid.getByRole("button", { name: "Mark repaid" }).click();
+    await expect(repaid).toHaveCount(0);
+    await expect(card).toContainText("Repaid");
+    await card.getByRole("button", { name: "Undo repaid" }).click();
+    const undo = leadPage.getByRole("dialog", { name: /^Undo repaid / });
+    await undo.getByRole("button", { name: "Undo repaid" }).click();
+    await expect(undo).toHaveCount(0);
+    await expect(card).toContainText("Approved");
+    await expect(
+      card.getByRole("button", { name: "Mark repaid" }),
+    ).toBeVisible();
+    await gotoMoney(leadPage, camp.slug, "budget");
+    await expect(
+      figure(leadPage.getByTestId("money-totals"), "Claims owed"),
+    ).toContainText("R 275,00");
+
+    // ── The self-rule: no Reopen on your own rejected claim ──────────────
+    await createCustomRole(leadPage, camp.slug, {
+      name: roleName,
+      emoji: "🧮",
+      colorLabel: "Teal",
+      privileges: ["Can manage money"],
+    });
+    await assignRoleToMember(leadPage, camp.slug, keeperName, roleName);
+    await gotoMoney(keeperPage, camp.slug, "claims");
+    await submitClaim(keeperPage, {
+      category: "Transport",
+      amount: "390",
+      description: "Tolls on the N1",
+    });
+    await gotoMoney(leadPage, camp.slug, "claims");
+    const keeperCard = leadPage
+      .getByTestId("claim-card")
+      .filter({ hasText: "Tolls on the N1" });
+    await keeperCard
+      .getByRole("button", { name: "Reject with a note" })
+      .click();
+    await reject
+      .getByLabel("Tell them why. They see this note.")
+      .fill("Not ours.");
+    await reject.getByRole("button", { name: "Reject claim" }).click();
+    await expect(reject).toHaveCount(0);
+    // The lead may reopen it…
+    await expect(
+      keeperCard.getByRole("button", { name: "Reopen" }),
+    ).toBeVisible();
+    // …its author, a money person, may not. Assert the card rendered (and a
+    // Reopen exists for a claim that is not theirs) before the absence.
+    await gotoMoney(keeperPage, camp.slug, "claims");
+    const ownRejected = keeperPage
+      .getByTestId("claim-card")
+      .filter({ hasText: "Tolls on the N1" });
+    await expect(ownRejected).toContainText("Rejected");
+    await expect(ownRejected).toContainText("(you)");
+    await expect(
+      keeperPage
+        .getByTestId("claim-card")
+        .filter({ hasText: "Gas bottle refill" })
+        .getByRole("button", { name: "Mark repaid" }),
+    ).toBeVisible();
+    await expect(
+      ownRejected.getByRole("button", { name: "Reopen" }),
+    ).toHaveCount(0);
   });
 });
