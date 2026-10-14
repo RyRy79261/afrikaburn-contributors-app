@@ -26,6 +26,9 @@ export const NotificationKind = z.enum([
   // Work Access Passes (epic #53): requests opened, granted or declined; a
   // pass list approved or returned. In-app only.
   "wap",
+  // Camp money (docs/camp-budget-spec.md): dues set, money recorded as
+  // received, a claim submitted or decided. In-app only.
+  "money",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 

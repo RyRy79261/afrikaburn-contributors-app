@@ -277,6 +277,9 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   // Work Access Passes (epic #53, migration 0036): requests opened, a request
   // granted or declined, a pass list approved or returned. In-app only.
   "wap",
+  // Camp money (docs/camp-budget-spec.md, migration 0037): dues set, money
+  // recorded as received, a claim submitted or decided. In-app only.
+  "money",
 ]);
 
 // How a camp shift is FIRST FILLED (epic #57). `open` = members sign
@@ -312,6 +315,40 @@ export const wapListStatusEnum = pgEnum("wap_list_status", [
   "submitted",
   "approved",
   "returned",
+]);
+
+// --- Camp money (docs/camp-budget-spec.md, migration 0037) ---------------
+// Each mirrors a Zod enum in @quagga/types camp-money.ts. The platform records
+// money; it never moves it (Decision 009, @quagga/core payment-tracking.ts).
+
+// A camp's budget for one edition. `approved` records who signed the plan
+// off and when; the plan can still change afterwards, every change audited.
+export const campBudgetStatusEnum = pgEnum("camp_budget_status", [
+  "draft",
+  "approved",
+]);
+
+// Which side of the books a budget category sits on.
+export const budgetCategoryKindEnum = pgEnum("budget_category_kind", [
+  "expense",
+  "income",
+]);
+
+// An entry is money already spent or received (`paid`), or spending the camp
+// has agreed to but not yet paid (`committed`).
+export const budgetEntryStatusEnum = pgEnum("budget_entry_status", [
+  "committed",
+  "paid",
+]);
+
+// A member's claim for money they spent for the camp. `submitted` → a money
+// person approves or rejects it; `approved` → marked `repaid` once the camp
+// has paid them back by EFT. A withdrawn claim is deleted (audited).
+export const campClaimStatusEnum = pgEnum("camp_claim_status", [
+  "submitted",
+  "approved",
+  "rejected",
+  "repaid",
 ]);
 
 // How a bulletin/announcement LANDS (epic #56). `feed` = an ordinary inbox
@@ -2938,6 +2975,317 @@ export const wapAllocations = pgTable(
     arrivalNotAfterDeparture: check(
       "wap_allocations_arrival_before_departure",
       sql`${a.arrivalDate} is null or ${a.departureDate} is null or ${a.arrivalDate} <= ${a.departureDate}`,
+    ),
+  }),
+);
+
+// --- Camp money: budget, dues and claims (docs/camp-budget-spec.md, 0037) ---
+// RECORDS, NEVER TRANSACTIONS. The platform never holds, moves, collects or
+// refunds money (AGENTS.md money law, Decision 009). Money moves by EFT
+// between people and the camp's own bank account; these tables record that it
+// did. Every rule is in @quagga/core camp-budget.ts; the store is
+// apps/web/lib/camp-money-store.ts. Amounts are whole cents, ZAR only.
+//
+// KEYED BY (camp, edition, USER), NOT BY MEMBERSHIP. The spec says "former
+// members keep their dues, payments and claims (the books must add up)", and
+// `leaveCamp` DELETES the membership row — a membership foreign key would
+// either cascade the camp's books away when someone leaves (cascade) or stop
+// them leaving (restrict). The user row is never deleted (account erasure
+// keeps it as a tombstone), so it is the stable key; the membership is joined
+// on read to tell a current member from a former one. `user_id` is still
+// SET NULL so that, should a user row ever go, the amounts stay and read
+// "Deleted account".
+//
+// Every actor column (`*_by_user_id`) is SET NULL: the money person deleting
+// their account keeps the record they made.
+
+// One per camp per edition: the camp fee, how to pay the camp, the
+// contingency and whether the plan has been approved.
+export const campBudgets = pgTable(
+  "camp_budgets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    // The camp fee: what each member owes unless `member_dues` says otherwise.
+    defaultDuesCents: integer("default_dues_cents").notNull().default(0),
+    // The camp's OWN bank details and how to use the ref code — free text the
+    // lead writes. Shown to members under "How to pay the camp". Instructions
+    // only: there is no payment link, ever.
+    paymentInstructions: text("payment_instructions"),
+    // Whole percent of planned spend held back as contingency.
+    contingencyPct: integer("contingency_pct").notNull().default(0),
+    status: campBudgetStatusEnum("status").notNull().default("draft"),
+    approvedAt: timestamp("approved_at", { mode: "date" }),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // When the starter category list was written. Null = never. Written ONCE,
+    // by a compare-and-set on this column (like `groups.shift_teams_seeded_at`),
+    // so a lead who removes a starter is never handed it again.
+    categoriesSeededAt: timestamp("categories_seeded_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    groupEditionUniq: uniqueIndex("camp_budgets_group_edition_idx").on(
+      b.groupId,
+      b.editionId,
+    ),
+    duesNonNegative: check(
+      "camp_budgets_default_dues_non_negative",
+      sql`${b.defaultDuesCents} >= 0`,
+    ),
+    contingencyBounds: check(
+      "camp_budgets_contingency_pct_bounds",
+      sql`${b.contingencyPct} >= 0 and ${b.contingencyPct} <= 100`,
+    ),
+    approvedIffStamped: check(
+      "camp_budgets_approved_iff_stamped",
+      sql`(${b.status} = 'approved') = (${b.approvedAt} is not null)`,
+    ),
+  }),
+);
+
+// The plan, by category. A category an entry or claim uses is ARCHIVED, never
+// deleted (`archived_at`; the entry and claim foreign keys are NO ACTION as
+// the backstop — not RESTRICT, which is checked mid-statement and would stop
+// a camp's own deletion from cascading through its categories and entries). `system_key = 'dues'` marks the one income category that dues
+// received are counted into — the lead may rename it, never remove it.
+export const budgetCategories = pgTable(
+  "budget_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    kind: budgetCategoryKindEnum("kind").notNull(),
+    name: text("name").notNull(),
+    nameNormalized: text("name_normalized").notNull(),
+    plannedCents: integer("planned_cents").notNull().default(0),
+    sort: integer("sort").notNull().default(0),
+    systemKey: text("system_key"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    groupEditionNameUniq: uniqueIndex(
+      "budget_categories_group_edition_name_idx",
+    ).on(c.groupId, c.editionId, c.nameNormalized),
+    systemKeyUniq: uniqueIndex("budget_categories_system_key_idx")
+      .on(c.groupId, c.editionId, c.systemKey)
+      .where(sql`${c.systemKey} is not null`),
+    plannedNonNegative: check(
+      "budget_categories_planned_non_negative",
+      sql`${c.plannedCents} >= 0`,
+    ),
+  }),
+);
+
+// Actual spending and income a money person entered. Approved claims and dues
+// received are NOT copied here — the derivation counts them in from their own
+// tables, so nothing is entered twice.
+export const budgetEntries = pgTable(
+  "budget_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => budgetCategories.id, { onDelete: "no action" }),
+    amountCents: integer("amount_cents").notNull(),
+    entryDate: date("entry_date", { mode: "string" }).notNull(),
+    description: text("description").notNull(),
+    status: budgetEntryStatusEnum("status").notNull().default("paid"),
+    // Private blob pathname under the camp's receipt prefix (@quagga/core
+    // `campReceiptPrefix`). Served only through the authorised receipt route.
+    receiptKey: text("receipt_key"),
+    receiptContentType: text("receipt_content_type"),
+    enteredByUserId: uuid("entered_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (e) => ({
+    groupEditionIdx: index("budget_entries_group_edition_idx").on(
+      e.groupId,
+      e.editionId,
+      e.entryDate,
+    ),
+    categoryIdx: index("budget_entries_category_idx").on(e.categoryId),
+    amountPositive: check(
+      "budget_entries_amount_positive",
+      sql`${e.amountCents} > 0`,
+    ),
+    receiptPaired: check(
+      "budget_entries_receipt_paired",
+      sql`(${e.receiptKey} is null) = (${e.receiptContentType} is null)`,
+    ),
+  }),
+);
+
+// What one member owes this edition when it is NOT the camp fee. Absent = the
+// camp fee. Waived is `amount_cents = 0` (the reason is asked for by
+// @quagga/core; it is not a CHECK because account erasure clears it).
+export const memberDues = pgTable(
+  "member_dues",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    amountCents: integer("amount_cents").notNull(),
+    reason: text("reason"),
+    setByUserId: uuid("set_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    groupEditionUserUniq: uniqueIndex("member_dues_group_edition_user_idx").on(
+      d.groupId,
+      d.editionId,
+      d.userId,
+    ),
+    userIdx: index("member_dues_user_idx").on(d.userId),
+    amountNonNegative: check(
+      "member_dues_amount_non_negative",
+      sql`${d.amountCents} >= 0`,
+    ),
+  }),
+);
+
+// Money a money person SAW ARRIVE in the camp's own account. Any number per
+// member (instalments need no plan). Never edited: a mistake is deleted (and
+// audited) and recorded again.
+export const duesPayments = pgTable(
+  "dues_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    amountCents: integer("amount_cents").notNull(),
+    receivedOn: date("received_on", { mode: "string" }).notNull(),
+    note: text("note"),
+    recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    groupEditionUserIdx: index("dues_payments_group_edition_user_idx").on(
+      p.groupId,
+      p.editionId,
+      p.userId,
+    ),
+    userIdx: index("dues_payments_user_idx").on(p.userId),
+    amountPositive: check(
+      "dues_payments_amount_positive",
+      sql`${p.amountCents} > 0`,
+    ),
+  }),
+);
+
+// A member paid for something for the camp and claims it back. The claimant
+// can never decide their own claim (CHECKs below are the backstop to
+// @quagga/core `canDecideClaim`). `description` is nullable only because
+// account erasure clears it; a new claim always has one.
+export const campClaims = pgTable(
+  "camp_claims",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    claimantUserId: uuid("claimant_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    categoryId: uuid("category_id").references(() => budgetCategories.id, {
+      onDelete: "no action",
+    }),
+    amountCents: integer("amount_cents").notNull(),
+    description: text("description"),
+    receiptKey: text("receipt_key"),
+    receiptContentType: text("receipt_content_type"),
+    status: campClaimStatusEnum("status").notNull().default("submitted"),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+    decisionNote: text("decision_note"),
+    repaidOn: date("repaid_on", { mode: "string" }),
+    repaidByUserId: uuid("repaid_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (c) => ({
+    groupEditionStatusIdx: index("camp_claims_group_edition_status_idx").on(
+      c.groupId,
+      c.editionId,
+      c.status,
+    ),
+    claimantIdx: index("camp_claims_claimant_idx").on(c.claimantUserId),
+    categoryIdx: index("camp_claims_category_idx").on(c.categoryId),
+    amountPositive: check(
+      "camp_claims_amount_positive",
+      sql`${c.amountCents} > 0`,
+    ),
+    decidedIffNotSubmitted: check(
+      "camp_claims_decided_iff_not_submitted",
+      sql`(${c.status} = 'submitted') = (${c.decidedAt} is null)`,
+    ),
+    repaidIffRepaid: check(
+      "camp_claims_repaid_on_iff_repaid",
+      sql`(${c.status} = 'repaid') = (${c.repaidOn} is not null)`,
+    ),
+    approvedHasCategory: check(
+      "camp_claims_approved_has_category",
+      sql`${c.status} not in ('approved', 'repaid') or ${c.categoryId} is not null`,
+    ),
+    notDecidedBySelf: check(
+      "camp_claims_not_decided_by_self",
+      sql`${c.decidedByUserId} is null or ${c.claimantUserId} is null or ${c.decidedByUserId} <> ${c.claimantUserId}`,
+    ),
+    notRepaidBySelf: check(
+      "camp_claims_not_repaid_by_self",
+      sql`${c.repaidByUserId} is null or ${c.claimantUserId} is null or ${c.repaidByUserId} <> ${c.claimantUserId}`,
+    ),
+    receiptPaired: check(
+      "camp_claims_receipt_paired",
+      sql`(${c.receiptKey} is null) = (${c.receiptContentType} is null)`,
     ),
   }),
 );

@@ -40,6 +40,7 @@ export function privilegeSummary(p: ProjectPermissions): string {
   if (p.manage_roles) parts.push("Manages roles");
   else if (p.assign_roles) parts.push("Assigns roles");
   if (p.manage_members) parts.push("Manages invites");
+  if (p.manage_money) parts.push("Manages money");
   return parts.length ? parts.join(" · ") : "No extra privileges";
 }
 
@@ -334,6 +335,14 @@ export function PrivilegeToggles({
         checked={!!value.manage_members}
         disabled={disabled}
         onChange={(v) => onChange({ ...value, manage_members: v || undefined })}
+      />
+
+      <PrivilegeRow
+        label="Can manage money"
+        hint="The budget, every member's dues and every claim. Without it, members see the totals and their own."
+        checked={!!value.manage_money}
+        disabled={disabled}
+        onChange={(v) => onChange({ ...value, manage_money: v || undefined })}
       />
     </div>
   );

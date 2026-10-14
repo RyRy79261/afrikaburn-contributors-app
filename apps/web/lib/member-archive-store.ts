@@ -213,6 +213,11 @@ export async function archiveMember(input: {
       .where(eq(schema.wapAllocations.membershipId, target.id))
       .returning({ id: schema.wapAllocations.id });
 
+    // CAMP MONEY is deliberately untouched (docs/camp-budget-spec.md): a
+    // former member keeps their dues, payments and claims — the books must
+    // add up. Those rows are keyed by user, not membership, and the money
+    // page lists them as "former".
+
     await tx.insert(schema.auditEvents).values({
       actorId: input.actorUserId,
       action: MEMBER_ARCHIVE_AUDIT_ACTION,

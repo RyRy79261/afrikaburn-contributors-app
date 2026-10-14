@@ -237,3 +237,7 @@ export * from "./work-access-passes";
 // Camp statistics (docs/camp-stats-spec.md): the stats page's aggregates and a
 // member's participation summary, behind the roster's own predicate. PURE.
 export * from "./camp-stats";
+// Camp money (docs/camp-budget-spec.md): budget, dues and claims as RECORDS —
+// the derived books, dues standing, the claim state machine, who may, receipt
+// checks and notices. The platform never moves money (Decision 009). PURE.
+export * from "./camp-budget";

@@ -30,6 +30,7 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
       expect(hasProjectPermission(m, "manage_members")).toBe(true);
       expect(hasProjectPermission(m, "manage_questionnaires")).toBe(true);
       expect(hasProjectPermission(m, "assign_roles")).toBe(true);
+      expect(hasProjectPermission(m, "manage_money")).toBe(true);
     }
     expect(isPermissionBackstop("lead")).toBe(true);
     expect(isPermissionBackstop("member")).toBe(false);
@@ -39,6 +40,7 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
     const m = member("member", NONE);
     expect(hasProjectPermission(m, "view_member_details")).toBe(false);
     expect(hasProjectPermission(m, "manage_roles")).toBe(false);
+    expect(hasProjectPermission(m, "manage_money")).toBe(false);
   });
 });
 
@@ -276,6 +278,15 @@ describe("roleGrantsElevatedPrivileges — escalation guard for assignment", () 
     expect(
       roleGrantsElevatedPrivileges("default", { manage_members: true }),
     ).toBe(true);
+  });
+
+  it("manage_money is elevating: it opens every member's dues and claims", () => {
+    expect(roleGrantsElevatedPrivileges("custom", { manage_money: true })).toBe(
+      true,
+    );
+    expect(
+      roleGrantsElevatedPrivileges("custom", { manage_money: false }),
+    ).toBe(false);
   });
 
   it("roles with only weaker grants are NOT elevating", () => {

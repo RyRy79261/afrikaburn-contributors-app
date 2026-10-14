@@ -155,6 +155,7 @@ export function allProjectPermissions(): ProjectPermissions {
     manage_roles: true,
     manage_members: true,
     post_announcements: { audienceRoles: "all", mayRequireAck: true },
+    manage_money: true,
   };
 }
 
@@ -193,7 +194,12 @@ export function roleGrantsElevatedPrivileges(
   permissions: ProjectPermissions,
 ): boolean {
   if (isPermissionsLockedKind(kind)) return true;
+  // `manage_money` opens every member's dues and claims (camp-budget spec):
+  // handing it out is the same kind of act as handing out member management,
+  // so an `assign_roles`-only holder may not do it either.
   return (
-    permissions.manage_roles === true || permissions.manage_members === true
+    permissions.manage_roles === true ||
+    permissions.manage_members === true ||
+    permissions.manage_money === true
   );
 }

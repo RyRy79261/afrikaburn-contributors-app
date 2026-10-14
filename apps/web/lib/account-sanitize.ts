@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import {
   assessDeletionEligibility,
   buildSanitizationPlan,
@@ -13,6 +13,10 @@ import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
 import { deleteAvatarBlob } from "@/lib/avatar-store";
+import {
+  deleteReceiptBlob,
+  deleteReceiptBlobQuietly,
+} from "@/lib/camp-receipt-blob";
 
 // The sanitization runner — the business end of account deletion
 // (docs/accounts-security-spec.md §Deletion, the Camp 404 "Lost Cat" precedent).
@@ -218,6 +222,44 @@ export async function sanitizeAccount(
     }
   }
 
+  // 1c'. CLAIM RECEIPTS (camp money, docs/camp-budget-spec.md). A photo of a
+  //     till slip in a member's name is theirs, and like the profile photo it
+  //     lives outside the database — so it is deleted HERE, before the
+  //     transaction, and a failure stops the whole sanitization (the request
+  //     stays pending; the next sweep retries). The amounts stay: the camp's
+  //     books must still add up, attributed to "Deleted account".
+  const claimReceipts = await handle
+    .select({
+      groupId: schema.campClaims.groupId,
+      receiptKey: schema.campClaims.receiptKey,
+    })
+    .from(schema.campClaims)
+    .where(
+      and(
+        eq(schema.campClaims.claimantUserId, userId),
+        isNotNull(schema.campClaims.receiptKey),
+      ),
+    );
+  const deletedReceipts = new Set<string>();
+  for (const r of claimReceipts) {
+    if (!r.receiptKey) continue;
+    try {
+      await deleteReceiptBlob(r.groupId, r.receiptKey);
+      deletedReceipts.add(r.receiptKey);
+    } catch (err) {
+      return {
+        ...base,
+        error: `Could not delete a claim receipt, so nothing was erased: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      };
+    }
+  }
+  // Receipts attached between the read above and the users-row lock below
+  // (the claim writes lock the same row FOR SHARE, so none can land after
+  // it): found again inside the transaction and deleted after it commits.
+  const lateReceipts: { groupId: string; key: string }[] = [];
+
   // Steps 2–5 + the request/audit writes all commit as ONE transaction, so the
   // POPIA erasure is all-or-nothing. Ordering within it still follows the notes
   // above (foreign keys; tombstone last).
@@ -322,18 +364,59 @@ export async function sanitizeAccount(
     // 2e. WORK ACCESS PASSES (epic #53). Keyed by membership as well: a
     //     "Departed Burner" cannot be let onto site, so their passes go back
     //     to the projects that held them, every edition's.
-    await tx
-      .delete(schema.wapAllocations)
+    await tx.delete(schema.wapAllocations).where(
+      inArray(
+        schema.wapAllocations.membershipId,
+        // former members: their passes are released too.
+        tx
+          .select({ id: schema.memberships.id })
+          .from(schema.memberships)
+          .where(eq(schema.memberships.userId, userId)),
+      ),
+    );
+
+    // 2f. CAMP MONEY (docs/camp-budget-spec.md). The AMOUNTS stay — every
+    //     camp's books must still add up, so dues, payments and claims keep
+    //     their rows and read "Deleted account". What goes is what is about
+    //     the person: a claim's description, receipt and decision note, the
+    //     reason their dues differ, and the money person's note on a payment
+    //     from them. Every camp's, every edition's, former memberships too.
+    const lockedReceipts = await tx
+      .select({
+        groupId: schema.campClaims.groupId,
+        receiptKey: schema.campClaims.receiptKey,
+      })
+      .from(schema.campClaims)
       .where(
-        inArray(
-          schema.wapAllocations.membershipId,
-          // former members: their passes are released too.
-          tx
-            .select({ id: schema.memberships.id })
-            .from(schema.memberships)
-            .where(eq(schema.memberships.userId, userId)),
+        and(
+          eq(schema.campClaims.claimantUserId, userId),
+          isNotNull(schema.campClaims.receiptKey),
         ),
-      );
+      )
+      .for("update");
+    for (const r of lockedReceipts) {
+      if (r.receiptKey && !deletedReceipts.has(r.receiptKey)) {
+        lateReceipts.push({ groupId: r.groupId, key: r.receiptKey });
+      }
+    }
+    await tx
+      .update(schema.campClaims)
+      .set({
+        description: null,
+        decisionNote: null,
+        receiptKey: null,
+        receiptContentType: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.campClaims.claimantUserId, userId));
+    await tx
+      .update(schema.memberDues)
+      .set({ reason: null, updatedAt: now })
+      .where(eq(schema.memberDues.userId, userId));
+    await tx
+      .update(schema.duesPayments)
+      .set({ note: null })
+      .where(eq(schema.duesPayments.userId, userId));
 
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
@@ -523,6 +606,12 @@ export async function sanitizeAccount(
       meta: plan.audit.meta,
     });
   });
+
+  // A receipt attached in the window before the lock: its key is nulled in
+  // the transaction above; the file goes now (best effort, logged).
+  for (const late of lateReceipts) {
+    await deleteReceiptBlobQuietly(late.groupId, late.key);
+  }
 
   // The last message this address will ever get from us.
   let notified = false;
