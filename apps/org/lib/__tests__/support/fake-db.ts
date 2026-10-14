@@ -206,6 +206,13 @@ export class FakeDb {
     return this.select(projection);
   }
 
+  /** `selectDistinctOn` likewise records as a `select`; rows are still
+   * returned in full, so code that picks the latest per key must do it
+   * itself as well (and the layout loader does). */
+  selectDistinctOn(_on: unknown, projection?: Record<string, unknown>) {
+    return this.select(projection);
+  }
+
   insert(table: Table) {
     return this.start("insert", getTableName(table));
   }

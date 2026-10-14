@@ -105,30 +105,39 @@ describe("getPinnedLayoutPlots — the placement CSV's plot size (decision 10)",
         registrationId: REG_ID,
         pinnedAt: new Date("2027-03-02T08:00:00Z"),
         document: createEmptyLayoutDocument(40, 30),
+        // The fake has no jsonb: seed what `document->'plot'->'boundary'` reads.
+        boundary: createEmptyLayoutDocument(40, 30).plot.boundary,
       },
       {
         registrationId: REG_ID,
         pinnedAt: new Date("2027-03-20T08:00:00Z"),
         document: createEmptyLayoutDocument(45, 30),
+        // The fake has no jsonb: seed what `document->'plot'->'boundary'` reads.
+        boundary: createEmptyLayoutDocument(45, 30).plot.boundary,
       },
       {
         registrationId: REG_ID,
         pinnedAt: new Date("2027-03-10T08:00:00Z"),
         document: createEmptyLayoutDocument(20, 20),
+        // The fake has no jsonb: seed what `document->'plot'->'boundary'` reads.
+        boundary: createEmptyLayoutDocument(20, 20).plot.boundary,
       },
       {
         registrationId: OTHER,
         pinnedAt: new Date("2027-03-05T08:00:00Z"),
         document: { schemaVersion: 99, plot: {} },
+        boundary: { kind: "hexagon" },
       },
     ]);
-    const plots = await getPinnedLayoutPlots([REG_ID, OTHER], 2027, READER);
+    const plots = await getPinnedLayoutPlots([REG_ID, OTHER], READER);
     expect(plots.get(REG_ID)).toEqual({ width: 45, depth: 30, areaM2: 1350 });
     // A stored document that no longer parses: no plot, never half a one.
     expect(plots.has(OTHER)).toBe(false);
     // Size and area only — nothing of the layout itself.
+    // Only the boundary is read, one row per registration — never the
+    // objects, never the full history of 256 kB documents.
     const [call] = db.recorded("select", "camp_layout_snapshots");
-    expect(call?.columns).toEqual(["registrationId", "pinnedAt", "document"]);
+    expect(call?.columns).toEqual(["registrationId", "pinnedAt", "boundary"]);
   });
 
   it("refuses an account that cannot read registrations, before any query", async () => {
@@ -139,8 +148,7 @@ describe("getPinnedLayoutPlots — the placement CSV's plot size (decision 10)",
         document: createEmptyLayoutDocument(40, 30),
       },
     ]);
-    expect((await getPinnedLayoutPlots([REG_ID], 2027, NO_ROLES)).size).toBe(0);
+    expect((await getPinnedLayoutPlots([REG_ID], NO_ROLES)).size).toBe(0);
     expect(db.recorded("select", "camp_layout_snapshots")).toHaveLength(0);
   });
 });
-

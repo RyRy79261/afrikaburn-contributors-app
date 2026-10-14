@@ -1,13 +1,14 @@
 import "server-only";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
+  boundaryDimensions,
   canOrgViewLayoutSnapshot,
   getLayoutCatalog,
   plotSummary,
   type OrgActor,
 } from "@quagga/core";
-import { LayoutDocument } from "@quagga/types";
+import { LayoutBoundary, LayoutDocument } from "@quagga/types";
 import { getDb, schema } from "./db";
 
 // The camp layout AfrikaBurn's reviewers see (docs/camp-layout-spec.md
@@ -91,24 +92,30 @@ export interface PinnedLayoutPlot {
  */
 export async function getPinnedLayoutPlots(
   registrationIds: readonly string[],
-  editionYear: number,
   actor: OrgActor,
 ): Promise<Map<string, PinnedLayoutPlot>> {
   const out = new Map<string, PinnedLayoutPlot>();
   if (!canOrgViewLayoutSnapshot(actor) || registrationIds.length === 0) {
     return out;
   }
+  // One row per registration (its latest pin), and only the plot boundary:
+  // the CSV needs width, depth and area, never the objects. A document can be
+  // 256 kB and every resubmit pins another, so the full history would be
+  // megabytes per export.
   const rows = await getDb()
-    .select({
+    .selectDistinctOn([schema.campLayoutSnapshots.registrationId], {
       registrationId: schema.campLayoutSnapshots.registrationId,
       pinnedAt: schema.campLayoutSnapshots.pinnedAt,
-      document: schema.campLayoutSnapshots.document,
+      boundary: sql<unknown>`${schema.campLayoutSnapshots.document}->'plot'->'boundary'`,
     })
     .from(schema.campLayoutSnapshots)
     .where(
       inArray(schema.campLayoutSnapshots.registrationId, [...registrationIds]),
     )
-    .orderBy(desc(schema.campLayoutSnapshots.pinnedAt));
+    .orderBy(
+      schema.campLayoutSnapshots.registrationId,
+      desc(schema.campLayoutSnapshots.pinnedAt),
+    );
 
   const latest = new Map<string, (typeof rows)[number]>();
   for (const row of rows) {
@@ -117,13 +124,15 @@ export async function getPinnedLayoutPlots(
       latest.set(row.registrationId, row);
     }
   }
-  const catalog = getLayoutCatalog(editionYear);
   for (const [registrationId, row] of latest) {
-    const parsed = LayoutDocument.safeParse(row.document);
+    const parsed = LayoutBoundary.safeParse(row.boundary);
     if (!parsed.success) continue;
-    const s = plotSummary(parsed.data, catalog);
-    out.set(registrationId, { width: s.width, depth: s.depth, areaM2: s.areaM2 });
+    const s = boundaryDimensions(parsed.data);
+    out.set(registrationId, {
+      width: s.width,
+      depth: s.depth,
+      areaM2: s.areaM2,
+    });
   }
   return out;
 }
-

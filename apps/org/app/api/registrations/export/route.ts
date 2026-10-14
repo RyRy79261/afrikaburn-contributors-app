@@ -82,7 +82,10 @@ export async function GET(): Promise<NextResponse> {
       wranglerSanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.registrations)
-    .innerJoin(schema.groups, eq(schema.groups.id, schema.registrations.groupId))
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
     // Wrangler is optional, so both joins are left joins — an unassigned camp
     // must still appear in the file, blank column and all.
     .leftJoin(
@@ -146,7 +149,6 @@ export async function GET(): Promise<NextResponse> {
   // decision 10) — never the layout itself.
   const layoutPlots = await getPinnedLayoutPlots(
     rows.map((r) => r.registrationId),
-    edition.year,
     session.actor,
   );
 
