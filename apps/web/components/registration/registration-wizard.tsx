@@ -43,6 +43,7 @@ import {
   YesNoField,
 } from "./field-kit";
 import { LayoutUploads } from "./layout-uploads";
+import { LayoutSectionCard, type WizardLayout } from "./layout-section-card";
 import { SupplierPicker } from "./supplier-picker";
 import { SectionReplyThread } from "./section-reply-thread";
 import { withdrawConsequence } from "./withdraw-registration";
@@ -83,6 +84,9 @@ interface WizardProps {
   /** The viewer's db user id — labels their own replies "You" in the thread. */
   viewerUserId: string | null;
   blobConfigured: boolean;
+  /** Section 4's camp layout (docs/camp-layout-spec.md decisions 11, 12), or
+   * null where layouts do not apply. */
+  layout: WizardLayout | null;
   saveAction: (
     slug: string,
     values: RegistrationValues,
@@ -95,9 +99,11 @@ interface WizardProps {
 function toSectionData(
   campName: string,
   v: RegistrationValues,
+  hasLayout: boolean,
 ): RegistrationSectionData {
   return {
     campName,
+    hasLayout,
     campDescription: v.campDescription,
     s1ContactEmail: v.s1ContactEmail,
     s2LntPlan: v.s2LntPlan,
@@ -153,9 +159,18 @@ export function RegistrationWizard(props: WizardProps) {
     [props.editionYear],
   );
 
+  // A drawn layout answers the area dimensions (layout spec decision 11).
+  const hasLayout = Boolean(props.layout?.plotSize);
+  /** The layout lives on the registration row: true once a save made one. */
+  const [rowExists, setRowExists] = React.useState(
+    props.layout?.canStart ?? false,
+  );
   const completed = React.useMemo(
-    () => new Set(completedSectionsFor(toSectionData(props.campName, values))),
-    [props.campName, values],
+    () =>
+      new Set(
+        completedSectionsFor(toSectionData(props.campName, values, hasLayout)),
+      ),
+    [props.campName, values, hasLayout],
   );
   const allComplete = completed.size === SECTION_KEYS.length;
   const missing = SECTION_KEYS.filter((k) => !completed.has(k));
@@ -198,6 +213,7 @@ export function RegistrationWizard(props: WizardProps) {
         }
         setSaveState("saved");
         setLastSavedAt(new Date());
+        setRowExists(true);
       }
       // The loop only exits with `dirtyRef` clear, i.e. the server now holds
       // every edit on screen. That — not "a save happened once" — is what the
@@ -453,7 +469,10 @@ export function RegistrationWizard(props: WizardProps) {
           {/* Active section fields */}
           <section className="flex flex-col gap-5 rounded-xl border border-border p-5">
             <p className="text-xs text-muted-foreground">
-              {isSectionComplete(active, toSectionData(props.campName, values))
+              {isSectionComplete(
+                active,
+                toSectionData(props.campName, values, hasLayout),
+              )
                 ? "All required fields complete."
                 : "Required fields are marked with *."}
             </p>
@@ -626,15 +645,29 @@ export function RegistrationWizard(props: WizardProps) {
                   />
                   <TextField
                     id="s4-dimensions"
-                    label="Camp area dimensions"
-                    required
+                    label={
+                      hasLayout
+                        ? "Camp area dimensions (optional)"
+                        : "Camp area dimensions"
+                    }
+                    required={!hasLayout}
                     placeholder="e.g. 20m x 15m"
-                    hint="Width x depth in metres."
+                    hint={
+                      hasLayout
+                        ? `From your layout: ${props.layout?.plotSize}. Add a note only if it differs.`
+                        : "Width x depth in metres."
+                    }
                     value={values.s4AreaDimensions}
                     onChange={(v) => update({ s4AreaDimensions: v })}
                     onCommit={commit}
                   />
                 </div>
+                {props.layout && (
+                  <LayoutSectionCard
+                    slug={props.slug}
+                    layout={{ ...props.layout, canStart: rowExists }}
+                  />
+                )}
                 <LayoutUploads
                   urls={values.s4LayoutUploadUrls}
                   blobConfigured={props.blobConfigured}

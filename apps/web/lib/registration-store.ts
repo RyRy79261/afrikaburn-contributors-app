@@ -5,6 +5,7 @@ import {
   buildCarryForwardPatch,
   changedFields,
   completedSectionsFor,
+  completedSectionsWithLayout,
   deriveOnboardingProgress,
   filterPickerEligible,
   isSubmittable,
@@ -29,7 +30,7 @@ import type {
 } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
-import { pinLayoutSnapshot } from "./camp-layout-store";
+import { pinLayoutSnapshot, registrationHasLayout } from "./camp-layout-store";
 
 // Camp-side data access + mutations for the registration wizard. Server-only;
 // the state machine + completeness predicates live in @quagga/core so this
@@ -442,9 +443,11 @@ export interface RegistrationValues {
 function toSectionData(
   campName: string,
   v: RegistrationValues,
+  hasLayout = false,
 ): RegistrationSectionData {
   return {
     campName,
+    hasLayout,
     campDescription: v.campDescription,
     s1ContactEmail: v.s1ContactEmail,
     s2LntPlan: v.s2LntPlan,
@@ -492,7 +495,16 @@ export async function saveRegistrationDraft(input: {
   }
 
   const v = input.values;
-  const completed = completedSectionsFor(toSectionData(input.group.name, v));
+  let completed = completedSectionsFor(toSectionData(input.group.name, v));
+  // A drawn layout makes the area dimensions optional (camp-layout-spec
+  // decision 11). Asked only when it could change the answer.
+  if (
+    existing &&
+    !completed.includes("size_logistics") &&
+    (await registrationHasLayout(existing.id))
+  ) {
+    completed = completedSectionsFor(toSectionData(input.group.name, v, true));
+  }
 
   const columns = {
     s1ContactEmail: v.s1ContactEmail,
@@ -702,11 +714,29 @@ export async function applyCampAction(input: {
           .where(sameStatus)
           .returning({ id: schema.registrations.id });
         if (rows.length > 0) {
-          await pinLayoutSnapshot(tx, {
+          const pinned = await pinLayoutSnapshot(tx, {
             registrationId: existing.id,
             submittedAt: now,
             actorUserId: input.actorUserId ?? null,
           });
+          // `completed_sections` is written by the wizard's autosave, so a
+          // layout drawn after the last save left section 4 stored as
+          // incomplete although the layout answers its dimensions
+          // (decision 11). The submitted record must say what was sent.
+          const refreshed =
+            pinned === null
+              ? null
+              : completedSectionsWithLayout(existing.completedSections, {
+                  s4ExpectedPopulation: existing.s4ExpectedPopulation,
+                  s4FirstArrivalDate: existing.s4FirstArrivalDate,
+                  s4AreaDimensions: existing.s4AreaDimensions,
+                });
+          if (refreshed) {
+            await tx
+              .update(schema.registrations)
+              .set({ completedSections: refreshed })
+              .where(eq(schema.registrations.id, existing.id));
+          }
         }
         return rows;
       })

@@ -3,6 +3,7 @@ import { SECTION_KEYS } from "@quagga/types";
 import {
   isSectionComplete,
   completedSectionsFor,
+  completedSectionsWithLayout,
   type RegistrationSectionData,
 } from "../registration-sections";
 import { isSubmittable } from "../entitlements";
@@ -132,6 +133,46 @@ describe("per-section completeness predicates", () => {
         s4AreaDimensions: "",
       }),
     ).toBe(false);
+  });
+
+  it("size_logistics: a drawn layout makes the area dimensions optional (decision 11)", () => {
+    const noDims = { ...fullData(), s4AreaDimensions: null };
+    expect(isSectionComplete("size_logistics", noDims)).toBe(false);
+    expect(
+      isSectionComplete("size_logistics", { ...noDims, hasLayout: true }),
+    ).toBe(true);
+    // Only the dimensions: a layout never stands in for the other answers.
+    expect(
+      isSectionComplete("size_logistics", {
+        ...noDims,
+        hasLayout: true,
+        s4ExpectedPopulation: null,
+      }),
+    ).toBe(false);
+    expect(
+      isSectionComplete("size_logistics", {
+        ...noDims,
+        hasLayout: true,
+        s4FirstArrivalDate: "",
+      }),
+    ).toBe(false);
+  });
+
+  it("completedSectionsWithLayout refreshes a stored set for a layout drawn since", () => {
+    const noDims = { ...fullData(), s4AreaDimensions: null };
+    expect(
+      completedSectionsWithLayout(["suppliers_commerce", "identity"], noDims),
+    ).toEqual(["identity", "size_logistics", "suppliers_commerce"]);
+    // Already complete, or still missing another answer: nothing to change.
+    expect(
+      completedSectionsWithLayout(["identity", "size_logistics"], noDims),
+    ).toBeNull();
+    expect(
+      completedSectionsWithLayout(["identity"], {
+        ...noDims,
+        s4ExpectedPopulation: null,
+      }),
+    ).toBeNull();
   });
 
   it("sound_placement requires a sound plan only when amplified sound is declared", () => {

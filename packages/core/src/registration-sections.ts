@@ -40,6 +40,15 @@ export interface RegistrationSectionData {
   s4ExpectedPopulation?: number | null;
   s4FirstArrivalDate?: string | null;
   s4AreaDimensions?: string | null;
+  /**
+   * The camp has drawn a layout for this registration
+   * (docs/camp-layout-spec.md decision 11, "derive over ask"). The layout
+   * states the plot's size, so the free-text area dimensions become optional.
+   * Never written into `s4_area_dimensions`; the other section-4 answers are
+   * still required, so a layout alone — or one carried from last year
+   * (decision 12) — never completes the section.
+   */
+  hasLayout?: boolean | null;
 
   // Section 5 — Sound & placement
   s5AmplifiedMusic?: string | null;
@@ -93,7 +102,7 @@ const SECTION_PREDICATES: Record<
   size_logistics: (d) =>
     positive(d.s4ExpectedPopulation) &&
     filled(d.s4FirstArrivalDate) &&
-    filled(d.s4AreaDimensions),
+    (filled(d.s4AreaDimensions) || d.hasLayout === true),
 
   // A rig needs a sound plan; acoustic camps don't. Placement 1st choice and a
   // family-friendly answer are always required.
@@ -125,3 +134,23 @@ export function completedSectionsFor(
 ): SectionKey[] {
   return SECTION_KEYS.filter((key) => isSectionComplete(key, data));
 }
+
+/**
+ * The stored completed set, refreshed for a layout drawn since it was
+ * computed: `completed_sections` is written by the wizard's autosave, so a
+ * layout created afterwards would leave section 4 shown incomplete although
+ * the camp owes nothing more there. Returns the new set in canonical order,
+ * or null when nothing changes.
+ */
+export function completedSectionsWithLayout(
+  completed: readonly string[],
+  data: RegistrationSectionData,
+): SectionKey[] | null {
+  if (completed.includes("size_logistics")) return null;
+  if (!isSectionComplete("size_logistics", { ...data, hasLayout: true })) {
+    return null;
+  }
+  const next = new Set<string>([...completed, "size_logistics"]);
+  return SECTION_KEYS.filter((k) => next.has(k));
+}
+
