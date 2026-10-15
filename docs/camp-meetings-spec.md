@@ -1,12 +1,12 @@
 # Camp meetings and calendar — Feature Spec
 
-| Field                  | Value                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| **Category**           | Engineering Spec                                                                           |
-| **Doc status**         | Draft — built overnight 14–15 Oct at Ryan's request; questions for Ryan at the end          |
-| **Normative language** | Descriptive only                                                                           |
-| **Requirement IDs**    | Partial — App Spec §4a `COMM-010`, `COMM-011`, `COMM-012` (meeting notices), `COMM-016`    |
-| **Owner / Updated**    | Ryan, 2026-10-15                                                                           |
+| Field                  | Value                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| **Category**           | Engineering Spec                                                                        |
+| **Doc status**         | Draft — built overnight 14–15 Oct at Ryan's request; questions for Ryan at the end      |
+| **Normative language** | Descriptive only                                                                        |
+| **Requirement IDs**    | Partial — App Spec §4a `COMM-010`, `COMM-011`, `COMM-012` (meeting notices), `COMM-016` |
+| **Owner / Updated**    | Ryan, 2026-10-15                                                                        |
 
 Camps plan the burn in meetings: a Sunday call in March, a kitchen-team
 meeting in April, the on-site sunrise briefing. Today the invite lives in
