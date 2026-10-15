@@ -140,6 +140,17 @@ test.describe("camp member — team chat rules", () => {
     const hello = uniqueName("TEAMRULES hello from Ren");
     await sendTeamMessage(renPage, kitchen, hello);
 
+    // Jabu's inbox lists the team chat with one unread — and the header's
+    // Messages link carries the count. At 360 that badge once pushed the
+    // header 17px wider than the screen (the design review's T3/T4 shots):
+    // assert the count is ON the page first, then that nothing scrolls.
+    await jabuPage.goto("/messages");
+    await expect(
+      jabuPage.getByRole("link", { name: new RegExp(kitchen) }),
+    ).toContainText("1 new message");
+    await expect(jabuPage.getByLabel("1 unread").first()).toBeVisible();
+    await expectNoSidewaysScroll(jabuPage);
+
     // ROUND TRIP: Jabu reads it, attributed to Ren, and replies.
     await openTeamChat(jabuPage, teamPath, kitchen);
     await expect(jabuPage.getByText(hello)).toBeVisible();
