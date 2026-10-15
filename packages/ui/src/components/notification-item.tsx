@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Ticket,
   UserCheck,
+  Users,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -38,7 +39,8 @@ export type NotificationKind =
   | "shift"
   | "wap"
   | "money"
-  | "meeting";
+  | "meeting"
+  | "team";
 
 /** kind → leading glyph. Exhaustive over NotificationKind by construction. */
 export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
@@ -53,6 +55,7 @@ export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
   wap: Ticket, // 🎫 work access passes granted / list approved or returned
   money: Wallet, // camp dues set / money recorded / a claim submitted or decided
   meeting: CalendarDays, // camp meeting scheduled / moved / cancelled
+  team: Users, // added to a camp team
 };
 
 export interface NotificationItemProps extends Omit<

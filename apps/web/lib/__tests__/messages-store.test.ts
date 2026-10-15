@@ -57,6 +57,8 @@ function participant(userId: string, over: Record<string, unknown> = {}) {
     sanitizedAt: null,
     lastReadAt: null,
     hiddenAt: null,
+    // The 1:1 paths serve direct conversations only (camp teams).
+    conversationKind: "direct",
     ...over,
   };
 }
@@ -452,6 +454,9 @@ describe("reportMessages — copies only selected messages of the reporter's own
       reason: "harassment",
       expiresAt: new Date("2027-10-24T12:00:00Z"),
     });
+    // A direct-message report carries no team-chat source snapshot.
+    expect(report.sourceCampName ?? null).toBeNull();
+    expect(report.sourceTeamName ?? null).toBeNull();
     const items = dbMock
       .writesTo(schema.messageReportItems)[0]!
       .arg("values") as { originalMessageId: string; body: string }[];
@@ -613,6 +618,9 @@ describe("inbox and unread counts carry no message body", () => {
       [
         {
           conversationId: CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: NOW,
           createdAt: NOW,
@@ -634,6 +642,7 @@ describe("inbox and unread counts carry no message body", () => {
     });
     expect(inbox).toEqual([
       {
+        kind: "direct",
         conversationId: CONVO,
         otherUserId: REN,
         otherName: "ren_notfound",
@@ -945,12 +954,18 @@ describe("hidden, blocked and expired edges", () => {
       [
         {
           conversationId: CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: NOW,
           createdAt: NOW,
         },
         {
           conversationId: OTHER_CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: null,
           createdAt: NOW,

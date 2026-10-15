@@ -285,6 +285,9 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   // Camp meetings (docs/camp-meetings-spec.md, migration 0039): a meeting
   // scheduled, moved or cancelled. In-app only.
   "meeting",
+  // Camp teams (docs/camp-teams-spec.md, migration 0040): "You were added to
+  // {team}" when a lead adds you. In-app only.
+  "team",
 ]);
 
 // How a camp shift is FIRST FILLED (epic #57). `open` = members sign
@@ -298,6 +301,20 @@ export const notificationKindEnum = pgEnum("notification_kind", [
 export const shiftSignupModeEnum = pgEnum("shift_signup_mode", [
   "open",
   "assign",
+]);
+
+// Camp teams (docs/camp-teams-spec.md). Who may put someone on a team:
+// `open` = any current camp member joins with one tap; `leads_add` = only the
+// team's leads and the camp's leads add people. Mirrors @quagga/types
+// `TEAM_JOIN_MODES`.
+export const teamJoinModeEnum = pgEnum("team_join_mode", ["open", "leads_add"]);
+
+// Camp teams (docs/camp-teams-spec.md). A conversation is a 1:1 `direct`
+// chat (epic #69) or one camp team's `team` chat. The same privacy law holds
+// for both: only its current participants read it.
+export const conversationKindEnum = pgEnum("conversation_kind", [
+  "direct",
+  "team",
 ]);
 
 // Work Access Passes (epic #53, docs/wap-spec.md). One row in `wap_requests`
@@ -2580,22 +2597,44 @@ export const securityEvents = pgTable(
 //   · ACCOUNT DELETION deletes the account's own `messages` and `user_blocks`
 //     whatever the timer says (apps/web `account-sanitize.ts`).
 
-export const conversations = pgTable("conversations", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  // The sorted pair of participant ids (@quagga/core
-  // `directConversationKey`). UNIQUE, so two concurrent "Message" clicks — from
-  // either side — converge on one conversation instead of creating two.
-  pairKey: text("pair_key").notNull().unique(),
-  // The timer applied to messages sent from now on. Changing it never rewrites
-  // an existing message's `expires_at`.
-  timer: messageTimerEnum("timer").notNull().default("off"),
-  createdBy: uuid("created_by").references(() => users.id, {
-    onDelete: "set null",
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // `direct` (1:1, epic #69) or `team` (one camp team's chat,
+    // docs/camp-teams-spec.md). The CHECK below ties each kind to its key.
+    kind: conversationKindEnum("kind").notNull().default("direct"),
+    // The sorted pair of participant ids (@quagga/core
+    // `directConversationKey`). UNIQUE, so two concurrent "Message" clicks — from
+    // either side — converge on one conversation instead of creating two. NULL
+    // for a team chat; Postgres treats NULLs as distinct, so the plain unique
+    // constraint (and the DM path's `ON CONFLICT (pair_key)`) is unchanged.
+    pairKey: text("pair_key").unique(),
+    // The camp team whose chat this is (null for a direct chat). UNIQUE: one
+    // chat per team, so two concurrent "ensure the chat" writes converge.
+    // CASCADE: deleting a team deletes its chat (reports keep their copies).
+    teamId: uuid("team_id")
+      .unique()
+      .references(() => shiftTeams.id, { onDelete: "cascade" }),
+    // The timer applied to messages sent from now on. Changing it never rewrites
+    // an existing message's `expires_at`.
+    timer: messageTimerEnum("timer").notNull().default("off"),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    // Bumped on every send; orders the inbox without scanning `messages`.
+    lastMessageAt: timestamp("last_message_at", { mode: "date" }),
+  },
+  (c) => ({
+    // A direct chat is keyed by its pair and has no team; a team chat is
+    // keyed by its team and has no pair. Nothing else is storable.
+    kindKeys: check(
+      "conversations_kind_keys",
+      sql`(${c.kind} = 'direct' and ${c.pairKey} is not null and ${c.teamId} is null) or (${c.kind} = 'team' and ${c.teamId} is not null and ${c.pairKey} is null)`,
+    ),
   }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  // Bumped on every send; orders the inbox without scanning `messages`.
-  lastMessageAt: timestamp("last_message_at", { mode: "date" }),
-});
+);
 
 export const conversationParticipants = pgTable(
   "conversation_participants",
@@ -2693,6 +2732,14 @@ export const messageReports = pgTable(
       onDelete: "set null",
     }),
     reason: text("reason"),
+    // Where a TEAM-CHAT report came from (docs/camp-teams-spec.md, migration
+    // 0041): the camp's and the team's names AS THEY WERE when it was
+    // reported — a snapshot, not a link, because the team may be renamed,
+    // archived or deleted (which cascades its chat away) and the queue must
+    // still say "{camp} · {team} team chat". Nothing else about the chat is
+    // kept. Both null for a direct-message report; never one without the other.
+    sourceCampName: text("source_camp_name"),
+    sourceTeamName: text("source_team_name"),
     status: messageReportStatusEnum("status").notNull().default("open"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
@@ -2702,6 +2749,10 @@ export const messageReports = pgTable(
     }),
   },
   (r) => ({
+    sourceBoth: check(
+      "message_reports_source_both",
+      sql`(${r.sourceCampName} is null) = (${r.sourceTeamName} is null)`,
+    ),
     statusCreatedIdx: index("message_reports_status_created_idx").on(
       r.status,
       r.createdAt.desc(),
@@ -2755,6 +2806,12 @@ export const shiftTeams = pgTable(
     name: text("name").notNull(),
     nameNormalized: text("name_normalized").notNull(),
     sort: integer("sort").notNull().default(0),
+    // Camp teams (docs/camp-teams-spec.md): what the team does (markdown,
+    // optional), who may put people on it, and when a camp lead archived it
+    // (an archived team leaves the list; its chat goes read-only).
+    description: text("description"),
+    joinMode: teamJoinModeEnum("join_mode").notNull().default("open"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => ({
@@ -2762,6 +2819,40 @@ export const shiftTeams = pgTable(
       t.groupId,
       t.nameNormalized,
     ),
+  }),
+);
+
+// Who is on a camp team (docs/camp-teams-spec.md). Keyed by USER, unique per
+// (team, user). Only current camp members: leaving the camp, being archived
+// from it and account erasure delete the row (apps/web/lib/camp-teams-store.ts
+// `removeFromCampTeams`, account-sanitize.ts), and every read joins the
+// person's ACTIVE membership of the team's camp regardless. The team chat's
+// `conversation_participants` rows follow these rows in the same transaction.
+// Removing someone from a team keeps their shifts (shifts are separate
+// sign-ups).
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => shiftTeams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // A team lead edits the team page, adds and removes members and sets the
+    // team chat's timer — for this team only.
+    isLead: boolean("is_lead").notNull().default(false),
+    // Null when the member joined themselves (or the adder is gone).
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (m) => ({
+    pk: primaryKey({ columns: [m.teamId, m.userId] }),
+    // "Which teams is this person on" (leave, archive, erasure).
+    userIdx: index("team_members_user_idx").on(m.userId),
   }),
 );
 

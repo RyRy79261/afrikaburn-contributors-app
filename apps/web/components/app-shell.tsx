@@ -102,7 +102,11 @@ export async function AppShell({
               Contributors
             </span>
           </Link>
-          <div className="flex items-center gap-5 text-sm">
+          {/* gap-3 below `sm`: with the Messages unread count showing (team
+              chats make that the usual case), gap-5 made this row 17px wider
+              than a 360 screen and the phone zoomed the whole page out.
+              Pinned by camp-team-chat-rules.spec.ts at mobile-360. */}
+          <div className="flex items-center gap-3 text-sm sm:gap-5">
             {showBrowseLinks && (
               <>
                 <NavLink href="/directory" icon="directory" label="Directory" />

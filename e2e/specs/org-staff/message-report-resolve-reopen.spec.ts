@@ -195,6 +195,8 @@ test.describe("org staff · message reports are resolved and reopened", () => {
     await openQueue(org, "open");
     await expect(row).toBeVisible();
     await expect(row).toContainText("1 message");
+    // A direct-message report shows as it always has: no team-chat source.
+    await expect(row).not.toContainText("team chat");
 
     await row.click();
     await org.waitForURL(/\/safety\/[0-9a-f-]{36}$/i);
@@ -207,6 +209,7 @@ test.describe("org staff · message reports are resolved and reopened", () => {
     await expect(org.getByText(reported, { exact: true })).toBeVisible();
     await expect(org.getByText(reason, { exact: true })).toBeVisible();
     await expect(org.getByText(hello)).toHaveCount(0);
+    await expect(org.getByText(/team chat/)).toHaveCount(0);
 
     // RESOLVE.
     const resolve = org.getByRole("button", { name: "Mark resolved" });

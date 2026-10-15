@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { dbMock, uniqueViolation } from "@/test/db-mock";
+import { boundStrings, dbMock, uniqueViolation } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
@@ -573,7 +573,30 @@ describe("leaveCamp — the no-lockout backstop on the way out", () => {
     dbMock.queue([{ role: "lead" }], [{ count: 0 }], []);
 
     expect(await leaveCamp(VIEWER, MAD_HATTERS)).toEqual({ ok: true });
-    expect(dbMock.queriesOfKind("delete")).toHaveLength(1);
+    // The membership, and — in the SAME transaction — their rows on this
+    // camp's teams and in those teams' chats (docs/camp-teams-spec.md): team
+    // rows are keyed by user, so the membership delete cannot cascade to them.
+    // The MEMBERSHIP goes first: a racing team join/add holds it FOR SHARE,
+    // so the delete waits for that write to commit and the team cleanup after
+    // it sees (and deletes) the rows it wrote. Cleanup-first left an orphan
+    // seat and chat row that came back on rejoin.
+    const deletes = dbMock.queriesOfKind("delete");
+    expect(deletes.map((d) => d.arg("delete"))).toEqual([
+      schema.memberships,
+      schema.teamMembers,
+      schema.conversationParticipants,
+    ]);
+    for (const d of deletes) {
+      expect(d.tx).toBe(true);
+      expect(boundStrings(d)).toContain(VIEWER);
+    }
+    // Scoped to THIS camp's teams, never every team the person is on: the
+    // team subquery the deletes read selects this camp's teams.
+    const campTeams = dbMock
+      .queriesTouching(schema.shiftTeams)
+      .filter((q) => q.kind === "select");
+    expect(campTeams).toHaveLength(1);
+    expect(boundStrings(campTeams[0]!)).toContain(MAD_HATTERS);
   });
 
   it("REFUSES someone who is not a member", async () => {

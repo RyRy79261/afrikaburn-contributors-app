@@ -55,7 +55,9 @@ const FORBIDDEN_TABLES = [
   "conversation_participants",
 ];
 
-function seedReport(): void {
+function seedReport(
+  source: { sourceCampName: string; sourceTeamName: string } | null = null,
+): void {
   db.seed("message_reports", [
     {
       id: REPORT,
@@ -66,6 +68,8 @@ function seedReport(): void {
       reason: "kept messaging after I said stop",
       reporterId: ALICE,
       reportedUserId: REN,
+      sourceCampName: source?.sourceCampName ?? null,
+      sourceTeamName: source?.sourceTeamName ?? null,
     },
   ]);
   db.seed("message_report_items", [
@@ -155,6 +159,28 @@ describe("what the queue shows", () => {
       action: MESSAGE_REPORT_VIEW_AUDIT_ACTION,
       subject: REPORT,
     });
+  });
+
+  it("a direct-message report shows no source, on the list or the detail", async () => {
+    seedReport();
+    const [row] = (await listMessageReports(PERSONAL_READER, OPEN, NOW)) ?? [];
+    expect(row?.source).toBeNull();
+    const detail = await getMessageReport(PERSONAL_READER, STAFF, REPORT, NOW);
+    expect(detail?.source).toBeNull();
+  });
+
+  it("a team-chat report shows its snapshotted camp and team, on the list and the detail", async () => {
+    seedReport({ sourceCampName: "Mad Hatters", sourceTeamName: "Tea bar" });
+    const [row] = (await listMessageReports(PERSONAL_READER, OPEN, NOW)) ?? [];
+    expect(row?.source).toBe("Mad Hatters · Tea bar team chat");
+    const detail = await getMessageReport(PERSONAL_READER, STAFF, REPORT, NOW);
+    expect(detail?.source).toBe("Mad Hatters · Tea bar team chat");
+    // Read from the report row itself: no team, camp or chat table is joined.
+    for (const call of db.calls) {
+      expect([...FORBIDDEN_TABLES, "shift_teams", "groups"]).not.toContain(
+        call.table,
+      );
+    }
   });
 
   it("never queries a live conversation table", async () => {

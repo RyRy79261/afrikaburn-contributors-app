@@ -275,6 +275,12 @@ unnoticed until the suite was first executed.
   session cookie did not exist yet, so the gate bounced to sign-in and ~100
   specs blamed the product. The sign-up factories now wait for the response AND
   for the cookie to actually land (`waitForSessionCookie`).
+- **A role name matches as a substring unless `exact: true`.** After clicking
+  Unblock, `getByRole("button", { name: "Block jabu" })` was satisfied at once —
+  by the "Unblock jabu" button still on screen — so the spec moved on before the
+  unblock had saved and blamed the team chat for still hiding messages. Any
+  name that is a suffix of its own opposite (Block/Unblock, Join/Rejoin) needs
+  `exact: true`.
 - **Create-camp soft-warns on a near-duplicate name** and needs a second,
   confirming submit. `uniqueCampName` varies a suffix rather than the stem, so
   once the database holds a few camps a near-match is close to certain.

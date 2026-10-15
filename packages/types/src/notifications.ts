@@ -32,6 +32,9 @@ export const NotificationKind = z.enum([
   // Camp meetings (docs/camp-meetings-spec.md): a meeting scheduled, moved or
   // cancelled, to the people it is for. In-app only.
   "meeting",
+  // Camp teams (docs/camp-teams-spec.md): "You were added to {team}" when a
+  // lead adds you. In-app only.
+  "team",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 

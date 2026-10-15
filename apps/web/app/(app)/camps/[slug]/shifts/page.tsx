@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, Plus, Users } from "lucide-react";
 import { shiftDateLabel } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -14,9 +14,7 @@ export const dynamic = "force-dynamic";
 // every other member gets their own view (S3), which leads also reach at
 // /shifts/mine. Strangers and former members get the camp's 404.
 
-function pick(
-  value: string | string[] | undefined,
-): string | null {
+function pick(value: string | string[] | undefined): string | null {
   return typeof value === "string" && value ? value : null;
 }
 
@@ -86,6 +84,12 @@ export default async function ShiftsPage({
         description={`${edition.name}${when}. Signing up is optional — people pick what suits them, you fill the gaps.`}
         actions={
           <>
+            <Button asChild variant="outline">
+              <Link href={`/camps/${camp.slug}/teams`}>
+                <Users className="h-4 w-4" aria-hidden />
+                Teams
+              </Link>
+            </Button>
             <Button asChild variant="outline">
               <Link href={`/camps/${camp.slug}/shifts/mine`}>
                 <CalendarDays className="h-4 w-4" aria-hidden />

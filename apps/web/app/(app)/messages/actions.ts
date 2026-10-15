@@ -20,6 +20,11 @@ import {
   startConversation,
   unblockUser,
 } from "@/lib/messages-store";
+import {
+  changeTeamChatTimer,
+  postTeamMessage,
+  reportTeamChatMessages,
+} from "@/lib/camp-teams-store";
 
 // Direct messaging server actions (epic #69). Every one: Zod at the boundary,
 // the signed-in, onboarded user resolved server-side (never an id from the
@@ -162,4 +167,65 @@ export async function saveDefaultMessageTimerAction(
   await saveDefaultMessageTimer(user.id, parsed.data.timer);
   revalidatePath("/profile");
   return { ok: true };
+}
+
+// --- Team chats (docs/camp-teams-spec.md) ---------------------------------------
+//
+// The whole input is parsed by the store with the @quagga/types schemas
+// (`SendTeamMessageInput`, `SetTeamChatTimerInput`, `ReportTeamMessagesInput`),
+// and the store re-decides — inside the write's transaction, with the viewer's
+// membership, account and team seat held FOR SHARE — that the caller is still
+// on the team. A camp lead who is not on the team is refused like a stranger.
+
+const TeamChatTarget = z.object({ conversationId: Uuid });
+
+/** Post into a team chat. `conversationId` only picks the page to refresh. */
+export async function sendTeamMessageAction(
+  input: unknown,
+): Promise<ActionResult<{ phoneHint: boolean }>> {
+  const user = await requireOnboardedUser();
+  const { conversationId, ...rest } = splitTarget(input);
+  const result = await postTeamMessage(user.id, rest);
+  if (result.ok && conversationId)
+    revalidatePath(`/messages/${conversationId}`);
+  return result;
+}
+
+/** Change a team chat's timer (team leads, and camp leads on the team). */
+export async function setTeamChatTimerAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await requireOnboardedUser();
+  const { conversationId, ...rest } = splitTarget(input);
+  const result = await changeTeamChatTimer(user.id, rest);
+  if (result.ok && conversationId)
+    revalidatePath(`/messages/${conversationId}`);
+  return result;
+}
+
+/** Report selected team-chat messages to the org safety queue. */
+export async function reportTeamMessagesAction(
+  input: unknown,
+): Promise<ActionResult<{ reportId: string }>> {
+  const user = await requireOnboardedUser();
+  const { conversationId: _ignored, ...rest } = splitTarget(input);
+  void _ignored;
+  return reportTeamChatMessages(user.id, rest);
+}
+
+/** Separates the page's conversation id (for revalidation only) from the
+ * store input, which is `.strict()` and refuses unknown keys. */
+function splitTarget(input: unknown): {
+  conversationId: string | null;
+  [key: string]: unknown;
+} {
+  if (typeof input !== "object" || input === null) {
+    return { conversationId: null };
+  }
+  const { conversationId, ...rest } = input as Record<string, unknown>;
+  const parsed = TeamChatTarget.safeParse({ conversationId });
+  return {
+    ...rest,
+    conversationId: parsed.success ? parsed.data.conversationId : null,
+  };
 }

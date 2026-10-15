@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CalendarDays, Minus, Plus } from "lucide-react";
+import { ArrowRight, CalendarDays, Minus, Pencil, Plus } from "lucide-react";
 import {
   formatClock,
   parseClock,
@@ -27,7 +28,12 @@ import {
   createShiftsAction,
   updateShiftAction,
 } from "@/app/(app)/camps/[slug]/shifts/actions";
-import { TeamsEditor, type TeamItem } from "./teams-editor";
+
+/** A team a shift can belong to. */
+export interface TeamItem {
+  id: string;
+  name: string;
+}
 
 // New shift / edit shift (canvas S2 `Y1tKxt` / `Ebxs3`). Set it up once and
 // repeat it across the days you need — one shift per picked day, each
@@ -78,7 +84,7 @@ const optionCard =
 export function ShiftForm({
   slug,
   days,
-  teams: initialTeams,
+  teams,
   roles,
   initial,
 }: {
@@ -92,7 +98,6 @@ export function ShiftForm({
   const router = useRouter();
   const editing = !!initial;
   const [pending, startTransition] = React.useTransition();
-  const [teams, setTeams] = React.useState(initialTeams);
   const [name, setName] = React.useState(initial?.name ?? "");
   const [teamId, setTeamId] = React.useState(initial?.teamId ?? "");
   const [startText, setStartText] = React.useState(
@@ -209,19 +214,20 @@ export function ShiftForm({
               <span className="text-sm font-medium" id="team-label">
                 Team
               </span>
-              <TeamsEditor
-                slug={slug}
-                teams={teams}
-                onChange={(next, addedId) => {
-                  setTeams(next);
-                  if (addedId) setTeamId(addedId);
-                  else if (!next.some((t) => t.id === teamId)) setTeamId("");
-                }}
-              />
+              {/* One list (docs/camp-teams-spec.md): the camp's teams are
+                  edited on the Teams pages, where archiving keeps a team's
+                  chat and history. */}
+              <Button asChild type="button" variant="ghost" size="sm">
+                <Link href={`/camps/${slug}/teams`}>
+                  <Pencil className="h-4 w-4" aria-hidden />
+                  Edit teams
+                </Link>
+              </Button>
             </div>
             {teams.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No teams yet — a shift doesn&apos;t need one.
+                No teams yet — a shift doesn&apos;t need one. Make teams in
+                Teams.
               </p>
             ) : (
               <ToggleGroup

@@ -24,6 +24,7 @@ const ALL_KINDS: NotificationKind[] = [
   "wap",
   "money",
   "meeting",
+  "team",
 ];
 
 describe("NotificationItem kind → icon map", () => {

@@ -9,6 +9,7 @@ import {
 } from "@quagga/core";
 
 import { buildDeletionGuardContext } from "@/lib/account";
+import { removeFromAllTeams } from "@/lib/camp-teams-store";
 import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
@@ -426,6 +427,12 @@ export async function sanitizeAccount(
     await tx
       .delete(schema.campMeetingAttendees)
       .where(eq(schema.campMeetingAttendees.userId, userId));
+
+    // 2h. CAMP TEAMS (docs/camp-teams-spec.md). Off every team in every camp
+    //     and out of every team chat. What they wrote there went with 2b
+    //     (every message this account sent); a direct chat's participant row
+    //     stays, so the other person still sees the "Departed Burner" stub.
+    await removeFromAllTeams(tx, userId);
 
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the

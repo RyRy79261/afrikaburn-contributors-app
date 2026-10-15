@@ -13,10 +13,7 @@ import { ShiftActionButton } from "@/components/shifts/shift-action-button";
 import { ShiftForm } from "@/components/shifts/shift-form";
 import { ShiftsHeader } from "@/components/shifts/shifts-header";
 import { candidatesFor, shiftLabel } from "@/components/shifts/view-model";
-import {
-  deleteShiftAction,
-  unassignFromShiftAction,
-} from "../../actions";
+import { deleteShiftAction, unassignFromShiftAction } from "../../actions";
 import { loadManagerContext } from "../../context";
 import { shiftFormRoles } from "../../roles";
 
@@ -36,6 +33,17 @@ export default async function EditShiftPage({
   const shift = board.shifts.find((s) => s.id === id);
   if (!shift) notFound();
   const roles = await shiftFormRoles(camp.id, board);
+  // An archived team is off the picker, but a shift already on one keeps it:
+  // offer it so saving the form does not silently drop the team.
+  const teams =
+    shift.teamId &&
+    shift.teamName &&
+    !board.teams.some((t) => t.id === shift.teamId)
+      ? [
+          ...board.teams,
+          { id: shift.teamId, name: `${shift.teamName} (archived)` },
+        ]
+      : board.teams;
   const gaps = shift.capacity - shift.assignments.length;
   const { candidates, excludedNote } = candidatesFor(
     shift,
@@ -120,7 +128,7 @@ export default async function EditShiftPage({
       <ShiftForm
         slug={camp.slug}
         days={days}
-        teams={board.teams}
+        teams={teams}
         roles={roles}
         initial={{
           id: shift.id,

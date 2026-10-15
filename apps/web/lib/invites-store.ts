@@ -10,6 +10,7 @@ import {
 } from "@quagga/core";
 import type { InviteKind } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
+import { removeFromCampTeams } from "./camp-teams-store";
 import { db, schema, withTransaction, type Tx } from "./db";
 import {
   getViewerRole,
@@ -462,6 +463,9 @@ async function redeemInTransaction(
     });
     // …and with no camp shifts: nothing left over from before (epic #57).
     await clearShiftsOnRestore(tx, { userId, groupId: invite.groupId });
+    // …and on no camp team (docs/camp-teams-spec.md): a team row that raced
+    // the archive would otherwise come back with its chat.
+    await removeFromCampTeams(tx, { userId, groupId: invite.groupId });
     await tx.insert(schema.auditEvents).values({
       actorId: userId,
       action: MEMBER_RESTORE_AUDIT_ACTION,

@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import {
-  ShiftCreateInput,
-  ShiftTeamName,
-  ShiftUpdateInput,
-} from "@quagga/core";
+import { ShiftCreateInput, ShiftUpdateInput } from "@quagga/core";
 
 import { activeMembership } from "@quagga/db";
 
@@ -15,15 +11,12 @@ import { db, schema } from "@/lib/db";
 import { getActiveEdition, type Edition } from "@/lib/edition";
 import { requireCampUser } from "@/lib/session";
 import {
-  addShiftTeam,
   assignToShift,
   createShifts,
   deleteShift,
   handShiftTo,
   leaveShift,
   offerShift,
-  removeShiftTeam,
-  renameShiftTeam,
   respondToHandOn,
   signUpForShift,
   takeOfferedShift,
@@ -196,62 +189,10 @@ export async function unassignFromShiftAction(
   return result;
 }
 
-const TeamAdd = z.object({ slug: Slug, name: ShiftTeamName }).strict();
-const TeamRename = TeamAdd.extend({ teamId: Id }).strict();
-const TeamRef = z.object({ slug: Slug, teamId: Id }).strict();
-
-export async function addShiftTeamAction(
-  raw: unknown,
-): Promise<ShiftActionResult<{ id: string }>> {
-  const parsed = TeamAdd.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: firstIssue(parsed.error, "Check the name.") };
-  }
-  const r = await resolve(parsed.data.slug);
-  if (!r.ok) return r;
-  const result = await addShiftTeam({
-    actorUserId: r.userId,
-    groupId: r.groupId,
-    name: parsed.data.name,
-  });
-  if (result.ok) revalidate(parsed.data.slug);
-  return result;
-}
-
-export async function renameShiftTeamAction(
-  raw: unknown,
-): Promise<ShiftActionResult> {
-  const parsed = TeamRename.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, error: firstIssue(parsed.error, "Check the name.") };
-  }
-  const r = await resolve(parsed.data.slug);
-  if (!r.ok) return r;
-  const result = await renameShiftTeam({
-    actorUserId: r.userId,
-    groupId: r.groupId,
-    teamId: parsed.data.teamId,
-    name: parsed.data.name,
-  });
-  if (result.ok) revalidate(parsed.data.slug);
-  return result;
-}
-
-export async function removeShiftTeamAction(
-  raw: unknown,
-): Promise<ShiftActionResult> {
-  const parsed = TeamRef.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "That team doesn't exist." };
-  const r = await resolve(parsed.data.slug);
-  if (!r.ok) return r;
-  const result = await removeShiftTeam({
-    actorUserId: r.userId,
-    groupId: r.groupId,
-    teamId: parsed.data.teamId,
-  });
-  if (result.ok) revalidate(parsed.data.slug);
-  return result;
-}
+// The camp's team list is edited on the Teams pages (docs/camp-teams-spec.md:
+// one list). The shifts editor's add / rename / remove actions are gone: a
+// hard delete here would have taken the team's chat with it, where the team
+// pages archive instead.
 
 // --- Member -------------------------------------------------------------------
 

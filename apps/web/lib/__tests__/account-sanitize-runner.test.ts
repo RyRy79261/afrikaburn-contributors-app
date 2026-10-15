@@ -138,6 +138,8 @@ function queueErasure(
     /* clear dues reasons */ [],
     /* clear payment notes */ [],
     /* delete campMeetingAttendees (camp meetings) */ [],
+    /* delete teamMembers (camp teams) */ [],
+    /* delete team-chat conversationParticipants (camp teams) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -643,6 +645,26 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(boundStrings(deletes[0]!)).toContain(USER);
     // The meetings themselves (titles, agendas, notes) are the camp's record.
     expect(dbMock.writesTo(schema.campMeetings)).toHaveLength(0);
+  });
+
+  it("takes the account off every camp team and out of every TEAM chat, keeping DM rows (camp teams)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const seats = dbMock
+      .writesTo(schema.teamMembers)
+      .filter((q) => q.kind === "delete");
+    expect(seats).toHaveLength(1);
+    expect(seats[0]!.tx).toBe(true);
+    expect(boundStrings(seats[0]!)).toContain(USER);
+    const chats = dbMock
+      .writesTo(schema.conversationParticipants)
+      .filter((q) => q.kind === "delete");
+    expect(chats).toHaveLength(1);
+    expect(chats[0]!.tx).toBe(true);
+    expect(boundStrings(chats[0]!)).toContain(USER);
   });
 
   it("RELEASES the account's Work Access Passes, scoped to its memberships, in the erasure transaction (epic #53)", async () => {

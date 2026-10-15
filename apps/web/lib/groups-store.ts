@@ -30,6 +30,7 @@ import type {
   RegistrationStatus,
 } from "@quagga/types";
 import { activeMembership, formerMembership } from "@quagga/db";
+import { removeFromCampTeams } from "./camp-teams-store";
 import { db, schema, withTransaction, type Tx } from "./db";
 
 /** One category chip on a directory card (org-defined per-edition taxonomy). */
@@ -1032,14 +1033,27 @@ export async function leaveCamp(
       };
     }
   }
-  await db()
-    .delete(schema.memberships)
-    .where(
-      and(
-        eq(schema.memberships.userId, userId),
-        eq(schema.memberships.groupId, groupId),
-      ),
-    );
+  await withTransaction(async (tx) => {
+    // The membership goes FIRST. Every team write locks the person's
+    // membership FOR SHARE before inserting a seat and a chat row
+    // (camp-teams-store.ts): deleting it first either waits for such a write
+    // to commit — and the team cleanup below, a later statement, then sees and
+    // deletes its rows — or makes the write find no membership and refuse.
+    // The other way round, a racing join/add committed its rows after the
+    // cleanup had looked, leaving an orphan seat that came back on rejoin.
+    await tx
+      .delete(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.userId, userId),
+          eq(schema.memberships.groupId, groupId),
+        ),
+      );
+    // Off every team of this camp and out of their chats, in the same
+    // transaction (docs/camp-teams-spec.md): team rows are keyed by user, so
+    // the membership's delete does not cascade to them.
+    await removeFromCampTeams(tx, { userId, groupId });
+  });
   return { ok: true };
 }
 

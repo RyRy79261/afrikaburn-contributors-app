@@ -68,7 +68,7 @@ export default async function SafetyReportPage({
       <PageHeading
         eyebrow="Console / Safety"
         title={`${report.reporterName} reported ${report.reportedName}`}
-        description={`Reported ${DATE.format(report.createdAt)}. This copy is deleted ${DATE.format(report.expiresAt)}. Opening this report is recorded in the audit log.`}
+        description={`${report.source ? `From ${report.source}. ` : ""}Reported ${DATE.format(report.createdAt)}. This copy is deleted ${DATE.format(report.expiresAt)}. Opening this report is recorded in the audit log.`}
         actions={
           report.status === "open" && canResolve ? (
             <ResolveReportButton reportId={report.id} />
