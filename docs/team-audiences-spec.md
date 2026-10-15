@@ -1,12 +1,12 @@
 # Team audiences — Feature Spec
 
-| Field                  | Value                                                            |
-| ---------------------- | ---------------------------------------------------------------- |
-| **Category**           | Engineering Spec                                                 |
-| **Doc status**         | Active                                                           |
-| **Normative language** | Descriptive only                                                 |
-| **Requirement IDs**    | Partial — App Spec §4a `COMM-012`, `COMM-014`                    |
-| **Owner / Updated**    | Ryan, 2026-10-15                                                 |
+| Field                  | Value                                         |
+| ---------------------- | --------------------------------------------- |
+| **Category**           | Engineering Spec                              |
+| **Doc status**         | Active                                        |
+| **Normative language** | Descriptive only                              |
+| **Requirement IDs**    | Partial — App Spec §4a `COMM-012`, `COMM-014` |
+| **Owner / Updated**    | Ryan, 2026-10-15                              |
 
 Camp teams exist ([camp-teams-spec.md](camp-teams-spec.md)), but an
 announcement or a meeting can still only go to the whole camp or to chosen

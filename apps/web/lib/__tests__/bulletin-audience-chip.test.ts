@@ -32,9 +32,7 @@ const byTeam = (teamIds: string[]): AudienceSpec => ({
 
 describe("bulletinAudienceChip", () => {
   it("names one team, and joins several with +, in the stored order", () => {
-    expect(bulletinAudienceChip(byTeam([KITCHEN]), TEAMS)).toBe(
-      "Kitchen team",
-    );
+    expect(bulletinAudienceChip(byTeam([KITCHEN]), TEAMS)).toBe("Kitchen team");
     expect(bulletinAudienceChip(byTeam([KITCHEN, BUILD]), TEAMS)).toBe(
       "Kitchen + Build crew",
     );
