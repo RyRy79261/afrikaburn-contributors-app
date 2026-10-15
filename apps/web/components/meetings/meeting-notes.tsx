@@ -20,6 +20,10 @@ import {
   type AutosaveState,
 } from "@/lib/layout-autosave";
 import { saveMeetingNotesAction } from "@/app/(app)/camps/[slug]/meetings/actions";
+import {
+  currentMeetingNotes,
+  type VersionedNotes,
+} from "@/lib/meeting-notes-state";
 import { useMeetingVersion } from "./meeting-version";
 
 // The meeting notes (frame G2): read by everyone the meeting is for, written
@@ -73,14 +77,16 @@ function NotesEditor({
   slug,
   meetingId,
   initial,
+  onSaved,
   onDone,
 }: {
   slug: string;
   meetingId: string;
   initial: string;
+  onSaved: (saved: VersionedNotes) => void;
   onDone: () => void;
 }) {
-  const { version, setVersion } = useMeetingVersion();
+  const { version, setVersion, onWrite } = useMeetingVersion();
   const [notes, setNotes] = React.useState(initial);
   const [state, setState] = React.useState<AutosaveState>({ kind: "saved" });
   const [autosave] = React.useState(() =>
@@ -95,7 +101,10 @@ function NotesEditor({
           notesMd,
         }),
       onState: setState,
-      onSaved: setVersion,
+      onSaved: (v, notesMd) => {
+        setVersion(v);
+        onSaved({ notesMd, version: v });
+      },
       debounceMs: AUTOSAVE_MS,
       retryMs: RETRY_MS,
     }),
@@ -104,6 +113,13 @@ function NotesEditor({
   React.useEffect(() => {
     autosave.change(notes);
   }, [autosave, notes]);
+
+  // A cancel on this page moves the version too; adopt it so the next save
+  // is not refused as someone else's.
+  React.useEffect(
+    () => onWrite((from, to) => autosave.rebase(from, to)),
+    [autosave, onWrite],
+  );
 
   // Leaving sends what is unsaved instead of dropping it (App Router
   // navigation fires no beforeunload); a full unload asks first.
@@ -208,19 +224,28 @@ function NotesEditor({
 export function MeetingNotes({
   slug,
   meetingId,
-  notesMd,
+  notesMd: renderedNotes,
+  version: renderedVersion,
   lastEdited,
   canEdit,
 }: {
   slug: string;
   meetingId: string;
   notesMd: string;
+  /** The meeting version the server rendered `notesMd` at. */
+  version: number;
   /** "Last edited by Ren Notfound · 21 Mar 2027, 20:14", or null. */
   lastEdited: string | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
+  // The last notes saved here, until a render at least that new lands.
+  const [lastSaved, setLastSaved] = React.useState<VersionedNotes | null>(null);
+  const notesMd = currentMeetingNotes(
+    { notesMd: renderedNotes, version: renderedVersion },
+    lastSaved,
+  );
 
   return (
     <section
@@ -247,6 +272,7 @@ export function MeetingNotes({
           slug={slug}
           meetingId={meetingId}
           initial={notesMd}
+          onSaved={setLastSaved}
           onDone={() => {
             setEditing(false);
             router.refresh();

@@ -42,7 +42,8 @@ export interface LayoutAutosaveOptions<D> {
   version: number;
   send: (doc: D, expectedVersion: number) => Promise<AutosaveResult>;
   onState: (state: AutosaveState) => void;
-  onSaved: (version: number) => void;
+  /** A save committed: the version it made and the document it holds. */
+  onSaved: (version: number, doc: D) => void;
   debounceMs: number;
   retryMs: number;
 }
@@ -66,6 +67,14 @@ export interface LayoutAutosave<D> {
    * site?" about that change would only put a second dialog in the way.
    */
   shouldWarnOnLeave(): boolean;
+  /**
+   * Another write on the same page (not this editor) moved the record from
+   * version `from` to `to` without touching this document — a meeting's
+   * Cancel button, say. Adopted only when this controller holds `from`, so a
+   * write it cannot vouch for is never skipped over: otherwise the next save
+   * would read to the server as stale, a conflict with oneself.
+   */
+  rebase(from: number, to: number): void;
 }
 
 /**
@@ -125,8 +134,9 @@ export function createLayoutAutosave<D>(
     inFlight = true;
     set({ kind: "saving" });
     let r: AutosaveResult;
+    const sentVersion = version;
     try {
-      r = await opts.send(toSend, version);
+      r = await opts.send(toSend, sentVersion);
     } catch {
       inFlight = false;
       uncertain = toSend;
@@ -139,9 +149,15 @@ export function createLayoutAutosave<D>(
     if (r.ok) {
       version = r.version;
       saved = toSend;
-      opts.onSaved(r.version);
+      opts.onSaved(r.version, toSend);
       if (latest !== saved) await flush();
       else set({ kind: "saved" });
+      return;
+    }
+    if (r.conflict && version !== sentVersion) {
+      // Refused as stale because a write on this page landed while it was in
+      // flight and was adopted (rebase): send again on top of that one.
+      await flush();
       return;
     }
     blocked = true;
@@ -187,5 +203,9 @@ export function createLayoutAutosave<D>(
     hasUnsaved,
     shouldWarnOnLeave: () =>
       state.kind === "conflict" ? latest !== atConflict : hasUnsaved(),
+    /** Adopts a same-page write made on top of the version held here. */
+    rebase(from, to) {
+      if (version === from && to > from) version = to;
+    },
   };
 }

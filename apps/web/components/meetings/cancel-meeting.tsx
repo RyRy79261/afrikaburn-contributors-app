@@ -27,7 +27,7 @@ export function CancelMeetingButton({
   meetingId: string;
 }) {
   const router = useRouter();
-  const { version, setVersion } = useMeetingVersion();
+  const { version, announceWrite } = useMeetingVersion();
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
@@ -43,7 +43,7 @@ export function CancelMeetingButton({
         toast.error(r.error);
         return;
       }
-      setVersion(r.version);
+      announceWrite(version, r.version);
       setOpen(false);
       toast.success("Meeting cancelled. Everyone it was for got a notice.");
       router.refresh();

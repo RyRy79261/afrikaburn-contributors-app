@@ -233,6 +233,7 @@ export default async function MeetingPage({
               slug={camp.slug}
               meetingId={meeting.id}
               notesMd={meeting.notesMd}
+              version={meeting.version}
               lastEdited={lastEdited}
               canEdit={meeting.canEditNotes}
             />
