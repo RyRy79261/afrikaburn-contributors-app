@@ -576,11 +576,15 @@ describe("leaveCamp — the no-lockout backstop on the way out", () => {
     // The membership, and — in the SAME transaction — their rows on this
     // camp's teams and in those teams' chats (docs/camp-teams-spec.md): team
     // rows are keyed by user, so the membership delete cannot cascade to them.
+    // The MEMBERSHIP goes first: a racing team join/add holds it FOR SHARE,
+    // so the delete waits for that write to commit and the team cleanup after
+    // it sees (and deletes) the rows it wrote. Cleanup-first left an orphan
+    // seat and chat row that came back on rejoin.
     const deletes = dbMock.queriesOfKind("delete");
     expect(deletes.map((d) => d.arg("delete"))).toEqual([
+      schema.memberships,
       schema.teamMembers,
       schema.conversationParticipants,
-      schema.memberships,
     ]);
     for (const d of deletes) {
       expect(d.tx).toBe(true);
