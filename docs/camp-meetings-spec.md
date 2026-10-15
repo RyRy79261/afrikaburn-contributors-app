@@ -57,6 +57,19 @@ Calendar sync: the platform holds the meeting itself.
 - Former members: no access. Account erasure removes their attendee rows and
   leaves the notes' text (authored text is the camp's record; their name is
   shown as "Deleted account").
+- Who sees a meeting for chosen roles: people holding those roles, the
+  camp's leads and co-leads, and whoever scheduled it. `schedule_meetings`
+  alone does not open it.
+- Who edits: details, moves and cancels need `schedule_meetings` (or lead)
+  now; notes and "who came" also the person who scheduled it. Every edit,
+  cancel and notes save is compare-and-set on one `version`; ticks are a
+  set and need none. Create, edit, cancel and notes saves are audited.
+- A move notices the audience only when the day, start or length changes;
+  people newly added to the audience get "scheduled".
+- Typed times are read as South African time (SAST, UTC+02:00, no DST) in
+  the two places that need an instant: the upcoming/past split and the
+  `.ics`, which names `Africa/Johannesburg` and embeds its definition. A
+  cancelled meeting gets no `.ics` and no new ticks.
 
 ## Surfaces
 
