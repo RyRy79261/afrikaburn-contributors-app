@@ -47,4 +47,7 @@ export const NOTIFICATION_SOURCE_LABELS: Record<NotificationKind, string> = {
   // Never written to an org inbox either (camp money notices go to camp
   // members and the camp's money people in the participant app).
   money: "Camp money",
+  // Never written to an org inbox either (meeting notices go to the camp
+  // members a meeting is for, in the participant app).
+  meeting: "Camp meetings",
 };

@@ -29,6 +29,9 @@ export const NotificationKind = z.enum([
   // Camp money (docs/camp-budget-spec.md): dues set, money recorded as
   // received, a claim submitted or decided. In-app only.
   "money",
+  // Camp meetings (docs/camp-meetings-spec.md): a meeting scheduled, moved or
+  // cancelled, to the people it is for. In-app only.
+  "meeting",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
