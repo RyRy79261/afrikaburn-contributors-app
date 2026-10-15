@@ -13,10 +13,7 @@ import { ShiftActionButton } from "@/components/shifts/shift-action-button";
 import { ShiftForm } from "@/components/shifts/shift-form";
 import { ShiftsHeader } from "@/components/shifts/shifts-header";
 import { candidatesFor, shiftLabel } from "@/components/shifts/view-model";
-import {
-  deleteShiftAction,
-  unassignFromShiftAction,
-} from "../../actions";
+import { deleteShiftAction, unassignFromShiftAction } from "../../actions";
 import { loadManagerContext } from "../../context";
 import { shiftFormRoles } from "../../roles";
 
@@ -42,7 +39,10 @@ export default async function EditShiftPage({
     shift.teamId &&
     shift.teamName &&
     !board.teams.some((t) => t.id === shift.teamId)
-      ? [...board.teams, { id: shift.teamId, name: `${shift.teamName} (archived)` }]
+      ? [
+          ...board.teams,
+          { id: shift.teamId, name: `${shift.teamName} (archived)` },
+        ]
       : board.teams;
   const gaps = shift.capacity - shift.assignments.length;
   const { candidates, excludedNote } = candidatesFor(

@@ -684,7 +684,8 @@ export async function listInbox(input: {
   }
   // Re-sort: the query ordered by the conversation's own timestamp, which a
   // team row must not be placed by (see above).
-  const keyOf = (e: InboxEntry) => sortKey.get(e.conversationId)?.getTime() ?? 0;
+  const keyOf = (e: InboxEntry) =>
+    sortKey.get(e.conversationId)?.getTime() ?? 0;
   return entries.sort((a, b) => keyOf(b) - keyOf(a));
 }
 

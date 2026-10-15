@@ -158,7 +158,10 @@ function shiftInserts() {
 function notices(): { userId: string; kind: string; title: string }[] {
   return dbMock
     .writesTo(schema.notifications)
-    .flatMap((q) => q.arg("values") as { userId: string; kind: string; title: string }[]);
+    .flatMap(
+      (q) =>
+        q.arg("values") as { userId: string; kind: string; title: string }[],
+    );
 }
 
 beforeEach(() => dbMock.reset());
@@ -276,9 +279,11 @@ describe("assignToShift", () => {
 
   it("lets a lead assign, audits it, and tells the member after commit", async () => {
     queueLocked({ actor: ALICE, parties: [ALICE, LERATO] });
-    dbMock.queue(/* insert */ [], /* audit */ [], [
-      { name: "Camp 404", slug: "camp-404" },
-    ]);
+    dbMock.queue(
+      /* insert */ [],
+      /* audit */ [],
+      [{ name: "Camp 404", slug: "camp-404" }],
+    );
     expect(
       await assignToShift({
         actorUserId: ALICE,
@@ -442,7 +447,8 @@ describe("hand to someone", () => {
     expect(notices()).toEqual([
       expect.objectContaining({
         userId: LERATO,
-        title: "jabu wants to hand you Kitchen · lunch on Thu 29 Apr, 12:00–15:00",
+        title:
+          "jabu wants to hand you Kitchen · lunch on Thu 29 Apr, 12:00–15:00",
       }),
     ]);
   });
@@ -452,7 +458,11 @@ describe("hand to someone", () => {
       actor: REN,
       assignments: [assignment(JABU, { handoverTo: M[LERATO] })],
     });
-    const result = await respondToHandOn({ userId: REN, accept: true, ...base });
+    const result = await respondToHandOn({
+      userId: REN,
+      accept: true,
+      ...base,
+    });
     expect(result).toEqual({
       ok: false,
       error: "That request was withdrawn or already answered.",
@@ -481,9 +491,12 @@ describe("hand to someone", () => {
     expect(sent.find((n) => n.userId === JABU)!.title).toBe(
       "lerato accepted your Kitchen · lunch on Thu 29 Apr — it's theirs now",
     );
-    expect(sent.filter((n) => n.title.includes("changed hands")).map((n) => n.userId).sort()).toEqual(
-      [ALICE, REN].sort(),
-    );
+    expect(
+      sent
+        .filter((n) => n.title.includes("changed hands"))
+        .map((n) => n.userId)
+        .sort(),
+    ).toEqual([ALICE, REN].sort());
   });
 
   it("declining clears the request and tells the holder it's still theirs", async () => {
@@ -500,7 +513,8 @@ describe("hand to someone", () => {
     expect(notices()).toEqual([
       expect.objectContaining({
         userId: JABU,
-        title: "lerato declined Kitchen · lunch on Thu 29 Apr — it's still yours",
+        title:
+          "lerato declined Kitchen · lunch on Thu 29 Apr — it's still yours",
       }),
     ]);
   });
@@ -529,9 +543,11 @@ describe("lead edits", () => {
       actor: ALICE,
       assignments: [assignment(JABU), assignment(ALICE)],
     });
-    dbMock.queue(/* update */ [], /* audit */ [], [
-      { name: "Camp 404", slug: "camp-404" },
-    ]);
+    dbMock.queue(
+      /* update */ [],
+      /* audit */ [],
+      [{ name: "Camp 404", slug: "camp-404" }],
+    );
     expect(
       await updateShift({
         actorUserId: ALICE,
@@ -683,7 +699,8 @@ describe("M1/M2 — every party's membership is locked before the shift", () => 
   const writes: [string, () => Promise<unknown>, () => void, string[]][] = [
     [
       "assignToShift (the lead AND the member put on)",
-      () => assignToShift({ actorUserId: ALICE, membershipId: M[LERATO], ...base }),
+      () =>
+        assignToShift({ actorUserId: ALICE, membershipId: M[LERATO], ...base }),
       () => queueLocked({ actor: ALICE, parties: [ALICE, LERATO] }),
       [ALICE, M[LERATO]],
     ],
@@ -716,7 +733,8 @@ describe("M1/M2 — every party's membership is locked before the shift", () => 
     ],
     [
       "takeOfferedShift",
-      () => takeOfferedShift({ userId: LERATO, assignmentId: "a-jabu", ...base }),
+      () =>
+        takeOfferedShift({ userId: LERATO, assignmentId: "a-jabu", ...base }),
       () => queueLocked({ actor: LERATO, assignments: offered() }),
       [LERATO],
     ],
@@ -838,7 +856,10 @@ describe("cross-camp ids answer like ids that do not exist", () => {
       edition,
       fields,
     });
-    expect(result).toEqual({ ok: false, error: "That team doesn't exist any more." });
+    expect(result).toEqual({
+      ok: false,
+      error: "That team doesn't exist any more.",
+    });
     expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
     const lookup = dbMock.queriesTouching(schema.shiftTeams)[0]!;
     expect(boundStrings(lookup)).toEqual(
@@ -871,7 +892,10 @@ describe("cross-camp ids answer like ids that do not exist", () => {
       teamId: fields.teamId,
       name: "Sound",
     });
-    expect(result).toEqual({ ok: false, error: "That team doesn't exist any more." });
+    expect(result).toEqual({
+      ok: false,
+      error: "That team doesn't exist any more.",
+    });
     const [update] = dbMock.writesTo(schema.shiftTeams);
     expect(boundStrings(update!)).toEqual(
       expect.arrayContaining([fields.teamId, CAMP]),
@@ -885,7 +909,10 @@ describe("cross-camp ids answer like ids that do not exist", () => {
       groupId: CAMP,
       teamId: fields.teamId,
     });
-    expect(result).toEqual({ ok: false, error: "That team doesn't exist any more." });
+    expect(result).toEqual({
+      ok: false,
+      error: "That team doesn't exist any more.",
+    });
     const [del] = dbMock.writesTo(schema.shiftTeams);
     expect(boundStrings(del!)).toEqual(
       expect.arrayContaining([fields.teamId, CAMP]),
@@ -921,9 +948,21 @@ describe("cross-camp ids answer like ids that do not exist", () => {
 describe("getShiftTileSummary — the camp page tile", () => {
   const rows = [
     // open-mode: 1 of 3 filled → 2 open
-    { date: "2027-04-28", capacity: 3, signupMode: OPEN, teamName: "Kitchen", filled: 1 },
+    {
+      date: "2027-04-28",
+      capacity: 3,
+      signupMode: OPEN,
+      teamName: "Kitchen",
+      filled: 1,
+    },
     // lead-only: 0 of 2 filled → 2 gaps a member cannot sign up for
-    { date: "2027-04-29", capacity: 2, signupMode: ASSIGN, teamName: "Sound", filled: 0 },
+    {
+      date: "2027-04-29",
+      capacity: 2,
+      signupMode: ASSIGN,
+      teamName: "Sound",
+      filled: 0,
+    },
   ];
 
   it("a member's count is only spots they could sign up for", async () => {
@@ -1115,10 +1154,18 @@ describe("createShifts", () => {
       /* inserted */ [{ id: "s1" }, { id: "s2" }],
     );
     expect(
-      await createShifts({ actorUserId: ALICE, groupId: CAMP, edition: burn, fields }),
+      await createShifts({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        edition: burn,
+        fields,
+      }),
     ).toEqual({ ok: true, created: 2 });
     const [insert] = dbMock.writesTo(schema.shifts);
-    const rows = insert!.arg("values") as { shiftDate: string; groupId: string }[];
+    const rows = insert!.arg("values") as {
+      shiftDate: string;
+      groupId: string;
+    }[];
     expect(rows.map((r) => r.shiftDate)).toEqual(["2027-04-29", "2027-04-30"]);
     expect(rows.every((r) => r.groupId === CAMP)).toBe(true);
     const [audit] = dbMock.writesTo(schema.auditEvents);
@@ -1135,7 +1182,10 @@ describe("createShifts", () => {
       edition: burn,
       fields: { ...fields, dates: ["2027-06-01"] },
     });
-    expect(result).toEqual({ ok: false, error: "Pick at least one day of the burn." });
+    expect(result).toEqual({
+      ok: false,
+      error: "Pick at least one day of the burn.",
+    });
     expect(dbMock.queries).toHaveLength(0);
   });
 
@@ -1225,7 +1275,10 @@ describe("updateShift — refusals after the lock", () => {
       edition: burn,
       fields,
     });
-    expect(result).toEqual({ ok: false, error: "That team doesn't exist any more." });
+    expect(result).toEqual({
+      ok: false,
+      error: "That team doesn't exist any more.",
+    });
     expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
   });
 
@@ -1290,10 +1343,12 @@ describe("deleteShift", () => {
     const [del] = dbMock.writesTo(schema.shifts);
     expect(del!.kind).toBe("delete");
     expect(boundStrings(del!)).toEqual(expect.arrayContaining([SHIFT, CAMP]));
-    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject({
-      action: "camp.shift.delete",
-      meta: { shiftId: SHIFT },
-    });
+    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject(
+      {
+        action: "camp.shift.delete",
+        meta: { shiftId: SHIFT },
+      },
+    );
     expect(notices().map((n) => n.userId)).toEqual([JABU]);
   });
 
@@ -1307,7 +1362,13 @@ describe("deleteShift", () => {
   });
 
   it("the lock found the row but the shift is not in this edition's list: missing", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ id: SHIFT }], [actorRow(ALICE)], [], /* no shifts */ []);
+    dbMock.queue(
+      [actorRow(ALICE)],
+      [{ id: SHIFT }],
+      [actorRow(ALICE)],
+      [],
+      /* no shifts */ [],
+    );
     expect(await deleteShift(input)).toEqual({
       ok: false,
       error: "That shift doesn't exist.",
@@ -1346,7 +1407,8 @@ describe("unassignFromShift", () => {
     queueLocked({ actor: ALICE, assignments: [assignment(JABU)] });
     expect(await unassignFromShift(input("a-lerato"))).toEqual({
       ok: false,
-      error: "That shift changed while you were looking — refresh and try again.",
+      error:
+        "That shift changed while you were looking — refresh and try again.",
     });
     expect(dbMock.writesTo(schema.shiftAssignments)).toHaveLength(0);
     expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
@@ -1359,13 +1421,17 @@ describe("unassignFromShift", () => {
     const [del] = dbMock.writesTo(schema.shiftAssignments);
     expect(del!.kind).toBe("delete");
     expect(del!.tx).toBe(true);
-    expect(boundStrings(del!)).toEqual(expect.arrayContaining(["a-jabu", SHIFT]));
-    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject({
-      actorId: ALICE,
-      action: "camp.shift.unassign",
-      subject: JABU,
-      meta: { membershipId: M[JABU] },
-    });
+    expect(boundStrings(del!)).toEqual(
+      expect.arrayContaining(["a-jabu", SHIFT]),
+    );
+    expect(dbMock.writesTo(schema.auditEvents)[0]!.arg("values")).toMatchObject(
+      {
+        actorId: ALICE,
+        action: "camp.shift.unassign",
+        subject: JABU,
+        meta: { membershipId: M[JABU] },
+      },
+    );
     expect(notices()).toEqual([
       expect.objectContaining({ userId: JABU, kind: SHIFT_KIND }),
     ]);
@@ -1415,11 +1481,16 @@ describe("leave, offer and withdraw — the holder's own spot", () => {
   }
 
   it("leaveShift deletes only the caller's own row, and tells nobody", async () => {
-    queueLocked({ actor: JABU, assignments: [assignment(LERATO), assignment(JABU)] });
+    queueLocked({
+      actor: JABU,
+      assignments: [assignment(LERATO), assignment(JABU)],
+    });
     expect(await leaveShift(input(JABU))).toEqual({ ok: true });
     const [del] = dbMock.writesTo(schema.shiftAssignments);
     expect(del!.kind).toBe("delete");
-    expect(boundStrings(del!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+    expect(boundStrings(del!)).toEqual(
+      expect.arrayContaining(["a-jabu", M[JABU]]),
+    );
     expect(boundStrings(del!)).not.toContain("a-lerato");
     expect(notices()).toHaveLength(0);
   });
@@ -1431,10 +1502,15 @@ describe("leave, offer and withdraw — the holder's own spot", () => {
     });
     expect(await offerShift(input(JABU))).toEqual({ ok: true });
     const [update] = dbMock.writesTo(schema.shiftAssignments);
-    const set = update!.arg("set") as { offeredAt: unknown; handoverToMembershipId: unknown };
+    const set = update!.arg("set") as {
+      offeredAt: unknown;
+      handoverToMembershipId: unknown;
+    };
     expect(set.offeredAt).toBeInstanceOf(Date);
     expect(set.handoverToMembershipId).toBeNull();
-    expect(boundStrings(update!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+    expect(boundStrings(update!)).toEqual(
+      expect.arrayContaining(["a-jabu", M[JABU]]),
+    );
   });
 
   it("withdrawHandOn clears both the offer and the request on the caller's own row", async () => {
@@ -1448,7 +1524,9 @@ describe("leave, offer and withdraw — the holder's own spot", () => {
       offeredAt: null,
       handoverToMembershipId: null,
     });
-    expect(boundStrings(update!)).toEqual(expect.arrayContaining(["a-jabu", M[JABU]]));
+    expect(boundStrings(update!)).toEqual(
+      expect.arrayContaining(["a-jabu", M[JABU]]),
+    );
   });
 });
 
@@ -1501,7 +1579,9 @@ describe("signUpForShift — the remaining refusals", () => {
       otherShifts: [{ ...overlapping, startMinute: 900 }],
       assignments: [onOther(LERATO)],
     });
-    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({ ok: true });
+    expect(await signUpForShift({ userId: LERATO, ...base })).toEqual({
+      ok: true,
+    });
     expect(shiftInserts()).toHaveLength(1);
   });
 
@@ -1524,7 +1604,10 @@ describe("takeOfferedShift — the remaining refusals", () => {
 
   it("a shift that is not this camp's answers as missing", async () => {
     queueLocked({ actor: LERATO, shift: null });
-    expect(await take(LERATO)).toEqual({ ok: false, error: "That shift doesn't exist." });
+    expect(await take(LERATO)).toEqual({
+      ok: false,
+      error: "That shift doesn't exist.",
+    });
   });
 
   it("refuses a caller with no active membership", async () => {
@@ -1537,7 +1620,10 @@ describe("takeOfferedShift — the remaining refusals", () => {
   });
 
   it("someone already on the shift cannot take a second spot on it", async () => {
-    queueLocked({ actor: LERATO, assignments: [offeredBy(JABU), assignment(LERATO)] });
+    queueLocked({
+      actor: LERATO,
+      assignments: [offeredBy(JABU), assignment(LERATO)],
+    });
     expect(await take(LERATO)).toEqual({
       ok: false,
       error: "You're already on that shift.",
@@ -1706,7 +1792,8 @@ describe("respondToHandOn — the remaining refusals", () => {
     dbMock.queue([CAMP_ROW], /* CAS matched nothing */ []);
     expect(await respond(true)).toEqual({
       ok: false,
-      error: "That shift changed while you were looking — refresh and try again.",
+      error:
+        "That shift changed while you were looking — refresh and try again.",
     });
     expect(notices()).toHaveLength(0);
   });
@@ -1732,10 +1819,17 @@ describe("shift teams — lead only, one name per camp", () => {
   it("addShiftTeam sorts the new team last and marks the camp's list as edited", async () => {
     dbMock.queue([actorRow(ALICE)], [{ n: 3 }], [{ id: "t-new" }]);
     expect(
-      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "  Sound " }),
+      await addShiftTeam({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        name: "  Sound ",
+      }),
     ).toEqual({ ok: true, id: "t-new" });
     const insert = dbMock.writesTo(schema.shiftTeams)[0]!;
-    expect(insert.arg("values")).toMatchObject({ sort: 3, nameNormalized: "sound" });
+    expect(insert.arg("values")).toMatchObject({
+      sort: 3,
+      nameNormalized: "sound",
+    });
     const [seeded] = dbMock.writesTo(schema.groups);
     expect(nullChecksOn(seeded!, schema.groups.shiftTeamsSeededAt)).toEqual([
       "is null",
@@ -1743,10 +1837,17 @@ describe("shift teams — lead only, one name per camp", () => {
   });
 
   it("addShiftTeam maps a duplicate name — even one wrapped as a cause — to a message", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], uniqueViolation("shift_teams_name_idx"));
+    dbMock.queue(
+      [actorRow(ALICE)],
+      [{ n: 0 }],
+      uniqueViolation("shift_teams_name_idx"),
+    );
     expect(
       await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+    ).toEqual({
+      ok: false,
+      error: "The camp already has a team with that name.",
+    });
 
     dbMock.reset();
     const wrapped = new Error("Failed query", {
@@ -1755,7 +1856,10 @@ describe("shift teams — lead only, one name per camp", () => {
     dbMock.queue([actorRow(ALICE)], [{ n: 0 }], wrapped);
     expect(
       await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+    ).toEqual({
+      ok: false,
+      error: "The camp already has a team with that name.",
+    });
   });
 
   it("addShiftTeam rethrows anything that is not a duplicate", async () => {
@@ -1768,7 +1872,12 @@ describe("shift teams — lead only, one name per camp", () => {
   it("renameShiftTeam refuses a plain member, and updates nothing", async () => {
     dbMock.queue([actorRow(JABU)]);
     expect(
-      await renameShiftTeam({ actorUserId: JABU, groupId: CAMP, teamId: TEAM, name: "Sound" }),
+      await renameShiftTeam({
+        actorUserId: JABU,
+        groupId: CAMP,
+        teamId: TEAM,
+        name: "Sound",
+      }),
     ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
     expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
   });
@@ -1776,7 +1885,12 @@ describe("shift teams — lead only, one name per camp", () => {
   it("renameShiftTeam renames this camp's team, normalising the name", async () => {
     dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
     expect(
-      await renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Tea Bar" }),
+      await renameShiftTeam({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        teamId: TEAM,
+        name: "Tea Bar",
+      }),
     ).toEqual({ ok: true });
     expect(dbMock.writesTo(schema.shiftTeams)[0]!.arg("set")).toEqual({
       name: "Tea Bar",
@@ -1787,13 +1901,26 @@ describe("shift teams — lead only, one name per camp", () => {
   it("renameShiftTeam maps a duplicate name to a message, and rethrows anything else", async () => {
     dbMock.queue([actorRow(ALICE)], uniqueViolation());
     expect(
-      await renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Sound" }),
-    ).toEqual({ ok: false, error: "The camp already has a team with that name." });
+      await renameShiftTeam({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        teamId: TEAM,
+        name: "Sound",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "The camp already has a team with that name.",
+    });
 
     dbMock.reset();
     dbMock.queue([actorRow(ALICE)], new Error("connection reset"));
     await expect(
-      renameShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM, name: "Sound" }),
+      renameShiftTeam({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        teamId: TEAM,
+        name: "Sound",
+      }),
     ).rejects.toThrow("connection reset");
   });
 
@@ -1808,7 +1935,11 @@ describe("shift teams — lead only, one name per camp", () => {
   it("removeShiftTeam removes this camp's team", async () => {
     dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
     expect(
-      await removeShiftTeam({ actorUserId: ALICE, groupId: CAMP, teamId: TEAM }),
+      await removeShiftTeam({
+        actorUserId: ALICE,
+        groupId: CAMP,
+        teamId: TEAM,
+      }),
     ).toEqual({ ok: true });
     expect(boundStrings(dbMock.writesTo(schema.shiftTeams)[0]!)).toEqual(
       expect.arrayContaining([TEAM, CAMP]),
@@ -1823,7 +1954,10 @@ describe("respondToHandOn — accepting a shift you are already on", () => {
     // message is to HER, not about a third person.
     queueLocked({
       actor: LERATO,
-      assignments: [assignment(JABU, { handoverTo: M[LERATO] }), assignment(LERATO)],
+      assignments: [
+        assignment(JABU, { handoverTo: M[LERATO] }),
+        assignment(LERATO),
+      ],
     });
     dbMock.queue([CAMP_ROW]);
     expect(

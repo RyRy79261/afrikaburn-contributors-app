@@ -476,7 +476,10 @@ describe("reads for the team pages and the team chat route", () => {
   it("New team's lead list is empty for a plain member, and the camp's members are never read", async () => {
     dbMock.queue(campRow, [{ role: MEMBER }]);
     expect(
-      await store.listNewTeamLeadCandidates({ slug: SLUG, viewerUserId: ALICE }),
+      await store.listNewTeamLeadCandidates({
+        slug: SLUG,
+        viewerUserId: ALICE,
+      }),
     ).toEqual([]);
     // Two reads only: the camp and the viewer's own role.
     expect(dbMock.queries).toHaveLength(2);

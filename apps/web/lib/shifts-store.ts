@@ -73,7 +73,8 @@ export type ShiftResult<T = object> =
 
 type Handle = Tx | ReturnType<typeof db>;
 
-const STALE = "That shift changed while you were looking — refresh and try again.";
+const STALE =
+  "That shift changed while you were looking — refresh and try again.";
 const MISSING = "That shift doesn't exist.";
 
 // --- Views -----------------------------------------------------------------
@@ -219,7 +220,9 @@ async function loadMembers(
 /** The camp's live shift teams, in the lead's order. An archived team is off
  * the list (docs/camp-teams-spec.md): no picker or filter offers it, and a
  * shift already on one keeps its team name through the shift's own join. */
-export async function listShiftTeams(groupId: string): Promise<ShiftTeamView[]> {
+export async function listShiftTeams(
+  groupId: string,
+): Promise<ShiftTeamView[]> {
   return db()
     .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
     .from(schema.shiftTeams)
@@ -485,7 +488,9 @@ async function lockActor(
     membershipId: row.membershipId,
     userId: row.userId,
     role: row.role,
-    displayName: publicMemberName(row.username, { sanitizedAt: row.sanitizedAt }),
+    displayName: publicMemberName(row.username, {
+      sanitizedAt: row.sanitizedAt,
+    }),
   };
 }
 
@@ -692,10 +697,16 @@ async function teamBelongs(
 ): Promise<boolean> {
   if (teamId === null) return true;
   const [t] = await tx
-    .select({ id: schema.shiftTeams.id, archivedAt: schema.shiftTeams.archivedAt })
+    .select({
+      id: schema.shiftTeams.id,
+      archivedAt: schema.shiftTeams.archivedAt,
+    })
     .from(schema.shiftTeams)
     .where(
-      and(eq(schema.shiftTeams.id, teamId), eq(schema.shiftTeams.groupId, groupId)),
+      and(
+        eq(schema.shiftTeams.id, teamId),
+        eq(schema.shiftTeams.groupId, groupId),
+      ),
     )
     .limit(1);
   if (!t) return false;
@@ -788,7 +799,12 @@ export async function updateShift(input: {
   const result = await withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.actorUserId);
     if (!mayManage(actor)) return refused("not_manager");
-    const locked = await lockShift(tx, input.groupId, input.edition.id, fields.id);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.edition.id,
+      fields.id,
+    );
     if (!locked) return { ok: false, error: MISSING };
     if (
       !(await teamBelongs(tx, input.groupId, fields.teamId, locked.view.teamId))
@@ -846,7 +862,8 @@ export async function updateShift(input: {
           actor!.displayName,
         );
         for (const a of locked.view.assignments) {
-          if (a.userId !== input.actorUserId) notices.push(toRow(a.userId, payload));
+          if (a.userId !== input.actorUserId)
+            notices.push(toRow(a.userId, payload));
         }
       }
     }
@@ -866,7 +883,12 @@ export async function deleteShift(input: {
   const result = await withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.actorUserId);
     if (!mayManage(actor)) return refused("not_manager");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     await tx
       .delete(schema.shifts)
@@ -889,7 +911,8 @@ export async function deleteShift(input: {
         actor!.displayName,
       );
       for (const a of locked.view.assignments) {
-        if (a.userId !== input.actorUserId) notices.push(toRow(a.userId, payload));
+        if (a.userId !== input.actorUserId)
+          notices.push(toRow(a.userId, payload));
       }
     }
     return { ok: true };
@@ -916,17 +939,26 @@ export async function assignToShift(input: {
       input.actorUserId,
       [input.membershipId],
     );
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const lockedTarget =
-      others.has(input.membershipId) || actor?.membershipId === input.membershipId;
-    const target = lockedTarget ? memberFactsFor(locked, input.membershipId) : null;
+      others.has(input.membershipId) ||
+      actor?.membershipId === input.membershipId;
+    const target = lockedTarget
+      ? memberFactsFor(locked, input.membershipId)
+      : null;
     const decision = decideAssign(
       locked.facts,
       mayManage(actor),
       target?.facts ?? null,
     );
-    if (!decision.ok) return refused(decision.reason, locked.view.requiredRoleName);
+    if (!decision.ok)
+      return refused(decision.reason, locked.view.requiredRoleName);
     await tx.insert(schema.shiftAssignments).values({
       shiftId: input.shiftId,
       membershipId: input.membershipId,
@@ -971,9 +1003,16 @@ export async function unassignFromShift(input: {
   const result = await withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.actorUserId);
     if (!mayManage(actor)) return refused("not_manager");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
-    const row = locked.view.assignments.find((a) => a.id === input.assignmentId);
+    const row = locked.view.assignments.find(
+      (a) => a.id === input.assignmentId,
+    );
     if (!row) return { ok: false, error: STALE };
     await tx
       .delete(schema.shiftAssignments)
@@ -1022,7 +1061,12 @@ export async function signUpForShift(input: {
   return withTransaction(async (tx): Promise<ShiftResult> => {
     // Their own membership locked before the shift: the clash check (M2).
     const { actor } = await lockParties(tx, input.groupId, input.userId);
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const me = actor ? memberFactsFor(locked, actor.membershipId) : null;
     const decision = decideSignUp(locked.facts, me?.facts ?? null);
@@ -1060,7 +1104,12 @@ export async function leaveShift(input: {
   return withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.userId);
     if (!actor) return refused("not_member");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const mine = heldAssignment(locked.facts, actor.membershipId);
     if (!mine) return refused("not_on_shift");
@@ -1088,7 +1137,12 @@ export async function offerShift(input: {
   return withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.userId);
     if (!actor) return refused("not_member");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const mine = heldAssignment(locked.facts, actor.membershipId);
     if (!mine) return refused("not_on_shift");
@@ -1115,7 +1169,12 @@ export async function withdrawHandOn(input: {
   return withTransaction(async (tx): Promise<ShiftResult> => {
     const actor = await lockActor(tx, input.groupId, input.userId);
     if (!actor) return refused("not_member");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const mine = heldAssignment(locked.facts, actor.membershipId);
     if (!mine) return refused("not_on_shift");
@@ -1144,11 +1203,19 @@ export async function handShiftTo(input: {
   const result = await withTransaction(async (tx): Promise<ShiftResult> => {
     // The holder AND the campmate it is handed to, locked before the shift: a
     // request is never left pointing at someone archived meanwhile (M1).
-    const { actor, others } = await lockParties(tx, input.groupId, input.userId, [
-      input.toMembershipId,
-    ]);
+    const { actor, others } = await lockParties(
+      tx,
+      input.groupId,
+      input.userId,
+      [input.toMembershipId],
+    );
     if (!actor) return refused("not_member");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const target =
       others.has(input.toMembershipId) ||
@@ -1160,7 +1227,8 @@ export async function handShiftTo(input: {
       actor.membershipId,
       target?.facts ?? null,
     );
-    if (!decision.ok) return refused(decision.reason, locked.view.requiredRoleName);
+    if (!decision.ok)
+      return refused(decision.reason, locked.view.requiredRoleName);
     const mine = heldAssignment(locked.facts, actor.membershipId)!;
     await tx
       .update(schema.shiftAssignments)
@@ -1202,7 +1270,12 @@ export async function respondToHandOn(input: {
     // Their own membership locked before the shift: the clash check (M2).
     const { actor } = await lockParties(tx, input.groupId, input.userId);
     if (!actor) return refused("not_member");
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const request = locked.view.assignments.find(
       (a) => a.handoverTo?.membershipId === actor.membershipId,
@@ -1218,7 +1291,10 @@ export async function respondToHandOn(input: {
         .where(
           and(
             eq(schema.shiftAssignments.id, request.id),
-            eq(schema.shiftAssignments.handoverToMembershipId, actor.membershipId),
+            eq(
+              schema.shiftAssignments.handoverToMembershipId,
+              actor.membershipId,
+            ),
           ),
         );
       if (ctx) {
@@ -1251,7 +1327,8 @@ export async function respondToHandOn(input: {
       if (decision.reason === "clash") {
         return {
           ok: false,
-          error: "You're on another shift at that time — hand that one on first.",
+          error:
+            "You're on another shift at that time — hand that one on first.",
         };
       }
       return refused(decision.reason);
@@ -1269,7 +1346,10 @@ export async function respondToHandOn(input: {
       .where(
         and(
           eq(schema.shiftAssignments.id, request.id),
-          eq(schema.shiftAssignments.handoverToMembershipId, actor.membershipId),
+          eq(
+            schema.shiftAssignments.handoverToMembershipId,
+            actor.membershipId,
+          ),
         ),
       )
       .returning({ id: schema.shiftAssignments.id });
@@ -1311,7 +1391,12 @@ export async function takeOfferedShift(input: {
   const result = await withTransaction(async (tx): Promise<ShiftResult> => {
     // Their own membership locked before the shift: the clash check (M2).
     const { actor } = await lockParties(tx, input.groupId, input.userId);
-    const locked = await lockShift(tx, input.groupId, input.editionId, input.shiftId);
+    const locked = await lockShift(
+      tx,
+      input.groupId,
+      input.editionId,
+      input.shiftId,
+    );
     if (!locked) return { ok: false, error: MISSING };
     const me = actor ? memberFactsFor(locked, actor.membershipId) : null;
     const decision = decideTakeOffered(
@@ -1339,7 +1424,9 @@ export async function takeOfferedShift(input: {
       }
       return refused(decision.reason);
     }
-    const from = locked.view.assignments.find((a) => a.id === input.assignmentId)!;
+    const from = locked.view.assignments.find(
+      (a) => a.id === input.assignmentId,
+    )!;
     const moved = await tx
       .update(schema.shiftAssignments)
       .set({
@@ -1361,7 +1448,10 @@ export async function takeOfferedShift(input: {
     if (camp) {
       const ctx = noticeContext(camp, locked.view);
       notices.push(
-        toRow(from.userId, shiftHandedOnNotification(ctx, actor!.displayName, "took")),
+        toRow(
+          from.userId,
+          shiftHandedOnNotification(ctx, actor!.displayName, "took"),
+        ),
       );
       const leads = shiftChangedHandsNotification(
         ctx,
@@ -1408,7 +1498,10 @@ export async function addShiftTeam(input: {
         .from(schema.shiftTeams)
         .where(eq(schema.shiftTeams.groupId, input.groupId));
       if ((count?.n ?? 0) >= SHIFT_MAX_TEAMS) {
-        return { ok: false, error: `A camp can have up to ${SHIFT_MAX_TEAMS} teams.` };
+        return {
+          ok: false,
+          error: `A camp can have up to ${SHIFT_MAX_TEAMS} teams.`,
+        };
       }
       const [row] = await tx
         .insert(schema.shiftTeams)
@@ -1450,7 +1543,10 @@ export async function renameShiftTeam(input: {
       if (!mayManage(actor)) return refused("not_manager");
       const updated = await tx
         .update(schema.shiftTeams)
-        .set({ name: input.name, nameNormalized: normalizeTeamName(input.name) })
+        .set({
+          name: input.name,
+          nameNormalized: normalizeTeamName(input.name),
+        })
         .where(
           and(
             eq(schema.shiftTeams.id, input.teamId),
@@ -1458,7 +1554,8 @@ export async function renameShiftTeam(input: {
           ),
         )
         .returning({ id: schema.shiftTeams.id });
-      if (!updated[0]) return { ok: false, error: "That team doesn't exist any more." };
+      if (!updated[0])
+        return { ok: false, error: "That team doesn't exist any more." };
       return { ok: true };
     });
   } catch (err) {
@@ -1485,7 +1582,8 @@ export async function removeShiftTeam(input: {
         ),
       )
       .returning({ id: schema.shiftTeams.id });
-    if (!removed[0]) return { ok: false, error: "That team doesn't exist any more." };
+    if (!removed[0])
+      return { ok: false, error: "That team doesn't exist any more." };
     return { ok: true };
   });
 }
