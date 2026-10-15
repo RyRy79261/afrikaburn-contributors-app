@@ -11,6 +11,13 @@
 // leads"). Whoever scheduled a meeting also keeps seeing it. Everyone else
 // gets the meeting's 404, the same answer an id that does not exist gets.
 //
+// TEAMS (docs/team-audiences-spec.md). A meeting may be for chosen camp
+// teams: its members see it (an archived team still counts; a deleted one
+// reaches nobody), plus the leads and whoever scheduled it, as for roles. A
+// TEAM LEAD without `schedule_meetings` may schedule, edit, move and cancel
+// meetings for the teams they lead — and only those: the audience before AND
+// after an edit must be within their teams.
+//
 // WHO SCHEDULES. Leads and co-leads (the irrevocable backstop) and members
 // holding `schedule_meetings`. They edit, move and cancel any meeting they can
 // see, and write its notes and "who came". The member who scheduled a meeting
@@ -49,6 +56,13 @@ import {
   resolveCampAnnouncementRecipients,
   type CampAnnouncementAudienceContext,
 } from "./announcements";
+import {
+  audienceTeamIds,
+  decideTeamAudienceTargets,
+  hasCampWideMeetingReach,
+  teamsWithinReach,
+  type TeamAudienceReach,
+} from "./team-audience";
 import {
   formatClock,
   formatShiftTime,
@@ -103,6 +117,11 @@ export interface MeetingViewer {
   /** The camp role ids this member holds with ACCEPTED consent. The baseline
    * role need not be listed: everyone holds it. */
   heldRoleIds: ReadonlySet<string>;
+  /** Every team of this camp the viewer is on (archived teams included).
+   * Absent = none. */
+  teamIds?: ReadonlySet<string>;
+  /** The live teams of this camp the viewer leads. Absent = none. */
+  ledTeamIds?: ReadonlySet<string>;
 }
 
 /** What access is decided on, read from the stored meeting row. */
@@ -113,17 +132,21 @@ export interface MeetingAccessFacts {
 }
 
 /**
- * Is a member with these roles in the meeting's audience? The whole camp, or
- * any one of the chosen roles. Naming the baseline role is naming everyone
- * (the shared audience resolver says the same). An empty role list reaches
- * nobody.
+ * Is a member with these roles (and teams) in the meeting's audience? The
+ * whole camp, any one of the chosen roles, or any one of the chosen teams.
+ * Naming the baseline role is naming everyone (the shared audience resolver
+ * says the same). An empty role or team list reaches nobody.
  */
 export function isInMeetingAudience(
   audience: MeetingAudience,
   heldRoleIds: ReadonlySet<string>,
   baselineRoleId: string | null,
+  teamIds: ReadonlySet<string> = new Set<string>(),
 ): boolean {
   if (audience.mode === "everyone") return true;
+  if (audience.mode === "teams") {
+    return audienceTeamIds(audience).some((id) => teamIds.has(id));
+  }
   return audience.roleIds.some(
     (id) => id === baselineRoleId || heldRoleIds.has(id),
   );
@@ -158,24 +181,62 @@ export function canViewMeeting(
     meeting.audience,
     viewer.heldRoleIds,
     baselineRoleId,
+    viewer.teamIds,
   );
 }
 
+/** What this viewer may address by team: any team with `schedule_meetings`
+ * (or as a lead), else only the live teams they lead. */
+export function meetingTeamReach(viewer: MeetingViewer): TeamAudienceReach {
+  return {
+    campWide:
+      viewer.membership !== null && hasCampWideMeetingReach(viewer.membership),
+    ledTeamIds: viewer.ledTeamIds ?? new Set<string>(),
+  };
+}
+
+/**
+ * May this viewer open "Schedule a meeting" at all? A scheduler, or a team
+ * lead of at least one live team (who then picks only their teams).
+ */
+export function canScheduleAnyMeeting(viewer: MeetingViewer): boolean {
+  if (viewer.membership === null) return false;
+  if (canScheduleMeetings(viewer.membership)) return true;
+  return (viewer.ledTeamIds?.size ?? 0) > 0;
+}
+
+/**
+ * A team lead's hold over THIS meeting: it is for teams, and every one of
+ * them is a live team they lead now. Never true for a whole-camp or by-role
+ * meeting.
+ */
+function teamLeadCoversMeeting(
+  viewer: MeetingViewer,
+  meeting: MeetingAccessFacts,
+): boolean {
+  if (meeting.audience.mode !== "teams") return false;
+  return teamsWithinReach(audienceTeamIds(meeting.audience), {
+    campWide: false,
+    ledTeamIds: viewer.ledTeamIds ?? new Set<string>(),
+  });
+}
+
 /** Edit the details, move or cancel: someone who sees the meeting AND may
- * schedule meetings now. */
+ * schedule meetings now — or a team lead, on a meeting for their teams. */
 export function canEditMeeting(
   viewer: MeetingViewer,
   meeting: MeetingAccessFacts,
   baselineRoleId: string | null,
 ): boolean {
+  if (!canViewMeeting(viewer, meeting, baselineRoleId)) return false;
   return (
-    canViewMeeting(viewer, meeting, baselineRoleId) &&
-    canScheduleMeetings(viewer.membership)
+    canScheduleMeetings(viewer.membership) ||
+    teamLeadCoversMeeting(viewer, meeting)
   );
 }
 
-/** Write the notes and tick who came: a scheduler who sees the meeting, or
- * the member who scheduled it. */
+/** Write the notes and tick who came: a scheduler who sees the meeting, a
+ * team lead on a meeting for their teams, or the member who scheduled it. */
 export function canEditMeetingNotes(
   viewer: MeetingViewer,
   meeting: MeetingAccessFacts,
@@ -183,6 +244,7 @@ export function canEditMeetingNotes(
 ): boolean {
   if (!canViewMeeting(viewer, meeting, baselineRoleId)) return false;
   if (canScheduleMeetings(viewer.membership)) return true;
+  if (teamLeadCoversMeeting(viewer, meeting)) return true;
   return (
     meeting.createdByUserId !== null &&
     meeting.createdByUserId === viewer.userId
@@ -193,48 +255,85 @@ export function canEditMeetingNotes(
 
 export type MeetingAudienceDecision =
   | { ok: true; audience: MeetingAudience }
-  | { ok: false; reason: "no_roles" | "unknown_role" };
+  | {
+      ok: false;
+      reason:
+        | "no_roles"
+        | "unknown_role"
+        | "no_teams"
+        | "unknown_team"
+        | "not_your_team"
+        | "not_scheduler";
+    };
+
+/** The camp's teams, as a meeting audience decision reads them. */
+export interface MeetingTeamFacts {
+  /** This camp's teams that are not archived. */
+  liveTeamIds: ReadonlySet<string>;
+  /** On an edit: the teams already on the stored audience, kept acceptable
+   * even if archived since. */
+  keepTeamIds?: ReadonlySet<string>;
+}
 
 /**
  * Turn the form's "who it's for" into the stored audience for THIS camp.
  * By-role needs at least one role, and every role must be one of this camp's
  * (a role from another camp is refused, never silently resolved to nobody).
  * Naming the baseline role is stored as the whole camp. Duplicates go.
+ *
+ * By-team (docs/team-audiences-spec.md) needs at least one of the camp's live
+ * teams; a scheduler without camp-wide reach (a team lead) may name only the
+ * teams they lead, and may not pick the whole camp or roles at all. `reach`
+ * absent is camp-wide — the caller has already checked `schedule_meetings`.
  */
 export function decideMeetingAudience(
-  input: { mode: "everyone" | "roles"; roleIds: readonly string[] },
+  input: {
+    mode: "everyone" | "roles" | "teams";
+    roleIds: readonly string[];
+    teamIds?: readonly string[];
+  },
   camp: {
     groupId: string;
     campRoleIds: ReadonlySet<string>;
     baselineRoleId: string | null;
+    teams?: MeetingTeamFacts;
   },
+  reach: TeamAudienceReach = { campWide: true, ledTeamIds: new Set() },
 ): MeetingAudienceDecision {
-  if (input.mode === "everyone") {
+  const everyone: MeetingAudience = {
+    kind: "project",
+    groupId: camp.groupId,
+    mode: "everyone",
+    roleIds: [],
+  };
+  if (input.mode === "teams") {
+    const decided = decideTeamAudienceTargets(
+      input.teamIds ?? [],
+      camp.teams ?? { liveTeamIds: new Set<string>() },
+      reach,
+    );
+    if (!decided.ok) return decided;
     return {
       ok: true,
       audience: {
         kind: "project",
         groupId: camp.groupId,
-        mode: "everyone",
+        mode: "teams",
         roleIds: [],
+        teamIds: decided.teamIds,
       },
     };
   }
+  // The whole camp and chosen roles need camp-wide reach.
+  if (!reach.campWide) return { ok: false, reason: "not_scheduler" };
+  if (input.mode === "everyone") return { ok: true, audience: everyone };
   const roleIds = [...new Set(input.roleIds)];
   if (roleIds.length === 0) return { ok: false, reason: "no_roles" };
   if (!roleIds.every((id) => camp.campRoleIds.has(id))) {
     return { ok: false, reason: "unknown_role" };
   }
   if (camp.baselineRoleId !== null && roleIds.includes(camp.baselineRoleId)) {
-    return {
-      ok: true,
-      audience: {
-        kind: "project",
-        groupId: camp.groupId,
-        mode: "everyone",
-        roleIds: [],
-      },
-    };
+    return { ok: true, audience: everyone };
   }
   return {
     ok: true,
@@ -250,8 +349,8 @@ export function decideMeetingAudience(
 /**
  * The people a meeting notice goes to: everyone who can see the meeting
  * (canViewMeeting) among this camp's current members — the audience the
- * announcements resolver gives for the same roles, plus, for a chosen-roles
- * meeting, the camp's leads and co-leads and whoever scheduled it — never the
+ * announcements resolver gives for the same roles or teams, plus, for a
+ * chosen-roles or chosen-teams meeting, the camp's leads and co-leads and whoever scheduled it — never the
  * person who made the change, never an erased account. Sorted, de-duplicated.
  */
 export function resolveMeetingRecipients(
@@ -264,7 +363,7 @@ export function resolveMeetingRecipients(
     return [];
   }
   const ids = new Set(resolveCampAnnouncementRecipients(audience, ctx, null));
-  if (audience.mode === "roles") {
+  if (audience.mode !== "everyone") {
     for (const m of ctx.memberships) {
       if (m.groupId !== ctx.groupId) continue;
       if (
@@ -314,6 +413,9 @@ export type MeetingRefusal =
   | "stale"
   | "no_roles"
   | "unknown_role"
+  | "no_teams"
+  | "unknown_team"
+  | "not_your_team"
   | "not_attendee";
 
 /** The sentence a refused writer reads. */
@@ -333,6 +435,12 @@ export function meetingRefusalMessage(reason: MeetingRefusal): string {
       return "Pick at least one role, or choose the whole camp.";
     case "unknown_role":
       return "One of those roles doesn't exist any more. Reload and pick again.";
+    case "no_teams":
+      return "Pick at least one team.";
+    case "unknown_team":
+      return "One of those teams doesn't exist any more. Reload and pick again.";
+    case "not_your_team":
+      return "You can only schedule meetings for the teams you lead.";
     case "not_attendee":
       return "That person isn't a member this meeting is for.";
   }

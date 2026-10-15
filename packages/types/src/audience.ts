@@ -119,11 +119,6 @@ export const OrgSuppliersAudience = z.object({
 });
 export type OrgSuppliersAudience = z.infer<typeof OrgSuppliersAudience>;
 
-/**
- * PROJECT audience — the project's own members, either everyone or a subset by
- * custom project role. `groupId` is the project group; `roleIds` are
- * `project_roles.id` values (ignored when `mode` is `everyone`).
- */
 /** How long someone has been with THIS camp (epic #54, Ryan 28 Sep 2026):
  * `new` = no earlier edition with the camp; `returning` = has been with it
  * before. Relative to the camp, never to AfrikaBurn — a ten-burn veteran who
@@ -136,11 +131,32 @@ export type CampTenure = z.infer<typeof CampTenure>;
 export const ProjectStructuralRole = z.enum(["lead", "admin", "member"]);
 export type ProjectStructuralRole = z.infer<typeof ProjectStructuralRole>;
 
+/**
+ * How a project audience picks its people: the whole project, chosen custom
+ * roles, or chosen camp teams (docs/team-audiences-spec.md). `teams` is only
+ * valid for camp ANNOUNCEMENTS and camp MEETINGS — questionnaires, onboarding
+ * and org bulletins refuse it at their boundary (`AudienceSpecWithoutTeams`).
+ */
+export const ProjectAudienceMode = z.enum(["everyone", "roles", "teams"]);
+export type ProjectAudienceMode = z.infer<typeof ProjectAudienceMode>;
+
+/** Teams one announcement or meeting may be addressed to. */
+export const AUDIENCE_MAX_TEAMS = 100;
+
+/**
+ * PROJECT audience — the project's own members: everyone, a subset by custom
+ * project role, or (announcements and meetings only) a subset by camp team.
+ * `groupId` is the project group; `roleIds` are `project_roles.id` values
+ * (ignored unless `mode` is `roles`); `teamIds` are `shift_teams.id` values
+ * (ignored unless `mode` is `teams`). `teamIds` is optional so every row
+ * written before team audiences existed keeps its exact meaning.
+ */
 export const ProjectAudience = z.object({
   kind: z.literal("project"),
   groupId: z.string().min(1),
-  mode: z.enum(["everyone", "roles"]),
+  mode: ProjectAudienceMode,
   roleIds: z.array(z.string().min(1)).default([]),
+  teamIds: z.array(z.string().min(1)).max(AUDIENCE_MAX_TEAMS).optional(),
   // --- Narrowing filters (camp onboarding, epic #54) ----------------------
   // Both OPTIONAL and both only ever SUBTRACT from what mode/roleIds reach:
   // absent means "no filter", which is exactly how every audience written
@@ -162,6 +178,26 @@ export const AudienceSpec = z.discriminatedUnion("kind", [
   ProjectAudience,
 ]);
 export type AudienceSpec = z.infer<typeof AudienceSpec>;
+
+/** True for a project audience addressed to camp teams. */
+export function isTeamAudience(spec: AudienceSpec | null | undefined): boolean {
+  return spec?.kind === "project" && spec.mode === "teams";
+}
+
+/** The refusal every non-team surface gives a team audience. */
+export const TEAM_AUDIENCE_REFUSED =
+  "Teams can only be chosen for camp announcements and meetings.";
+
+/**
+ * An audience spec for a surface that does NOT take teams — questionnaires,
+ * onboarding and org bulletins (docs/team-audiences-spec.md §"Not built").
+ * The shared shape gained `mode: "teams"`; these boundaries refuse it rather
+ * than letting it resolve to nobody (or, worse, be read as "everyone").
+ */
+export const AudienceSpecWithoutTeams = AudienceSpec.refine(
+  (spec) => !isTeamAudience(spec),
+  { message: TEAM_AUDIENCE_REFUSED },
+);
 
 /** The authored scope implied by an audience spec (org vs group). */
 export function authoredScopeForAudience(
@@ -203,7 +239,7 @@ export const QuestionnaireActivationInput = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   editionId: z.string().min(1),
-  audience: AudienceSpec,
+  audience: AudienceSpecWithoutTeams,
   blocking: z.boolean().default(true),
   dueAt: z.string().min(1).nullable().default(null),
 });

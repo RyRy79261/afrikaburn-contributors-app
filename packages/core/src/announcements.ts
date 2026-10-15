@@ -13,6 +13,10 @@
 //     publish transaction over rows it has locked, so a sender demoted between
 //     drafting and publishing is refused (Camp 404's `lockSenderReach`).
 //
+//     By TEAM (docs/team-audiences-spec.md): camp leads and holders of
+//     camp-wide `post_announcements` may pick any live team; a team lead
+//     without it, only the teams they lead (./team-audience).
+//
 //   · WHO RECEIVES — `resolveCampAnnouncementRecipients`. The camp's own live
 //     memberships only (the `project` branch of the one shared resolver), minus
 //     the author and any sanitized account. A pending invitee has no
@@ -35,10 +39,19 @@ import type {
 } from "@quagga/types";
 import {
   canPostAnnouncementAudience,
+  hasProjectPermission,
   isPermissionBackstop,
   type PermissionMembership,
 } from "./project-permissions";
 import { projectAudienceTargetRoleIds } from "./questionnaire-authz";
+import {
+  audienceTeamIds,
+  decideTeamAudienceTargets,
+  hasCampWideAnnouncementReach,
+  mayRequireAnnouncementAck,
+  teamsWithinReach,
+  type AudienceTeamMember,
+} from "./team-audience";
 import {
   resolveAudience,
   type AudienceMembership,
@@ -60,6 +73,46 @@ export interface CampAnnouncementSendRequest {
    * camp is refused outright rather than silently resolving to nobody.
    */
   campRoleIds: ReadonlySet<string>;
+  /**
+   * The camp's teams as the sender sees them, for a by-team send
+   * (docs/team-audiences-spec.md). Absent = this caller loaded no teams, and
+   * every by-team audience is refused.
+   */
+  teams?: AnnouncementTeamContext;
+}
+
+/** The team facts a by-team announcement is judged on. */
+export interface AnnouncementTeamContext {
+  /** This camp's teams that are not archived. */
+  liveTeamIds: ReadonlySet<string>;
+  /** The live teams of this camp the sender leads right now. */
+  ledTeamIds: ReadonlySet<string>;
+}
+
+/**
+ * May this member send to these TEAMS? Every team must be one of the camp's
+ * live teams; a camp lead or a holder of camp-wide `post_announcements` may
+ * pick any of them, anyone else only teams they lead. Must-acknowledge still
+ * needs the backstop or `mayRequireAck`.
+ */
+function canSendTeamAnnouncement(
+  m: PermissionMembership,
+  req: CampAnnouncementSendRequest,
+): boolean {
+  if (!req.teams) return false;
+  const decision = decideTeamAudienceTargets(
+    audienceTeamIds(req.audience),
+    { liveTeamIds: req.teams.liveTeamIds },
+    {
+      campWide: hasCampWideAnnouncementReach(m),
+      ledTeamIds: req.teams.ledTeamIds,
+    },
+  );
+  if (!decision.ok) return false;
+  if (req.presentation === "acknowledge" && !mayRequireAnnouncementAck(m)) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -77,6 +130,7 @@ export function canSendCampAnnouncement(
   const { audience } = req;
   if (audience.kind !== "project") return false;
   if (audience.groupId !== req.groupId) return false;
+  if (audience.mode === "teams") return canSendTeamAnnouncement(m, req);
   if (audience.mode === "roles") {
     if (audience.roleIds.length === 0) return false;
     if (!audience.roleIds.every((id) => req.campRoleIds.has(id))) return false;
@@ -90,6 +144,19 @@ export function canSendCampAnnouncement(
 }
 
 /**
+ * May this member open the announcement composer at all? A holder of
+ * `post_announcements` (the backstop included), or the lead of at least one
+ * live team — who may then address only the teams they lead
+ * (`canSendCampAnnouncement` holds them to that on every write).
+ */
+export function canComposeCampAnnouncements(
+  m: PermissionMembership,
+  ledTeamIds: ReadonlySet<string>,
+): boolean {
+  return hasProjectPermission(m, "post_announcements") || ledTeamIds.size > 0;
+}
+
+/**
  * May this member pin or unpin an announcement? PINNING AUTHORITY FOLLOWS
  * POSTING AUTHORITY (Camp 404, owner's ruling): if you may post to that
  * audience, you may pin what was posted to it. Presentation is irrelevant to a
@@ -99,6 +166,20 @@ export function canPinCampAnnouncement(
   m: PermissionMembership,
   req: Omit<CampAnnouncementSendRequest, "presentation">,
 ): boolean {
+  const { audience } = req;
+  if (audience.kind === "project" && audience.mode === "teams") {
+    // A published by-team announcement stays pinnable by whoever could have
+    // sent it to those teams — even after a team was archived or deleted,
+    // which is why the live-team check of a NEW send is not asked here.
+    if (audience.groupId !== req.groupId) return false;
+    if (isPermissionBackstop(m.structuralRole)) {
+      return audienceTeamIds(audience).length > 0;
+    }
+    return teamsWithinReach(audienceTeamIds(audience), {
+      campWide: hasCampWideAnnouncementReach(m),
+      ledTeamIds: req.teams?.ledTeamIds ?? new Set<string>(),
+    });
+  }
   return canSendCampAnnouncement(m, { ...req, presentation: "feed" });
 }
 
@@ -111,6 +192,9 @@ export interface CampAnnouncementAudienceContext {
   memberships: readonly AudienceMembership[];
   roleAssignments: readonly AudienceRoleAssignment[];
   projectRoles: readonly AudienceProjectRole[];
+  /** This camp's team seats, for a by-team audience. Absent = a by-team
+   * audience reaches nobody. */
+  teamMembers?: readonly AudienceTeamMember[];
   /** Accounts that must never receive anything (sanitized "Departed Burner"
    * stubs keep their memberships for integrity). */
   excludedUserIds?: ReadonlySet<string>;
@@ -137,6 +221,9 @@ export function resolveCampAnnouncementRecipients(
     bios: [],
     roleAssignments: ctx.roleAssignments,
     projectRoles: ctx.projectRoles.filter((r) => r.groupId === ctx.groupId),
+    teamMembers: (ctx.teamMembers ?? []).filter(
+      (t) => t.groupId === ctx.groupId,
+    ),
   });
   return ids.filter(
     (id) => id !== authorUserId && !(ctx.excludedUserIds?.has(id) ?? false),
