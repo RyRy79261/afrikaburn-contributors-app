@@ -67,7 +67,13 @@ a Telegram group, the chat is in the app.
 - **Blocking**: a block between two people hides each one's messages from the
   other in shared team chats; neither is removed from the team.
 - **Reporting** works as in direct messages: the reported messages are copied
-  to the org safety queue, nothing else.
+  to the org safety queue, nothing else. The queue row and the report page
+  also say where it came from — "{camp name} · {team name} team chat" (Ryan,
+  15 Oct 2026). Those two names are a snapshot taken when the report is made
+  (`message_reports.source_camp_name` / `source_team_name`, migration 0041),
+  so a later rename, archive or deletion of the team does not change or lose
+  it; nothing else about the chat is shown. Direct-message reports show as
+  before, with no source line.
 - **Timer**: team leads and camp leads set the team chat's disappearing timer
   (off / 24 h / 7 d / 90 d), shown in the chat.
 - **Mentions, files, reactions**: not in this build.
