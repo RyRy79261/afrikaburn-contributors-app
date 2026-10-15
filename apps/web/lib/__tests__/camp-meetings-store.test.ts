@@ -202,9 +202,9 @@ function queueActor(
     [{ membershipId: "m-actor", role, username, groupKind: THEME_CAMP }],
     ROLES,
     held.map((projectRoleId) => ({ projectRoleId })),
-    // the actor's locked seats, then the camp's teams
-    team.seats ?? [],
+    // the camp's teams, then the actor's seats (both locked)
     team.teams ?? [],
+    team.seats ?? [],
   );
 }
 
@@ -1155,6 +1155,31 @@ describe("team audiences", () => {
         .map((n) => n.userId)
         .sort(),
     ).toEqual([ALICE, JABU].sort());
+  });
+
+  it("a camp lead's team pick reads the camp's team rows FOR SHARE, before any seat", async () => {
+    // Alice is on no team, so her own seats lock nothing: only the camp-wide
+    // team read can make a concurrent archive wait (or be what she sees).
+    queueActor(LEAD, [], "Alice Hatter", { teams: TEAMS });
+    dbMock.queue([{ id: MEETING }], /* audit */ []);
+    queueRecipients();
+    expect((await store.createCampMeeting(ALICE, EDITION, teamForm)).ok).toBe(
+      true,
+    );
+    const inTx = dbMock.queries.filter((q) => q.tx);
+    // The camp's teams: from shift_teams with no join to team_members.
+    const teamRead = inTx.findIndex(
+      (q) => q.arg("from") === schema.shiftTeams && !q.called("innerJoin"),
+    );
+    const seatRead = inTx.findIndex(
+      (q) =>
+        q.arg("from") === schema.teamMembers &&
+        q.arg("innerJoin") === schema.shiftTeams,
+    );
+    expect(teamRead).toBeGreaterThanOrEqual(0);
+    expect(inTx[teamRead]!.arg("for")).toBe("share");
+    // Team rows before seats, the order camp-teams-store.ts locks in.
+    expect(seatRead).toBeGreaterThan(teamRead);
   });
 
   it("a team lead may not schedule for another team, or the whole camp", async () => {

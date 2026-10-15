@@ -224,12 +224,18 @@ function permissionsFor(
   return { structuralRole: role, rolePermissions };
 }
 
-/** Every team of the camp, archived included. */
+/**
+ * Every team of the camp, archived included. With `lock`, the team rows are
+ * held `FOR SHARE` for the caller's transaction, so a team archived while a
+ * write is in flight waits for it or is what it sees — the "no new pick of an
+ * archived team" rule then holds for teams the writer is not on too.
+ */
 async function loadCampTeams(
   handle: Handle,
   groupId: string,
+  lock = false,
 ): Promise<MeetingTeamOption[]> {
-  const rows = await handle
+  const query = handle
     .select({
       id: schema.shiftTeams.id,
       name: schema.shiftTeams.name,
@@ -239,6 +245,7 @@ async function loadCampTeams(
     .from(schema.shiftTeams)
     .where(eq(schema.shiftTeams.groupId, groupId))
     .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.name));
+  const rows = lock ? await query.for("share") : await query;
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -937,9 +944,10 @@ async function lockMeetingActor(
     loadCampRoles(tx, groupId),
     loadHeldRoleIds(tx, row.membershipId),
   ]);
-  // After the membership lock, as in camp-teams-store.ts: team row, then seat.
+  // After the membership lock, as in camp-teams-store.ts and the announcements
+  // store: every team row of the camp FOR SHARE, then the actor's own seats.
+  const teams = await loadCampTeams(tx, groupId, true);
   const seats = await loadTeamSeats(tx, groupId, userId, true);
-  const teams = await loadCampTeams(tx, groupId);
   const { baselineRoleId, campRoleIds } = campFacts(roles);
   return {
     userId,
