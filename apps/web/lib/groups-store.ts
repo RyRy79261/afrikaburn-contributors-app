@@ -30,6 +30,7 @@ import type {
   RegistrationStatus,
 } from "@quagga/types";
 import { activeMembership, formerMembership } from "@quagga/db";
+import { removeFromCampTeams } from "./camp-teams-store";
 import { db, schema, withTransaction, type Tx } from "./db";
 
 /** One category chip on a directory card (org-defined per-edition taxonomy). */
@@ -1032,14 +1033,20 @@ export async function leaveCamp(
       };
     }
   }
-  await db()
-    .delete(schema.memberships)
-    .where(
-      and(
-        eq(schema.memberships.userId, userId),
-        eq(schema.memberships.groupId, groupId),
-      ),
-    );
+  await withTransaction(async (tx) => {
+    // Off every team of this camp and out of their chats, in the same
+    // transaction (docs/camp-teams-spec.md): team rows are keyed by user, so
+    // the membership's delete does not cascade to them.
+    await removeFromCampTeams(tx, { userId, groupId });
+    await tx
+      .delete(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.userId, userId),
+          eq(schema.memberships.groupId, groupId),
+        ),
+      );
+  });
   return { ok: true };
 }
 

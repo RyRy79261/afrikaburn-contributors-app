@@ -14,6 +14,7 @@ import {
 } from "@quagga/core";
 import type { OfficerKey } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
+import { removeFromCampTeams } from "./camp-teams-store";
 import { db, schema, withTransaction, type Tx } from "./db";
 import { getMemberPermissions } from "./roles-store";
 
@@ -212,6 +213,14 @@ export async function archiveMember(input: {
       .delete(schema.wapAllocations)
       .where(eq(schema.wapAllocations.membershipId, target.id))
       .returning({ id: schema.wapAllocations.id });
+
+    // 7. CAMP TEAMS (docs/camp-teams-spec.md). Only current camp members are
+    //    on a team: a former member comes off every team of this camp and
+    //    out of those teams' chats. Their shifts are handled above, not here.
+    await removeFromCampTeams(tx, {
+      userId: target.userId,
+      groupId: input.groupId,
+    });
 
     // CAMP MONEY is deliberately untouched (docs/camp-budget-spec.md): a
     // former member keeps their dues, payments and claims — the books must
@@ -510,6 +519,11 @@ export async function restoreMember(input: {
       groupId: input.groupId,
     });
     await clearShiftsOnRestore(tx, {
+      userId: target.userId,
+      groupId: input.groupId,
+    });
+    // No team rows either: a restored member starts on no team, like a new one.
+    await removeFromCampTeams(tx, {
       userId: target.userId,
       groupId: input.groupId,
     });

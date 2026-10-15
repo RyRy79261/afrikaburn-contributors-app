@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { dbMock, uniqueViolation } from "@/test/db-mock";
+import { boundStrings, dbMock, uniqueViolation } from "@/test/db-mock";
 
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
@@ -573,7 +573,26 @@ describe("leaveCamp — the no-lockout backstop on the way out", () => {
     dbMock.queue([{ role: "lead" }], [{ count: 0 }], []);
 
     expect(await leaveCamp(VIEWER, MAD_HATTERS)).toEqual({ ok: true });
-    expect(dbMock.queriesOfKind("delete")).toHaveLength(1);
+    // The membership, and — in the SAME transaction — their rows on this
+    // camp's teams and in those teams' chats (docs/camp-teams-spec.md): team
+    // rows are keyed by user, so the membership delete cannot cascade to them.
+    const deletes = dbMock.queriesOfKind("delete");
+    expect(deletes.map((d) => d.arg("delete"))).toEqual([
+      schema.teamMembers,
+      schema.conversationParticipants,
+      schema.memberships,
+    ]);
+    for (const d of deletes) {
+      expect(d.tx).toBe(true);
+      expect(boundStrings(d)).toContain(VIEWER);
+    }
+    // Scoped to THIS camp's teams, never every team the person is on: the
+    // team subquery the deletes read selects this camp's teams.
+    const campTeams = dbMock
+      .queriesTouching(schema.shiftTeams)
+      .filter((q) => q.kind === "select");
+    expect(campTeams).toHaveLength(1);
+    expect(boundStrings(campTeams[0]!)).toContain(MAD_HATTERS);
   });
 
   it("REFUSES someone who is not a member", async () => {

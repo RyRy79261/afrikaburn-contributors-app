@@ -250,10 +250,24 @@ describe("archiveMember — the write", () => {
     dbMock.queue([targetRow()], [{ id: M_REN }], [], []);
     await archiveMember(input());
     // The ONLY deletes are future commitments the camp must refill, not
-    // history: their camp shift spots (epic #57) and their Work Access Pass
-    // (epic #53).
+    // history: their camp shift spots (epic #57), their Work Access Pass
+    // (epic #53), and their seats on this camp's teams with those teams'
+    // chats (docs/camp-teams-spec.md — only current members are on a team).
     const deletes = dbMock.queriesOfKind("delete");
-    expect(deletes).toHaveLength(2);
+    expect(deletes).toHaveLength(4);
+    expect(deletes[2]!.arg("delete")).toBe(schema.teamMembers);
+    expect(deletes[3]!.arg("delete")).toBe(schema.conversationParticipants);
+    for (const d of deletes.slice(2)) {
+      expect(d.tx).toBe(true);
+      // Their rows only…
+      expect(boundStrings(d)).toContain(REN);
+    }
+    // …and only this camp's teams (the subquery both deletes read).
+    const campTeams = dbMock
+      .queriesTouching(schema.shiftTeams)
+      .filter((q) => q.kind === "select");
+    expect(campTeams).toHaveLength(1);
+    expect(boundStrings(campTeams[0]!)).toContain(CAMP);
     expect(deletes[0]!.arg("delete")).toBe(schema.shiftAssignments);
     expect(deletes[0]!.tx).toBe(true);
     expect(boundStrings(deletes[0]!)).toContain(M_REN);
