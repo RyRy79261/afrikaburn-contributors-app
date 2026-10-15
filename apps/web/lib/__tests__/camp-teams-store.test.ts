@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { GroupKind, MembershipRole, TEAM_JOIN_MODES } from "@quagga/types";
+import {
+  GroupKind,
+  MembershipRole,
+  TEAM_JOIN_MODES,
+  TEAM_MAX_LEADS,
+} from "@quagga/types";
 import { boundStrings, dbMock } from "@/test/db-mock";
 
 // Camp teams store (docs/camp-teams-spec.md). Asserts DECISIONS — who is
@@ -1842,5 +1847,64 @@ describe("team chat wrappers", () => {
     expect(boundStrings(dbMock.queriesTouching(schema.shiftTeams)[0]!)).toEqual(
       expect.arrayContaining([TEAM, CAMP]),
     );
+  });
+});
+
+describe("the team lead cap on appointments", () => {
+  const leadSeats = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      userId: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      isLead: true,
+    }));
+  const appoint = (isLead: boolean, userId = REN) =>
+    store.setCampTeamLead(JABU, { slug: SLUG, teamId: TEAM, userId, isLead });
+
+  it("an eleventh lead is refused, and nothing is written", async () => {
+    dbMock.queue(
+      campRow,
+      [person(JABU, LEAD), person(REN, MEMBER)],
+      [team()],
+      [...leadSeats(TEAM_MAX_LEADS), { userId: REN, isLead: false }],
+    );
+    expect(await appoint(true)).toEqual({
+      ok: false,
+      error: `A team can have up to ${TEAM_MAX_LEADS} leads.`,
+    });
+    expect(dbMock.writesTo(schema.teamMembers)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("the tenth lead is allowed", async () => {
+    dbMock.queue(
+      campRow,
+      [person(JABU, LEAD), person(REN, MEMBER)],
+      [team()],
+      [...leadSeats(TEAM_MAX_LEADS - 1), { userId: REN, isLead: false }],
+    );
+    expect(await appoint(true)).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.teamMembers)[0]!.arg("set")).toMatchObject({
+      isLead: true,
+    });
+  });
+
+  it("at the cap, standing a lead down and re-confirming a lead still work", async () => {
+    const full = leadSeats(TEAM_MAX_LEADS);
+    const existing = full[0]!.userId;
+    dbMock.queue(
+      campRow,
+      [person(JABU, LEAD), { ...person(existing, MEMBER), username: "x" }],
+      [team()],
+      full,
+    );
+    expect(await appoint(false, existing)).toEqual({ ok: true });
+
+    dbMock.reset();
+    dbMock.queue(
+      campRow,
+      [person(JABU, LEAD), { ...person(existing, MEMBER), username: "x" }],
+      [team()],
+      full,
+    );
+    expect(await appoint(true, existing)).toEqual({ ok: true });
   });
 });

@@ -42,6 +42,7 @@ import {
   SendTeamMessageInput,
   SetTeamChatTimerInput,
   SetTeamLeadInput,
+  TEAM_MAX_LEADS,
   TeamSelfInput,
   UpdateTeamInput,
   isProjectKind,
@@ -1045,6 +1046,19 @@ export async function setCampTeamLead(
           : null,
       });
       if (!decision.ok) return refused(decision);
+      // The cap the create form enforces holds for appointments too. Counted
+      // from the seats read under the team row's FOR UPDATE lock, so two
+      // concurrent appointments cannot both slip under it.
+      if (input.isLead && team.seats.get(input.userId)?.isLead !== true) {
+        let leads = 0;
+        for (const seat of team.seats.values()) if (seat.isLead) leads++;
+        if (leads >= TEAM_MAX_LEADS) {
+          return {
+            ok: false,
+            error: `A team can have up to ${TEAM_MAX_LEADS} leads.`,
+          };
+        }
+      }
       await tx
         .update(schema.teamMembers)
         .set({ isLead: input.isLead, updatedAt: now })
