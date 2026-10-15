@@ -122,15 +122,19 @@ export async function composerData(
     ? campTeams.teams.filter((t) => targetableTeamIds.includes(t.id))
     : campTeams.teams;
   // `mayRequireAck` is a scope flag, but the predicate answers questions about
-  // a whole send — probe it with an audience this sender may already target.
+  // a whole send — probe it with a whole-camp or role audience this sender
+  // may already target. Teams are asked one by one below instead: a team lead
+  // may require acknowledgement of the teams they lead without the flag
+  // (Ryan, 16 Oct 2026), so for teams the answer depends on the pick.
   const probe = canTargetEveryone
     ? audience("everyone", [])
     : targetableRoleIds[0]
       ? audience("roles", [targetableRoleIds[0]])
-      : targetableTeamIds[0]
-        ? audience("teams", [targetableTeamIds[0]])
-        : null;
+      : null;
   const mayRequireAck = probe ? may(probe, true) : false;
+  const ackTeamIds = targetableTeamIds.filter((id) =>
+    may(audience("teams", [id]), true),
+  );
 
   const teamsByUser = teamIdsByUser(campTeams.seats);
 
@@ -149,6 +153,7 @@ export async function composerData(
       targetableTeamIds,
       teamsOnly,
       mayRequireAck,
+      ackTeamIds,
     },
   };
 }

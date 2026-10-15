@@ -64,7 +64,13 @@ export interface ComposerScope {
   /** A team lead without `post_announcements`: only "By team", only their
    * teams, with the one-line reason (frame knWLt, state 1). */
   teamsOnly: boolean;
+  /** May require acknowledgement of the whole camp / the roles offered. */
   mayRequireAck: boolean;
+  /** Teams this sender may require acknowledgement of — every targetable team
+   * for a holder of `mayRequireAck`, and the teams they lead for anyone else
+   * (Ryan, 16 Oct 2026). A by-team pick may require it when every chosen
+   * team is here. */
+  ackTeamIds: string[];
 }
 
 type SaveAction = (
@@ -158,6 +164,21 @@ export function AnnouncementComposer({
 
   const targetable = new Set(scope.targetableRoleIds);
   const targetableTeams = new Set(scope.targetableTeamIds);
+  const ackTeams = new Set(scope.ackTeamIds);
+  // Must-acknowledge follows the audience: a team lead may gate the teams
+  // they lead, so for "By team" it depends on the pick (none picked yet reads
+  // as allowed if any team could be — the publish refuses an empty pick).
+  const mayRequireAck =
+    mode === "teams"
+      ? teamIds.length > 0
+        ? teamIds.every((id) => ackTeams.has(id))
+        : ackTeams.size > 0
+      : scope.mayRequireAck;
+  // An audience change that rules it out falls back to the inbox, rather
+  // than leaving a choice selected that the server would refuse.
+  if (!mayRequireAck && presentation === "acknowledge") {
+    setPresentation("feed");
+  }
   const teamNames = chosenTeamNames(teams, teamIds);
   const base = `/camps/${slug}/announcements`;
 
@@ -398,7 +419,12 @@ export function AnnouncementComposer({
             <button
               type="button"
               aria-pressed={presentation === "acknowledge"}
-              disabled={!scope.mayRequireAck}
+              disabled={!mayRequireAck}
+              title={
+                !mayRequireAck && mode === "teams"
+                  ? "Only for the teams you lead"
+                  : undefined
+              }
               onClick={() => setPresentation("acknowledge")}
               className={optionButton(presentation === "acknowledge")}
             >

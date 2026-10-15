@@ -15,7 +15,8 @@
 //
 //     By TEAM (docs/team-audiences-spec.md): camp leads and holders of
 //     camp-wide `post_announcements` may pick any live team; a team lead
-//     without it, only the teams they lead (./team-audience).
+//     without it, only the teams they lead (./team-audience) — and they may
+//     make those teams acknowledge it (Ryan, 16 Oct 2026).
 //
 //   · WHO RECEIVES — `resolveCampAnnouncementRecipients`. The camp's own live
 //     memberships only (the `project` branch of the one shared resolver), minus
@@ -48,7 +49,7 @@ import {
   audienceTeamIds,
   decideTeamAudienceTargets,
   hasCampWideAnnouncementReach,
-  mayRequireAnnouncementAck,
+  mayRequireTeamAnnouncementAck,
   teamsWithinReach,
   type AudienceTeamMember,
 } from "./team-audience";
@@ -92,8 +93,9 @@ export interface AnnouncementTeamContext {
 /**
  * May this member send to these TEAMS? Every team must be one of the camp's
  * live teams; a camp lead or a holder of camp-wide `post_announcements` may
- * pick any of them, anyone else only teams they lead. Must-acknowledge still
- * needs the backstop or `mayRequireAck`.
+ * pick any of them, anyone else only teams they lead. Must-acknowledge needs
+ * the backstop or `mayRequireAck` — or that the sender leads every chosen
+ * team (Ryan, 16 Oct 2026).
  */
 function canSendTeamAnnouncement(
   m: PermissionMembership,
@@ -109,7 +111,10 @@ function canSendTeamAnnouncement(
     },
   );
   if (!decision.ok) return false;
-  if (req.presentation === "acknowledge" && !mayRequireAnnouncementAck(m)) {
+  if (
+    req.presentation === "acknowledge" &&
+    !mayRequireTeamAnnouncementAck(m, decision.teamIds, req.teams.ledTeamIds)
+  ) {
     return false;
   }
   return true;

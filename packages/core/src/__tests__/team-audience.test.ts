@@ -41,6 +41,7 @@ import {
   audienceTeamIds,
   decideTeamAudienceTargets,
   hasCampWideAnnouncementReach,
+  mayRequireTeamAnnouncementAck,
   teamAudienceLabel,
   teamAudienceRefusalMessage,
   teamNamesFor,
@@ -370,10 +371,7 @@ describe("who may send an announcement to a team", () => {
     expect(send(m, teams(KITCHEN), kitchenLead)).toBe(true);
   });
 
-  it("must-acknowledge needs the backstop or mayRequireAck", () => {
-    expect(
-      send(perms(MEMBER), teams(KITCHEN), kitchenLead, "acknowledge"),
-    ).toBe(false);
+  it("must-acknowledge: a scoped grant with mayRequireAck covers its teams", () => {
     expect(
       send(
         perms(MEMBER, SCOPED_ACK_POSTER),
@@ -382,6 +380,91 @@ describe("who may send an announcement to a team", () => {
         "acknowledge",
       ),
     ).toBe(true);
+  });
+
+  // Ryan, 16 Oct 2026: a team lead WITHOUT post_announcements may make the
+  // teams they lead acknowledge an announcement. Nothing else widens.
+  it("a team lead may require acknowledgement of the teams they lead", () => {
+    const leadsBoth: AnnouncementTeamContext = {
+      liveTeamIds: LIVE,
+      ledTeamIds: new Set([KITCHEN, BUILD]),
+    };
+    expect(
+      send(perms(MEMBER), teams(KITCHEN), kitchenLead, "acknowledge"),
+    ).toBe(true);
+    expect(
+      send(perms(MEMBER), teams(KITCHEN, BUILD), leadsBoth, "acknowledge"),
+    ).toBe(true);
+    expect(
+      mayRequireTeamAnnouncementAck(
+        perms(MEMBER),
+        [KITCHEN],
+        new Set([KITCHEN]),
+      ),
+    ).toBe(true);
+  });
+
+  it("…but not when any chosen team is one they do not lead", () => {
+    expect(
+      send(perms(MEMBER), teams(KITCHEN, BUILD), kitchenLead, "acknowledge"),
+    ).toBe(false);
+    expect(send(perms(MEMBER), teams(BUILD), kitchenLead, "acknowledge")).toBe(
+      false,
+    );
+    // The ack rule itself, apart from reach: one unled team and the flag
+    // decides — and an empty pick is never a lead's.
+    expect(
+      mayRequireTeamAnnouncementAck(
+        perms(MEMBER),
+        [KITCHEN, BUILD],
+        new Set([KITCHEN]),
+      ),
+    ).toBe(false);
+    expect(
+      mayRequireTeamAnnouncementAck(perms(MEMBER), [], new Set([KITCHEN])),
+    ).toBe(false);
+  });
+
+  it("a camp-wide poster without mayRequireAck: only the teams they lead", () => {
+    const allNoAck = perms(MEMBER, {
+      post_announcements: { audienceRoles: "all", mayRequireAck: false },
+    });
+    expect(send(allNoAck, teams(BUILD), kitchenLead)).toBe(true);
+    expect(send(allNoAck, teams(BUILD), kitchenLead, "acknowledge")).toBe(
+      false,
+    );
+    expect(send(allNoAck, teams(KITCHEN), kitchenLead, "acknowledge")).toBe(
+      true,
+    );
+    expect(
+      send(
+        allNoAck,
+        { ...teams(), mode: "everyone" },
+        kitchenLead,
+        "acknowledge",
+      ),
+    ).toBe(false);
+  });
+
+  it("a team lead's must-acknowledge never reaches the whole camp or roles", () => {
+    const m = perms(MEMBER);
+    const roleAudience: ProjectAudience = {
+      kind: "project",
+      groupId: CAMP,
+      mode: "roles",
+      roleIds: [KITCHEN_ROLE],
+    };
+    expect(
+      send(m, { ...teams(), mode: "everyone" }, kitchenLead, "acknowledge"),
+    ).toBe(false);
+    expect(send(m, roleAudience, kitchenLead, "acknowledge")).toBe(false);
+    // A role-limited grant without mayRequireAck: its roles feed-only, its
+    // own team may be gated.
+    const scoped = perms(MEMBER, SCOPED_POSTER);
+    expect(send(scoped, roleAudience, kitchenLead)).toBe(true);
+    expect(send(scoped, roleAudience, kitchenLead, "acknowledge")).toBe(false);
+    expect(send(scoped, teams(KITCHEN), kitchenLead, "acknowledge")).toBe(true);
+    expect(send(scoped, teams(BUILD), kitchenLead, "acknowledge")).toBe(false);
   });
 
   it("an archived, deleted or another camp's team is refused for a new send", () => {

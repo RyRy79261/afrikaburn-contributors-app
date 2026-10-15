@@ -11,6 +11,11 @@
 //     never roles. The store reads the lead's seats inside the write's
 //     transaction, held FOR SHARE, so a lead removed mid-send is refused.
 //
+//   · WHO MAY REQUIRE ACKNOWLEDGEMENT of a team. The camp-wide rule (the
+//     backstop, or `mayRequireAck` on a `post_announcements` grant), and also
+//     the lead of EVERY chosen team (Ryan, 16 Oct 2026). Checked over the same
+//     locked seats, so a lead removed mid-send cannot gate their old team.
+//
 //   · WHO IS REACHED. Current camp members on any chosen team. The team-member
 //     rows are passed to the shared resolver (./audience) as
 //     `AudienceContext.teamMembers`; an id with no rows (a deleted team)
@@ -108,12 +113,31 @@ export function hasCampWideAnnouncementReach(m: PermissionMembership): boolean {
   );
 }
 
-/** May this member require acknowledgement? The backstop, or a
- * `post_announcements` grant with `mayRequireAck`. A team lead without one
- * sends to their team as an ordinary inbox item only. */
+/** May this member require acknowledgement of ANY audience they may reach?
+ * The backstop, or a `post_announcements` grant with `mayRequireAck`. A team
+ * lead without one may still require it of the teams they lead
+ * (`mayRequireTeamAnnouncementAck`). */
 export function mayRequireAnnouncementAck(m: PermissionMembership): boolean {
   if (isPermissionBackstop(m.structuralRole)) return true;
   return m.rolePermissions.some((p) => p.post_announcements?.mayRequireAck);
+}
+
+/**
+ * May this member require acknowledgement of THESE teams? Anyone who may
+ * require it at all (`mayRequireAnnouncementAck`), and — Ryan, 16 Oct 2026 —
+ * a team lead of every chosen team, with or without `post_announcements`:
+ * leading a team carries the authority to make its members read something.
+ * One chosen team they do not lead, and the flag decides. Nothing else
+ * widens: whether the sender may reach these teams at all is
+ * `decideTeamAudienceTargets`' question, asked first.
+ */
+export function mayRequireTeamAnnouncementAck(
+  m: PermissionMembership,
+  teamIds: readonly string[],
+  ledTeamIds: ReadonlySet<string>,
+): boolean {
+  if (mayRequireAnnouncementAck(m)) return true;
+  return teamIds.length > 0 && teamIds.every((id) => ledTeamIds.has(id));
 }
 
 /** Does `schedule_meetings` (or the backstop) reach the whole camp? */

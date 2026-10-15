@@ -294,6 +294,86 @@ describe("by-team drafts", () => {
     expect(stubs.saved).toHaveLength(0);
   });
 
+  // Ryan, 16 Oct 2026: a team lead may make their own teams acknowledge.
+  it("a team lead saves a must-acknowledge draft to their own team", async () => {
+    stubs.sender = kitchenTeamLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction({
+      ...TEAM_DRAFT,
+      teamIds: [KITCHEN_TEAM],
+      presentation: "acknowledge",
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(stubs.saved[0]).toMatchObject({
+      fields: { presentation: "acknowledge" },
+    });
+  });
+
+  /** Camp-wide post_announcements WITHOUT mayRequireAck, leading the kitchen
+   * team: may reach every team and the whole camp by feed, so only the ack
+   * rule refuses what follows. */
+  function campWideKitchenLead() {
+    return {
+      ...kitchenTeamLead(),
+      perms: {
+        structuralRole: "member",
+        rolePermissions: [
+          {
+            post_announcements: { audienceRoles: "all", mayRequireAck: false },
+          },
+        ],
+      },
+    };
+  }
+
+  it("a team lead's must-acknowledge is refused when any team is not theirs", async () => {
+    stubs.sender = campWideKitchenLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    expect(
+      await actions.saveAnnouncementDraftAction({
+        ...TEAM_DRAFT,
+        teamIds: [KITCHEN_TEAM, BUILD_TEAM],
+        presentation: "acknowledge",
+      }),
+    ).toEqual({ ok: false, error: ANNOUNCEMENT_MESSAGES.notAllowed });
+    expect(stubs.saved).toHaveLength(0);
+  });
+
+  it("a team lead's must-acknowledge to the whole camp or a role is refused", async () => {
+    for (const audience of [
+      { mode: "everyone", roleIds: [] },
+      { mode: "roles", roleIds: [KITCHEN] },
+    ]) {
+      for (const sender of [kitchenTeamLead(), campWideKitchenLead()]) {
+        stubs.sender = sender;
+        dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+        const result = await actions.saveAnnouncementDraftAction({
+          ...DRAFT,
+          ...audience,
+          presentation: "acknowledge",
+        });
+        expect(result).toEqual({
+          ok: false,
+          error: ANNOUNCEMENT_MESSAGES.notAllowed,
+        });
+      }
+    }
+    expect(stubs.saved).toHaveLength(0);
+    // The same camp-wide sender may reach them by feed — so it is the ack
+    // rule, not reach, that refused above.
+    stubs.sender = campWideKitchenLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    expect(
+      (
+        await actions.saveAnnouncementDraftAction({
+          ...DRAFT,
+          mode: "everyone",
+          roleIds: [],
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
   it("no team picked says so", async () => {
     stubs.sender = kitchenTeamLead();
     dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
