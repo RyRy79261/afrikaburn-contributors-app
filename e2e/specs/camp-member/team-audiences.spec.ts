@@ -246,6 +246,10 @@ test.describe("camp member — team audiences", () => {
     await jabuPage.goto(`/bulletins/${renAnnouncementId}`);
     await expect(jabuPage.getByRole("heading", { name: title })).toBeVisible();
     await expect(jabuPage.getByText(marker)).toBeVisible();
+    // The chip names the team it came through, not a generic "Your team".
+    await expect(
+      jabuPage.getByText(`${kitchen} team`, { exact: true }),
+    ).toBeVisible();
 
     // Mia cannot open it: the 404 copy is present, the title absent.
     await expectServerNotFound(miaPage, `/bulletins/${renAnnouncementId}`, [

@@ -4,11 +4,6 @@ import { eq } from "drizzle-orm";
 import { ArrowLeft, CheckCircle2, ExternalLink, Pin } from "lucide-react";
 import { z } from "zod";
 import { INVITE_RESUME_PATH, announcementPath } from "@quagga/core";
-import {
-  ORG_OUTBOUND_SELECTOR_LABELS,
-  OFFICER_AUDIENCE_LABELS,
-  type AudienceSpec,
-} from "@quagga/types";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import { MarkdownView } from "@quagga/ui/components/markdown-editor/markdown-view";
@@ -17,6 +12,7 @@ import { isDatabaseConfigured } from "@/lib/config";
 import { requireCampUser, enforceGate } from "@/lib/session";
 import { getBulletinForCurrentUser } from "@/lib/bulletins";
 import { markAnnouncementRead } from "@/lib/announcement-gate";
+import { bulletinAudienceChip } from "@/lib/bulletin-audience-chip";
 import { readPendingInvite } from "@/lib/pending-invite";
 import { db, schema } from "@/lib/db";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -37,34 +33,6 @@ import { acknowledgeAnnouncementAction } from "./actions";
 export const dynamic = "force-dynamic";
 
 const BulletinId = z.string().uuid();
-
-/**
- * Audience chip copy. The spec's audience machinery is shared with
- * questionnaires; participants only ever see outbound/officer/project shapes
- * here because org-internal broadcasts can't reach this page at all.
- */
-function audienceChipLabel(spec: AudienceSpec | null): string | null {
-  if (!spec) return null;
-  switch (spec.kind) {
-    case "org_outbound":
-      return spec.selectors
-        .map((s) => ORG_OUTBOUND_SELECTOR_LABELS[s] ?? s)
-        .join(", ");
-    case "org_officer":
-      return spec.officerKeys
-        .map((k) => OFFICER_AUDIENCE_LABELS[k] ?? k)
-        .join(", ");
-    case "project":
-      // A by-team announcement reached the reader through a team they are on.
-      return spec.mode === "teams" ? "Your team" : "Your camp";
-    case "org_suppliers":
-      // Supplier broadcasts never reach a burner's bulletin page (they target
-      // supplier accounts), but the label keeps the switch exhaustive.
-      return "Suppliers";
-    case "org_internal":
-      return null;
-  }
-}
 
 function formatPublished(at: Date | null): string {
   if (!at) return "Unpublished";
@@ -111,7 +79,17 @@ export default async function BulletinPage({
     .from(schema.bulletins)
     .where(eq(schema.bulletins.id, bulletin.id))
     .limit(1);
-  const audience = audienceChipLabel(audienceRow?.audience ?? null);
+  const spec = audienceRow?.audience ?? null;
+  // A by-team announcement's chip names its teams: the sending camp's teams,
+  // archived included (the reader was on one of them when it went out).
+  const campTeams =
+    spec?.kind === "project" && spec.mode === "teams" && bulletin.groupId
+      ? await db()
+          .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
+          .from(schema.shiftTeams)
+          .where(eq(schema.shiftTeams.groupId, bulletin.groupId))
+      : [];
+  const audience = bulletinAudienceChip(spec, campTeams);
 
   const fromCamp = bulletin.groupId !== null;
   const kicker = fromCamp
