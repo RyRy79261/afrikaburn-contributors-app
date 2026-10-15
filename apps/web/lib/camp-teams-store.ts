@@ -520,6 +520,9 @@ export interface CampTeamView {
   canJoin: boolean;
   canManage: boolean;
   canArchive: boolean;
+  /** The team chat's conversation id — only for someone on the team (the
+   * chat's own gate still decides every read). */
+  chatConversationId: string | null;
 }
 
 /**
@@ -566,6 +569,13 @@ export async function getCampTeam(input: {
   };
   if (facts.archived && !isCampLeadRole(viewer.campRole) && !seat) return null;
   const people = seats.map(personView).sort(byName);
+  const [chat] = seat
+    ? await db()
+        .select({ id: schema.conversations.id })
+        .from(schema.conversations)
+        .where(eq(schema.conversations.teamId, team.id))
+        .limit(1)
+    : [];
   return {
     camp,
     id: team.id,
@@ -580,6 +590,7 @@ export async function getCampTeam(input: {
     canJoin: decideJoinTeam(viewer, facts, seat).ok,
     canManage: canManageTeam(viewer, facts, seat),
     canArchive: canArchiveTeam(viewer),
+    chatConversationId: chat?.id ?? null,
   };
 }
 
@@ -611,6 +622,46 @@ export async function listTeamCandidates(input: {
     );
   return rows
     .filter((r) => !onTeam.has(r.userId))
+    .map((r) => ({
+      userId: r.userId,
+      displayName: publicMemberName(r.username),
+      isLead: false,
+    }))
+    .sort(byName);
+}
+
+/**
+ * Who a camp lead may name as a new team's leads: the camp's current members
+ * (accounts not erased), by name. Empty for anyone who may not create a team
+ * — the create write re-checks every id under its own lock.
+ */
+export async function listNewTeamLeadCandidates(input: {
+  slug: string;
+  viewerUserId: string;
+}): Promise<TeamPersonView[]> {
+  if (!isDatabaseConfigured()) return [];
+  const camp = await findCamp(input.slug);
+  if (!camp) return [];
+  const viewer: TeamViewer = {
+    userId: input.viewerUserId,
+    campRole: await viewerRole(camp.id, input.viewerUserId),
+  };
+  if (!canCreateTeam(viewer)) return [];
+  const rows = await db()
+    .select({
+      userId: schema.memberships.userId,
+      username: schema.users.username,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .where(
+      and(
+        eq(schema.memberships.groupId, camp.id),
+        activeMembership(),
+        isNull(schema.users.sanitizedAt),
+      ),
+    );
+  return rows
     .map((r) => ({
       userId: r.userId,
       displayName: publicMemberName(r.username),
@@ -1083,6 +1134,51 @@ export async function loadTeamChat(input: {
     teamId: input.teamId,
     viewerUserId: input.viewerUserId,
   });
+}
+
+/** A team chat opened from the inbox, with the camp it belongs to. */
+export interface TeamChatByConversation {
+  campSlug: string;
+  chat: TeamChatView;
+}
+
+/**
+ * The team chat behind an inbox row's conversation id, for a current member
+ * of the team — or null for everyone else, for a direct chat's id and for an
+ * id that does not exist, identically. Resolving the id reads only the
+ * conversation's team and camp; every gate is `getTeamChat`'s.
+ */
+export async function loadTeamChatByConversation(input: {
+  conversationId: string;
+  viewerUserId: string;
+}): Promise<TeamChatByConversation | null> {
+  if (!isDatabaseConfigured()) return null;
+  const [row] = await db()
+    .select({
+      teamId: schema.shiftTeams.id,
+      groupId: schema.shiftTeams.groupId,
+      campSlug: schema.groups.slug,
+    })
+    .from(schema.conversations)
+    .innerJoin(
+      schema.shiftTeams,
+      eq(schema.shiftTeams.id, schema.conversations.teamId),
+    )
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.shiftTeams.groupId))
+    .where(
+      and(
+        eq(schema.conversations.id, input.conversationId),
+        eq(schema.conversations.kind, "team"),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  const chat = await getTeamChat({
+    groupId: row.groupId,
+    teamId: row.teamId,
+    viewerUserId: input.viewerUserId,
+  });
+  return chat ? { campSlug: row.campSlug, chat } : null;
 }
 
 const CHAT_MISSING = "That team chat isn't available.";

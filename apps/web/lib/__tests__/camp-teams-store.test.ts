@@ -471,3 +471,106 @@ describe("cleanup on leaving the camp, archive and erasure", () => {
     expect(boundParams(sub[0]!.arg("where"))).toEqual(["team"]);
   });
 });
+
+describe("reads for the team pages and the team chat route", () => {
+  it("New team's lead list is empty for a plain member, and the camp's members are never read", async () => {
+    dbMock.queue(campRow, [{ role: MEMBER }]);
+    expect(
+      await store.listNewTeamLeadCandidates({ slug: SLUG, viewerUserId: ALICE }),
+    ).toEqual([]);
+    // Two reads only: the camp and the viewer's own role.
+    expect(dbMock.queries).toHaveLength(2);
+    expect(dbMock.pending).toBe(0);
+  });
+
+  it("a camp lead gets the camp's current members by name", async () => {
+    dbMock.queue(
+      campRow,
+      [{ role: LEAD }],
+      [
+        { userId: REN, username: "ren" },
+        { userId: ALICE, username: "alice" },
+      ],
+    );
+    const people = await store.listNewTeamLeadCandidates({
+      slug: SLUG,
+      viewerUserId: JABU,
+    });
+    expect(people.map((p) => p.userId)).toEqual([ALICE, REN]);
+  });
+
+  it("the team page names the chat only to someone on the team", async () => {
+    const row = { ...team(), description: null };
+    dbMock.queue(campRow, [{ role: LEAD }], [row], /* seats */ []);
+    const outsider = await store.getCampTeam({
+      slug: SLUG,
+      teamId: TEAM,
+      viewerUserId: JABU,
+    });
+    // A camp lead NOT on the team: no chat id, and the conversation table is
+    // never read for them.
+    expect(outsider!.chatConversationId).toBeNull();
+    expect(dbMock.queriesTouching(schema.conversations)).toHaveLength(0);
+
+    dbMock.reset();
+    dbMock.queue(
+      campRow,
+      [{ role: MEMBER }],
+      [row],
+      [{ teamId: TEAM, userId: ALICE, isLead: false, username: "alice" }],
+      [{ id: CONVO }],
+    );
+    const member = await store.getCampTeam({
+      slug: SLUG,
+      teamId: TEAM,
+      viewerUserId: ALICE,
+    });
+    expect(member!.chatConversationId).toBe(CONVO);
+  });
+
+  it("a conversation id that is no team chat opens nothing, and no message is read", async () => {
+    dbMock.queue(/* no team conversation */ []);
+    expect(
+      await store.loadTeamChatByConversation({
+        conversationId: CONVO,
+        viewerUserId: ALICE,
+      }),
+    ).toBeNull();
+    expect(dbMock.queries).toHaveLength(1);
+    expect(dbMock.queriesTouching(schema.messages)).toHaveLength(0);
+    // The lookup is narrowed to TEAM conversations, by the bound value.
+    const [lookup] = dbMock.queries;
+    expect(boundParams(lookup!.arg("where"))).toEqual([CONVO, "team"]);
+  });
+
+  it("a team chat found by id still goes through the team-chat gate", async () => {
+    dbMock.queue(
+      [{ teamId: TEAM, groupId: CAMP, campSlug: SLUG }],
+      // getTeamChat's facts: the team in this camp …
+      [
+        {
+          teamId: TEAM,
+          teamName: "Kitchen",
+          archivedAt: null,
+          campName: "Mad Hatters",
+        },
+      ],
+      // … NO seat for the viewer (a camp lead not on the team) …
+      [],
+      [{ role: LEAD }],
+      [{ id: CONVO, timer: "off" }],
+      // … but a STALE participant row, so only the seat check refuses.
+      [{ userId: JABU, joinedAt: new Date(0) }],
+      // What a broken gate would go on to read: blocks, messages.
+      [],
+      [],
+    );
+    expect(
+      await store.loadTeamChatByConversation({
+        conversationId: CONVO,
+        viewerUserId: JABU,
+      }),
+    ).toBeNull();
+    expect(dbMock.queriesTouching(schema.messages)).toHaveLength(0);
+  });
+});
