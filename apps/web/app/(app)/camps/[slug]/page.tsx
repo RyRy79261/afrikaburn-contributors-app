@@ -73,6 +73,8 @@ import {
   loadMeetingsAccess,
 } from "@/lib/camp-meetings-store";
 import { MeetingsTile } from "@/components/meetings/meetings-tile";
+import { TeamsTile } from "@/components/teams/teams-tile";
+import { listCampTeams } from "@/lib/camp-teams-store";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -174,7 +176,7 @@ export default async function CampPage({
   const viewerManagesPasses =
     isMember && canManageWorkAccessPasses({ structuralRole: camp.viewerRole! });
 
-  // Thirteen independent reads, issued together rather than one after another.
+  // Independent reads, issued together rather than one after another.
   //
   // They were a sequential chain, and the chain WAS this page's cost: each is a
   // separate HTTP round trip to the database, so the render could not finish
@@ -202,6 +204,7 @@ export default async function CampPage({
     moneySummary,
     layoutTile,
     meetingsTile,
+    teamsView,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -313,6 +316,11 @@ export default async function CampPage({
               }
             : null,
         )
+      : null,
+    // Camp teams (docs/camp-teams-spec.md): counts for the tile. The store
+    // re-checks current membership and returns null for anyone else.
+    campUser && isMember
+      ? listCampTeams({ slug: camp.slug, viewerUserId: campUser.id })
       : null,
   ]);
   const ownPassLine = ownPass
@@ -842,6 +850,15 @@ export default async function CampPage({
                 slug={camp.slug}
                 next={meetingsTile.next}
                 canSchedule={meetingsTile.canSchedule}
+              />
+            )}
+            {/* Camp teams (docs/camp-teams-spec.md) — members only. */}
+            {teamsView && (
+              <TeamsTile
+                slug={camp.slug}
+                teams={teamsView.teams.length}
+                mine={teamsView.teams.filter((t) => t.viewerOnTeam).length}
+                canCreate={teamsView.canCreate}
               />
             )}
             {/* Work Access Passes (epic #53) — leads and co-leads. */}

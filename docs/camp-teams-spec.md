@@ -100,7 +100,14 @@ a Telegram group, the chat is in the app.
   for team leads and camp leads.
 - `/messages` — the inbox lists team chats beside direct messages; a team chat
   shows sender names and the team name.
-- The shifts team editor links to the team pages (one list).
+- The shifts team editor links to the team pages (one list). Its old add /
+  rename / remove dialog is gone: the remove was a hard delete that took the
+  team's chat with it, where the team pages archive instead.
+- The team chat opens at `/messages/[id]` (the chat's conversation id), the
+  same route as a direct chat; the page serves it only through the team-chat
+  gate, and the team page's "Team chat" button is shown only to its members.
+- The camp page has a Teams tile (members only): how many teams, how many the
+  member is on.
 
 ## Not built
 
