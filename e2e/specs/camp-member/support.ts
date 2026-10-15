@@ -241,3 +241,97 @@ export async function expectServerNotFound(
   }
   return { finalUrl: page.url() };
 }
+
+// ── Camp teams (docs/camp-teams-spec.md) ────────────────────────────────────
+// Selectors: apps/web/components/teams/{team-dialogs,team-form,people-picker}.tsx
+// and apps/web/components/messages/team-chat-thread.tsx.
+
+/**
+ * As a camp lead, make a team from the camp's team list ("New team") and
+ * return its page path. `leads` are ticked in the create form's people picker
+ * by their display name (the username); `joinMode` picks "Who can join".
+ */
+export async function createTeam(
+  leadPage: Page,
+  slug: string,
+  opts: { name: string; joinMode?: "open" | "leads_add"; leads?: string[] },
+): Promise<{ teamPath: string }> {
+  await leadPage.goto(`/camps/${slug}/teams`);
+  await expect(
+    leadPage.getByRole("heading", { name: "Teams", exact: true }),
+  ).toBeVisible();
+  await leadPage.getByRole("button", { name: "New team" }).first().click();
+  const dialog = leadPage.getByRole("dialog");
+  await dialog.getByLabel("Team name").fill(opts.name);
+  if (opts.joinMode === "leads_add") {
+    await dialog.getByRole("radio", { name: /leads add only/i }).check();
+  }
+  for (const lead of opts.leads ?? []) {
+    await dialog.getByRole("checkbox", { name: lead, exact: true }).check();
+  }
+  await dialog.getByRole("button", { name: "Create team" }).click();
+  await leadPage.waitForURL(/\/teams\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+  await expect(
+    leadPage.getByRole("heading", { name: opts.name }),
+  ).toBeVisible();
+  return { teamPath: new URL(leadPage.url()).pathname };
+}
+
+/**
+ * Join an open team from its page and wait until the server has seated the
+ * viewer (the page's "Team chat" link only renders for members).
+ */
+export async function joinTeamFromPage(
+  page: Page,
+  teamPath: string,
+  team: string,
+): Promise<void> {
+  await page.goto(teamPath);
+  await page.getByRole("button", { name: `Join ${team}` }).click();
+  await expect(page.getByRole("link", { name: "Team chat" })).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+/** Open the team chat from the team page; returns the chat's path. */
+export async function openTeamChat(
+  page: Page,
+  teamPath: string,
+  team: string,
+): Promise<string> {
+  await page.goto(teamPath);
+  await page.getByRole("link", { name: "Team chat" }).click();
+  await page.waitForURL(/\/messages\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+  await expect(
+    page.getByRole("textbox", { name: `Message ${team}` }),
+  ).toBeVisible();
+  return new URL(page.url()).pathname;
+}
+
+/** Post one message in a team chat and wait for it to be on screen. */
+export async function sendTeamMessage(
+  page: Page,
+  team: string,
+  text: string,
+): Promise<void> {
+  const box = page.getByRole("textbox", { name: `Message ${team}` });
+  await box.fill(text);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText(text)).toBeVisible();
+  await expect(box).toHaveValue("");
+}
+
+/** A burner's id, read from their roster link on the camp page. */
+export async function burnerIdFromRoster(
+  page: Page,
+  slug: string,
+  username: string,
+): Promise<string> {
+  await page.goto(`/camps/${slug}`);
+  const link = page.getByRole("link", { name: username }).first();
+  await expect(link).toBeVisible();
+  const href = await link.getAttribute("href");
+  const id = href?.match(/\/burners\/([0-9a-f-]{36})/i)?.[1];
+  if (!id) throw new Error(`[camp-member] no burner link for ${username}`);
+  return id;
+}
