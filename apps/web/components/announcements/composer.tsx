@@ -16,6 +16,14 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { cn } from "@quagga/ui/lib/utils";
+import {
+  chosenTeamNames,
+  teamLeadNotice,
+  teamMemberCount,
+  teamReachPhrase,
+  type TeamOption,
+} from "@/lib/team-audience-view";
+import { offeredAudienceRoleIds } from "@/lib/meeting-view";
 import type { AnnouncementActionResult } from "@/app/(app)/camps/[slug]/announcements/actions";
 
 // The camp announcement composer (epic #56). NEEDS DESIGN REVIEW — built from
@@ -47,9 +55,15 @@ export interface ComposerDraft {
   sendAt: string | null;
 }
 
+/** What this sender may address, from the server's own predicate. */
 export interface ComposerScope {
   canTargetEveryone: boolean;
   targetableRoleIds: string[];
+  /** Teams this sender may address (docs/team-audiences-spec.md). */
+  targetableTeamIds: string[];
+  /** A team lead without `post_announcements`: only "By team", only their
+   * teams, with the one-line reason (frame knWLt, state 1). */
+  teamsOnly: boolean;
   mayRequireAck: boolean;
 }
 
@@ -79,12 +93,15 @@ function fromLocalInput(value: string): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
+/** The camp announcement composer: title, message, audience, how it lands. */
 export function AnnouncementComposer({
   slug,
   roles,
+  teams,
   members,
   scope,
   draft,
+  initialTeamIds,
   schedulingEnabled,
   saveAction,
   publishAction,
@@ -92,10 +109,17 @@ export function AnnouncementComposer({
 }: {
   slug: string;
   roles: ComposerRole[];
-  /** Per member, the role ids they hold (for the live "resolves to" count). */
-  members: { roleIds: string[] }[];
+  /** The camp's live teams the picker lists (only the sender's own for a
+   * team lead without the camp-wide permission). */
+  teams: TeamOption[];
+  /** Per member, the role ids they hold and the teams they are on (for the
+   * live "resolves to" count). */
+  members: { roleIds: string[]; teamIds?: string[] }[];
   scope: ComposerScope;
   draft?: ComposerDraft;
+  /** A new announcement opened from a team page: start on "By team" with
+   * this team chosen. Ignored when editing a draft. */
+  initialTeamIds?: string[];
   /** Is a scheduler wired to the dispatch route? Off hides "Send later"
    * entirely (the server refuses a send time anyway). */
   schedulingEnabled: boolean;
@@ -107,11 +131,21 @@ export function AnnouncementComposer({
   const [pending, startTransition] = React.useTransition();
   const [title, setTitle] = React.useState(draft?.title ?? "");
   const [bodyMd, setBodyMd] = React.useState(draft?.bodyMd ?? "");
+  const startTeams = draft
+    ? offeredAudienceRoleIds(draft.teamIds ?? [], teams)
+    : (initialTeamIds ?? []);
   const [mode, setMode] = React.useState<"everyone" | "roles" | "teams">(
-    draft?.mode ?? (scope.canTargetEveryone ? "everyone" : "roles"),
+    scope.teamsOnly
+      ? "teams"
+      : (draft?.mode ??
+          (startTeams.length > 0
+            ? "teams"
+            : scope.canTargetEveryone
+              ? "everyone"
+              : "roles")),
   );
   const [roleIds, setRoleIds] = React.useState<string[]>(draft?.roleIds ?? []);
-  const [teamIds] = React.useState<string[]>(draft?.teamIds ?? []);
+  const [teamIds, setTeamIds] = React.useState<string[]>(startTeams);
   const [presentation, setPresentation] =
     React.useState<AnnouncementPresentation>(draft?.presentation ?? "feed");
   const [pinOnPublish, setPinOnPublish] = React.useState(
@@ -123,6 +157,8 @@ export function AnnouncementComposer({
   );
 
   const targetable = new Set(scope.targetableRoleIds);
+  const targetableTeams = new Set(scope.targetableTeamIds);
+  const teamNames = chosenTeamNames(teams, teamIds);
   const base = `/camps/${slug}/announcements`;
 
   // The live count EXCLUDES nobody the server would include except the author
@@ -131,10 +167,11 @@ export function AnnouncementComposer({
   // publish result states the real number.
   const resolvedCount = React.useMemo(() => {
     if (mode === "everyone") return members.length;
+    if (mode === "teams") return teamMemberCount(members, teamIds);
     if (roleIds.length === 0) return 0;
     const wanted = new Set(roleIds);
     return members.filter((m) => m.roleIds.some((id) => wanted.has(id))).length;
-  }, [mode, roleIds, members]);
+  }, [mode, roleIds, teamIds, members]);
 
   function payload() {
     return {
@@ -240,20 +277,43 @@ export function AnnouncementComposer({
 
         <div className="flex flex-col gap-3">
           <span className="text-sm font-medium">Who it goes to</span>
-          <div className="flex gap-2">
-            {(["everyone", "roles"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={mode === m}
-                disabled={m === "everyone" && !scope.canTargetEveryone}
-                onClick={() => setMode(m)}
-                className={optionButton(mode === m)}
-              >
-                {m === "everyone" ? "Everyone in this camp" : "By role"}
-              </button>
-            ))}
-          </div>
+          {scope.teamsOnly ? (
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                aria-hidden
+              />
+              {teamLeadNotice(
+                teams.map((t) => t.name),
+                "announcement",
+              )}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {(teams.length > 0
+                ? (["everyone", "roles", "teams"] as const)
+                : (["everyone", "roles"] as const)
+              ).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  disabled={
+                    (m === "everyone" && !scope.canTargetEveryone) ||
+                    (m === "teams" && targetableTeams.size === 0)
+                  }
+                  onClick={() => setMode(m)}
+                  className={optionButton(mode === m)}
+                >
+                  {m === "everyone"
+                    ? "Everyone in this camp"
+                    : m === "roles"
+                      ? "By role"
+                      : "By team"}
+                </button>
+              ))}
+            </div>
+          )}
           {mode === "roles" &&
             (roles.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -285,12 +345,41 @@ export function AnnouncementComposer({
                 ))}
               </ToggleGroup>
             ))}
+          {mode === "teams" && (
+            <ToggleGroup
+              type="multiple"
+              variant="outline"
+              value={teamIds}
+              onValueChange={setTeamIds}
+              className="flex-wrap justify-start"
+              aria-label="Teams"
+            >
+              {teams.map((t) => (
+                <ToggleGroupItem
+                  key={t.id}
+                  value={t.id}
+                  disabled={!targetableTeams.has(t.id)}
+                  title={
+                    targetableTeams.has(t.id)
+                      ? undefined
+                      : "You can only send to the teams you lead"
+                  }
+                >
+                  {t.name}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
           <p className="text-sm text-muted-foreground">
             Reaches about{" "}
             <span className="font-semibold text-foreground">
               {resolvedCount} {resolvedCount === 1 ? "member" : "members"}
             </span>{" "}
-            right now — current members only, never pending invitees.
+            {mode === "teams"
+              ? teamIds.length === 0
+                ? "— pick at least one team."
+                : `right now — ${teamReachPhrase(teamNames)}.`
+              : "right now — current members only, never pending invitees."}
           </p>
         </div>
 

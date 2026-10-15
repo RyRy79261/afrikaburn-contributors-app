@@ -403,6 +403,47 @@ async function campTeamNames(
     .where(eq(schema.shiftTeams.groupId, groupId));
 }
 
+/** The composer's team picker: the camp's live teams in their list order,
+ * and who is on each (for the reach count). */
+export interface ComposerTeams {
+  teams: { id: string; name: string }[];
+  seats: { teamId: string; userId: string }[];
+}
+
+/**
+ * The camp's live (not archived) teams and their seats, for the composer's
+ * "By team" picker. A READ for the screen only: what a sender may pick is
+ * decided by `canSendCampAnnouncement`, again inside the publish transaction.
+ */
+export async function loadComposerTeams(
+  groupId: string,
+): Promise<ComposerTeams> {
+  const teams = await db()
+    .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
+    .from(schema.shiftTeams)
+    .where(
+      and(
+        eq(schema.shiftTeams.groupId, groupId),
+        isNull(schema.shiftTeams.archivedAt),
+      ),
+    )
+    .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.name));
+  if (teams.length === 0) return { teams, seats: [] };
+  const seats = await db()
+    .select({
+      teamId: schema.teamMembers.teamId,
+      userId: schema.teamMembers.userId,
+    })
+    .from(schema.teamMembers)
+    .where(
+      inArray(
+        schema.teamMembers.teamId,
+        teams.map((t) => t.id),
+      ),
+    );
+  return { teams, seats };
+}
+
 function toAuthorView(
   row: AnnouncementRow,
   viewerId: string,

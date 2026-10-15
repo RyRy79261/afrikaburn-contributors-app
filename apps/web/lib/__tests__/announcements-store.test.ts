@@ -3,7 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@quagga/db";
 import { ANNOUNCEMENT_MESSAGES } from "@quagga/core";
-import { dbMock, type RecordedQuery } from "@/test/db-mock";
+import { dbMock, nullChecksOn, type RecordedQuery } from "@/test/db-mock";
 import type { SenderContext } from "@/lib/announcements-store";
 
 // CAMP ANNOUNCEMENTS — the store's write paths (epic #56), ported from Camp
@@ -1445,5 +1445,47 @@ describe("team audiences", () => {
       sender: senderContext(false),
     });
     expect(result.drafts[0]?.teamNames).toEqual(["Build & strike", "Kitchen"]);
+  });
+});
+
+// The composer's "By team" picker (docs/team-audiences-spec.md): a screen
+// read only. It must list LIVE teams of THIS camp and the seats on exactly
+// those teams — an archived team is never offered for a new send.
+describe("loadComposerTeams", () => {
+  const KITCHEN_TEAM = "7e7e7e7e-0000-4000-8000-000000000001";
+  const SOUND_TEAM = "7e7e7e7e-0000-4000-8000-000000000003";
+
+  it("reads this camp's live teams, then the seats on those teams", async () => {
+    dbMock.queue(
+      [
+        { id: KITCHEN_TEAM, name: "Kitchen" },
+        { id: SOUND_TEAM, name: "Sound" },
+      ],
+      [
+        { teamId: KITCHEN_TEAM, userId: COOK },
+        { teamId: SOUND_TEAM, userId: BUILDER },
+      ],
+    );
+    const result = await store.loadComposerTeams(CAMP);
+    expect(result.teams.map((t) => t.name)).toEqual(["Kitchen", "Sound"]);
+    expect(result.seats).toHaveLength(2);
+
+    const [teamRead, seatRead] = dbMock.queries;
+    expect(nullChecksOn(teamRead!, schema.shiftTeams.archivedAt)).toEqual([
+      "is null",
+    ]);
+    expect(whereOf(teamRead!).params).toContain(CAMP);
+    expect(seatRead!.arg("from")).toBe(schema.teamMembers);
+    expect(whereOf(seatRead!).params).toEqual([KITCHEN_TEAM, SOUND_TEAM]);
+    expect(dbMock.pending).toBe(0);
+  });
+
+  it("skips the seat read when the camp has no live team", async () => {
+    dbMock.queue([]);
+    expect(await store.loadComposerTeams(CAMP)).toEqual({
+      teams: [],
+      seats: [],
+    });
+    expect(dbMock.queries).toHaveLength(1);
   });
 });

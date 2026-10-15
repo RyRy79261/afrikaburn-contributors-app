@@ -1261,3 +1261,19 @@ describe("team audiences", () => {
     expect(await store.loadCampMeeting(offTeam!, EDITION, MEETING)).toBeNull();
   });
 });
+
+// The schedule form's reach count (docs/team-audiences-spec.md): every seat
+// on THIS camp's teams, archived included — a meeting for an archived team
+// still shows to its members, so the count must see them too.
+describe("listCampTeamSeats", () => {
+  it("joins seats to their team and keys the read on this camp", async () => {
+    const seats = [{ teamId: "t-kitchen", groupId: CAMP, userId: "u-cook" }];
+    dbMock.queue(seats);
+    expect(await store.listCampTeamSeats(CAMP)).toEqual(seats);
+    const [read] = dbMock.queries;
+    expect(read!.arg("from")).toBe(schema.teamMembers);
+    expect(read!.called("innerJoin")).toBe(true);
+    expect(boundStrings(read!)).toContain(CAMP);
+    expect(nullChecksOn(read!, schema.shiftTeams.archivedAt)).toEqual([]);
+  });
+});

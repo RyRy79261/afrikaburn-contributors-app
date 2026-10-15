@@ -309,6 +309,16 @@ async function loadCampTeamSeats(
     .where(eq(schema.shiftTeams.groupId, groupId));
 }
 
+/**
+ * Every seat on this camp's teams, archived teams included — the schedule
+ * form's reach count. A read for the screen; every write re-decides.
+ */
+export async function listCampTeamSeats(
+  groupId: string,
+): Promise<AudienceTeamMember[]> {
+  return loadCampTeamSeats(db(), groupId);
+}
+
 function campFacts(roles: readonly CampRoleRow[]): {
   baselineRoleId: string | null;
   campRoleIds: Set<string>;

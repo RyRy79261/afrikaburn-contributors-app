@@ -100,6 +100,7 @@ export default async function CampAnnouncementPage({
         <AnnouncementComposer
           slug={camp.slug}
           roles={data.roles}
+          teams={data.teams}
           members={data.members}
           scope={data.scope}
           draft={{
