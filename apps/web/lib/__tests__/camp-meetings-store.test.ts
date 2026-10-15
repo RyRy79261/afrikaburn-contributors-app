@@ -1124,7 +1124,8 @@ describe("team audiences", () => {
     expect(upcoming[0]?.audience).toEqual({
       mode: "teams",
       roleNames: [],
-      teamNames: ["Build & strike", "Kitchen"],
+      // The camp's list order (TEAMS), not the stored uuid order.
+      teamNames: ["Kitchen", "Build & strike"],
     });
   });
 

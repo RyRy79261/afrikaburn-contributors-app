@@ -165,15 +165,15 @@ export function teamAudienceLabel(names: readonly string[]): string {
 }
 
 /**
- * The chosen teams' names, in the stored order, skipping ids whose team no
- * longer exists. For building `teamAudienceLabel`'s input.
+ * The chosen teams' names, in the order of `teams` (pass the camp's list
+ * order — `sort`, then name — so a chip reads like the picker did), skipping
+ * ids whose team no longer exists. The stored ids are sorted by uuid, which
+ * is no order a person chose. For building `teamAudienceLabel`'s input.
  */
 export function teamNamesFor(
   teamIds: readonly string[],
   teams: readonly { id: string; name: string }[],
 ): string[] {
-  const byId = new Map(teams.map((t) => [t.id, t.name]));
-  return teamIds
-    .map((id) => byId.get(id))
-    .filter((n): n is string => n !== undefined);
+  const wanted = new Set(teamIds);
+  return teams.filter((t) => wanted.has(t.id)).map((t) => t.name);
 }

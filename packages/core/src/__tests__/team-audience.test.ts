@@ -482,16 +482,18 @@ describe("the chip", () => {
     expect(teamAudienceLabel(["  "])).toBe("Deleted team");
   });
 
-  it("teamNamesFor keeps the stored order and skips deleted teams", () => {
+  it("teamNamesFor follows the camp's list order and skips deleted teams", () => {
+    // Stored ids are uuid-sorted; the chip reads in the camp's own order.
     expect(
       teamNamesFor(
         [BUILD, DELETED, KITCHEN],
         [
           { id: KITCHEN, name: "Kitchen" },
+          { id: "unchosen", name: "Sound" },
           { id: BUILD, name: "Build & strike" },
         ],
       ),
-    ).toEqual(["Build & strike", "Kitchen"]);
+    ).toEqual(["Kitchen", "Build & strike"]);
   });
 });
 

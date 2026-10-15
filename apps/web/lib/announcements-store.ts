@@ -400,7 +400,8 @@ async function campTeamNames(
   return db()
     .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
     .from(schema.shiftTeams)
-    .where(eq(schema.shiftTeams.groupId, groupId));
+    .where(eq(schema.shiftTeams.groupId, groupId))
+    .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.name));
 }
 
 /** The composer's team picker: the camp's live teams in their list order,

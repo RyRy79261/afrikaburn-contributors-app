@@ -1444,7 +1444,8 @@ describe("team audiences", () => {
       viewerId: AUTHOR,
       sender: senderContext(false),
     });
-    expect(result.drafts[0]?.teamNames).toEqual(["Build & strike", "Kitchen"]);
+    // The camp's list order (the team read), not the stored uuid order.
+    expect(result.drafts[0]?.teamNames).toEqual(["Kitchen", "Build & strike"]);
   });
 });
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { ArrowLeft, CheckCircle2, ExternalLink, Pin } from "lucide-react";
 import { z } from "zod";
 import { INVITE_RESUME_PATH, announcementPath } from "@quagga/core";
@@ -88,6 +88,7 @@ export default async function BulletinPage({
           .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
           .from(schema.shiftTeams)
           .where(eq(schema.shiftTeams.groupId, bulletin.groupId))
+          .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.name))
       : [];
   const audience = bulletinAudienceChip(spec, campTeams);
 
