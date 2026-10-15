@@ -604,7 +604,7 @@ export async function listTeamCandidates(input: {
   viewerUserId: string;
 }): Promise<TeamPersonView[]> {
   const team = await getCampTeam(input);
-  if (!team || !team.canManage || team.archived) return [];
+  if (!team || !team.canManage) return [];
   const onTeam = new Set(team.members.map((m) => m.userId));
   const rows = await db()
     .select({

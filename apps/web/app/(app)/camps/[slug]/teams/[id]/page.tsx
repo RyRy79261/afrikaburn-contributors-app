@@ -74,7 +74,9 @@ export default async function CampTeamPage({
   });
   if (!team) notFound();
   const { camp } = team;
-  const canAdd = team.canManage && !team.archived;
+  // canManage is already false for a team lead on an archived team; a camp
+  // lead keeps every right there (camp-teams-spec, Archived teams).
+  const canAdd = team.canManage;
   const [candidates, board] = await Promise.all([
     canAdd
       ? listTeamCandidates({

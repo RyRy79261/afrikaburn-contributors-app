@@ -182,9 +182,16 @@ export function decideLeaveTeam(
   return ok;
 }
 
+/** An archived team refuses everyone's team-management rights except the
+ * camp leads' (spec: "team leads lose their rights on an archived team; camp
+ * leads keep theirs"). */
+function archivedForViewer(viewer: TeamViewer, team: TeamFacts): boolean {
+  return team.archived && !isCampLeadRole(viewer.campRole);
+}
+
 /**
- * May the viewer add this person? A manager of the team, while it is not
- * archived; the person must be a CURRENT member of the camp (not erased) and
+ * May the viewer add this person? A manager of the team — on an archived
+ * team, a camp lead only; the person must be a CURRENT member of the camp (not erased) and
  * not already on it.
  */
 export function decideAddTeamMember(input: {
@@ -195,17 +202,17 @@ export function decideAddTeamMember(input: {
   targetSeat: TeamSeat | null;
 }): TeamDecision {
   if (input.viewer.campRole === null) return no("not_member");
+  if (archivedForViewer(input.viewer, input.team)) return no("archived");
   if (!canManageTeam(input.viewer, input.team, input.viewerSeat)) {
     return no("not_manager");
   }
-  if (input.team.archived) return no("archived");
   if (!input.targetIsCampMember) return no("target_not_member");
   if (input.targetSeat) return no("already_on_team");
   return ok;
 }
 
-/** May the viewer remove this person from the team? A manager, and the
- * person must be on it. Their shifts are untouched. */
+/** May the viewer remove this person from the team? A manager (on an
+ * archived team, a camp lead only), and the person must be on it. Their shifts are untouched. */
 export function decideRemoveTeamMember(input: {
   viewer: TeamViewer;
   team: TeamFacts;
@@ -213,6 +220,7 @@ export function decideRemoveTeamMember(input: {
   targetSeat: TeamSeat | null;
 }): TeamDecision {
   if (input.viewer.campRole === null) return no("not_member");
+  if (archivedForViewer(input.viewer, input.team)) return no("archived");
   if (!canManageTeam(input.viewer, input.team, input.viewerSeat)) {
     return no("not_manager");
   }
@@ -221,7 +229,7 @@ export function decideRemoveTeamMember(input: {
 }
 
 /** May the viewer make someone a team lead (or stop them being one)? A
- * manager; the person must be on the team (a lead is a member first). */
+ * manager (on an archived team, a camp lead only); the person must be on the team (a lead is a member first). */
 export function decideSetTeamLead(input: {
   viewer: TeamViewer;
   team: TeamFacts;
@@ -229,10 +237,10 @@ export function decideSetTeamLead(input: {
   targetSeat: TeamSeat | null;
 }): TeamDecision {
   if (input.viewer.campRole === null) return no("not_member");
+  if (archivedForViewer(input.viewer, input.team)) return no("archived");
   if (!canManageTeam(input.viewer, input.team, input.viewerSeat)) {
     return no("not_manager");
   }
-  if (input.team.archived) return no("archived");
   if (!input.targetSeat) return no("not_on_team");
   return ok;
 }

@@ -161,14 +161,70 @@ describe("joining, leaving, adding, removing", () => {
         targetSeat: { isLead: false },
       }),
     ).toMatchObject({ reason: "already_on_team" });
+  });
+
+  it("an archived team: team leads lose their rights, camp leads keep theirs", () => {
+    // Spec, Archived teams. A team lead (seated, isLead) is refused every
+    // management write; a camp lead and a co-lead may still add, remove and
+    // appoint leads.
+    const teamLead = { viewer: member, viewerSeat: { isLead: true } };
+    for (const lead of [campLead, coLead]) {
+      expect(
+        decideAddTeamMember({
+          viewer: lead,
+          viewerSeat: null,
+          team: archived,
+          targetIsCampMember: true,
+          targetSeat: null,
+        }),
+      ).toEqual({ ok: true });
+      expect(
+        decideRemoveTeamMember({
+          viewer: lead,
+          viewerSeat: null,
+          team: archived,
+          targetSeat: { isLead: false },
+        }),
+      ).toEqual({ ok: true });
+      expect(
+        decideSetTeamLead({
+          viewer: lead,
+          viewerSeat: null,
+          team: archived,
+          targetSeat: { isLead: false },
+        }),
+      ).toEqual({ ok: true });
+    }
     expect(
       decideAddTeamMember({
-        ...base,
+        ...teamLead,
         team: archived,
-        viewer: campLead,
-        viewerSeat: null,
+        targetIsCampMember: true,
+        targetSeat: null,
       }),
     ).toMatchObject({ reason: "archived" });
+    expect(
+      decideRemoveTeamMember({
+        ...teamLead,
+        team: archived,
+        targetSeat: { isLead: false },
+      }),
+    ).toMatchObject({ reason: "archived" });
+    expect(
+      decideSetTeamLead({
+        ...teamLead,
+        team: archived,
+        targetSeat: { isLead: false },
+      }),
+    ).toMatchObject({ reason: "archived" });
+    // The same team lead on a live team may do all three.
+    expect(
+      decideSetTeamLead({
+        ...teamLead,
+        team: open,
+        targetSeat: { isLead: false },
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("removing and appointing leads: managers only, the person must be on it", () => {
