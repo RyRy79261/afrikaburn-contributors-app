@@ -829,13 +829,13 @@ async function audit(
   });
 }
 
-/** Who a notice about this audience goes to, read in the write's
- * transaction: current members in the audience, never the actor, never an
- * erased account. */
+/** Who a notice about this meeting goes to, read in the write's
+ * transaction: current members who can see it (the audience, plus the leads
+ * and whoever scheduled it), never the actor, never an erased account. */
 async function recipientsFor(
   tx: Tx,
   groupId: string,
-  audience: MeetingAudience,
+  meeting: Pick<MeetingAccessFacts, "audience" | "createdByUserId">,
   actorUserId: string,
 ): Promise<string[]> {
   const [members, roles] = await Promise.all([
@@ -843,7 +843,7 @@ async function recipientsFor(
     loadCampRoles(tx, groupId),
   ]);
   return resolveMeetingRecipients(
-    audience,
+    meeting,
     {
       groupId,
       memberships: members.map((m) => ({
@@ -992,7 +992,7 @@ export async function createCampMeeting(
       const recipients = await recipientsFor(
         tx,
         camp.id,
-        audience.audience,
+        { audience: audience.audience, createdByUserId: viewerUserId },
         viewerUserId,
       );
       notices.push(
@@ -1051,12 +1051,7 @@ export async function updateCampMeeting(
       );
       if (!audience.ok) return refused(audience.reason);
 
-      const before = await recipientsFor(
-        tx,
-        camp.id,
-        current.audience,
-        viewerUserId,
-      );
+      const before = await recipientsFor(tx, camp.id, current, viewerUserId);
       const updated = await tx
         .update(schema.campMeetings)
         .set({
@@ -1092,7 +1087,10 @@ export async function updateCampMeeting(
       const after = await recipientsFor(
         tx,
         camp.id,
-        audience.audience,
+        {
+          audience: audience.audience,
+          createdByUserId: current.createdByUserId,
+        },
         viewerUserId,
       );
       const told = meetingUpdateNotices({ before, after, timingChanged });
@@ -1161,7 +1159,7 @@ export async function cancelCampMeeting(
       const recipients = await recipientsFor(
         tx,
         camp.id,
-        current.audience,
+        current,
         viewerUserId,
       );
       notices.push(

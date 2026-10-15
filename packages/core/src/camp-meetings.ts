@@ -248,17 +248,39 @@ export function decideMeetingAudience(
 }
 
 /**
- * The people a meeting notice goes to: this camp's current members in the
- * audience, never the person who made the change, never an erased account.
- * The announcements resolver, so "who a meeting reaches" and "who an
- * announcement to the same roles reaches" can never disagree.
+ * The people a meeting notice goes to: everyone who can see the meeting
+ * (canViewMeeting) among this camp's current members — the audience the
+ * announcements resolver gives for the same roles, plus, for a chosen-roles
+ * meeting, the camp's leads and co-leads and whoever scheduled it — never the
+ * person who made the change, never an erased account. Sorted, de-duplicated.
  */
 export function resolveMeetingRecipients(
-  audience: MeetingAudience,
+  meeting: Pick<MeetingAccessFacts, "audience" | "createdByUserId">,
   ctx: CampAnnouncementAudienceContext,
   actorUserId: string | null,
 ): string[] {
-  return resolveCampAnnouncementRecipients(audience, ctx, actorUserId);
+  const { audience } = meeting;
+  if (audience.kind !== "project" || audience.groupId !== ctx.groupId) {
+    return [];
+  }
+  const ids = new Set(resolveCampAnnouncementRecipients(audience, ctx, null));
+  if (audience.mode === "roles") {
+    for (const m of ctx.memberships) {
+      if (m.groupId !== ctx.groupId) continue;
+      if (
+        isPermissionBackstop(m.role) ||
+        (meeting.createdByUserId !== null &&
+          m.userId === meeting.createdByUserId)
+      ) {
+        ids.add(m.userId);
+      }
+    }
+  }
+  return [...ids]
+    .filter(
+      (id) => id !== actorUserId && !(ctx.excludedUserIds?.has(id) ?? false),
+    )
+    .sort();
 }
 
 /**

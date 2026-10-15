@@ -55,6 +55,8 @@ const SOUND = "0b0b0b0b-0000-4000-8000-000000000002";
 const ALICE = "aaaaaaaa-0000-4000-8000-000000000001";
 const JABU = "aaaaaaaa-0000-4000-8000-000000000002";
 const REN = "aaaaaaaa-0000-4000-8000-000000000003";
+const ZOE = "aaaaaaaa-0000-4000-8000-000000000004";
+const SAM = "aaaaaaaa-0000-4000-8000-000000000005";
 
 const perms = (
   role: MembershipRole,
@@ -183,15 +185,19 @@ describe("who sees a meeting", () => {
 
   it("agrees with the recipient resolver for every member", () => {
     // The page's "can I see it" and the notice's "who hears" must never
-    // disagree for a plain member.
+    // disagree: a chosen-roles meeting reaches the role holders, the camp's
+    // leads and co-leads, and whoever scheduled it — exactly canViewMeeting.
     const memberships = [
       { membershipId: "m-alice", userId: ALICE, groupId: CAMP, role: LEAD },
       { membershipId: "m-jabu", userId: JABU, groupId: CAMP, role: MEMBER },
       { membershipId: "m-ren", userId: REN, groupId: CAMP, role: MEMBER },
+      { membershipId: "m-zoe", userId: ZOE, groupId: CAMP, role: ADMIN },
+      { membershipId: "m-sam", userId: SAM, groupId: CAMP, role: MEMBER },
     ];
     const roleAssignments = [
       { membershipId: "m-jabu", projectRoleId: KITCHEN },
       { membershipId: "m-ren", projectRoleId: SOUND },
+      { membershipId: "m-sam", projectRoleId: SOUND },
     ];
     const projectRoles = [
       {
@@ -204,24 +210,42 @@ describe("who sees a meeting", () => {
       { id: SOUND, groupId: CAMP, kind: "custom" as const, officerKey: null },
     ];
     const ctx = { groupId: CAMP, memberships, roleAssignments, projectRoles };
-    const recipients = resolveMeetingRecipients(kitchenOnly, ctx, null);
-    expect(recipients).toEqual([JABU]);
-    for (const [userId, roles] of [
-      [JABU, [KITCHEN]],
-      [REN, [SOUND]],
-    ] as const) {
-      expect(isInMeetingAudience(kitchenOnly, new Set(roles), BASELINE)).toBe(
-        recipients.includes(userId),
-      );
+    // Ren (sound, a scheduler) scheduled a kitchen meeting.
+    const m = meeting(kitchenOnly, REN);
+    const recipients = resolveMeetingRecipients(m, ctx, null);
+    expect(recipients).toEqual([ALICE, JABU, REN, ZOE].sort());
+    const viewers: [string, MembershipRole, string[]][] = [
+      [ALICE, LEAD, []],
+      [JABU, MEMBER, [KITCHEN]],
+      [REN, MEMBER, [SOUND]],
+      [ZOE, ADMIN, []],
+      [SAM, MEMBER, [SOUND]],
+    ];
+    for (const [userId, role, roles] of viewers) {
+      expect(
+        canViewMeeting(viewer(userId, perms(role), roles), m, BASELINE),
+      ).toBe(recipients.includes(userId));
     }
+    // A lead moving it does not notify themselves; the scheduler still hears.
+    expect(resolveMeetingRecipients(m, ctx, ALICE)).toEqual(
+      [JABU, REN, ZOE].sort(),
+    );
+    // A scheduler who has left the camp hears nothing (not a current member).
+    expect(
+      resolveMeetingRecipients(
+        meeting(kitchenOnly, "aaaaaaaa-0000-4000-8000-0000000000ff"),
+        ctx,
+        null,
+      ),
+    ).toEqual([ALICE, JABU, ZOE].sort());
     // The author never notifies themselves; an erased account never hears.
     expect(
       resolveMeetingRecipients(
-        everyone,
-        { ...ctx, excludedUserIds: new Set([REN]) },
+        meeting(everyone, ALICE),
+        { ...ctx, excludedUserIds: new Set([REN, ZOE]) },
         ALICE,
       ),
-    ).toEqual([JABU]);
+    ).toEqual([JABU, SAM].sort());
   });
 });
 
