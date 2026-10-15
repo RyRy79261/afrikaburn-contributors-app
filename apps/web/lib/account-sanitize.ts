@@ -418,6 +418,15 @@ export async function sanitizeAccount(
       .set({ note: null })
       .where(eq(schema.duesPayments.userId, userId));
 
+    // 2g. CAMP MEETINGS (docs/camp-meetings-spec.md). "Who came" is a record
+    //     about the person, so their ticks go, every camp's and edition's.
+    //     What they WROTE — a meeting's title, agenda and notes — is the
+    //     camp's record and stays; their name on it reads as a departed
+    //     account through the users row.
+    await tx
+      .delete(schema.campMeetingAttendees)
+      .where(eq(schema.campMeetingAttendees.userId, userId));
+
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the
     //    display name with the "Departed Burner" stub.
