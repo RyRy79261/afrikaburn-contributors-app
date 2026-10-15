@@ -192,7 +192,11 @@ export default async function CampTeamPage({
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      {/* grid-cols-1 is minmax(0, 1fr): without a template the one implicit
+          column grows to its widest unbreakable row, and a lead's member row
+          (a 20-character handle, Lead, Remove) pushed the page to 430px at a
+          360 screen, the Edit team dialog's Save off the visible screen. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-labelledby="about-heading"
@@ -253,7 +257,7 @@ export default async function CampTeamPage({
           </section>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-labelledby="leads-heading"
             className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
@@ -280,7 +284,9 @@ export default async function CampTeamPage({
                 {team.leads.map((p) => (
                   <li key={p.userId} className="flex items-center gap-3">
                     <PersonAvatar person={p} />
-                    <span className="text-sm font-medium">{p.displayName}</span>
+                    <span className="min-w-0 text-sm font-medium wrap-anywhere">
+                      {p.displayName}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -316,7 +322,7 @@ export default async function CampTeamPage({
                   return (
                     <li key={p.userId} className="flex items-center gap-3 py-2">
                       <PersonAvatar person={p} />
-                      <span className="min-w-0 flex-1 text-sm font-medium">
+                      <span className="min-w-0 flex-1 text-sm font-medium wrap-anywhere">
                         {p.displayName}
                       </span>
                       {p.isLead && (
