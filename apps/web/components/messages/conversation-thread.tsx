@@ -476,7 +476,7 @@ export function ConversationThread({
  * small a target on a phone (canvas cKyLt / Nk5tw). A picked row is tinted
  * and its bubble ringed.
  */
-function ReportRow({
+export function ReportRow({
   reporting,
   mine,
   picked,
