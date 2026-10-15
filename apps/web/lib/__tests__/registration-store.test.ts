@@ -237,6 +237,116 @@ describe("applyCampAction — the decision_reason invariant", () => {
   });
 });
 
+describe("applyCampAction — a submit pins the camp layout", () => {
+  const LAYOUT = "1a1a1a1a-0000-4000-8000-000000000001";
+
+  it("pins in the SAME transaction, stamped with the same submitted_at", async () => {
+    // AfrikaBurn must never see a submission without the plan sent with it,
+    // nor a plan from a submission that lost the compare-and-set.
+    dbMock.queue(
+      [registration()],
+      /* the compare-and-set … returning */ [{ id: REGISTRATION }],
+      /* the layout, FOR SHARE */ [{ id: LAYOUT, version: 7, document: {} }],
+    );
+    expect(
+      await applyCampAction({
+        groupId: GROUP,
+        editionId: EDITION,
+        action: "submit",
+        actorUserId: VIEWER,
+      }),
+    ).toMatchObject({ ok: true, status: "submitted" });
+
+    expect(dbMock.transactions).toBe(1);
+    const set = dbMock.onlyQuery("update").arg("set") as { submittedAt: Date };
+    expect(dbMock.onlyQuery("update").tx).toBe(true);
+    const snapshot = dbMock.writesTo(schema.campLayoutSnapshots)[0]!;
+    expect(snapshot.tx).toBe(true);
+    expect(snapshot.arg("values")).toMatchObject({
+      registrationId: REGISTRATION,
+      version: 7,
+      registrationSubmittedAt: set.submittedAt,
+      pinnedByUserId: VIEWER,
+    });
+  });
+
+  it("a layout drawn since the last autosave completes section 4 on the submitted record", async () => {
+    dbMock.queue(
+      [
+        registration({
+          s4ExpectedPopulation: 45,
+          s4FirstArrivalDate: "2027-04-24",
+          s4AreaDimensions: null,
+        }),
+      ],
+      [{ id: REGISTRATION }],
+      [{ id: LAYOUT, version: 7, document: {} }],
+    );
+    await applyCampAction({
+      groupId: GROUP,
+      editionId: EDITION,
+      action: "submit",
+    });
+    const refresh = dbMock
+      .writesTo(schema.registrations)
+      .filter((q) => q.kind === "update")[1]!;
+    expect(refresh.tx).toBe(true);
+    expect(refresh.arg("set")).toEqual({
+      completedSections: [
+        "identity",
+        "lnt",
+        "participation",
+        "size_logistics",
+        "suppliers_commerce",
+      ],
+    });
+  });
+
+  it("a resubmit pins again — append-only", async () => {
+    dbMock.queue(
+      [registration({ status: "changes_requested" })],
+      [{ id: REGISTRATION }],
+      [{ id: LAYOUT, version: 9, document: {} }],
+    );
+    await applyCampAction({
+      groupId: GROUP,
+      editionId: EDITION,
+      action: "resubmit",
+    });
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)).toHaveLength(1);
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)[0]!.kind).toBe("insert");
+  });
+
+  it("pins nothing when the compare-and-set loses", async () => {
+    dbMock.queue([registration()], /* nothing matched */ []);
+    expect(
+      (
+        await applyCampAction({
+          groupId: GROUP,
+          editionId: EDITION,
+          action: "submit",
+        })
+      ).ok,
+    ).toBe(false);
+    expect(dbMock.writesTo(schema.campLayoutSnapshots)).toHaveLength(0);
+    expect(dbMock.queriesTouching(schema.campLayouts)).toHaveLength(0);
+  });
+
+  it("never pins on a withdrawal", async () => {
+    dbMock.queue(
+      [registration({ status: "submitted" })],
+      [{ id: REGISTRATION }],
+    );
+    await applyCampAction({
+      groupId: GROUP,
+      editionId: EDITION,
+      action: "withdraw",
+    });
+    expect(dbMock.transactions).toBe(0);
+    expect(dbMock.queriesTouching(schema.campLayouts)).toHaveLength(0);
+  });
+});
+
 describe("saveRegistrationDraft", () => {
   it("REFUSES to write once the status is no longer editable", async () => {
     dbMock.queue([registration({ status: "under_review" })]);
@@ -295,7 +405,7 @@ describe("saveRegistrationDraft", () => {
     ).not.toHaveProperty("s4WorkAccessPasses");
 
     dbMock.reset();
-    dbMock.queue([registration()], [], [], []);
+    dbMock.queue([registration()], /* no layout drawn */ [], [], [], []);
     await saveRegistrationDraft({
       group: { id: GROUP, name: "Mad Hatters" },
       editionId: EDITION,
@@ -325,6 +435,38 @@ describe("saveRegistrationDraft", () => {
     expect(written.completedSections).toEqual(result.completedSections);
   });
 
+  it("a drawn layout makes the area dimensions optional (layout spec decision 11)", async () => {
+    const s4 = { s4ExpectedPopulation: 45, s4FirstArrivalDate: "2027-04-24" };
+    // No layout: blank dimensions leave section 4 incomplete.
+    dbMock.queue([registration()], /* no layout */ [], [], [], []);
+    const without = await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values(s4),
+    });
+    if (!without.ok) throw new Error("expected a successful save");
+    expect(without.completedSections).not.toContain("size_logistics");
+    expect(dbMock.queriesTouching(schema.campLayouts)).toHaveLength(1);
+
+    // A layout drawn: the same answers complete it, and the free-text column
+    // is never written for the camp.
+    dbMock.reset();
+    dbMock.queue([registration()], [{ id: "layout-1" }], [], [], []);
+    const withLayout = await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values(s4),
+    });
+    if (!withLayout.ok) throw new Error("expected a successful save");
+    expect(withLayout.completedSections).toContain("size_logistics");
+    const set = dbMock.writesTo(schema.registrations)[0]!.arg("set") as {
+      completedSections: string[];
+      s4AreaDimensions: string | null;
+    };
+    expect(set.completedSections).toContain("size_logistics");
+    expect(set.s4AreaDimensions).toBeNull();
+  });
+
   it("throws rather than half-saving when the insert returns no row", async () => {
     dbMock.queue([], [], /* returning nothing */ []);
 
@@ -342,6 +484,7 @@ describe("saveRegistrationDraft", () => {
     // camp admin could POST the id directly.
     dbMock.queue(
       [registration()],
+      /* no layout drawn */ [],
       /* the group description write */ [],
       /* the registration update */ [],
       /* the declarations delete */ [],
@@ -370,6 +513,7 @@ describe("saveRegistrationDraft", () => {
   it("issues no declaration insert when every posted supplier is ineligible", async () => {
     dbMock.queue(
       [registration()],
+      /* no layout drawn */ [],
       [],
       [],
       [],

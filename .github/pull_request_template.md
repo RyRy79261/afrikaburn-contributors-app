@@ -3,7 +3,7 @@ TITLE: Conventional Commits with a workspace scope — see CONTRIBUTING.md.
     type(scope): imperative subject, lowercase, no full stop, <=72 chars
     e.g. fix(web): exclude sanitized accounts from the anti-lockout counts
 Scopes are workspace names without the @quagga/ prefix: web · org · suppliers ·
-core · db · ui · auth · types · e2e · repo. Several: fix(web,org): … · none: repo.
+core · db · ui · auth · types · geo · e2e · repo. Several: fix(web,org): … · none: repo.
 Add ! before the colon for a breaking change: feat(db)!: …
 
 KEEP THIS SHORT. Every section below wants a few lines, not paragraphs. If
@@ -21,7 +21,7 @@ migration is a reviewer who misses the migration.
 
 <!-- One line per workspace you changed; delete the rest. Link file paths where
      it saves a search.
-     web · org · suppliers · core · db · ui · auth · types · e2e · repo -->
+     web · org · suppliers · core · db · ui · auth · types · geo · e2e · repo -->
 
 - **workspace** —
 

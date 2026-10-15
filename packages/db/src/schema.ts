@@ -25,6 +25,7 @@ import type {
   CampHistoryEntry,
   SupplierOnboardingSteps,
   WapApprovedPass,
+  LayoutDocument,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). The R0 core (migrations
@@ -3286,6 +3287,99 @@ export const campClaims = pgTable(
     receiptPaired: check(
       "camp_claims_receipt_paired",
       sql`(${c.receiptKey} is null) = (${c.receiptContentType} is null)`,
+    ),
+  }),
+);
+
+// --- Camp layouts (docs/camp-layout-spec.md, epic #62) ---------------------
+// A camp's plan drawn to scale: a `LayoutDocument` (@quagga/types) in
+// plot-local METRES, stored as jsonb and validated by Zod on every write.
+// Geometry is data, not PostGIS (gis-placement-spec §C): the outline is a
+// rectangle in v1 and a GIS polygon later, with no migration either way.
+//
+// OWNED BY THE REGISTRATION (spec decision 8): one layout per camp per
+// edition, through `registration_id` and nothing else. Deleting the
+// registration (or the camp, through it) deletes the plan.
+//
+// A WORKING DOCUMENT (decision 9). Editors change it at any time in the
+// edition, whatever the registration's status. Saves are compare-and-set on
+// `version`: a save names the version it was made from, and the UPDATE
+// matches on it, so a stale editor writes nothing and is told so.
+//
+// PRIVATE TO THE CAMP. Every current member reads it; leads, co-leads and
+// `manage_layout` holders write it (@quagga/core camp-layout.ts). It shows
+// where people sleep, so it is never in a public projection, directory or
+// export other than the plot size. It holds no personal data beyond the
+// free-text labels editors write.
+export const campLayouts = pgTable(
+  "camp_layouts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    document: jsonb("document").$type<LayoutDocument>().notNull(),
+    // Starts at 1 and goes up by one on every save.
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (l) => ({
+    registrationUniq: uniqueIndex("camp_layouts_registration_idx").on(
+      l.registrationId,
+    ),
+    versionPositive: check(
+      "camp_layouts_version_positive",
+      sql`${l.version} >= 1`,
+    ),
+  }),
+);
+
+// What AfrikaBurn sees (decision 10): a copy of the layout PINNED when the
+// registration is submitted or resubmitted, in the same transaction as the
+// status change. APPEND-ONLY — a resubmit adds a row, it never replaces one,
+// so the console can always say what was sent when. The org reads the latest
+// row for the registration; later edits to `camp_layouts` do not reach it
+// until the camp resubmits.
+//
+// `registration_submitted_at` is the `registrations.submitted_at` stamp of
+// the submission this snapshot belongs to — the same instant, written in the
+// same transaction — which is what ties a pin to a submission without a
+// submissions table.
+export const campLayoutSnapshots = pgTable(
+  "camp_layout_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    layoutId: uuid("layout_id")
+      .notNull()
+      .references(() => campLayouts.id, { onDelete: "cascade" }),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    document: jsonb("document").$type<LayoutDocument>().notNull(),
+    registrationSubmittedAt: timestamp("registration_submitted_at", {
+      mode: "date",
+    }).notNull(),
+    pinnedAt: timestamp("pinned_at", { mode: "date" }).notNull().defaultNow(),
+    pinnedByUserId: uuid("pinned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (s) => ({
+    registrationPinnedIdx: index(
+      "camp_layout_snapshots_registration_pinned_idx",
+    ).on(s.registrationId, s.pinnedAt.desc()),
+    layoutIdx: index("camp_layout_snapshots_layout_idx").on(s.layoutId),
+    versionPositive: check(
+      "camp_layout_snapshots_version_positive",
+      sql`${s.version} >= 1`,
     ),
   }),
 );

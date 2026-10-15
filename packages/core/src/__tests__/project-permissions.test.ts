@@ -31,6 +31,7 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
       expect(hasProjectPermission(m, "manage_questionnaires")).toBe(true);
       expect(hasProjectPermission(m, "assign_roles")).toBe(true);
       expect(hasProjectPermission(m, "manage_money")).toBe(true);
+      expect(hasProjectPermission(m, "manage_layout")).toBe(true);
     }
     expect(isPermissionBackstop("lead")).toBe(true);
     expect(isPermissionBackstop("member")).toBe(false);
@@ -41,6 +42,17 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
     expect(hasProjectPermission(m, "view_member_details")).toBe(false);
     expect(hasProjectPermission(m, "manage_roles")).toBe(false);
     expect(hasProjectPermission(m, "manage_money")).toBe(false);
+    expect(hasProjectPermission(m, "manage_layout")).toBe(false);
+  });
+
+  it("manage_layout is granted on top for a plain member, and a captain holds it", () => {
+    expect(
+      hasProjectPermission(
+        member("member", { manage_layout: true }),
+        "manage_layout",
+      ),
+    ).toBe(true);
+    expect(allProjectPermissions().manage_layout).toBe(true);
   });
 });
 
@@ -286,6 +298,15 @@ describe("roleGrantsElevatedPrivileges — escalation guard for assignment", () 
     );
     expect(
       roleGrantsElevatedPrivileges("custom", { manage_money: false }),
+    ).toBe(false);
+  });
+
+  it("manage_layout is elevating: it rewrites what the camp sends AfrikaBurn", () => {
+    expect(
+      roleGrantsElevatedPrivileges("custom", { manage_layout: true }),
+    ).toBe(true);
+    expect(
+      roleGrantsElevatedPrivileges("custom", { manage_layout: false }),
     ).toBe(false);
   });
 

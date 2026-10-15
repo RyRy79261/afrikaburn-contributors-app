@@ -41,6 +41,7 @@ export function privilegeSummary(p: ProjectPermissions): string {
   else if (p.assign_roles) parts.push("Assigns roles");
   if (p.manage_members) parts.push("Manages invites");
   if (p.manage_money) parts.push("Manages money");
+  if (p.manage_layout) parts.push("Edits the layout");
   return parts.length ? parts.join(" · ") : "No extra privileges";
 }
 
@@ -166,6 +167,8 @@ export function PrivilegeToggles({
     });
   }
 
+  /** Adds or removes one role from `manage_questionnaires`' audience; from
+   * "all", it starts a fresh list. */
   function toggleScopeRole(roleId: string) {
     if (!mq) return;
     const current = mq.audienceRoles === "all" ? [] : mq.audienceRoles;
@@ -343,6 +346,14 @@ export function PrivilegeToggles({
         checked={!!value.manage_money}
         disabled={disabled}
         onChange={(v) => onChange({ ...value, manage_money: v || undefined })}
+      />
+
+      <PrivilegeRow
+        label="Can edit the camp layout"
+        hint="Draw and change the camp's plan. Every member can see it; AfrikaBurn sees the copy sent with the registration."
+        checked={!!value.manage_layout}
+        disabled={disabled}
+        onChange={(v) => onChange({ ...value, manage_layout: v || undefined })}
       />
     </div>
   );

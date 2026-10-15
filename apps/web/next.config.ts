@@ -18,6 +18,7 @@ const config: NextConfig = {
     "@quagga/ui",
     "@quagga/types",
     "@quagga/core",
+    "@quagga/geo",
     "@quagga/db",
   ],
   turbopack: { root: repoRoot },

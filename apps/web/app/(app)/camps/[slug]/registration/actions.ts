@@ -244,6 +244,7 @@ export async function submitRegistrationAction(
     groupId: gate.group.id,
     editionId: gate.editionId,
     action,
+    actorUserId: gate.userId,
   });
   if (!result.ok) return result;
 

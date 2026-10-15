@@ -9,6 +9,7 @@ import {
 } from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
+import { getPinnedLayoutPlots } from "@/lib/layout-snapshot";
 import { getActiveEdition } from "@/lib/queries";
 import { requireOrgSession } from "@/lib/session";
 
@@ -44,8 +45,13 @@ const EXPORTABLE_STATUSES = [
   "approved",
 ] as const;
 
+/** The active edition's placement CSV, as a download. 503 when no edition is
+ * active. */
 export async function GET(): Promise<NextResponse> {
-  await requireOrgSession({ capability: "read", domain: "registrations" });
+  const session = await requireOrgSession({
+    capability: "read",
+    domain: "registrations",
+  });
 
   const edition = await getActiveEdition();
   if (!edition) {
@@ -78,7 +84,10 @@ export async function GET(): Promise<NextResponse> {
       wranglerSanitizedAt: schema.users.sanitizedAt,
     })
     .from(schema.registrations)
-    .innerJoin(schema.groups, eq(schema.groups.id, schema.registrations.groupId))
+    .innerJoin(
+      schema.groups,
+      eq(schema.groups.id, schema.registrations.groupId),
+    )
     // Wrangler is optional, so both joins are left joins — an unassigned camp
     // must still appear in the file, blank column and all.
     .leftJoin(
@@ -138,6 +147,13 @@ export async function GET(): Promise<NextResponse> {
     categoriesByRegistration.set(row.registrationId, list);
   }
 
+  // The plot size and area from each camp's pinned layout (camp-layout-spec
+  // decision 10) — never the layout itself.
+  const layoutPlots = await getPinnedLayoutPlots(
+    rows.map((r) => r.registrationId),
+    session.actor,
+  );
+
   const exportRows: PlacementExportRow[] = rows.map((row) => ({
     campName: row.campName,
     campCode: row.campCode,
@@ -147,6 +163,7 @@ export async function GET(): Promise<NextResponse> {
     contactEmail: row.contactEmail,
     expectedPopulation: row.expectedPopulation,
     areaDimensions: row.areaDimensions,
+    layoutPlot: layoutPlots.get(row.registrationId) ?? null,
     workAccessPasses: row.workAccessPasses,
     firstArrivalDate: row.firstArrivalDate,
     amplifiedMusic: row.amplifiedMusic,

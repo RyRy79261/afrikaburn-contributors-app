@@ -5,6 +5,7 @@ import {
   buildCarryForwardPatch,
   changedFields,
   completedSectionsFor,
+  completedSectionsWithLayout,
   deriveOnboardingProgress,
   filterPickerEligible,
   isSubmittable,
@@ -13,6 +14,7 @@ import {
   publicMemberName,
   resolveCampAction,
   selectComparisonPrior,
+  shouldPinLayoutSnapshot,
   type CampAction,
   type ComparisonBasis,
   type FieldChange,
@@ -28,6 +30,7 @@ import type {
 } from "@quagga/types";
 import { activeMembership } from "@quagga/db";
 import { db, schema, withTransaction, type Tx } from "./db";
+import { pinLayoutSnapshot, registrationHasLayout } from "./camp-layout-store";
 
 // Camp-side data access + mutations for the registration wizard. Server-only;
 // the state machine + completeness predicates live in @quagga/core so this
@@ -440,9 +443,11 @@ export interface RegistrationValues {
 function toSectionData(
   campName: string,
   v: RegistrationValues,
+  hasLayout = false,
 ): RegistrationSectionData {
   return {
     campName,
+    hasLayout,
     campDescription: v.campDescription,
     s1ContactEmail: v.s1ContactEmail,
     s2LntPlan: v.s2LntPlan,
@@ -490,7 +495,16 @@ export async function saveRegistrationDraft(input: {
   }
 
   const v = input.values;
-  const completed = completedSectionsFor(toSectionData(input.group.name, v));
+  let completed = completedSectionsFor(toSectionData(input.group.name, v));
+  // A drawn layout makes the area dimensions optional (camp-layout-spec
+  // decision 11). Asked only when it could change the answer.
+  if (
+    existing &&
+    !completed.includes("size_logistics") &&
+    (await registrationHasLayout(existing.id))
+  ) {
+    completed = completedSectionsFor(toSectionData(input.group.name, v, true));
+  }
 
   const columns = {
     s1ContactEmail: v.s1ContactEmail,
@@ -628,6 +642,8 @@ export async function applyCampAction(input: {
   groupId: string;
   editionId: string;
   action: CampAction;
+  /** Who acted — recorded on a pinned layout snapshot and its audit row. */
+  actorUserId?: string | null;
 }): Promise<TransitionResult> {
   const existing = await getRegistration(input.groupId, input.editionId);
   if (!existing) {
@@ -663,30 +679,72 @@ export async function applyCampAction(input: {
   // check and the write were not the same instant. Guarding on the exact status
   // makes the losing writer update zero rows, and zero rows is reported back
   // rather than silently accepted as a success.
-  const updated = await db()
-    .update(schema.registrations)
-    .set({
-      status: target,
-      updatedAt: new Date(),
-      // THE REVIEWER'S WORDS BELONG TO THE STATE THEY WERE SAID ABOUT.
-      // `decision_reason` holds the reason for the CURRENT state, and a camp
-      // moving itself out of `changes_requested` has acted on that feedback —
-      // carrying it into `submitted` left "From the reviewer: your LNT section
-      // needs more detail" sitting under "Submitted — awaiting review", which
-      // reads as though AfrikaBurn is still asking. Same for a withdrawal.
-      // The org's own decide path already clears it on any transition that
-      // carries no reason; this is the camp-side half of the same invariant
-      // (migration 0027 corrected the rows 0025's backfill wrote).
-      decisionReason: null,
-      ...(target === "submitted" ? { submittedAt: new Date() } : {}),
-    })
-    .where(
-      and(
-        eq(schema.registrations.id, existing.id),
-        eq(schema.registrations.status, existing.status),
-      ),
-    )
-    .returning({ id: schema.registrations.id });
+  //
+  // A SUBMIT PINS THE LAYOUT (docs/camp-layout-spec.md decision 9). The pin
+  // is written in the same transaction as the status change, stamped with
+  // the same `submitted_at`, so AfrikaBurn can never see a submission without
+  // the plan the camp sent with it, or a plan from a submission that lost
+  // this compare-and-set.
+  const pin = shouldPinLayoutSnapshot(input.action);
+  const now = new Date();
+  const values = {
+    status: target,
+    updatedAt: now,
+    // THE REVIEWER'S WORDS BELONG TO THE STATE THEY WERE SAID ABOUT.
+    // `decision_reason` holds the reason for the CURRENT state, and a camp
+    // moving itself out of `changes_requested` has acted on that feedback —
+    // carrying it into `submitted` left "From the reviewer: your LNT section
+    // needs more detail" sitting under "Submitted — awaiting review", which
+    // reads as though AfrikaBurn is still asking. Same for a withdrawal.
+    // The org's own decide path already clears it on any transition that
+    // carries no reason; this is the camp-side half of the same invariant
+    // (migration 0027 corrected the rows 0025's backfill wrote).
+    decisionReason: null,
+    ...(target === "submitted" ? { submittedAt: now } : {}),
+  };
+  const sameStatus = and(
+    eq(schema.registrations.id, existing.id),
+    eq(schema.registrations.status, existing.status),
+  );
+  const updated = pin
+    ? await withTransaction(async (tx) => {
+        const rows = await tx
+          .update(schema.registrations)
+          .set(values)
+          .where(sameStatus)
+          .returning({ id: schema.registrations.id });
+        if (rows.length > 0) {
+          const pinned = await pinLayoutSnapshot(tx, {
+            registrationId: existing.id,
+            submittedAt: now,
+            actorUserId: input.actorUserId ?? null,
+          });
+          // `completed_sections` is written by the wizard's autosave, so a
+          // layout drawn after the last save left section 4 stored as
+          // incomplete although the layout answers its dimensions
+          // (decision 11). The submitted record must say what was sent.
+          const refreshed =
+            pinned === null
+              ? null
+              : completedSectionsWithLayout(existing.completedSections, {
+                  s4ExpectedPopulation: existing.s4ExpectedPopulation,
+                  s4FirstArrivalDate: existing.s4FirstArrivalDate,
+                  s4AreaDimensions: existing.s4AreaDimensions,
+                });
+          if (refreshed) {
+            await tx
+              .update(schema.registrations)
+              .set({ completedSections: refreshed })
+              .where(eq(schema.registrations.id, existing.id));
+          }
+        }
+        return rows;
+      })
+    : await db()
+        .update(schema.registrations)
+        .set(values)
+        .where(sameStatus)
+        .returning({ id: schema.registrations.id });
   if (updated.length === 0) {
     return {
       ok: false,

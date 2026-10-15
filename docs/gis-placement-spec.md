@@ -770,6 +770,14 @@ Each phase is independently shippable and none blocks a release — roadmap desi
 principle 5, which named this exact subsystem as the canonical example of a
 speculative build that must stay in its own lane.
 
+> **Phase 3 is split (Ryan, 14 Oct 2026, #62).** A generic camp layout editor
+> ships now, ahead of Phases 0–2: a rectangle plot the camp sizes itself, in
+> plot-local metres, with hand-placed tents under a Bedouin
+> ([`camp-layout-spec.md`](camp-layout-spec.md)). Its outline is typed
+> rectangle-or-polygon, so the erf-anchored version (Phase 3 proper) swaps the
+> source of the outline without a migration. Editing uses react-konva; every
+> read-only view stays SVG, as §G intended.
+
 | Phase                               | What ships                                                                                                                                     | Depends on                                   | Schema                                                             |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
 | **0 — Probe**                       | `probe-map-source.ts`, a written contract for AB's API, and a decision on whether the rest of this plan survives contact with it               | An endpoint and credentials from AB          | None                                                               |

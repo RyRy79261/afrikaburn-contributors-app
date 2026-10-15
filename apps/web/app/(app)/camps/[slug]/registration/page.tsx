@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, GitCompare, History } from "lucide-react";
 import {
   canViewCampRegistration,
+  formatPlotSize,
   pastSubmittedRegistrations,
   selectComparisonPrior,
 } from "@quagga/core";
@@ -26,6 +27,8 @@ import {
   type RegistrationValues,
 } from "@/lib/registration-store";
 import { CarryForwardBanner } from "@/components/registration/carry-forward-banner";
+import type { WizardLayout } from "@/components/registration/layout-section-card";
+import { loadCampLayout, loadLayoutAccess } from "@/lib/camp-layout-store";
 import {
   saveRegistrationDraftAction,
   submitRegistrationAction,
@@ -70,6 +73,10 @@ function emptyValues(description: string | null): RegistrationValues {
   };
 }
 
+/**
+ * The camp's registration for the active edition: the wizard while it is a
+ * draft or has changes requested, the locked summary otherwise.
+ */
 export default async function RegistrationPage({
   params,
 }: {
@@ -215,6 +222,31 @@ export default async function RegistrationPage({
         }
       : emptyValues(context.group.description);
 
+    // Section 4's camp layout (layout spec decisions 11 and 12): the size
+    // from a drawn layout, or the way in to draw one. Null where a layout
+    // does not apply (not a theme camp), through the same access check the
+    // layout page takes.
+    const layoutAccess = await loadLayoutAccess(slug, campUser.id);
+    let layout: WizardLayout | null = null;
+    if (layoutAccess) {
+      const view = await loadCampLayout(layoutAccess, {
+        id: context.editionId,
+        year: context.editionYear,
+      });
+      layout = {
+        plotSize: view.summary ? formatPlotSize(view.summary) : null,
+        lastYear:
+          view.lastYear && layoutAccess.canEdit
+            ? {
+                editionYear: view.lastYear.editionYear,
+                size: formatPlotSize(view.lastYear.summary),
+                objectCount: view.lastYear.summary.totalObjectCount,
+              }
+            : null,
+        canStart: view.registration !== null,
+      };
+    }
+
     // The carry-forward offer, only while it is still an offer: once this
     // year's draft has been seeded there is nothing to bring across, and a
     // banner that stays put after you have pressed it reads as a failure.
@@ -246,6 +278,7 @@ export default async function RegistrationPage({
           decisionReason={registration?.decisionReason ?? null}
           viewerUserId={campUser.id}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+          layout={layout}
           saveAction={saveRegistrationDraftAction}
           submitAction={submitRegistrationAction}
           withdrawAction={withdrawRegistrationAction}

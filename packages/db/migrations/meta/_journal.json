@@ -267,6 +267,13 @@
       "when": 1791929844193,
       "tag": "0037_camp_money",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791966523881,
+      "tag": "0038_camp_layouts",
+      "breakpoints": true
     }
   ]
 }

@@ -269,6 +269,10 @@ export const ProjectPermissionKey = z.enum([
   // Camp money (docs/camp-budget-spec.md): the camp's budget, every member's
   // dues and every claim. Without it a member sees the totals and their own.
   "manage_money",
+  // Camp layout (docs/camp-layout-spec.md decision 5): edit the camp's plan.
+  // Every current member VIEWS it; this is who changes it. The person who
+  // plans a camp's build is often not its lead.
+  "manage_layout",
 ]);
 export type ProjectPermissionKey = z.infer<typeof ProjectPermissionKey>;
 
@@ -318,6 +322,7 @@ export const ProjectPermissions = z.object({
   manage_members: z.boolean().optional(),
   post_announcements: PostAnnouncementsScope.optional(),
   manage_money: z.boolean().optional(),
+  manage_layout: z.boolean().optional(),
 });
 export type ProjectPermissions = z.infer<typeof ProjectPermissions>;
 
@@ -330,6 +335,7 @@ export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
   manage_members: "Manage members",
   post_announcements: "Post announcements",
   manage_money: "Manage money",
+  manage_layout: "Edit the camp layout",
 };
 
 // --- Officer catalog (questionnaire-spec §"Officer roles") -----------------
