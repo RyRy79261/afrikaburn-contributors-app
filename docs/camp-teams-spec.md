@@ -3,7 +3,7 @@
 | Field                  | Value                                                                                   |
 | ---------------------- | --------------------------------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                                        |
-| **Doc status**         | Draft — for review before build                                                         |
+| **Doc status**         | Active                                                                                  |
 | **Normative language** | Descriptive only                                                                        |
 | **Requirement IDs**    | Partial — App Spec §4a `COMM-008`, `COMM-012`, `COMM-013`, `COMM-014`, `COMM-016`       |
 | **Owner / Updated**    | Ryan, 2026-10-15                                                                        |
@@ -32,6 +32,11 @@ a Telegram group, the chat is in the app.
 - **Camp leads read a team chat only if they join the team** (the
   direct-message law: only a chat's members read it).
 - **New members see messages from when they joined**, not the history.
+- **Removing someone from a team keeps their shifts** (shifts are separate
+  sign-ups; a lead takes them off shifts as today).
+- Frames: T1 teams list `Zam6P` / `mcghm`, T2 team page `z53vuX` / `lexRq`,
+  T3 team chat `qsuL0` / `fyZFW`, T4 inbox `p17kP` / `DwjfT`. A Teams tile on
+  the camp page and the shifts "Edit teams" link are built without a frame.
 
 ## Model
 
