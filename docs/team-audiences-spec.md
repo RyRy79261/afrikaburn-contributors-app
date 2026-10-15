@@ -3,7 +3,7 @@
 | Field                  | Value                                                            |
 | ---------------------- | ---------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                 |
-| **Doc status**         | Draft — for review before build                                  |
+| **Doc status**         | Active                                                           |
 | **Normative language** | Descriptive only                                                 |
 | **Requirement IDs**    | Partial — App Spec §4a `COMM-012`, `COMM-014`                    |
 | **Owner / Updated**    | Ryan, 2026-10-15                                                 |
@@ -21,6 +21,11 @@ without making "Kitchen" a role too. This adds **teams** as an audience.
   `post_announcements` / `schedule_meetings` permission. They cannot reach the
   whole camp, roles, or other teams that way. Holders of the camp-wide
   permission (and camp leads) may pick any teams.
+
+- Frames: A1 announcement form `knWLt` / `y2O4gf`; A2 meeting form `bIVG2` /
+  `YGauR` and team page shortcuts `Yzft0` / `IyeIT`. Each form keeps its
+  wording and adds one option ("By team" / "Teams"). The team page shortcuts
+  show to the team's leads and the camp's leads.
 
 ## Model
 
