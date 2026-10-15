@@ -42,6 +42,7 @@ export function privilegeSummary(p: ProjectPermissions): string {
   if (p.manage_members) parts.push("Manages invites");
   if (p.manage_money) parts.push("Manages money");
   if (p.manage_layout) parts.push("Edits the layout");
+  if (p.schedule_meetings) parts.push("Schedules meetings");
   return parts.length ? parts.join(" · ") : "No extra privileges";
 }
 
@@ -354,6 +355,16 @@ export function PrivilegeToggles({
         checked={!!value.manage_layout}
         disabled={disabled}
         onChange={(v) => onChange({ ...value, manage_layout: v || undefined })}
+      />
+
+      <PrivilegeRow
+        label="Can schedule meetings"
+        hint="Schedule, move and cancel the camp's meetings, and write the notes and who came. Members see only the meetings meant for them."
+        checked={!!value.schedule_meetings}
+        disabled={disabled}
+        onChange={(v) =>
+          onChange({ ...value, schedule_meetings: v || undefined })
+        }
       />
     </div>
   );
