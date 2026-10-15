@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { z } from "zod";
+import { teamAudienceLabel } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import { Card, CardContent } from "@quagga/ui/components/card";
@@ -107,6 +108,7 @@ export default async function CampAnnouncementPage({
             bodyMd: announcement.bodyMd,
             mode: announcement.audience.mode,
             roleIds: announcement.audience.roleIds,
+            teamIds: announcement.audience.teamIds ?? [],
             presentation: announcement.presentation,
             pinOnPublish: announcement.pinOnPublish,
             meetingUrl: announcement.meetingUrl,
@@ -134,7 +136,9 @@ export default async function CampAnnouncementPage({
           <Badge variant="outline">
             {announcement.audience.mode === "everyone"
               ? "Everyone"
-              : `${announcement.audience.roleIds.length} role(s)`}
+              : announcement.audience.mode === "teams"
+                ? teamAudienceLabel(announcement.teamNames)
+                : `${announcement.audience.roleIds.length} role(s)`}
           </Badge>
           {mustAcknowledge && <Badge variant="outline">Must acknowledge</Badge>}
           {announcement.pinnedAt && <Badge>Pinned</Badge>}

@@ -101,12 +101,15 @@ function campRoles(posterGrants: boolean) {
   ];
 }
 
-/** Queue the three locked reads `lockSenderContext` makes. */
+/** Queue the locked reads `lockSenderContext` makes: membership, roles,
+ * held roles, then the camp's live teams (none here, so the seat read is
+ * skipped). */
 function queueSender(opts: { posterGrants: boolean }) {
   dbMock.queue(
     [{ id: "m-author", role: "member" }],
     campRoles(opts.posterGrants),
     [{ projectRoleId: POSTER_ROLE }],
+    [],
   );
 }
 
@@ -255,7 +258,9 @@ describe("publishCampAnnouncement", () => {
     const lockedReads = dbMock.queries.filter(
       (q) => q.kind === "select" && q.tx && q.called("for"),
     );
+    // membership, roles, held roles, the camp's live teams; then the draft.
     expect(lockedReads.map((q) => q.arg("for"))).toEqual([
+      "share",
       "share",
       "share",
       "share",
@@ -733,6 +738,7 @@ function senderContext(poster: boolean): SenderContext {
     },
     baselineRoleId: BASELINE,
     campRoleIds: new Set([BASELINE, KITCHEN, POSTER_ROLE]),
+    teams: { liveTeamIds: new Set<string>(), ledTeamIds: new Set<string>() },
   };
 }
 
@@ -1325,5 +1331,119 @@ describe("dispatchDueCampAnnouncements — skips and failures", () => {
       { bulletinId: second, error: "connection reset" },
     ]);
     expect(summary).toMatchObject({ due: 2, dispatched: 0, skipped: 0 });
+  });
+});
+
+// --- Team audiences (docs/team-audiences-spec.md) ----------------------------
+
+describe("team audiences", () => {
+  const KITCHEN_TEAM = "7e7e7e7e-0000-4000-8000-000000000001";
+  const BUILD_TEAM = "7e7e7e7e-0000-4000-8000-000000000002";
+  const teamAudience = (...teamIds: string[]) => ({
+    kind: "project" as const,
+    groupId: CAMP,
+    mode: "teams" as const,
+    roleIds: [],
+    teamIds,
+  });
+
+  /** `lockSenderContext` for an author with NO post_announcements: the
+   * membership, the roles, no held roles, the camp's live teams, then the
+   * author's lead seats. */
+  function queueTeamLead(ledTeamIds: string[]) {
+    dbMock.queue(
+      [{ id: "m-author", role: "member" }],
+      campRoles(false),
+      [],
+      [{ id: KITCHEN_TEAM }, { id: BUILD_TEAM }],
+      ledTeamIds.map((teamId) => ({ teamId })),
+    );
+  }
+
+  it("a team lead without the permission publishes to their team; only it receives", async () => {
+    queueTeamLead([KITCHEN_TEAM]);
+    dbMock.queue(
+      [draftRow({ audience: teamAudience(KITCHEN_TEAM) })],
+      [{ id: DRAFT }],
+      /* audit */ [],
+    );
+    queueFanOutReads();
+    // The seats: the cook and the author on the kitchen, the builder on build.
+    dbMock.queue([
+      { teamId: KITCHEN_TEAM, groupId: CAMP, userId: COOK },
+      { teamId: KITCHEN_TEAM, groupId: CAMP, userId: AUTHOR },
+      { teamId: BUILD_TEAM, groupId: CAMP, userId: BUILDER },
+    ]);
+
+    const result = await store.publishCampAnnouncement({
+      groupId: CAMP,
+      id: DRAFT,
+      actorId: AUTHOR,
+      activeEditionId: EDITION,
+    });
+    expect(result).toEqual({ ok: true, recipients: 1, scheduledFor: null });
+    const values = notificationInserts()[0]!.arg("values") as {
+      userId: string;
+    }[];
+    expect(values.map((v) => v.userId)).toEqual([COOK]);
+    // The author's lead seats were read FOR SHARE, in the transaction, keyed
+    // on the author as a lead.
+    const seatRead = dbMock
+      .queriesTouching(schema.teamMembers)
+      .find((q) => q.tx && q.called("for"))!;
+    expect(seatRead.arg("for")).toBe("share");
+    expect(whereOf(seatRead).sql).toContain('"team_members"."is_lead" = $');
+    expect(whereOf(seatRead).params).toContain(AUTHOR);
+  });
+
+  it("a team lead is refused another team, before any claim", async () => {
+    queueTeamLead([KITCHEN_TEAM]);
+    dbMock.queue([draftRow({ audience: teamAudience(BUILD_TEAM) })]);
+    const result = await store.publishCampAnnouncement({
+      groupId: CAMP,
+      id: DRAFT,
+      actorId: AUTHOR,
+      activeEditionId: EDITION,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: ANNOUNCEMENT_MESSAGES.notAllowed,
+    });
+    expect(bulletinUpdates()).toHaveLength(0);
+    expect(notificationInserts()).toHaveLength(0);
+  });
+
+  it("a lead removed before publish is refused (the locked seat read is empty)", async () => {
+    queueTeamLead([]);
+    dbMock.queue([draftRow({ audience: teamAudience(KITCHEN_TEAM) })]);
+    expect(
+      (
+        await store.publishCampAnnouncement({
+          groupId: CAMP,
+          id: DRAFT,
+          actorId: AUTHOR,
+          activeEditionId: EDITION,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(bulletinUpdates()).toHaveLength(0);
+  });
+
+  it("the sender's list names the teams of a by-team announcement", async () => {
+    dbMock.queue(
+      [draftRow({ audience: teamAudience(BUILD_TEAM, KITCHEN_TEAM) })],
+      [],
+      [
+        { id: KITCHEN_TEAM, name: "Kitchen" },
+        { id: BUILD_TEAM, name: "Build & strike" },
+      ],
+    );
+    const result = await store.listCampAnnouncementsForSender({
+      groupId: CAMP,
+      editionId: EDITION,
+      viewerId: AUTHOR,
+      sender: senderContext(false),
+    });
+    expect(result.drafts[0]?.teamNames).toEqual(["Build & strike", "Kitchen"]);
   });
 });

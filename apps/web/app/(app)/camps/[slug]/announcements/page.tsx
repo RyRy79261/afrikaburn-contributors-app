@@ -3,7 +3,7 @@ import { ArrowLeft, Megaphone, Plus } from "lucide-react";
 import { Button } from "@quagga/ui/components/button";
 import { BulletinCard } from "@quagga/ui/components/bulletin-card";
 import { EmptyState } from "@quagga/ui/components/empty-state";
-import { plainPreview } from "@quagga/core";
+import { plainPreview, teamAudienceLabel } from "@quagga/core";
 import { PreviewNotice } from "@/components/preview-notice";
 import {
   listCampAnnouncementsForSender,
@@ -31,6 +31,7 @@ function fmt(d: Date): string {
 
 function audienceLabel(a: AuthorAnnouncement): string {
   if (a.audience.mode === "everyone") return "Everyone";
+  if (a.audience.mode === "teams") return teamAudienceLabel(a.teamNames);
   const n = a.audience.roleIds.length;
   return `${n} ${n === 1 ? "role" : "roles"}`;
 }

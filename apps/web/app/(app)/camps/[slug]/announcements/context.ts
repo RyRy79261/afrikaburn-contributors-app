@@ -1,7 +1,10 @@
 import "server-only";
 
 import { notFound, redirect } from "next/navigation";
-import { canSendCampAnnouncement, hasProjectPermission } from "@quagga/core";
+import {
+  canComposeCampAnnouncements,
+  canSendCampAnnouncement,
+} from "@quagga/core";
 import type { ProjectAudience } from "@quagga/types";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/config";
@@ -19,7 +22,8 @@ import type {
 } from "@/components/announcements/composer";
 
 // The shared guard for every /camps/[slug]/announcements page. A viewer who
-// is not a member of the camp, or a member without `post_announcements`, gets
+// is not a member of the camp, or a member with neither `post_announcements`
+// nor a team they lead, gets
 // the camp's ordinary 404 — the same answer as a camp that does not exist, so
 // a free camp's announcements surface is as undiscoverable as the camp.
 
@@ -50,9 +54,12 @@ export async function loadAnnouncementsContext(
   if (!camp) notFound();
 
   const sender = await getSenderContext(camp.id, user.id);
-  if (!sender || !hasProjectPermission(sender.perms, "post_announcements")) {
+  // `post_announcements`, or a lead of a live team (to their teams only).
+  if (
+    !sender ||
+    !canComposeCampAnnouncements(sender.perms, sender.teams.ledTeamIds)
+  )
     notFound();
-  }
   return { kind: "ready", user, edition, camp, sender };
 }
 
@@ -90,6 +97,7 @@ export async function composerData(
       presentation: requireAck ? "acknowledge" : "feed",
       baselineRoleId: sender.baselineRoleId,
       campRoleIds: sender.campRoleIds,
+      teams: sender.teams,
     });
 
   const canTargetEveryone = may(audience("everyone", []), false);

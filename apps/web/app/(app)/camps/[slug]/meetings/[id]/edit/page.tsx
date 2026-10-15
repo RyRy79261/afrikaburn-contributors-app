@@ -49,6 +49,7 @@ export default async function EditMeetingPage({
           videoLink: meeting.videoLink,
           mode: meeting.audience.mode,
           roleIds: offeredAudienceRoleIds(meeting.audienceRoleIds, roles),
+          teamIds: meeting.audienceTeamIds,
           agendaMd: meeting.agendaMd,
         }}
       />

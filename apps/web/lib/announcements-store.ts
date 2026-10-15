@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import {
   ANNOUNCEMENT_MESSAGES,
+  audienceTeamIds,
   campAnnouncementEmail,
   campAnnouncementNotification,
   canPinCampAnnouncement,
@@ -24,7 +25,9 @@ import {
   isAnnouncementSchedulingEnabled,
   resolveCampAnnouncementRecipients,
   shouldSendImmediateEmail,
+  teamNamesFor,
   validateSendAt,
+  type AnnouncementTeamContext,
   type PermissionMembership,
 } from "@quagga/core";
 import type {
@@ -72,6 +75,54 @@ export interface SenderContext {
   perms: PermissionMembership;
   baselineRoleId: string | null;
   campRoleIds: Set<string>;
+  /** The camp's live teams and the ones this sender leads (team audiences,
+   * docs/team-audiences-spec.md). */
+  teams: AnnouncementTeamContext;
+}
+
+type Handle = Tx | ReturnType<typeof db>;
+
+/**
+ * The camp's live (not archived) teams, and the live teams `userId` leads.
+ * With `lock`, both are read `FOR SHARE` inside the caller's transaction —
+ * the team rows, then the sender's own seats — so a team archived, or a lead
+ * removed, while a send is in flight waits for it or is what it sees. That
+ * order (team row before seat) is the one camp-teams-store.ts takes too.
+ */
+async function loadSenderTeams(
+  handle: Handle,
+  groupId: string,
+  userId: string,
+  lock: boolean,
+): Promise<AnnouncementTeamContext> {
+  const liveQuery = handle
+    .select({ id: schema.shiftTeams.id })
+    .from(schema.shiftTeams)
+    .where(
+      and(
+        eq(schema.shiftTeams.groupId, groupId),
+        isNull(schema.shiftTeams.archivedAt),
+      ),
+    );
+  const live = lock ? await liveQuery.for("share") : await liveQuery;
+  const liveTeamIds = new Set(live.map((t) => t.id));
+  if (liveTeamIds.size === 0) {
+    return { liveTeamIds, ledTeamIds: new Set<string>() };
+  }
+  const seatQuery = handle
+    .select({ teamId: schema.teamMembers.teamId })
+    .from(schema.teamMembers)
+    .where(
+      and(
+        eq(schema.teamMembers.userId, userId),
+        eq(schema.teamMembers.isLead, true),
+        inArray(schema.teamMembers.teamId, [...liveTeamIds]),
+      ),
+    );
+  const seats = lock
+    ? await seatQuery.for("share", { of: [schema.teamMembers] })
+    : await seatQuery;
+  return { liveTeamIds, ledTeamIds: new Set(seats.map((s) => s.teamId)) };
 }
 
 /**
@@ -85,14 +136,16 @@ export async function getSenderContext(
 ): Promise<SenderContext | null> {
   const perms = await getMemberPermissions(groupId, userId);
   if (!perms) return null;
-  const [baselineRoleId, roles] = await Promise.all([
+  const [baselineRoleId, roles, teams] = await Promise.all([
     getBaselineRoleId(groupId),
     listRoles(groupId),
+    loadSenderTeams(db(), groupId, userId, false),
   ]);
   return {
     perms,
     baselineRoleId,
     campRoleIds: new Set(roles.map((r) => r.id)),
+    teams,
   };
 }
 
@@ -104,8 +157,8 @@ export async function getSenderContext(
  * is what this sees; one that comes later waits for this transaction. The check
  * and the write cannot fall out of step (Camp 404's `lockSenderReach`).
  *
- * Lock order is memberships → project_roles → member_role_assignments,
- * everywhere in this file.
+ * Lock order is memberships → project_roles → member_role_assignments →
+ * shift_teams → team_members, everywhere in this file.
  */
 async function lockSenderContext(
   tx: Tx,
@@ -147,6 +200,7 @@ async function lockSenderContext(
     )
     .for("share");
   const heldIds = new Set(held.map((h) => h.projectRoleId));
+  const teams = await loadSenderTeams(tx, groupId, userId, true);
 
   const rolePermissions: ProjectPermissions[] = [];
   let baselineRoleId: string | null = null;
@@ -164,6 +218,7 @@ async function lockSenderContext(
     perms: { structuralRole: membership.role, rolePermissions },
     baselineRoleId,
     campRoleIds: new Set(roles.map((r) => r.id)),
+    teams,
   };
 }
 
@@ -180,6 +235,7 @@ function sendAllowed(
     presentation,
     baselineRoleId: sender.baselineRoleId,
     campRoleIds: sender.campRoleIds,
+    teams: sender.teams,
   });
 }
 
@@ -194,6 +250,7 @@ function pinAllowed(
     audience,
     baselineRoleId: sender.baselineRoleId,
     campRoleIds: sender.campRoleIds,
+    teams: sender.teams,
   });
 }
 
@@ -266,6 +323,9 @@ export interface AuthorAnnouncement {
   isMine: boolean;
   /** Whether the viewer may pin/unpin it (posting authority over its audience). */
   canPin: boolean;
+  /** For a by-team audience, the chosen teams' names (archived teams
+   * included, deleted ones left out) — the chip's input. Empty otherwise. */
+  teamNames: string[];
   tally: AnnouncementTally;
 }
 
@@ -333,12 +393,23 @@ async function tallies(
   );
 }
 
+/** Every team of the camp (archived included), id → name, for chips. */
+async function campTeamNames(
+  groupId: string,
+): Promise<{ id: string; name: string }[]> {
+  return db()
+    .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
+    .from(schema.shiftTeams)
+    .where(eq(schema.shiftTeams.groupId, groupId));
+}
+
 function toAuthorView(
   row: AnnouncementRow,
   viewerId: string,
   groupId: string,
   sender: SenderContext,
   tally: AnnouncementTally,
+  teams: readonly { id: string; name: string }[],
 ): AuthorAnnouncement | null {
   if (row.audience.kind !== "project") return null;
   return {
@@ -357,6 +428,7 @@ function toAuthorView(
     updatedAt: row.updatedAt,
     isMine: row.createdByUserId === viewerId,
     canPin: pinAllowed(sender, groupId, row.audience),
+    teamNames: teamNamesFor(audienceTeamIds(row.audience), teams),
     tally,
   };
 }
@@ -404,10 +476,16 @@ export async function listCampAnnouncementsForSender(input: {
       r.createdByUserId === input.viewerId ||
       pinAllowed(input.sender, input.groupId, r.audience),
   );
-  const counts = await tallies(visiblePublished.map((r) => r.id));
+  const byTeam = [...drafts, ...visiblePublished].some(
+    (r) => r.audience.kind === "project" && r.audience.mode === "teams",
+  );
+  const [counts, teams] = await Promise.all([
+    tallies(visiblePublished.map((r) => r.id)),
+    byTeam ? campTeamNames(input.groupId) : Promise.resolve([]),
+  ]);
 
   const view = (r: AnnouncementRow, t: AnnouncementTally) =>
-    toAuthorView(r, input.viewerId, input.groupId, input.sender, t);
+    toAuthorView(r, input.viewerId, input.groupId, input.sender, t, teams);
   return {
     drafts: drafts.flatMap((r) => view(r, NO_TALLY) ?? []),
     published: visiblePublished.flatMap(
@@ -439,6 +517,10 @@ export async function getCampAnnouncementForSender(input: {
     )
     .limit(1);
   if (!row) return null;
+  const teams =
+    row.audience.kind === "project" && row.audience.mode === "teams"
+      ? await campTeamNames(input.groupId)
+      : [];
   if (row.publishedAt === null) {
     if (row.createdByUserId !== input.viewerId) return null;
     return toAuthorView(
@@ -447,6 +529,7 @@ export async function getCampAnnouncementForSender(input: {
       input.groupId,
       input.sender,
       NO_TALLY,
+      teams,
     );
   }
   if (
@@ -462,6 +545,7 @@ export async function getCampAnnouncementForSender(input: {
     input.groupId,
     input.sender,
     counts.get(row.id) ?? NO_TALLY,
+    teams,
   );
 }
 
@@ -588,44 +672,62 @@ async function fanOut(
     .limit(1);
   const campName = group?.name ?? "Your camp";
 
-  const [memberships, roleAssignments, projectRoles] = await Promise.all([
-    tx
-      .select({
-        membershipId: schema.memberships.id,
-        userId: schema.memberships.userId,
-        groupId: schema.memberships.groupId,
-        role: schema.memberships.role,
-        sanitizedAt: schema.users.sanitizedAt,
-      })
-      .from(schema.memberships)
-      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-      .where(
-        and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
-      ),
-    tx
-      .select({
-        membershipId: schema.memberRoleAssignments.membershipId,
-        projectRoleId: schema.memberRoleAssignments.projectRoleId,
-        consent: schema.memberRoleAssignments.consentStatus,
-      })
-      .from(schema.memberRoleAssignments)
-      .innerJoin(
-        schema.memberships,
-        eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
-      )
-      .where(
-        and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
-      ),
-    tx
-      .select({
-        id: schema.projectRoles.id,
-        groupId: schema.projectRoles.groupId,
-        kind: schema.projectRoles.kind,
-        officerKey: schema.projectRoles.officerKey,
-      })
-      .from(schema.projectRoles)
-      .where(eq(schema.projectRoles.groupId, row.groupId)),
-  ]);
+  const [memberships, roleAssignments, projectRoles, teamMembers] =
+    await Promise.all([
+      tx
+        .select({
+          membershipId: schema.memberships.id,
+          userId: schema.memberships.userId,
+          groupId: schema.memberships.groupId,
+          role: schema.memberships.role,
+          sanitizedAt: schema.users.sanitizedAt,
+        })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .where(
+          and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
+        ),
+      tx
+        .select({
+          membershipId: schema.memberRoleAssignments.membershipId,
+          projectRoleId: schema.memberRoleAssignments.projectRoleId,
+          consent: schema.memberRoleAssignments.consentStatus,
+        })
+        .from(schema.memberRoleAssignments)
+        .innerJoin(
+          schema.memberships,
+          eq(schema.memberships.id, schema.memberRoleAssignments.membershipId),
+        )
+        .where(
+          and(eq(schema.memberships.groupId, row.groupId), activeMembership()),
+        ),
+      tx
+        .select({
+          id: schema.projectRoles.id,
+          groupId: schema.projectRoles.groupId,
+          kind: schema.projectRoles.kind,
+          officerKey: schema.projectRoles.officerKey,
+        })
+        .from(schema.projectRoles)
+        .where(eq(schema.projectRoles.groupId, row.groupId)),
+      // Seats on this camp's teams, archived teams included (a by-team audience
+      // still reaches an archived team's members; a deleted team has no seats).
+      // Only a by-team audience reads them, so other sends skip the query.
+      row.audience.mode === "teams"
+        ? tx
+            .select({
+              teamId: schema.teamMembers.teamId,
+              groupId: schema.shiftTeams.groupId,
+              userId: schema.teamMembers.userId,
+            })
+            .from(schema.teamMembers)
+            .innerJoin(
+              schema.shiftTeams,
+              eq(schema.shiftTeams.id, schema.teamMembers.teamId),
+            )
+            .where(eq(schema.shiftTeams.groupId, row.groupId))
+        : Promise.resolve([]),
+    ]);
 
   const recipientIds = resolveCampAnnouncementRecipients(
     row.audience,
@@ -637,6 +739,7 @@ async function fanOut(
         ...r,
         officerKey: (r.officerKey as OfficerKey | null) ?? null,
       })),
+      teamMembers,
       excludedUserIds: new Set(
         memberships.filter((m) => m.sanitizedAt !== null).map((m) => m.userId),
       ),

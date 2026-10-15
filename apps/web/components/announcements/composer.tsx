@@ -36,8 +36,10 @@ export interface ComposerDraft {
   id: string;
   title: string;
   bodyMd: string;
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   roleIds: string[];
+  /** Chosen camp teams, when `mode` is `teams`. */
+  teamIds?: string[];
   presentation: AnnouncementPresentation;
   pinOnPublish: boolean;
   meetingUrl: string | null;
@@ -105,10 +107,11 @@ export function AnnouncementComposer({
   const [pending, startTransition] = React.useTransition();
   const [title, setTitle] = React.useState(draft?.title ?? "");
   const [bodyMd, setBodyMd] = React.useState(draft?.bodyMd ?? "");
-  const [mode, setMode] = React.useState<"everyone" | "roles">(
+  const [mode, setMode] = React.useState<"everyone" | "roles" | "teams">(
     draft?.mode ?? (scope.canTargetEveryone ? "everyone" : "roles"),
   );
   const [roleIds, setRoleIds] = React.useState<string[]>(draft?.roleIds ?? []);
+  const [teamIds] = React.useState<string[]>(draft?.teamIds ?? []);
   const [presentation, setPresentation] =
     React.useState<AnnouncementPresentation>(draft?.presentation ?? "feed");
   const [pinOnPublish, setPinOnPublish] = React.useState(
@@ -141,6 +144,7 @@ export function AnnouncementComposer({
       bodyMd,
       mode,
       roleIds: mode === "roles" ? roleIds : [],
+      teamIds: mode === "teams" ? teamIds : [],
       presentation,
       pinOnPublish,
       meetingUrl: meetingUrl.trim(),

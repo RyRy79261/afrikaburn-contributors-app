@@ -59,8 +59,10 @@ export interface MeetingFormInitial {
   durationMinutes: number;
   location: string | null;
   videoLink: string | null;
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   roleIds: string[];
+  /** Chosen camp teams, when `mode` is `teams`. */
+  teamIds?: string[];
   agendaMd: string;
 }
 
@@ -102,12 +104,13 @@ export function MeetingForm({
   );
   const [location, setLocation] = React.useState(initial?.location ?? "");
   const [videoLink, setVideoLink] = React.useState(initial?.videoLink ?? "");
-  const [mode, setMode] = React.useState<"everyone" | "roles">(
+  const [mode, setMode] = React.useState<"everyone" | "roles" | "teams">(
     initial?.mode ?? "everyone",
   );
   const [roleIds, setRoleIds] = React.useState<string[]>(
     initial?.roleIds ?? [],
   );
+  const [teamIds] = React.useState<string[]>(initial?.teamIds ?? []);
   const [agendaMd, setAgendaMd] = React.useState(initial?.agendaMd ?? "");
   const [error, setError] = React.useState<string | null>(null);
 
@@ -116,7 +119,11 @@ export function MeetingForm({
     videoLink.trim() && !looksHttps(videoLink)
       ? "Use a link that starts with https:// — plain http and other kinds of link aren't allowed."
       : null;
-  const reach = meetingReach(members, { mode, roleIds }, baselineRoleId);
+  const reach = meetingReach(
+    members,
+    { mode, roleIds, teamIds },
+    baselineRoleId,
+  );
   const durations = [
     ...new Set([
       ...MEETING_DURATION_OPTIONS,
@@ -161,6 +168,7 @@ export function MeetingForm({
       videoLink: videoLink.trim(),
       mode,
       roleIds: mode === "roles" ? roleIds : [],
+      teamIds: mode === "teams" ? teamIds : [],
       agendaMd,
     };
     startTransition(async () => {

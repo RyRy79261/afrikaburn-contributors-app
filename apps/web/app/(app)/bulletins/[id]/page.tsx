@@ -55,7 +55,8 @@ function audienceChipLabel(spec: AudienceSpec | null): string | null {
         .map((k) => OFFICER_AUDIENCE_LABELS[k] ?? k)
         .join(", ");
     case "project":
-      return "Your camp";
+      // A by-team announcement reached the reader through a team they are on.
+      return spec.mode === "teams" ? "Your team" : "Your camp";
     case "org_suppliers":
       // Supplier broadcasts never reach a burner's bulletin page (they target
       // supplier accounts), but the label keeps the switch exhaustive.

@@ -64,6 +64,7 @@ function kitchenPoster() {
     },
     baselineRoleId: BASELINE,
     campRoleIds: new Set([BASELINE, KITCHEN, BUILD]),
+    teams: { liveTeamIds: new Set<string>(), ledTeamIds: new Set<string>() },
   };
 }
 
@@ -228,5 +229,97 @@ describe("publishAnnouncementAction", () => {
     });
     expect(result.ok).toBe(false);
     expect(dbMock.queries).toHaveLength(0);
+  });
+});
+
+// --- Team audiences (docs/team-audiences-spec.md) ----------------------------
+
+describe("by-team drafts", () => {
+  const KITCHEN_TEAM = "7e7e7e7e-0000-4000-8000-000000000001";
+  const BUILD_TEAM = "7e7e7e7e-0000-4000-8000-000000000002";
+  /** A team lead of the kitchen team with no post_announcements at all. */
+  function kitchenTeamLead() {
+    return {
+      perms: { structuralRole: "member", rolePermissions: [{}] },
+      baselineRoleId: BASELINE,
+      campRoleIds: new Set([BASELINE, KITCHEN, BUILD]),
+      teams: {
+        liveTeamIds: new Set([KITCHEN_TEAM, BUILD_TEAM]),
+        ledTeamIds: new Set([KITCHEN_TEAM]),
+      },
+    };
+  }
+  const TEAM_DRAFT = { ...DRAFT, mode: "teams", roleIds: [] };
+
+  it("a team lead saves a draft to their own team", async () => {
+    stubs.sender = kitchenTeamLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction({
+      ...TEAM_DRAFT,
+      teamIds: [KITCHEN_TEAM, KITCHEN_TEAM],
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(stubs.saved[0]).toMatchObject({
+      fields: {
+        audience: {
+          kind: "project",
+          groupId: CAMP,
+          mode: "teams",
+          roleIds: [],
+          teamIds: [KITCHEN_TEAM],
+        },
+      },
+    });
+  });
+
+  it("a team lead is refused another team, and the whole camp", async () => {
+    stubs.sender = kitchenTeamLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    expect(
+      await actions.saveAnnouncementDraftAction({
+        ...TEAM_DRAFT,
+        teamIds: [BUILD_TEAM],
+      }),
+    ).toEqual({ ok: false, error: ANNOUNCEMENT_MESSAGES.notAllowed });
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    expect(
+      (
+        await actions.saveAnnouncementDraftAction({
+          ...DRAFT,
+          mode: "everyone",
+          roleIds: [],
+        })
+      ).ok,
+    ).toBe(false);
+    expect(stubs.saved).toHaveLength(0);
+  });
+
+  it("no team picked says so", async () => {
+    stubs.sender = kitchenTeamLead();
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    expect(await actions.saveAnnouncementDraftAction(TEAM_DRAFT)).toEqual({
+      ok: false,
+      error: "Pick at least one team.",
+    });
+  });
+
+  it("a member who leads no team and holds nothing is not a sender", async () => {
+    stubs.sender = {
+      ...kitchenTeamLead(),
+      teams: {
+        liveTeamIds: new Set([KITCHEN_TEAM]),
+        ledTeamIds: new Set<string>(),
+      },
+    };
+    dbMock.queue([{ id: CAMP, kind: "theme_camp" }]);
+    const result = await actions.saveAnnouncementDraftAction({
+      ...TEAM_DRAFT,
+      teamIds: [KITCHEN_TEAM],
+    });
+    // Refused at the gate, not by the audience check further on.
+    expect(result).toEqual({
+      ok: false,
+      error: "You don't have permission to post announcements for this camp.",
+    });
   });
 });

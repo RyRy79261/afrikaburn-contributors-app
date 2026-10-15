@@ -80,6 +80,10 @@ export default async function OnboardingBuilderPage({
     notFound();
   }
   const audience = draft.audience as ProjectAudience;
+  // Onboarding never takes a team audience (docs/team-audiences-spec.md
+  // §"Not built"; its actions refuse one). A row carrying one is not an
+  // onboarding this editor can show.
+  if (audience.mode === "teams") notFound();
 
   const [perms, baselineRoleId] = await Promise.all([
     getMemberPermissions(camp.id, user.id),
@@ -103,8 +107,7 @@ export default async function OnboardingBuilderPage({
   // Counts-only facts for the live reach line — no names, no ids.
   const members = camp.members.map((m) => ({
     role: (STRUCTURAL.includes(m.role) ? m.role : "other") as
-      | ProjectStructuralRole
-      | "other",
+      ProjectStructuralRole | "other",
     tenure: tenure.get(m.membershipId) ?? ("new" as const),
     roleIds: (assignments.get(m.membershipId) ?? [])
       .filter((a) => a.consent === "accepted")
