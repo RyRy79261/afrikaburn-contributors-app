@@ -29,6 +29,18 @@ export function teamReachPhrase(names: readonly string[]): string {
 }
 
 /**
+ * The tail of the announcement form's reach line for a by-team pick (frame
+ * knWLt): which teams, and that the camp's leads see it too — the spec's
+ * visibility rule, the same words the meeting form uses. The count before it
+ * stays the inbox count (team members only): leads are not sent a by-team
+ * announcement, they read it on the camp's announcements page.
+ */
+export function announcementTeamReach(names: readonly string[]): string {
+  if (names.length === 0) return "— pick at least one team.";
+  return `right now — ${teamReachPhrase(names)}, plus the camp's leads.`;
+}
+
+/**
  * The one-line explanation a team lead without the camp-wide privilege reads
  * above their teams: what they may address, and why the other options are
  * missing. Words follow the form they sit on (frames knWLt and bIVG2).

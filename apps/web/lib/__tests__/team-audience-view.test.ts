@@ -6,6 +6,7 @@ import {
   teamMemberCount,
   teamIdsByUser,
   teamReachPhrase,
+  announcementTeamReach,
 } from "../team-audience-view";
 
 const KITCHEN = "11111111-1111-4111-8111-111111111111";
@@ -34,6 +35,20 @@ describe("teamReachPhrase", () => {
   });
   it("is empty with nothing chosen", () => {
     expect(teamReachPhrase([])).toBe("");
+  });
+});
+
+describe("announcementTeamReach", () => {
+  it("names the teams and adds the camp's leads, as frame knWLt reads", () => {
+    expect(announcementTeamReach(["Kitchen", "Build & strike"])).toBe(
+      "right now — Kitchen and Build & strike, plus the camp's leads.",
+    );
+    expect(announcementTeamReach(["Kitchen"])).toBe(
+      "right now — the Kitchen team, plus the camp's leads.",
+    );
+  });
+  it("asks for a team when none is chosen", () => {
+    expect(announcementTeamReach([])).toBe("— pick at least one team.");
   });
 });
 

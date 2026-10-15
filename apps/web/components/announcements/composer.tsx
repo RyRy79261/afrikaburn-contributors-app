@@ -20,7 +20,7 @@ import {
   chosenTeamNames,
   teamLeadNotice,
   teamMemberCount,
-  teamReachPhrase,
+  announcementTeamReach,
   type TeamOption,
 } from "@/lib/team-audience-view";
 import { offeredAudienceRoleIds } from "@/lib/meeting-view";
@@ -376,9 +376,7 @@ export function AnnouncementComposer({
               {resolvedCount} {resolvedCount === 1 ? "member" : "members"}
             </span>{" "}
             {mode === "teams"
-              ? teamIds.length === 0
-                ? "— pick at least one team."
-                : `right now — ${teamReachPhrase(teamNames)}.`
+              ? announcementTeamReach(teamNames)
               : "right now — current members only, never pending invitees."}
           </p>
         </div>
