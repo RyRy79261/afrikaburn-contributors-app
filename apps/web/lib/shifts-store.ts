@@ -216,12 +216,19 @@ async function loadMembers(
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-/** The camp's shift teams, in the lead's order. */
+/** The camp's live shift teams, in the lead's order. An archived team is off
+ * the list (docs/camp-teams-spec.md): no picker or filter offers it, and a
+ * shift already on one keeps its team name through the shift's own join. */
 export async function listShiftTeams(groupId: string): Promise<ShiftTeamView[]> {
   return db()
     .select({ id: schema.shiftTeams.id, name: schema.shiftTeams.name })
     .from(schema.shiftTeams)
-    .where(eq(schema.shiftTeams.groupId, groupId))
+    .where(
+      and(
+        eq(schema.shiftTeams.groupId, groupId),
+        isNull(schema.shiftTeams.archivedAt),
+      ),
+    )
     .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.createdAt));
 }
 
@@ -674,21 +681,25 @@ function refused(reason: ShiftRefusal, roleName?: string | null) {
   return { ok: false as const, error: shiftRefusalMessage(reason, roleName) };
 }
 
-/** Is this team id one of THIS camp's teams? */
+/** Is this team id one of THIS camp's teams, and one a shift may be put on?
+ * An archived team is off the list, so a shift may not be newly put on it;
+ * a shift already on it (`currentTeamId`) keeps it through an edit. */
 async function teamBelongs(
   tx: Tx,
   groupId: string,
   teamId: string | null,
+  currentTeamId: string | null = null,
 ): Promise<boolean> {
   if (teamId === null) return true;
   const [t] = await tx
-    .select({ id: schema.shiftTeams.id })
+    .select({ id: schema.shiftTeams.id, archivedAt: schema.shiftTeams.archivedAt })
     .from(schema.shiftTeams)
     .where(
       and(eq(schema.shiftTeams.id, teamId), eq(schema.shiftTeams.groupId, groupId)),
     )
     .limit(1);
-  return !!t;
+  if (!t) return false;
+  return !t.archivedAt || teamId === currentTeamId;
 }
 
 /** Is this role id one of THIS camp's roles, and one a shift may require?
@@ -779,7 +790,9 @@ export async function updateShift(input: {
     if (!mayManage(actor)) return refused("not_manager");
     const locked = await lockShift(tx, input.groupId, input.edition.id, fields.id);
     if (!locked) return { ok: false, error: MISSING };
-    if (!(await teamBelongs(tx, input.groupId, fields.teamId))) {
+    if (
+      !(await teamBelongs(tx, input.groupId, fields.teamId, locked.view.teamId))
+    ) {
       return { ok: false, error: "That team doesn't exist any more." };
     }
     if (!(await roleBelongs(tx, input.groupId, fields.requiredRoleId))) {

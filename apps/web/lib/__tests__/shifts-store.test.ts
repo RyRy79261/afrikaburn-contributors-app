@@ -560,6 +560,40 @@ describe("lead edits", () => {
     expect(notices()).toHaveLength(0);
   });
 
+  it("refuses moving a shift onto an archived team", async () => {
+    queueLocked({ actor: ALICE, assignments: [] });
+    dbMock.queue([{ id: SOUND, archivedAt: new Date("2027-04-01T00:00:00Z") }]);
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition,
+      fields: { ...fields, teamId: SOUND },
+    });
+    expect(result.ok).toBe(false);
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
+  });
+
+  it("keeps a shift on the archived team it is already on through an edit", async () => {
+    queueLocked({
+      actor: ALICE,
+      shift: shiftRow({ teamId: SOUND, teamName: "Sound" }),
+      assignments: [],
+    });
+    dbMock.queue(
+      [{ id: SOUND, archivedAt: new Date("2027-04-01T00:00:00Z") }],
+      /* update */ [],
+      /* audit */ [],
+    );
+    const result = await updateShift({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition,
+      fields: { ...fields, teamId: SOUND, name: "Sound · check" },
+    });
+    expect(result).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(1);
+  });
+
   it("refuses shrinking a shift below the people already on it", async () => {
     queueLocked({
       actor: ALICE,
@@ -1003,6 +1037,15 @@ describe("loadShiftBoard — what the Shifts pages render", () => {
     expect(await listShiftTeams(CAMP)).toEqual([{ id: TEAM, name: "Sound" }]);
     expect(boundStrings(dbMock.queries[0]!)).toContain(CAMP);
   });
+
+  it("listShiftTeams leaves archived teams off the list (pickers, filters)", async () => {
+    dbMock.queue([]);
+    await listShiftTeams(CAMP);
+    expect(dbMock.queries).toHaveLength(1);
+    expect(
+      nullChecksOn(dbMock.queries[0]!, schema.shiftTeams.archivedAt),
+    ).toEqual(["is null"]);
+  });
 });
 
 describe("ensureStarterTeams — seeded once per camp", () => {
@@ -1094,6 +1137,30 @@ describe("createShifts", () => {
     });
     expect(result).toEqual({ ok: false, error: "Pick at least one day of the burn." });
     expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("refuses an archived team, and writes nothing", async () => {
+    dbMock.queue(
+      [actorRow(ALICE)],
+      /* this camp's, but archived */ [
+        { id: TEAM, archivedAt: new Date("2027-04-01T00:00:00Z") },
+      ],
+      // What the rest of a create would read, so only the archive check
+      // can refuse it.
+      /* role is this camp's */ [{ id: SOUND }],
+      /* inserted */ [{ id: "s1" }, { id: "s2" }],
+    );
+    const result = await createShifts({
+      actorUserId: ALICE,
+      groupId: CAMP,
+      edition: burn,
+      fields,
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "That team doesn't exist any more.",
+    });
+    expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
   });
 
   it("refuses a plain member, and writes nothing", async () => {
