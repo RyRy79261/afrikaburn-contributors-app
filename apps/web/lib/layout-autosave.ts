@@ -68,6 +68,11 @@ export interface LayoutAutosave<D> {
   shouldWarnOnLeave(): boolean;
 }
 
+/**
+ * The editor's autosave controller: one compare-and-set save in flight at a
+ * time, debounced, retried while offline, and stopped for good by a conflict
+ * or refusal until `retry()`.
+ */
 export function createLayoutAutosave<D>(
   opts: LayoutAutosaveOptions<D>,
 ): LayoutAutosave<D> {
@@ -82,20 +87,30 @@ export function createLayoutAutosave<D>(
   let timer: ReturnType<typeof setTimeout> | null = null;
   let state: AutosaveState = { kind: "saved" };
 
+  /** Records the state and reports it to the editor. */
   const set = (s: AutosaveState) => {
     state = s;
     opts.onState(s);
   };
+  /** Cancels a pending debounce or retry timer. */
   const clear = () => {
     if (timer) clearTimeout(timer);
     timer = null;
   };
+  /** A flush in `ms`, replacing any one already scheduled. */
   const schedule = (ms: number) => {
     clear();
     timer = setTimeout(() => void flush(), ms);
   };
+  /** True while a save's outcome is unknown or the latest doc differs from the
+   * saved one. */
   const hasUnsaved = () => uncertain !== null || latest !== saved;
 
+  /**
+   * Sends the uncertain doc first, else the latest; on success sends again if
+   * more changed meanwhile. A thrown send is "offline" and retried; a refusal
+   * or conflict blocks further saves.
+   */
   async function flush(): Promise<void> {
     clear();
     if (inFlight || blocked) return;
@@ -135,6 +150,7 @@ export function createLayoutAutosave<D>(
   }
 
   return {
+    /** A change undone back to the saved doc cancels the pending send. */
     change(doc) {
       latest = doc;
       leaving = false;
@@ -149,11 +165,14 @@ export function createLayoutAutosave<D>(
       schedule(opts.debounceMs);
     },
     flush,
+    /** Unblocks after a refusal or conflict and sends straight away. */
     retry() {
       blocked = false;
       leaving = false;
       void flush();
     },
+    /** Sends what is unsaved now; a save in flight sends the rest when it
+     * lands. */
     leave() {
       leaving = true;
       clear();

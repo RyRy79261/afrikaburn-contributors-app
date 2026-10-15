@@ -135,6 +135,7 @@ function parseFamily(value: string | null): {
   return { choice: choice ?? null, detail: rest.join(" — ") };
 }
 
+/** The six-section registration wizard, with draft autosave and submit. */
 export function RegistrationWizard(props: WizardProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<RegistrationValues>(
@@ -285,6 +286,7 @@ export function RegistrationWizard(props: WizardProps) {
     }
   }
 
+  /** Withdraws the registration after a confirm that names the consequence. */
   async function handleWithdraw() {
     // Same consequence copy as the locked view's withdraw control. The old text
     // here promised the camp could "register again" — `registrations` is UNIQUE

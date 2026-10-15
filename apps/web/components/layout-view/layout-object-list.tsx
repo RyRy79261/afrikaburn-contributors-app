@@ -19,6 +19,8 @@ import { ObjectListDisclosure } from "./object-list-disclosure";
 
 type AnyObject = LayoutObject | NestedLayoutObject;
 
+/** The plan in words: each object's name and size, with links into covered
+ * areas. */
 export function LayoutObjectList({
   slug,
   objects,

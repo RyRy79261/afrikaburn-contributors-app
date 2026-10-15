@@ -55,6 +55,10 @@ export const dynamic = "force-dynamic";
 
 const ParamsSchema = z.object({ slug: z.string().min(1).max(200) });
 
+/**
+ * The camp's layout page: the editor for editors on a wide screen, the
+ * read-only plan for everyone else, or a covered area when `?area=` names one.
+ */
 export default async function CampLayoutPage({
   params,
   searchParams,
@@ -96,6 +100,7 @@ export default async function CampLayoutPage({
     </Button>
   );
 
+  /** The page heading with the back link to the camp. */
   const header = (subtitle: string) => (
     <div>
       {back}
@@ -234,6 +239,7 @@ export default async function CampLayoutPage({
       })()
     : null;
 
+  /** The read-only plan; `warnings` only ever passed for an editor. */
   const readOnly = (
     subtitle: string,
     warnings: CampLayoutView["warnings"] = null,

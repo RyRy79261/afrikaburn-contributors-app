@@ -75,12 +75,15 @@ import { getMemberPermissions } from "./roles-store";
 export type LayoutResult<T = object> =
   ({ ok: true } & T) | { ok: false; error: string };
 
+/** A failed result carrying the refusal's user-facing sentence. */
 function refused(reason: LayoutRefusal): { ok: false; error: string } {
   return { ok: false, error: layoutRefusalMessage(reason) };
 }
 
 const INVALID = "That layout couldn't be saved. Reload and try again.";
 
+/** True for a Postgres unique violation (23505), looking up to three `cause`s
+ * deep. */
 function isUniqueViolation(err: unknown): boolean {
   let e: unknown = err;
   for (let i = 0; i < 3 && e && typeof e === "object"; i++) {
@@ -112,6 +115,7 @@ export interface LayoutAccess {
   canSeeWarnings: boolean;
 }
 
+/** The group with this slug, any kind, or null. */
 async function findCamp(
   slug: string,
 ): Promise<(LayoutCamp & { kind: GroupKind }) | null> {
@@ -283,6 +287,10 @@ async function findLastYearsLayout(
 
 type Handle = Tx | ReturnType<typeof db>;
 
+/**
+ * The camp's layout from its most recent EARLIER edition, for carrying
+ * forward; null when it has none.
+ */
 async function findLayoutSource(
   handle: Handle,
   groupId: string,
@@ -327,6 +335,10 @@ interface LayoutActor {
   permissions: PermissionMembership;
 }
 
+/**
+ * The baseline role's permissions plus every role this membership holds with
+ * accepted consent, each clamped to what its kind may grant.
+ */
 async function loadRolePermissions(
   tx: Tx,
   groupId: string,
@@ -414,6 +426,8 @@ async function registrationFor(
   return row ?? null;
 }
 
+/** The registration's layout row, locked `FOR UPDATE`; null when it has
+ * none. */
 async function layoutFor(
   tx: Tx,
   registrationId: string,
@@ -431,6 +445,10 @@ async function layoutFor(
   return row ?? null;
 }
 
+/**
+ * Writes one layout `audit_events` row in the caller's transaction. `meta`
+ * holds ids, versions and counts only.
+ */
 async function audit(
   tx: Tx,
   actorId: string,

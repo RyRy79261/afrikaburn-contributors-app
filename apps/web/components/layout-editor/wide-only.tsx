@@ -10,6 +10,8 @@ import { useSyncExternalStore, type ReactNode } from "react";
 
 const QUERY = "(min-width: 768px)";
 
+/** True once the viewport is at least 768 px wide; always false on the
+ * server. */
 export function useWideEnough(): boolean {
   return useSyncExternalStore(
     (cb) => {
@@ -22,6 +24,7 @@ export function useWideEnough(): boolean {
   );
 }
 
+/** Mounts its children only on a viewport wide enough to edit. */
 export function WideOnly({ children }: { children: ReactNode }) {
   return useWideEnough() ? children : null;
 }

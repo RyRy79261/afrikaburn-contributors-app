@@ -58,6 +58,10 @@ export interface LayoutReadOnlyProps {
   header: ReactNode;
 }
 
+/**
+ * The read-only plan with its object list, for members and for every phone;
+ * an editor on a phone also sees the warnings and outlines.
+ */
 export function LayoutReadOnly({
   slug,
   editionYear,
@@ -78,6 +82,7 @@ export function LayoutReadOnly({
   const parentName = parent ? layoutObjectName(parent, catalog) : null;
   const summary = plotSummary(doc, catalog);
 
+  /** The covered area's object name, by structure id. */
   const areaName = (id: string) => {
     const o = doc.plot.objects.find((x) => x.id === id);
     return o ? layoutObjectName(o, catalog) : "a covered area";

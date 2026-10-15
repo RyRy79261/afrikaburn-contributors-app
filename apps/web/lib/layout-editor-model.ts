@@ -59,26 +59,35 @@ function tidy(v: number): number {
   return Number(v.toFixed(6)) + 0;
 }
 
+/** An object side in metres, clamped to the allowed range; the minimum when not
+ * a number. */
 export function clampSize(v: number): number {
   if (!Number.isFinite(v)) return LAYOUT_MIN_SIZE_M;
   return tidy(Math.min(LAYOUT_MAX_SIZE_M, Math.max(LAYOUT_MIN_SIZE_M, v)));
 }
 
+/** A plot side in metres, clamped to the allowed range; the minimum when not a
+ * number. */
 export function clampPlotSide(v: number): number {
   if (!Number.isFinite(v)) return LAYOUT_MIN_SIZE_M;
   return tidy(Math.min(LAYOUT_MAX_PLOT_M, Math.max(LAYOUT_MIN_SIZE_M, v)));
 }
 
+/** A clearance or safety halo in metres, clamped to [0, max]; 0 when not a
+ * number. */
 export function clampHalo(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return tidy(Math.min(LAYOUT_MAX_HALO_M, Math.max(0, v)));
 }
 
+/** A coordinate in metres, clamped to ±the layout's reach; 0 when not a
+ * number. */
 export function clampCoord(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return tidy(Math.min(LAYOUT_MAX_COORD_M, Math.max(-LAYOUT_MAX_COORD_M, v)));
 }
 
+/** Any angle as degrees in [0, 360); 0 when not a number. */
 export function clampRotation(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return tidy(normaliseDeg(v)) % 360;
@@ -127,6 +136,10 @@ export function getArea(
   };
 }
 
+/**
+ * The document with one area's object list replaced by `fn`'s result. A
+ * shade structure without a covered area gets a default one first.
+ */
 function withAreaObjects(
   doc: LayoutDocument,
   ref: AreaRef,
@@ -169,6 +182,7 @@ function stripChild(o: AnyLayoutObject): NestedLayoutObject {
   return rest;
 }
 
+/** The object with this id in the given area, or null. */
 export function findObject(
   doc: LayoutDocument,
   ref: AreaRef,
@@ -209,6 +223,7 @@ export function nextLabel(
   return `${base} ${max + 1}`.slice(0, LAYOUT_LABEL_MAX);
 }
 
+/** The string with every RegExp metacharacter escaped. */
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -281,10 +296,14 @@ export function newObjectFromEntry(
   return o;
 }
 
+/** False once the layout holds the maximum number of objects, nested ones
+ * included. */
 export function canAddObject(doc: LayoutDocument): boolean {
   return countLayoutObjects(doc.plot) < LAYOUT_MAX_OBJECTS;
 }
 
+/** The document with `obj` appended to the area; unchanged when the layout is
+ * full. */
 export function addObject(
   doc: LayoutDocument,
   ref: AreaRef,
@@ -309,6 +328,11 @@ export interface ObjectPatch {
   label?: string;
 }
 
+/**
+ * The object with the patch applied, every value clamped. A circle takes
+ * one size for width, length and diameter and ignores rotation; an empty
+ * label removes the label.
+ */
 export function applyPatch<T extends AnyLayoutObject>(o: T, patch: ObjectPatch): T {
   const next: T = { ...o };
   let [x, y] = o.centre;
@@ -341,6 +365,7 @@ export function applyPatch<T extends AnyLayoutObject>(o: T, patch: ObjectPatch):
   return next;
 }
 
+/** The document with the patch applied to the object `id` in the area. */
 export function updateObject(
   doc: LayoutDocument,
   ref: AreaRef,
@@ -475,6 +500,7 @@ export interface History {
   future: readonly LayoutDocument[];
 }
 
+/** A history holding just `doc`, nothing to undo or redo. */
 export function initHistory(doc: LayoutDocument): History {
   return { past: [], present: doc, future: [] };
 }
@@ -491,6 +517,7 @@ export function pushHistory(h: History, doc: LayoutDocument): History {
   };
 }
 
+/** Steps back one edit; unchanged when there is nothing to undo. */
 export function undo(h: History): History {
   const prev = h.past[h.past.length - 1];
   if (!prev) return h;
@@ -501,6 +528,7 @@ export function undo(h: History): History {
   };
 }
 
+/** Steps forward one undone edit; unchanged when there is nothing to redo. */
 export function redo(h: History): History {
   const next = h.future[0];
   if (!next) return h;
@@ -555,6 +583,7 @@ export function stageHeight(
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 8;
 
+/** One zoom step in or out (×1.25), clamped to [ZOOM_MIN, ZOOM_MAX]. */
 export function stepZoom(zoom: number, direction: 1 | -1): number {
   const next = direction > 0 ? zoom * 1.25 : zoom / 1.25;
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(next.toFixed(4))));
@@ -567,6 +596,7 @@ export function sizeReadout(
   width: number,
   length: number,
 ): string {
+  /** Metres to one decimal, always shown, with the unit. */
   const m = (v: number) => `${(Math.round(v * 10) / 10).toFixed(1)} m`;
   return shape === "circle" ? `Ø ${m(width)}` : `${m(width)} × ${m(length)}`;
 }
@@ -575,6 +605,7 @@ export function sizeReadout(
 export function dimsText(
   o: Pick<AnyLayoutObject, "shape" | "width" | "length" | "diameter">,
 ): string {
+  /** At most one decimal, no trailing ".0". */
   const t = (v: number) => String(Math.round(v * 10) / 10);
   return o.shape === "circle"
     ? `Ø ${t(o.diameter ?? o.width)} m`

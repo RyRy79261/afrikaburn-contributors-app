@@ -38,6 +38,7 @@ export type SaveLayoutResult =
       conflict?: { byName: string | null; at: string | null };
     };
 
+/** The active edition's id and year, or null when none is configured. */
 async function activeEdition(): Promise<LayoutEdition | null> {
   const edition = await getActiveEdition();
   return edition ? { id: edition.id, year: edition.year } : null;
@@ -46,6 +47,7 @@ async function activeEdition(): Promise<LayoutEdition | null> {
 const NO_EDITION = "No active edition is configured.";
 const SlugOnly = z.object({ slug: z.string().min(1).max(200) });
 
+/** Refreshes the camp page (its layout tile) and the layout page. */
 function revalidate(slug: string) {
   revalidatePath(`/camps/${slug}`);
   revalidatePath(`/camps/${slug}/layout`);

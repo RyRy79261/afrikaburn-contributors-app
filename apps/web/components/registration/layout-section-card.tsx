@@ -24,6 +24,10 @@ export interface WizardLayout {
   canStart: boolean;
 }
 
+/**
+ * The registration wizard's layout card: the drawn plot's size and a link to
+ * the editor, or the ways to start one.
+ */
 export function LayoutSectionCard({
   slug,
   layout,
@@ -36,6 +40,8 @@ export function LayoutSectionCard({
   const [pending, startTransition] = useTransition();
   const href = `/camps/${slug}/layout`;
 
+  /** Starts this edition's layout from last year's, then refreshes the
+   * wizard. */
   const carry = () => {
     setError(null);
     startTransition(async () => {

@@ -47,6 +47,8 @@ const GROUP_ORDER: LayoutCatalogGroup[] = [
   "inside",
 ];
 
+/** The palette of catalogue objects that can be placed at this level, by
+ * group. */
 export function LayoutPalette({
   catalog,
   level,
@@ -196,6 +198,8 @@ export function MetreField({
     if (!editing) setText(shown);
   }, [shown, editing]);
 
+  /** Commits the typed value on blur or Enter; text that is not one number
+   * reverts. */
   const commit = () => {
     setEditing(false);
     const v = parseMetresInput(text);
@@ -245,6 +249,10 @@ export function MetreField({
 
 // --- Inspector -------------------------------------------------------------------
 
+/**
+ * The selected object's fields (size, position, rotation, halos, label) and
+ * its duplicate, delete and open-covered-area actions.
+ */
 export function LayoutInspector({
   object,
   entry,
@@ -421,6 +429,7 @@ export function LayoutInspector({
 
 // --- Warnings (editors only) -------------------------------------------------------
 
+/** The editors' list of layout warnings; picking one selects its object. */
 export function LayoutWarningsPanel({
   warnings,
   areaName,

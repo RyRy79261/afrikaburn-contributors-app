@@ -31,6 +31,10 @@ const INLINE_PROPS = [
   "text-anchor",
 ] as const;
 
+/**
+ * Copies the computed drawing styles onto the clone, element by element, and
+ * drops its classes: an SVG drawn as an image cannot see the page's CSS.
+ */
 function inlineStyles(source: Element, target: Element) {
   const cs = getComputedStyle(source);
   const style = INLINE_PROPS.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(
@@ -45,6 +49,10 @@ function inlineStyles(source: Element, target: Element) {
   }
 }
 
+/**
+ * The plan SVG as a PNG data URL at 2×, on the card's background colour.
+ * Null when no 2D canvas is available; throws when the SVG will not load.
+ */
 async function svgToPngUrl(svg: SVGSVGElement): Promise<string | null> {
   const vb = svg.viewBox.baseVal;
   const scale = 2;
@@ -76,6 +84,7 @@ async function svgToPngUrl(svg: SVGSVGElement): Promise<string | null> {
   return canvas.toDataURL("image/png");
 }
 
+/** Saves the plan SVG with this id as a PNG; a toast when it fails. */
 export function DownloadPlanButton({
   svgId,
   fileName,
@@ -86,6 +95,7 @@ export function DownloadPlanButton({
   className?: string;
 }) {
   const [busy, setBusy] = useState(false);
+  /** Draws the PNG and clicks a download link for it. */
   const onClick = async () => {
     const svg = document.getElementById(svgId);
     if (!(svg instanceof SVGSVGElement)) return;
@@ -118,6 +128,7 @@ export function DownloadPlanButton({
   );
 }
 
+/** Opens the printable plan in a new tab. */
 export function PrintPlanLink({
   href,
   className,

@@ -118,6 +118,7 @@ const STATUS_LABEL: Record<RegistrationStatus, string> = {
   withdrawn: "Withdrawn",
 };
 
+/** A camp's home page, with its registration status and layout tile. */
 export default async function CampPage({
   params,
 }: {

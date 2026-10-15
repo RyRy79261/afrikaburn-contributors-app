@@ -40,6 +40,11 @@ export interface LayoutSnapshotForReview {
   };
 }
 
+/**
+ * The registration's most recently pinned layout, with its plot summary.
+ * Null when the actor may not see it, nothing is pinned, or the stored
+ * document no longer parses.
+ */
 export async function getLayoutSnapshotForReview(
   registrationId: string,
   editionYear: number,

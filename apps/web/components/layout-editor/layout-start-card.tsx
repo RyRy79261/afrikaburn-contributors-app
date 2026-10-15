@@ -22,6 +22,10 @@ export interface LayoutStartCardProps {
   lastYear: { editionYear: number; size: string; objectCount: number } | null;
 }
 
+/**
+ * The "start your layout" card: carry last year's plan forward, or create an
+ * empty plot of a typed size.
+ */
 export function LayoutStartCard({
   slug,
   editionName,
@@ -34,6 +38,7 @@ export function LayoutStartCard({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  /** Creates the empty plot; refuses sides outside 0.1–500 m. */
   const create = () => {
     const w = parseMetresInput(width);
     const d = parseMetresInput(depth);
@@ -49,6 +54,7 @@ export function LayoutStartCard({
     });
   };
 
+  /** Starts this edition's layout from last year's. */
   const carry = () => {
     setError(null);
     startTransition(async () => {
@@ -138,6 +144,7 @@ export function LayoutStartCard({
   );
 }
 
+/** A decimal text input with an "m" suffix; the caller parses the text. */
 function MetreInput({
   id,
   value,

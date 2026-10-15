@@ -12,6 +12,8 @@ import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 // else. The mouse wheel never zooms (it scrolls the page); a trackpad pinch
 // and a double-tap do.
 
+/** Pinch-zoom and pan for the plan; panning only once zoomed in, so the page
+ * still scrolls. */
 export function PlanViewport({ children }: { children: ReactNode }) {
   const [zoomed, setZoomed] = useState(false);
   return (

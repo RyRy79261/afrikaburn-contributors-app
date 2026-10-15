@@ -81,6 +81,7 @@ const OPERATING_HOURS_LABELS: Record<string, string> = {
   late_night: "Late night",
 };
 
+/** One registration's review page in the console, section by section. */
 export default async function RegistrationDetailPage({
   params,
 }: {
@@ -423,6 +424,8 @@ function renderProjectField(field: ProjectField): FieldSpec {
   }
 }
 
+/** The read-only fields each review section shows, Section 4's pinned layout
+ * included. */
 function buildSectionFields(
   detail: RegistrationDetail,
   hoursLabels: Record<string, string>,

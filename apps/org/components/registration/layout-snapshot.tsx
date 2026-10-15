@@ -17,6 +17,10 @@ import { formatDate } from "@/lib/labels";
 const PLAN_TITLE =
   "The camp's layout as sent with the registration, drawn to scale";
 
+/**
+ * The pinned layout in the org's registration review: the plan, its size
+ * and when it was sent. No warnings.
+ */
 export function LayoutSnapshotView({
   snapshot,
   editionYear,

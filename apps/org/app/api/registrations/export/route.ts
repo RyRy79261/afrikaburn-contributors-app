@@ -45,6 +45,8 @@ const EXPORTABLE_STATUSES = [
   "approved",
 ] as const;
 
+/** The active edition's placement CSV, as a download. 503 when no edition is
+ * active. */
 export async function GET(): Promise<NextResponse> {
   const session = await requireOrgSession({
     capability: "read",

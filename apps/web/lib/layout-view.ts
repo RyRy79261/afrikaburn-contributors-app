@@ -8,6 +8,7 @@ import type { LayoutDocument } from "@quagga/types";
 
 const TZ = "Africa/Johannesburg";
 
+/** "2027-03-03": the calendar day in South African time, for comparing days. */
 function dayKey(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
@@ -17,6 +18,7 @@ function dayKey(d: Date): string {
   }).format(d);
 }
 
+/** "14:05" in South African time. */
 function timeOf(d: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -64,6 +66,7 @@ export function lastEditedLine(
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
+/** At most one decimal, no trailing ".0". */
 function trim(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
@@ -139,6 +142,10 @@ export type LayoutTileView =
       updatedByName: string | null;
     };
 
+/**
+ * Which state the camp tile shows: no registration, registered but not
+ * drawn, or the drawn plan with its summary.
+ */
 export function layoutTileView(view: {
   registration: unknown;
   layout: {

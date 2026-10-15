@@ -117,6 +117,8 @@ const RULER = 24;
 const MARGIN = 28;
 const MIN_HEIGHT = 320;
 
+/** A "#rrggbb" colour as rgba() at `alpha`; any other colour string
+ * unchanged. */
 export function withAlpha(colour: string, alpha: number): string {
   const hex = colour.trim().replace("#", "");
   if (!/^[0-9a-f]{6}$/i.test(hex)) return colour;
@@ -206,18 +208,23 @@ function editorLabelFit(
   return "none";
 }
 
+/** The cache key for one icon in one colour: "tent|#2d7696". */
 function iconKey(icon: string | undefined, colour: string): string {
   return `${icon ?? "box"}|${colour}`;
 }
 
+/** The covered-area chip on a shade structure. */
 function openText(count: number): string {
   return count > 0 ? `${count} inside · open ›` : "Open inside ›";
 }
 
+/** A ring in metres as Konva's flat [x, y, x, y…] points, in pixels at
+ * `scale`. */
 function ringPoints(ring: Ring, scale: number): number[] {
   return ring.flatMap(([x, y]) => [x * scale, y * scale]);
 }
 
+/** The box around both; `a` when there is no `b`. */
 function unionBox(a: BBox, b: BBox | null): BBox {
   if (!b) return a;
   return {
@@ -228,6 +235,7 @@ function unionBox(a: BBox, b: BBox | null): BBox {
   };
 }
 
+/** An object's stroke colour by role and palette group, from the theme. */
 function colourFor(
   e: LayoutCatalogEntry | undefined,
   theme: StageTheme,
@@ -251,6 +259,11 @@ function colourFor(
   }
 }
 
+/**
+ * The Konva canvas: the area, its grid and rulers, the objects with their
+ * halos and labels, drag and transform handles, wheel zoom, palette drops
+ * and PNG export. Loaded on the client only.
+ */
 export default function EditorStage(props: EditorStageProps) {
   const {
     objects,
@@ -322,8 +335,11 @@ export default function EditorStage(props: EditorStageProps) {
   const prevScale = useRef(scale);
   const anchor = useRef<Vec | null>(null);
 
-  // Fit: centre the area in the viewport. Runs on "Fit", on opening another
-  // area, and when the viewport is resized.
+  /**
+   * Fit: the pan that centres the area in the viewport at scale `s` (px per
+   * metre). Runs on "Fit", on opening another area, and when the viewport is
+   * resized.
+   */
   const centreAt = useCallback(
     (s: number): Vec => {
       const cx = (box.minX + box.maxX) / 2;
@@ -368,6 +384,7 @@ export default function EditorStage(props: EditorStageProps) {
     tr.getLayer()?.batchDraw();
   }, [selectedId, objects, hideChrome, scale]);
 
+  /** A stage pixel position as metres in the area's frame. */
   const toMetres = useCallback(
     (abs: { x: number; y: number }): Vec => {
       const w = worldRef.current?.absolutePosition() ?? { x: pan[0], y: pan[1] };
@@ -406,6 +423,7 @@ export default function EditorStage(props: EditorStageProps) {
 
   const grid = useMemo(() => {
     const lines: { key: string; points: number[]; major: boolean }[] = [];
+    /** Adds one grid line at `v` metres. */
     const push = (v: number, vertical: boolean, major: boolean) => {
       lines.push({
         key: `${vertical ? "v" : "h"}${v}`,
@@ -415,6 +433,7 @@ export default function EditorStage(props: EditorStageProps) {
           : [areaBox.minX * scale, v * scale, areaBox.maxX * scale, v * scale],
       });
     };
+    /** Calls `cb` for every multiple of `s` from `min` to `max`. */
     const each = (min: number, max: number, s: number, cb: (v: number) => void) => {
       for (let v = Math.ceil(min / s) * s; v <= max + 1e-9; v += s) {
         cb(Number(v.toFixed(6)));
@@ -430,6 +449,8 @@ export default function EditorStage(props: EditorStageProps) {
     return lines;
   }, [areaBox.minX, areaBox.minY, areaBox.maxX, areaBox.maxY, scale, step, minor]);
 
+  /** Tick positions in metres along a ruler, for the part of the area in
+   * view. */
   const rulerTicks = (axis: "x" | "y") => {
     const len = axis === "x" ? width : height;
     const p = axis === "x" ? pan[0] : pan[1];
@@ -442,6 +463,8 @@ export default function EditorStage(props: EditorStageProps) {
     return ticks;
   };
 
+  /** Ctrl/Cmd + wheel zooms about the pointer; a plain wheel scrolls the
+   * page. */
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     if (!e.evt.ctrlKey && !e.evt.metaKey) return;
     e.evt.preventDefault();
@@ -451,6 +474,8 @@ export default function EditorStage(props: EditorStageProps) {
     onZoom(Math.min(8, Math.max(0.25, Number((zoom * factor).toFixed(4)))));
   };
 
+  /** A palette entry dropped on the canvas, placed at the drop point in
+   * metres. */
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     const key = e.dataTransfer.getData(PALETTE_DRAG_TYPE);
     const stage = stageRef.current;
@@ -465,6 +490,7 @@ export default function EditorStage(props: EditorStageProps) {
   // Support poles paint last: a pole under a tent is what the warning is
   // about, and it must stay visible and clickable (frame LcZsE).
   const drawOrder = useMemo(() => {
+    /** True for a support pole. */
     const isPole = (o: AnyLayoutObject) =>
       findCatalogEntry(catalog, o.catalogKey)?.role === "pole";
     return [...objects.filter((o) => !isPole(o)), ...objects.filter(isPole)];

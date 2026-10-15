@@ -8,6 +8,8 @@ import { ChevronDown } from "lucide-react";
 // <details>, so the list exists once in the page: open on the server, and
 // folded after hydration when the screen is narrow.
 
+/** A <details> that is open on the server and wide screens, folded on a
+ * phone. */
 export function ObjectListDisclosure({
   summary,
   children,

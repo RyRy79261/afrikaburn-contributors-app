@@ -73,6 +73,10 @@ function emptyValues(description: string | null): RegistrationValues {
   };
 }
 
+/**
+ * The camp's registration for the active edition: the wizard while it is a
+ * draft or has changes requested, the locked summary otherwise.
+ */
 export default async function RegistrationPage({
   params,
 }: {

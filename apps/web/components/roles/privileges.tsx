@@ -167,6 +167,8 @@ export function PrivilegeToggles({
     });
   }
 
+  /** Adds or removes one role from `manage_questionnaires`' audience; from
+   * "all", it starts a fresh list. */
   function toggleScopeRole(roleId: string) {
     if (!mq) return;
     const current = mq.audienceRoles === "all" ? [] : mq.audienceRoles;

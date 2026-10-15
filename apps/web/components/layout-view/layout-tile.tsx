@@ -21,6 +21,8 @@ import {
 // The thumbnail is the same server-rendered SVG as the plan itself, shapes
 // only. No warnings, at any rank.
 
+/** The camp page's layout tile: a thumbnail and summary, or what to do
+ * first. */
 export function LayoutTile({
   slug,
   editionName,

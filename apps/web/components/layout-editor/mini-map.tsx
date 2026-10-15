@@ -11,10 +11,12 @@ import type { LayoutDocument } from "@quagga/types";
 // card under a covered area (frame LcZsE "Bedouin 1 on the whole camp").
 // Plain SVG from the same metre document; no canvas.
 
+/** A ring as an SVG `points` attribute, in metres. */
 function points(ring: Ring): string {
   return ring.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
+/** The whole camp as a small SVG with one shade structure highlighted. */
 export function LayoutMiniMap({
   doc,
   highlightId,

@@ -114,6 +114,7 @@ const TZ = "Africa/Johannesburg";
 
 type SaveState = AutosaveState;
 
+/** "14:05" in South African time. */
 function timeOf(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -122,6 +123,7 @@ function timeOf(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** "3 Mar 2027" in South African time. */
 function dateOf(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -131,6 +133,7 @@ function dateOf(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** A fresh object id. */
 function newId(): string {
   return crypto.randomUUID();
 }
@@ -154,8 +157,10 @@ const FALLBACK_THEME: StageTheme = {
 function useStageTheme(): StageTheme {
   const [theme, setTheme] = useState<StageTheme>(FALLBACK_THEME);
   useEffect(() => {
+    /** Reads the theme's CSS variables into the canvas palette. */
     const read = () => {
       const s = getComputedStyle(document.documentElement);
+      /** A CSS variable's value, or the fallback when unset. */
       const v = (name: string, fb: string) =>
         s.getPropertyValue(name).trim() || fb;
       setTheme({
@@ -183,6 +188,7 @@ function useStageTheme(): StageTheme {
   return theme;
 }
 
+/** True when focus is in a text field, so editor shortcuts stand aside. */
 function isTyping(el: Element | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
@@ -209,6 +215,10 @@ export interface CampLayoutEditorProps {
   snapshotPinnedAt: string | null;
 }
 
+/**
+ * The camp layout editor: palette, canvas, inspector and warnings, with
+ * undo/redo, keyboard nudging and autosave. Wide screens only.
+ */
 export function CampLayoutEditor({
   slug,
   campName,
@@ -240,6 +250,7 @@ export function CampLayoutEditor({
 
   // --- Edits ---------------------------------------------------------------------
 
+  /** Applies an edit to the present document as one undo step. */
   const commit = useCallback((fn: (d: LayoutDocument) => LayoutDocument) => {
     setHistory((h) => pushHistory(h, fn(h.present)));
   }, []);
@@ -255,6 +266,8 @@ export function CampLayoutEditor({
     if (selectedId && !selected) setSelectedId(null);
   }, [selectedId, selected]);
 
+  /** Switches the canvas to the plot (null) or a covered area, refitted,
+   * nothing selected. */
   const openArea = useCallback((ref: AreaRef) => {
     setAreaRef(ref);
     setSelectedId(null);
@@ -262,6 +275,11 @@ export function CampLayoutEditor({
     setFitNonce((n) => n + 1);
   }, []);
 
+  /**
+   * Places a new object from the palette, at the drop point (snapped when
+   * snapping is on) or the area's centre, and selects it. Refuses past the
+   * object limit.
+   */
   const addEntry = useCallback(
     (entry: LayoutCatalogEntry, at?: Vec) => {
       if (!canAddObject(doc)) {
@@ -287,11 +305,14 @@ export function CampLayoutEditor({
     [doc, current, commit, snap],
   );
 
+  /** Applies an inspector change to the selected object. */
   const patchSelected = (patch: ObjectPatch) => {
     if (!selected) return;
     commit((d) => updateObject(d, current.ref, selected.id, patch));
   };
 
+  /** Copies the selected object and selects the copy; refuses past the object
+   * limit. */
   const duplicateSelected = () => {
     if (!selected) return;
     const r = duplicateObject(doc, current.ref, selected.id, newId, catalog);
@@ -303,6 +324,8 @@ export function CampLayoutEditor({
     }
   };
 
+  /** Removes the selected object (a shade structure with everything under
+   * it). */
   const deleteSelected = useCallback(() => {
     if (!selectedId) return;
     commit((d) => removeObject(d, current.ref, selectedId));
@@ -331,15 +354,18 @@ export function CampLayoutEditor({
     autosave.change(doc);
   }, [autosave, doc]);
 
+  /** "Try again" on the save chip. */
   const retry = () => autosave.retry();
 
   // Leaving sends what is unsaved instead of dropping it: on unmount (an
   // in-app link — App Router navigation fires no beforeunload) and on
   // pagehide. A full unload with a change still unsaved also asks first.
   useEffect(() => {
+    /** Asks before unloading while there is an unsaved change worth keeping. */
     const onLeave = (e: BeforeUnloadEvent) => {
       if (autosave.shouldWarnOnLeave()) e.preventDefault();
     };
+    /** Sends what is unsaved as the page goes away. */
     const onPageHide = () => autosave.leave();
     window.addEventListener("beforeunload", onLeave);
     window.addEventListener("pagehide", onPageHide);
@@ -353,6 +379,10 @@ export function CampLayoutEditor({
   // --- Keyboard ---------------------------------------------------------------------
 
   useEffect(() => {
+    /**
+     * Undo/redo anywhere; arrows nudge, Delete removes and Escape deselects
+     * only while the plan (or nothing) has focus.
+     */
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(document.activeElement)) return;
       const mod = e.ctrlKey || e.metaKey;
@@ -461,16 +491,20 @@ export function CampLayoutEditor({
     ? findCatalogEntry(catalog, selected.catalogKey)
     : undefined;
 
+  /** Keeps the stage's handle for PNG export. */
   const onReady = useCallback((api: StageApi) => {
     stageApi.current = api;
   }, []);
 
+  /** Opens the warning's area and selects its first object. */
   const onPickWarning = (w: LayoutWarning) => {
     if (w.areaId !== current.ref) openArea(w.areaId);
     setSelectedId(w.objectIds[0] ?? null);
     canvasRef.current?.focus();
   };
 
+  /** Downloads the current area as a PNG named after the camp, year and
+   * area. */
   const downloadPng = async () => {
     const url = await stageApi.current?.exportPng();
     if (!url) return;
@@ -941,6 +975,7 @@ export function CampLayoutEditor({
   );
 }
 
+/** The "Plot size" popover: width and depth inputs, in metres. */
 function PlotSizePopover({
   width,
   depth,

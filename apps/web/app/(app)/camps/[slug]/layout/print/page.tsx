@@ -48,10 +48,12 @@ const ParamsSchema = z.object({ slug: z.string().min(1).max(200) });
 
 type AnyObject = LayoutObject | NestedLayoutObject;
 
+/** Metres to one decimal, always shown, with the unit. */
 function metres(v: number): string {
   return `${(Math.round(v * 10) / 10).toFixed(1)} m`;
 }
 
+/** One area's objects as a table: name, kind, size, centre and rotation. */
 function ObjectTable({
   objects,
   catalog,
@@ -113,6 +115,8 @@ function ObjectTable({
   );
 }
 
+/** The printable plan: the whole camp, then each covered area that holds
+ * objects, with their object tables. */
 export default async function CampLayoutPrintPage({
   params,
 }: {
