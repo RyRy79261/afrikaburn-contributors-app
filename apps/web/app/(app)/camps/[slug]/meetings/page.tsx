@@ -42,14 +42,17 @@ export default async function CampMeetingsPage({
         description={`The camp's calls and get-togethers for ${edition.name}, with the link, the agenda and the notes in one place.`}
         actions={
           <>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link href={`/camps/${camp.slug}/calendar`}>
                 <CalendarDays className="h-4 w-4" aria-hidden />
                 Calendar
               </Link>
             </Button>
             {canSchedule && (
-              <Button asChild>
+              <Button
+                asChild
+                className="order-first w-full sm:order-none sm:w-auto"
+              >
                 <Link href={`${base}/new`}>
                   <Plus className="h-4 w-4" aria-hidden />
                   Schedule meeting
@@ -101,7 +104,7 @@ export default async function CampMeetingsPage({
                 Nothing coming up.
               </p>
             ) : (
-              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+              <ul className="divide-y divide-border sm:overflow-hidden sm:rounded-lg sm:border sm:border-border">
                 {upcoming.map((m) => (
                   <MeetingRow
                     key={m.id}
@@ -132,7 +135,7 @@ export default async function CampMeetingsPage({
                   cancelled meeting stays readable.
                 </p>
               </div>
-              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+              <ul className="divide-y divide-border sm:overflow-hidden sm:rounded-lg sm:border sm:border-border">
                 {past.map((m) => (
                   <MeetingRow
                     key={m.id}

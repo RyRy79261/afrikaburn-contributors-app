@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Info } from "lucide-react";
 import {
   calendarAgenda,
   calendarMonthGrid,
@@ -76,15 +76,24 @@ export default async function CampCalendarPage({
             phaseLabel={phaseLabel}
           />
         </div>
-        <div className="md:hidden">
+        <div className="flex flex-col gap-4 md:hidden">
           <CalendarAgenda
             slug={camp.slug}
             days={calendarAgenda(month, days)}
             allDays={days}
             phaseLabel={phaseLabel}
           />
+          <p className="text-sm text-muted-foreground">
+            Days with nothing on are left out. Tap a meeting to open it.
+          </p>
         </div>
       </section>
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        Read-only. Build, event and strike dates come from AfrikaBurn. Meetings
+        show only when they&apos;re meant for you, and your shifts are yours
+        alone: nobody else sees them here.
+      </p>
     </div>
   );
 }

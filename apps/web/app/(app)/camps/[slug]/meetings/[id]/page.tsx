@@ -115,13 +115,21 @@ export default async function MeetingPage({
           actions={
             meeting.canEdit && !cancelled ? (
               <>
-                <Button asChild variant="outline">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                >
                   <Link href={`${base}/edit`}>
                     <Pencil className="h-4 w-4" aria-hidden />
                     Edit
                   </Link>
                 </Button>
-                <CancelMeetingButton slug={camp.slug} meetingId={meeting.id} />
+                <CancelMeetingButton
+                  slug={camp.slug}
+                  meetingId={meeting.id}
+                  className="flex-1 sm:flex-none"
+                />
               </>
             ) : undefined
           }
@@ -176,6 +184,10 @@ export default async function MeetingPage({
                   className="block break-all font-mono text-sm underline-offset-4 hover:underline"
                 >
                   {displayLink(meeting.videoLink)}
+                  <ExternalLink
+                    className="ml-1.5 inline h-3.5 w-3.5 align-[-2px] text-primary"
+                    aria-hidden
+                  />
                 </a>
                 <p className="text-sm text-muted-foreground">
                   Opens in a new tab
@@ -186,7 +198,7 @@ export default async function MeetingPage({
           {!cancelled && (
             <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
               {meeting.videoLink && (
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                   <a
                     href={meeting.videoLink}
                     target="_blank"
@@ -197,7 +209,7 @@ export default async function MeetingPage({
                   </a>
                 </Button>
               )}
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="w-full sm:w-auto">
                 <a href={`${base}/ics`} download>
                   <CalendarPlus className="h-4 w-4" aria-hidden />
                   Add to my calendar

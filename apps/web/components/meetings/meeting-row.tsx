@@ -32,7 +32,7 @@ export function MeetingRow({
   const cancelled = meeting.cancelledAt !== null;
   const href = meetingPath(slug, meeting.id);
   return (
-    <li className="relative flex flex-col gap-3 px-4 py-3 hover:bg-muted/30 sm:flex-row sm:items-center sm:gap-4">
+    <li className="relative flex flex-col gap-3 py-3 hover:bg-muted/30 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
       <div className="flex min-w-0 flex-1 items-start gap-4 sm:items-center">
         <MeetingDateBlock date={meeting.date} muted={cancelled} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -55,9 +55,12 @@ export function MeetingRow({
               {meetingTimeRange(meeting.startMinute, meeting.durationMinutes)}
             </span>
             {meeting.location && (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{meeting.location}</span>
+              <span className="inline-flex min-w-0 items-start gap-1.5 sm:items-center">
+                <MapPin
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0"
+                  aria-hidden
+                />
+                <span className="sm:truncate">{meeting.location}</span>
               </span>
             )}
             {meeting.videoLink && (

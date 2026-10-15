@@ -4,6 +4,7 @@ import {
   displayLink,
   meetingDurationLabel,
   meetingLongDate,
+  meetingMoveSummary,
   meetingReach,
   meetingTimeRange,
   meetingWhenLine,
@@ -93,6 +94,34 @@ describe("meeting labels", () => {
     expect(displayLink("https://meet.example.com/mad-hatters/")).toBe(
       "meet.example.com/mad-hatters",
     );
+  });
+
+  it("names exactly what moved on the edit form", () => {
+    const before = {
+      date: "2027-03-21",
+      startMinute: 1140,
+      durationMinutes: 60,
+    };
+    expect(meetingMoveSummary(before, { ...before })).toBeNull();
+    expect(meetingMoveSummary(before, { ...before, startMinute: 1170 })).toBe(
+      "You moved the start from 19:00 to 19:30.",
+    );
+    expect(meetingMoveSummary(before, { ...before, date: "2027-03-22" })).toBe(
+      "You moved the day from Sun 21 Mar to Mon 22 Mar.",
+    );
+    expect(
+      meetingMoveSummary(before, {
+        date: "2027-03-22",
+        startMinute: 1170,
+        durationMinutes: 90,
+      }),
+    ).toBe(
+      "You moved the day from Sun 21 Mar to Mon 22 Mar, the start from 19:00 to 19:30 and the length from 1 hour to 1 hour 30 minutes.",
+    );
+    // A half-typed start is not a move yet.
+    expect(
+      meetingMoveSummary(before, { ...before, startMinute: null }),
+    ).toBeNull();
   });
 
   it("labels the audience chip", () => {

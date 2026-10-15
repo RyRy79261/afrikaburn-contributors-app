@@ -44,6 +44,48 @@ export function meetingWhenLine(m: {
   return `${shiftDateLabel(m.date).medium} · ${meetingTimeRange(m.startMinute, m.durationMinutes)}`;
 }
 
+/** When a meeting happens: its day, start and length. */
+export interface MeetingTiming {
+  date: string;
+  startMinute: number;
+  durationMinutes: number;
+}
+
+/**
+ * The edit form's move notice (frame G3 "Editing"): what the scheduler
+ * changed about WHEN, from what to what — "the start from 19:00 to 19:30".
+ * Null when nothing about the timing changed (or the new start is not a
+ * time yet), because only a change of day, start or length notifies.
+ */
+export function meetingMoveSummary(
+  before: MeetingTiming,
+  after: { date: string; startMinute: number | null; durationMinutes: number },
+): string | null {
+  if (after.startMinute === null || !after.date) return null;
+  const parts: string[] = [];
+  if (before.date !== after.date) {
+    parts.push(
+      `the day from ${shiftDateLabel(before.date).medium} to ${shiftDateLabel(after.date).medium}`,
+    );
+  }
+  if (before.startMinute !== after.startMinute) {
+    parts.push(
+      `the start from ${formatClock(before.startMinute)} to ${formatClock(after.startMinute)}`,
+    );
+  }
+  if (before.durationMinutes !== after.durationMinutes) {
+    parts.push(
+      `the length from ${meetingDurationLabel(before.durationMinutes)} to ${meetingDurationLabel(after.durationMinutes)}`,
+    );
+  }
+  if (parts.length === 0) return null;
+  const joined =
+    parts.length === 1
+      ? parts[0]
+      : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `You moved ${joined}.`;
+}
+
 const WEEKDAY_NAMES = [
   "Sunday",
   "Monday",

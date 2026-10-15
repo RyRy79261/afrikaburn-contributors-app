@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@quagga/ui/components/dialog";
 import { toast } from "@quagga/ui/components/toast";
+import { cn } from "@quagga/ui/lib/utils";
 import { cancelMeetingAction } from "@/app/(app)/camps/[slug]/meetings/actions";
 import { useMeetingVersion } from "./meeting-version";
 
@@ -22,9 +23,12 @@ import { useMeetingVersion } from "./meeting-version";
 export function CancelMeetingButton({
   slug,
   meetingId,
+  className,
 }: {
   slug: string;
   meetingId: string;
+  /** Extra classes for the trigger button (e.g. its width on a phone). */
+  className?: string;
 }) {
   const router = useRouter();
   const { version, announceWrite } = useMeetingVersion();
@@ -53,7 +57,7 @@ export function CancelMeetingButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-destructive">
+        <Button variant="outline" className={cn("text-destructive", className)}>
           <CalendarX className="h-4 w-4" aria-hidden />
           Cancel meeting
         </Button>

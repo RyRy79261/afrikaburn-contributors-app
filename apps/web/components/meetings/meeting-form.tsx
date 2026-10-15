@@ -30,6 +30,7 @@ import {
 import {
   MEETING_DURATION_OPTIONS,
   meetingDurationLabel,
+  meetingMoveSummary,
   meetingReach,
   type ReachMember,
 } from "@/lib/meeting-view";
@@ -122,11 +123,13 @@ export function MeetingForm({
       ...(initial ? [initial.durationMinutes] : []),
     ]),
   ].sort((a, b) => a - b);
-  const timingChanged =
-    editing &&
-    (initial.date !== date ||
-      initial.startMinute !== start ||
-      initial.durationMinutes !== Number(duration));
+  const moveSummary = initial
+    ? meetingMoveSummary(initial, {
+        date,
+        startMinute: start,
+        durationMinutes: Number(duration),
+      })
+    : null;
 
   /** Sends the form; on success opens the meeting page. */
   function submit(e: React.FormEvent) {
@@ -208,8 +211,13 @@ export function MeetingForm({
           </Field>
 
           <div className="flex flex-col gap-2">
-            <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
-              <Field label="Date" htmlFor="meeting-date" required>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-[2fr_1fr_1fr]">
+              <Field
+                label="Date"
+                htmlFor="meeting-date"
+                required
+                className="col-span-2 sm:col-span-1"
+              >
                 <Input
                   id="meeting-date"
                   type="date"
@@ -250,15 +258,15 @@ export function MeetingForm({
             </p>
           </div>
 
-          {editing && timingChanged && (
+          {moveSummary && (
             <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/10 p-3">
               <CalendarClock
                 className="mt-0.5 h-4 w-4 shrink-0 text-warning"
                 aria-hidden
               />
               <p className="text-sm">
-                You changed when it happens. Saving tells everyone it&apos;s
-                for. Fixing the title, place or agenda sends nothing.
+                {moveSummary} Saving tells everyone it&apos;s for. Fixing the
+                title, place or agenda sends nothing.
               </p>
             </div>
           )}
@@ -299,7 +307,7 @@ export function MeetingForm({
               Who it&apos;s for
             </span>
             <div
-              className="flex gap-2"
+              className="flex flex-col gap-2 sm:flex-row"
               role="group"
               aria-labelledby="audience-label"
             >
@@ -361,7 +369,7 @@ export function MeetingForm({
           </Field>
 
           {!editing && (
-            <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 p-3">
+            <div className="flex items-start gap-2.5 rounded-lg border border-primary/40 bg-primary/10 p-3">
               <Info
                 className="mt-0.5 h-4 w-4 shrink-0 text-primary"
                 aria-hidden
@@ -380,8 +388,12 @@ export function MeetingForm({
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={pending || !title.trim()}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              type="submit"
+              disabled={pending || !title.trim()}
+              className="w-full sm:w-auto"
+            >
               {!editing && <CalendarPlus className="h-4 w-4" aria-hidden />}
               {pending
                 ? "Saving…"
@@ -392,6 +404,7 @@ export function MeetingForm({
             <Button
               type="button"
               variant="ghost"
+              className="w-full sm:w-auto"
               onClick={() =>
                 router.push(
                   initial
