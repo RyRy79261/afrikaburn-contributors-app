@@ -7,16 +7,26 @@
 // the picker only mirrors it. Each refusal has a positive control first.
 //
 //   1. The camp lead makes two teams: Kitchen (Ren leads it) and Sound (no
-//      lead). Jabu joins Kitchen; Mia is on no team.
+//      lead). Jabu joins Kitchen; Mia is on no team (until step 6).
 //   2. The team page shows "Post to the team" / "Schedule a team meeting" to
 //      Ren, and not to Jabu.
 //   3. Ren schedules a team meeting from the shortcut: the form opens on his
 //      team, with no Whole camp / Chosen roles and the one-line reason. Jabu
-//      sees the meeting; Mia gets the 404 an unknown meeting gets.
+//      and the camp lead see the meeting; Mia gets the 404 an unknown meeting
+//      gets.
 //   4. Ren is never offered Sound, even when the URL asks for it.
-//   5. Ren posts to the team from the shortcut. Jabu gets it; Mia does not.
-//   6. The camp lead, who may address any team, gets the full picker with
-//      the asked-for team chosen.
+//   5. Ren posts to the team from the shortcut. Jabu gets it and can open
+//      it; Mia cannot open it.
+//   6. Mia joins Sound. The camp lead, who may address any team, opens the
+//      picker on the asked-for team and sends to Kitchen AND Sound. Jabu and
+//      Mia both get it — and Mia, with that one present, still has no sign
+//      of Ren's Kitchen-only announcement.
+//   7. The camp lead's meeting form also opens on the asked-for team.
+//
+// A crafted request (a team lead naming another team or the whole camp) is
+// refused server-side; that is pinned by unit tests, not here:
+// apps/web/lib/__tests__/{announcement-actions,announcements-store,
+// camp-meetings-store}.test.ts.
 //
 // Selector provenance (verified against source on 2026-10-15):
 //   team page ....... apps/web/app/(app)/camps/[slug]/teams/[id]/page.tsx
@@ -73,6 +83,7 @@ test.describe("camp member — team audiences", () => {
 
     const ren = uniqueUsername("ren_notfound");
     const jabu = uniqueUsername("jabu");
+    const mia = uniqueUsername("mia_fourie");
 
     // ── 1. The camp, its people and two teams ────────────────────────────
     await signUpBurner(alicePage, { onboard: true });
@@ -82,7 +93,7 @@ test.describe("camp member — team audiences", () => {
     for (const [page, username] of [
       [renPage, ren],
       [jabuPage, jabu],
-      [miaPage, uniqueUsername("mia_fourie")],
+      [miaPage, mia],
     ] as const) {
       const invite = await inviteToCamp(alicePage, camp.slug, "member");
       await signUpBurner(page, { onboard: true, username });
@@ -161,7 +172,27 @@ test.describe("camp member — team audiences", () => {
       .filter({ hasText: meetingTitle });
     await expect(row).toContainText(`${kitchen} team`, { ignoreCase: true });
 
+    // The camp's lead sees a team meeting they are not on.
+    await alicePage.goto(`/camps/${camp.slug}/meetings`);
+    await expect(
+      alicePage.getByRole("heading", { level: 1, name: "Meetings" }),
+    ).toBeVisible();
+    await expect(
+      alicePage.getByRole("listitem").filter({ hasText: meetingTitle }),
+    ).toContainText(`${kitchen} team`, { ignoreCase: true });
+    await alicePage.goto(meetingPath);
+    await expect(
+      alicePage.getByRole("heading", { level: 1, name: meetingTitle }),
+    ).toBeVisible();
+
+    // Mia, on no team: the page proves itself rendered (the 404 copy), then
+    // the title is absent — and absent from her own list too.
     await expectServerNotFound(miaPage, meetingPath, [meetingTitle]);
+    await miaPage.goto(`/camps/${camp.slug}/meetings`);
+    await expect(
+      miaPage.getByRole("heading", { level: 1, name: "Meetings" }),
+    ).toBeVisible();
+    await expect(miaPage.getByText(meetingTitle)).toHaveCount(0);
 
     // ── 4. Never another team, even when the URL asks for it ─────────────
     await renPage.goto(`/camps/${camp.slug}/announcements/new?team=${soundId}`);
@@ -205,22 +236,30 @@ test.describe("camp member — team audiences", () => {
       .click();
     await renPage.waitForURL(/\/announcements\/[0-9a-f-]{36}$/i);
     await expect(renPage.getByRole("heading", { name: title })).toBeVisible();
+    const renAnnouncementId = new URL(renPage.url()).pathname.split("/").pop()!;
 
     await jabuPage.goto("/notifications");
     await expect(
       jabuPage.getByRole("heading", { name: /^notifications$/i }),
     ).toBeVisible();
     await expect(jabuPage.getByText(title)).toBeVisible();
+    await jabuPage.goto(`/bulletins/${renAnnouncementId}`);
+    await expect(jabuPage.getByRole("heading", { name: title })).toBeVisible();
+    await expect(jabuPage.getByText(marker)).toBeVisible();
 
-    await miaPage.goto("/notifications");
+    // Mia cannot open it: the 404 copy is present, the title absent.
+    await expectServerNotFound(miaPage, `/bulletins/${renAnnouncementId}`, [
+      title,
+      marker,
+    ]);
+
+    // ── 6. The camp lead may address any team — here, two ───────────────
+    await miaPage.goto(`/camps/${camp.slug}/teams`);
+    await miaPage.getByRole("button", { name: `Join ${sound}` }).click();
     await expect(
-      miaPage.getByRole("heading", { name: /^notifications$/i }),
-    ).toBeVisible();
-    // Present first: Mia was told about nothing else, so prove the page
-    // painted by its heading, then that the title is absent.
-    await expect(miaPage.getByText(title)).toHaveCount(0);
+      miaPage.getByRole("button", { name: `Join ${sound}` }),
+    ).toHaveCount(0, { timeout: 15_000 });
 
-    // ── 6. The camp lead may address any team ───────────────────────────
     await alicePage.goto(
       `/camps/${camp.slug}/announcements/new?team=${soundId}`,
     );
@@ -236,13 +275,55 @@ test.describe("camp member — team audiences", () => {
     await expect(
       alicePage.getByRole("button", { name: kitchen }),
     ).toHaveAttribute("aria-pressed", "false");
-    await alicePage.getByRole("button", { name: kitchen }).click();
-    // Ren and Jabu on Kitchen; nobody on Sound yet.
+    // Mia alone on Sound so far.
     await expect(
-      alicePage.getByText(/reaches about\s*2 members/i),
+      alicePage.getByText(/reaches about\s*1 member\b/i),
     ).toBeVisible();
+    await alicePage.getByRole("button", { name: kitchen }).click();
+    await expect(
+      alicePage.getByRole("button", { name: kitchen }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Ren and Jabu on Kitchen, Mia on Sound.
+    await expect(
+      alicePage.getByText(/reaches about\s*3 members/i),
+    ).toBeVisible();
+
+    const bothTitle = uniqueName("Strike roster is up");
+    const bothMarker = `Check the roster ${Date.now().toString(36)}`;
+    await alicePage.getByLabel(/^title/i).fill(bothTitle);
+    await alicePage
+      .getByRole("textbox", { name: /announcement message/i })
+      .click();
+    await alicePage.keyboard.type(bothMarker);
+    await alicePage
+      .getByRole("button", { name: /publish announcement/i })
+      .click();
+    await alicePage.waitForURL(/\/announcements\/[0-9a-f-]{36}$/i);
+    await expect(
+      alicePage.getByRole("heading", { name: bothTitle }),
+    ).toBeVisible();
+
+    // The sender's list names both teams on the new one, and still lists
+    // Ren's team announcement.
     await alicePage.goto(`/camps/${camp.slug}/announcements`);
     await expect(alicePage.getByText(title)).toBeVisible();
+    const bothRow = alicePage.getByRole("link").filter({ hasText: bothTitle });
+    await expect(bothRow).toContainText(kitchen);
+    await expect(bothRow).toContainText(sound);
+
+    // Jabu (Kitchen) and Mia (Sound) both get it.
+    for (const page of [jabuPage, miaPage]) {
+      await page.goto("/notifications");
+      await expect(
+        page.getByRole("heading", { name: /^notifications$/i }),
+      ).toBeVisible();
+      await expect(page.getByText(bothTitle)).toBeVisible();
+    }
+    // Present first (above), then absent: Mia was never sent Ren's
+    // Kitchen-only announcement, joining Sound did not change that.
+    await expect(miaPage.getByText(title)).toHaveCount(0);
+
+    // ── 7. The camp lead's meeting form opens on the asked-for team ──────
     await alicePage.goto(`/camps/${camp.slug}/meetings/new?team=${soundId}`);
     await expect(
       alicePage.getByRole("button", { name: "Teams", exact: true }),
