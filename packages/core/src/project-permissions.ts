@@ -157,6 +157,7 @@ export function allProjectPermissions(): ProjectPermissions {
     post_announcements: { audienceRoles: "all", mayRequireAck: true },
     manage_money: true,
     manage_layout: true,
+    schedule_meetings: true,
   };
 }
 
@@ -206,6 +207,10 @@ export function roleGrantsElevatedPrivileges(
     permissions.manage_roles === true ||
     permissions.manage_members === true ||
     permissions.manage_money === true ||
-    permissions.manage_layout === true
+    permissions.manage_layout === true ||
+    // `schedule_meetings` sends notices to the whole camp, writes the notes
+    // that become the camp's record and ticks who came. Handing that out is
+    // a lead's decision too.
+    permissions.schedule_meetings === true
   );
 }

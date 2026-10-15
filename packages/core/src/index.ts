@@ -246,3 +246,7 @@ export * from "./camp-budget";
 // summary, carry-forward and snapshot pinning. Geometry is @quagga/geo. PURE.
 export * from "./layout-catalog";
 export * from "./camp-layout";
+// Camp meetings and calendar (docs/camp-meetings-spec.md): who sees and who
+// schedules a meeting, the upcoming/past split, the derived camp calendar,
+// the .ics file and the meeting notices. PURE.
+export * from "./camp-meetings";
