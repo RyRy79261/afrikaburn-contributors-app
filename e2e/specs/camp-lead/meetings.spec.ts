@@ -15,7 +15,10 @@
 //      download its .ics; A has no Edit or Cancel.
 //   4. B — a member outside the audience — gets the 404 an unknown meeting
 //      gets, for the page and the .ics, and the list does not name it.
-//   5. The lead writes the notes (autosave) and ticks A as came; A reads both.
+//   5. The lead writes the notes: a local draft survives a reload ("Draft
+//      restored") without reaching the server, "Save notes" writes it once
+//      and clears the draft, and a save over a version someone else moved
+//      is refused with the text kept. The lead ticks A as came; A reads both.
 //   6. The lead cancels it: it stays readable, moves to Past and cancelled,
 //      offers no .ics, and A is told.
 //   7. A stranger gets the camp's not-found for Meetings and the calendar.
@@ -162,17 +165,92 @@ test.describe("camp lead — meetings", () => {
     expect(bIcs.status()).toBe(404);
     expect(await bIcs.text()).not.toContain(title);
 
-    // ── 5. Notes (autosave) and who came ─────────────────────────────────
+    // ── 5. Notes (local draft, Save notes, conflict) and who came ────────
+    const DRAFT_PREFIX = "quagga:draft:meeting-notes:";
+    /** The notes drafts this browser holds, as their stored values. */
+    const drafts = (page: typeof leadPage) =>
+      page.evaluate((prefix) => {
+        const out: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith(prefix)) out.push(localStorage.getItem(key)!);
+        }
+        return out;
+      }, DRAFT_PREFIX);
+    // A reload with unsaved notes asks first; the draft is kept either way.
+    const acceptDialogs = (d: { accept: () => Promise<void> }) =>
+      void d.accept();
+    leadPage.on("dialog", acceptDialogs);
+
     await leadPage.getByRole("button", { name: "Edit notes" }).click();
     const notes = leadPage.getByRole("textbox", { name: "Meeting notes" });
     await notes.click();
     await leadPage.keyboard.type(notesMarker);
-    await expect(leadPage.getByText("Saved", { exact: true })).toBeVisible({
-      timeout: 15_000,
-    });
-    await leadPage.getByRole("button", { name: "Done" }).click();
+    // The footer is the one way to save: no autosave chip, no "Done".
+    await expect(
+      leadPage.getByRole("button", { name: "Save notes" }),
+    ).toBeVisible();
+    await expect(leadPage.getByRole("button", { name: "Done" })).toHaveCount(0);
+    await expect
+      .poll(async () => (await drafts(leadPage)).join(""))
+      .toContain(notesMarker);
+
+    // A reload lands back in the editor, from the draft.
+    await leadPage.reload();
+    await expect(leadPage.getByText(/^Draft restored/)).toBeVisible();
+    await expect(notes).toContainText(notesMarker);
+    // Nothing reached the server: A, in the audience, reads no notes yet.
+    await aPage.goto(meetingUrl);
+    await expect(
+      aPage.getByRole("heading", { level: 1, name: title }),
+    ).toBeVisible();
+    await expect(aPage.getByText("No notes yet.")).toBeVisible();
+    await expect(aPage.getByText(notesMarker)).toHaveCount(0);
+
+    await leadPage.getByRole("button", { name: "Save notes" }).click();
+    await expect(
+      leadPage.getByRole("button", { name: "Edit notes" }),
+    ).toBeVisible();
     await expect(leadPage.getByText(notesMarker)).toBeVisible();
     await expect(leadPage.getByText(/last edited by/i)).toBeVisible();
+    expect(await drafts(leadPage)).toEqual([]);
+    await leadPage.reload();
+    await expect(
+      leadPage.getByRole("button", { name: "Edit notes" }),
+    ).toBeVisible();
+    await expect(leadPage.getByText(notesMarker)).toBeVisible();
+    await expect(leadPage.getByText(/^Draft restored/)).toHaveCount(0);
+
+    // Two tabs: the second saves first; the first is refused, text kept.
+    const otherTab = await leadPage.context().newPage();
+    await leadPage.getByRole("button", { name: "Edit notes" }).click();
+    await otherTab.goto(meetingUrl);
+    await otherTab.getByRole("button", { name: "Edit notes" }).click();
+    await otherTab.getByRole("textbox", { name: "Meeting notes" }).click();
+    await otherTab.keyboard.press("End");
+    await otherTab.keyboard.type(" Theirs first.");
+    await otherTab.getByRole("button", { name: "Save notes" }).click();
+    await expect(
+      otherTab.getByRole("button", { name: "Edit notes" }),
+    ).toBeVisible();
+    await expect(otherTab.getByText(/Theirs first\./)).toBeVisible();
+    await otherTab.close();
+
+    await notes.click();
+    await leadPage.keyboard.press("End");
+    await leadPage.keyboard.type(" Mine second.");
+    await leadPage.getByRole("button", { name: "Save notes" }).click();
+    await expect(
+      leadPage.getByRole("alert").filter({ hasText: /someone else saved/i }),
+    ).toBeVisible();
+    await expect(notes).toContainText("Mine second.");
+    // Reloading shows theirs; the stale draft is not offered back.
+    await leadPage.getByRole("button", { name: "Reload notes" }).click();
+    await expect(leadPage.getByText(/Theirs first\./)).toBeVisible();
+    await expect(leadPage.getByText(/^Draft restored/)).toHaveCount(0);
+    await expect(leadPage.getByText(/Mine second\./)).toHaveCount(0);
+    expect(await drafts(leadPage)).toEqual([]);
+    leadPage.off("dialog", acceptDialogs);
 
     const tick = leadPage.getByRole("checkbox", { name: aName });
     await expect(tick).not.toBeChecked();
