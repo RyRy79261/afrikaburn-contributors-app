@@ -910,10 +910,33 @@ describe("who came", () => {
   it("a note-taker ticks a member who could see it", async () => {
     queueActor(LEAD);
     dbMock.queue([meetingRow({ audience: KITCHEN_ONLY })]);
+    dbMock.queue([{ sanitizedAt: null }]);
     queueMembers();
     expect(await store.setCampMeetingAttendance(ALICE, EDITION, tick)).toEqual({
       ok: true,
     });
+    // The ticked person's rows are held FOR SHARE first, so an account
+    // erasure in flight is waited for and seen (account-sanitize.ts 2g).
+    // The ticked person's lock, not the note-taker's own (same shape).
+    const lock = dbMock
+      .queriesTouching(schema.memberships)
+      .find(
+        (q) =>
+          q.kind === "select" &&
+          q.called("for") &&
+          boundStrings(q).includes(JABU),
+      )!;
+    expect(lock).toBeDefined();
+    expect(lock.tx).toBe(true);
+    expect(lock.arg("for")).toBe("share");
+    const of = (
+      lock.calls.find((c) => c.method === "for")!.args[1] as {
+        of: unknown;
+      }
+    ).of;
+    expect([of].flat()).toEqual(
+      expect.arrayContaining([schema.memberships, schema.users]),
+    );
     const insert = dbMock.writesTo(schema.campMeetingAttendees)[0]!;
     expect(insert.arg("values")).toEqual({
       meetingId: MEETING,
@@ -924,10 +947,17 @@ describe("who came", () => {
   });
 
   it("refuses someone outside the audience, an erased account and a stranger", async () => {
+    const lockRow: Record<string, unknown[]> = {
+      [REN]: [{ sanitizedAt: null }],
+      // Erased while the tick was on its way: the lock reads it set.
+      [GONE]: [{ sanitizedAt: new Date() }],
+      "aaaaaaaa-0000-4000-8000-0000000000ff": [],
+    };
     for (const userId of [REN, GONE, "aaaaaaaa-0000-4000-8000-0000000000ff"]) {
       dbMock.reset();
       queueActor(LEAD);
       dbMock.queue([meetingRow({ audience: KITCHEN_ONLY })]);
+      dbMock.queue(lockRow[userId]!);
       queueMembers();
       expect(
         await store.setCampMeetingAttendance(ALICE, EDITION, {

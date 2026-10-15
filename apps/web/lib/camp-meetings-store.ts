@@ -1284,6 +1284,27 @@ export async function setCampMeetingAttendance(
         return { ok: true };
       }
       if (current.cancelledAt !== null) return refused("cancelled");
+      // Hold the ticked person's membership and account rows FOR SHARE, as
+      // account-sanitize.ts expects of every writer keyed by a person: an
+      // erasure in flight holds `users` FOR UPDATE, so this waits for it and
+      // then reads `sanitized_at` set, instead of inserting a tick its step 2g
+      // has already cleared from a snapshot taken before it.
+      const [locked] = await tx
+        .select({ sanitizedAt: schema.users.sanitizedAt })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .where(
+          and(
+            eq(schema.memberships.groupId, camp.id),
+            eq(schema.memberships.userId, input.userId),
+            activeMembership(),
+          ),
+        )
+        .limit(1)
+        .for("share", { of: [schema.memberships, schema.users] });
+      if (!locked || locked.sanitizedAt !== null) {
+        return refused("not_attendee");
+      }
       const members = await loadCampMembers(tx, camp.id);
       const target = members.find(
         (m) => m.userId === input.userId && !m.sanitized,
