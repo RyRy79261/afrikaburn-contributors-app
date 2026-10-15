@@ -183,7 +183,8 @@ export default async function CampTeamPage({
               Schedule a team meeting
             </Link>
           </Button>
-          <span className="text-xs text-muted-foreground">
+          {/* Desktop only: the phone frame (IyeIT) drops the hint. */}
+          <span className="hidden text-xs text-muted-foreground sm:inline">
             Opens the form with this team already chosen.
           </span>
         </div>

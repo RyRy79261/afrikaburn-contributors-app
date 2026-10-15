@@ -459,8 +459,14 @@ export function AnnouncementComposer({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => save(true)} disabled={pending}>
+        {/* Full-width and stacked on a phone, as the meeting form's actions
+            are (frame y2O4gf). */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button
+            onClick={() => save(true)}
+            disabled={pending}
+            className="w-full sm:w-auto"
+          >
             <Send className="h-4 w-4" aria-hidden />
             {sendAtLocal ? "Schedule announcement" : "Publish announcement"}
           </Button>
@@ -468,11 +474,17 @@ export function AnnouncementComposer({
             variant="secondary"
             onClick={() => save(false)}
             disabled={pending}
+            className="w-full sm:w-auto"
           >
             Save draft
           </Button>
           {draft && (
-            <Button variant="ghost" onClick={remove} disabled={pending}>
+            <Button
+              variant="ghost"
+              onClick={remove}
+              disabled={pending}
+              className="w-full sm:w-auto"
+            >
               <Trash2 className="h-4 w-4" aria-hidden />
               Delete draft
             </Button>
