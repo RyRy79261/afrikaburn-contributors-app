@@ -4,14 +4,19 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { browserDraftStore, clearAllDrafts } from "@/lib/editor-draft";
 
-/** Ends the Neon Auth session and returns to the landing page. */
+/** Ends the Neon Auth session and returns to the landing page. Unsaved
+ * editor drafts kept in this browser (lib/editor-draft.ts) go with it, so the
+ * next person on a shared device finds none. */
 export function SignOutButton() {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
 
   async function signOut() {
     setPending(true);
+    const drafts = browserDraftStore();
+    if (drafts) clearAllDrafts(drafts);
     try {
       await authClient.signOut();
     } catch {
