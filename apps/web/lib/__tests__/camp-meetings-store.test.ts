@@ -216,30 +216,26 @@ const form = {
 };
 
 function notices() {
-  return dbMock
-    .writesTo(schema.notifications)
-    .flatMap(
-      (q) =>
-        q.arg("values") as Array<{
-          userId: string;
-          kind: string;
-          title: string;
-          link: string;
-        }>,
-    );
+  return dbMock.writesTo(schema.notifications).flatMap(
+    (q) =>
+      q.arg("values") as Array<{
+        userId: string;
+        kind: string;
+        title: string;
+        link: string;
+      }>,
+  );
 }
 
 function audits() {
-  return dbMock
-    .writesTo(schema.auditEvents)
-    .map(
-      (q) =>
-        q.arg("values") as {
-          action: string;
-          subject: string;
-          meta: Record<string, unknown>;
-        },
-    );
+  return dbMock.writesTo(schema.auditEvents).map(
+    (q) =>
+      q.arg("values") as {
+        action: string;
+        subject: string;
+        meta: Record<string, unknown>;
+      },
+  );
 }
 
 beforeEach(() => {
