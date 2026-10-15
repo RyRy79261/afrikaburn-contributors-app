@@ -50,4 +50,7 @@ export const NOTIFICATION_SOURCE_LABELS: Record<NotificationKind, string> = {
   // Never written to an org inbox either (meeting notices go to the camp
   // members a meeting is for, in the participant app).
   meeting: "Camp meetings",
+  // Never written to an org inbox either ("You were added to {team}" goes to
+  // the camp member a lead added, in the participant app).
+  team: "Camp teams",
 };

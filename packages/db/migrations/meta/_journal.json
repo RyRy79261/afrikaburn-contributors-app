@@ -281,6 +281,13 @@
       "when": 1792025833638,
       "tag": "0039_camp_meetings",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792066351926,
+      "tag": "0040_nice_solo",
+      "breakpoints": true
     }
   ]
 }
