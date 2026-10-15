@@ -152,6 +152,7 @@ const REFUSAL_MESSAGES: Record<LayoutRefusal, string> = {
   wrong_level: "That object can't go there.",
 };
 
+/** The sentence a person sees for a refusal reason. */
 export function layoutRefusalMessage(reason: LayoutRefusal): string {
   return REFUSAL_MESSAGES[reason];
 }
@@ -167,6 +168,10 @@ export const LAYOUT_AUDIT = {
 
 // --- Decisions -----------------------------------------------------------------
 
+/**
+ * Whether a layout may be started: refuses non-editors, camps without a
+ * registration this edition, and camps that already have one. Null is allowed.
+ */
 export function decideLayoutCreate(facts: {
   canEdit: boolean;
   hasRegistration: boolean;
@@ -254,6 +259,7 @@ export function checkLayoutAgainstCatalog(
   doc: LayoutDocument,
   catalog: readonly LayoutCatalogEntry[],
 ): { reason: LayoutRefusal; objectId: string } | null {
+  /** The first catalogue problem with one object at `level`, or null. */
   const check = (
     o: LayoutObject | NestedLayoutObject,
     level: "plot" | "nested",
@@ -414,6 +420,8 @@ export interface LayoutAreaSummary {
   coveredPct: number;
 }
 
+/** The object's catalogue role; "object" when its key is not in the
+ * catalogue. */
 function roleOf(
   catalog: readonly LayoutCatalogEntry[],
   o: AnyObject,
@@ -421,6 +429,10 @@ function roleOf(
   return findCatalogEntry(catalog, o.catalogKey)?.role ?? "object";
 }
 
+/**
+ * Area, object counts and covered ground for one area's objects, in metres.
+ * Areas (zones) and paths do not count as covered ground.
+ */
 function summarise(
   ring: Ring,
   dims: { width: number; depth: number },
@@ -491,6 +503,7 @@ export function formatMetres(v: number): string {
   return `${(Math.round(v * 10) / 10).toFixed(1)} m`;
 }
 
+/** Metres to at most one decimal, without the unit or a trailing ".0". */
 function trimMetres(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
@@ -556,6 +569,7 @@ export function layoutObjectName(
   return findCatalogEntry(catalog, o.catalogKey)?.label ?? o.catalogKey;
 }
 
+/** The string with its first character lower-cased. */
 function lowerFirst(s: string): string {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
@@ -564,10 +578,15 @@ function lowerFirst(s: string): string {
 function overlapSize(a: Footprint, b: Footprint): string {
   const shared = intersectionRing(a, b);
   const [w, d] = shared.length ? bboxSize(bbox(shared)) : [0, 0];
+  /** One decimal place, always shown. */
   const one = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
   return `${one(w)} × ${one(d)} m`;
 }
 
+/**
+ * Every warning inside one area (the plot, or one covered area): bounds,
+ * halos past the edge, frontage, and each overlapping pair.
+ */
 function areaWarnings(
   ring: Ring,
   level: "plot" | "nested",
@@ -577,6 +596,8 @@ function areaWarnings(
   frontage: readonly [Vec, Vec] | null,
 ): LayoutWarning[] {
   const out: LayoutWarning[] = [];
+  /** Adds a warning stamped with this area's id; requirement defaults to
+   * null. */
   const push = (
     w: Omit<LayoutWarning, "areaId" | "requirement"> & {
       requirement?: string;
@@ -671,6 +692,11 @@ function areaWarnings(
   return out;
 }
 
+/**
+ * The warning, if any, for one pair of objects in the same area: blocked
+ * paths, objects on support poles, overlaps, and rigging or safety zones
+ * breached. Zones and entrances never warn.
+ */
 function pairWarning(
   a: Item,
   b: Item,
@@ -818,6 +844,7 @@ export function layoutWarnings(
       ),
     );
   }
+  /** Warnings sort before notices. */
   const rank = (w: LayoutWarning) => (w.severity === "warning" ? 0 : 1);
   return all
     .map((w, i) => ({ w, i }))
@@ -838,6 +865,7 @@ export function createEmptyLayoutDocument(
   };
 }
 
+/** A plot side clamped to the allowed range, in metres. */
 function clampSide(v: number): number {
   return Math.min(LAYOUT_MAX_PLOT_M, Math.max(LAYOUT_MIN_SIZE_M, v));
 }
@@ -900,6 +928,8 @@ export function shouldPinLayoutSnapshot(action: CampAction): boolean {
 export type LayoutSnapshotState =
   "not_sent" | "sent_current" | "changed_since_sent";
 
+/** Whether AfrikaBurn's pinned copy is missing, current, or behind the live
+ * layout. */
 export function layoutSnapshotState(
   layoutVersion: number,
   latestPinnedVersion: number | null,

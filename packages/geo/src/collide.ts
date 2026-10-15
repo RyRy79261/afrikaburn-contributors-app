@@ -33,10 +33,13 @@ function inRectFrame(r: RectFootprint, p: Vec): Vec {
   return rotate(sub(p, r.centre), -r.rotationDeg);
 }
 
+/** The rectangle's two edge directions, as unit vectors: its separating
+ * axes. */
 function rectAxes(r: RectFootprint): Vec[] {
   return [rotate([1, 0], r.rotationDeg), rotate([0, 1], r.rotationDeg)];
 }
 
+/** The [min, max] extent of a ring along `axis`. */
 function project(ring: Ring, axis: Vec): readonly [number, number] {
   let min = Infinity;
   let max = -Infinity;
@@ -48,6 +51,8 @@ function project(ring: Ring, axis: Vec): readonly [number, number] {
   return [min, max];
 }
 
+/** Separating-axis overlap depth of two rectangles, in metres; ≤ 0 when
+ * apart. */
 function rectRectDepth(a: RectFootprint, b: RectFootprint): number {
   const ra = rectCorners(a);
   const rb = rectCorners(b);
@@ -60,6 +65,7 @@ function rectRectDepth(a: RectFootprint, b: RectFootprint): number {
   return depth;
 }
 
+/** How far a circle and a rectangle overlap, in metres; ≤ 0 when apart. */
 function circleRectDepth(c: CircleFootprint, r: RectFootprint): number {
   const [x, y] = inRectFrame(r, c.centre);
   const hw = r.width / 2;
@@ -155,6 +161,7 @@ export function footprintInsideRing(f: Footprint, ring: Ring): boolean {
   );
 }
 
+/** True when `p` lies on the rectangle's outline (within EPSILON). */
 function onRectEdge(r: RectFootprint, p: Vec): boolean {
   const ring = rectCorners(r);
   return distanceToBoundary(p, ring) <= EPSILON;

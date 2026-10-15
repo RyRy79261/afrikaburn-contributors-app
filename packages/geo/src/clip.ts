@@ -6,10 +6,12 @@
 import { cross, sub, type Vec } from "./vec";
 import { normaliseRing, vertexAt, type Ring } from "./polygon";
 
+/** True when `p` is on the left of (or on) the directed edge a→b. */
 function inside(p: Vec, a: Vec, b: Vec): boolean {
   return cross(sub(b, a), sub(p, a)) >= 0;
 }
 
+/** Where the line p→q crosses the line a→b; `p` when they are parallel. */
 function intersect(p: Vec, q: Vec, a: Vec, b: Vec): Vec {
   const r = sub(q, p);
   const s = sub(b, a);

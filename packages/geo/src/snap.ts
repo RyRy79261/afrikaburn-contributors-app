@@ -18,10 +18,13 @@ export function snapTo(value: number, step: number): number {
   return Number(snapped.toFixed(9)) + 0;
 }
 
+/** A length snapped to the grid step (0.5 m by default). */
 export function snapLength(value: number, step = SNAP_LENGTH_M): number {
   return snapTo(value, step);
 }
 
+/** A point with both coordinates snapped to the grid step (0.5 m by
+ * default). */
 export function snapPoint(p: Vec, step = SNAP_LENGTH_M): Vec {
   return [snapTo(p[0], step), snapTo(p[1], step)];
 }

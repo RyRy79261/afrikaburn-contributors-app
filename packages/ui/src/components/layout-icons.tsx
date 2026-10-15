@@ -74,6 +74,8 @@ const ICONS: Record<string, LucideIcon> = {
   zap: Zap,
 };
 
+/** The lucide icon for a catalogue icon name; a plain box for unknown or
+ * missing names. */
 export function layoutIcon(name: string | undefined): LucideIcon {
   return (name && ICONS[name]) || Box;
 }

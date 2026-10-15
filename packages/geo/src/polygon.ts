@@ -34,6 +34,7 @@ export function signedArea(ring: Ring): number {
   return sum / 2;
 }
 
+/** Unsigned area of the ring, in square metres, whichever way it winds. */
 export function area(ring: Ring): number {
   return Math.abs(signedArea(ring));
 }
@@ -43,6 +44,8 @@ export function normaliseRing(ring: Ring): Ring {
   return signedArea(ring) < 0 ? [...ring].reverse() : ring;
 }
 
+/** The axis-aligned box around the points. Infinite bounds for an empty
+ * list. */
 export function bbox(points: readonly Vec[]): BBox {
   let minX = Infinity;
   let minY = Infinity;
@@ -57,6 +60,7 @@ export function bbox(points: readonly Vec[]): BBox {
   return { minX, minY, maxX, maxY };
 }
 
+/** Width (x) and depth (y) of a box, in metres. */
 export function bboxSize(b: BBox): readonly [width: number, depth: number] {
   return [b.maxX - b.minX, b.maxY - b.minY];
 }
@@ -144,6 +148,7 @@ export function signedDistanceToBoundary(p: Vec, ring: Ring): number {
   return pointInPolygon(p, ring) ? d : -d;
 }
 
+/** Which side of a→b the point c is on: 1 left, -1 right, 0 collinear. */
 function orientation(a: Vec, b: Vec, c: Vec): number {
   const v = cross(sub(b, a), sub(c, a));
   return Math.abs(v) < EPSILON * EPSILON ? 0 : Math.sign(v);

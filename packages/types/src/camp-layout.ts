@@ -81,6 +81,7 @@ const Rotation = Metres.refine(
   "Rotation is between 0° and 360°.",
 );
 
+/** Optional free text capped at `max` characters. */
 const OptionalText = (max: number) =>
   z.string().max(max, `Keep it under ${max} characters.`).optional();
 
@@ -160,6 +161,7 @@ const objectFields = {
   visibility: LayoutVisibility, // LAYOUT-043
 };
 
+/** Refinement: a circle-shaped object must carry a diameter. */
 function circleNeedsDiameter(
   o: { shape: LayoutShape; diameter?: number },
   ctx: z.RefinementCtx,

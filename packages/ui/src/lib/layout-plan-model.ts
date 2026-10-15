@@ -45,6 +45,8 @@ type AnyObject = LayoutObject | NestedLayoutObject;
 export type PlanTone =
   "shelter" | "infrastructure" | "vehicle" | "safety" | "area" | "pole";
 
+/** The colour family for a catalogue entry; an unknown entry draws as a
+ * vehicle. */
 export function planTone(e: LayoutCatalogEntry | undefined): PlanTone {
   if (!e) return "vehicle";
   if (e.role === "pole") return "pole";
@@ -69,6 +71,7 @@ export function planTone(e: LayoutCatalogEntry | undefined): PlanTone {
 export function planDims(
   o: Pick<AnyObject, "shape" | "width" | "length" | "diameter">,
 ): string {
+  /** One decimal place at most, no trailing ".0". */
   const t = (v: number) => String(Math.round(v * 10) / 10);
   return o.shape === "circle"
     ? `Ø ${t(o.diameter ?? o.width)} m`
@@ -115,6 +118,7 @@ export function planArea(
 /** The longer side of the drawn content, in SVG user units. */
 export const PLAN_TARGET_PX = 800;
 
+/** SVG units per metre, so the longer side of `box` spans `target` units. */
 export function planScale(box: BBox, target = PLAN_TARGET_PX): number {
   const side = Math.max(box.maxX - box.minX, box.maxY - box.minY);
   return target / Math.max(side, 0.1);
@@ -147,6 +151,10 @@ export function textWidth(text: string, fontPx: number): number {
   return text.length * fontPx * 0.58;
 }
 
+/**
+ * How much label an object's drawn box (in px) has room for: name and
+ * dimensions, name only, an icon, or nothing.
+ */
 export function labelFit(
   wPx: number,
   hPx: number,
@@ -235,10 +243,12 @@ const RULER_TOP = 26;
 const PAD = 10;
 const SCALE_BAR_BAND = 40;
 
+/** A number to one decimal place, without a trailing ".0". */
 function trimNumber(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 
+/** The axis-aligned box around a footprint's ring, in metres. */
 function footprintBox(ring: Ring): BBox {
   return bbox(ring);
 }
@@ -301,10 +311,15 @@ export function buildPlanLayout(
   const left = opts.rulers ? RULER_LEFT : PAD;
   const top = opts.rulers ? RULER_TOP : PAD;
   const bottom = opts.scaleBar ? SCALE_BAR_BAND : PAD;
+  /** Metres to SVG units, horizontally. */
   const X = (x: number) => left + (x - content.minX) * scale;
+  /** Metres to SVG units, vertically. */
   const Y = (y: number) => top + (y - content.minY) * scale;
+  /** A ring as an SVG `points` attribute. */
   const pts = (ring: Ring) =>
     ring.map(([x, y]) => `${round(X(x))},${round(Y(y))}`).join(" ");
+  /** A footprint as SVG geometry: circles stay circles, everything else a
+   * polygon. */
   const shapeOf = (fp: Footprint, ring: Ring): PlanShape =>
     fp.kind === "circle"
       ? {
@@ -320,8 +335,10 @@ export function buildPlanLayout(
 
   const major = niceStep(scale, 48);
   const minor = major / 5 >= 0.5 && (major / 5) * scale >= 8 ? major / 5 : null;
+  /** Vertical grid-line positions every `step` metres across the area. */
   const gx = (step: number) =>
     ticks(areaBoxM.minX, areaBoxM.maxX, step).map((v) => round(X(v)));
+  /** Horizontal grid-line positions every `step` metres down the area. */
   const gy = (step: number) =>
     ticks(areaBoxM.minY, areaBoxM.maxY, step).map((v) => round(Y(v)));
 
@@ -424,6 +441,7 @@ export function buildPlanLayout(
   };
 }
 
+/** Rounded to 2 decimals, to keep the SVG markup short. */
 function round(v: number): number {
   return Math.round(v * 100) / 100;
 }

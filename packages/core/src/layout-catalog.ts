@@ -100,6 +100,11 @@ type EntryInput = Omit<
     >
   >;
 
+/**
+ * A catalogue entry with the defaults filled in: no halos, plot-level,
+ * tents and vehicles private and kept off the frontage, a circle's diameter
+ * from its width.
+ */
 function entry(e: EntryInput): LayoutCatalogEntry {
   const length = e.length ?? e.width;
   return {

@@ -10,22 +10,27 @@ export type Vec = readonly [x: number, y: number];
 /** Below this, two lengths in metres are the same length (a micrometre). */
 export const EPSILON = 1e-6;
 
+/** A vector from its two components, in metres. */
 export function vec(x: number, y: number): Vec {
   return [x, y];
 }
 
+/** a + b, component-wise. */
 export function add(a: Vec, b: Vec): Vec {
   return [a[0] + b[0], a[1] + b[1]];
 }
 
+/** a − b: the vector from b to a. */
 export function sub(a: Vec, b: Vec): Vec {
   return [a[0] - b[0], a[1] - b[1]];
 }
 
+/** `a` stretched by the scalar `k`. */
 export function scale(a: Vec, k: number): Vec {
   return [a[0] * k, a[1] * k];
 }
 
+/** The dot product; the length of `a` along `b` when `b` is a unit vector. */
 export function dot(a: Vec, b: Vec): number {
   return a[0] * b[0] + a[1] * b[1];
 }
@@ -35,14 +40,17 @@ export function cross(a: Vec, b: Vec): number {
   return a[0] * b[1] - a[1] * b[0];
 }
 
+/** Euclidean length, in metres. */
 export function length(a: Vec): number {
   return Math.hypot(a[0], a[1]);
 }
 
+/** Euclidean distance between two points, in metres. */
 export function distance(a: Vec, b: Vec): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
 
+/** Degrees to radians. */
 export function degToRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
@@ -68,6 +76,7 @@ export function cosSin(deg: number): readonly [cos: number, sin: number] {
   return [Math.cos(rad), Math.sin(rad)];
 }
 
+/** False when either component is NaN or ±Infinity. */
 export function isFiniteVec(v: Vec): boolean {
   return Number.isFinite(v[0]) && Number.isFinite(v[1]);
 }

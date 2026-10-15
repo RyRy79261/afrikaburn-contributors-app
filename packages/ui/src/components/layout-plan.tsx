@@ -97,6 +97,7 @@ export interface LayoutPlanProps {
   highlightIds?: ReadonlySet<string>;
 }
 
+/** One footprint as an SVG circle or polygon, already in plan pixels. */
 function Shape({
   shape,
   className,
@@ -128,10 +129,13 @@ function Shape({
   );
 }
 
+/** The covered-area chip on a shade structure: "3 inside · open ›". */
 function chipText(count: number): string {
   return `${count} inside · open ›`;
 }
 
+/** An object's label, sized to what its box has room for; nothing on
+ * thumbnails. */
 function ItemText({
   item,
   fontPx,

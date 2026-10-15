@@ -41,6 +41,7 @@ export function rectCorners(r: RectFootprint): Ring {
   return local.map((p) => add(r.centre, rotate(p, r.rotationDeg)));
 }
 
+/** A circle as a regular polygon of `segments` vertices, counter-clockwise. */
 export function circleRing(
   c: CircleFootprint,
   segments = CIRCLE_SEGMENTS,
@@ -61,10 +62,13 @@ export function footprintRing(f: Footprint, segments = CIRCLE_SEGMENTS): Ring {
   return f.kind === "rect" ? rectCorners(f) : circleRing(f, segments);
 }
 
+/** The footprint's exact area in square metres (a circle as πr², not its
+ * polygon). */
 export function footprintArea(f: Footprint): number {
   return f.kind === "rect" ? f.width * f.length : Math.PI * f.radius * f.radius;
 }
 
+/** The axis-aligned box around the footprint, rotation included. */
 export function footprintBBox(f: Footprint): BBox {
   if (f.kind === "circle") {
     const [x, y] = f.centre;

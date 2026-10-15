@@ -32,6 +32,7 @@ export function angleToParent(frame: Frame, localDeg: number): number {
   return normaliseDeg(localDeg + frame.rotationDeg);
 }
 
+/** A rotation in the parent, as a rotation in the child frame. */
 export function angleToLocal(frame: Frame, parentDeg: number): number {
   return normaliseDeg(parentDeg - frame.rotationDeg);
 }
