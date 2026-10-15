@@ -40,15 +40,12 @@ vi.mock("@/lib/shifts-store", () => {
     return { ok: true };
   };
   return {
-    addShiftTeam: ok,
     assignToShift: ok,
     createShifts: ok,
     deleteShift: ok,
     handShiftTo: ok,
     leaveShift: ok,
     offerShift: ok,
-    removeShiftTeam: ok,
-    renameShiftTeam: ok,
     respondToHandOn: ok,
     signUpForShift: ok,
     takeOfferedShift: ok,

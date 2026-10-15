@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@quagga/db";
 import { MembershipRole, NotificationKind } from "@quagga/types";
-import {
-  boundStrings,
-  dbMock,
-  nullChecksOn,
-  uniqueViolation,
-} from "@/test/db-mock";
+import { boundStrings, dbMock, nullChecksOn } from "@/test/db-mock";
 
 // Camp shifts (epic #57) — the store's WRITES. What these pin is the decision
 // (who is refused, and that a refusal writes nothing), that the facts come
@@ -19,7 +14,6 @@ import {
 vi.mock("../db", async () => (await import("@/test/db-mock")).dbModuleMock());
 
 const {
-  addShiftTeam,
   assignToShift,
   createShifts,
   deleteShift,
@@ -30,8 +24,6 @@ const {
   listShiftTeams,
   loadShiftBoard,
   offerShift,
-  removeShiftTeam,
-  renameShiftTeam,
   respondToHandOn,
   signUpForShift,
   takeOfferedShift,
@@ -882,52 +874,6 @@ describe("cross-camp ids answer like ids that do not exist", () => {
     expect(dbMock.writesTo(schema.shifts)).toHaveLength(0);
     const lookup = dbMock.queriesTouching(schema.projectRoles)[0]!;
     expect(boundStrings(lookup)).toEqual(expect.arrayContaining([SOUND, CAMP]));
-  });
-
-  it("renaming another camp's team changes nothing", async () => {
-    dbMock.queue([actorRow(ALICE)], /* no row in this camp */ []);
-    const result = await renameShiftTeam({
-      actorUserId: ALICE,
-      groupId: CAMP,
-      teamId: fields.teamId,
-      name: "Sound",
-    });
-    expect(result).toEqual({
-      ok: false,
-      error: "That team doesn't exist any more.",
-    });
-    const [update] = dbMock.writesTo(schema.shiftTeams);
-    expect(boundStrings(update!)).toEqual(
-      expect.arrayContaining([fields.teamId, CAMP]),
-    );
-  });
-
-  it("removing another camp's team deletes nothing", async () => {
-    dbMock.queue([actorRow(ALICE)], /* no row in this camp */ []);
-    const result = await removeShiftTeam({
-      actorUserId: ALICE,
-      groupId: CAMP,
-      teamId: fields.teamId,
-    });
-    expect(result).toEqual({
-      ok: false,
-      error: "That team doesn't exist any more.",
-    });
-    const [del] = dbMock.writesTo(schema.shiftTeams);
-    expect(boundStrings(del!)).toEqual(
-      expect.arrayContaining([fields.teamId, CAMP]),
-    );
-  });
-
-  it("a team is added to the caller's own camp, never one named in the request", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], [{ id: "t-new" }]);
-    expect(
-      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({ ok: true, id: "t-new" });
-    const insert = dbMock
-      .writesTo(schema.shiftTeams)
-      .find((q) => q.kind === "insert")!;
-    expect(insert.arg("values")).toMatchObject({ groupId: CAMP });
   });
 
   it("assigning onto another camp's shift: the scoped shift lock finds nothing", async () => {
@@ -1796,154 +1742,6 @@ describe("respondToHandOn — the remaining refusals", () => {
         "That shift changed while you were looking — refresh and try again.",
     });
     expect(notices()).toHaveLength(0);
-  });
-});
-
-describe("shift teams — lead only, one name per camp", () => {
-  it("addShiftTeam refuses a plain member", async () => {
-    dbMock.queue([actorRow(JABU)]);
-    expect(
-      await addShiftTeam({ actorUserId: JABU, groupId: CAMP, name: "Sound" }),
-    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
-    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
-  });
-
-  it("addShiftTeam refuses a camp at the team limit", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ n: 30 }]);
-    expect(
-      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({ ok: false, error: "A camp can have up to 30 teams." });
-    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
-  });
-
-  it("addShiftTeam sorts the new team last and marks the camp's list as edited", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ n: 3 }], [{ id: "t-new" }]);
-    expect(
-      await addShiftTeam({
-        actorUserId: ALICE,
-        groupId: CAMP,
-        name: "  Sound ",
-      }),
-    ).toEqual({ ok: true, id: "t-new" });
-    const insert = dbMock.writesTo(schema.shiftTeams)[0]!;
-    expect(insert.arg("values")).toMatchObject({
-      sort: 3,
-      nameNormalized: "sound",
-    });
-    const [seeded] = dbMock.writesTo(schema.groups);
-    expect(nullChecksOn(seeded!, schema.groups.shiftTeamsSeededAt)).toEqual([
-      "is null",
-    ]);
-  });
-
-  it("addShiftTeam maps a duplicate name — even one wrapped as a cause — to a message", async () => {
-    dbMock.queue(
-      [actorRow(ALICE)],
-      [{ n: 0 }],
-      uniqueViolation("shift_teams_name_idx"),
-    );
-    expect(
-      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({
-      ok: false,
-      error: "The camp already has a team with that name.",
-    });
-
-    dbMock.reset();
-    const wrapped = new Error("Failed query", {
-      cause: uniqueViolation("shift_teams_name_idx"),
-    });
-    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], wrapped);
-    expect(
-      await addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).toEqual({
-      ok: false,
-      error: "The camp already has a team with that name.",
-    });
-  });
-
-  it("addShiftTeam rethrows anything that is not a duplicate", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ n: 0 }], new Error("connection reset"));
-    await expect(
-      addShiftTeam({ actorUserId: ALICE, groupId: CAMP, name: "Sound" }),
-    ).rejects.toThrow("connection reset");
-  });
-
-  it("renameShiftTeam refuses a plain member, and updates nothing", async () => {
-    dbMock.queue([actorRow(JABU)]);
-    expect(
-      await renameShiftTeam({
-        actorUserId: JABU,
-        groupId: CAMP,
-        teamId: TEAM,
-        name: "Sound",
-      }),
-    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
-    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
-  });
-
-  it("renameShiftTeam renames this camp's team, normalising the name", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
-    expect(
-      await renameShiftTeam({
-        actorUserId: ALICE,
-        groupId: CAMP,
-        teamId: TEAM,
-        name: "Tea Bar",
-      }),
-    ).toEqual({ ok: true });
-    expect(dbMock.writesTo(schema.shiftTeams)[0]!.arg("set")).toEqual({
-      name: "Tea Bar",
-      nameNormalized: "tea bar",
-    });
-  });
-
-  it("renameShiftTeam maps a duplicate name to a message, and rethrows anything else", async () => {
-    dbMock.queue([actorRow(ALICE)], uniqueViolation());
-    expect(
-      await renameShiftTeam({
-        actorUserId: ALICE,
-        groupId: CAMP,
-        teamId: TEAM,
-        name: "Sound",
-      }),
-    ).toEqual({
-      ok: false,
-      error: "The camp already has a team with that name.",
-    });
-
-    dbMock.reset();
-    dbMock.queue([actorRow(ALICE)], new Error("connection reset"));
-    await expect(
-      renameShiftTeam({
-        actorUserId: ALICE,
-        groupId: CAMP,
-        teamId: TEAM,
-        name: "Sound",
-      }),
-    ).rejects.toThrow("connection reset");
-  });
-
-  it("removeShiftTeam refuses a plain member, and deletes nothing", async () => {
-    dbMock.queue([actorRow(JABU)]);
-    expect(
-      await removeShiftTeam({ actorUserId: JABU, groupId: CAMP, teamId: TEAM }),
-    ).toEqual({ ok: false, error: "Only the camp's leads can change shifts." });
-    expect(dbMock.writesTo(schema.shiftTeams)).toHaveLength(0);
-  });
-
-  it("removeShiftTeam removes this camp's team", async () => {
-    dbMock.queue([actorRow(ALICE)], [{ id: TEAM }]);
-    expect(
-      await removeShiftTeam({
-        actorUserId: ALICE,
-        groupId: CAMP,
-        teamId: TEAM,
-      }),
-    ).toEqual({ ok: true });
-    expect(boundStrings(dbMock.writesTo(schema.shiftTeams)[0]!)).toEqual(
-      expect.arrayContaining([TEAM, CAMP]),
-    );
   });
 });
 

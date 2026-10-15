@@ -84,7 +84,7 @@ const optionCard =
 export function ShiftForm({
   slug,
   days,
-  teams: initialTeams,
+  teams,
   roles,
   initial,
 }: {
@@ -98,7 +98,6 @@ export function ShiftForm({
   const router = useRouter();
   const editing = !!initial;
   const [pending, startTransition] = React.useTransition();
-  const teams = initialTeams;
   const [name, setName] = React.useState(initial?.name ?? "");
   const [teamId, setTeamId] = React.useState(initial?.teamId ?? "");
   const [startText, setStartText] = React.useState(
