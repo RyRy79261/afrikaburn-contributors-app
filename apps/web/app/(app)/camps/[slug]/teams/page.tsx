@@ -86,7 +86,12 @@ export default async function CampTeamsPage({
           aria-labelledby="teams-heading"
           className="flex flex-col gap-3"
         >
-          <h2 id="teams-heading" className="text-sm">
+          {/* A count line, not a display heading: opt out of the brand's
+              uppercase h2 so it reads as the frame's "6 teams · you're in 2". */}
+          <h2
+            id="teams-heading"
+            className="text-sm font-normal normal-case tracking-normal"
+          >
             <span className="font-semibold">
               {teams.length} {teams.length === 1 ? "team" : "teams"}
             </span>

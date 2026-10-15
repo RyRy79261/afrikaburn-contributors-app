@@ -114,7 +114,7 @@ function DirectRow({ entry }: { entry: DirectInboxEntry }) {
       />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{entry.otherName}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground wrap-anywhere">
           {entry.unread > 0
             ? unreadMessagesLine(entry.unread, entry.otherName)
             : entry.lastMessageAt
@@ -152,7 +152,7 @@ function TeamRow({ entry }: { entry: TeamInboxEntry }) {
             Team
           </Badge>
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground wrap-anywhere">
           <span className="sr-only">{entry.campName} · </span>
           {line}
         </p>
