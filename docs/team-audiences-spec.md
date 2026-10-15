@@ -52,8 +52,8 @@ boundary.
 
 ## Rules (`@quagga/core`, server-side)
 
-- **Who is reached**: current members of any of the chosen teams (not
-  archived teams; former and erased accounts never).
+- **Who is reached**: current members of any chosen team (former and erased
+  accounts never). An archived team still resolves to its members.
 - **Who sees an announcement / meeting sent to teams**: the reached members,
   the camp's leads and co-leads, and the sender / scheduler — the same rule
   the role audience uses.

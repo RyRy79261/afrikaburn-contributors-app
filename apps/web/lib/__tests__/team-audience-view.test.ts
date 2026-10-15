@@ -41,10 +41,10 @@ describe("teamReachPhrase", () => {
 describe("announcementTeamReach", () => {
   it("names the teams and adds the camp's leads, as frame knWLt reads", () => {
     expect(announcementTeamReach(["Kitchen", "Build & strike"])).toBe(
-      "right now — Kitchen and Build & strike, plus the camp's leads.",
+      "right now — Kitchen and Build & strike. The camp's leads can also read it on the announcements page.",
     );
     expect(announcementTeamReach(["Kitchen"])).toBe(
-      "right now — the Kitchen team, plus the camp's leads.",
+      "right now — the Kitchen team. The camp's leads can also read it on the announcements page.",
     );
   });
   it("asks for a team when none is chosen", () => {
