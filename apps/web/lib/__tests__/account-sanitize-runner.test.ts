@@ -137,6 +137,7 @@ function queueErasure(
     /* clear claim descriptions, notes, receipts */ [],
     /* clear dues reasons */ [],
     /* clear payment notes */ [],
+    /* delete campMeetingAttendees (camp meetings) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -625,6 +626,23 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(cleared).toHaveLength(1);
     expect(cleared[0]!.tx).toBe(true);
     expect(cleared[0]!.arg("set")).toEqual({ handoverToMembershipId: null });
+  });
+
+  it("ERASES the account's meeting attendance, every camp's, and keeps the meetings (camp meetings)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const deletes = dbMock
+      .writesTo(schema.campMeetingAttendees)
+      .filter((q) => q.kind === "delete");
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.tx).toBe(true);
+    // Scoped to THIS account — never a blanket delete of everyone's ticks.
+    expect(boundStrings(deletes[0]!)).toContain(USER);
+    // The meetings themselves (titles, agendas, notes) are the camp's record.
+    expect(dbMock.writesTo(schema.campMeetings)).toHaveLength(0);
   });
 
   it("RELEASES the account's Work Access Passes, scoped to its memberships, in the erasure transaction (epic #53)", async () => {

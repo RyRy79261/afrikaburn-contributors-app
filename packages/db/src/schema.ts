@@ -26,6 +26,7 @@ import type {
   SupplierOnboardingSteps,
   WapApprovedPass,
   LayoutDocument,
+  MeetingAudience,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). The R0 core (migrations
@@ -281,6 +282,9 @@ export const notificationKindEnum = pgEnum("notification_kind", [
   // Camp money (docs/camp-budget-spec.md, migration 0037): dues set, money
   // recorded as received, a claim submitted or decided. In-app only.
   "money",
+  // Camp meetings (docs/camp-meetings-spec.md, migration 0039): a meeting
+  // scheduled, moved or cancelled. In-app only.
+  "meeting",
 ]);
 
 // How a camp shift is FIRST FILLED (epic #57). `open` = members sign
@@ -3381,5 +3385,124 @@ export const campLayoutSnapshots = pgTable(
       "camp_layout_snapshots_version_positive",
       sql`${s.version} >= 1`,
     ),
+  }),
+);
+
+// --- Camp meetings (docs/camp-meetings-spec.md, migration 0039) -----------
+// A camp's meetings for one edition: the Sunday call in March, the kitchen
+// team in April, the sunrise briefing on site. The call link, the agenda and
+// the notes live on the meeting, so the camp stops losing them to WhatsApp.
+//
+// TIME has no zone, like shifts: a calendar date plus minutes after midnight
+// plus a length, exactly as the organiser typed it (@quagga/core
+// camp-meetings.ts reads it as South African time only where it must: the
+// upcoming/past split and the .ics file).
+//
+// PRIVATE TO THE AUDIENCE. `audience` is the announcements shape (a `project`
+// audience for this same camp — the CHECK makes that structural): the whole
+// camp, or chosen camp roles. Only members in it (and the camp's leads) see
+// the meeting, its link and its notes; everyone else gets the same 404 a
+// meeting that does not exist gets. Never public, never in a directory.
+//
+// Edits are compare-and-set on `version` (details and notes alike), like the
+// layout. A cancelled meeting keeps its row and stays readable. People are
+// users and SET NULL: authored text is the camp's record, and an erased
+// author reads "Deleted account".
+export const campMeetings = pgTable(
+  "camp_meetings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    editionId: uuid("edition_id")
+      .notNull()
+      .references(() => editions.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    meetingDate: date("meeting_date", { mode: "string" }).notNull(),
+    startMinute: integer("start_minute").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    location: text("location"),
+    // https only (validated by `MeetingUrl` at the boundary, and the CHECK).
+    videoLink: text("video_link"),
+    audience: jsonb("audience").$type<MeetingAudience>().notNull(),
+    agendaMd: text("agenda_md").notNull().default(""),
+    notesMd: text("notes_md").notNull().default(""),
+    // Starts at 1 and goes up by one on every edit, cancel and notes save.
+    version: integer("version").notNull().default(1),
+    cancelledAt: timestamp("cancelled_at", { mode: "date" }),
+    cancelledByUserId: uuid("cancelled_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // "Last edited by" on the notes. Null until someone writes them.
+    notesUpdatedAt: timestamp("notes_updated_at", { mode: "date" }),
+    notesUpdatedByUserId: uuid("notes_updated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (m) => ({
+    // The meetings list and the calendar: one camp, one edition, by date.
+    groupEditionDateIdx: index("camp_meetings_group_edition_date_idx").on(
+      m.groupId,
+      m.editionId,
+      m.meetingDate,
+    ),
+    startInDay: check(
+      "camp_meetings_start_minute_in_day",
+      sql`${m.startMinute} >= 0 and ${m.startMinute} < 1440`,
+    ),
+    durationBounds: check(
+      "camp_meetings_duration_bounds",
+      sql`${m.durationMinutes} > 0 and ${m.durationMinutes} <= 1440`,
+    ),
+    versionPositive: check(
+      "camp_meetings_version_positive",
+      sql`${m.version} >= 1`,
+    ),
+    videoLinkHttps: check(
+      "camp_meetings_video_link_https",
+      sql`${m.videoLink} is null or ${m.videoLink} like 'https://%'`,
+    ),
+    audienceIsThisCamp: check(
+      "camp_meetings_audience_is_this_camp",
+      sql`(${m.audience}->>'kind') = 'project' and (${m.audience}->>'groupId') = ${m.groupId}::text`,
+    ),
+    cancelledPaired: check(
+      "camp_meetings_cancelled_by_needs_cancelled_at",
+      sql`${m.cancelledByUserId} is null or ${m.cancelledAt} is not null`,
+    ),
+  }),
+);
+
+// "Who came": the note-taker's tick list. A record of who was there, not a
+// register and not an RSVP. Keyed by USER, not membership, so archiving a
+// member keeps the record of meetings they came to; account erasure deletes
+// their rows explicitly (apps/web/lib/account-sanitize.ts).
+export const campMeetingAttendees = pgTable(
+  "camp_meeting_attendees",
+  {
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => campMeetings.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    markedByUserId: uuid("marked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (a) => ({
+    pk: primaryKey({ columns: [a.meetingId, a.userId] }),
+    userIdx: index("camp_meeting_attendees_user_idx").on(a.userId),
   }),
 );

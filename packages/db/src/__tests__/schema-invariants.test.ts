@@ -402,3 +402,65 @@ describe("camp layouts (migration 0038)", () => {
     ]);
   });
 });
+
+describe("camp meetings (migration 0039)", () => {
+  const fkMap = (table: string) =>
+    (byName.get(table)?.foreignKeys ?? []).map((fk) => ({
+      column: fk.reference().columns[0]!.name,
+      target: getTableConfig(fk.reference().foreignTable).name,
+      onDelete: fk.onDelete,
+    }));
+
+  it("belongs to the camp and the edition, and goes with either", () => {
+    const fks = fkMap("camp_meetings");
+    expect(fks.find((f) => f.column === "group_id")).toEqual({
+      column: "group_id",
+      target: "groups",
+      onDelete: "cascade",
+    });
+    expect(fks.find((f) => f.column === "edition_id")).toEqual({
+      column: "edition_id",
+      target: "editions",
+      onDelete: "cascade",
+    });
+  });
+
+  it("never cascades a meeting away with a person, and never hangs off a membership", () => {
+    for (const fk of fkMap("camp_meetings")) {
+      expect(fk.target).not.toBe("memberships");
+      if (fk.target === "users") {
+        expect(`camp_meetings.${fk.column}:${fk.onDelete}`).toBe(
+          `camp_meetings.${fk.column}:set null`,
+        );
+      }
+    }
+    // "Who came" is keyed by user, so archiving a member keeps the record;
+    // erasure removes the rows explicitly (apps/web/lib/account-sanitize.ts).
+    for (const fk of fkMap("camp_meeting_attendees")) {
+      expect(fk.target).not.toBe("memberships");
+    }
+  });
+
+  it("pins the CHECKs: time in the day, a real length, https links, its own camp", () => {
+    const checks = (byName.get("camp_meetings")?.checks ?? [])
+      .map((c) => c.name)
+      .sort();
+    expect(checks).toEqual([
+      "camp_meetings_audience_is_this_camp",
+      "camp_meetings_cancelled_by_needs_cancelled_at",
+      "camp_meetings_duration_bounds",
+      "camp_meetings_start_minute_in_day",
+      "camp_meetings_version_positive",
+      "camp_meetings_video_link_https",
+    ]);
+    const https = byName
+      .get("camp_meetings")
+      ?.checks.find((c) => c.name === "camp_meetings_video_link_https");
+    expect(predicateText(https?.value)).toContain("like 'https://%'");
+  });
+
+  it("ticks one person once per meeting", () => {
+    const pk = byName.get("camp_meeting_attendees")?.primaryKeys[0];
+    expect(pk?.columns.map((c) => c.name)).toEqual(["meeting_id", "user_id"]);
+  });
+});

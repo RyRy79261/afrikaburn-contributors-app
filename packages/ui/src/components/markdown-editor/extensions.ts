@@ -15,21 +15,38 @@ import type { Extensions } from "@tiptap/core";
 // so there is no path for arbitrary/script HTML to render. Links are restricted
 // to safe protocols.
 
-export const markdownExtensions: Extensions = [
-  StarterKit.configure({
-    heading: { levels: [2, 3] },
-    link: {
-      openOnClick: false,
-      autolink: true,
-      protocols: ["http", "https", "mailto"],
-      HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
-    },
-  }),
-  Markdown.configure({
-    html: false,
-    linkify: true,
-    breaks: false,
-    transformPastedText: true,
-    transformCopiedText: true,
-  }),
-];
+/** The extension set, with or without StarterKit's trailing empty paragraph. */
+function buildMarkdownExtensions(trailingNode: boolean): Extensions {
+  return [
+    StarterKit.configure({
+      heading: { levels: [2, 3] },
+      link: {
+        openOnClick: false,
+        autolink: true,
+        protocols: ["http", "https", "mailto"],
+        HTMLAttributes: {
+          rel: "noopener noreferrer nofollow",
+          target: "_blank",
+        },
+      },
+      // The editor keeps a paragraph after a closing list so the cursor can
+      // leave it; a read-only view has no cursor, and that empty paragraph
+      // only shows as blank space under the text.
+      ...(trailingNode ? {} : { trailingNode: false as const }),
+    }),
+    Markdown.configure({
+      html: false,
+      linkify: true,
+      breaks: false,
+      transformPastedText: true,
+      transformCopiedText: true,
+    }),
+  ];
+}
+
+/** The editor's extensions. */
+export const markdownExtensions: Extensions = buildMarkdownExtensions(true);
+
+/** The read-only view's extensions: the same schema, no trailing paragraph. */
+export const markdownViewExtensions: Extensions =
+  buildMarkdownExtensions(false);

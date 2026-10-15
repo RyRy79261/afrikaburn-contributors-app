@@ -68,6 +68,11 @@ import { MoneyTile } from "@/components/money/money-tile";
 import { loadCampLayout, loadLayoutAccess } from "@/lib/camp-layout-store";
 import { layoutTileView } from "@/lib/layout-view";
 import { LayoutTile } from "@/components/layout-view/layout-tile";
+import {
+  getNextCampMeeting,
+  loadMeetingsAccess,
+} from "@/lib/camp-meetings-store";
+import { MeetingsTile } from "@/components/meetings/meetings-tile";
 import { MyLogisticsCard } from "@/components/roster/my-logistics-card";
 import { listPendingQuestionnaires } from "@/lib/questionnaire-store";
 import { PreviewNotice } from "@/components/preview-notice";
@@ -196,6 +201,7 @@ export default async function CampPage({
     ownParticipation,
     moneySummary,
     layoutTile,
+    meetingsTile,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -282,6 +288,27 @@ export default async function CampPage({
                     id: edition.id,
                     year: edition.year,
                   }),
+                ),
+              }
+            : null,
+        )
+      : null,
+    // Camp meetings (docs/camp-meetings-spec.md): the next meeting meant for
+    // THIS member — `loadMeetingsAccess` re-checks current membership, and
+    // the store filters to the meetings in their audience. Null hides it.
+    campUser && isMember
+      ? loadMeetingsAccess(camp.slug, campUser.id).then(async (access) =>
+          access
+            ? {
+                canSchedule: access.canSchedule,
+                next: await getNextCampMeeting(
+                  access,
+                  {
+                    id: edition.id,
+                    startDate: edition.startDate,
+                    endDate: edition.endDate,
+                  },
+                  new Date(),
                 ),
               }
             : null,
@@ -807,6 +834,14 @@ export default async function CampPage({
                 slug={camp.slug}
                 canManage={viewerManagesShifts}
                 summary={shiftSummary}
+              />
+            )}
+            {/* Camp meetings (docs/camp-meetings-spec.md) — members only. */}
+            {meetingsTile && (
+              <MeetingsTile
+                slug={camp.slug}
+                next={meetingsTile.next}
+                canSchedule={meetingsTile.canSchedule}
               />
             )}
             {/* Work Access Passes (epic #53) — leads and co-leads. */}

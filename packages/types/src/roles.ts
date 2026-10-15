@@ -273,6 +273,10 @@ export const ProjectPermissionKey = z.enum([
   // Every current member VIEWS it; this is who changes it. The person who
   // plans a camp's build is often not its lead.
   "manage_layout",
+  // Camp meetings (docs/camp-meetings-spec.md): schedule, move and cancel the
+  // camp's meetings, and write the agenda, notes and "who came" on any
+  // meeting the holder can see. Every member in a meeting's audience READS it.
+  "schedule_meetings",
 ]);
 export type ProjectPermissionKey = z.infer<typeof ProjectPermissionKey>;
 
@@ -323,6 +327,7 @@ export const ProjectPermissions = z.object({
   post_announcements: PostAnnouncementsScope.optional(),
   manage_money: z.boolean().optional(),
   manage_layout: z.boolean().optional(),
+  schedule_meetings: z.boolean().optional(),
 });
 export type ProjectPermissions = z.infer<typeof ProjectPermissions>;
 
@@ -336,6 +341,7 @@ export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
   post_announcements: "Post announcements",
   manage_money: "Manage money",
   manage_layout: "Edit the camp layout",
+  schedule_meetings: "Schedule meetings",
 };
 
 // --- Officer catalog (questionnaire-spec §"Officer roles") -----------------

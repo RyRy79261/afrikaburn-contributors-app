@@ -193,4 +193,72 @@ describe("layout autosave", () => {
     a.change({ n: 4 });
     expect(a.shouldWarnOnLeave()).toBe(true);
   });
+
+  it("adopts a same-page write (a cancel) made on top of its version", async () => {
+    // Cancel on the meeting page moved v1 -> v2 while the notes editor was
+    // open; the editor's next save must go out at v2, not be refused as
+    // someone else's save.
+    const { server, commit } = fakeServer();
+    const { a, last, saved } = setup(commit);
+    server.version = 2; // the cancel's compare-and-set
+    a.rebase(1, 2);
+    a.change({ n: 1 });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(last()).toEqual({ kind: "saved" });
+    expect(saved).toEqual([3]);
+    expect(server.doc).toEqual({ n: 1 });
+  });
+
+  it("does not adopt a write made on top of a version it does not hold", async () => {
+    // A rebase from a version this editor never held could skip over someone
+    // else's save: it must stay a conflict.
+    const { server, commit } = fakeServer();
+    const { a, last } = setup(commit);
+    server.version = 3;
+    server.doc = { n: 42 };
+    a.rebase(2, 3);
+    a.change({ n: 1 });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(last()?.kind).toBe("conflict");
+    expect(server.doc).toEqual({ n: 42 });
+  });
+
+  it("a save refused because a same-page write won the race is sent again", async () => {
+    const { server, commit } = fakeServer();
+    let release: () => void = () => {};
+    const send: Send = async (doc, expected) => {
+      if (server.calls === 0) {
+        // The cancel lands while this first save is in flight.
+        await new Promise<void>((r) => (release = r));
+      }
+      return commit(doc, expected);
+    };
+    const { a, last } = setup(send);
+    a.change({ n: 1 });
+    await vi.advanceTimersByTimeAsync(800);
+    server.version = 2;
+    a.rebase(1, 2);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(last()).toEqual({ kind: "saved" });
+    expect(server.doc).toEqual({ n: 1 });
+    expect(server.version).toBe(3);
+  });
+
+  it("reports the document each save committed", async () => {
+    const { commit } = fakeServer();
+    const docs: Doc[] = [];
+    const a = createLayoutAutosave<Doc>({
+      initial: { n: 0 },
+      version: 1,
+      send: commit,
+      onState: () => {},
+      onSaved: (_v, doc) => docs.push(doc),
+      debounceMs: 800,
+      retryMs: 10_000,
+    });
+    a.change({ n: 7 });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(docs).toEqual([{ n: 7 }]);
+  });
 });

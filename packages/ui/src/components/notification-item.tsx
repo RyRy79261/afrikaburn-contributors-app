@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   CalendarClock,
+  CalendarDays,
   ClipboardList,
   Compass,
   type LucideIcon,
@@ -36,7 +37,8 @@ export type NotificationKind =
   | "bulletin"
   | "shift"
   | "wap"
-  | "money";
+  | "money"
+  | "meeting";
 
 /** kind → leading glyph. Exhaustive over NotificationKind by construction. */
 export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
@@ -50,6 +52,7 @@ export const NOTIFICATION_KIND_ICON: Record<NotificationKind, LucideIcon> = {
   shift: CalendarClock, // 🗓 camp shift assigned / handed on / changed
   wap: Ticket, // 🎫 work access passes granted / list approved or returned
   money: Wallet, // camp dues set / money recorded / a claim submitted or decided
+  meeting: CalendarDays, // camp meeting scheduled / moved / cancelled
 };
 
 export interface NotificationItemProps extends Omit<

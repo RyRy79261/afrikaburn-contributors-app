@@ -19,9 +19,11 @@ import { cn } from "../../lib/utils";
 // every edit. Toolbar is intentionally minimal: bold / italic / link / bullet
 // list / ordered list / heading. Client-only (Tiptap uses the DOM).
 
+// `normal-case`: a writer's "## Transport" stays as typed — the global h1/h2
+// brand caps are for page headings, not for text someone wrote.
 const PROSE_CLASS =
   "prose-editor min-h-[8rem] max-w-none px-3 py-2 text-sm leading-relaxed focus:outline-none " +
-  "[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold " +
+  "[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:normal-case [&_h2]:tracking-normal " +
   "[&_h3]:mb-2 [&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold " +
   "[&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 " +
   "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 " +
