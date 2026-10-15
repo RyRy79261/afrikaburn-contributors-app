@@ -40,10 +40,14 @@ export default async function MessagesPage() {
   ]);
   if (!edition) return <PreviewNotice feature="Messages" />;
 
-  const inbox = await listInbox({
-    viewerUserId: user.id,
-    editionId: edition.id,
-  });
+  // Team chats (docs/camp-teams-spec.md) join this list with their own row
+  // and route in the team-chat UI; until then the page lists direct chats.
+  const inbox = (
+    await listInbox({
+      viewerUserId: user.id,
+      editionId: edition.id,
+    })
+  ).filter((entry) => entry.kind === "direct");
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">

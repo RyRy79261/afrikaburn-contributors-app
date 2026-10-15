@@ -5,13 +5,17 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNull,
   lte,
   ne,
+  notInArray,
   or,
   sql,
+  type SQLWrapper,
 } from "drizzle-orm";
+import { activeMembership } from "@quagga/db";
 import { consumeRateLimit } from "@quagga/db";
 import {
   DM_RATE_LIMITS,
@@ -29,12 +33,22 @@ import {
   readMessageTimer,
   reportCopyExpiresAt,
   timerChangeNotice,
+  canReadTeamChat,
+  canReportTeamMessages,
+  canSendTeamMessage,
+  canSetTeamChatTimer,
+  reportedTeamSender,
+  visibleTeamMessages,
   type DmRateLimitAction,
   type MessageTimer,
+  type TeamChatAccess,
+  type TeamSeat,
+  type TeamViewer,
   type UserBlock,
 } from "@quagga/core";
+import type { MembershipRole } from "@quagga/types";
 
-import { db, schema, withTransaction } from "./db";
+import { db, schema, withTransaction, type Tx } from "./db";
 import { isDatabaseConfigured } from "./config";
 import {
   loadCampmateMemberships,
@@ -113,6 +127,8 @@ interface ParticipantRow {
   sanitizedAt: Date | null;
   lastReadAt: Date | null;
   hiddenAt: Date | null;
+  /** The conversation's kind, on every row (camp teams). */
+  conversationKind: "direct" | "team";
 }
 
 function loadParticipants(
@@ -125,13 +141,34 @@ function loadParticipants(
       sanitizedAt: schema.users.sanitizedAt,
       lastReadAt: schema.conversationParticipants.lastReadAt,
       hiddenAt: schema.conversationParticipants.hiddenAt,
+      conversationKind: schema.conversations.kind,
     })
     .from(schema.conversationParticipants)
     .innerJoin(
       schema.users,
       eq(schema.users.id, schema.conversationParticipants.userId),
     )
+    .innerJoin(
+      schema.conversations,
+      eq(
+        schema.conversations.id,
+        schema.conversationParticipants.conversationId,
+      ),
+    )
     .where(eq(schema.conversationParticipants.conversationId, conversationId));
+}
+
+/**
+ * The 1:1 paths serve DIRECT conversations only. A team chat's id handed to
+ * one of them answers exactly like an unknown id: the team chat has its own
+ * gates (current team membership, the history cut, block hiding — below),
+ * and the 1:1 code knows none of them. Fails closed on an unknown kind.
+ */
+function isDirect(participants: readonly ParticipantRow[]): boolean {
+  return (
+    participants.length > 0 &&
+    participants.every((p) => p.conversationKind === "direct")
+  );
 }
 
 function displayName(row: {
@@ -238,6 +275,7 @@ export async function startConversation(input: {
   if (existing) {
     const participants = await loadParticipants(existing);
     if (
+      !isDirect(participants) ||
       !canReadConversation({
         viewerUserId: input.viewerUserId,
         participantUserIds: participants.map((p) => p.userId),
@@ -353,6 +391,7 @@ export async function getConversation(input: {
   const participants = await loadParticipants(input.conversationId);
   // THE GATE. Refused before `messages` is touched at all.
   if (
+    !isDirect(participants) ||
     !canReadConversation({
       viewerUserId: input.viewerUserId,
       participantUserIds: participants.map((p) => p.userId),
@@ -445,7 +484,9 @@ export async function getConversation(input: {
   };
 }
 
-export interface InboxEntry {
+/** A 1:1 conversation in the inbox. */
+export interface DirectInboxEntry {
+  kind: "direct";
   conversationId: string;
   otherUserId: string;
   otherName: string;
@@ -454,10 +495,59 @@ export interface InboxEntry {
   lastMessageAt: Date | null;
 }
 
+/** A camp team's chat in the inbox (docs/camp-teams-spec.md). */
+export interface TeamInboxEntry {
+  kind: "team";
+  conversationId: string;
+  teamId: string;
+  teamName: string;
+  campSlug: string;
+  campName: string;
+  unread: number;
+  /** Who sent the newest message the viewer can SEE — never what. */
+  lastSenderName: string | null;
+  lastMessageAt: Date | null;
+}
+
+/** One inbox row: a direct chat or a team chat (frame T4). */
+export type InboxEntry = DirectInboxEntry | TeamInboxEntry;
+
+/**
+ * SQL: the viewer is still on this conversation's team — a `team_members`
+ * row with an ACTIVE membership of the team's camp. Participant rows follow
+ * team membership in the same transaction; this is the second lock on the
+ * same door, so a stale participant row surfaces nothing.
+ */
+function stillOnTeam(me: string) {
+  return sql`exists (
+    select 1 from ${schema.teamMembers} tm
+    join ${schema.shiftTeams} st on st.id = tm.team_id
+    join ${schema.memberships} m on m.user_id = tm.user_id and m.group_id = st.group_id and m.archived_at is null
+    where tm.team_id = ${schema.conversations.teamId} and tm.user_id = ${me}
+  )`;
+}
+
+/**
+ * SQL: a team-chat message this viewer may count — sent at or after they
+ * joined (the history cut) and not from someone a block stands between them
+ * and. Direct conversations are untouched by this (their rules are epic #69's).
+ */
+function teamMessageVisibleTo(me: string) {
+  return and(
+    gte(schema.messages.createdAt, schema.conversationParticipants.joinedAt),
+    sql`not exists (
+      select 1 from ${schema.userBlocks} b
+      where (b.blocker_id = ${me} and b.blocked_id = ${schema.messages.senderId})
+         or (b.blocker_id = ${schema.messages.senderId} and b.blocked_id = ${me})
+    )`,
+  );
+}
+
 /**
  * The viewer's inbox: one row per conversation they are in and have not
- * hidden, newest first. NO MESSAGE BODY is selected — the preview is the
- * sender and an unread count, never content.
+ * hidden, newest first — direct chats and the chats of the teams they are on.
+ * NO MESSAGE BODY is selected — the preview is the sender and an unread
+ * count, never content.
  */
 export async function listInbox(input: {
   viewerUserId: string;
@@ -470,6 +560,9 @@ export async function listInbox(input: {
   const mine = await db()
     .select({
       conversationId: schema.conversationParticipants.conversationId,
+      kind: schema.conversations.kind,
+      teamId: schema.conversations.teamId,
+      joinedAt: schema.conversationParticipants.joinedAt,
       lastReadAt: schema.conversationParticipants.lastReadAt,
       lastMessageAt: schema.conversations.lastMessageAt,
       createdAt: schema.conversations.createdAt,
@@ -486,6 +579,7 @@ export async function listInbox(input: {
       and(
         eq(schema.conversationParticipants.userId, me),
         isNull(schema.conversationParticipants.hiddenAt),
+        or(eq(schema.conversations.kind, "direct"), stillOnTeam(me)),
       ),
     )
     .orderBy(
@@ -495,27 +589,49 @@ export async function listInbox(input: {
     )
     .limit(100);
   if (mine.length === 0) return [];
-  const ids = mine.map((r) => r.conversationId);
+  const directIds = mine
+    .filter((r) => r.kind === "direct")
+    .map((r) => r.conversationId);
+  const teamRows = mine.filter((r) => r.kind === "team" && r.teamId);
 
-  const others = await db()
-    .select({
-      conversationId: schema.conversationParticipants.conversationId,
-      userId: schema.conversationParticipants.userId,
-      username: schema.users.username,
-      sanitizedAt: schema.users.sanitizedAt,
-    })
-    .from(schema.conversationParticipants)
-    .innerJoin(
-      schema.users,
-      eq(schema.users.id, schema.conversationParticipants.userId),
-    )
-    .where(
-      and(
-        inArray(schema.conversationParticipants.conversationId, ids),
-        ne(schema.conversationParticipants.userId, me),
-      ),
-    );
-  const unreadRows = await unreadCounts(me, now, ids);
+  const others =
+    directIds.length === 0
+      ? []
+      : await db()
+          .select({
+            conversationId: schema.conversationParticipants.conversationId,
+            userId: schema.conversationParticipants.userId,
+            username: schema.users.username,
+            sanitizedAt: schema.users.sanitizedAt,
+          })
+          .from(schema.conversationParticipants)
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.conversationParticipants.userId),
+          )
+          .where(
+            and(
+              inArray(
+                schema.conversationParticipants.conversationId,
+                directIds,
+              ),
+              ne(schema.conversationParticipants.userId, me),
+            ),
+          );
+  const unreadRows = await unreadCounts(
+    me,
+    now,
+    mine.map((r) => r.conversationId),
+  );
+  const teams = await loadInboxTeams(
+    me,
+    now,
+    teamRows.map((r) => ({
+      conversationId: r.conversationId,
+      teamId: r.teamId!,
+      joinedAt: r.joinedAt,
+    })),
+  );
 
   const avatarOf = new Map<string, boolean>();
   await Promise.all(
@@ -531,9 +647,26 @@ export async function listInbox(input: {
 
   const entries: InboxEntry[] = [];
   for (const row of mine) {
+    if (row.kind === "team") {
+      const team = teams.get(row.conversationId);
+      if (!team) continue;
+      entries.push({
+        kind: "team",
+        conversationId: row.conversationId,
+        teamId: team.teamId,
+        teamName: team.teamName,
+        campSlug: team.campSlug,
+        campName: team.campName,
+        unread: unreadRows.get(row.conversationId) ?? 0,
+        lastSenderName: team.lastSenderName,
+        lastMessageAt: row.lastMessageAt,
+      });
+      continue;
+    }
     const other = others.find((o) => o.conversationId === row.conversationId);
     if (!other) continue;
     entries.push({
+      kind: "direct",
       conversationId: row.conversationId,
       otherUserId: other.userId,
       otherName: displayName(other),
@@ -545,7 +678,90 @@ export async function listInbox(input: {
   return entries;
 }
 
-/** Unread live text messages from others, per conversation. */
+/**
+ * The team half of the inbox: each team's name and camp, and who sent the
+ * newest message the viewer can see (after they joined, live, not from
+ * someone a block stands between them and). One small query per team chat —
+ * a person is on a handful of teams.
+ */
+async function loadInboxTeams(
+  me: string,
+  now: Date,
+  rows: readonly { conversationId: string; teamId: string; joinedAt: Date }[],
+): Promise<
+  Map<
+    string,
+    {
+      teamId: string;
+      teamName: string;
+      campSlug: string;
+      campName: string;
+      lastSenderName: string | null;
+    }
+  >
+> {
+  const out = new Map<
+    string,
+    {
+      teamId: string;
+      teamName: string;
+      campSlug: string;
+      campName: string;
+      lastSenderName: string | null;
+    }
+  >();
+  if (rows.length === 0) return out;
+  const teams = await db()
+    .select({
+      teamId: schema.shiftTeams.id,
+      teamName: schema.shiftTeams.name,
+      campSlug: schema.groups.slug,
+      campName: schema.groups.name,
+    })
+    .from(schema.shiftTeams)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.shiftTeams.groupId))
+    .where(
+      inArray(
+        schema.shiftTeams.id,
+        rows.map((r) => r.teamId),
+      ),
+    );
+  for (const row of rows) {
+    const team = teams.find((t) => t.teamId === row.teamId);
+    if (!team) continue;
+    const [last] = await db()
+      .select({
+        username: schema.users.username,
+        sanitizedAt: schema.users.sanitizedAt,
+      })
+      .from(schema.messages)
+      .innerJoin(schema.users, eq(schema.users.id, schema.messages.senderId))
+      .where(
+        and(
+          eq(schema.messages.conversationId, row.conversationId),
+          eq(schema.messages.kind, "text"),
+          liveAt(now),
+          gte(schema.messages.createdAt, row.joinedAt),
+          sql`not exists (
+            select 1 from ${schema.userBlocks} b
+            where (b.blocker_id = ${me} and b.blocked_id = ${schema.messages.senderId})
+               or (b.blocker_id = ${schema.messages.senderId} and b.blocked_id = ${me})
+          )`,
+        ),
+      )
+      .orderBy(desc(schema.messages.createdAt), desc(schema.messages.id))
+      .limit(1);
+    out.set(row.conversationId, {
+      ...team,
+      lastSenderName: last ? displayName(last) : null,
+    });
+  }
+  return out;
+}
+
+/** Unread live text messages from others, per conversation. In a team chat,
+ * only messages the viewer can see count (history cut, blocks), and only
+ * while they are still on the team. */
 async function unreadCounts(
   me: string,
   now: Date,
@@ -560,6 +776,10 @@ async function unreadCounts(
     or(
       isNull(schema.conversationParticipants.lastReadAt),
       gt(schema.messages.createdAt, schema.conversationParticipants.lastReadAt),
+    ),
+    or(
+      eq(schema.conversations.kind, "direct"),
+      and(stillOnTeam(me), teamMessageVisibleTo(me)),
     ),
   ];
   if (conversationIds) {
@@ -578,13 +798,17 @@ async function unreadCounts(
         schema.messages.conversationId,
       ),
     )
+    .innerJoin(
+      schema.conversations,
+      eq(schema.conversations.id, schema.messages.conversationId),
+    )
     .where(and(...conds))
     .groupBy(schema.messages.conversationId);
   return new Map(rows.map((r) => [r.conversationId, Number(r.count)]));
 }
 
-/** The header badge: unread messages across every visible conversation.
- * Env-less / failure ⇒ 0, so the chrome always renders. */
+/** The header badge: unread messages across every visible conversation,
+ * direct and team. Env-less / failure ⇒ 0, so the chrome always renders. */
 export async function getUnreadMessageCount(
   viewerUserId: string,
 ): Promise<number> {
@@ -622,6 +846,7 @@ export async function sendMessage(input: {
   const participants = await loadParticipants(input.conversationId);
   const ids = participants.map((p) => p.userId);
   if (
+    !isDirect(participants) ||
     !canReadConversation({
       viewerUserId: input.viewerUserId,
       participantUserIds: ids,
@@ -718,6 +943,7 @@ export async function setConversationTimer(input: {
   const participants = await loadParticipants(input.conversationId);
   const ids = participants.map((p) => p.userId);
   if (
+    !isDirect(participants) ||
     !canReadConversation({
       viewerUserId: input.viewerUserId,
       participantUserIds: ids,
@@ -886,6 +1112,7 @@ export async function reportMessages(input: {
   const participantIds = participants.map((p) => p.userId);
   // Refused before any message row is read.
   if (
+    !isDirect(participants) ||
     !canReadConversation({
       viewerUserId: input.viewerUserId,
       participantUserIds: participantIds,
@@ -1010,4 +1237,624 @@ export async function sweepExpiredMessages(
     messagesDeleted: deletedMessages.length,
     reportsDeleted: deletedReports.length,
   };
+}
+
+// --- Team chats (docs/camp-teams-spec.md) ------------------------------------
+//
+// A camp team's chat is a `conversations` row of kind `team`, one per team,
+// whose participant rows follow `team_members` in the same transaction
+// (apps/web/lib/camp-teams-store.ts). The direct-message law stands, extended
+// by @quagga/core camp-teams.ts:
+//   · ONLY CURRENT TEAM MEMBERS READ IT — a participant row AND a team row with
+//     an active camp membership, both. No function here takes a role for
+//     reading; a camp lead who is not on the team is refused like a stranger.
+//   · The history cut: a member sees messages sent at or after they joined.
+//   · Blocks hide each one's messages from the other; nobody is removed.
+//   · The org sees only what a member reports (copies, as for direct chats).
+// Every function is addressed by (camp, team) — the camp resolved from the
+// session's own membership by the caller — never by a bare conversation id.
+
+/** Find or create the team's chat. Conflict-safe: the unique `team_id` makes
+ * two concurrent callers converge on one row. */
+export async function ensureTeamConversation(
+  tx: Tx,
+  teamId: string,
+  createdBy: string | null,
+): Promise<string> {
+  const [created] = await tx
+    .insert(schema.conversations)
+    .values({ kind: "team", teamId, timer: "off", createdBy })
+    .onConflictDoNothing({ target: schema.conversations.teamId })
+    .returning({ id: schema.conversations.id });
+  if (created) return created.id;
+  const [row] = await tx
+    .select({ id: schema.conversations.id })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.teamId, teamId))
+    .limit(1);
+  if (!row) throw new Error("team conversation could not be created");
+  return row.id;
+}
+
+/**
+ * Put people into a team's chat, starting their history cut NOW. A leftover
+ * row (there should be none: leaving deletes it) is reset rather than kept,
+ * so re-joining never reopens what was said while they were away.
+ */
+export async function addTeamChatParticipants(
+  tx: Tx,
+  conversationId: string,
+  userIds: readonly string[],
+  now: Date,
+): Promise<void> {
+  if (userIds.length === 0) return;
+  await tx
+    .insert(schema.conversationParticipants)
+    .values(
+      userIds.map((userId) => ({
+        conversationId,
+        userId,
+        joinedAt: now,
+        lastReadAt: null,
+        hiddenAt: null,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [
+        schema.conversationParticipants.conversationId,
+        schema.conversationParticipants.userId,
+      ],
+      set: { joinedAt: now, lastReadAt: null, hiddenAt: null },
+    });
+}
+
+/**
+ * Take one person out of these teams' chats (a list of team ids, or a
+ * subquery selecting them). They keep nothing of them: the participant row
+ * goes, and with it the history cut — joining again starts a new one.
+ */
+export async function removeTeamChatParticipants(
+  tx: Tx,
+  teamIds: readonly string[] | SQLWrapper,
+  userId: string,
+): Promise<void> {
+  if (Array.isArray(teamIds) && teamIds.length === 0) return;
+  const teams = Array.isArray(teamIds)
+    ? inArray(schema.conversations.teamId, [...(teamIds as readonly string[])])
+    : inArray(schema.conversations.teamId, teamIds as SQLWrapper);
+  await tx.delete(schema.conversationParticipants).where(
+    and(
+      eq(schema.conversationParticipants.userId, userId),
+      inArray(
+        schema.conversationParticipants.conversationId,
+        tx
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(and(eq(schema.conversations.kind, "team"), teams)),
+      ),
+    ),
+  );
+}
+
+type Handle = Tx | ReturnType<typeof db>;
+
+interface TeamChatFacts {
+  teamId: string;
+  teamName: string;
+  campName: string;
+  archived: boolean;
+  conversationId: string | null;
+  timer: MessageTimer;
+  viewer: TeamViewer;
+  seat: TeamSeat | null;
+  /** The viewer's participant row's `joined_at` (the history cut). */
+  joinedAt: Date | null;
+  participantUserIds: string[];
+  access: TeamChatAccess;
+}
+
+/**
+ * Every fact the team chat's gates read, from the database: the team (inside
+ * THIS camp), its chat, the viewer's active camp role and team seat (an
+ * erased account has neither), and the chat's participants. Null when the
+ * team is not this camp's. Inside a transaction (`lock`), the viewer's
+ * membership, account and team row are held `FOR SHARE`, so a removal, an
+ * archive or an erasure either waits for the write or is seen by it.
+ */
+async function loadTeamChatFacts(
+  handle: Handle,
+  input: { groupId: string; teamId: string; viewerUserId: string },
+  lock = false,
+): Promise<TeamChatFacts | null> {
+  const [team] = await handle
+    .select({
+      teamId: schema.shiftTeams.id,
+      teamName: schema.shiftTeams.name,
+      archivedAt: schema.shiftTeams.archivedAt,
+      campName: schema.groups.name,
+    })
+    .from(schema.shiftTeams)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.shiftTeams.groupId))
+    .where(
+      and(
+        eq(schema.shiftTeams.id, input.teamId),
+        eq(schema.shiftTeams.groupId, input.groupId),
+      ),
+    )
+    .limit(1);
+  if (!team) return null;
+
+  const viewerQuery = handle
+    .select({
+      role: schema.memberships.role,
+      isLead: schema.teamMembers.isLead,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .innerJoin(
+      schema.teamMembers,
+      and(
+        eq(schema.teamMembers.userId, schema.memberships.userId),
+        eq(schema.teamMembers.teamId, input.teamId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.memberships.groupId, input.groupId),
+        eq(schema.memberships.userId, input.viewerUserId),
+        activeMembership(),
+        isNull(schema.users.sanitizedAt),
+      ),
+    )
+    .limit(1);
+  // former members: none — this only names the tables `viewerQuery` (above,
+  // filtered by `activeMembership()`) locks.
+  const [seated] = lock
+    ? await viewerQuery.for("share", {
+        of: [schema.memberships, schema.users, schema.teamMembers],
+      })
+    : await viewerQuery;
+
+  // Not on the team: the camp role still decides nothing about READING, but
+  // the caller may want it for a refusal's wording. Read it without a lock.
+  let campRole: MembershipRole | null = seated?.role ?? null;
+  if (!seated) {
+    const [m] = await handle
+      .select({ role: schema.memberships.role })
+      .from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+      .where(
+        and(
+          eq(schema.memberships.groupId, input.groupId),
+          eq(schema.memberships.userId, input.viewerUserId),
+          activeMembership(),
+          isNull(schema.users.sanitizedAt),
+        ),
+      )
+      .limit(1);
+    campRole = m?.role ?? null;
+  }
+
+  const [convo] = await handle
+    .select({ id: schema.conversations.id, timer: schema.conversations.timer })
+    .from(schema.conversations)
+    .where(
+      and(
+        eq(schema.conversations.teamId, input.teamId),
+        eq(schema.conversations.kind, "team"),
+      ),
+    )
+    .limit(1);
+  const participants = convo
+    ? await handle
+        .select({
+          userId: schema.conversationParticipants.userId,
+          joinedAt: schema.conversationParticipants.joinedAt,
+        })
+        .from(schema.conversationParticipants)
+        .where(eq(schema.conversationParticipants.conversationId, convo.id))
+    : [];
+  const participantUserIds = participants.map((p) => p.userId);
+  const seat = seated ? { isLead: seated.isLead } : null;
+  return {
+    teamId: team.teamId,
+    teamName: team.teamName,
+    campName: team.campName,
+    archived: team.archivedAt !== null,
+    conversationId: convo?.id ?? null,
+    timer: readMessageTimer(convo?.timer),
+    viewer: { userId: input.viewerUserId, campRole },
+    seat,
+    joinedAt:
+      participants.find((p) => p.userId === input.viewerUserId)?.joinedAt ??
+      null,
+    participantUserIds,
+    access: {
+      viewerUserId: input.viewerUserId,
+      participantUserIds,
+      viewerOnTeam: seat !== null,
+    },
+  };
+}
+
+/** Every block that involves the viewer, either direction. */
+function loadBlocksOf(userId: string): PromiseLike<UserBlock[]> {
+  return db()
+    .select({
+      blockerId: schema.userBlocks.blockerId,
+      blockedId: schema.userBlocks.blockedId,
+    })
+    .from(schema.userBlocks)
+    .where(
+      or(
+        eq(schema.userBlocks.blockerId, userId),
+        eq(schema.userBlocks.blockedId, userId),
+      ),
+    );
+}
+
+/** The ids a block stands between the viewer and. */
+function blockedOthers(userId: string, blocks: readonly UserBlock[]): string[] {
+  return [
+    ...new Set(
+      blocks.map((b) => (b.blockerId === userId ? b.blockedId : b.blockerId)),
+    ),
+  ].filter((id) => id !== userId);
+}
+
+/** A team chat as one current member of the team sees it (frame T3). */
+export interface TeamChatView {
+  teamId: string;
+  conversationId: string;
+  teamName: string;
+  campName: string;
+  memberCount: number;
+  timer: MessageTimer;
+  /** The viewer's history cut: they see messages from here on. */
+  joinedAt: Date;
+  messages: ConversationMessageView[];
+  /** The viewer may post (on the team, team not archived). */
+  canSend: boolean;
+  /** The viewer may change the timer (team lead or camp lead, on the team). */
+  canSetTimer: boolean;
+  archived: boolean;
+}
+
+/**
+ * The team's chat for a current member of the team, or null — for everyone
+ * else (a camp lead not on the team included) and for a team that is not
+ * this camp's, identically. Serves only messages sent after the viewer
+ * joined, live, and not from someone a block stands between them and. Marks
+ * it read up to now.
+ */
+export async function getTeamChat(input: {
+  groupId: string;
+  teamId: string;
+  viewerUserId: string;
+  now?: Date;
+}): Promise<TeamChatView | null> {
+  if (!isDatabaseConfigured()) return null;
+  const now = input.now ?? new Date();
+  const facts = await loadTeamChatFacts(db(), input);
+  // THE GATE. Refused before `messages` is touched at all.
+  if (
+    !facts ||
+    !facts.conversationId ||
+    !facts.joinedAt ||
+    !canReadTeamChat(facts.access)
+  ) {
+    return null;
+  }
+  const conversationId = facts.conversationId;
+  const joinedAt = facts.joinedAt;
+  const blocks = await loadBlocksOf(input.viewerUserId);
+  const hidden = blockedOthers(input.viewerUserId, blocks);
+
+  const rows = await db()
+    .select({
+      id: schema.messages.id,
+      kind: schema.messages.kind,
+      body: schema.messages.body,
+      senderId: schema.messages.senderId,
+      createdAt: schema.messages.createdAt,
+      expiresAt: schema.messages.expiresAt,
+    })
+    .from(schema.messages)
+    .where(
+      and(
+        eq(schema.messages.conversationId, conversationId),
+        liveAt(now),
+        // The history cut and block hiding, in SQL so the window below is a
+        // window of messages the viewer may see …
+        gte(schema.messages.createdAt, joinedAt),
+        hidden.length > 0
+          ? notInArray(schema.messages.senderId, hidden)
+          : undefined,
+      ),
+    )
+    .orderBy(desc(schema.messages.createdAt), desc(schema.messages.id))
+    .limit(CONVERSATION_MESSAGE_LIMIT);
+  // … and again over what came back, by the core rule itself.
+  const visible = visibleTeamMessages(
+    [...rows].reverse(),
+    { userId: input.viewerUserId, joinedAt },
+    blocks,
+  );
+
+  const senderIds = [...new Set(visible.map((m) => m.senderId))];
+  const people =
+    senderIds.length === 0
+      ? []
+      : await db()
+          .select({
+            id: schema.users.id,
+            username: schema.users.username,
+            sanitizedAt: schema.users.sanitizedAt,
+          })
+          .from(schema.users)
+          .where(inArray(schema.users.id, senderIds));
+  const names = new Map(people.map((p) => [p.id, displayName(p)]));
+
+  await db()
+    .update(schema.conversationParticipants)
+    .set({ lastReadAt: now })
+    .where(
+      and(
+        eq(schema.conversationParticipants.conversationId, conversationId),
+        eq(schema.conversationParticipants.userId, input.viewerUserId),
+      ),
+    );
+
+  const team = { archived: facts.archived };
+  return {
+    teamId: facts.teamId,
+    conversationId,
+    teamName: facts.teamName,
+    campName: facts.campName,
+    memberCount: facts.participantUserIds.length,
+    timer: facts.timer,
+    joinedAt,
+    messages: visible.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      body: m.body,
+      senderId: m.senderId,
+      senderName: names.get(m.senderId) ?? publicMemberName(null),
+      mine: m.senderId === input.viewerUserId,
+      createdAt: m.createdAt,
+      expiresAt: m.expiresAt,
+    })),
+    canSend: canSendTeamMessage(facts.access, team),
+    canSetTimer: canSetTeamChatTimer(
+      facts.access,
+      facts.viewer,
+      team,
+      facts.seat,
+    ),
+    archived: facts.archived,
+  };
+}
+
+const TEAM_CHAT_NOT_FOUND = "That team chat isn't available.";
+
+/**
+ * Post into a team chat. Re-decided inside the write's transaction with the
+ * viewer's membership, account and team row held `FOR SHARE`, so a removal
+ * that commits first refuses this post. Returns `phoneHint` like a DM.
+ */
+export async function sendTeamMessage(input: {
+  groupId: string;
+  teamId: string;
+  viewerUserId: string;
+  body: string;
+  now?: Date;
+}): Promise<DmResult<{ phoneHint: boolean }>> {
+  if (!isDatabaseConfigured()) return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+  const body = input.body.trim();
+  if (body.length === 0 || body.length > MESSAGE_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `Messages are 1–${MESSAGE_MAX_LENGTH} characters.`,
+    };
+  }
+  const pre = await loadTeamChatFacts(db(), input);
+  if (!pre || !canReadTeamChat(pre.access)) {
+    return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+  }
+  if (await rateLimited("send", input.viewerUserId)) {
+    return {
+      ok: false,
+      error:
+        "You're sending messages very quickly. Wait a moment and try again.",
+    };
+  }
+  const now = input.now ?? new Date();
+  const result = await withTransaction(async (tx): Promise<DmResult> => {
+    const facts = await loadTeamChatFacts(tx, input, true);
+    if (!facts || !facts.conversationId || !canReadTeamChat(facts.access)) {
+      return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+    }
+    if (!canSendTeamMessage(facts.access, { archived: facts.archived })) {
+      return {
+        ok: false,
+        error: "This team is archived — its chat is read-only.",
+      };
+    }
+    await tx.insert(schema.messages).values({
+      conversationId: facts.conversationId,
+      senderId: input.viewerUserId,
+      kind: "text",
+      body,
+      createdAt: now,
+      expiresAt: messageExpiresAt(facts.timer, now),
+    });
+    await tx
+      .update(schema.conversations)
+      .set({ lastMessageAt: now })
+      .where(eq(schema.conversations.id, facts.conversationId));
+    // Sending is reading: the sender's own unread marker moves with them.
+    await tx
+      .update(schema.conversationParticipants)
+      .set({ lastReadAt: now })
+      .where(
+        and(
+          eq(
+            schema.conversationParticipants.conversationId,
+            facts.conversationId,
+          ),
+          eq(schema.conversationParticipants.userId, input.viewerUserId),
+        ),
+      );
+    return { ok: true };
+  });
+  if (!result.ok) return result;
+  return { ok: true, phoneHint: messageLooksLikePhoneNumber(body) };
+}
+
+/**
+ * Change the team chat's timer — team leads and camp leads who are on the
+ * team. Announced in the chat as a system line; applies to messages sent
+ * after it, exactly as in a direct chat.
+ */
+export async function setTeamChatTimer(input: {
+  groupId: string;
+  teamId: string;
+  viewerUserId: string;
+  timer: MessageTimer;
+  now?: Date;
+}): Promise<DmResult> {
+  if (!isDatabaseConfigured()) return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+  if (await rateLimited("send", input.viewerUserId)) {
+    return {
+      ok: false,
+      error: "Too many changes. Wait a moment and try again.",
+    };
+  }
+  const now = input.now ?? new Date();
+  const timer = readMessageTimer(input.timer);
+  return withTransaction(async (tx): Promise<DmResult> => {
+    const facts = await loadTeamChatFacts(tx, input, true);
+    if (!facts || !facts.conversationId || !canReadTeamChat(facts.access)) {
+      return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+    }
+    if (
+      !canSetTeamChatTimer(
+        facts.access,
+        facts.viewer,
+        { archived: facts.archived },
+        facts.seat,
+      )
+    ) {
+      return {
+        ok: false,
+        error: "Only the team's leads and the camp's leads change the timer.",
+      };
+    }
+    await tx
+      .update(schema.conversations)
+      .set({ timer, lastMessageAt: now })
+      .where(eq(schema.conversations.id, facts.conversationId));
+    await tx.insert(schema.messages).values({
+      conversationId: facts.conversationId,
+      senderId: input.viewerUserId,
+      kind: "system",
+      body: timerChangeNotice(timer),
+      createdAt: now,
+      expiresAt: messageExpiresAt(timer, now),
+    });
+    return { ok: true };
+  });
+}
+
+/**
+ * Report selected team-chat messages. Copies exactly those messages — only
+ * if every one is live, of this team's chat, and one the reporter can SEE
+ * (after they joined, not hidden by a block) — into a report, as for direct
+ * chats. Anything else refuses the whole report.
+ */
+export async function reportTeamMessages(input: {
+  groupId: string;
+  teamId: string;
+  viewerUserId: string;
+  messageIds: readonly string[];
+  reason: string | null;
+  now?: Date;
+}): Promise<DmResult<{ reportId: string }>> {
+  if (!isDatabaseConfigured()) return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+  const now = input.now ?? new Date();
+  const facts = await loadTeamChatFacts(db(), input);
+  // Refused before any message row is read.
+  if (
+    !facts ||
+    !facts.conversationId ||
+    !facts.joinedAt ||
+    !canReadTeamChat(facts.access)
+  ) {
+    return { ok: false, error: TEAM_CHAT_NOT_FOUND };
+  }
+  const uniqueIds = [...new Set(input.messageIds)];
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: "Select at least one message to report." };
+  }
+  const [selected, blocks] = await Promise.all([
+    db()
+      .select({
+        id: schema.messages.id,
+        conversationId: schema.messages.conversationId,
+        senderId: schema.messages.senderId,
+        kind: schema.messages.kind,
+        body: schema.messages.body,
+        createdAt: schema.messages.createdAt,
+      })
+      .from(schema.messages)
+      .where(and(inArray(schema.messages.id, uniqueIds), liveAt(now))),
+    loadBlocksOf(input.viewerUserId),
+  ]);
+  if (
+    selected.length !== uniqueIds.length ||
+    !canReportTeamMessages({
+      access: facts.access,
+      conversationId: facts.conversationId,
+      joinedAt: facts.joinedAt,
+      blocks,
+      selected,
+    })
+  ) {
+    return { ok: false, error: "Those messages can't be reported from here." };
+  }
+  if (await rateLimited("report", input.viewerUserId)) {
+    return {
+      ok: false,
+      error: "You've sent several reports recently. Try again later.",
+    };
+  }
+  const reason =
+    input.reason?.trim().slice(0, REPORT_REASON_MAX_LENGTH) || null;
+  const conversationId = facts.conversationId;
+  const reportId = await withTransaction(async (tx) => {
+    const [report] = await tx
+      .insert(schema.messageReports)
+      .values({
+        conversationId,
+        reporterId: input.viewerUserId,
+        reportedUserId: reportedTeamSender(input.viewerUserId, selected),
+        reason,
+        createdAt: now,
+        expiresAt: reportCopyExpiresAt(now),
+      })
+      .returning({ id: schema.messageReports.id });
+    if (!report) throw new Error("report could not be created");
+    await tx.insert(schema.messageReportItems).values(
+      selected.map((m) => ({
+        reportId: report.id,
+        originalMessageId: m.id,
+        senderId: m.senderId,
+        kind: m.kind,
+        body: m.body,
+        sentAt: m.createdAt,
+      })),
+    );
+    return report.id;
+  });
+  return { ok: true, reportId };
 }

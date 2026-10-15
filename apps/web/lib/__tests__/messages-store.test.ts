@@ -57,6 +57,8 @@ function participant(userId: string, over: Record<string, unknown> = {}) {
     sanitizedAt: null,
     lastReadAt: null,
     hiddenAt: null,
+    // The 1:1 paths serve direct conversations only (camp teams).
+    conversationKind: "direct",
     ...over,
   };
 }
@@ -613,6 +615,9 @@ describe("inbox and unread counts carry no message body", () => {
       [
         {
           conversationId: CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: NOW,
           createdAt: NOW,
@@ -634,6 +639,7 @@ describe("inbox and unread counts carry no message body", () => {
     });
     expect(inbox).toEqual([
       {
+        kind: "direct",
         conversationId: CONVO,
         otherUserId: REN,
         otherName: "ren_notfound",
@@ -945,12 +951,18 @@ describe("hidden, blocked and expired edges", () => {
       [
         {
           conversationId: CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: NOW,
           createdAt: NOW,
         },
         {
           conversationId: OTHER_CONVO,
+          kind: "direct",
+          teamId: null,
+          joinedAt: NOW,
           lastReadAt: null,
           lastMessageAt: null,
           createdAt: NOW,
