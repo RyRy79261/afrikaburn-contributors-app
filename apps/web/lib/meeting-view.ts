@@ -206,3 +206,18 @@ export function pickCalendarMonth(
   if (months.includes(current)) return current;
   return months[0] ?? current;
 }
+
+/**
+ * The stored audience's role ids that the form still offers. A role deleted
+ * after the meeting was scheduled has no toggle, so seeding the form with it
+ * would send an id nobody can see or remove, and every save would be refused
+ * as an unknown role — the meeting could never be edited again. Dropping it
+ * leaves the form's own "pick at least one role" check to guide the scheduler.
+ */
+export function offeredAudienceRoleIds(
+  stored: readonly string[],
+  offered: readonly { id: string }[],
+): string[] {
+  const ids = new Set(offered.map((r) => r.id));
+  return stored.filter((id) => ids.has(id));
+}

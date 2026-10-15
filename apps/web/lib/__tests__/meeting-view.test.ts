@@ -6,6 +6,7 @@ import {
   meetingLongDate,
   meetingMoveSummary,
   meetingReach,
+  offeredAudienceRoleIds,
   meetingTimeRange,
   meetingWhenLine,
   monthLabel,
@@ -156,5 +157,25 @@ describe("calendar month", () => {
   it("falls back to the first month when today is outside the range", () => {
     expect(pickCalendarMonth(months, undefined, "2026-10-15")).toBe("2027-03");
     expect(pickCalendarMonth([], undefined, "2026-10-15")).toBe("2026-10");
+  });
+});
+
+describe("offeredAudienceRoleIds", () => {
+  const roles = [{ id: "kitchen" }, { id: "sound" }];
+
+  it("keeps the roles the form still offers", () => {
+    expect(offeredAudienceRoleIds(["kitchen", "sound"], roles)).toEqual([
+      "kitchen",
+      "sound",
+    ]);
+  });
+
+  it("drops a role deleted since, so the meeting stays editable", () => {
+    // A deleted role has no toggle: kept, it would be sent on every save and
+    // refused as unknown, with no way to remove it.
+    expect(offeredAudienceRoleIds(["kitchen", "deleted-role"], roles)).toEqual([
+      "kitchen",
+    ]);
+    expect(offeredAudienceRoleIds(["deleted-role"], roles)).toEqual([]);
   });
 });

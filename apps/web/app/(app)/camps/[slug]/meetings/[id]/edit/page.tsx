@@ -3,6 +3,7 @@ import { PreviewNotice } from "@/components/preview-notice";
 import { ShiftsHeader } from "@/components/shifts/shifts-header";
 import { MeetingForm } from "@/components/meetings/meeting-form";
 import { loadCampMeeting } from "@/lib/camp-meetings-store";
+import { offeredAudienceRoleIds } from "@/lib/meeting-view";
 import { loadSchedulerContext, meetingFormData } from "../../context";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export default async function EditMeetingPage({
           location: meeting.location,
           videoLink: meeting.videoLink,
           mode: meeting.audience.mode,
-          roleIds: meeting.audienceRoleIds,
+          roleIds: offeredAudienceRoleIds(meeting.audienceRoleIds, roles),
           agendaMd: meeting.agendaMd,
         }}
       />
