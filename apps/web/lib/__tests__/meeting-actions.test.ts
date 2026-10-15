@@ -112,7 +112,7 @@ describe("meeting actions", () => {
     expect(r).toEqual({
       ok: false,
       error: meetingRefusalMessage("stale"),
-      conflict: { byName: null, at: null },
+      conflict: true,
     });
   });
 

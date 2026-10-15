@@ -85,7 +85,7 @@ export default async function MeetingPage({
   const { slug, id } = await params;
   const ctx = await loadMeetingsContext(slug);
   if (ctx.kind === "preview") return <PreviewNotice feature="Camp meetings" />;
-  const { access, meetingEdition } = ctx;
+  const { access, meetingEdition, user } = ctx;
   const meeting = await loadCampMeeting(access, meetingEdition, id);
   if (!meeting) notFound();
   const { camp } = access;
@@ -244,6 +244,7 @@ export default async function MeetingPage({
             <MeetingNotes
               slug={camp.slug}
               meetingId={meeting.id}
+              userId={user.id}
               notesMd={meeting.notesMd}
               version={meeting.version}
               lastEdited={lastEdited}

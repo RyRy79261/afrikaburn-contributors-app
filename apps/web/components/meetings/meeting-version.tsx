@@ -8,7 +8,8 @@ import * as React from "react";
 // organiser's own save would read to the server as someone else's. Both
 // directions: a notes save moves the version Cancel sends (setVersion), and a
 // cancel moves the version an OPEN notes editor holds (announceWrite, which
-// the editor's autosave adopts through onWrite → rebase).
+// the editor adopts through onWrite when it held `from`; its local draft
+// follows).
 
 /** A write on this page moved the version from `from` to `to`. */
 type WriteListener = (from: number, to: number) => void;

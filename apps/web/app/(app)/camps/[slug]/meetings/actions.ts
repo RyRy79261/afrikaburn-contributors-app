@@ -22,21 +22,16 @@ import {
 // member outside the audience and an unknown id all get "That meeting
 // doesn't exist.".
 //
-// NOTES SAVES DO NOT REVALIDATE: the notes autosave as you type, and
-// re-rendering the meeting page on every save would throw the editor's
-// content back at it. The page is dynamic and reads fresh on the next visit.
+// NOTES SAVES DO NOT REVALIDATE: they show nowhere but the meeting page,
+// which is dynamic; the editor refreshes it itself once "Save notes" lands.
 
 export type MeetingActionResult<T = object> =
   ({ ok: true } & T) | { ok: false; error: string };
 
-/** A notes save's answer, shaped for the shared autosave controller. */
+/** A notes save's answer; `conflict` marks "someone else saved first". */
 export type SaveNotesResult =
   | { ok: true; version: number }
-  | {
-      ok: false;
-      error: string;
-      conflict?: { byName: string | null; at: string | null };
-    };
+  | { ok: false; error: string; conflict?: boolean };
 
 const NO_EDITION = "No active edition is configured.";
 const STALE = meetingRefusalMessage("stale");
@@ -109,8 +104,8 @@ export async function cancelMeetingAction(
   return { ok: true, version: r.version };
 }
 
-/** One autosave of the notes. "Someone else saved first" comes back as a
- * conflict, so the editor stops and offers a reload instead of retrying. */
+/** "Save notes": one compare-and-set write. "Someone else saved first" comes
+ * back as a conflict, so the editor keeps the text and offers a reload. */
 export async function saveMeetingNotesAction(
   raw: unknown,
 ): Promise<SaveNotesResult> {
@@ -120,7 +115,7 @@ export async function saveMeetingNotesAction(
   const r = await saveCampMeetingNotes(user.id, edition, raw);
   if (r.ok) return { ok: true, version: r.version };
   if (r.error === STALE) {
-    return { ok: false, error: r.error, conflict: { byName: null, at: null } };
+    return { ok: false, error: r.error, conflict: true };
   }
   return r;
 }
