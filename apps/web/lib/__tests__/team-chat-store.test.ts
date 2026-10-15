@@ -333,6 +333,9 @@ describe("reporting team messages", () => {
       reporterId: ALICE,
       reportedUserId: REN,
       reason: null,
+      // The source snapshot: the camp's and team's names, nothing else.
+      sourceCampName: "Mad Hatters",
+      sourceTeamName: "Kitchen",
     });
     const [items] = dbMock.writesTo(schema.messageReportItems);
     expect((items!.arg("values") as unknown[]).length).toBe(2);

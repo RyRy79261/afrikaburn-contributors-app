@@ -430,6 +430,23 @@ export function reportedTeamSender(
 }
 
 /**
+ * Where a reported message came from, for the org safety queue: the camp's
+ * and the team's names as they were snapshotted at report time
+ * (`message_reports.source_camp_name` / `source_team_name`). Nothing else
+ * about the chat is shown. Null for a direct-message report (no snapshot),
+ * which the queue keeps showing as it always has.
+ */
+export function teamChatReportSource(input: {
+  sourceCampName: string | null;
+  sourceTeamName: string | null;
+}): string | null {
+  const camp = input.sourceCampName?.trim();
+  const team = input.sourceTeamName?.trim();
+  if (!camp || !team) return null;
+  return `${camp} · ${team} team chat`;
+}
+
+/**
  * The team inbox row's line: who and how many, or who sent last — never
  * what. Matches the direct-message preview rule (./messaging
  * `unreadMessagesLine`).

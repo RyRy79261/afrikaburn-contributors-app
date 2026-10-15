@@ -24,7 +24,8 @@
 // components/messages/team-chat-thread.tsx ("Change", "Disappearing
 // messages: <label>", "Report messages", "Select message from <name>: …",
 // "Send report (n)"), components/messages/profile-message-actions.tsx
-// ("Block <name>"), apps/org safety pages ("<reporter> reported <reported>").
+// ("Block <name>"), apps/org safety pages ("<reporter> reported <reported>",
+// "<camp> · <team> team chat", "From <camp> · <team> team chat.").
 
 import { type Page } from "@playwright/test";
 import { test, expect, skipUnlessGod } from "../../fixtures";
@@ -373,7 +374,9 @@ test.describe("camp member — team chat rules", () => {
       renPage.getByText(/report sent to afrikaburn's safety team/i),
     ).toBeVisible({ timeout: 15_000 });
 
-    // ORG STAFF: the Open queue lists it as a one-message report naming Jabu.
+    // ORG STAFF: the Open queue lists it as a one-message report naming Jabu,
+    // and says which camp's team chat it came from — the two names only.
+    const source = `${camp.name} · ${team} team chat`;
     const staff = await provisionOrgStaff(makeAppPage);
     const org = staff.org;
     await org.goto("/safety?status=open");
@@ -385,11 +388,13 @@ test.describe("camp member — team chat rules", () => {
     });
     await expect(row).toBeVisible();
     await expect(row).toContainText("1 message");
+    await expect(row).toContainText(source);
     await row.click();
     await org.waitForURL(/\/safety\/[0-9a-f-]{36}$/i);
     await expect(
       org.getByRole("heading", { name: `${ren} reported ${jabu}` }),
     ).toBeVisible();
+    await expect(org.getByText(`From ${source}.`)).toBeVisible();
     // The copy of the reported message, and nothing else from the chat.
     await expect(org.getByText(reported, { exact: true })).toBeVisible();
     await expect(org.getByText(harmless)).toHaveCount(0);

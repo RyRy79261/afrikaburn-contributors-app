@@ -23,8 +23,10 @@ import { PageHeading } from "@/components/page-heading";
 // /safety — the direct-message report queue (epic #69). NEEDS DESIGN REVIEW.
 //
 // Shows WHO reported WHOM and WHEN — no message and no reason text is loaded
-// for this list. The reported messages render only on a report's own page,
-// and opening one is audited. There is no path from here (or anywhere in the
+// for this list — and, for a team-chat report, which camp's team chat it came
+// from (the names snapshotted at report time; nothing else about the chat).
+// The reported messages render only on a report's own page, and opening one
+// is audited. There is no path from here (or anywhere in the
 // console) to a conversation: the org sees what a participant reported and
 // nothing else.
 
@@ -116,10 +118,17 @@ export default async function SafetyReportsPage({
                     href={`/safety/${r.id}`}
                     className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <span className="text-sm">
-                      <span className="font-medium">{r.reporterName}</span>{" "}
-                      reported{" "}
-                      <span className="font-medium">{r.reportedName}</span>
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-sm">
+                        <span className="font-medium">{r.reporterName}</span>{" "}
+                        reported{" "}
+                        <span className="font-medium">{r.reportedName}</span>
+                      </span>
+                      {r.source && (
+                        <span className="text-xs text-muted-foreground">
+                          {r.source}
+                        </span>
+                      )}
                     </span>
                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="secondary">

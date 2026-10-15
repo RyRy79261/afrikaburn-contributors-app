@@ -454,6 +454,9 @@ describe("reportMessages — copies only selected messages of the reporter's own
       reason: "harassment",
       expiresAt: new Date("2027-10-24T12:00:00Z"),
     });
+    // A direct-message report carries no team-chat source snapshot.
+    expect(report.sourceCampName ?? null).toBeNull();
+    expect(report.sourceTeamName ?? null).toBeNull();
     const items = dbMock
       .writesTo(schema.messageReportItems)[0]!
       .arg("values") as { originalMessageId: string; body: string }[];

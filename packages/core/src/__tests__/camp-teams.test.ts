@@ -25,6 +25,7 @@ import {
   isTeamMessageVisible,
   reportedTeamSender,
   teamAddedNotification,
+  teamChatReportSource,
   teamInboxLine,
   teamRefusalMessage,
   visibleTeamMessages,
@@ -497,6 +498,32 @@ describe("reporting team messages", () => {
     ).toBe(JABU);
     expect(
       reportedTeamSender(ALICE, [{ senderId: ALICE, createdAt: t(9) }]),
+    ).toBeNull();
+  });
+});
+
+describe("teamChatReportSource", () => {
+  it("names the camp and the team chat a report came from", () => {
+    expect(
+      teamChatReportSource({
+        sourceCampName: "Mad Hatters",
+        sourceTeamName: "Tea bar",
+      }),
+    ).toBe("Mad Hatters · Tea bar team chat");
+  });
+
+  it("is null for a direct-message report (no snapshot), and for half a snapshot", () => {
+    expect(
+      teamChatReportSource({ sourceCampName: null, sourceTeamName: null }),
+    ).toBeNull();
+    expect(
+      teamChatReportSource({
+        sourceCampName: "Mad Hatters",
+        sourceTeamName: null,
+      }),
+    ).toBeNull();
+    expect(
+      teamChatReportSource({ sourceCampName: "  ", sourceTeamName: "Kitchen" }),
     ).toBeNull();
   });
 });

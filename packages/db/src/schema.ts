@@ -2732,6 +2732,14 @@ export const messageReports = pgTable(
       onDelete: "set null",
     }),
     reason: text("reason"),
+    // Where a TEAM-CHAT report came from (docs/camp-teams-spec.md, migration
+    // 0041): the camp's and the team's names AS THEY WERE when it was
+    // reported — a snapshot, not a link, because the team may be renamed,
+    // archived or deleted (which cascades its chat away) and the queue must
+    // still say "{camp} · {team} team chat". Nothing else about the chat is
+    // kept. Both null for a direct-message report; never one without the other.
+    sourceCampName: text("source_camp_name"),
+    sourceTeamName: text("source_team_name"),
     status: messageReportStatusEnum("status").notNull().default("open"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
@@ -2741,6 +2749,10 @@ export const messageReports = pgTable(
     }),
   },
   (r) => ({
+    sourceBoth: check(
+      "message_reports_source_both",
+      sql`(${r.sourceCampName} is null) = (${r.sourceTeamName} is null)`,
+    ),
     statusCreatedIdx: index("message_reports_status_created_idx").on(
       r.status,
       r.createdAt.desc(),

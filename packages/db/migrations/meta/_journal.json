@@ -288,6 +288,13 @@
       "when": 1792066351926,
       "tag": "0040_nice_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792088869046,
+      "tag": "0041_dapper_deadpool",
+      "breakpoints": true
     }
   ]
 }

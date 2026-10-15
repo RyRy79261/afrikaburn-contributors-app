@@ -6,6 +6,7 @@ import {
   MESSAGE_REPORT_VIEW_AUDIT_ACTION,
   canReviewMessageReports,
   publicMemberName,
+  teamChatReportSource,
   type MessageReportStatus,
   type OrgActor,
 } from "@quagga/core";
@@ -27,6 +28,13 @@ import { getDb, schema } from "@/lib/db";
 // and when; the messages themselves render only on a report's DETAIL view,
 // and opening one writes a `dm.report.view` audit row (off the critical path
 // via `after()`, like the medical read).
+//
+// WHERE FROM: a team-chat report carries a snapshot of the camp's and the
+// team's names taken when it was reported (`source_camp_name` /
+// `source_team_name`), shown as "{camp} · {team} team chat". The snapshot is
+// read from the report row itself — never by joining the team or its chat —
+// so it survives a rename, an archive or the team's deletion, and opens no
+// path to anything else about the chat. A direct-message report has none.
 
 const LIST_CAP = 200;
 
@@ -38,6 +46,8 @@ export interface MessageReportSummary {
   reporterName: string;
   reportedName: string;
   messageCount: number;
+  /** "{camp} · {team} team chat" for a team-chat report; null for a DM. */
+  source: string | null;
 }
 
 export interface MessageReportDetail extends MessageReportSummary {
@@ -96,6 +106,8 @@ export async function listMessageReports(
       expiresAt: schema.messageReports.expiresAt,
       reporterId: schema.messageReports.reporterId,
       reportedUserId: schema.messageReports.reportedUserId,
+      sourceCampName: schema.messageReports.sourceCampName,
+      sourceTeamName: schema.messageReports.sourceTeamName,
     })
     .from(schema.messageReports)
     .where(
@@ -136,6 +148,7 @@ export async function listMessageReports(
       r.reportedUserId ? names.get(r.reportedUserId) : undefined,
     ),
     messageCount: countOf.get(r.id) ?? 0,
+    source: teamChatReportSource(r),
   }));
 }
 
@@ -161,6 +174,8 @@ export async function getMessageReport(
       reason: schema.messageReports.reason,
       reporterId: schema.messageReports.reporterId,
       reportedUserId: schema.messageReports.reportedUserId,
+      sourceCampName: schema.messageReports.sourceCampName,
+      sourceTeamName: schema.messageReports.sourceTeamName,
     })
     .from(schema.messageReports)
     .where(
@@ -219,6 +234,7 @@ export async function getMessageReport(
       report.reportedUserId ? names.get(report.reportedUserId) : undefined,
     ),
     messageCount: items.length,
+    source: teamChatReportSource(report),
     items: items.map((i) => ({
       id: i.id,
       senderName: nameOf(i.senderId ? names.get(i.senderId) : undefined),

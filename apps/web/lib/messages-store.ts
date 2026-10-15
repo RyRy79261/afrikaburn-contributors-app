@@ -1854,6 +1854,10 @@ export async function reportTeamMessages(input: {
         reporterId: input.viewerUserId,
         reportedUserId: reportedTeamSender(input.viewerUserId, selected),
         reason,
+        // Where it came from, as named NOW: a snapshot that survives a
+        // rename, an archive or the team's deletion. Only the two names.
+        sourceCampName: facts.campName,
+        sourceTeamName: facts.teamName,
         createdAt: now,
         expiresAt: reportCopyExpiresAt(now),
       })
