@@ -15,8 +15,10 @@
 //      and the camp lead see the meeting; Mia gets the 404 an unknown meeting
 //      gets.
 //   4. Ren is never offered Sound, even when the URL asks for it.
-//   5. Ren posts to the team from the shortcut. Jabu gets it and can open
-//      it; Mia cannot open it.
+//   5. Ren posts to the team from the shortcut, as MUST ACKNOWLEDGE — a team
+//      lead may require it of the teams they lead (Ryan, 16 Oct 2026). Jabu
+//      is held at the acknowledge gate until he ticks it; Mia, on no team, is
+//      not gated and cannot open it.
 //   6. Mia joins Sound. The camp lead, who may address any team, opens the
 //      picker on the asked-for team and sends to Kitchen AND Sound. Jabu and
 //      Mia both get it — and Mia, with that one present, still has no sign
@@ -34,6 +36,7 @@
 //                     people-picker}.tsx
 //   meeting form .... apps/web/components/meetings/meeting-form.tsx
 //   composer ........ apps/web/components/announcements/composer.tsx
+//   gate ............ apps/web/components/announcements/acknowledge-gate.tsx
 //   reach / notice .. apps/web/lib/team-audience-view.ts
 
 import { type Page } from "@playwright/test";
@@ -219,10 +222,12 @@ test.describe("camp member — team audiences", () => {
     await expect(
       renPage.getByRole("button", { name: kitchen }),
     ).toHaveAttribute("aria-pressed", "true");
-    // Must-acknowledge needs the privilege a team lead does not hold.
-    await expect(
-      renPage.getByRole("button", { name: /^must acknowledge/i }),
-    ).toBeDisabled();
+    // A team lead may make the team they lead acknowledge it, with no
+    // announcement privilege at all (Ryan, 16 Oct 2026).
+    const mustAck = renPage.getByRole("button", { name: /^must acknowledge/i });
+    await expect(mustAck).toBeEnabled();
+    await mustAck.click();
+    await expect(mustAck).toHaveAttribute("aria-pressed", "true");
 
     const title = uniqueName("Monday prep starts at 10");
     const marker = `Bring an apron ${Date.now().toString(36)}`;
@@ -237,6 +242,39 @@ test.describe("camp member — team audiences", () => {
     await renPage.waitForURL(/\/announcements\/[0-9a-f-]{36}$/i);
     await expect(renPage.getByRole("heading", { name: title })).toBeVisible();
     const renAnnouncementId = new URL(renPage.url()).pathname.split("/").pop()!;
+    const acknowledgedStat = renPage
+      .getByText("Acknowledged", { exact: true })
+      .locator("..");
+    await expect(acknowledgedStat).toContainText("0 of 1");
+
+    // Jabu, on the team, is held at the gate wherever he goes.
+    const gateUrl = new RegExp(`/bulletins/${renAnnouncementId}$`);
+    await jabuPage.goto(`/camps/${camp.slug}`);
+    await expect(jabuPage).toHaveURL(gateUrl);
+    await expect(jabuPage.getByRole("heading", { name: title })).toBeVisible();
+    await expect(jabuPage.getByText(marker)).toBeVisible();
+    const acknowledge = jabuPage.getByRole("button", {
+      name: /^acknowledge$/i,
+    });
+    await expect(acknowledge).toBeDisabled();
+    await jabuPage
+      .getByRole("checkbox", { name: /read and understood/i })
+      .check();
+    await acknowledge.click();
+    await jabuPage.waitForURL(/\/directory\/?$/);
+
+    // Mia, on no team, is not gated: her camp page paints (present first),
+    // and nothing of Ren's announcement is on it.
+    await miaPage.goto(`/camps/${camp.slug}`);
+    await expect(
+      miaPage.getByRole("heading", { name: camp.name }),
+    ).toBeVisible();
+    await expect(miaPage).not.toHaveURL(gateUrl);
+    await expect(miaPage.getByText(title)).toHaveCount(0);
+
+    await renPage.reload();
+    await expect(renPage.getByRole("heading", { name: title })).toBeVisible();
+    await expect(acknowledgedStat).toContainText("1 of 1");
 
     await jabuPage.goto("/notifications");
     await expect(
