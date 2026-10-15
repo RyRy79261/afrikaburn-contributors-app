@@ -26,7 +26,18 @@ Calendar sync: the platform holds the meeting itself.
   audience picker). Only the audience sees the meeting, its link and notes.
 - **Notes**: anyone in the audience may read; the scheduler, leads and
   `schedule_meetings` holders may write the agenda and notes (markdown, the
-  shared editor). Compare-and-set on `version`, like the layout.
+  shared editor). The notes save with an explicit **Save notes** in a footer
+  kept in sight while the editor scrolls, plus Cancel — one compare-and-set
+  write on the `version` the editor opened; a stale version is refused with
+  "someone else saved first, reload" and the text stays in the editor. No
+  autosave to the server. While typing, the notes are kept as a **local
+  draft** in this browser (`localStorage`, keyed by writer, meeting and the
+  version opened), offered back on reopening with "Draft restored" and
+  Discard, cleared on save, on Discard/Cancel and on sign-out, and ignored
+  (removed) once the version has moved on. A draft holds only what its writer
+  typed into a form they could open, and is never offered to anyone else.
+  _(Ryan, 15 Oct 2026: work like Camp 404's minutes editor, not
+  autosave-to-server.)_
 - **No RSVP in v1.** "Who came" is a simple attendee tick list in the notes,
   written by the note-taker, never a tracking feature.
 - **Calendar** is read-only and derived: edition milestones (build window,
