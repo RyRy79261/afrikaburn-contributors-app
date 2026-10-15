@@ -250,3 +250,7 @@ export * from "./camp-layout";
 // schedules a meeting, the upcoming/past split, the derived camp calendar,
 // the .ics file and the meeting notices. PURE.
 export * from "./camp-meetings";
+// Camp teams and team chat (docs/camp-teams-spec.md): who sees and manages a
+// team, joining by join mode, the team chat's read/send/timer/report gates
+// (the direct-message law, extended), the history cut and block hiding. PURE.
+export * from "./camp-teams";
