@@ -646,6 +646,7 @@ export async function listInbox(input: {
   );
 
   const entries: InboxEntry[] = [];
+  const sortKey = new Map<string, Date>();
   for (const row of mine) {
     if (row.kind === "team") {
       const team = teams.get(row.conversationId);
@@ -659,8 +660,13 @@ export async function listInbox(input: {
         campName: team.campName,
         unread: unreadRows.get(row.conversationId) ?? 0,
         lastSenderName: team.lastSenderName,
-        lastMessageAt: row.lastMessageAt,
+        // The newest message the viewer can SEE, never the conversation's
+        // `last_message_at`: that one is bumped by every send, including
+        // a blocked person's and anything before the viewer joined, and
+        // showing it would leak when they were active (camp-teams-spec).
+        lastMessageAt: team.lastVisibleAt,
       });
+      sortKey.set(row.conversationId, team.lastVisibleAt ?? row.joinedAt);
       continue;
     }
     const other = others.find((o) => o.conversationId === row.conversationId);
@@ -674,13 +680,17 @@ export async function listInbox(input: {
       unread: unreadRows.get(row.conversationId) ?? 0,
       lastMessageAt: row.lastMessageAt,
     });
+    sortKey.set(row.conversationId, row.lastMessageAt ?? row.createdAt);
   }
-  return entries;
+  // Re-sort: the query ordered by the conversation's own timestamp, which a
+  // team row must not be placed by (see above).
+  const keyOf = (e: InboxEntry) => sortKey.get(e.conversationId)?.getTime() ?? 0;
+  return entries.sort((a, b) => keyOf(b) - keyOf(a));
 }
 
 /**
- * The team half of the inbox: each team's name and camp, and who sent the
- * newest message the viewer can see (after they joined, live, not from
+ * The team half of the inbox: each team's name and camp, and who sent (and
+ * when) the newest message the viewer can see (after they joined, live, not from
  * someone a block stands between them and). One small query per team chat —
  * a person is on a handful of teams.
  */
@@ -697,6 +707,7 @@ async function loadInboxTeams(
       campSlug: string;
       campName: string;
       lastSenderName: string | null;
+      lastVisibleAt: Date | null;
     }
   >
 > {
@@ -708,6 +719,7 @@ async function loadInboxTeams(
       campSlug: string;
       campName: string;
       lastSenderName: string | null;
+      lastVisibleAt: Date | null;
     }
   >();
   if (rows.length === 0) return out;
@@ -733,6 +745,7 @@ async function loadInboxTeams(
       .select({
         username: schema.users.username,
         sanitizedAt: schema.users.sanitizedAt,
+        createdAt: schema.messages.createdAt,
       })
       .from(schema.messages)
       .innerJoin(schema.users, eq(schema.users.id, schema.messages.senderId))
@@ -754,6 +767,7 @@ async function loadInboxTeams(
     out.set(row.conversationId, {
       ...team,
       lastSenderName: last ? displayName(last) : null,
+      lastVisibleAt: last ? last.createdAt : null,
     });
   }
   return out;

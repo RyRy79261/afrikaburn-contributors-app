@@ -391,6 +391,94 @@ describe("the 1:1 paths refuse a team chat's id", () => {
 });
 
 describe("the inbox lists team chats beside direct ones", () => {
+  const SEEN_AT = new Date("2027-04-27T09:00:00Z");
+
+  it("dates and sorts a team row by the newest message the viewer can SEE, not the conversation's last send", async () => {
+    // The team conversation's last_message_at (NOW) was bumped by a message
+    // ALICE cannot see (a blocked sender, or sent before she joined). Her
+    // newest visible one is SEEN_AT; a DM sits between the two.
+    const DM = "cccccccc-0000-4000-8000-000000000002";
+    const DM_AT = new Date("2027-04-27T11:00:00Z");
+    dbMock.queue(
+      /* mine, in last_message_at order */ [
+        {
+          conversationId: CONVO,
+          kind: "team",
+          teamId: TEAM,
+          joinedAt: JOINED,
+          lastReadAt: null,
+          lastMessageAt: NOW,
+          createdAt: JOINED,
+        },
+        {
+          conversationId: DM,
+          kind: "direct",
+          teamId: null,
+          joinedAt: JOINED,
+          lastReadAt: null,
+          lastMessageAt: DM_AT,
+          createdAt: JOINED,
+        },
+      ],
+      /* the DM's other side */ [
+        { conversationId: DM, userId: REN, username: "ren", sanitizedAt: null },
+      ],
+      /* unread */ [],
+      /* teams */ [
+        {
+          teamId: TEAM,
+          teamName: "Kitchen",
+          campSlug: "mad-hatters",
+          campName: "Mad Hatters",
+        },
+      ],
+      /* last visible */ [
+        { username: "carol", sanitizedAt: null, createdAt: SEEN_AT },
+      ],
+    );
+    const inbox = await store.listInbox({
+      viewerUserId: ALICE,
+      editionId: "e",
+      now: NOW,
+    });
+    expect(inbox.map((e) => [e.conversationId, e.lastMessageAt])).toEqual([
+      [DM, DM_AT],
+      [CONVO, SEEN_AT],
+    ]);
+  });
+
+  it("shows no time for a team row with nothing visible yet", async () => {
+    dbMock.queue(
+      [
+        {
+          conversationId: CONVO,
+          kind: "team",
+          teamId: TEAM,
+          joinedAt: JOINED,
+          lastReadAt: null,
+          lastMessageAt: NOW,
+          createdAt: JOINED,
+        },
+      ],
+      [],
+      [
+        {
+          teamId: TEAM,
+          teamName: "Kitchen",
+          campSlug: "mad-hatters",
+          campName: "Mad Hatters",
+        },
+      ],
+      /* nothing visible */ [],
+    );
+    const [entry] = await store.listInbox({
+      viewerUserId: ALICE,
+      editionId: "e",
+      now: NOW,
+    });
+    expect(entry).toMatchObject({ lastSenderName: null, lastMessageAt: null });
+  });
+
   it("shows the team's name and the last sender, never a body", async () => {
     dbMock.queue(
       /* mine */ [
@@ -413,7 +501,9 @@ describe("the inbox lists team chats beside direct ones", () => {
           campName: "Mad Hatters",
         },
       ],
-      /* last sender */ [{ username: "ren_notfound", sanitizedAt: null }],
+      /* last sender */ [
+        { username: "ren_notfound", sanitizedAt: null, createdAt: SEEN_AT },
+      ],
     );
     const inbox = await store.listInbox({
       viewerUserId: ALICE,
@@ -430,7 +520,8 @@ describe("the inbox lists team chats beside direct ones", () => {
         campName: "Mad Hatters",
         unread: 2,
         lastSenderName: "ren_notfound",
-        lastMessageAt: NOW,
+        // The visible message's time, NOT the conversation's NOW.
+        lastMessageAt: SEEN_AT,
       },
     ]);
     for (const q of dbMock.queriesOfKind("select")) {
