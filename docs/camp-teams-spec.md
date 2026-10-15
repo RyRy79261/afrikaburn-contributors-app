@@ -1,12 +1,12 @@
 # Camp teams and team chat — Feature Spec
 
-| Field                  | Value                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------- |
-| **Category**           | Engineering Spec                                                                        |
-| **Doc status**         | Active                                                                                  |
-| **Normative language** | Descriptive only                                                                        |
-| **Requirement IDs**    | Partial — App Spec §4a `COMM-008`, `COMM-012`, `COMM-013`, `COMM-014`, `COMM-016`       |
-| **Owner / Updated**    | Ryan, 2026-10-15                                                                        |
+| Field                  | Value                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| **Category**           | Engineering Spec                                                                  |
+| **Doc status**         | Active                                                                            |
+| **Normative language** | Descriptive only                                                                  |
+| **Requirement IDs**    | Partial — App Spec §4a `COMM-008`, `COMM-012`, `COMM-013`, `COMM-014`, `COMM-016` |
+| **Owner / Updated**    | Ryan, 2026-10-15                                                                  |
 
 A camp runs on teams — kitchen, build crew, sound, MOOP — and each team runs on
 a WhatsApp group that someone has to admin, that holds everyone's phone number,
@@ -71,6 +71,17 @@ a Telegram group, the chat is in the app.
 - **Timer**: team leads and camp leads set the team chat's disappearing timer
   (off / 24 h / 7 d / 90 d), shown in the chat.
 - **Mentions, files, reactions**: not in this build.
+- **Read gate, twice**: reading needs a chat participant row AND a current
+  `team_members` row with an active camp membership — a stale row of either
+  kind alone opens nothing. The 1:1 message paths refuse a team chat's id.
+- **Archived teams**: off the list except for camp leads and people still on
+  them; the chat stays readable for its members and is read-only. Team leads
+  lose their rights on an archived team; camp leads keep theirs.
+- **Timer and appointing leads**: a camp lead must be on the team to set the
+  timer (no write path into a chat they cannot read). Team leads and camp
+  leads appoint a team's leads from people already on it.
+- **Reports** from a team chat name as the reported person whoever sent most
+  of the selected messages (the queue shows every copy with its sender).
 - Former members and erased accounts: removed from every team and chat (the
   existing sanitiser deletes their messages).
 
