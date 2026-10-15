@@ -83,6 +83,9 @@ export function createLayoutAutosave<D>(
   let uncertain: D | null = null;
   let inFlight = false;
   let blocked = false;
+  /** The document as it stood when a conflict refused it: that change is
+   * already reported lost, so only edits made AFTER it are worth a prompt. */
+  let atConflict: D | null = null;
   let leaving = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let state: AutosaveState = { kind: "saved" };
@@ -142,6 +145,7 @@ export function createLayoutAutosave<D>(
       return;
     }
     blocked = true;
+    atConflict = r.conflict ? latest : null;
     set(
       r.conflict
         ? { kind: "conflict", byName: r.conflict.byName, at: r.conflict.at }
@@ -168,6 +172,7 @@ export function createLayoutAutosave<D>(
     /** Unblocks after a refusal or conflict and sends straight away. */
     retry() {
       blocked = false;
+      atConflict = null;
       leaving = false;
       void flush();
     },
@@ -180,6 +185,7 @@ export function createLayoutAutosave<D>(
       if (!blocked && !inFlight && hasUnsaved()) void flush();
     },
     hasUnsaved,
-    shouldWarnOnLeave: () => state.kind !== "conflict" && hasUnsaved(),
+    shouldWarnOnLeave: () =>
+      state.kind === "conflict" ? latest !== atConflict : hasUnsaved(),
   };
 }

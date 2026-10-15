@@ -187,5 +187,10 @@ describe("layout autosave", () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(a.hasUnsaved()).toBe(true);
     expect(a.shouldWarnOnLeave()).toBe(false);
+
+    // But an edit made AFTER the conflict cannot be saved either, and nothing
+    // has told the user it is lost: leaving must ask again.
+    a.change({ n: 4 });
+    expect(a.shouldWarnOnLeave()).toBe(true);
   });
 });
