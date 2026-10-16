@@ -1,7 +1,11 @@
 import "server-only";
 
 import { and, desc, eq, isNotNull, notInArray } from "drizzle-orm";
-import { canReadPersonalInformationIn, type OrgActor } from "@quagga/core";
+import {
+  canReadPersonalInformationIn,
+  MEMBER_RECORDS_AUDIT_ACTIONS,
+  type OrgActor,
+} from "@quagga/core";
 
 import { getDb, schema } from "@/lib/db";
 import {
@@ -74,7 +78,14 @@ export async function getRecentActivity(
     })
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
-    .where(notInArray(schema.auditEvents.action, [...FEED_EXCLUDED_ACTIONS]))
+    .where(
+      notInArray(schema.auditEvents.action, [
+        ...FEED_EXCLUDED_ACTIONS,
+        // Camp-private, not a display choice: never in the console at all
+        // (docs/member-records-spec.md; `getAuditTrail` excludes them too).
+        ...MEMBER_RECORDS_AUDIT_ACTIONS,
+      ]),
+    )
     .orderBy(desc(schema.auditEvents.createdAt))
     .limit(limit);
   return rows.map((r) => ({

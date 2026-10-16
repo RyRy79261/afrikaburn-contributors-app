@@ -23,7 +23,10 @@ vi.mock("@quagga/db", async (importOriginal) => ({
   createHttpDb: () => db,
 }));
 
-import { MEDICAL_VIEW_AUDIT_ACTION } from "@quagga/core";
+import {
+  MEDICAL_VIEW_AUDIT_ACTION,
+  MEMBER_RECORDS_AUDIT,
+} from "@quagga/core";
 import { getRecentActivity, getSubmissionSeries } from "@/lib/status-board";
 import { getSystemStatus, probeDatabase } from "@/lib/system-probe";
 
@@ -81,6 +84,21 @@ describe("getRecentActivity", () => {
     // filter — or pointing it at something else — turns this red.
     const [call] = db.recorded("select", "audit_events");
     expect(whereMentions(call?.where, MEDICAL_VIEW_AUDIT_ACTION)).toBe(true);
+  });
+
+  // Regression (member-records review): a camp's private-note audit rows
+  // reached the overview feed — a named lead keeps notes, and when. The spec
+  // says never the org console.
+  it("EXCLUDES every member-records action IN THE QUERY, for every rank", async () => {
+    for (const actor of [GOD, PERSONAL_READER, READER]) {
+      db = fakeDb();
+      db.seed("audit_events", []);
+      await getRecentActivity(actor);
+      const [call] = db.recorded("select", "audit_events");
+      for (const action of Object.values(MEMBER_RECORDS_AUDIT)) {
+        expect(whereMentions(call?.where, action)).toBe(true);
+      }
+    }
   });
 
   it("honours the row limit the card asks for", async () => {

@@ -53,6 +53,15 @@ export const MEMBER_RECORDS_AUDIT = {
   duplicateDismiss: "camp.member_duplicate.dismiss",
 } as const;
 
+/**
+ * Every member-records audit action. Camp-private: the org console's audit
+ * readers (`/audit`, the overview activity feed) exclude them IN THE QUERY,
+ * whatever the reader's rank — "never the org console" (spec §Rules). Even
+ * without the text, a row says that a named lead keeps notes, and when.
+ */
+export const MEMBER_RECORDS_AUDIT_ACTIONS: readonly string[] =
+  Object.values(MEMBER_RECORDS_AUDIT);
+
 /** The line the note form shows under the box (spec §Surfaces). */
 export const MEMBER_NOTES_AUDIENCE_NOTE =
   "Only the camp's leads and note-keepers see these. The member can request them under POPIA.";

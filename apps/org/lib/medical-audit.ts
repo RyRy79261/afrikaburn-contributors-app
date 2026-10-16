@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, notInArray } from "drizzle-orm";
 import {
   canReadPersonalInformationIn,
   MEDICAL_VIEW_AUDIT_ACTION,
+  MEMBER_RECORDS_AUDIT_ACTIONS,
   publicMemberName,
   type MedicalAccessBasis,
   type OrgActor,
@@ -225,9 +226,16 @@ export async function getAuditTrail(
     .from(schema.auditEvents)
     .leftJoin(schema.users, eq(schema.users.id, schema.auditEvents.actorId))
     .where(
-      personal
-        ? undefined
-        : ne(schema.auditEvents.action, MEDICAL_VIEW_AUDIT_ACTION),
+      and(
+        // Camp-private: a camp's member-note rows never reach the console,
+        // for any rank (docs/member-records-spec.md).
+        notInArray(schema.auditEvents.action, [
+          ...MEMBER_RECORDS_AUDIT_ACTIONS,
+        ]),
+        personal
+          ? undefined
+          : ne(schema.auditEvents.action, MEDICAL_VIEW_AUDIT_ACTION),
+      ),
     )
     .orderBy(desc(schema.auditEvents.createdAt))
     .limit(limit);
