@@ -7,9 +7,11 @@ import {
   enforceKindPermissions,
   isPermissionsLockedKind,
   isPermissionBackstop,
+  kindMayHoldMemberNotes,
   roleGrantsElevatedPrivileges,
   type PermissionMembership,
 } from "../project-permissions";
+import { canManageMemberNotes } from "../member-records";
 import type { ProjectPermissions } from "@quagga/types";
 
 const NONE: ProjectPermissions = {};
@@ -279,6 +281,29 @@ describe("captain lock", () => {
     expect(enforceKindPermissions("custom", perms)).toBe(perms);
     expect(enforceKindPermissions("baseline", perms)).toBe(perms);
     expect(isPermissionsLockedKind("default")).toBe(false);
+  });
+
+  // Regression (member-records review): `member_notes` on the baseline role
+  // — which every member holds implicitly — opened every private note to the
+  // whole camp. Clamped on write and on read.
+  it("the baseline role never holds member_notes; other kinds keep it", () => {
+    const perms: ProjectPermissions = {
+      member_notes: true,
+      view_member_details: true,
+    };
+    expect(kindMayHoldMemberNotes("baseline")).toBe(false);
+    expect(enforceKindPermissions("baseline", perms)).toEqual({
+      view_member_details: true,
+    });
+    expect(
+      canManageMemberNotes(
+        member("member", enforceKindPermissions("baseline", perms)),
+      ),
+    ).toBe(false);
+    for (const kind of ["custom", "default", "officer"] as const) {
+      expect(kindMayHoldMemberNotes(kind)).toBe(true);
+      expect(enforceKindPermissions(kind, perms).member_notes).toBe(true);
+    }
   });
 });
 

@@ -230,6 +230,29 @@ describe("adding a note", () => {
     }
   });
 
+  // Regression (member-records review): a `manage_roles` holder could tick
+  // `member_notes` on the baseline role — which every member holds — and so
+  // open every note to the whole camp. The read path clamps it by kind.
+  it("member_notes stored on the BASELINE role grants nobody anything", async () => {
+    dbMock.queue(
+      campRow,
+      [person(LERATO, MEMBER), person(JABU, MEMBER)],
+      [
+        { id: BASELINE_ROLE, kind: BASELINE, permissions: { member_notes: true } },
+        { id: WELFARE_ROLE, kind: CUSTOM, permissions: {} },
+      ],
+      [],
+    );
+    expect(
+      await store.addMemberNote(LERATO, {
+        slug: SLUG,
+        subjectUserId: JABU,
+        body: "hi",
+      }),
+    ).toEqual({ ok: false, error: "That person isn't in this camp." });
+    expect(dbMock.writesTo(schema.memberNotes)).toHaveLength(0);
+  });
+
   it("a note about someone outside the camp is refused as not found", async () => {
     dbMock.queue(campRow, [person(ALICE, LEAD)], ...rolesFor(null));
     const result = await store.addMemberNote(ALICE, {
