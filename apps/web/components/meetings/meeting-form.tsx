@@ -28,6 +28,12 @@ import {
   updateMeetingAction,
 } from "@/app/(app)/camps/[slug]/meetings/actions";
 import {
+  chosenTeamNames,
+  teamLeadNotice,
+  teamReachPhrase,
+  type TeamOption,
+} from "@/lib/team-audience-view";
+import {
   MEETING_DURATION_OPTIONS,
   meetingDurationLabel,
   meetingMoveSummary,
@@ -59,8 +65,10 @@ export interface MeetingFormInitial {
   durationMinutes: number;
   location: string | null;
   videoLink: string | null;
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   roleIds: string[];
+  /** Chosen camp teams, when `mode` is `teams`. */
+  teamIds?: string[];
   agendaMd: string;
 }
 
@@ -79,15 +87,28 @@ function looksHttps(value: string): boolean {
 export function MeetingForm({
   slug,
   roles,
+  teams,
+  campWide,
   members,
   baselineRoleId,
   initial,
+  initialTeamIds,
 }: {
   slug: string;
   roles: MeetingFormRole[];
+  /** The teams the picker lists: every live team for a camp-wide scheduler,
+   * only their own for a team lead (plus, when editing, the meeting's). */
+  teams: TeamOption[];
+  /** May pick the whole camp and roles (`schedule_meetings` or a camp lead).
+   * False for a team lead, who sees only "Teams" and the reason (frame
+   * bIVG2, state 1). */
+  campWide: boolean;
   members: ReachMember[];
   baselineRoleId: string | null;
   initial?: MeetingFormInitial;
+  /** A new meeting opened from a team page: start on "Teams" with this team
+   * chosen. Ignored when editing. */
+  initialTeamIds?: string[];
 }) {
   const router = useRouter();
   const editing = !!initial;
@@ -102,12 +123,17 @@ export function MeetingForm({
   );
   const [location, setLocation] = React.useState(initial?.location ?? "");
   const [videoLink, setVideoLink] = React.useState(initial?.videoLink ?? "");
-  const [mode, setMode] = React.useState<"everyone" | "roles">(
-    initial?.mode ?? "everyone",
+  const startTeams = initial ? (initial.teamIds ?? []) : (initialTeamIds ?? []);
+  const [mode, setMode] = React.useState<"everyone" | "roles" | "teams">(
+    !campWide
+      ? "teams"
+      : (initial?.mode ?? (startTeams.length > 0 ? "teams" : "everyone")),
   );
   const [roleIds, setRoleIds] = React.useState<string[]>(
     initial?.roleIds ?? [],
   );
+  const [teamIds, setTeamIds] = React.useState<string[]>(startTeams);
+  const teamNames = chosenTeamNames(teams, teamIds);
   const [agendaMd, setAgendaMd] = React.useState(initial?.agendaMd ?? "");
   const [error, setError] = React.useState<string | null>(null);
 
@@ -116,7 +142,11 @@ export function MeetingForm({
     videoLink.trim() && !looksHttps(videoLink)
       ? "Use a link that starts with https:// — plain http and other kinds of link aren't allowed."
       : null;
-  const reach = meetingReach(members, { mode, roleIds }, baselineRoleId);
+  const reach = meetingReach(
+    members,
+    { mode, roleIds, teamIds },
+    baselineRoleId,
+  );
   const durations = [
     ...new Set([
       ...MEETING_DURATION_OPTIONS,
@@ -151,6 +181,10 @@ export function MeetingForm({
       setError("Pick at least one role, or choose the whole camp.");
       return;
     }
+    if (mode === "teams" && teamIds.length === 0) {
+      setError("Pick at least one team.");
+      return;
+    }
     const fields = {
       slug,
       title,
@@ -161,6 +195,7 @@ export function MeetingForm({
       videoLink: videoLink.trim(),
       mode,
       roleIds: mode === "roles" ? roleIds : [],
+      teamIds: mode === "teams" ? teamIds : [],
       agendaMd,
     };
     startTransition(async () => {
@@ -306,23 +341,43 @@ export function MeetingForm({
             <span className="text-sm font-medium" id="audience-label">
               Who it&apos;s for
             </span>
-            <div
-              className="flex flex-col gap-2 sm:flex-row"
-              role="group"
-              aria-labelledby="audience-label"
-            >
-              {(["everyone", "roles"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  onClick={() => setMode(m)}
-                  className={optionButton(mode === m)}
-                >
-                  {m === "everyone" ? "Whole camp" : "Chosen roles"}
-                </button>
-              ))}
-            </div>
+            {campWide ? (
+              <div
+                className="flex flex-col gap-2 sm:flex-row"
+                role="group"
+                aria-labelledby="audience-label"
+              >
+                {(teams.length > 0
+                  ? (["everyone", "roles", "teams"] as const)
+                  : (["everyone", "roles"] as const)
+                ).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={mode === m}
+                    onClick={() => setMode(m)}
+                    className={optionButton(mode === m)}
+                  >
+                    {m === "everyone"
+                      ? "Whole camp"
+                      : m === "roles"
+                        ? "Chosen roles"
+                        : "Teams"}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Info
+                  className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                  aria-hidden
+                />
+                {teamLeadNotice(
+                  teams.map((t) => t.name),
+                  "meeting",
+                )}
+              </p>
+            )}
             {mode === "roles" &&
               (roles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -345,6 +400,22 @@ export function MeetingForm({
                   ))}
                 </ToggleGroup>
               ))}
+            {mode === "teams" && (
+              <ToggleGroup
+                type="multiple"
+                variant="outline"
+                value={teamIds}
+                onValueChange={setTeamIds}
+                className="flex-wrap justify-start"
+                aria-label="Teams"
+              >
+                {teams.map((t) => (
+                  <ToggleGroupItem key={t.id} value={t.id}>
+                    {t.name}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            )}
             <p className="text-sm text-muted-foreground">
               Shows to{" "}
               <span className="font-semibold text-foreground">
@@ -352,7 +423,11 @@ export function MeetingForm({
               </span>{" "}
               {mode === "everyone"
                 ? "— everyone in the camp right now, leads included."
-                : `— people in those roles and the camp's ${reach.leads} ${reach.leads === 1 ? "lead" : "leads"}.`}
+                : mode === "teams"
+                  ? teamIds.length === 0
+                    ? `— only the camp's ${reach.leads === 1 ? "lead" : "leads"} until you pick a team.`
+                    : `— ${teamReachPhrase(teamNames)} right now, plus the camp's ${reach.leads === 1 ? "lead" : "leads"}.`
+                  : `— people in those roles and the camp's ${reach.leads} ${reach.leads === 1 ? "lead" : "leads"}.`}
             </p>
           </div>
 

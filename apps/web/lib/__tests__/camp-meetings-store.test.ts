@@ -151,14 +151,25 @@ function queueMembers() {
   );
 }
 
-/** `recipientsFor`: members (two chains), then the camp's roles. */
-function queueRecipients() {
+/** `recipientsFor`: members (two chains), the camp's roles, then the
+ * members' team seats (`loadCampMembers`' last chain). */
+function queueRecipients(seats: unknown[] = []) {
   queueMembers();
-  dbMock.queue(ROLES);
+  dbMock.queue(ROLES, seats);
+}
+
+/** A team as `loadCampTeams` reads it, and a seat as `loadTeamSeats` does. */
+interface TeamRows {
+  teams?: { id: string; name: string; archivedAt: Date | null; sort: number }[];
+  seats?: { teamId: string; isLead: boolean; archivedAt: Date | null }[];
 }
 
 /** `loadMeetingsAccess` for one viewer. */
-function queueAccess(role: MembershipRole | null, held: string[] = []) {
+function queueAccess(
+  role: MembershipRole | null,
+  held: string[] = [],
+  team: TeamRows = {},
+) {
   dbMock.queue([camp()]);
   if (role === null) {
     dbMock.queue([]);
@@ -168,6 +179,9 @@ function queueAccess(role: MembershipRole | null, held: string[] = []) {
     [{ id: "m-viewer", role }],
     ROLES,
     held.map((projectRoleId) => ({ projectRoleId })),
+    // the camp's teams, then the viewer's seats
+    team.teams ?? [],
+    team.seats ?? [],
   );
 }
 
@@ -177,6 +191,7 @@ function queueActor(
   role: MembershipRole | null,
   held: string[] = [],
   username = "Alice Hatter",
+  team: TeamRows = {},
 ) {
   dbMock.queue([camp()]);
   if (role === null) {
@@ -187,6 +202,9 @@ function queueActor(
     [{ membershipId: "m-actor", role, username, groupKind: THEME_CAMP }],
     ROLES,
     held.map((projectRoleId) => ({ projectRoleId })),
+    // the camp's teams, then the actor's seats (both locked)
+    team.teams ?? [],
+    team.seats ?? [],
   );
 }
 
@@ -322,6 +340,7 @@ describe("reads", () => {
     expect(upcoming[0]?.audience).toEqual({
       mode: "roles",
       roleNames: ["Kitchen wizard"],
+      teamNames: [],
     });
   });
 
@@ -600,6 +619,7 @@ describe("scheduling", () => {
           editionId: EDITION.id,
           audience: "everyone",
           roles: 0,
+          teams: 0,
         },
       }),
     ]);
@@ -1033,5 +1053,253 @@ describe("who came", () => {
       ).ok,
     ).toBe(false);
     expect(dbMock.writesTo(schema.campMeetingAttendees)).toHaveLength(0);
+  });
+});
+
+// --- Team audiences (docs/team-audiences-spec.md) ----------------------------
+
+describe("team audiences", () => {
+  const KITCHEN_TEAM = "7e7e7e7e-0000-4000-8000-000000000001";
+  const BUILD_TEAM = "7e7e7e7e-0000-4000-8000-000000000002";
+  const TEAMS = [
+    { id: KITCHEN_TEAM, name: "Kitchen", archivedAt: null, sort: 0 },
+    { id: BUILD_TEAM, name: "Build & strike", archivedAt: null, sort: 1 },
+  ];
+  const KITCHEN_TEAM_ONLY: MeetingAudience = {
+    ...EVERYONE,
+    mode: "teams",
+    roleIds: [],
+    teamIds: [KITCHEN_TEAM],
+  };
+  /** Ren leads the kitchen team, without `schedule_meetings`. */
+  const renLeadsKitchen: TeamRows = {
+    teams: TEAMS,
+    seats: [{ teamId: KITCHEN_TEAM, isLead: true, archivedAt: null }],
+  };
+  const teamForm = {
+    ...form,
+    mode: "teams" as const,
+    teamIds: [KITCHEN_TEAM],
+  };
+
+  it("a team lead may open the form, but not camp-wide", async () => {
+    queueAccess(MEMBER, [], renLeadsKitchen);
+    const a = await store.loadMeetingsAccess("mad-hatters", REN);
+    expect(a?.canSchedule).toBe(true);
+    expect(a?.canScheduleCampWide).toBe(false);
+    expect(a?.viewer.ledTeamIds).toEqual(new Set([KITCHEN_TEAM]));
+    expect(a?.teams.map((t) => t.name)).toEqual(["Kitchen", "Build & strike"]);
+  });
+
+  it("an archived team's seat is not a lead's reach", async () => {
+    queueAccess(MEMBER, [], {
+      teams: TEAMS,
+      seats: [{ teamId: KITCHEN_TEAM, isLead: true, archivedAt: new Date() }],
+    });
+    const a = await store.loadMeetingsAccess("mad-hatters", REN);
+    expect(a?.canSchedule).toBe(false);
+    expect(a?.viewer.teamIds).toEqual(new Set([KITCHEN_TEAM]));
+  });
+
+  it("the list's chip names the teams", async () => {
+    queueAccess(LEAD, [], { teams: TEAMS });
+    const withTeams = await store.loadMeetingsAccess("mad-hatters", ALICE);
+    dbMock.queue(
+      [
+        meetingRow({
+          audience: {
+            ...KITCHEN_TEAM_ONLY,
+            teamIds: [BUILD_TEAM, KITCHEN_TEAM],
+          },
+          date: "2027-04-07",
+        }),
+      ],
+      [],
+    );
+    const { upcoming } = await store.listCampMeetings(
+      withTeams!,
+      EDITION,
+      new Date("2027-03-25T10:00:00Z"),
+    );
+    expect(upcoming[0]?.audience).toEqual({
+      mode: "teams",
+      roleNames: [],
+      // The camp's list order (TEAMS), not the stored uuid order.
+      teamNames: ["Kitchen", "Build & strike"],
+    });
+  });
+
+  it("a team lead schedules for their team; the seat read is held FOR SHARE", async () => {
+    queueActor(MEMBER, [], "Ren Notfound", renLeadsKitchen);
+    dbMock.queue([{ id: MEETING }], /* audit */ []);
+    // recipients: members, assignments, roles, then seats (Jabu is on it)
+    queueRecipients([
+      { teamId: KITCHEN_TEAM, groupId: CAMP, userId: JABU },
+      { teamId: KITCHEN_TEAM, groupId: CAMP, userId: REN },
+    ]);
+    const r = await store.createCampMeeting(REN, EDITION, teamForm);
+    expect(r).toEqual({ ok: true, id: MEETING, version: 1 });
+    expect(
+      dbMock.writesTo(schema.campMeetings)[0]!.arg("values"),
+    ).toMatchObject({ audience: KITCHEN_TEAM_ONLY, createdByUserId: REN });
+    // The seat read is the one that joins team_members, inside the write.
+    const seatRead = dbMock
+      .queriesTouching(schema.teamMembers)
+      .find((q) => q.tx && q.called("for"))!;
+    expect(seatRead.arg("for")).toBe("share");
+    expect(audits()[0]).toMatchObject({
+      meta: { audience: "teams", roles: 0, teams: 1 },
+    });
+    // The team and the camp's lead hear of it; the scheduler does not.
+    expect(
+      notices()
+        .map((n) => n.userId)
+        .sort(),
+    ).toEqual([ALICE, JABU].sort());
+  });
+
+  it("a camp lead's team pick reads the camp's team rows FOR SHARE, before any seat", async () => {
+    // Alice is on no team, so her own seats lock nothing: only the camp-wide
+    // team read can make a concurrent archive wait (or be what she sees).
+    queueActor(LEAD, [], "Alice Hatter", { teams: TEAMS });
+    dbMock.queue([{ id: MEETING }], /* audit */ []);
+    queueRecipients();
+    expect((await store.createCampMeeting(ALICE, EDITION, teamForm)).ok).toBe(
+      true,
+    );
+    const inTx = dbMock.queries.filter((q) => q.tx);
+    // The camp's teams: from shift_teams with no join to team_members.
+    const teamRead = inTx.findIndex(
+      (q) => q.arg("from") === schema.shiftTeams && !q.called("innerJoin"),
+    );
+    const seatRead = inTx.findIndex(
+      (q) =>
+        q.arg("from") === schema.teamMembers &&
+        q.arg("innerJoin") === schema.shiftTeams,
+    );
+    expect(teamRead).toBeGreaterThanOrEqual(0);
+    expect(inTx[teamRead]!.arg("for")).toBe("share");
+    // Team rows before seats, the order camp-teams-store.ts locks in.
+    expect(seatRead).toBeGreaterThan(teamRead);
+  });
+
+  it("a team lead may not schedule for another team, or the whole camp", async () => {
+    queueActor(MEMBER, [], "Ren Notfound", renLeadsKitchen);
+    expect(
+      await store.createCampMeeting(REN, EDITION, {
+        ...teamForm,
+        teamIds: [BUILD_TEAM],
+      }),
+    ).toEqual({
+      ok: false,
+      error: "You can only schedule meetings for the teams you lead.",
+    });
+    dbMock.reset();
+    queueActor(MEMBER, [], "Ren Notfound", renLeadsKitchen);
+    expect(await store.createCampMeeting(REN, EDITION, form)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("Only the camp's leads"),
+    });
+    expect(dbMock.queriesOfKind("insert")).toHaveLength(0);
+  });
+
+  it("a member who leads no team is refused before any write", async () => {
+    queueActor(MEMBER, [], "Ren Notfound", { teams: TEAMS });
+    expect((await store.createCampMeeting(REN, EDITION, teamForm)).ok).toBe(
+      false,
+    );
+    expect(dbMock.queriesOfKind("insert")).toHaveLength(0);
+  });
+
+  it("a team lead edits their team's meeting, and cannot widen it", async () => {
+    const edit = { ...teamForm, id: MEETING, expectedVersion: 2 };
+    queueActor(MEMBER, [], "Ren Notfound", renLeadsKitchen);
+    dbMock.queue([
+      meetingRow({ audience: KITCHEN_TEAM_ONLY, createdByUserId: ALICE }),
+    ]);
+    expect(
+      await store.updateCampMeeting(REN, EDITION, {
+        ...edit,
+        teamIds: [KITCHEN_TEAM, BUILD_TEAM],
+      }),
+    ).toEqual({
+      ok: false,
+      error: "You can only schedule meetings for the teams you lead.",
+    });
+    expect(dbMock.queriesOfKind("update")).toHaveLength(0);
+
+    dbMock.reset();
+    queueActor(MEMBER, [], "Ren Notfound", renLeadsKitchen);
+    dbMock.queue([
+      meetingRow({ audience: KITCHEN_TEAM_ONLY, createdByUserId: ALICE }),
+    ]);
+    queueRecipients();
+    dbMock.queue([{ version: 3 }], /* audit */ []);
+    queueRecipients();
+    expect(
+      await store.updateCampMeeting(REN, EDITION, { ...edit, title: "Menu" }),
+    ).toEqual({ ok: true, version: 3 });
+  });
+
+  it("a camp lead may keep a team archived since on the meeting", async () => {
+    const edit = { ...teamForm, id: MEETING, expectedVersion: 2 };
+    queueActor(LEAD, [], "Alice Hatter", {
+      teams: [{ ...TEAMS[0]!, archivedAt: new Date() }, TEAMS[1]!],
+    });
+    dbMock.queue([meetingRow({ audience: KITCHEN_TEAM_ONLY })]);
+    queueRecipients();
+    dbMock.queue([{ version: 3 }], []);
+    queueRecipients();
+    expect(await store.updateCampMeeting(ALICE, EDITION, edit)).toEqual({
+      ok: true,
+      version: 3,
+    });
+    // ...but may not add an archived team to a meeting that did not have it.
+    dbMock.reset();
+    queueActor(LEAD, [], "Alice Hatter", {
+      teams: [{ ...TEAMS[0]!, archivedAt: new Date() }, TEAMS[1]!],
+    });
+    dbMock.queue([meetingRow()]);
+    expect(await store.updateCampMeeting(ALICE, EDITION, edit)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("doesn't exist any more"),
+    });
+  });
+
+  it("a team meeting shows to its team, and is hidden from everyone else", async () => {
+    queueAccess(MEMBER, [], {
+      teams: TEAMS,
+      seats: [{ teamId: KITCHEN_TEAM, isLead: false, archivedAt: null }],
+    });
+    const onTeam = await store.loadMeetingsAccess("mad-hatters", JABU);
+    dbMock.queue([meetingRow({ audience: KITCHEN_TEAM_ONLY })]);
+    const seen = await store.loadCampMeeting(onTeam!, EDITION, MEETING);
+    expect(seen?.audienceTeamIds).toEqual([KITCHEN_TEAM]);
+    expect(seen?.canEdit).toBe(false);
+
+    dbMock.reset();
+    queueAccess(MEMBER, [], {
+      teams: TEAMS,
+      seats: [{ teamId: BUILD_TEAM, isLead: true, archivedAt: null }],
+    });
+    const offTeam = await store.loadMeetingsAccess("mad-hatters", JABU);
+    dbMock.queue([meetingRow({ audience: KITCHEN_TEAM_ONLY })]);
+    expect(await store.loadCampMeeting(offTeam!, EDITION, MEETING)).toBeNull();
+  });
+});
+
+// The schedule form's reach count (docs/team-audiences-spec.md): every seat
+// on THIS camp's teams, archived included — a meeting for an archived team
+// still shows to its members, so the count must see them too.
+describe("listCampTeamSeats", () => {
+  it("joins seats to their team and keys the read on this camp", async () => {
+    const seats = [{ teamId: "t-kitchen", groupId: CAMP, userId: "u-cook" }];
+    dbMock.queue(seats);
+    expect(await store.listCampTeamSeats(CAMP)).toEqual(seats);
+    const [read] = dbMock.queries;
+    expect(read!.arg("from")).toBe(schema.teamMembers);
+    expect(read!.called("innerJoin")).toBe(true);
+    expect(boundStrings(read!)).toContain(CAMP);
+    expect(nullChecksOn(read!, schema.shiftTeams.archivedAt)).toEqual([]);
   });
 });

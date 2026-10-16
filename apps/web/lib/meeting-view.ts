@@ -4,6 +4,7 @@ import {
   isInMeetingAudience,
   isPermissionBackstop,
   shiftDateLabel,
+  teamAudienceLabel,
   type ShiftPhase,
 } from "@quagga/core";
 import type { MembershipRole } from "@quagga/types";
@@ -126,12 +127,17 @@ export function displayLink(url: string): string {
   return url.replace(/^https:\/\//i, "").replace(/\/$/, "");
 }
 
-/** The audience chip: "Whole camp", or the chosen roles' names. */
+/** The audience chip: "Whole camp", the chosen roles' names, or the chosen
+ * teams ("Kitchen team", "Kitchen + Build & strike"). */
 export function audienceChipLabel(audience: {
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   roleNames: readonly string[];
+  teamNames?: readonly string[];
 }): string {
   if (audience.mode === "everyone") return "Whole camp";
+  if (audience.mode === "teams") {
+    return teamAudienceLabel(audience.teamNames ?? []);
+  }
   if (audience.roleNames.length === 0) return "Chosen roles";
   return audience.roleNames.join(", ");
 }
@@ -141,6 +147,8 @@ export interface ReachMember {
   role: MembershipRole;
   /** Role ids held with ACCEPTED consent. */
   roleIds: readonly string[];
+  /** Teams of the camp they are on. Absent = none. */
+  teamIds?: readonly string[];
 }
 
 /**
@@ -151,7 +159,11 @@ export interface ReachMember {
  */
 export function meetingReach(
   members: readonly ReachMember[],
-  audience: { mode: "everyone" | "roles"; roleIds: readonly string[] },
+  audience: {
+    mode: "everyone" | "roles" | "teams";
+    roleIds: readonly string[];
+    teamIds?: readonly string[];
+  },
   baselineRoleId: string | null,
 ): { total: number; leads: number } {
   const leads = members.filter((m) => isPermissionBackstop(m.role)).length;
@@ -159,13 +171,19 @@ export function meetingReach(
   const stored = {
     kind: "project" as const,
     groupId: "",
-    mode: "roles" as const,
-    roleIds: [...audience.roleIds],
+    mode: audience.mode,
+    roleIds: audience.mode === "roles" ? [...audience.roleIds] : [],
+    teamIds: audience.mode === "teams" ? [...(audience.teamIds ?? [])] : [],
   };
   const total = members.filter(
     (m) =>
       isPermissionBackstop(m.role) ||
-      isInMeetingAudience(stored, new Set(m.roleIds), baselineRoleId),
+      isInMeetingAudience(
+        stored,
+        new Set(m.roleIds),
+        baselineRoleId,
+        new Set(m.teamIds ?? []),
+      ),
   ).length;
   return { total, leads };
 }

@@ -16,6 +16,14 @@ import {
   ToggleGroupItem,
 } from "@quagga/ui/components/toggle-group";
 import { cn } from "@quagga/ui/lib/utils";
+import {
+  chosenTeamNames,
+  teamLeadNotice,
+  teamMemberCount,
+  announcementTeamReach,
+  type TeamOption,
+} from "@/lib/team-audience-view";
+import { offeredAudienceRoleIds } from "@/lib/meeting-view";
 import type { AnnouncementActionResult } from "@/app/(app)/camps/[slug]/announcements/actions";
 
 // The camp announcement composer (epic #56). NEEDS DESIGN REVIEW — built from
@@ -36,8 +44,10 @@ export interface ComposerDraft {
   id: string;
   title: string;
   bodyMd: string;
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   roleIds: string[];
+  /** Chosen camp teams, when `mode` is `teams`. */
+  teamIds?: string[];
   presentation: AnnouncementPresentation;
   pinOnPublish: boolean;
   meetingUrl: string | null;
@@ -45,10 +55,22 @@ export interface ComposerDraft {
   sendAt: string | null;
 }
 
+/** What this sender may address, from the server's own predicate. */
 export interface ComposerScope {
   canTargetEveryone: boolean;
   targetableRoleIds: string[];
+  /** Teams this sender may address (docs/team-audiences-spec.md). */
+  targetableTeamIds: string[];
+  /** A team lead without `post_announcements`: only "By team", only their
+   * teams, with the one-line reason (frame knWLt, state 1). */
+  teamsOnly: boolean;
+  /** May require acknowledgement of the whole camp / the roles offered. */
   mayRequireAck: boolean;
+  /** Teams this sender may require acknowledgement of — every targetable team
+   * for a holder of `mayRequireAck`, and the teams they lead for anyone else
+   * (Ryan, 16 Oct 2026). A by-team pick may require it when every chosen
+   * team is here. */
+  ackTeamIds: string[];
 }
 
 type SaveAction = (
@@ -77,12 +99,15 @@ function fromLocalInput(value: string): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
+/** The camp announcement composer: title, message, audience, how it lands. */
 export function AnnouncementComposer({
   slug,
   roles,
+  teams,
   members,
   scope,
   draft,
+  initialTeamIds,
   schedulingEnabled,
   saveAction,
   publishAction,
@@ -90,10 +115,17 @@ export function AnnouncementComposer({
 }: {
   slug: string;
   roles: ComposerRole[];
-  /** Per member, the role ids they hold (for the live "resolves to" count). */
-  members: { roleIds: string[] }[];
+  /** The camp's live teams the picker lists (only the sender's own for a
+   * team lead without the camp-wide permission). */
+  teams: TeamOption[];
+  /** Per member, the role ids they hold and the teams they are on (for the
+   * live "resolves to" count). */
+  members: { roleIds: string[]; teamIds?: string[] }[];
   scope: ComposerScope;
   draft?: ComposerDraft;
+  /** A new announcement opened from a team page: start on "By team" with
+   * this team chosen. Ignored when editing a draft. */
+  initialTeamIds?: string[];
   /** Is a scheduler wired to the dispatch route? Off hides "Send later"
    * entirely (the server refuses a send time anyway). */
   schedulingEnabled: boolean;
@@ -105,10 +137,21 @@ export function AnnouncementComposer({
   const [pending, startTransition] = React.useTransition();
   const [title, setTitle] = React.useState(draft?.title ?? "");
   const [bodyMd, setBodyMd] = React.useState(draft?.bodyMd ?? "");
-  const [mode, setMode] = React.useState<"everyone" | "roles">(
-    draft?.mode ?? (scope.canTargetEveryone ? "everyone" : "roles"),
+  const startTeams = draft
+    ? offeredAudienceRoleIds(draft.teamIds ?? [], teams)
+    : (initialTeamIds ?? []);
+  const [mode, setMode] = React.useState<"everyone" | "roles" | "teams">(
+    scope.teamsOnly
+      ? "teams"
+      : (draft?.mode ??
+          (startTeams.length > 0
+            ? "teams"
+            : scope.canTargetEveryone
+              ? "everyone"
+              : "roles")),
   );
   const [roleIds, setRoleIds] = React.useState<string[]>(draft?.roleIds ?? []);
+  const [teamIds, setTeamIds] = React.useState<string[]>(startTeams);
   const [presentation, setPresentation] =
     React.useState<AnnouncementPresentation>(draft?.presentation ?? "feed");
   const [pinOnPublish, setPinOnPublish] = React.useState(
@@ -120,6 +163,23 @@ export function AnnouncementComposer({
   );
 
   const targetable = new Set(scope.targetableRoleIds);
+  const targetableTeams = new Set(scope.targetableTeamIds);
+  const ackTeams = new Set(scope.ackTeamIds);
+  // Must-acknowledge follows the audience: a team lead may gate the teams
+  // they lead, so for "By team" it depends on the pick (none picked yet reads
+  // as allowed if any team could be — the publish refuses an empty pick).
+  const mayRequireAck =
+    mode === "teams"
+      ? teamIds.length > 0
+        ? teamIds.every((id) => ackTeams.has(id))
+        : ackTeams.size > 0
+      : scope.mayRequireAck;
+  // An audience change that rules it out falls back to the inbox, rather
+  // than leaving a choice selected that the server would refuse.
+  if (!mayRequireAck && presentation === "acknowledge") {
+    setPresentation("feed");
+  }
+  const teamNames = chosenTeamNames(teams, teamIds);
   const base = `/camps/${slug}/announcements`;
 
   // The live count EXCLUDES nobody the server would include except the author
@@ -128,10 +188,11 @@ export function AnnouncementComposer({
   // publish result states the real number.
   const resolvedCount = React.useMemo(() => {
     if (mode === "everyone") return members.length;
+    if (mode === "teams") return teamMemberCount(members, teamIds);
     if (roleIds.length === 0) return 0;
     const wanted = new Set(roleIds);
     return members.filter((m) => m.roleIds.some((id) => wanted.has(id))).length;
-  }, [mode, roleIds, members]);
+  }, [mode, roleIds, teamIds, members]);
 
   function payload() {
     return {
@@ -141,6 +202,7 @@ export function AnnouncementComposer({
       bodyMd,
       mode,
       roleIds: mode === "roles" ? roleIds : [],
+      teamIds: mode === "teams" ? teamIds : [],
       presentation,
       pinOnPublish,
       meetingUrl: meetingUrl.trim(),
@@ -236,20 +298,43 @@ export function AnnouncementComposer({
 
         <div className="flex flex-col gap-3">
           <span className="text-sm font-medium">Who it goes to</span>
-          <div className="flex gap-2">
-            {(["everyone", "roles"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={mode === m}
-                disabled={m === "everyone" && !scope.canTargetEveryone}
-                onClick={() => setMode(m)}
-                className={optionButton(mode === m)}
-              >
-                {m === "everyone" ? "Everyone in this camp" : "By role"}
-              </button>
-            ))}
-          </div>
+          {scope.teamsOnly ? (
+            <p className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                aria-hidden
+              />
+              {teamLeadNotice(
+                teams.map((t) => t.name),
+                "announcement",
+              )}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {(teams.length > 0
+                ? (["everyone", "roles", "teams"] as const)
+                : (["everyone", "roles"] as const)
+              ).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  disabled={
+                    (m === "everyone" && !scope.canTargetEveryone) ||
+                    (m === "teams" && targetableTeams.size === 0)
+                  }
+                  onClick={() => setMode(m)}
+                  className={optionButton(mode === m)}
+                >
+                  {m === "everyone"
+                    ? "Everyone in this camp"
+                    : m === "roles"
+                      ? "By role"
+                      : "By team"}
+                </button>
+              ))}
+            </div>
+          )}
           {mode === "roles" &&
             (roles.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -281,12 +366,39 @@ export function AnnouncementComposer({
                 ))}
               </ToggleGroup>
             ))}
+          {mode === "teams" && (
+            <ToggleGroup
+              type="multiple"
+              variant="outline"
+              value={teamIds}
+              onValueChange={setTeamIds}
+              className="flex-wrap justify-start"
+              aria-label="Teams"
+            >
+              {teams.map((t) => (
+                <ToggleGroupItem
+                  key={t.id}
+                  value={t.id}
+                  disabled={!targetableTeams.has(t.id)}
+                  title={
+                    targetableTeams.has(t.id)
+                      ? undefined
+                      : "You can only send to the teams you lead"
+                  }
+                >
+                  {t.name}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
           <p className="text-sm text-muted-foreground">
             Reaches about{" "}
             <span className="font-semibold text-foreground">
               {resolvedCount} {resolvedCount === 1 ? "member" : "members"}
             </span>{" "}
-            right now — current members only, never pending invitees.
+            {mode === "teams"
+              ? announcementTeamReach(teamNames)
+              : "right now — current members only, never pending invitees."}
           </p>
         </div>
 
@@ -307,7 +419,12 @@ export function AnnouncementComposer({
             <button
               type="button"
               aria-pressed={presentation === "acknowledge"}
-              disabled={!scope.mayRequireAck}
+              disabled={!mayRequireAck}
+              title={
+                !mayRequireAck && mode === "teams"
+                  ? "Only for the teams you lead"
+                  : undefined
+              }
               onClick={() => setPresentation("acknowledge")}
               className={optionButton(presentation === "acknowledge")}
             >
@@ -368,8 +485,14 @@ export function AnnouncementComposer({
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => save(true)} disabled={pending}>
+        {/* Full-width and stacked on a phone, as the meeting form's actions
+            are (frame y2O4gf). */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button
+            onClick={() => save(true)}
+            disabled={pending}
+            className="w-full sm:w-auto"
+          >
             <Send className="h-4 w-4" aria-hidden />
             {sendAtLocal ? "Schedule announcement" : "Publish announcement"}
           </Button>
@@ -377,11 +500,17 @@ export function AnnouncementComposer({
             variant="secondary"
             onClick={() => save(false)}
             disabled={pending}
+            className="w-full sm:w-auto"
           >
             Save draft
           </Button>
           {draft && (
-            <Button variant="ghost" onClick={remove} disabled={pending}>
+            <Button
+              variant="ghost"
+              onClick={remove}
+              disabled={pending}
+              className="w-full sm:w-auto"
+            >
               <Trash2 className="h-4 w-4" aria-hidden />
               Delete draft
             </Button>

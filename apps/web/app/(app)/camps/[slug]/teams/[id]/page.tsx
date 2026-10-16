@@ -5,6 +5,8 @@ import {
   ArrowRight,
   Archive,
   CalendarClock,
+  CalendarPlus,
+  Megaphone,
   Crown,
   FileText,
   Lock,
@@ -92,6 +94,11 @@ export default async function CampTeamPage({
     .filter((s) => s.teamId === team.id && s.date >= today)
     .slice(0, UPCOMING_SHIFTS);
   const base = `/camps/${camp.slug}/teams`;
+  // "Post to the team" / "Schedule a team meeting" (docs/team-audiences-spec.md,
+  // frame Yzft0): the team's leads and the camp's leads — exactly who
+  // `canManage` names — and never on an archived team, which no new send may
+  // name. The forms and their actions re-decide every pick server-side.
+  const showShortcuts = team.canManage && !team.archived;
   const firstLead = team.leads[0]?.displayName ?? null;
 
   return (
@@ -159,6 +166,29 @@ export default async function CampTeamPage({
           </>
         }
       />
+
+      {showShortcuts && (
+        <div className="-mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link
+              href={`/camps/${camp.slug}/announcements/new?team=${team.id}`}
+            >
+              <Megaphone className="h-4 w-4" aria-hidden />
+              Post to the team
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href={`/camps/${camp.slug}/meetings/new?team=${team.id}`}>
+              <CalendarPlus className="h-4 w-4" aria-hidden />
+              Schedule a team meeting
+            </Link>
+          </Button>
+          {/* Desktop only: the phone frame (IyeIT) drops the hint. */}
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            Opens the form with this team already chosen.
+          </span>
+        </div>
+      )}
 
       {team.archived && (
         <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -374,7 +404,9 @@ export default async function CampTeamPage({
         <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         Every member of the camp sees this page and who is in the team. Only the
         team&apos;s members read its chat — not AfrikaBurn, and not camp leads
-        unless they join the team.
+        unless they join the team. Team leads and camp leads see Post to the
+        team, Schedule a team meeting, Edit team, Add people and Remove; other
+        members see the page without them.
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MeetingUrl } from "./notifications";
+import { AUDIENCE_MAX_TEAMS } from "./audience";
 
 // Camp meetings and calendar (docs/camp-meetings-spec.md). This file is the
 // VALIDATION authority for every meeting input crossing a server-action
@@ -35,8 +36,11 @@ export const MeetingAudience = z
   .object({
     kind: z.literal("project"),
     groupId: z.string().uuid(),
-    mode: z.enum(["everyone", "roles"]),
+    mode: z.enum(["everyone", "roles", "teams"]),
     roleIds: z.array(z.string().uuid()).max(MEETING_MAX_ROLES),
+    /** Camp teams (`shift_teams.id`), only when `mode` is `teams`. Absent on
+     * every meeting stored before team audiences. */
+    teamIds: z.array(z.string().uuid()).max(AUDIENCE_MAX_TEAMS).optional(),
   })
   .strict();
 export type MeetingAudience = z.infer<typeof MeetingAudience>;
@@ -100,8 +104,9 @@ const MeetingFields = {
     .nullable()
     .default(null)
     .transform((v) => (v ? v.replace(/^https:/i, "https:") : null)),
-  mode: z.enum(["everyone", "roles"]),
+  mode: z.enum(["everyone", "roles", "teams"]),
   roleIds: z.array(z.string().uuid()).max(MEETING_MAX_ROLES).default([]),
+  teamIds: z.array(z.string().uuid()).max(AUDIENCE_MAX_TEAMS).default([]),
   agendaMd: z
     .string()
     .max(MEETING_AGENDA_MAX, "That agenda is too long.")

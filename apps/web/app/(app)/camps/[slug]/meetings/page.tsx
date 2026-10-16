@@ -152,8 +152,8 @@ export default async function CampMeetingsPage({
 
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        Only members of the camp see its meetings. A meeting for chosen roles
-        shows only to people in those roles, the camp&apos;s leads and whoever
+        Only members of the camp see its meetings. A meeting for chosen roles or
+        teams shows only to people in them, the camp&apos;s leads and whoever
         scheduled it.
       </p>
     </div>

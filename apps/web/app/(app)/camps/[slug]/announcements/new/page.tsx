@@ -4,6 +4,7 @@ import { Button } from "@quagga/ui/components/button";
 import { PreviewNotice } from "@/components/preview-notice";
 import { AnnouncementComposer } from "@/components/announcements/composer";
 import { announcementSchedulingEnabled } from "@/lib/announcements-store";
+import { preselectedTeamIds } from "@/lib/team-audience-view";
 import { composerData, loadAnnouncementsContext } from "../context";
 import {
   deleteAnnouncementDraftAction,
@@ -11,16 +12,21 @@ import {
   saveAnnouncementDraftAction,
 } from "../actions";
 
-// /camps/[slug]/announcements/new — compose (epic #56). NEEDS DESIGN REVIEW.
+// /camps/[slug]/announcements/new — compose (epic #56; team audience frame
+// knWLt / y2O4gf). `?team=<id>` (the team page's "Post to the team") starts on
+// "By team" with that team chosen, when the sender may address it.
 
 export const dynamic = "force-dynamic";
 
+/** The composer for a new camp announcement. */
 export default async function NewCampAnnouncementPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ team?: string | string[] }>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const ctx = await loadAnnouncementsContext(slug);
   if (ctx.kind === "preview") {
     return <PreviewNotice feature="Camp announcements" />;
@@ -44,8 +50,13 @@ export default async function NewCampAnnouncementPage({
       <AnnouncementComposer
         slug={camp.slug}
         roles={data.roles}
+        teams={data.teams}
         members={data.members}
         scope={data.scope}
+        initialTeamIds={preselectedTeamIds(
+          query.team,
+          data.teams.filter((t) => data.scope.targetableTeamIds.includes(t.id)),
+        )}
         schedulingEnabled={announcementSchedulingEnabled()}
         saveAction={saveAnnouncementDraftAction}
         publishAction={publishAnnouncementAction}

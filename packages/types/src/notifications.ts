@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AudienceSpec } from "./audience";
+import { AUDIENCE_MAX_TEAMS, AudienceSpecWithoutTeams } from "./audience";
 
 // Notifications & bulletins (docs/notifications-spec.md). One inbox, two
 // origins: personal event notifications + org `bulletin` broadcasts. This file
@@ -61,7 +61,7 @@ export type NotificationPayload = z.infer<typeof NotificationPayload>;
 export const BulletinComposeInput = z.object({
   title: z.string().trim().min(1, "Give the bulletin a title.").max(200),
   bodyMd: z.string().trim().min(1, "Write the bulletin body.").max(20000),
-  audience: AudienceSpec,
+  audience: AudienceSpecWithoutTeams,
   pinned: z.boolean().default(false),
   publish: z.boolean().default(false),
 });
@@ -120,8 +120,10 @@ export const CampAnnouncementDraftInput = z.object({
     .trim()
     .min(1, "Write the announcement.")
     .max(20000, "That announcement is too long."),
-  mode: z.enum(["everyone", "roles"]),
+  mode: z.enum(["everyone", "roles", "teams"]),
   roleIds: z.array(z.string().uuid()).max(100).default([]),
+  /** Camp teams (`shift_teams.id`), read only when `mode` is `teams`. */
+  teamIds: z.array(z.string().uuid()).max(AUDIENCE_MAX_TEAMS).default([]),
   presentation: AnnouncementPresentation.default("feed"),
   pinOnPublish: z.boolean().default(false),
   /** Empty string from the form means "no link". */

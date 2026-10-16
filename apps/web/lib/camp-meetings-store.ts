@@ -7,6 +7,7 @@ import {
   buildMeetingIcs,
   canEditMeeting,
   canEditMeetingNotes,
+  canScheduleAnyMeeting,
   canScheduleMeetings,
   canViewMeeting,
   decideMeetingAudience,
@@ -22,12 +23,16 @@ import {
   meetingRefusalMessage,
   meetingScheduledNotification,
   meetingsAvailableForGroup,
+  meetingTeamReach,
   meetingTimingChanged,
   meetingUpdateNotices,
   nextMeeting,
   publicMemberName,
   resolveMeetingRecipients,
   splitMeetings,
+  teamNamesFor,
+  audienceTeamIds,
+  type AudienceTeamMember,
   type CalendarDay,
   type MeetingAccessFacts,
   type MeetingNoticeContext,
@@ -57,6 +62,11 @@ import { insertNotifications } from "./notifications";
 // pure @quagga/core function (camp-meetings.ts); this file loads the facts
 // those functions read — from the database, never from the request — and
 // performs the writes.
+//
+// TEAMS (docs/team-audiences-spec.md). A meeting may be for chosen camp
+// teams. Every viewer and every member a decision is made about carries the
+// teams they are on; a team lead without `schedule_meetings` schedules and
+// edits only for the live teams they lead, read from seats held FOR SHARE.
 //
 // SCOPING. A request names a camp by slug and a meeting by id. The viewer's
 // ACTIVE membership of that camp is resolved first (`loadMeetingsAccess` for
@@ -114,6 +124,15 @@ export interface MeetingRoleOption {
   kind: ProjectRoleKind;
 }
 
+/** One of the camp's teams, for the audience picker and the chip. */
+export interface MeetingTeamOption {
+  id: string;
+  name: string;
+  /** Archived teams are never offered for a new pick, but still name the
+   * chip of a meeting that was for them. */
+  archived: boolean;
+}
+
 /** The viewer's standing in one camp, resolved for every meeting read. */
 export interface MeetingsAccess {
   camp: MeetingCamp;
@@ -121,7 +140,14 @@ export interface MeetingsAccess {
   baselineRoleId: string | null;
   /** Every role of the camp, baseline included. */
   roles: MeetingRoleOption[];
+  /** Every team of the camp, archived included. */
+  teams: MeetingTeamOption[];
+  /** May open "Schedule a meeting": `schedule_meetings`, or a lead of a live
+   * team (docs/team-audiences-spec.md). */
   canSchedule: boolean;
+  /** Camp-wide: may pick the whole camp, roles, or any team. False for a team
+   * lead without `schedule_meetings`, who may pick only `viewer.ledTeamIds`. */
+  canScheduleCampWide: boolean;
 }
 
 type Handle = Tx | ReturnType<typeof db>;
@@ -198,6 +224,108 @@ function permissionsFor(
   return { structuralRole: role, rolePermissions };
 }
 
+/**
+ * Every team of the camp, archived included. With `lock`, the team rows are
+ * held `FOR SHARE` for the caller's transaction, so a team archived while a
+ * write is in flight waits for it or is what it sees — the "no new pick of an
+ * archived team" rule then holds for teams the writer is not on too.
+ */
+async function loadCampTeams(
+  handle: Handle,
+  groupId: string,
+  lock = false,
+): Promise<MeetingTeamOption[]> {
+  const query = handle
+    .select({
+      id: schema.shiftTeams.id,
+      name: schema.shiftTeams.name,
+      archivedAt: schema.shiftTeams.archivedAt,
+      sort: schema.shiftTeams.sort,
+    })
+    .from(schema.shiftTeams)
+    .where(eq(schema.shiftTeams.groupId, groupId))
+    .orderBy(asc(schema.shiftTeams.sort), asc(schema.shiftTeams.name));
+  const rows = lock ? await query.for("share") : await query;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    archived: r.archivedAt !== null,
+  }));
+}
+
+/**
+ * One person's seats on this camp's teams: every team they are on (archived
+ * included — a meeting for an archived team stays visible to its members) and
+ * the live teams they lead. With `lock`, the seats and their team rows are
+ * held `FOR SHARE` for the caller's transaction, as every person-keyed write
+ * here holds what it decided on: a lead removed, or a team archived, while a
+ * write is in flight waits for it or is what it sees.
+ */
+async function loadTeamSeats(
+  handle: Handle,
+  groupId: string,
+  userId: string,
+  lock: boolean,
+): Promise<{ teamIds: Set<string>; ledTeamIds: Set<string> }> {
+  const query = handle
+    .select({
+      teamId: schema.teamMembers.teamId,
+      isLead: schema.teamMembers.isLead,
+      archivedAt: schema.shiftTeams.archivedAt,
+    })
+    .from(schema.teamMembers)
+    .innerJoin(
+      schema.shiftTeams,
+      eq(schema.shiftTeams.id, schema.teamMembers.teamId),
+    )
+    .where(
+      and(
+        eq(schema.shiftTeams.groupId, groupId),
+        eq(schema.teamMembers.userId, userId),
+      ),
+    );
+  const rows = lock
+    ? await query.for("share", { of: [schema.shiftTeams, schema.teamMembers] })
+    : await query;
+  return {
+    teamIds: new Set(rows.map((r) => r.teamId)),
+    ledTeamIds: new Set(
+      rows
+        .filter((r) => r.isLead && r.archivedAt === null)
+        .map((r) => r.teamId),
+    ),
+  };
+}
+
+/** Every seat on this camp's teams (archived teams included). */
+async function loadCampTeamSeats(
+  handle: Handle,
+  groupId: string,
+): Promise<AudienceTeamMember[]> {
+  return handle
+    .select({
+      teamId: schema.teamMembers.teamId,
+      groupId: schema.shiftTeams.groupId,
+      userId: schema.teamMembers.userId,
+    })
+    .from(schema.teamMembers)
+    .innerJoin(
+      schema.shiftTeams,
+      eq(schema.shiftTeams.id, schema.teamMembers.teamId),
+    )
+    .where(eq(schema.shiftTeams.groupId, groupId));
+}
+
+/**
+ * Every seat on this camp's teams, archived teams included — the schedule
+ * form's reach count. A read for the screen; every write re-decides.
+ */
+export async function listCampTeamSeats(
+  groupId: string,
+): Promise<AudienceTeamMember[]> {
+  return loadCampTeamSeats(db(), groupId);
+}
+
 function campFacts(roles: readonly CampRoleRow[]): {
   baselineRoleId: string | null;
   campRoleIds: Set<string>;
@@ -239,13 +367,24 @@ export async function loadMeetingsAccess(
     loadCampRoles(db(), group.id),
     loadHeldRoleIds(db(), m.id),
   ]);
+  const teams = await loadCampTeams(db(), group.id);
+  const seats = await loadTeamSeats(db(), group.id, viewerUserId, false);
   const membership = permissionsFor(m.role, roles, held);
+  const viewer = {
+    userId: viewerUserId,
+    membership,
+    heldRoleIds: held,
+    teamIds: seats.teamIds,
+    ledTeamIds: seats.ledTeamIds,
+  };
   return {
     camp: { id: group.id, name: group.name, slug: group.slug },
-    viewer: { userId: viewerUserId, membership, heldRoleIds: held },
+    viewer,
     baselineRoleId: campFacts(roles).baselineRoleId,
     roles: roles.map((r) => ({ id: r.id, name: r.name, kind: r.kind })),
-    canSchedule: canScheduleMeetings(membership),
+    teams,
+    canSchedule: canScheduleAnyMeeting(viewer),
+    canScheduleCampWide: canScheduleMeetings(membership),
   };
 }
 
@@ -294,9 +433,11 @@ interface MeetingRow {
 
 /** Who the meeting's audience is, as the list's chip shows it. */
 export interface MeetingAudienceView {
-  mode: "everyone" | "roles";
+  mode: "everyone" | "roles" | "teams";
   /** The chosen roles' names (roles deleted since are left out). */
   roleNames: string[];
+  /** The chosen teams' names (archived kept, deleted left out). */
+  teamNames: string[];
 }
 
 /** One row of the meetings list (frame G1). */
@@ -325,14 +466,25 @@ function accessFacts(row: MeetingRow): MeetingAccessFacts {
 function audienceView(
   audience: MeetingAudience,
   roles: readonly MeetingRoleOption[],
+  teams: readonly MeetingTeamOption[],
 ): MeetingAudienceView {
-  if (audience.mode === "everyone") return { mode: "everyone", roleNames: [] };
+  if (audience.mode === "everyone") {
+    return { mode: "everyone", roleNames: [], teamNames: [] };
+  }
+  if (audience.mode === "teams") {
+    return {
+      mode: "teams",
+      roleNames: [],
+      teamNames: teamNamesFor(audienceTeamIds(audience), teams),
+    };
+  }
   const byId = new Map(roles.map((r) => [r.id, r.name]));
   return {
     mode: "roles",
     roleNames: audience.roleIds
       .map((id) => byId.get(id))
       .filter((n): n is string => n !== undefined),
+    teamNames: [],
   };
 }
 
@@ -377,7 +529,7 @@ async function attendeeCounts(
 
 function toListItem(
   row: MeetingRow,
-  roles: readonly MeetingRoleOption[],
+  access: Pick<MeetingsAccess, "roles" | "teams">,
   counts: ReadonlyMap<string, number>,
 ): MeetingListItem {
   return {
@@ -388,7 +540,7 @@ function toListItem(
     durationMinutes: row.durationMinutes,
     location: row.location,
     videoLink: row.videoLink,
-    audience: audienceView(row.audience, roles),
+    audience: audienceView(row.audience, access.roles, access.teams),
     cancelledAt: row.cancelledAt,
     attendeeCount: counts.get(row.id) ?? 0,
     hasNotes: row.notesMd.trim().length > 0,
@@ -404,7 +556,7 @@ export async function listCampMeetings(
 ): Promise<{ upcoming: MeetingListItem[]; past: MeetingListItem[] }> {
   const rows = await visibleMeetings(access, edition);
   const counts = await attendeeCounts(rows.map((r) => r.id));
-  const items = rows.map((r) => toListItem(r, access.roles, counts));
+  const items = rows.map((r) => toListItem(r, access, counts));
   return splitMeetings(items, now);
 }
 
@@ -416,7 +568,7 @@ export async function getNextCampMeeting(
 ): Promise<MeetingListItem | null> {
   const rows = await visibleMeetings(access, edition);
   const next = nextMeeting(rows, now);
-  return next ? toListItem(next, access.roles, new Map()) : null;
+  return next ? toListItem(next, access, new Map()) : null;
 }
 
 /** A person on the meeting page, by public name only. */
@@ -432,6 +584,7 @@ export interface MeetingDetail extends MeetingListItem {
   version: number;
   /** The stored audience, for the edit form. */
   audienceRoleIds: string[];
+  audienceTeamIds: string[];
   createdByName: string | null;
   cancelledByName: string | null;
   notesUpdatedAt: Date | null;
@@ -476,9 +629,12 @@ interface CampMember {
   name: string;
   sanitized: boolean;
   heldRoleIds: Set<string>;
+  /** Every team of the camp they are on (archived included). */
+  teamIds: Set<string>;
 }
 
-/** The camp's current members and the roles each holds (accepted). */
+/** The camp's current members, the roles each holds (accepted) and the
+ * teams each is on. */
 async function loadCampMembers(
   handle: Handle,
   groupId: string,
@@ -513,6 +669,13 @@ async function loadCampMembers(
         ),
       ),
   ]);
+  const seats = await loadCampTeamSeats(handle, groupId);
+  const teamsOf = new Map<string, Set<string>>();
+  for (const seat of seats) {
+    const set = teamsOf.get(seat.userId) ?? new Set<string>();
+    set.add(seat.teamId);
+    teamsOf.set(seat.userId, set);
+  }
   const held = new Map<string, Set<string>>();
   for (const a of assignments) {
     const set = held.get(a.membershipId) ?? new Set<string>();
@@ -526,6 +689,7 @@ async function loadCampMembers(
     name: publicMemberName(m.username, { sanitizedAt: m.sanitizedAt }),
     sanitized: m.sanitizedAt !== null,
     heldRoleIds: held.get(m.membershipId) ?? new Set<string>(),
+    teamIds: teamsOf.get(m.userId) ?? new Set<string>(),
   }));
 }
 
@@ -536,6 +700,7 @@ function memberAsViewer(m: CampMember): MeetingViewer {
     userId: m.userId,
     membership: { structuralRole: m.role, rolePermissions: [] },
     heldRoleIds: m.heldRoleIds,
+    teamIds: m.teamIds,
   };
 }
 
@@ -618,11 +783,12 @@ export async function loadCampMeeting(
 
   const nameOf = (id: string | null) => (id ? (names.get(id) ?? null) : null);
   return {
-    ...toListItem(row, access.roles, new Map([[row.id, attendees.length]])),
+    ...toListItem(row, access, new Map([[row.id, attendees.length]])),
     agendaMd: row.agendaMd,
     notesMd: row.notesMd,
     version: row.version,
     audienceRoleIds: row.audience.mode === "roles" ? row.audience.roleIds : [],
+    audienceTeamIds: audienceTeamIds(row.audience),
     createdByName: nameOf(row.createdByUserId),
     cancelledByName: nameOf(row.cancelledByUserId),
     notesUpdatedAt: row.notesUpdatedAt,
@@ -738,6 +904,8 @@ interface MeetingActor {
   viewer: MeetingViewer & { membership: PermissionMembership };
   baselineRoleId: string | null;
   campRoleIds: Set<string>;
+  /** This camp's teams that are not archived. */
+  liveTeamIds: Set<string>;
 }
 
 /**
@@ -776,6 +944,10 @@ async function lockMeetingActor(
     loadCampRoles(tx, groupId),
     loadHeldRoleIds(tx, row.membershipId),
   ]);
+  // After the membership lock, as in camp-teams-store.ts and the announcements
+  // store: every team row of the camp FOR SHARE, then the actor's own seats.
+  const teams = await loadCampTeams(tx, groupId, true);
+  const seats = await loadTeamSeats(tx, groupId, userId, true);
   const { baselineRoleId, campRoleIds } = campFacts(roles);
   return {
     userId,
@@ -784,9 +956,12 @@ async function lockMeetingActor(
       userId,
       membership: permissionsFor(row.role, roles, held),
       heldRoleIds: held,
+      teamIds: seats.teamIds,
+      ledTeamIds: seats.ledTeamIds,
     },
     baselineRoleId,
     campRoleIds,
+    liveTeamIds: new Set(teams.filter((t) => !t.archived).map((t) => t.id)),
   };
 }
 
@@ -842,6 +1017,10 @@ async function recipientsFor(
     loadCampMembers(tx, groupId),
     loadCampRoles(tx, groupId),
   ]);
+  // Seats of current members only (the resolver narrows to them regardless).
+  const teamMembers: AudienceTeamMember[] = members.flatMap((m) =>
+    [...m.teamIds].map((teamId) => ({ teamId, groupId, userId: m.userId })),
+  );
   return resolveMeetingRecipients(
     meeting,
     {
@@ -864,6 +1043,7 @@ async function recipientsFor(
         kind: r.kind,
         officerKey: (r.officerKey as OfficerKey | null) ?? null,
       })),
+      teamMembers,
       excludedUserIds: new Set(
         members.filter((m) => m.sanitized).map((m) => m.userId),
       ),
@@ -956,12 +1136,15 @@ export async function createCampMeeting(
     input.slug,
     viewerUserId,
     async (tx, { camp, actor, notices }) => {
-      if (!canScheduleMeetings(actor.viewer.membership)) {
+      // `schedule_meetings`, or a team lead — for the teams they lead only,
+      // which decideMeetingAudience enforces against the seats locked above.
+      if (!canScheduleAnyMeeting(actor.viewer)) {
         return refused("not_scheduler");
       }
       const audience = decideMeetingAudience(
-        { mode: input.mode, roleIds: input.roleIds },
+        { mode: input.mode, roleIds: input.roleIds, teamIds: input.teamIds },
         { groupId: camp.id, ...actorCamp(actor) },
+        meetingTeamReach(actor.viewer),
       );
       if (!audience.ok) return refused(audience.reason);
       const [row] = await tx
@@ -988,6 +1171,7 @@ export async function createCampMeeting(
         editionId: edition.id,
         audience: audience.audience.mode,
         roles: audience.audience.roleIds.length,
+        teams: audienceTeamIds(audience.audience).length,
       });
       const recipients = await recipientsFor(
         tx,
@@ -1009,13 +1193,22 @@ export async function createCampMeeting(
   );
 }
 
-function actorCamp(actor: MeetingActor): {
+function actorCamp(
+  actor: MeetingActor,
+  stored?: MeetingAudience,
+): {
   campRoleIds: Set<string>;
   baselineRoleId: string | null;
+  teams: { liveTeamIds: Set<string>; keepTeamIds: Set<string> };
 } {
   return {
     campRoleIds: actor.campRoleIds,
     baselineRoleId: actor.baselineRoleId,
+    teams: {
+      liveTeamIds: actor.liveTeamIds,
+      // On an edit, the teams already chosen stay valid even if archived.
+      keepTeamIds: new Set(stored ? audienceTeamIds(stored) : []),
+    },
   };
 }
 
@@ -1045,9 +1238,12 @@ export async function updateCampMeeting(
         expectedVersion: input.expectedVersion,
       });
       if (refusal) return refused(refusal);
+      // A team lead's edit stays within their teams: canEditMeeting held the
+      // stored audience to that, and the reach here holds the new one to it.
       const audience = decideMeetingAudience(
-        { mode: input.mode, roleIds: input.roleIds },
-        { groupId: camp.id, ...actorCamp(actor) },
+        { mode: input.mode, roleIds: input.roleIds, teamIds: input.teamIds },
+        { groupId: camp.id, ...actorCamp(actor, current.audience) },
+        meetingTeamReach(actor.viewer),
       );
       if (!audience.ok) return refused(audience.reason);
 
@@ -1083,6 +1279,7 @@ export async function updateCampMeeting(
         timingChanged,
         audience: audience.audience.mode,
         roles: audience.audience.roleIds.length,
+        teams: audienceTeamIds(audience.audience).length,
       });
       const after = await recipientsFor(
         tx,
