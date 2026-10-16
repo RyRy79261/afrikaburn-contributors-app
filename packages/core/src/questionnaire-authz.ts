@@ -61,6 +61,9 @@ export function canAuthorAudience(
   orgGroupId: string,
 ): boolean {
   if (spec.kind === "project") {
+    // Teams are an audience for camp announcements and meetings only
+    // (docs/team-audiences-spec.md); questionnaires refuse them here.
+    if (spec.mode === "teams") return false;
     return isProjectAdmin(memberships, spec.groupId);
   }
   return isOrgAuthor(memberships, orgGroupId);
@@ -107,7 +110,8 @@ export function canManageProjectRoles(
 /**
  * The project_role ids a ProjectAudience targets for scope-checking. "everyone"
  * (baseline) resolves to the baseline role id — targeting the whole camp IS
- * targeting the baseline (questionnaire-spec §"Role kinds").
+ * targeting the baseline (questionnaire-spec §"Role kinds"). "teams" targets
+ * no role at all, so no role scope ever covers it.
  */
 export function projectAudienceTargetRoleIds(
   audience: ProjectAudience,
@@ -116,6 +120,8 @@ export function projectAudienceTargetRoleIds(
   if (audience.mode === "everyone") {
     return baselineRoleId ? [baselineRoleId] : [];
   }
+  // A team audience targets no ROLE: role scopes never cover it.
+  if (audience.mode === "teams") return [];
   return [...audience.roleIds];
 }
 
@@ -136,6 +142,9 @@ export function canAuthorProjectQuestionnaire(
   blocking: boolean,
   baselineRoleId: string | null,
 ): boolean {
+  // Questionnaires and onboarding take no team audience, not even from a lead
+  // (docs/team-audiences-spec.md §"Not built").
+  if (audience.mode === "teams") return false;
   if (isPermissionBackstop(m.structuralRole)) return true;
   if (audience.mode === "everyone" && !baselineRoleId) return false;
   const targetRoleIds = projectAudienceTargetRoleIds(audience, baselineRoleId);

@@ -57,6 +57,25 @@ describe("meetingReach", () => {
     ).toBe(2);
   });
 
+  it("counts a chosen team's members plus the leads; holding a role is not enough", () => {
+    const TEAM = "44444444-4444-4444-8444-444444444444";
+    const withTeams: ReachMember[] = [
+      ...members,
+      { role: "member", roleIds: [], teamIds: [TEAM] },
+      { role: "lead", roleIds: [], teamIds: [TEAM] },
+    ];
+    expect(
+      meetingReach(
+        withTeams,
+        { mode: "teams", roleIds: [KITCHEN], teamIds: [TEAM] },
+        BASELINE,
+      ),
+    ).toEqual({ total: 4, leads: 3 });
+    expect(
+      meetingReach(withTeams, { mode: "teams", roleIds: [] }, BASELINE).total,
+    ).toBe(3);
+  });
+
   it("treats the baseline role as everyone", () => {
     expect(
       meetingReach(members, { mode: "roles", roleIds: [BASELINE] }, BASELINE)
@@ -134,6 +153,23 @@ describe("meeting labels", () => {
     ).toBe("Kitchen, Sound");
     expect(audienceChipLabel({ mode: "roles", roleNames: [] })).toBe(
       "Chosen roles",
+    );
+    expect(
+      audienceChipLabel({
+        mode: "teams",
+        roleNames: [],
+        teamNames: ["Kitchen"],
+      }),
+    ).toBe("Kitchen team");
+    expect(
+      audienceChipLabel({
+        mode: "teams",
+        roleNames: [],
+        teamNames: ["Kitchen", "Build & strike"],
+      }),
+    ).toBe("Kitchen + Build & strike");
+    expect(audienceChipLabel({ mode: "teams", roleNames: [] })).toBe(
+      "Deleted team",
     );
   });
 });

@@ -254,3 +254,7 @@ export * from "./camp-meetings";
 // team, joining by join mode, the team chat's read/send/timer/report gates
 // (the direct-message law, extended), the history cut and block hiding. PURE.
 export * from "./camp-teams";
+// Team audiences (docs/team-audiences-spec.md): announcements and meetings
+// addressed to camp teams — who may pick which teams (team leads: only their
+// own), the chip label. PURE.
+export * from "./team-audience";

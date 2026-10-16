@@ -24,7 +24,12 @@ export default async function EditMeetingPage({
   const { access, edition, meetingEdition, user } = ctx;
   const meeting = await loadCampMeeting(access, meetingEdition, id);
   if (!meeting || !meeting.canEdit || meeting.cancelledAt) notFound();
-  const { roles, members } = await meetingFormData(access, edition.id, user.id);
+  const { roles, teams, members } = await meetingFormData(
+    access,
+    edition.id,
+    user.id,
+    meeting.audienceTeamIds,
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -36,6 +41,8 @@ export default async function EditMeetingPage({
       <MeetingForm
         slug={access.camp.slug}
         roles={roles}
+        teams={teams}
+        campWide={access.canScheduleCampWide}
         members={members}
         baselineRoleId={access.baselineRoleId}
         initial={{
@@ -49,6 +56,7 @@ export default async function EditMeetingPage({
           videoLink: meeting.videoLink,
           mode: meeting.audience.mode,
           roleIds: offeredAudienceRoleIds(meeting.audienceRoleIds, roles),
+          teamIds: offeredAudienceRoleIds(meeting.audienceTeamIds, teams),
           agendaMd: meeting.agendaMd,
         }}
       />

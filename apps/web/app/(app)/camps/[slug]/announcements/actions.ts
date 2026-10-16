@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   ANNOUNCEMENT_MESSAGES,
+  canComposeCampAnnouncements,
   canSendCampAnnouncement,
-  hasProjectPermission,
   validateSendAt,
 } from "@quagga/core";
 import {
@@ -63,7 +63,13 @@ async function requireSender(
   const camp = await campForSlug(slug);
   if (!camp) return { ok: false, error: "Camp not found." };
   const sender = await getSenderContext(camp.id, user.id);
-  if (!sender || !hasProjectPermission(sender.perms, "post_announcements")) {
+  // A team lead without `post_announcements` is a sender too — for the teams
+  // they lead only (docs/team-audiences-spec.md); `canSendCampAnnouncement`
+  // holds them to that below and again inside the publish transaction.
+  if (
+    !sender ||
+    !canComposeCampAnnouncements(sender.perms, sender.teams.ledTeamIds)
+  ) {
     return { ok: false, error: NOT_A_SENDER };
   }
   return { ok: true, groupId: camp.id, userId: user.id, sender };
@@ -98,6 +104,9 @@ export async function saveAnnouncementDraftAction(
     groupId: gate.groupId,
     mode: input.mode,
     roleIds: input.mode === "roles" ? input.roleIds : [],
+    ...(input.mode === "teams"
+      ? { teamIds: [...new Set(input.teamIds)].sort() }
+      : {}),
   };
   if (
     !canSendCampAnnouncement(gate.sender.perms, {
@@ -106,6 +115,7 @@ export async function saveAnnouncementDraftAction(
       presentation: input.presentation,
       baselineRoleId: gate.sender.baselineRoleId,
       campRoleIds: gate.sender.campRoleIds,
+      teams: gate.sender.teams,
     })
   ) {
     return {
@@ -113,7 +123,9 @@ export async function saveAnnouncementDraftAction(
       error:
         input.mode === "roles" && input.roleIds.length === 0
           ? "Pick at least one role, or send to the whole camp."
-          : ANNOUNCEMENT_MESSAGES.notAllowed,
+          : input.mode === "teams" && input.teamIds.length === 0
+            ? "Pick at least one team."
+            : ANNOUNCEMENT_MESSAGES.notAllowed,
     };
   }
 

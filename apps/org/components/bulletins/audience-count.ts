@@ -8,7 +8,7 @@ import {
   resolveBulletinAudience,
   type AuthzMembership,
 } from "@quagga/core";
-import { AudienceSpec } from "@quagga/types";
+import { AudienceSpecWithoutTeams } from "@quagga/types";
 
 import { buildAudienceContext } from "@/lib/questionnaires/queries";
 import { requireOrgSession, type OrgSession } from "@/lib/session";
@@ -32,7 +32,8 @@ import { requireOrgSession, type OrgSession } from "@/lib/session";
 // never the security boundary.
 
 const PreviewInput = z.object({
-  audience: AudienceSpec,
+  // Org bulletins never take a camp-team audience (docs/team-audiences-spec.md).
+  audience: AudienceSpecWithoutTeams,
   editionId: z.string().uuid(),
 });
 

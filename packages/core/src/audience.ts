@@ -19,6 +19,7 @@ import type {
   RoleAssignmentConsent,
 } from "@quagga/types";
 import { PROJECT_ADMIN_ROLES } from "@quagga/types";
+import type { AudienceTeamMember } from "./team-audience";
 
 /** A membership row, trimmed to what audience resolution needs. */
 export interface AudienceMembership {
@@ -96,6 +97,12 @@ export interface AudienceContext {
    * Optional so callers that never target suppliers still type-check; absent ⇒
    * empty (a bulletin to suppliers then reaches nobody, a valid outcome). */
   suppliers?: readonly AudienceSupplier[];
+  /** Camp team seats (`team_members`), for a project audience with
+   * `mode: "teams"` (camp announcements and meetings only). Optional: a
+   * caller that does not load them — every questionnaire and onboarding path,
+   * which refuse team audiences at their boundary — resolves a team audience
+   * to nobody, never to everyone. */
+  teamMembers?: readonly AudienceTeamMember[];
 }
 
 const LEAD_ADMIN = new Set<MembershipRole>(PROJECT_ADMIN_ROLES);
@@ -218,6 +225,21 @@ function resolveProjectAudience(
       (tenure === null || (m.tenure !== undefined && tenure.has(m.tenure))),
   );
   if (mode === "everyone") return inGroup.map((m) => m.userId);
+
+  if (mode === "teams") {
+    // Seats on any chosen team of THIS camp. A deleted team has no seats and
+    // reaches nobody; an archived one keeps its seats. Only a current member
+    // (`inGroup`) is ever returned, whatever seat rows the caller passed.
+    const wantedTeams = new Set(spec.teamIds ?? []);
+    if (wantedTeams.size === 0) return [];
+    const onTeam = new Set<string>();
+    for (const t of ctx.teamMembers ?? []) {
+      if (t.groupId === groupId && wantedTeams.has(t.teamId)) {
+        onTeam.add(t.userId);
+      }
+    }
+    return inGroup.filter((m) => onTeam.has(m.userId)).map((m) => m.userId);
+  }
 
   const wanted = new Set(roleIds);
   if (wanted.size === 0) return [];
