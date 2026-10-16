@@ -39,7 +39,10 @@ duplicate" hint on the roster.
   created_at, updated_at, edited_by) — several notes per member, newest first.
   Keyed by (camp, user), not membership, so archive keeps them; `leaveCamp`
   and account erasure delete them in their transactions.
-- No table for duplicates: the hint is computed on read.
+- Duplicate hints are computed on read (never stored). Only a dismissal is
+  stored: `member_duplicate_dismissals` (camp, user_a, user_b; the pair
+  ordered so each pair has one row), so a dismissed pair is not flagged
+  again.
 
 ## Rules (`@quagga/core`, server-side)
 
