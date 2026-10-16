@@ -33,6 +33,7 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
       expect(hasProjectPermission(m, "manage_money")).toBe(true);
       expect(hasProjectPermission(m, "manage_layout")).toBe(true);
       expect(hasProjectPermission(m, "schedule_meetings")).toBe(true);
+      expect(hasProjectPermission(m, "member_notes")).toBe(true);
     }
     expect(isPermissionBackstop("lead")).toBe(true);
     expect(isPermissionBackstop("member")).toBe(false);
@@ -55,6 +56,7 @@ describe("lead/admin backstop — irrevocable, no self-lockout", () => {
     ).toBe(true);
     expect(allProjectPermissions().manage_layout).toBe(true);
     expect(allProjectPermissions().schedule_meetings).toBe(true);
+    expect(allProjectPermissions().member_notes).toBe(true);
   });
 });
 
@@ -318,6 +320,15 @@ describe("roleGrantsElevatedPrivileges — escalation guard for assignment", () 
     ).toBe(true);
     expect(
       roleGrantsElevatedPrivileges("custom", { schedule_meetings: false }),
+    ).toBe(false);
+  });
+
+  it("member_notes is elevating: it opens the camp's private notes on everyone", () => {
+    expect(roleGrantsElevatedPrivileges("custom", { member_notes: true })).toBe(
+      true,
+    );
+    expect(
+      roleGrantsElevatedPrivileges("custom", { member_notes: false }),
     ).toBe(false);
   });
 

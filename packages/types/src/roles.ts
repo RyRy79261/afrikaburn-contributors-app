@@ -277,6 +277,10 @@ export const ProjectPermissionKey = z.enum([
   // camp's meetings, and write the agenda, notes and "who came" on any
   // meeting the holder can see. Every member in a meeting's audience READS it.
   "schedule_meetings",
+  // Member records (docs/member-records-spec.md): read and write the camp's
+  // PRIVATE notes about its members. Never the member, never other members,
+  // never the org. A welfare lead is the usual holder.
+  "member_notes",
 ]);
 export type ProjectPermissionKey = z.infer<typeof ProjectPermissionKey>;
 
@@ -328,6 +332,7 @@ export const ProjectPermissions = z.object({
   manage_money: z.boolean().optional(),
   manage_layout: z.boolean().optional(),
   schedule_meetings: z.boolean().optional(),
+  member_notes: z.boolean().optional(),
 });
 export type ProjectPermissions = z.infer<typeof ProjectPermissions>;
 
@@ -342,6 +347,7 @@ export const PROJECT_PERMISSION_LABELS: Record<ProjectPermissionKey, string> = {
   manage_money: "Manage money",
   manage_layout: "Edit the camp layout",
   schedule_meetings: "Schedule meetings",
+  member_notes: "Keep private member notes",
 };
 
 // --- Officer catalog (questionnaire-spec §"Officer roles") -----------------

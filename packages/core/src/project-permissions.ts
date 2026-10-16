@@ -158,6 +158,7 @@ export function allProjectPermissions(): ProjectPermissions {
     manage_money: true,
     manage_layout: true,
     schedule_meetings: true,
+    member_notes: true,
   };
 }
 
@@ -211,6 +212,9 @@ export function roleGrantsElevatedPrivileges(
     // `schedule_meetings` sends notices to the whole camp, writes the notes
     // that become the camp's record and ticks who came. Handing that out is
     // a lead's decision too.
-    permissions.schedule_meetings === true
+    permissions.schedule_meetings === true ||
+    // `member_notes` opens the camp's private notes about every member
+    // (docs/member-records-spec.md): who reads those is a lead's decision.
+    permissions.member_notes === true
   );
 }
