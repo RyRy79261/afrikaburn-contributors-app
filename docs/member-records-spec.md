@@ -3,7 +3,7 @@
 | Field                  | Value                                                         |
 | ---------------------- | ------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                              |
-| **Doc status**         | Draft — for review before build                               |
+| **Doc status**         | Active                                                        |
 | **Normative language** | Descriptive only                                              |
 | **Requirement IDs**    | Partial — App Spec §4 `CDB-025`, `CDB-034`, `CDB-038`, `CDB-040` |
 | **Owner / Updated**    | Ryan, 2026-10-16                                              |
@@ -28,6 +28,10 @@ duplicate" hint on the roster.
   hard-locked fields are never compared.
 - **Retention**: notes stay while a member is archived (they may come back);
   leaving the camp or deleting the account deletes them.
+
+- Frames: R1 profile with private notes `Ka9U0` / `r7hFMv`, R1b plain
+  camp-mate view `Z7GfV0` / `TvN1a`, R2 roster with notes and duplicate chips
+  `cMHOt` / `Xdabl`.
 
 ## Model
 
