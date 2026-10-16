@@ -765,7 +765,7 @@ export async function dismissDuplicate(
         pair: [current(userA), current(userB)],
       });
       if (!decision.ok) return refused(decision);
-      await tx
+      const inserted = await tx
         .insert(schema.memberDuplicateDismissals)
         .values({
           groupId: camp.id,
@@ -773,7 +773,11 @@ export async function dismissDuplicate(
           userBId: userB,
           dismissedByUserId: viewerUserId,
         })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ groupId: schema.memberDuplicateDismissals.groupId });
+      // Already dismissed (a double click, two leads at once): a no-op, and
+      // so no second audit row for a dismissal that did not happen.
+      if (inserted.length === 0) return { ok: true };
       await audit(
         tx,
         viewerUserId,

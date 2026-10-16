@@ -825,7 +825,7 @@ describe("dismissing a possible duplicate", () => {
       campRow,
       [person(ALICE, LEAD), thandi, thandiDube],
       ...rolesFor(null),
-      [],
+      [{ groupId: CAMP }],
       [],
     );
     expect(
@@ -850,6 +850,25 @@ describe("dismissing a possible duplicate", () => {
       subject: CAMP,
       meta: { groupId: CAMP, userIds: [JABU, LERATO] },
     });
+  });
+
+  // Regression (member-records review): a repeat dismissal inserted nothing
+  // but still wrote an audit row for a dismissal that did not happen.
+  it("a pair already dismissed is a no-op: ok, and no second audit row", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), thandi, thandiDube],
+      ...rolesFor(null),
+      [],
+    );
+    expect(
+      await store.dismissDuplicate(ALICE, {
+        slug: SLUG,
+        userIds: [JABU, LERATO],
+      }),
+    ).toEqual({ ok: true });
+    expect(dbMock.writesTo(schema.memberDuplicateDismissals)).toHaveLength(1);
+    expect(auditRows()).toHaveLength(0);
   });
 
   it("refuses a pair whose names are not similar, so no row can be planted", async () => {
