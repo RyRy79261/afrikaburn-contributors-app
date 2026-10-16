@@ -27,7 +27,9 @@ import { loadCampRoster } from "@/lib/roster-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { RosterFilters } from "@/components/roster/roster-filters";
 import { RosterTable } from "@/components/roster/roster-table";
+import { loadRosterMemberRecords } from "@/lib/member-records-store";
 import { archiveMemberAction, restoreMemberAction } from "../actions";
+import { dismissDuplicateAction } from "../member-records-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -161,12 +163,21 @@ export default async function CampRosterPage({
 
   await enforceGate(viewer.id);
 
-  const result = await loadCampRoster({
-    slug: parsed.data.slug,
-    viewerUserId: viewer.id,
-    editionId: edition.id,
-    searchParams: query,
-  });
+  const [result, records] = await Promise.all([
+    loadCampRoster({
+      slug: parsed.data.slug,
+      viewerUserId: viewer.id,
+      editionId: edition.id,
+      searchParams: query,
+    }),
+    // Member records (frame R2): note COUNTS for note people, duplicate
+    // hints for roster viewers — each part decided by @quagga/core in the
+    // store before its rows are read; a part the viewer may not see is null.
+    loadRosterMemberRecords({
+      slug: parsed.data.slug,
+      viewerUserId: viewer.id,
+    }),
+  ]);
   if (!result) notFound();
 
   const { camp, roster, stats, filter, roleOptions, actions } = result;
@@ -251,6 +262,16 @@ export default async function CampRosterPage({
           rows={roster.rows}
           label={former ? "Former members" : "Camp roster"}
           former={former}
+          records={
+            records
+              ? {
+                  slug: camp.slug,
+                  noteCounts: records.noteCounts,
+                  duplicates: records.duplicates,
+                  dismiss: dismissDuplicateAction,
+                }
+              : undefined
+          }
           actions={{
             slug: camp.slug,
             byMembership: actions,

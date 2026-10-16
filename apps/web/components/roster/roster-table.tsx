@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import type { CampRosterRow, RosterBioStatus } from "@quagga/core";
+import type {
+  CampRosterRow,
+  DuplicateCandidate,
+  RosterBioStatus,
+} from "@quagga/core";
 import { ROSTER_ROLE_LABEL } from "@quagga/core";
 import { Badge } from "@quagga/ui/components/badge";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@quagga/ui/components/responsive-data-table";
+import {
+  NoteCountChip,
+  PossibleDuplicateChip,
+  type DismissDuplicateAction,
+} from "@/components/member-records/roster-record-chips";
 import {
   MemberArchiveButton,
   type MemberArchiveAction,
@@ -52,20 +61,55 @@ function yesNo(value: boolean | undefined): string {
   return value ? "Yes" : "No";
 }
 
-const COLUMNS: ResponsiveColumn<CampRosterRow>[] = [
-  {
+/** What member records adds to the rows (docs/member-records-spec.md, frame
+ * R2), exactly as the server's `loadRosterMemberRecords` decided it for THIS
+ * viewer: a null part is one the viewer may not see, and renders nothing. */
+export interface RosterRecordsView {
+  slug: string;
+  /** userId → note COUNT (never text). Note people only. */
+  noteCounts: Record<string, number> | null;
+  /** userId → the similar-named member(s). Roster viewers only. */
+  duplicates: Record<string, DuplicateCandidate[]> | null;
+  dismiss: DismissDuplicateAction;
+}
+
+function nameColumn(
+  records: RosterRecordsView | undefined,
+): ResponsiveColumn<CampRosterRow> {
+  return {
     id: "name",
     header: "Name",
     role: "title",
-    cell: (row) => (
-      <Link
-        href={`/burners/${row.userId}`}
-        className="font-medium underline-offset-2 hover:underline"
-      >
-        {row.displayName}
-      </Link>
-    ),
-  },
+    cell: (row) => {
+      const notes = records?.noteCounts?.[row.userId] ?? 0;
+      const others = records?.duplicates?.[row.userId] ?? [];
+      return (
+        <span className="flex flex-col items-start gap-1">
+          <span className="flex flex-col items-start gap-1 md:flex-row md:flex-wrap md:items-center md:gap-2">
+            <Link
+              href={`/burners/${row.userId}`}
+              className="font-medium underline-offset-2 hover:underline"
+            >
+              {row.displayName}
+            </Link>
+            {notes > 0 && <NoteCountChip count={notes} />}
+          </span>
+          {records && others.length > 0 && (
+            <PossibleDuplicateChip
+              slug={records.slug}
+              userId={row.userId}
+              name={row.displayName}
+              others={others}
+              dismiss={records.dismiss}
+            />
+          )}
+        </span>
+      );
+    },
+  };
+}
+
+const COLUMNS: ResponsiveColumn<CampRosterRow>[] = [
   {
     id: "roles",
     header: "Roles",
@@ -151,20 +195,25 @@ function actionsColumn(
   };
 }
 
+/** The camp roster: one row per member, with the archive / restore action
+ * and the member-records chips the server allowed this viewer. */
 export function RosterTable({
   rows,
   actions,
+  records,
   label = "Camp roster",
   former = false,
 }: {
   rows: CampRosterRow[];
   actions?: RosterRowActions;
+  records?: RosterRecordsView;
   label?: string;
   /** The "Former members" list: no bio is loaded for them (roster-store), so
    * the column would only ever say "Not started" — drop it. */
   former?: boolean;
 }) {
-  const base = former ? COLUMNS.filter((c) => c.id !== "bio") : COLUMNS;
+  const all = [nameColumn(records), ...COLUMNS];
+  const base = former ? all.filter((c) => c.id !== "bio") : all;
   const columns =
     actions && Object.keys(actions.byMembership).length > 0
       ? [...base, actionsColumn(actions)]
