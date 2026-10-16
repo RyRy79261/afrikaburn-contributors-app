@@ -3597,3 +3597,84 @@ export const campMeetingAttendees = pgTable(
     userIdx: index("camp_meeting_attendees_user_idx").on(a.userId),
   }),
 );
+
+// --- Member records (docs/member-records-spec.md) ---------------------------
+//
+// PRIVATE NOTES a camp keeps about one of its people. Read and written only by
+// the camp's leads, co-leads and `member_notes` holders (@quagga/core
+// member-records.ts); never by the member, other members or the org. Keyed by
+// (camp, subject USER), not membership, so archiving a member keeps them (they
+// may come back); `leaveCamp` and account erasure delete them explicitly in
+// their own transactions (apps/web/lib/groups-store.ts, account-sanitize.ts).
+// The author is a users row (set null if it were ever hard-deleted; erasure
+// tombstones the row, so a departed author reads as "Departed Burner").
+export const memberNotes = pgTable(
+  "member_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    subjectUserId: uuid("subject_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    authorUserId: uuid("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Who last edited it (only the author may edit; null until an edit).
+    editedByUserId: uuid("edited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (n) => ({
+    // A member's notes, newest first; and the roster's per-member counts.
+    groupSubjectIdx: index("member_notes_group_subject_idx").on(
+      n.groupId,
+      n.subjectUserId,
+      n.createdAt,
+    ),
+    // Erasure deletes by subject across every camp.
+    subjectIdx: index("member_notes_subject_idx").on(n.subjectUserId),
+    bodyLength: check(
+      "member_notes_body_length",
+      sql`char_length(${n.body}) between 1 and 2000`,
+    ),
+  }),
+);
+
+// A "possible duplicate" hint someone dismissed ("Not the same person"). The
+// hints themselves are computed on read from similar names and never stored;
+// only the dismissal is, once per camp per pair. The pair is ORDERED
+// (user_a < user_b) so each pair has exactly one row, enforced by the check
+// and the primary key. Leaving the camp or erasing either account deletes it.
+export const memberDuplicateDismissals = pgTable(
+  "member_duplicate_dismissals",
+  {
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userAId: uuid("user_a_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userBId: uuid("user_b_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    dismissedByUserId: uuid("dismissed_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (d) => ({
+    pk: primaryKey({ columns: [d.groupId, d.userAId, d.userBId] }),
+    userBIdx: index("member_duplicate_dismissals_user_b_idx").on(d.userBId),
+    userAIdx: index("member_duplicate_dismissals_user_a_idx").on(d.userAId),
+    ordered: check(
+      "member_duplicate_dismissals_ordered_pair",
+      sql`${d.userAId} < ${d.userBId}`,
+    ),
+  }),
+);

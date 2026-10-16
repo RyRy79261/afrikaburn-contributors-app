@@ -464,3 +464,51 @@ describe("camp meetings (migration 0039)", () => {
     expect(pk?.columns.map((c) => c.name)).toEqual(["meeting_id", "user_id"]);
   });
 });
+
+describe("member records (migration 0042)", () => {
+  const fkMap = (table: string) =>
+    (byName.get(table)?.foreignKeys ?? []).map((fk) => ({
+      column: fk.reference().columns[0]!.name,
+      target: getTableConfig(fk.reference().foreignTable).name,
+      onDelete: fk.onDelete,
+    }));
+  const checks = (table: string) =>
+    (byName.get(table)?.checks ?? []).map((c) => c.name).sort();
+
+  it("keys notes by camp and person, never by membership, so archive keeps them", () => {
+    const fks = fkMap("member_notes");
+    expect(fks.map((f) => f.target)).not.toContain("memberships");
+    expect(fks.find((f) => f.column === "group_id")?.onDelete).toBe("cascade");
+    expect(fks.find((f) => f.column === "subject_user_id")?.onDelete).toBe(
+      "cascade",
+    );
+    // An author leaving never takes the camp's note about someone else.
+    expect(fks.find((f) => f.column === "author_user_id")?.onDelete).toBe(
+      "set null",
+    );
+  });
+
+  it("caps a note at 2 000 characters and refuses an empty one", () => {
+    expect(checks("member_notes")).toEqual(["member_notes_body_length"]);
+    const check = byName
+      .get("member_notes")
+      ?.checks.find((c) => c.name === "member_notes_body_length");
+    expect(predicateText(check?.value)).toContain("between 1 and 2000");
+  });
+
+  it("stores one dismissal per ordered pair per camp", () => {
+    const pk = byName.get("member_duplicate_dismissals")?.primaryKeys[0];
+    expect(pk?.columns.map((c) => c.name)).toEqual([
+      "group_id",
+      "user_a_id",
+      "user_b_id",
+    ]);
+    expect(checks("member_duplicate_dismissals")).toEqual([
+      "member_duplicate_dismissals_ordered_pair",
+    ]);
+    const check = byName
+      .get("member_duplicate_dismissals")
+      ?.checks.find((c) => c.name === "member_duplicate_dismissals_ordered_pair");
+    expect(predicateText(check?.value)).toBe("user_a_id < user_b_id");
+  });
+});
