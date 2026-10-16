@@ -10,6 +10,7 @@ import {
 
 import { buildDeletionGuardContext } from "@/lib/account";
 import { removeFromAllTeams } from "@/lib/camp-teams-store";
+import { removeAllMemberRecords } from "@/lib/member-records-store";
 import { db, schema, withTransaction } from "@/lib/db";
 import { isDatabaseConfigured } from "@/lib/config";
 import { sendEmail } from "@/lib/email";
@@ -433,6 +434,12 @@ export async function sanitizeAccount(
     //     (every message this account sent); a direct chat's participant row
     //     stays, so the other person still sees the "Departed Burner" stub.
     await removeFromAllTeams(tx, userId);
+
+    // 2i. MEMBER RECORDS (docs/member-records-spec.md). Every camp's private
+    //     notes about this person, and every "not the same person" dismissal
+    //     naming them. Notes they WROTE about others are the camp's record and
+    //     stay; the author reads as a departed account through the users row.
+    await removeAllMemberRecords(tx, userId);
 
     // 3. Erase every bio row (one per edition). The plan's patch nulls all
     //    personal columns including the hard-locked classes, and replaces the

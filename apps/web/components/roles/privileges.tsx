@@ -43,6 +43,7 @@ export function privilegeSummary(p: ProjectPermissions): string {
   if (p.manage_money) parts.push("Manages money");
   if (p.manage_layout) parts.push("Edits the layout");
   if (p.schedule_meetings) parts.push("Schedules meetings");
+  if (p.member_notes) parts.push("Keeps member notes");
   return parts.length ? parts.join(" · ") : "No extra privileges";
 }
 
@@ -365,6 +366,14 @@ export function PrivilegeToggles({
         onChange={(v) =>
           onChange({ ...value, schedule_meetings: v || undefined })
         }
+      />
+
+      <PrivilegeRow
+        label="Can keep private member notes"
+        hint="Read and write the camp's private notes about its members. The member doesn't see them; neither does anyone else in the camp."
+        checked={!!value.member_notes}
+        disabled={disabled}
+        onChange={(v) => onChange({ ...value, member_notes: v || undefined })}
       />
     </div>
   );

@@ -31,6 +31,7 @@ import type {
 } from "@quagga/types";
 import { activeMembership, formerMembership } from "@quagga/db";
 import { removeFromCampTeams } from "./camp-teams-store";
+import { removeMemberRecordsForCamp } from "./member-records-store";
 import { db, schema, withTransaction, type Tx } from "./db";
 
 /** One category chip on a directory card (org-defined per-edition taxonomy). */
@@ -1053,6 +1054,12 @@ export async function leaveCamp(
     // transaction (docs/camp-teams-spec.md): team rows are keyed by user, so
     // the membership's delete does not cascade to them.
     await removeFromCampTeams(tx, { userId, groupId });
+    // The camp's private notes about them and any "not the same person"
+    // dismissal naming them go too (docs/member-records-spec.md). Keyed by
+    // user, so the membership's delete does not cascade to them; after it,
+    // so a note write racing this one waits on the membership lock and then
+    // finds nobody, or committed first and is deleted here.
+    await removeMemberRecordsForCamp(tx, { userId, groupId });
   });
   return { ok: true };
 }

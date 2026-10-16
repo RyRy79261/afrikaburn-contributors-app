@@ -585,10 +585,19 @@ describe("leaveCamp — the no-lockout backstop on the way out", () => {
       schema.memberships,
       schema.teamMembers,
       schema.conversationParticipants,
+      // The camp's private notes ABOUT them and any duplicate dismissal
+      // naming them (docs/member-records-spec.md) — keyed by user, so these
+      // too go explicitly, after the membership.
+      schema.memberNotes,
+      schema.memberDuplicateDismissals,
     ]);
     for (const d of deletes) {
       expect(d.tx).toBe(true);
       expect(boundStrings(d)).toContain(VIEWER);
+    }
+    // Scoped to THIS camp: another camp's notes about them are its own.
+    for (const d of deletes.slice(3)) {
+      expect(boundStrings(d)).toContain(MAD_HATTERS);
     }
     // Scoped to THIS camp's teams, never every team the person is on: the
     // team subquery the deletes read selects this camp's teams.
