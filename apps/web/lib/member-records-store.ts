@@ -86,6 +86,12 @@ const NOT_FOUND = memberRecordsRefusalMessage("not_found");
 // encrypted at rest exactly like `burner_bios.medical_notes`; with no
 // PGCRYPTO_KEY it is never stored, in plaintext or at all, and the writer is
 // told so rather than shown a success.
+// An edit of a note whose stored text cannot be decrypted (a wrong or rotated
+// PGCRYPTO_KEY): refused, so the edit cannot overwrite words nobody can read.
+// The card hides Edit on such a note; this is the server's own refusal.
+const UNREADABLE_NOTE =
+  "This note can't be read with the site's current encryption key, so it " +
+  "can't be edited. It can still be deleted.";
 const NO_KEY =
   "Private notes can't be saved right now: this site's encryption key isn't " +
   "configured. Nothing was saved. Tell an organiser (PGCRYPTO_KEY is missing).";
@@ -626,6 +632,9 @@ async function noteSubject(
   return row?.subjectUserId ?? null;
 }
 
+/** A locked note: the facts the rules read, and its stored ciphertext. */
+type LockedNote = MemberNoteFacts & { id: string; body: string };
+
 /**
  * The note row `FOR UPDATE`, scoped to this camp, as the rules see it — or
  * null when it does not exist here, or its person is no longer in the camp
@@ -636,12 +645,15 @@ async function lockNote(
   groupId: string,
   noteId: string,
   people: Map<string, LockedPerson>,
-): Promise<(MemberNoteFacts & { id: string }) | null> {
+): Promise<LockedNote | null> {
   const [row] = await tx
     .select({
       id: schema.memberNotes.id,
       subjectUserId: schema.memberNotes.subjectUserId,
       authorUserId: schema.memberNotes.authorUserId,
+      // The stored ciphertext: an edit must never overwrite text this
+      // process cannot read (see editMemberNote).
+      body: schema.memberNotes.body,
     })
     .from(schema.memberNotes)
     .where(
@@ -666,7 +678,7 @@ async function withNoteWrite<T>(
     ctx: {
       camp: RecordsCamp;
       viewer: MemberNotesViewer;
-      note: (MemberNoteFacts & { id: string }) | null;
+      note: LockedNote | null;
       now: Date;
     },
   ) => Promise<MemberRecordsResult<T>>,
@@ -706,6 +718,10 @@ export async function editMemberNote(
     async (tx, { camp, viewer, note, now }) => {
       const decision = decideEditMemberNote(viewer, note);
       if (!decision.ok || !note) return refused(decision);
+      if (!isCryptoConfigured()) return { ok: false, error: NO_KEY };
+      if (decryptField(note.body).state !== "ok") {
+        return { ok: false, error: UNREADABLE_NOTE };
+      }
       const body = encryptNoteBody(input.body);
       if (body === null) return { ok: false, error: NO_KEY };
       await tx

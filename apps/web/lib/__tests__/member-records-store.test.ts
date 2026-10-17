@@ -427,10 +427,15 @@ describe("adding a note", () => {
 });
 
 describe("editing and deleting a note", () => {
-  const note = (authorUserId: string | null, subjectUserId = JABU) => ({
+  const note = (
+    authorUserId: string | null,
+    subjectUserId = JABU,
+    body = encrypt("Great on build week."),
+  ) => ({
     id: NOTE,
     subjectUserId,
     authorUserId,
+    body,
   });
 
   /** findCamp, the note's subject, the lock, the actor's roles, the note. */
@@ -470,6 +475,23 @@ describe("editing and deleting a note", () => {
       meta: { groupId: CAMP, noteId: NOTE, subjectUserId: JABU },
     });
     expect(JSON.stringify(row)).not.toContain("night shifts");
+  });
+
+  // Regression (PR #108 review): only the card hid Edit on a note that could
+  // not be decrypted; the server would still overwrite that ciphertext.
+  it("an edit of a note whose stored text cannot be decrypted is refused, nothing written", async () => {
+    queueNoteWrite(person(REN, MEMBER), note(REN, JABU, "not-ciphertext"), {
+      member_notes: true,
+    });
+    const result = await store.editMemberNote(REN, {
+      slug: SLUG,
+      noteId: NOTE,
+      body: SECRET,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.error).toMatch(/can't be read/i);
+    expect(dbMock.writesTo(schema.memberNotes)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 
   it("with no encryption key, an edit is refused and nothing is written", async () => {
