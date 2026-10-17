@@ -1,0 +1,2 @@
+ALTER TABLE "member_notes" DROP CONSTRAINT "member_notes_body_length";--> statement-breakpoint
+ALTER TABLE "member_notes" ADD CONSTRAINT "member_notes_body_ciphertext_length" CHECK (char_length("member_notes"."body") between 1 and 8040);

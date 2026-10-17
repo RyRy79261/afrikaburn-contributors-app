@@ -3618,6 +3618,10 @@ export const memberNotes = pgTable(
     subjectUserId: uuid("subject_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // ENCRYPTED AT REST, exactly like `burner_bios.medical_notes`: AES-256-GCM
+    // base64 ciphertext via @quagga/db/crypto, encrypted and decrypted at the
+    // apps/web boundary (member-records-store.ts). Never plaintext: with no
+    // PGCRYPTO_KEY a note is refused, not stored (Ryan, 17 Oct 2026).
     body: text("body").notNull(),
     authorUserId: uuid("author_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -3638,9 +3642,13 @@ export const memberNotes = pgTable(
     ),
     // Erasure deletes by subject across every camp.
     subjectIdx: index("member_notes_subject_idx").on(n.subjectUserId),
-    bodyLength: check(
-      "member_notes_body_length",
-      sql`char_length(${n.body}) between 1 and 2000`,
+    // `body` is CIPHERTEXT (see the note on `body` above), so the 2,000-
+    // character cap on the text is enforced by Zod before encryption; this
+    // bounds what a 2,000-character note can encrypt to: Zod counts UTF-16
+    // units (≤ 3 UTF-8 bytes each), so base64(12 + 16 + 6,000 bytes) = 8,040.
+    bodyCiphertextLength: check(
+      "member_notes_body_ciphertext_length",
+      sql`char_length(${n.body}) between 1 and 8040`,
     ),
   }),
 );

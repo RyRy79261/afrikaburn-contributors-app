@@ -488,12 +488,22 @@ describe("member records (migration 0042)", () => {
     );
   });
 
-  it("caps a note at 2 000 characters and refuses an empty one", () => {
-    expect(checks("member_notes")).toEqual(["member_notes_body_length"]);
+  // The body is AES-256-GCM ciphertext (encrypted like medical notes), so the
+  // 2 000-character cap lives in Zod and the column bounds the CIPHERTEXT a
+  // 2 000-character note can produce. A plaintext cap here would refuse every
+  // long note once encrypted.
+  it("bounds the encrypted body and refuses an empty one", async () => {
+    expect(checks("member_notes")).toEqual([
+      "member_notes_body_ciphertext_length",
+    ]);
     const check = byName
       .get("member_notes")
-      ?.checks.find((c) => c.name === "member_notes_body_length");
-    expect(predicateText(check?.value)).toContain("between 1 and 2000");
+      ?.checks.find((c) => c.name === "member_notes_body_ciphertext_length");
+    expect(predicateText(check?.value)).toContain("between 1 and 8040");
+    // The bound holds the worst case: 2 000 three-byte characters, encrypted.
+    process.env.PGCRYPTO_KEY ??= "schema-invariants-test-key";
+    const { encrypt } = await import("../crypto");
+    expect(encrypt("\u20ac".repeat(2000)).length).toBeLessThanOrEqual(8040);
   });
 
   it("stores one dismissal per ordered pair per camp", () => {
