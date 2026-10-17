@@ -16,7 +16,10 @@ import {
 import { Textarea } from "@quagga/ui/components/textarea";
 import { toast } from "@quagga/ui/components/toast";
 import { cn } from "@quagga/ui/lib/utils";
-import type { PrivateNoteItemView } from "@/lib/member-records-view";
+import {
+  settleAction,
+  type PrivateNoteItemView,
+} from "@/lib/member-records-view";
 
 // The Private notes card on a burner's profile (docs/member-records-spec.md,
 // frame R1 `Ka9U0` desktop / `r7hFMv` mobile 360). One card per camp the
@@ -94,7 +97,9 @@ function NoteRow({
 
   function save() {
     startTransition(async () => {
-      const result = await edit({ slug, noteId: note.id, body: draft });
+      const result = await settleAction(() =>
+        edit({ slug, noteId: note.id, body: draft }),
+      );
       if (result.ok) {
         toast.success("Note saved");
         setMode("view");
@@ -107,7 +112,9 @@ function NoteRow({
 
   function destroy() {
     startTransition(async () => {
-      const result = await remove({ slug, noteId: note.id });
+      const result = await settleAction(() =>
+        remove({ slug, noteId: note.id }),
+      );
       if (result.ok) {
         toast.success("Note deleted");
         router.refresh();
@@ -286,11 +293,13 @@ export function PrivateNotesCard({
     e.preventDefault();
     if (!sendable(draft)) return;
     startTransition(async () => {
-      const result = await actions.add({
-        slug: camp.slug,
-        subjectUserId,
-        body: draft,
-      });
+      const result = await settleAction(() =>
+        actions.add({
+          slug: camp.slug,
+          subjectUserId,
+          body: draft,
+        }),
+      );
       if (result.ok) {
         setDraft("");
         toast.success("Note added");
