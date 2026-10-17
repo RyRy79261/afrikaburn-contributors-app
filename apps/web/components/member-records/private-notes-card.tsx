@@ -182,9 +182,16 @@ function NoteRow({
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="flex min-w-0 flex-col gap-1">
               {meta}
-              <p className="whitespace-pre-wrap break-words text-sm">
-                {note.body}
-              </p>
+              {note.unreadable ? (
+                <p className="text-sm italic text-muted-foreground">
+                  This note can&apos;t be read: the site&apos;s encryption key
+                  has changed. Tell an organiser.
+                </p>
+              ) : (
+                <p className="whitespace-pre-wrap break-words text-sm">
+                  {note.body}
+                </p>
+              )}
             </div>
             {mode === "confirm" ? (
               <div className="flex flex-wrap items-center gap-2 sm:shrink-0">

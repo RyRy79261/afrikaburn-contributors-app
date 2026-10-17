@@ -39,6 +39,7 @@ import {
   type ProjectRoleKind,
 } from "@quagga/types";
 import { isDatabaseConfigured } from "./config";
+import { decryptField, isCryptoConfigured, safeEncrypt } from "./crypto-guard";
 import { db, schema, withTransaction, type Tx } from "./db";
 import { getMemberPermissions } from "./roles-store";
 
@@ -81,6 +82,18 @@ export type MemberRecordsResult<T = object> =
 
 const INVALID = "Check the note and try again.";
 const NOT_FOUND = memberRecordsRefusalMessage("not_found");
+// REFUSE, DON'T DROP — the medical-notes rule (bio-store.ts). A note's body is
+// encrypted at rest exactly like `burner_bios.medical_notes`; with no
+// PGCRYPTO_KEY it is never stored, in plaintext or at all, and the writer is
+// told so rather than shown a success.
+const NO_KEY =
+  "Private notes can't be saved right now: this site's encryption key isn't " +
+  "configured. Nothing was saved. Tell an organiser (PGCRYPTO_KEY is missing).";
+
+/** A note's text as stored: AES-256-GCM ciphertext, or null with no key. */
+function encryptNoteBody(text: string): string | null {
+  return isCryptoConfigured() ? safeEncrypt(text) : null;
+}
 
 function refused(decision: MemberRecordsDecision): {
   ok: false;
@@ -284,7 +297,12 @@ async function withRecordsWrite<T>(
 /** One note as the Private notes card shows it. */
 export interface MemberNoteView {
   id: string;
+  /** The decrypted text; "" when `unreadable`. */
   body: string;
+  /** Ciphertext is stored but this process cannot decrypt it (a wrong or
+   * rotated PGCRYPTO_KEY). Shown as such — never as an empty note — and not
+   * editable, so an edit can never overwrite text nobody could read. */
+  unreadable: boolean;
   /** The author's handle ("Departed Burner" for an erased account). */
   authorName: string;
   isOwn: boolean;
@@ -335,9 +353,12 @@ async function loadNotes(
       authorUserId: r.authorUserId,
       subjectUserId,
     };
+    const text = decryptField(r.body);
+    const unreadable = text.state !== "ok";
     return {
       id: r.id,
-      body: r.body,
+      body: text.value ?? "",
+      unreadable,
       authorName: publicMemberName(r.authorUsername, {
         sanitizedAt: r.authorSanitizedAt,
       }),
@@ -345,7 +366,7 @@ async function loadNotes(
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       edited: r.editedByUserId !== null,
-      canEdit: canEditMemberNote(viewer, facts),
+      canEdit: !unreadable && canEditMemberNote(viewer, facts),
       canDelete: canDeleteMemberNote(viewer, facts),
     };
   });
@@ -563,12 +584,14 @@ export async function addMemberNote(
       };
       const decision = decideAddMemberNote(viewer, subject);
       if (!decision.ok) return refused(decision);
+      const body = encryptNoteBody(input.body);
+      if (body === null) return { ok: false, error: NO_KEY };
       const [row] = await tx
         .insert(schema.memberNotes)
         .values({
           groupId: camp.id,
           subjectUserId,
-          body: input.body,
+          body,
           authorUserId: viewerUserId,
           createdAt: now,
           updatedAt: now,
@@ -683,9 +706,11 @@ export async function editMemberNote(
     async (tx, { camp, viewer, note, now }) => {
       const decision = decideEditMemberNote(viewer, note);
       if (!decision.ok || !note) return refused(decision);
+      const body = encryptNoteBody(input.body);
+      if (body === null) return { ok: false, error: NO_KEY };
       await tx
         .update(schema.memberNotes)
-        .set({ body: input.body, editedByUserId: viewerUserId, updatedAt: now })
+        .set({ body, editedByUserId: viewerUserId, updatedAt: now })
         .where(
           and(
             eq(schema.memberNotes.id, note.id),

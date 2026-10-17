@@ -28,6 +28,7 @@ describe("toPrivateNoteItems", () => {
       {
         id: "n2",
         body: "Great on build week",
+        unreadable: false,
         authorName: "Alice Hatter",
         createdAt: new Date("2026-10-12T09:00:00Z"),
         edited: true,
@@ -37,6 +38,7 @@ describe("toPrivateNoteItems", () => {
       {
         id: "n1",
         body: "Asked not to be on night shifts",
+        unreadable: false,
         authorName: "Ren Notfound",
         createdAt: new Date("2026-10-03T09:00:00Z"),
         edited: false,
@@ -48,6 +50,7 @@ describe("toPrivateNoteItems", () => {
       {
         id: "n2",
         body: "Great on build week",
+        unreadable: false,
         authorName: "Alice Hatter",
         dateLabel: "12 Oct 2026",
         edited: true,
@@ -57,6 +60,7 @@ describe("toPrivateNoteItems", () => {
       {
         id: "n1",
         body: "Asked not to be on night shifts",
+        unreadable: false,
         authorName: "Ren Notfound",
         dateLabel: "3 Oct 2026",
         edited: false,

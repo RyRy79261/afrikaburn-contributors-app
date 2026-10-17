@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
+import { decrypt, encrypt } from "@quagga/db/crypto";
 import { MEMBER_RECORDS_AUDIT } from "@quagga/core";
 import {
   GroupKind,
@@ -80,15 +81,28 @@ const perms = (role: string, grant: ProjectPermissions = {}) => ({
   rolePermissions: [{}, grant],
 });
 
+const TEST_KEY = "member-records-test-key-not-a-secret";
+
 beforeEach(() => {
   dbMock.reset();
   getMemberPermissions.mockReset();
   process.env.DATABASE_URL = "postgres://test";
+  // Notes are encrypted at rest like medical notes (@quagga/db/crypto).
+  process.env.PGCRYPTO_KEY = TEST_KEY;
 });
 
 afterEach(() => {
   delete process.env.DATABASE_URL;
+  delete process.env.PGCRYPTO_KEY;
 });
+
+/** The stored body is ciphertext of `text` — never `text` itself. */
+function expectCiphertextOf(stored: unknown, text: string): void {
+  expect(typeof stored).toBe("string");
+  expect(stored).not.toContain(text);
+  expect(stored).not.toContain("night shifts");
+  expect(decrypt(stored as string)).toBe(text);
+}
 
 /** Does the chain's WHERE reference this exact schema column (identity)? */
 function whereMentions(
@@ -135,8 +149,14 @@ describe("adding a note", () => {
       groupId: CAMP,
       subjectUserId: JABU,
       authorUserId: ALICE,
-      body: SECRET,
     });
+    // Encrypted at rest (regression: the body was stored as plaintext).
+    expectCiphertextOf(
+      (insert!.arg("values") as { body: unknown }).body,
+      SECRET,
+    );
+    // No bound value of the insert carries the text either.
+    expect(boundStrings(insert!).join(" ")).not.toContain("night shifts");
     const [row] = auditRows();
     expect(row).toEqual({
       actorId: ALICE,
@@ -147,6 +167,27 @@ describe("adding a note", () => {
     // The audit row never carries the text.
     expect(JSON.stringify(row)).not.toContain("night shifts");
     expect(dbMock.writesTo(schema.auditEvents)[0]!.tx).toBe(true);
+  });
+
+  // Regression (Ryan, 17 Oct 2026: encrypt notes like medical notes). With no
+  // PGCRYPTO_KEY a note is REFUSED — never stored in plaintext, never dropped
+  // behind a success.
+  it("with no encryption key, a note is refused and nothing is written", async () => {
+    delete process.env.PGCRYPTO_KEY;
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+    );
+    const result = await store.addMemberNote(ALICE, {
+      slug: SLUG,
+      subjectUserId: JABU,
+      body: SECRET,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.error).toMatch(/encryption key/i);
+    expect(dbMock.writesTo(schema.memberNotes)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 
   it("locks both people's memberships AND accounts FOR SHARE, erased accounts excluded", async () => {
@@ -419,10 +460,8 @@ describe("editing and deleting a note", () => {
     const [update] = dbMock.writesTo(schema.memberNotes);
     expect(update!.kind).toBe("update");
     expect(update!.tx).toBe(true);
-    expect(update!.arg("set")).toMatchObject({
-      body: SECRET,
-      editedByUserId: REN,
-    });
+    expect(update!.arg("set")).toMatchObject({ editedByUserId: REN });
+    expectCiphertextOf((update!.arg("set") as { body: unknown }).body, SECRET);
     expect(boundStrings(update!)).toEqual(expect.arrayContaining([NOTE, CAMP]));
     const [row] = auditRows();
     expect(row).toMatchObject({
@@ -431,6 +470,19 @@ describe("editing and deleting a note", () => {
       meta: { groupId: CAMP, noteId: NOTE, subjectUserId: JABU },
     });
     expect(JSON.stringify(row)).not.toContain("night shifts");
+  });
+
+  it("with no encryption key, an edit is refused and nothing is written", async () => {
+    delete process.env.PGCRYPTO_KEY;
+    queueNoteWrite(person(REN, MEMBER), note(REN), { member_notes: true });
+    const result = await store.editMemberNote(REN, {
+      slug: SLUG,
+      noteId: NOTE,
+      body: SECRET,
+    });
+    expect(result.ok).toBe(false);
+    expect(dbMock.writesTo(schema.memberNotes)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
   });
 
   it("locks the people FOR SHARE, then the note FOR UPDATE, scoped to this camp", async () => {
@@ -574,7 +626,7 @@ describe("notes on a burner's profile", () => {
   });
   const stored = (over: Record<string, unknown> = {}) => ({
     id: NOTE,
-    body: SECRET,
+    body: encrypt(SECRET),
     authorUserId: REN,
     editedByUserId: null,
     createdAt: new Date("2026-10-03T10:00:00Z"),
@@ -604,12 +656,37 @@ describe("notes on a burner's profile", () => {
       ["Alice Hatter", true, true, true, true],
       ["Ren Notfound", false, false, false, true],
     ]);
+    // Read round-trips: the stored ciphertext comes back as the text.
+    expect(cards[0]!.notes.map((n) => [n.body, n.unreadable])).toEqual([
+      [SECRET, false],
+      [SECRET, false],
+    ]);
     // Asked about THIS camp's notes on THIS person.
     const notesQuery = dbMock.queriesTouching(schema.memberNotes)[0]!;
     expect(boundStrings(notesQuery)).toEqual(
       expect.arrayContaining([CAMP, JABU]),
     );
     expect(getMemberPermissions).toHaveBeenCalledWith(CAMP, ALICE);
+  });
+
+  it("a note this process cannot decrypt reads as unreadable: no text, no edit, still deletable", async () => {
+    getMemberPermissions.mockResolvedValue(perms(LEAD));
+    dbMock.queue(
+      [shared()],
+      [
+        stored({ id: "n2", body: "not-ciphertext", authorUserId: ALICE, authorUsername: "Alice Hatter" }),
+      ],
+    );
+    const [card] = await store.loadProfileMemberNotes({
+      viewerUserId: ALICE,
+      subjectUserId: JABU,
+    });
+    expect(card!.notes[0]).toMatchObject({
+      body: "",
+      unreadable: true,
+      canEdit: false,
+      canDelete: true,
+    });
   });
 
   it("an erased author reads as a departed account; an archived member's card says so", async () => {

@@ -18,6 +18,7 @@ export function memberNoteDateLabel(d: Date): string {
 export interface MemberNoteLike {
   id: string;
   body: string;
+  unreadable: boolean;
   authorName: string;
   createdAt: Date;
   edited: boolean;
@@ -31,6 +32,8 @@ export interface MemberNoteLike {
 export interface PrivateNoteItemView {
   id: string;
   body: string;
+  /** Stored but undecryptable: the card says so instead of showing text. */
+  unreadable: boolean;
   authorName: string;
   dateLabel: string;
   edited: boolean;
@@ -46,6 +49,7 @@ export function toPrivateNoteItems(
   return notes.map((n) => ({
     id: n.id,
     body: n.body,
+    unreadable: n.unreadable,
     authorName: n.authorName,
     dateLabel: memberNoteDateLabel(n.createdAt),
     edited: n.edited,
