@@ -22,6 +22,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { uniqueUsername } from "../../lib/identity";
 import { appAlerts } from "../../lib/dom";
+import { gotoRegistrationsQueuePage } from "../../lib/registrations-queue";
 
 // --- Camp creation (raw form, for the dedupe paths) ------------------------
 //
@@ -319,7 +320,8 @@ export async function openRegistrationInConsole(
   // click. The camp name is unique per worker, so page until we find it.
   const MAX_PAGES = 25;
   for (let p = 1; p <= MAX_PAGES; p++) {
-    await orgPage.goto(`/registrations?page=${p}`);
+    // Waits for the RENDERED queue, not just `load` — see the helper.
+    await gotoRegistrationsQueuePage(orgPage, p);
     const link = orgPage
       .getByRole("link", { name: campName })
       .filter({ visible: true });
@@ -339,6 +341,10 @@ export async function openRegistrationInConsole(
       // queue is a hop with nothing to gain: it depends on `updated_at`
       // ordering and pagination that the test does not care about. Specs that
       // need to come back should hold this and navigate straight there.
+      // (16 Oct 2026: "chrome over an empty body" is what the queue looks like
+      // while its loading.tsx skeleton is still up — the race that
+      // gotoRegistrationsQueuePage now waits out. Probably the same cause;
+      // not re-verified for the second-call case.)
       return orgPage.url();
     }
     // SAY WHICH FAILURE THIS IS. The console renders a full-screen gate for an

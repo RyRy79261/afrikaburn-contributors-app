@@ -22,6 +22,7 @@ import {
   joinByInvite,
 } from "../../personas/factories";
 import { provisionOrgStaff, type MakeAppPage } from "./_helpers";
+import { gotoRegistrationsQueuePage } from "../../lib/registrations-queue";
 
 /**
  * Create a camp lead who has SUBMITTED a full six-section theme-camp
@@ -52,7 +53,8 @@ async function openDetailFromQueue(
   // Walk pages until the (per-worker-unique) camp name appears.
   const MAX_PAGES = 25;
   for (let p = 1; p <= MAX_PAGES; p++) {
-    await org.goto(`/registrations?page=${p}`);
+    // Waits for the RENDERED queue, not just `load` — see the helper.
+    await gotoRegistrationsQueuePage(org, p);
     const link = org.getByRole("link", { name: campName });
     if (await link.count()) {
       await link.first().click();

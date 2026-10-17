@@ -32,6 +32,7 @@ import {
   type Account,
 } from "../../personas/factories";
 import { uniqueUsername } from "../../lib/identity";
+import { gotoRegistrationsQueuePage } from "../../lib/registrations-queue";
 
 /** The fixed org catalog display names — camps may NOT alias these (officers.ts). */
 export const OFFICER_NAMES = {
@@ -201,7 +202,8 @@ export async function openOrgRegistration(
 ): Promise<string> {
   const MAX_PAGES = 25;
   for (let p = 1; p <= MAX_PAGES; p++) {
-    await orgPage.goto(`/registrations?page=${p}`);
+    // Waits for the RENDERED queue, not just `load` — see the helper.
+    await gotoRegistrationsQueuePage(orgPage, p);
     const link = orgPage.getByRole("link", { name: campName, exact: true });
     if (await link.count()) {
       await link.first().click();
