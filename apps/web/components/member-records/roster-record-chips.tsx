@@ -11,7 +11,10 @@ import {
   PopoverTrigger,
 } from "@quagga/ui/components/popover";
 import { toast } from "@quagga/ui/components/toast";
-import { duplicateHintSentence } from "@/lib/member-records-view";
+import {
+  duplicateHintSentence,
+  settleAction,
+} from "@/lib/member-records-view";
 
 // The roster's member-records chips (docs/member-records-spec.md, frame R2
 // `cMHOt` desktop / `Xdabl` mobile 360).
@@ -62,7 +65,9 @@ function DismissPair({
 
   function run() {
     startTransition(async () => {
-      const result = await dismiss({ slug, userIds: [userId, other.userId] });
+      const result = await settleAction(() =>
+        dismiss({ slug, userIds: [userId, other.userId] }),
+      );
       if (result.ok) {
         toast.success("Hint hidden for the camp");
         router.refresh();

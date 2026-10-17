@@ -67,3 +67,23 @@ export function duplicateHintSentence(
 ): string {
   return `${other.name} and ${name} have similar names. They may be one person with two accounts.`;
 }
+
+/** What a member-records action says when the call itself fails. */
+export const ACTION_FAILED =
+  "That didn't go through. Check your connection and try again.";
+
+/**
+ * Run a member-records server action so a REJECTED call (a dropped
+ * connection, a server crash) comes back as an ordinary refusal the caller
+ * toasts, instead of escaping the transition as an unhandled error with no
+ * word to the person who clicked.
+ */
+export async function settleAction<T extends { ok: boolean }>(
+  call: () => Promise<T>,
+): Promise<T | { ok: false; error: string }> {
+  try {
+    return await call();
+  } catch {
+    return { ok: false, error: ACTION_FAILED };
+  }
+}

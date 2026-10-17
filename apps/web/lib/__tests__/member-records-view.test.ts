@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACTION_FAILED,
   duplicateHintSentence,
+  settleAction,
   memberNoteDateLabel,
   toPrivateNoteItems,
 } from "../member-records-view";
@@ -80,6 +82,26 @@ describe("duplicateHintSentence", () => {
       }),
     ).toBe(
       "Thandi Mokoena and Thandi Mokoena-Dube have similar names. They may be one person with two accounts.",
+    );
+  });
+});
+
+// Regression (PR #108 review): the roster's "Not the same person" awaited the
+// server action with no catch, so a rejected call (dropped connection, server
+// crash) escaped the transition and the person who clicked was told nothing.
+describe("settleAction", () => {
+  it("turns a rejected call into a refusal the caller can toast", async () => {
+    await expect(
+      settleAction(() => Promise.reject(new Error("network down"))),
+    ).resolves.toEqual({ ok: false, error: ACTION_FAILED });
+  });
+
+  it("passes a settled result through untouched", async () => {
+    const ok = { ok: true as const };
+    await expect(settleAction(() => Promise.resolve(ok))).resolves.toBe(ok);
+    const refused = { ok: false as const, error: "Not similar." };
+    await expect(settleAction(() => Promise.resolve(refused))).resolves.toBe(
+      refused,
     );
   });
 });
