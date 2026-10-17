@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, Info } from "lucide-react";
 import type { ProjectPermissions } from "@quagga/types";
-import { isPermissionsLockedKind } from "@quagga/core";
+import { isPermissionsLockedKind, kindMayHoldMemberNotes } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { Switch } from "@quagga/ui/components/switch";
 import { toast } from "@quagga/ui/components/toast";
@@ -43,6 +43,7 @@ export function privilegeSummary(p: ProjectPermissions): string {
   if (p.manage_money) parts.push("Manages money");
   if (p.manage_layout) parts.push("Edits the layout");
   if (p.schedule_meetings) parts.push("Schedules meetings");
+  if (p.member_notes) parts.push("Keeps member notes");
   return parts.length ? parts.join(" · ") : "No extra privileges";
 }
 
@@ -92,6 +93,7 @@ export function PrivilegeToggles({
   disabled,
   roles,
   idPrefix,
+  memberNotesAllowed = true,
 }: {
   value: ProjectPermissions;
   onChange: (next: ProjectPermissions) => void;
@@ -99,6 +101,9 @@ export function PrivilegeToggles({
   /** Every role in the camp — the audience candidates for questionnaires. */
   roles: RoleVM[];
   idPrefix: string;
+  /** False for the baseline role: everyone holds it, so it may never keep
+   * member notes (`kindMayHoldMemberNotes`; the server clamps it too). */
+  memberNotesAllowed?: boolean;
 }) {
   const mq = value.manage_questionnaires;
   const scopeAll = mq?.audienceRoles === "all";
@@ -366,6 +371,18 @@ export function PrivilegeToggles({
           onChange({ ...value, schedule_meetings: v || undefined })
         }
       />
+
+      {memberNotesAllowed && (
+        <PrivilegeRow
+          label="Can keep private member notes"
+          hint="Read and write the camp's private notes about its members. The member doesn't see them; neither does anyone else in the camp."
+          checked={!!value.member_notes}
+          disabled={disabled}
+          onChange={(v) =>
+            onChange({ ...value, member_notes: v || undefined })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -431,6 +448,7 @@ export function PrivilegeEditor({
         disabled={disabled}
         roles={roles}
         idPrefix={role.id}
+        memberNotesAllowed={kindMayHoldMemberNotes(role.kind)}
       />
       {!disabled && dirty && (
         <Button

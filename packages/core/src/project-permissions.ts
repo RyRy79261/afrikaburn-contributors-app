@@ -158,6 +158,7 @@ export function allProjectPermissions(): ProjectPermissions {
     manage_money: true,
     manage_layout: true,
     schedule_meetings: true,
+    member_notes: true,
   };
 }
 
@@ -171,15 +172,30 @@ export function isPermissionsLockedKind(kind: ProjectRoleKind): boolean {
 }
 
 /**
- * Coerce a permissions object to what a role of `kind` is ALLOWED to store.
- * Captain → forced to all (locked). Every other kind keeps the supplied
- * permissions unchanged.
+ * May a role of `kind` hold `member_notes`? Not the baseline role: every
+ * member holds it implicitly, so `member_notes` on it would open the camp's
+ * private notes to the whole camp — "nobody else in the camp"
+ * (docs/member-records-spec.md, Decisions).
+ */
+export function kindMayHoldMemberNotes(kind: ProjectRoleKind): boolean {
+  return kind !== "baseline";
+}
+
+/**
+ * Coerce a permissions object to what a role of `kind` is ALLOWED to hold.
+ * Captain → forced to all (locked). Baseline → never `member_notes`. Every
+ * other kind keeps the supplied permissions unchanged. Applied on write AND
+ * on every read, so a row stored before a rule existed is clamped too.
  */
 export function enforceKindPermissions(
   kind: ProjectRoleKind,
   permissions: ProjectPermissions,
 ): ProjectPermissions {
   if (isPermissionsLockedKind(kind)) return allProjectPermissions();
+  if (!kindMayHoldMemberNotes(kind) && permissions.member_notes !== undefined) {
+    const { member_notes: _dropped, ...rest } = permissions;
+    return rest;
+  }
   return permissions;
 }
 
@@ -211,6 +227,9 @@ export function roleGrantsElevatedPrivileges(
     // `schedule_meetings` sends notices to the whole camp, writes the notes
     // that become the camp's record and ticks who came. Handing that out is
     // a lead's decision too.
-    permissions.schedule_meetings === true
+    permissions.schedule_meetings === true ||
+    // `member_notes` opens the camp's private notes about every member
+    // (docs/member-records-spec.md): who reads those is a lead's decision.
+    permissions.member_notes === true
   );
 }

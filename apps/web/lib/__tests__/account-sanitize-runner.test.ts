@@ -140,6 +140,8 @@ function queueErasure(
     /* delete campMeetingAttendees (camp meetings) */ [],
     /* delete teamMembers (camp teams) */ [],
     /* delete team-chat conversationParticipants (camp teams) */ [],
+    /* delete memberNotes about them (member records) */ [],
+    /* delete memberDuplicateDismissals naming them (member records) */ [],
     /* update burnerBios */ [],
     /* delete session */ [],
     /* delete account */ [],
@@ -665,6 +667,37 @@ describe("sanitizeAccount — the erasure itself", () => {
     expect(chats).toHaveLength(1);
     expect(chats[0]!.tx).toBe(true);
     expect(boundStrings(chats[0]!)).toContain(USER);
+  });
+
+  it("deletes every camp's notes ABOUT the account and every dismissal naming it, in the erasure transaction (member records)", async () => {
+    dbMock.queue([dueRequest()]);
+    queueErasure();
+
+    await sanitizeAccount(USER, REQUEST, NOW);
+
+    const notes = dbMock
+      .writesTo(schema.memberNotes)
+      .filter((q) => q.kind === "delete");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.tx).toBe(true);
+    // Scoped to THIS account — never a blanket delete of the camp's notes.
+    expect(boundStrings(notes[0]!)).toContain(USER);
+    const dismissals = dbMock
+      .writesTo(schema.memberDuplicateDismissals)
+      .filter((q) => q.kind === "delete");
+    expect(dismissals).toHaveLength(1);
+    expect(dismissals[0]!.tx).toBe(true);
+    expect(boundStrings(dismissals[0]!)).toContain(USER);
+    // After the users row is locked FOR UPDATE: a racing note write waits.
+    const lockAt = dbMock.queries.findIndex(
+      (q) => q.arg("from") === schema.users && q.arg("for") === "update",
+    );
+    expect(lockAt).toBeGreaterThanOrEqual(0);
+    expect(dbMock.queries.indexOf(notes[0]!)).toBeGreaterThan(lockAt);
+    // Notes are deleted, never rewritten.
+    expect(
+      dbMock.writesTo(schema.memberNotes).filter((q) => q.kind !== "delete"),
+    ).toHaveLength(0);
   });
 
   it("RELEASES the account's Work Access Passes, scoped to its memberships, in the erasure transaction (epic #53)", async () => {

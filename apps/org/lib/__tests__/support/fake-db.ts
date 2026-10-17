@@ -1,4 +1,5 @@
-import { getTableName, type Table } from "drizzle-orm";
+import { getTableName, sql, type SQL, type Table } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 /**
  * A TABLE-KEYED FAKE OF THE DRIZZLE BUILDER, and the reason most of the console
@@ -299,5 +300,31 @@ export function whereParams(condition: unknown): unknown[] {
     Object.values(node as Record<string, unknown>).forEach(walk);
   };
   walk(condition);
+  return out;
+}
+
+/**
+ * The values a recorded `where` EXCLUDES from `column` with `NOT IN`, read off
+ * the SQL drizzle actually renders for it. Stricter than `whereMentions`, which
+ * finds a literal however it is used — an `inArray` that INCLUDED those values
+ * would satisfy it just as well. Still no proof of SQL semantics (see the
+ * header): it proves the condition was BUILT as an exclusion of these values.
+ *
+ * `column` is the rendered reference, e.g. `"audit_events"."action"`.
+ */
+export function notInValues(condition: unknown, column: string): string[] {
+  if (condition === undefined || condition === null) return [];
+  const { sql: text, params } = new PgDialect().sqlToQuery(
+    sql`${condition as SQL}`,
+  );
+  const out: string[] = [];
+  const escaped = column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`${escaped} not in \\(([^)]*)\\)`, "g");
+  for (const match of text.matchAll(re)) {
+    for (const ref of match[1]!.split(",")) {
+      const index = Number(ref.trim().replace("$", "")) - 1;
+      out.push(String(params[index]));
+    }
+  }
   return out;
 }

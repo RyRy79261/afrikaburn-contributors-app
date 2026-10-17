@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MEDICAL_VIEW_AUDIT_ACTION } from "@quagga/core";
+import { MEDICAL_VIEW_AUDIT_ACTION, MEMBER_RECORDS_AUDIT } from "@quagga/core";
 
-import { fakeDb, whereMentions, type FakeDb } from "./support/fake-db";
+import {
+  fakeDb,
+  notInValues,
+  whereMentions,
+  type FakeDb,
+} from "./support/fake-db";
 import { GOD, PERSONAL_READER, READER, SUPPLIERS_LEAD } from "./support/actors";
 
 // The source-text assertions below and the EXECUTED ones at the bottom of this
@@ -316,9 +321,27 @@ describe("getAuditTrail", () => {
       action: MEDICAL_VIEW_AUDIT_ACTION,
       actorEmail: "medic@example.com",
     });
-    // The granted caller's query carries NO exclusion at all — the pair is what
-    // makes the negative half above mean something.
-    expect(db.recorded("select", "audit_events")[0]?.where).toBeUndefined();
+    // The granted caller's query does NOT exclude the medical rows — the pair
+    // is what makes the negative half below mean something.
+    const where = db.recorded("select", "audit_events")[0]?.where;
+    expect(whereMentions(where, MEDICAL_VIEW_AUDIT_ACTION)).toBe(false);
+  });
+
+  // Regression (member-records review): a camp's private-note audit rows were
+  // listed on /audit with the actor's address — a named lead keeps notes about
+  // members, and when. The spec says never the org console, for any rank.
+  it("EXCLUDES every member-records action IN THE QUERY, for every rank", async () => {
+    for (const actor of [GOD, PERSONAL_READER, READER, SUPPLIERS_LEAD]) {
+      db = fakeDb();
+      db.seed("audit_events", []);
+      await getAuditTrail(actor);
+      const [call] = db.recorded("select", "audit_events");
+      // Built as an EXCLUSION of every member-records action — an inArray
+      // that selected them would still "mention" each literal.
+      expect(notInValues(call?.where, '"audit_events"."action"')).toEqual(
+        expect.arrayContaining(Object.values(MEMBER_RECORDS_AUDIT)),
+      );
+    }
   });
 
   it("WITHHOLDS the address and FILTERS the medical rows for everyone else", async () => {

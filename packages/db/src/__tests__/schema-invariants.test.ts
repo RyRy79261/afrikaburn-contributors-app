@@ -464,3 +464,61 @@ describe("camp meetings (migration 0039)", () => {
     expect(pk?.columns.map((c) => c.name)).toEqual(["meeting_id", "user_id"]);
   });
 });
+
+describe("member records (migration 0042)", () => {
+  const fkMap = (table: string) =>
+    (byName.get(table)?.foreignKeys ?? []).map((fk) => ({
+      column: fk.reference().columns[0]!.name,
+      target: getTableConfig(fk.reference().foreignTable).name,
+      onDelete: fk.onDelete,
+    }));
+  const checks = (table: string) =>
+    (byName.get(table)?.checks ?? []).map((c) => c.name).sort();
+
+  it("keys notes by camp and person, never by membership, so archive keeps them", () => {
+    const fks = fkMap("member_notes");
+    expect(fks.map((f) => f.target)).not.toContain("memberships");
+    expect(fks.find((f) => f.column === "group_id")?.onDelete).toBe("cascade");
+    expect(fks.find((f) => f.column === "subject_user_id")?.onDelete).toBe(
+      "cascade",
+    );
+    // An author leaving never takes the camp's note about someone else.
+    expect(fks.find((f) => f.column === "author_user_id")?.onDelete).toBe(
+      "set null",
+    );
+  });
+
+  // The body is AES-256-GCM ciphertext (encrypted like medical notes), so the
+  // 2 000-character cap lives in Zod and the column bounds the CIPHERTEXT a
+  // 2 000-character note can produce. A plaintext cap here would refuse every
+  // long note once encrypted.
+  it("bounds the encrypted body and refuses an empty one", async () => {
+    expect(checks("member_notes")).toEqual([
+      "member_notes_body_ciphertext_length",
+    ]);
+    const check = byName
+      .get("member_notes")
+      ?.checks.find((c) => c.name === "member_notes_body_ciphertext_length");
+    expect(predicateText(check?.value)).toContain("between 1 and 8040");
+    // The bound holds the worst case: 2 000 three-byte characters, encrypted.
+    process.env.PGCRYPTO_KEY ??= "schema-invariants-test-key";
+    const { encrypt } = await import("../crypto");
+    expect(encrypt("\u20ac".repeat(2000)).length).toBeLessThanOrEqual(8040);
+  });
+
+  it("stores one dismissal per ordered pair per camp", () => {
+    const pk = byName.get("member_duplicate_dismissals")?.primaryKeys[0];
+    expect(pk?.columns.map((c) => c.name)).toEqual([
+      "group_id",
+      "user_a_id",
+      "user_b_id",
+    ]);
+    expect(checks("member_duplicate_dismissals")).toEqual([
+      "member_duplicate_dismissals_ordered_pair",
+    ]);
+    const check = byName
+      .get("member_duplicate_dismissals")
+      ?.checks.find((c) => c.name === "member_duplicate_dismissals_ordered_pair");
+    expect(predicateText(check?.value)).toBe("user_a_id < user_b_id");
+  });
+});

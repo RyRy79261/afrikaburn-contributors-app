@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-import { fakeDb, whereMentions, type FakeDb } from "./support/fake-db";
+import {
+  fakeDb,
+  notInValues,
+  whereMentions,
+  type FakeDb,
+} from "./support/fake-db";
 import { GOD, PERSONAL_READER, READER, SUPPLIERS_LEAD } from "./support/actors";
 
 /**
@@ -23,7 +28,10 @@ vi.mock("@quagga/db", async (importOriginal) => ({
   createHttpDb: () => db,
 }));
 
-import { MEDICAL_VIEW_AUDIT_ACTION } from "@quagga/core";
+import {
+  MEDICAL_VIEW_AUDIT_ACTION,
+  MEMBER_RECORDS_AUDIT,
+} from "@quagga/core";
 import { getRecentActivity, getSubmissionSeries } from "@/lib/status-board";
 import { getSystemStatus, probeDatabase } from "@/lib/system-probe";
 
@@ -81,6 +89,23 @@ describe("getRecentActivity", () => {
     // filter — or pointing it at something else — turns this red.
     const [call] = db.recorded("select", "audit_events");
     expect(whereMentions(call?.where, MEDICAL_VIEW_AUDIT_ACTION)).toBe(true);
+  });
+
+  // Regression (member-records review): a camp's private-note audit rows
+  // reached the overview feed — a named lead keeps notes, and when. The spec
+  // says never the org console.
+  it("EXCLUDES every member-records action IN THE QUERY, for every rank", async () => {
+    for (const actor of [GOD, PERSONAL_READER, READER]) {
+      db = fakeDb();
+      db.seed("audit_events", []);
+      await getRecentActivity(actor);
+      const [call] = db.recorded("select", "audit_events");
+      // Built as an EXCLUSION of every member-records action — an inArray
+      // that selected them would still "mention" each literal.
+      expect(notInValues(call?.where, '"audit_events"."action"')).toEqual(
+        expect.arrayContaining(Object.values(MEMBER_RECORDS_AUDIT)),
+      );
+    }
   });
 
   it("honours the row limit the card asks for", async () => {

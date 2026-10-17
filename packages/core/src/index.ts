@@ -258,3 +258,7 @@ export * from "./camp-teams";
 // addressed to camp teams — who may pick which teams (team leads: only their
 // own), the chip label. PURE.
 export * from "./team-audience";
+// Member records (docs/member-records-spec.md): who keeps a camp's private
+// notes about its members, edit/delete rights, and the name-only "possible
+// duplicate" hints with their dismissals. PURE.
+export * from "./member-records";

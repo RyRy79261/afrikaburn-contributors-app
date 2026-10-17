@@ -20,6 +20,14 @@ import {
 import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
 import { loadProfileParticipation } from "@/lib/camp-stats-store";
 import { ParticipationSummary } from "@/components/stats/participation-summary";
+import { loadProfileMemberNotes } from "@/lib/member-records-store";
+import { toPrivateNoteItems } from "@/lib/member-records-view";
+import { PrivateNotesCard } from "@/components/member-records/private-notes-card";
+import {
+  addMemberNoteAction,
+  deleteMemberNoteAction,
+  editMemberNoteAction,
+} from "../../camps/[slug]/member-records-actions";
 import {
   findDirectConversation,
   viewerHasBlocked,
@@ -113,8 +121,8 @@ export default async function BurnerProfilePage({
         viewerHasBlocked(viewer.id, profile.userId),
       ]);
 
-  const [medical, campmateFields, avatarKey, participation] = await Promise.all(
-    [
+  const [medical, campmateFields, avatarKey, participation, noteCards] =
+    await Promise.all([
       resolveMedicalNotesForViewer({
         viewerUserId: viewer.id,
         subjectUserId: profile.userId,
@@ -138,8 +146,15 @@ export default async function BurnerProfilePage({
         subjectUserId: profile.userId,
         edition,
       }),
-    ],
-  );
+      // Member records (docs/member-records-spec.md, frame R1): one Private
+      // notes card per shared camp where the viewer is a note person — empty
+      // for the person themself, a plain camp-mate, another camp's lead and
+      // the org, decided in the store by @quagga/core before a note is read.
+      loadProfileMemberNotes({
+        viewerUserId: viewer.id,
+        subjectUserId: profile.userId,
+      }),
+    ]);
 
   const isOwn = profile.userId === viewer.id;
   // The camp-mate view is a SUPERSET of the public one (it includes every
@@ -222,6 +237,22 @@ export default async function BurnerProfilePage({
             audience="viewer"
             campName={block.camp.name}
             subjectName={heading}
+          />
+        ))}
+
+        {noteCards.map((card) => (
+          <PrivateNotesCard
+            key={card.camp.slug}
+            camp={{ name: card.camp.name, slug: card.camp.slug }}
+            subjectUserId={profile.userId}
+            subjectName={heading}
+            notes={toPrivateNoteItems(card.notes)}
+            showCampName={noteCards.length > 1}
+            actions={{
+              add: addMemberNoteAction,
+              edit: editMemberNoteAction,
+              remove: deleteMemberNoteAction,
+            }}
           />
         ))}
 
