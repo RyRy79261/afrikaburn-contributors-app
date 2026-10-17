@@ -6,7 +6,7 @@
 | **Doc status**         | Active                                                        |
 | **Normative language** | Descriptive only                                              |
 | **Requirement IDs**    | Partial — App Spec §4 `CDB-025`, `CDB-034`, `CDB-038`, `CDB-040` |
-| **Owner / Updated**    | Ryan, 2026-10-16                                              |
+| **Owner / Updated**    | Ryan, 2026-10-17                                              |
 
 Camp leads keep notes about their people in a private spreadsheet: "great on
 build, needs a lift", "asked not to be on night shifts". And when a camp
@@ -28,6 +28,14 @@ duplicate" hint on the roster.
   hard-locked fields are never compared.
 - **Retention**: notes stay while a member is archived (they may come back);
   leaving the camp or deleting the account deletes them.
+- **Encrypted at rest** (Ryan, 17 Oct 2026): a note's text is stored exactly
+  as medical notes are — AES-256-GCM via `@quagga/db/crypto`, encrypted and
+  decrypted at the apps/web boundary. With no `PGCRYPTO_KEY` a note is
+  refused, never stored in plaintext. A note that cannot be decrypted shows as
+  unreadable (never as empty) and cannot be edited, only deleted.
+- **Captains** keep notes too (Ryan, 17 Oct 2026): the captain role is locked
+  to every privilege, `member_notes` included. Like any note-keeper who is not
+  a structural lead, a captain deletes only their own notes.
 
 - Frames: R1 profile with private notes `Ka9U0` / `r7hFMv`, R1b plain
   camp-mate view `Z7GfV0` / `TvN1a`, R2 roster with notes and duplicate chips
@@ -35,7 +43,8 @@ duplicate" hint on the roster.
 
 ## Model
 
-- `member_notes` (camp, subject user, body text ≤ 2 000 chars, author user,
+- `member_notes` (camp, subject user, body text ≤ 2 000 chars — stored as
+  ciphertext, see Decisions — author user,
   created_at, updated_at, edited_by) — several notes per member, newest first.
   Keyed by (camp, user), not membership, so archive keeps them; `leaveCamp`
   and account erasure delete them in their transactions.
