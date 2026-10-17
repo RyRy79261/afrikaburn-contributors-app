@@ -3,7 +3,12 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MEDICAL_VIEW_AUDIT_ACTION, MEMBER_RECORDS_AUDIT } from "@quagga/core";
 
-import { fakeDb, whereMentions, type FakeDb } from "./support/fake-db";
+import {
+  fakeDb,
+  notInValues,
+  whereMentions,
+  type FakeDb,
+} from "./support/fake-db";
 import { GOD, PERSONAL_READER, READER, SUPPLIERS_LEAD } from "./support/actors";
 
 // The source-text assertions below and the EXECUTED ones at the bottom of this
@@ -331,9 +336,11 @@ describe("getAuditTrail", () => {
       db.seed("audit_events", []);
       await getAuditTrail(actor);
       const [call] = db.recorded("select", "audit_events");
-      for (const action of Object.values(MEMBER_RECORDS_AUDIT)) {
-        expect(whereMentions(call?.where, action)).toBe(true);
-      }
+      // Built as an EXCLUSION of every member-records action — an inArray
+      // that selected them would still "mention" each literal.
+      expect(notInValues(call?.where, '"audit_events"."action"')).toEqual(
+        expect.arrayContaining(Object.values(MEMBER_RECORDS_AUDIT)),
+      );
     }
   });
 
