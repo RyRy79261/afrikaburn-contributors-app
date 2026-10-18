@@ -1777,3 +1777,42 @@ Added the "Export notes about this member" action (#111) to the Private notes ca
   `space_between` header row beside the title column. Mobile: stacked under the description
   (gap 12), button padding [14,17] = 45px, hint fixed-width fill_container, left-aligned —
   the code's `sm:` breakpoints.
+
+## Registration safety (#49, 18 Oct 2026) — pen CLI, four new frames, four frames extended
+
+Spec: `docs/registration-safety-spec.md`. All edits through `pen interactive` from stdin.
+
+- New (participant band, y=5260, 2020 pitch after Xdabl): Section 4 wizard **GFtHX** (x=145052)
+  / mobile **sSl0w** (x=146452); Gas & fuel record **T7rUD** (x=147072) / mobile **qjdpW**
+  (x=148472). Next free desktop slot: x=149092.
+- Extended in place, frame ids unchanged: RGcNS spacer tile → "Gas, fuel & water" (`RJzGe`),
+  EQW5G new tile `URe54`; f3jmCq inspector + vnpZw body get an Extinguishers card
+  (`qi8us` / `fyfiX`); PRDdG / t4Ji4 Camp Size & Logistics fields replaced (`l5O1j`→`LN9Ap`,
+  `ZpB7i`→`oOOW1`; the rest of each Fields subtree was re-id'd by Replace).
+- **`Update(instance, {descendants:{slot: <frame with children>}})` on a COPIED ref broke the
+  frame**: every later `Get` visitor over that frame threw "TypeError: cannot read property of
+  undefined", while Export still rendered. Replacing the whole ref (`Replace(id, {type:"ref",
+  ref, descendants})`) fixed it. If a visitor over a frame suddenly throws, suspect the last
+  descendants Update.
+- `l524ck` (ghost button) label slot is `sZAW7`, not `ZAdHf` (that is `lY5QH`'s). The wrong key
+  leaves "Cancel" showing — read the component before overriding.
+- A JS error inside a later statement is reported at the LAST loop of the snippet; bisect by
+  removing statements, not by trusting the `at:` line.
+- Headless exports need `brand/` next to the scratch .pen, or the logo renders as a checkerboard.
+- Problem counts per frame (Get visitor `ctx.problems`) matched the source frames exactly
+  (quilt-band diamonds, unread badges): 0 new.
+
+### Follow-up 18 Oct 2026 — review fixes for #49
+
+- Each `execute` line has its own scope: a helper file such as `prelude.js` must be
+  CONCATENATED into the snippet, not sent as an earlier execute, or every helper is undefined.
+- After `Replace`, the CLI may still print "has 'fill_container' sizing but is not inside a
+  flexbox layout" for the OLD (now deleted) node id. `Get(oldId)` throws "Can't find node",
+  so the warning is stale; check the problem count on the frame instead.
+- An AppShell (`l99dum`) instance's avatar is overridden by instance path:
+  `Update("<instance>/axOeJ/b5sb0Z", {content: "ND"})`. Plain content Updates by path did
+  not break later Get visitors (unlike the descendants-slot Update above).
+- Exporting a SUBNODE (a section crop) renders it on a light background, so `$foreground`
+  text is near-invisible there. The full-frame export is the one to read for contrast.
+- Mobile touch targets: Segmented options padding [13,22] (44 px, track 52); checkbox rows
+  wrapped in a 44 px frame with gap 0; stand-alone links get `height: 44` on the `gsClL` ref.
