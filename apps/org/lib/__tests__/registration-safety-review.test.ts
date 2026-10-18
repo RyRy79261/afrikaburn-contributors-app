@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { GasFuelRecord, LayoutDocument } from "@quagga/types";
 import {
   NOT_ANSWERED,
+  placeSafetyReviewFields,
   safetyReviewFields,
   type SafetyReviewInput,
 } from "@/lib/registration-safety-review";
@@ -152,5 +153,18 @@ describe("safetyReviewFields", () => {
   it("never mentions sand", () => {
     const text = JSON.stringify(safetyReviewFields(input())).toLowerCase();
     expect(text).not.toContain("sand");
+  });
+});
+
+describe("placeSafetyReviewFields — the frame's order (LN9Ap / oOOW1)", () => {
+  it("puts the water estimate beside the population and keeps the rest in order", () => {
+    const fields = safetyReviewFields(input({ gasFuel: null, pinnedLayout: null }));
+    const placed = placeSafetyReviewFields(fields);
+    expect(placed.besidePopulation.map((f) => f.label)).toEqual(["Water estimate"]);
+    expect(placed.afterSize.map((f) => f.label)).toEqual([
+      "Generator",
+      "Fire",
+      "Gas or fuel",
+    ]);
   });
 });

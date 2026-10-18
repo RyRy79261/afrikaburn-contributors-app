@@ -87,6 +87,23 @@ function overWhat(r: GasFuelRecord): string {
     : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
+export const WATER_ESTIMATE_LABEL = "Water estimate";
+
+/**
+ * Where the safety fields sit in section 4 (frames LN9Ap / oOOW1): the water
+ * estimate is worked out from the population, so it sits beside it; the gates,
+ * the fuel depot, the record and the layout-derived counts follow the camp's
+ * own size answers. Order within each group is kept.
+ */
+export function placeSafetyReviewFields<T extends { label: string }>(
+  fields: readonly T[],
+): { besidePopulation: T[]; afterSize: T[] } {
+  return {
+    besidePopulation: fields.filter((f) => f.label === WATER_ESTIMATE_LABEL),
+    afterSize: fields.filter((f) => f.label !== WATER_ESTIMATE_LABEL),
+  };
+}
+
 /** The section 4 safety fields, in the frame's order. */
 export function safetyReviewFields(i: SafetyReviewInput): SafetyReviewField[] {
   const r = i.registration;
@@ -101,7 +118,7 @@ export function safetyReviewFields(i: SafetyReviewInput): SafetyReviewField[] {
       })
     : null;
   out.push({
-    label: "Water estimate",
+    label: WATER_ESTIMATE_LABEL,
     value: water
       ? `About ${formatLitres(water.litres)} — ${describeWaterEstimate(water)}. Worked out, not asked.`
       : "Needs the population and first arrival",

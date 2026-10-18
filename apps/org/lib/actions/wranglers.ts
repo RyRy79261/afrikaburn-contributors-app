@@ -289,6 +289,18 @@ export async function assignWrangler(
     // The write and its audit row are one unit — an assignment that exists
     // without a record of who made it is the thing the trail is for.
     const wranglerChanged = await withTransaction(async (tx) => {
+      // THE SAME LOCK A GAS & FUEL SAVE TAKES (apps/web/lib/gas-fuel-store.ts
+      // withGasFuelWrite). Without it a save and an assignment interleave: the
+      // save sees no wrangler, this assignment commits, the deferred check
+      // below reads the record from before the save, and the wrangler is
+      // never told. Holding the registration row serialises the two, so
+      // either the save sees this committed assignment and sends the
+      // wrangler copy itself, or the deferred check sees the committed save.
+      await tx
+        .select({ id: schema.registrations.id })
+        .from(schema.registrations)
+        .where(eq(schema.registrations.id, registration.id))
+        .for("update");
       const [previous] = await tx
         .select({ userId: schema.wranglerAssignments.wranglerUserId })
         .from(schema.wranglerAssignments)

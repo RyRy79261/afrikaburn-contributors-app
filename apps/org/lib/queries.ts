@@ -31,6 +31,7 @@ import {
   canReadPersonalInformationIn,
   countCategoryUsage,
   deriveOfficerCoverage,
+  officerTriggersFromRegistration,
   deriveQuestionnaireCompletion,
   deriveRegistrationFunnel,
   deriveStatusBoardKpis,
@@ -44,7 +45,6 @@ import {
   orgRankFromRole,
   publicMemberName,
   sanitizeOrgPermissions,
-  soundLevelFromValue,
   summarizeOrgActor,
   systemManagerRefusal,
   type OfficerCoverage,
@@ -1849,13 +1849,8 @@ export async function getStatusBoard(
     .filter((r) => inFlight.has(r.status))
     .map((r) => ({
       isRegisteredOrInFlight: true,
-      triggers: {
-        soundLevel: soundLevelFromValue(r.soundRaw),
-        // The section 4 gates (registration-safety-spec); null reads false.
-        hasGenerators: r.hasGenerator === true,
-        hasOpenFlame: r.hasFire === true,
-        hasFuelStorage: r.hasGasOrFuel === true,
-      },
+      // The section 4 gates (registration-safety-spec), mapped by core.
+      triggers: officerTriggersFromRegistration(r),
       assignedKeys: assignedByGroup.get(r.groupId) ?? new Set<OfficerKey>(),
     }));
 

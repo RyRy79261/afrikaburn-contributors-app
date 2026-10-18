@@ -71,6 +71,7 @@ import { Badge } from "@quagga/ui/components/badge";
 import { AlertTriangle } from "lucide-react";
 import { getSavedGasFuelForReview } from "@/lib/gas-fuel";
 import {
+  placeSafetyReviewFields,
   safetyReviewFields,
   type SafetyReviewField,
 } from "@/lib/registration-safety-review";
@@ -473,6 +474,7 @@ function buildSectionFields(
   safetyFields: FieldSpec[],
 ): Record<(typeof SECTION_KEYS)[number], FieldSpec[]> {
   const r = detail.registration;
+  const safety = placeSafetyReviewFields(safetyFields);
   const layoutLinks =
     r.s4LayoutUploadUrls.length > 0 ? (
       <span className="flex flex-col gap-1">
@@ -555,6 +557,7 @@ function buildSectionFields(
     ],
     size_logistics: [
       { label: "Expected population", value: r.s4ExpectedPopulation ?? "—" },
+      ...safety.besidePopulation,
       { label: "First arrival", value: formatDate(r.s4FirstArrivalDate) },
       // The OLD form's count only, and only when one was given (docs/wap-spec.md,
       // "The old registration-form field") — the requests live in the Passes tab.
@@ -567,6 +570,7 @@ function buildSectionFields(
           ]
         : []),
       { label: "Area dimensions", value: r.s4AreaDimensions },
+      ...safety.afterSize,
       ...(layoutSnapshot
         ? [
             {
@@ -586,7 +590,6 @@ function buildSectionFields(
           ]
         : []),
       { label: "Layout uploads", value: layoutLinks, wide: true },
-      ...safetyFields,
     ],
     sound_placement: [
       {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { fakeDb, type FakeDb } from "./support/fake-db";
+import { fakeDb, whereParams, type FakeDb } from "./support/fake-db";
 
 /**
  * A wrangler is AfrikaBurn's "dusty guardian angel" for one approved theme camp,
@@ -284,6 +284,25 @@ describe("assignWrangler — the deferred fuel depot copy (registration-safety-s
       await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
       expect(depotCopies()).toHaveLength(0);
     }
+  });
+
+  it("locks the registration row before writing, as a gas & fuel save does", async () => {
+    // Without the lock a save and an assignment interleave and the wrangler
+    // is never told: the save sees no wrangler, the assignment commits, and
+    // the deferred check reads the record from before the save.
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    const lockIndex = db.calls.findIndex(
+      (c) =>
+        c.op === "select" &&
+        c.table === "registrations" &&
+        c.methods.includes("for"),
+    );
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(whereParams(db.calls[lockIndex]!.where)).toEqual([REG_ID]);
+    const writeIndex = db.calls.findIndex(
+      (c) => c.op === "insert" && c.table === "wrangler_assignments",
+    );
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("sends nothing when another request claimed the column first", async () => {

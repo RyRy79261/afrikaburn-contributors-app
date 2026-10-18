@@ -36,12 +36,29 @@ import {
  */
 
 import type * as QuaggaDb from "@quagga/db";
+import type * as QuaggaCore from "@quagga/core";
 
 let db: FakeDb;
 vi.mock("@quagga/db", async (importOriginal) => ({
   ...(await importOriginal<typeof QuaggaDb>()),
   createHttpDb: () => db,
 }));
+
+// A pass-through spy on the officer-coverage derivation, so the status board's
+// test can see the TRIGGERS it hands core — the board's own output does not
+// change with them (`officerRequirements` ignores the three gates), which is
+// exactly why a hard-coded `false` once went unseen.
+const coverageSpy = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+vi.mock("@quagga/core", async (importOriginal) => {
+  const real = await importOriginal<typeof QuaggaCore>();
+  return {
+    ...real,
+    deriveOfficerCoverage: (...args: Parameters<typeof real.deriveOfficerCoverage>) => {
+      coverageSpy.calls.push(args);
+      return real.deriveOfficerCoverage(...args);
+    },
+  };
+});
 
 import { encrypt } from "@quagga/db/crypto";
 import {
@@ -975,6 +992,41 @@ describe("getStatusBoard", () => {
     expect(board.edition).toBeNull();
     expect(board.funnel.total).toBe(0);
     expect(db.calls).toEqual([]);
+  });
+
+  it("hands the section 4 gates to officer coverage as the camp answered them (registration-safety-spec)", async () => {
+    db.seed("registrations", [
+      // funnel read, then the officer-coverage camp read, then the wrangler read
+      [{ status: "approved" }, { status: "submitted" }],
+      [
+        {
+          groupId: "group-1",
+          status: "approved",
+          soundRaw: null,
+          hasGenerator: true,
+          hasFire: true,
+          hasGasOrFuel: true,
+        },
+        {
+          groupId: "group-2",
+          status: "submitted",
+          soundRaw: null,
+          hasGenerator: null,
+          hasFire: false,
+          hasGasOrFuel: null,
+        },
+      ],
+      [],
+    ]);
+    coverageSpy.calls.length = 0;
+    await getStatusBoard(EDITION);
+    const camps = coverageSpy.calls.at(-1)?.[0] as {
+      triggers: Record<string, unknown>;
+    }[];
+    expect(camps.map((c) => c.triggers)).toEqual([
+      { soundLevel: 0, hasGenerators: true, hasOpenFlame: true, hasFuelStorage: true },
+      { soundLevel: 0, hasGenerators: false, hasOpenFlame: false, hasFuelStorage: false },
+    ]);
   });
 
   it("reads the section 4 gates for officer triggers instead of hard-coding false (registration-safety-spec)", async () => {

@@ -32,6 +32,7 @@ export async function getSavedGasFuelForReview(
       updatedAt: schema.campGasFuelRecords.updatedAt,
       campNotifiedAt: schema.campGasFuelRecords.campNotifiedAt,
       wranglerNotifiedAt: schema.campGasFuelRecords.wranglerNotifiedAt,
+      isDraft: schema.campGasFuelRecords.isDraft,
     })
     .from(schema.campGasFuelRecords)
     .where(
@@ -41,7 +42,9 @@ export async function getSavedGasFuelForReview(
       ),
     )
     .limit(1);
-  if (!row) return null;
+  // Checked again on the row, not only in the WHERE: "a draft is never shown"
+  // is the rule, and a unit test can see this line where it cannot see SQL.
+  if (!row || row.isDraft) return null;
   const parsed = GasFuelRecord.safeParse(row.record);
   if (!parsed.success) return null;
   return {
