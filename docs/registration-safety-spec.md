@@ -429,3 +429,50 @@ Participant band (y = 5260):
 
 Organiser band (y = 8660): org review `PRDdG` / `t4Ji4`, Camp Size & Logistics
 fields (`LN9Ap` / `oOOW1`).
+
+### Design review after build (19 Oct 2026)
+
+The build was compared with the frames above, desktop and 360, on a local
+stack. Differences fixed in code: the fire kinds are ticked boxes in the
+frame's order (two columns, column-first, one at 360) rather than chips;
+each fire and gas policy link sits inside its follow-up; a rule between each gate; the
+"Not answered yet" mark and the layout-suggestion map glyph; the
+extinguisher card's fill, pencil-ruler "Open layout" and "— nothing to
+upload here"; the record card's short saved line ("96 kg of gas · 2 × 20 L ·
+1 × 200 L barrel"), its desktop-only icon tile and the dashed-circle
+"Optional" chip; on the record page the sentence-case titles, the cloud on
+the saved line, the book glyph on the policy link, the filled "within the
+limits" box, a bolder draft title, one rule above the empty-form note, and a
+bottle row that fits "Choose a size" at 360; the Extinguishers card title in
+sentence case; in the org review, Fuel depot names only what is over the
+limit ("96 kg of gas and a 200 L barrel" — 2 × 20 L stay in camp), the
+structures read "a, b and c.", and the chip is sentence case; 44 px targets
+at 360 for the policy links, the card buttons and every record control.
+
+Kept as built, on purpose:
+
+- **"Filled in from your layout"** (frame: "Suggested from…") and the G1
+  hint's **"— no size or fuel estimate"**: both are this spec's own wording
+  (§"The three gates"), which wins for engineering.
+- **"Wrangler not told yet: none assigned."** in the org review's Fuel depot
+  line (frame: "No wrangler yet: …"): the spec's wording (§"Org review").
+- **The Yes/No control** is the wizard's shared `YesNoField`, as in sections
+  3 and 5 and the vehicle and artwork forms; the frame draws the canvas
+  library's segmented toggle. Restyling it is a change to every form, not to
+  this one.
+- **The record page goes back to the camp** ("← camp name") where the frame
+  says "Cancel", like every other camp page; a member who can only read has
+  nothing to cancel.
+- **"Nothing is saved until you press Save record."** (frame: "…until you
+  change something"): the record saves on the button only.
+- **The record page's empty state** keeps "Add a bottle size" and the total
+  line; frame state 3 is a condensed illustration of the same form.
+- **The extinguishers line in the org review** leaves out the frame's worked
+  example "(the 150 m² stretch tent needs 4)", which belongs to that one
+  layout.
+- **Inbox rows** show the time (camp copy) or "Wranglers" (console copy), the
+  inboxes' own meta line, not the frame's "· Karoo Kombuis".
+- **The depot line with a wrangler** (frame state 6) cannot be reached in the
+  wizard today: a wrangler is assigned only after approval, when the
+  registration is read-only. The code path is unit-tested; the record page's
+  wrangler notice was checked on screen.
