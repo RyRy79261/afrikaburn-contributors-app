@@ -6,6 +6,7 @@ import {
   changedFields,
   completedSectionsFor,
   completedSectionsWithLayout,
+  normalizeFireAnswer,
   deriveOnboardingProgress,
   filterPickerEligible,
   isSubmittable,
@@ -425,6 +426,13 @@ export interface RegistrationValues {
   s4FirstArrivalDate: string | null;
   s4AreaDimensions: string | null;
   s4LayoutUploadUrls: string[];
+  /** The safety gates (docs/registration-safety-spec.md). Null = not
+   * answered; a layout suggestion is never written here until the camp
+   * touches section 4. */
+  s4HasGenerator: boolean | null;
+  s4HasFire: boolean | null;
+  s4FireKinds: string[];
+  s4HasGasOrFuel: boolean | null;
   s5AmplifiedMusic: string | null;
   s5SoundPlan: string | null;
   s5PlacementFirstChoice: string | null;
@@ -460,6 +468,10 @@ function toSectionData(
     s4ExpectedPopulation: v.s4ExpectedPopulation,
     s4FirstArrivalDate: v.s4FirstArrivalDate,
     s4AreaDimensions: v.s4AreaDimensions,
+    s4HasGenerator: v.s4HasGenerator,
+    s4HasFire: v.s4HasFire,
+    s4FireKinds: v.s4FireKinds,
+    s4HasGasOrFuel: v.s4HasGasOrFuel,
     s5AmplifiedMusic: v.s5AmplifiedMusic,
     s5SoundPlan: v.s5SoundPlan,
     s5PlacementFirstChoice: v.s5PlacementFirstChoice,
@@ -528,6 +540,11 @@ export async function saveRegistrationDraft(input: {
     // registration: N".
     s4AreaDimensions: v.s4AreaDimensions,
     s4LayoutUploadUrls: v.s4LayoutUploadUrls,
+    s4HasGenerator: v.s4HasGenerator,
+    s4HasFire: v.s4HasFire,
+    // Answering G2 = No clears the kinds (spec §"Questionnaire vs columns").
+    s4FireKinds: normalizeFireAnswer(v.s4HasFire, v.s4FireKinds),
+    s4HasGasOrFuel: v.s4HasGasOrFuel,
     s5AmplifiedMusic: v.s5AmplifiedMusic,
     s5SoundPlan: v.s5SoundPlan,
     s5PlacementFirstChoice: v.s5PlacementFirstChoice,
@@ -730,6 +747,10 @@ export async function applyCampAction(input: {
                   s4ExpectedPopulation: existing.s4ExpectedPopulation,
                   s4FirstArrivalDate: existing.s4FirstArrivalDate,
                   s4AreaDimensions: existing.s4AreaDimensions,
+                  s4HasGenerator: existing.s4HasGenerator,
+                  s4HasFire: existing.s4HasFire,
+                  s4FireKinds: existing.s4FireKinds,
+                  s4HasGasOrFuel: existing.s4HasGasOrFuel,
                 });
           if (refreshed) {
             await tx
