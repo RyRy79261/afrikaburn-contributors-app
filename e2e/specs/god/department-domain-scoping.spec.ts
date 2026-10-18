@@ -30,6 +30,7 @@
 // obedience to it (predicate before select, per domain) in
 // apps/org/lib/__tests__/org-rank-enforcement.test.ts.
 
+import type { Page } from "@playwright/test";
 import { test, expect, skipUnlessGod } from "../../fixtures";
 import {
   createCamp,
@@ -39,15 +40,29 @@ import {
   submitRegistration,
 } from "../../personas/factories";
 import { openRegistrationInConsole } from "../camp-lead/support";
-import { elevateVisibleRow, gotoAccount } from "./support";
+import {
+  elevateVisibleRow,
+  gotoAccount,
+  restoreDepartmentDomains,
+  snapshotDepartmentDomains,
+  type DepartmentDomainSnapshot,
+} from "./support";
+
+/** Every department this spec creates, and only those, starts with this. */
+const DEPARTMENT_PREFIX = "QA Scope ";
 
 /** A department name no earlier run can have taken (names are unique org-wide). */
 function departmentName(): string {
-  return `QA Scope ${Date.now().toString(36)}${Math.floor(Math.random() * 900 + 100)}`;
+  return `${DEPARTMENT_PREFIX}${Date.now().toString(36)}${Math.floor(Math.random() * 900 + 100)}`;
 }
 
 test.describe("system manager · what a department owns is what its roles reach", () => {
-  test.beforeEach(async ({ holdDeploymentLock }) => {
+  // What the permanent departments owned before this test, and the god page
+  // that reads and restores it (a page of its own: see support.ts).
+  let ownedBefore: DepartmentDomainSnapshot | null = null;
+  let restorePage: Page | null = null;
+
+  test.beforeEach(async ({ holdDeploymentLock, makeAppPage }) => {
     skipUnlessGod();
     // EVERY TEST HERE MOVES A DOMAIN, AND A DOMAIN HAS ONE OWNER. Claiming
     // "the supplier repository" for this test's fresh department TAKES it from
@@ -57,6 +72,23 @@ test.describe("system manager · what a department owns is what its roles reach"
     // the measured failure). Any new spec that saves what a department owns
     // must take this lock too.
     await holdDeploymentLock("department-domains");
+    // …and must put back what it took. Deleting this test's department leaves
+    // the domain owned by NOBODY, not returned to the seeded department it was
+    // taken from — so without the afterEach below, every run stripped the
+    // seeded Suppliers and Theme camps departments of their domains.
+    ownedBefore = null;
+    restorePage = await makeAppPage("org");
+    await elevateToGod(restorePage);
+    ownedBefore = await snapshotDepartmentDomains(restorePage);
+  });
+
+  // Runs whether the test passed or died midway, and before fixture teardown,
+  // so the lock taken above is still held while it writes.
+  test.afterEach(async () => {
+    if (!ownedBefore || !restorePage) return;
+    await restoreDepartmentDomains(restorePage, ownedBefore, (name) =>
+      name.startsWith(DEPARTMENT_PREFIX),
+    );
   });
 
   test("a department owning nothing says so, and owning suppliers says that instead", async ({
@@ -237,11 +269,15 @@ test.describe("system manager · what a department owns is what its roles reach"
         const trigger = orgPage.getByRole("button", { name: `Delete ${name}` });
         if ((await trigger.count()) === 0) continue;
         await trigger.click();
-        await orgPage
-          .getByRole("dialog")
+        const confirm = orgPage.getByRole("dialog");
+        await confirm
           .getByRole("button", { name: /delete department and its roles/i })
           .click();
-        await expect(orgPage.getByText(/department deleted/i)).toBeVisible();
+        // The dialog closing is THIS delete's success. The "department
+        // deleted" toast is not: the first delete's is still on screen when
+        // the second is clicked, so waiting on it let the test end with the
+        // second delete in flight.
+        await expect(confirm).toBeHidden();
       }
     }
   });

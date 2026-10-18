@@ -53,7 +53,7 @@ export function ProfileMessageActions({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex min-w-0 max-w-full flex-wrap gap-2">
       {canMessage && !blockedByViewer && (
         <form action={start}>
           <input type="hidden" name="targetUserId" value={targetUserId} />
@@ -69,9 +69,15 @@ export function ProfileMessageActions({
         size="sm"
         disabled={busy}
         onClick={() => void toggleBlock()}
+        // A 20-character username does not fit a 360 card on one line; the
+        // label truncates and the full name stays in the title.
+        className="min-w-0 max-w-full"
+        title={blockedByViewer ? `Unblock ${name}` : `Block ${name}`}
       >
         <Ban className="h-4 w-4" aria-hidden />
-        {blockedByViewer ? `Unblock ${name}` : `Block ${name}`}
+        <span className="min-w-0 truncate">
+          {blockedByViewer ? `Unblock ${name}` : `Block ${name}`}
+        </span>
       </Button>
     </div>
   );
