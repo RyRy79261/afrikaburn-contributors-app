@@ -262,3 +262,9 @@ export * from "./team-audience";
 // notes about its members, edit/delete rights, and the name-only "possible
 // duplicate" hints with their dismissals. PURE.
 export * from "./member-records";
+
+// Registration safety (docs/registration-safety-spec.md, epic #49): the
+// policy links, the water guide, the extinguishers a layout implies, the
+// section 4 gates and their layout suggestions, the gas & fuel record's
+// permissions, carry-forward and fuel depot notices. PURE — no I/O.
+export * from "./registration-safety";

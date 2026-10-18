@@ -72,9 +72,14 @@ export type OfficerRequirement = "required" | "recommended";
 export interface OfficerTriggerInput {
   /** Amplified-sound level 0–4 (0 = none). Derive with `soundLevelFromValue`. */
   soundLevel: number;
-  /** Declared generators / open-flame gifting / large fuel or gas storage. */
+  /** G1: the camp brings a generator (`s4_has_generator`). */
   hasGenerators: boolean;
+  /** G2: the camp has ANY fire, of any kind (`s4_has_fire`) — not only
+   * open-flame gifting. */
   hasOpenFlame: boolean;
+  /** G3: the camp brings ANY LPG gas or liquid fuel (`s4_has_gas_or_fuel`)
+   * — not only large storage. Never re-derived from the optional gas & fuel
+   * record. (docs/registration-safety-spec.md) */
   hasFuelStorage: boolean;
 }
 

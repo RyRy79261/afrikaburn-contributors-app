@@ -2,6 +2,7 @@ import type { SectionKey } from "@quagga/types";
 import { SECTION_KEYS } from "@quagga/types";
 import { isWithinWordLimit } from "./word-count";
 import { isNoAmplifiedSound } from "./sound";
+import { safetyGatesComplete } from "./registration-safety";
 
 // Per-section completeness predicates (build-spec §Core logic: "submit-gate —
 // all six complete — define per-section completeness predicates"). These are
@@ -49,6 +50,15 @@ export interface RegistrationSectionData {
    * (decision 12) — never completes the section.
    */
   hasLayout?: boolean | null;
+  /**
+   * The three safety gates and the fire follow-up
+   * (docs/registration-safety-spec.md). Null = not answered. A layout
+   * suggestion is NOT an answer: only what the camp saved counts.
+   */
+  s4HasGenerator?: boolean | null;
+  s4HasFire?: boolean | null;
+  s4FireKinds?: readonly string[] | null;
+  s4HasGasOrFuel?: boolean | null;
 
   // Section 5 — Sound & placement
   s5AmplifiedMusic?: string | null;
@@ -102,7 +112,12 @@ const SECTION_PREDICATES: Record<
   size_logistics: (d) =>
     positive(d.s4ExpectedPopulation) &&
     filled(d.s4FirstArrivalDate) &&
-    (filled(d.s4AreaDimensions) || d.hasLayout === true),
+    (filled(d.s4AreaDimensions) || d.hasLayout === true) &&
+    // G1–G3, and at least one fire kind when G2 is yes. Stored rows marked
+    // complete before these gates existed stay so until their next save — by
+    // decision, no backfill and no recompute on read (spec §"Stored
+    // completed_sections").
+    safetyGatesComplete(d),
 
   // A rig needs a sound plan; acoustic camps don't. Placement 1st choice and a
   // family-friendly answer are always required.

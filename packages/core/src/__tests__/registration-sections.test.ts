@@ -30,6 +30,10 @@ function fullData(): RegistrationSectionData {
     s4ExpectedPopulation: 45,
     s4FirstArrivalDate: "2027-04-24",
     s4AreaDimensions: "20m x 15m",
+    s4HasGenerator: true,
+    s4HasFire: true,
+    s4FireKinds: ["braai_brazier"],
+    s4HasGasOrFuel: false,
 
     s5AmplifiedMusic: "Level 1 — Car stereo",
     s5SoundPlan: "Low background music, off during quiet hours.",

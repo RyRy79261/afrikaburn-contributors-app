@@ -75,6 +75,10 @@ export interface CarryForwardFields {
   s4WorkAccessPasses?: number | null;
   s4AreaDimensions?: string | null;
   s4LayoutUploadUrls?: readonly string[] | null;
+  s4HasGenerator?: boolean | null;
+  s4HasFire?: boolean | null;
+  s4FireKinds?: readonly string[] | null;
+  s4HasGasOrFuel?: boolean | null;
   s5AmplifiedMusic?: string | null;
   s5SoundPlan?: string | null;
   s5PlacementFirstChoice?: string | null;
@@ -110,6 +114,10 @@ const FIELD_SECTION: Record<CarryForwardField, SectionKey> = {
   s4WorkAccessPasses: "size_logistics",
   s4AreaDimensions: "size_logistics",
   s4LayoutUploadUrls: "size_logistics",
+  s4HasGenerator: "size_logistics",
+  s4HasFire: "size_logistics",
+  s4FireKinds: "size_logistics",
+  s4HasGasOrFuel: "size_logistics",
   s5AmplifiedMusic: "sound_placement",
   s5SoundPlan: "sound_placement",
   s5PlacementFirstChoice: "sound_placement",
@@ -143,6 +151,10 @@ const FIELD_LABELS: Record<CarryForwardField, string> = {
   s4WorkAccessPasses: "Work Access Passes",
   s4AreaDimensions: "Area dimensions",
   s4LayoutUploadUrls: "Layout uploads",
+  s4HasGenerator: "Generator",
+  s4HasFire: "Fire",
+  s4FireKinds: "Kinds of fire",
+  s4HasGasOrFuel: "Gas or fuel",
   s5AmplifiedMusic: "Amplified sound level",
   s5SoundPlan: "Sound plan",
   s5PlacementFirstChoice: "Placement — first choice",

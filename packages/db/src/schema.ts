@@ -27,6 +27,7 @@ import type {
   WapApprovedPass,
   LayoutDocument,
   MeetingAudience,
+  GasFuelRecord,
 } from "@quagga/types";
 
 // Quagga Portal schema (AfrikaBurn Contributors App). The R0 core (migrations
@@ -1414,6 +1415,15 @@ export const registrations = pgTable(
       .$type<string[]>()
       .notNull()
       .default([]),
+    // The safety gates (docs/registration-safety-spec.md, epic #49): G1 a
+    // generator, G2 any fire, G2a which kinds (stable keys, `FireKind` in
+    // @quagga/types), G3 LPG gas or liquid fuel. Nullable, no default: null =
+    // not answered. Officer status reads the three flags; the org review reads
+    // all four. Form 2 — never carried forward.
+    s4HasGenerator: boolean("s4_has_generator"),
+    s4HasFire: boolean("s4_has_fire"),
+    s4FireKinds: jsonb("s4_fire_kinds").$type<string[]>(),
+    s4HasGasOrFuel: boolean("s4_has_gas_or_fuel"),
 
     // Section 5 — Sound & placement preferences.
     s5AmplifiedMusic: text("s5_amplified_music"),
@@ -3475,6 +3485,53 @@ export const campLayoutSnapshots = pgTable(
     versionPositive: check(
       "camp_layout_snapshots_version_positive",
       sql`${s.version} >= 1`,
+    ),
+  }),
+);
+
+// --- Camp gas & fuel records (docs/registration-safety-spec.md, epic #49) --
+// An OPTIONAL camp record, not a registration answer, in the same sense as the
+// layout: what a camp is bringing that burns (LPG bottles, jerry cans, 200 L
+// barrels, fuel trailers, a note). A `GasFuelRecord` (@quagga/types) in jsonb,
+// Zod-validated on every write; totals are computed, never stored.
+//
+// OWNED BY THE REGISTRATION, one per camp per edition, cascade like
+// `camp_layouts`. Never required, never in the registration's completeness.
+//
+// `is_draft`: a copy carried forward from last year ("Start from 2026") that
+// the camp has not saved yet. Every read outside the record page ignores
+// drafts — the org review, the dashboard, section 4 and the notices.
+//
+// The fuel depot notice is EDGE-TRIGGERED and its two copies are tracked
+// separately: `camp_notified_at` (the camp's leads/admins) and
+// `wrangler_notified_at` (the wrangler, possibly deferred to assignment).
+// Both are cleared when a save turns the advice false.
+export const campGasFuelRecords = pgTable(
+  "camp_gas_fuel_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    registrationId: uuid("registration_id")
+      .notNull()
+      .references(() => registrations.id, { onDelete: "cascade" }),
+    record: jsonb("record").$type<GasFuelRecord>().notNull(),
+    isDraft: boolean("is_draft").notNull().default(false),
+    campNotifiedAt: timestamp("camp_notified_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    wranglerNotifiedAt: timestamp("wrangler_notified_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    registrationUniq: uniqueIndex("camp_gas_fuel_records_registration_idx").on(
+      r.registrationId,
     ),
   }),
 );

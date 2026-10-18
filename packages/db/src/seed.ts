@@ -66,7 +66,7 @@ import {
   normalizeName,
   seededOrgRoleRows,
 } from "@quagga/core";
-import { SupplierImportRow } from "@quagga/types";
+import { FIRE_KIND_LABELS, FIRE_KINDS, SupplierImportRow } from "@quagga/types";
 import type { Questionnaire, SupplierOnboardingSteps } from "@quagga/types";
 import { createPooledDb } from "./index";
 import * as schema from "./schema";
@@ -391,6 +391,66 @@ export async function seedReferenceData(db: Db): Promise<void> {
               prompt:
                 "Upload your camp layout diagram — interactive area, private camping, ablutions, water and fuel storage, parking, and your camp name on the drawing.",
               required: true,
+            },
+            // The safety gates (docs/registration-safety-spec.md). THE
+            // CONTRACT is the question ids AND the option values: exactly
+            // `yes` / `no` (labels are free), and `fire_kinds` values equal to
+            // the stable `FireKind` keys. The mirror parses values, never
+            // labels. `has_fire` is last on the page so its per-option `goTo`
+            // decides the branch: Yes → the "fire" page, No → skip it.
+            {
+              id: "has_generator",
+              kind: "single_select",
+              prompt: "Will you bring a generator?",
+              helper:
+                "A generator needs fuel and is a sound and fire risk, so we only ask whether you have one.",
+              required: true,
+              options: [
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" },
+              ],
+            },
+            {
+              id: "has_gas_or_fuel",
+              kind: "single_select",
+              prompt: "Will you bring LPG gas or liquid fuel (petrol, diesel, paraffin)?",
+              required: true,
+              options: [
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" },
+              ],
+            },
+            {
+              id: "has_fire",
+              kind: "single_select",
+              prompt: "Will your camp have any fire?",
+              helper:
+                "Braai, brazier, burn barrel, fire pit, gas cooking or heating, flame effects or fire performance.",
+              required: true,
+              options: [
+                { value: "yes", label: "Yes", goTo: "fire" },
+                { value: "no", label: "No", goTo: "sound_placement" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "fire",
+          kind: "questions",
+          title: "Fire",
+          next: "sound_placement",
+          questions: [
+            {
+              id: "fire_kinds",
+              kind: "multi_select",
+              prompt: "Which kinds of fire?",
+              helper: "Tick every kind you'll have.",
+              required: true,
+              minSelections: 1,
+              options: FIRE_KINDS.map((key) => ({
+                value: key,
+                label: FIRE_KIND_LABELS[key],
+              })),
             },
           ],
         },
