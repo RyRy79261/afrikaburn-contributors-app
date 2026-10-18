@@ -20,6 +20,7 @@ import {
   protectionBypassHeaders,
   type AppName,
 } from "./lib/env";
+import { acquireDeploymentLock, type DeploymentLock } from "./lib/exclusive";
 
 interface Fixtures {
   /** Create an isolated page against any app; auto-closed at test end. */
@@ -28,6 +29,12 @@ interface Fixtures {
   webPage: Page;
   orgPage: Page;
   suppliersPage: Page;
+  /**
+   * Hold a cross-worker lock on deployment-wide state until this test ends —
+   * released in teardown, so a failed or timed-out test still lets go. Only for
+   * state the product makes a singleton (lib/exclusive.ts says why).
+   */
+  holdDeploymentLock: (name: DeploymentLock) => Promise<void>;
 }
 
 export const test = base.extend<Fixtures>({
@@ -61,6 +68,14 @@ export const test = base.extend<Fixtures>({
   },
   suppliersPage: async ({ makeAppPage }, use) => {
     await use(await makeAppPage("suppliers"));
+  },
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires the destructure.
+  holdDeploymentLock: async ({}, use) => {
+    const releases: Array<() => Promise<void>> = [];
+    await use(async (name) => {
+      releases.push(await acquireDeploymentLock(name));
+    });
+    for (const release of releases.reverse()) await release();
   },
 });
 

@@ -47,8 +47,16 @@ function departmentName(): string {
 }
 
 test.describe("system manager · what a department owns is what its roles reach", () => {
-  test.beforeEach(() => {
+  test.beforeEach(async ({ holdDeploymentLock }) => {
     skipUnlessGod();
+    // EVERY TEST HERE MOVES A DOMAIN, AND A DOMAIN HAS ONE OWNER. Claiming
+    // "the supplier repository" for this test's fresh department TAKES it from
+    // whichever department held it — including another test's, mid-assertion.
+    // A fresh department per test isolates nothing here, so the tests take
+    // turns instead, across workers, repeats and projects (lib/exclusive.ts has
+    // the measured failure). Any new spec that saves what a department owns
+    // must take this lock too.
+    await holdDeploymentLock("department-domains");
   });
 
   test("a department owning nothing says so, and owning suppliers says that instead", async ({
