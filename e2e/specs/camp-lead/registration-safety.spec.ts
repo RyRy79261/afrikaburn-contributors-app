@@ -7,6 +7,7 @@
 //     section, saved server-side, "No" to fire clears the kinds; the rough
 //     water guide is worked out from population and arrival; the policies are
 //     links only.
+//   • Submit opens on Form 1 alone: the gates never hold it.
 //   • The optional gas & fuel record: a save over the limit shows the depot
 //     notice and tells the camp's leads ONCE, in-app, with no amounts; a plain
 //     member reads it but cannot change it; the dashboard tile and section 4
@@ -22,7 +23,9 @@ import {
   inviteToCamp,
   joinByInvite,
   signUpBurner,
+  submitRegistration,
 } from "../../personas/factories";
+import { expectServerNotFound } from "../camp-member/support";
 
 /** Make the registration row exist (the record lives on it). */
 async function startDraft(page: Page, slug: string) {
@@ -93,6 +96,20 @@ test.describe("camp lead — registration safety (section 4)", () => {
       .click();
     const kinds = gate(webPage, /which kinds of fire/i);
     await expect(kinds).toBeVisible();
+    if (test.info().project.name === "mobile-360") {
+      // 44 px touch targets at 360 (frame sSl0w): the gate's Yes/No and the
+      // fire-kind chips.
+      const yes = gate(webPage, /will you bring a generator/i).getByRole(
+        "button",
+        { name: "Yes", exact: true },
+      );
+      const chip = kinds.getByRole("button", {
+        name: "Braai or brazier (raised)",
+        exact: true,
+      });
+      expect((await yes.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
     await gate(webPage, /will you bring lpg gas or liquid fuel/i)
       .getByRole("button", { name: "Yes", exact: true })
       .click();
@@ -163,12 +180,30 @@ test.describe("camp lead — registration safety (section 4)", () => {
     const camp = await createCamp(webPage, { description: "Chai at dawn." });
     await startDraft(webPage, camp.slug);
 
+    // The plain member joins BEFORE the save that sends the notice, so "never
+    // told" is tested against a notice that was actually sent while they were
+    // in the camp. (Joining afterwards made the check unable to fail.)
+    const { url } = await inviteToCamp(webPage, camp.slug);
+    const member = await makeAppPage("web");
+    await signUpBurner(member, { onboard: true });
+    await joinByInvite(member, url);
+
+    // Never public: a signed-in burner who is not a member gets not-found.
+    const stranger = await makeAppPage("web");
+    await signUpBurner(stranger, { onboard: true });
+    await expectServerNotFound(stranger, `/camps/${camp.slug}/gas-fuel`, [
+      "Gas & fuel record",
+    ]);
+
     // A first-time camp gets the empty form: no offer, no notice.
     await webPage.goto(`/camps/${camp.slug}/gas-fuel`);
     await expect(
       webPage.getByRole("heading", { name: /gas & fuel record/i }),
     ).toBeVisible();
     await expect(webPage.getByRole("button", { name: "Save record" })).toBeVisible();
+    await expect(webPage.getByTestId("gas-fuel-empty-hint")).toHaveText(
+      "Nothing is saved until you press Save record. No fuel depot notice.",
+    );
     await expect(webPage.getByTestId("gas-fuel-carry-offer")).toHaveCount(0);
     await expect(webPage.getByTestId("gas-fuel-depot-notice")).toHaveCount(0);
 
@@ -190,6 +225,7 @@ test.describe("camp lead — registration safety (section 4)", () => {
     await expect(notice).toContainText("96 kg of gas is over 90 kg");
     await expect(notice).toContainText("they'll be told when one is assigned");
     await expect(notice).toContainText("at most 100 kg of gas per camp");
+    await expect(webPage.getByTestId("gas-fuel-empty-hint")).toHaveCount(0);
 
     // The lead is told, in-app, once, with no amounts.
     const DEPOT_TITLE =
@@ -234,16 +270,13 @@ test.describe("camp lead — registration safety (section 4)", () => {
     ).toBeVisible();
 
     // A plain member reads it, read-only, and is never told.
-    const { url } = await inviteToCamp(webPage, camp.slug);
-    const member = await makeAppPage("web");
-    await signUpBurner(member, { onboard: true });
-    await joinByInvite(member, url);
     await member.goto(`/camps/${camp.slug}/gas-fuel`);
     const readOnly = member.getByTestId("gas-fuel-read-only");
     await expect(readOnly).toContainText(
       "Only leads, co-leads and whoever plans the layout can change this.",
     );
     await expect(readOnly).toContainText("2 × 48 kg · 96 kg");
+    await expect(readOnly).toContainText("The diesel barrel is for the generator.");
     await expect(member.getByRole("button", { name: "Save record" })).toHaveCount(0);
     await member.goto("/notifications");
     await expect(
@@ -260,12 +293,14 @@ test.describe("camp lead — registration safety (section 4)", () => {
     await expect(webPage.getByTestId("gas-fuel-depot-notice")).toHaveCount(0);
   });
 
-  test("the extinguishers card follows the drawn plan", async ({ webPage }) => {
-    test.skip(
-      test.info().project.name === "mobile-360",
-      "Drawing needs 768 px; the 360 view shows the same card, covered by the record test's member view.",
-    );
+  test("the extinguishers card follows the drawn plan, in the editor and the 360 view", async ({
+    webPage,
+  }) => {
     test.setTimeout(180_000);
+    const mobile = test.info().project.name === "mobile-360";
+    // Drawing needs 768 px: on the 360 project the plan is drawn wide, then
+    // the view-only 360 card is checked at 360 below.
+    if (mobile) await webPage.setViewportSize({ width: 1280, height: 900 });
     await signUpBurner(webPage, { onboard: true });
     const camp = await createCamp(webPage, { description: "Shade." });
     await startDraft(webPage, camp.slug);
@@ -301,5 +336,37 @@ test.describe("camp lead — registration safety (section 4)", () => {
       "Have 2 fire extinguishers",
     );
     await answerSafetyGates(webPage);
+
+    // At 360 the layout page is the view-only plan, with its own card.
+    await webPage.setViewportSize({ width: 360, height: 780 });
+    await webPage.goto(`/camps/${camp.slug}/layout`);
+    const viewCard = webPage
+      .getByTestId("extinguishers-card")
+      .filter({ visible: true });
+    await expect(viewCard).toContainText("2 × 4.5 kg DCP");
+    await expect(viewCard).toContainText("Worked out from the plan.");
+    await expect(viewCard).not.toContainText(/sand/i);
+  });
+
+  test("submit opens with section 4's gates still unanswered", async ({
+    webPage,
+  }) => {
+    // The gates are Form 2: never required for submit (registration-safety-
+    // spec; frame GFtHX). The wizard used to hold Submit for all six sections.
+    test.setTimeout(180_000);
+    await signUpBurner(webPage, { onboard: true });
+    const camp = await createCamp(webPage, { description: "Chai at dawn." });
+    await submitRegistration(webPage, camp.slug, {
+      skipSafetyGates: true,
+      beforeSubmit: async (page) => {
+        await expect(
+          page.getByText(/5 of 6 sections complete/i).filter({ visible: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: /submit registration/i }),
+        ).toBeEnabled();
+        await expect(page.getByText(/submit opens once/i)).toHaveCount(0);
+      },
+    });
   });
 });

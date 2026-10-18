@@ -584,6 +584,14 @@ export interface RegistrationInput {
   hasFire?: boolean;
   fireKinds?: string[];
   hasGasOrFuel?: boolean;
+  /**
+   * Leave section 4's safety gates UNANSWERED, so section 4 stays in
+   * progress. Submit must still open: the gates are Form 2 and never required
+   * for submit (registration-safety-spec; frame GFtHX).
+   */
+  skipSafetyGates?: boolean;
+  /** Runs once every section is filled, just before Submit is clicked. */
+  beforeSubmit?: (page: Page) => Promise<void>;
   soundPlan?: string;
   feeStructure?: string;
 }
@@ -692,7 +700,7 @@ export async function submitRegistration(
   await page
     .getByLabel(/camp area dimensions/i)
     .fill(input.areaDimensions ?? "20m x 15m");
-  await answerSafetyGates(page, input);
+  if (!input.skipSafetyGates) await answerSafetyGates(page, input);
   for (const [i, layoutUrl] of (input.layoutUrls ?? []).entries()) {
     await page.getByLabel("Paste a URL").fill(layoutUrl);
     await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -735,8 +743,10 @@ export async function submitRegistration(
     timeout: 15_000,
   });
 
-  // Submit — the gate opens only when the client sees all six sections complete;
-  // handleSubmit force-saves the draft before the server re-checks completeness.
+  // Submit — the gate opens once the client sees the Form 1 sections complete
+  // (the server's `isSubmittable`); handleSubmit force-saves the draft before
+  // the server re-checks completeness.
+  if (input.beforeSubmit) await input.beforeSubmit(page);
   const submit = page.getByRole("button", { name: /submit registration/i });
   await expect(submit).toBeEnabled();
   await submit.click();
