@@ -349,7 +349,7 @@ export function YesNoField({
             type="button"
             onClick={() => onChange(opt.v)}
             aria-pressed={value === opt.v}
-            className={`rounded-md border px-4 py-2 text-sm transition-colors ${
+            className={`min-h-11 rounded-md border px-4 py-2 text-sm transition-colors sm:min-h-0 ${
               value === opt.v
                 ? "border-accent bg-accent/15 text-foreground"
                 : "border-input text-muted-foreground hover:text-foreground"
@@ -398,7 +398,7 @@ export function CheckGroup({
               type="button"
               onClick={() => toggle(opt.value)}
               aria-pressed={on}
-              className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              className={`min-h-11 rounded-full border px-3.5 py-1.5 text-sm transition-colors sm:min-h-0 ${
                 on
                   ? "border-accent bg-accent/15 text-foreground"
                   : "border-input text-muted-foreground hover:text-foreground"

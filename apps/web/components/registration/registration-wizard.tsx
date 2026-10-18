@@ -23,6 +23,8 @@ import {
   completedSectionsFor,
   getPlacementZones,
   isSectionComplete,
+  isSubmittable,
+  missingSections,
   normalizeFireAnswer,
   SOUND_SCALE,
   waterEstimateLitres,
@@ -249,8 +251,12 @@ export function RegistrationWizard(props: WizardProps) {
       ),
     [props.campName, values, hasLayout],
   );
-  const allComplete = completed.size === SECTION_KEYS.length;
-  const missing = SECTION_KEYS.filter((k) => !completed.has(k));
+  // THE SERVER'S GATE, not a stricter one: submit needs the FORM 1 sections
+  // (@quagga/core `isSubmittable`). Form 2's sections — section 4's safety
+  // gates included — are never required for submit
+  // (docs/registration-safety-spec.md; frame GFtHX).
+  const allComplete = isSubmittable([...completed]);
+  const missing = missingSections([...completed]);
 
   /**
    * Flush the draft to the server. Resolves TRUE only once the server holds
@@ -1009,14 +1015,14 @@ export function RegistrationWizard(props: WizardProps) {
         </div>
       </div>
 
-      {/* Submit area (canvas `kDSa7`) — the gate stays locked until all six
-          sections are complete. */}
+      {/* Submit area (canvas `kDSa7`) — the gate stays locked until the
+          Form 1 sections are complete. */}
       <div className="flex flex-col gap-4 border-t border-border pt-6">
         {!allComplete && (
           <>
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Lock className="h-4 w-4 shrink-0" aria-hidden />
-              Submit opens once all six sections are complete
+              Submit opens once the Form 1 sections are complete
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

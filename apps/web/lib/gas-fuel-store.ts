@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { activeMembership } from "@quagga/db";
 import {
   canEditGasFuelRecord,
+  canViewGasFuelRecord,
   copyGasFuelRecordForNewEdition,
   decideFuelDepotNotice,
   decideGasFuelSave,
@@ -73,7 +74,9 @@ export async function loadGasFuelAccess(
   viewerUserId: string,
 ): Promise<GasFuelAccess | null> {
   const access = await loadLayoutAccess(slug, viewerUserId);
-  if (!access) return null;
+  // The record's own read predicate, enforced here so the rule @quagga/core
+  // tests is the one the page obeys — not merely the layout's.
+  if (!access || !canViewGasFuelRecord(access.membership)) return null;
   return { ...access, canEditRecord: canEditGasFuelRecord(access.membership) };
 }
 
@@ -189,7 +192,12 @@ export async function getSavedGasFuelRecord(
   return row && !row.isDraft ? row : null;
 }
 
-/** The most recent EARLIER edition's saved record for this camp. */
+/** The most recent EARLIER edition's saved record for this camp.
+ *
+ * The year and the draft flag are checked again on the rows, not only in the
+ * WHERE: "never offer a draft, never offer this edition's own row" is the rule,
+ * and a unit test can see this filter where it cannot see SQL. A camp has one
+ * row per edition, so reading them all costs nothing. */
 async function findGasFuelSource(
   handle: Tx | ReturnType<typeof db>,
   groupId: string,
@@ -198,6 +206,7 @@ async function findGasFuelSource(
   const rows = await handle
     .select({
       editionYear: schema.editions.year,
+      isDraft: schema.campGasFuelRecords.isDraft,
       record: schema.campGasFuelRecords.record,
     })
     .from(schema.campGasFuelRecords)
@@ -217,9 +226,10 @@ async function findGasFuelSource(
         eq(schema.campGasFuelRecords.isDraft, false),
       ),
     )
-    .orderBy(desc(schema.editions.year))
-    .limit(1);
-  const row = rows[0];
+    .orderBy(desc(schema.editions.year));
+  const row = rows
+    .filter((r) => !r.isDraft && r.editionYear < currentYear)
+    .sort((a, b) => b.editionYear - a.editionYear)[0];
   if (!row) return null;
   const record = parseStored(row.record);
   return record ? { editionYear: row.editionYear, record } : null;
@@ -231,6 +241,9 @@ export interface GasFuelPageView {
   stored: StoredGasFuelRecord | null;
   /** An earlier record to start from — editors only, only while none. */
   lastYear: { editionYear: number; record: GasFuelRecord } | null;
+  /** For a carried-forward draft: the year it came from ("Draft from your
+   * 2026 record"), resolved the way the offer resolved it; null otherwise. */
+  draftSourceYear: number | null;
   wranglerName: string | null;
 }
 
@@ -241,20 +254,27 @@ export async function loadGasFuelPage(
 ): Promise<GasFuelPageView> {
   const registrationId = await registrationIdFor(access.camp.id, edition.id);
   if (!registrationId) {
-    return { registrationId: null, stored: null, lastYear: null, wranglerName: null };
+    return {
+      registrationId: null,
+      stored: null,
+      lastYear: null,
+      draftSourceYear: null,
+      wranglerName: null,
+    };
   }
   const [stored, wrangler] = await Promise.all([
     recordRow(registrationId),
     findCampWrangler(access.camp.id, edition.id),
   ]);
-  const lastYear =
-    !stored && access.canEditRecord
+  const source =
+    (!stored && access.canEditRecord) || stored?.isDraft
       ? await findGasFuelSource(db(), access.camp.id, edition.year)
       : null;
   return {
     registrationId,
     stored,
-    lastYear,
+    lastYear: !stored && access.canEditRecord ? source : null,
+    draftSourceYear: stored?.isDraft ? (source?.editionYear ?? null) : null,
     wranglerName: wrangler?.name ?? null,
   };
 }

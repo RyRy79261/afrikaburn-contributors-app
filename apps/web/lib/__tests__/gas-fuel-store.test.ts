@@ -361,3 +361,94 @@ describe("getSavedGasFuelRecord — drafts are invisible outside the record page
     );
   });
 });
+
+describe("loadGasFuelAccess — the record page's read boundary", () => {
+  it("a stranger or former member gets null: the camp's not-found", async () => {
+    dbMock.queue([camp]);
+    stubs.permissions = null;
+    expect(await store.loadGasFuelAccess("karoo-kombuis", ALICE)).toBeNull();
+  });
+
+  it("no such camp gets null", async () => {
+    dbMock.queue([]);
+    stubs.permissions = { structuralRole: LEAD, rolePermissions: [] };
+    expect(await store.loadGasFuelAccess("nope", ALICE)).toBeNull();
+  });
+
+  it("a current member reads but cannot edit; a lead edits", async () => {
+    dbMock.queue([camp]);
+    stubs.permissions = { structuralRole: MEMBER, rolePermissions: [] };
+    const member = await store.loadGasFuelAccess("karoo-kombuis", REN);
+    expect(member?.canEditRecord).toBe(false);
+
+    dbMock.queue([camp]);
+    stubs.permissions = { structuralRole: LEAD, rolePermissions: [] };
+    const lead = await store.loadGasFuelAccess("karoo-kombuis", ALICE);
+    expect(lead?.canEditRecord).toBe(true);
+  });
+});
+
+describe("loadGasFuelPage — what is offered, and the draft's year", () => {
+  const leadAccess = () => ({
+    camp: { id: CAMP, name: camp.name, slug: camp.slug },
+    viewerUserId: ALICE,
+    membership: { structuralRole: LEAD, rolePermissions: [] },
+    canEdit: true,
+    canSeeWarnings: true,
+    canEditRecord: true,
+  });
+  const storedRow = (isDraft: boolean) => ({
+    record: OVER,
+    isDraft,
+    campNotifiedAt: null,
+    wranglerNotifiedAt: null,
+    updatedAt: new Date(),
+    username: "alice",
+    sanitizedAt: null,
+  });
+
+  it("a carried-forward draft reports the year it came from", async () => {
+    dbMock.queue(
+      /* registration */ [{ id: REGISTRATION }],
+      /* this edition's row */ [storedRow(true)],
+      /* no wrangler */ [],
+      /* earlier records */ [{ editionYear: 2026, isDraft: false, record: OVER }],
+    );
+    const view = await store.loadGasFuelPage(leadAccess(), EDITION);
+    expect(view.draftSourceYear).toBe(2026);
+    expect(view.lastYear).toBeNull();
+  });
+
+  it("a saved record reports no draft year and offers nothing", async () => {
+    dbMock.queue([{ id: REGISTRATION }], [storedRow(false)], []);
+    const view = await store.loadGasFuelPage(leadAccess(), EDITION);
+    expect(view.draftSourceYear).toBeNull();
+    expect(view.lastYear).toBeNull();
+  });
+
+  it("never offers a draft or this edition's own row as last year's", async () => {
+    dbMock.queue(
+      [{ id: REGISTRATION }],
+      /* nothing this edition */ [],
+      [],
+      [
+        { editionYear: 2027, isDraft: false, record: WITHIN },
+        { editionYear: 2026, isDraft: true, record: WITHIN },
+        { editionYear: 2025, isDraft: false, record: OVER },
+      ],
+    );
+    const view = await store.loadGasFuelPage(leadAccess(), EDITION);
+    expect(view.lastYear).toEqual({ editionYear: 2025, record: OVER });
+  });
+
+  it("offers nothing when every earlier row is a draft", async () => {
+    dbMock.queue(
+      [{ id: REGISTRATION }],
+      [],
+      [],
+      [{ editionYear: 2026, isDraft: true, record: OVER }],
+    );
+    const view = await store.loadGasFuelPage(leadAccess(), EDITION);
+    expect(view.lastYear).toBeNull();
+  });
+});

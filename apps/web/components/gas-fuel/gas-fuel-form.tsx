@@ -63,6 +63,8 @@ interface Props {
   stored: { record: GasFuelRecord; isDraft: boolean } | null;
   /** Last year's saved record, offered while there is none this edition. */
   lastYear: { editionYear: number; summary: string } | null;
+  /** For a carried-forward draft, the year it came from; null when unknown. */
+  draftSourceYear: number | null;
   wranglerName: string | null;
 }
 
@@ -174,7 +176,10 @@ export function GasFuelForm(props: Props) {
           data-testid="gas-fuel-carry-offer"
         >
           <div className="flex items-start gap-3">
-            <History className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <History
+              className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+              aria-hidden
+            />
             <div>
               <h2 className="text-sm font-semibold">
                 Start from your {offer.editionYear} record?
@@ -209,9 +214,16 @@ export function GasFuelForm(props: Props) {
           className="flex items-start gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4"
           data-testid="gas-fuel-draft"
         >
-          <History className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <History
+            className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+            aria-hidden
+          />
           <div>
-            <p className="text-sm font-medium">Draft from your previous record</p>
+            <p className="text-sm font-medium">
+              {props.draftSourceYear !== null
+                ? `Draft from your ${props.draftSourceYear} record`
+                : "Draft from your previous record"}
+            </p>
             <p className="text-sm text-muted-foreground">
               Check every number, then save. Until you do, it doesn&apos;t
               count, the organisers don&apos;t see it, and nobody is told about
@@ -224,12 +236,21 @@ export function GasFuelForm(props: Props) {
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
         <div>
           <h2 className="text-lg font-semibold">LPG gas</h2>
-          <p className="text-sm text-muted-foreground">One row for each bottle size.</p>
+          <p className="text-sm text-muted-foreground">
+            One row for each bottle size.
+          </p>
         </div>
         <ul className="flex flex-col gap-3">
           {rows.map((row, i) => (
-            <li key={row.key} className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1.5">
+            <li
+              key={row.key}
+              // One row at every width (frame qjdpW): the size fills, the
+              // count and delete keep their size, and the per-row subtotal
+              // is dropped below sm — the Total line already sums it.
+              className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-end gap-3 sm:grid-cols-[9rem_6rem_1fr_auto]"
+              data-testid="gas-fuel-bottle-row"
+            >
+              <div className="flex min-w-0 flex-col gap-1.5">
                 <label
                   className="text-xs text-muted-foreground"
                   htmlFor={`lpg-size-${row.key}`}
@@ -246,7 +267,7 @@ export function GasFuelForm(props: Props) {
                     )
                   }
                 >
-                  <SelectTrigger id={`lpg-size-${row.key}`} className="w-36">
+                  <SelectTrigger id={`lpg-size-${row.key}`} className="w-full">
                     <SelectValue placeholder="Choose a size" />
                   </SelectTrigger>
                   <SelectContent>
@@ -270,7 +291,7 @@ export function GasFuelForm(props: Props) {
                   type="number"
                   inputMode="numeric"
                   min={0}
-                  className="w-24"
+                  className="w-full"
                   value={String(row.count)}
                   onChange={(e) =>
                     setRows((rs) =>
@@ -283,14 +304,14 @@ export function GasFuelForm(props: Props) {
                   }
                 />
               </div>
-              <span className="pb-2 text-sm text-muted-foreground tabular-nums">
+              <span className="hidden pb-2 text-sm text-muted-foreground tabular-nums sm:inline">
                 {(row.sizeKg ?? 0) * row.count} kg
               </span>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="ml-auto"
+                className="justify-self-end"
                 aria-label={`Remove bottle row ${i + 1}`}
                 onClick={() =>
                   setRows((rs) =>
@@ -330,7 +351,9 @@ export function GasFuelForm(props: Props) {
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
         <div>
           <h2 className="text-lg font-semibold">Liquid fuel</h2>
-          <p className="text-sm text-muted-foreground">Petrol, diesel or paraffin.</p>
+          <p className="text-sm text-muted-foreground">
+            Petrol, diesel or paraffin.
+          </p>
         </div>
         <CountRow
           id="jerry-cans"
@@ -353,6 +376,15 @@ export function GasFuelForm(props: Props) {
           value={trailers}
           onChange={setTrailers}
         />
+        {props.stored === null && (
+          // Frame T7rUD state 3, reworded: this form saves only on the button.
+          <p
+            className="border-t border-border pt-3 text-xs text-muted-foreground"
+            data-testid="gas-fuel-empty-hint"
+          >
+            Nothing is saved until you press Save record. No fuel depot notice.
+          </p>
+        )}
       </section>
 
       <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
@@ -437,7 +469,10 @@ function DepotNotice({
       role="status"
       data-testid="gas-fuel-depot-notice"
     >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+        aria-hidden
+      />
       <div>
         <p className="text-sm font-semibold">This goes to the fuel depot</p>
         <p className="text-sm text-muted-foreground">
@@ -458,7 +493,10 @@ function WithinLimits() {
       className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm text-muted-foreground"
       data-testid="gas-fuel-within-limits"
     >
-      <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+      <CircleCheck
+        className="mt-0.5 h-4 w-4 shrink-0 text-success"
+        aria-hidden
+      />
       Within the limits: up to {FUEL_DEPOT_GAS_KG} kg of gas and 2 × 20 L of
       fuel stay in your camp. Nothing goes to the fuel depot.
     </p>
@@ -478,7 +516,9 @@ function ReadOnlyRecord({
   const rows = record?.lpg.filter((r) => r.count > 0) ?? [];
   return (
     <div className="flex flex-col gap-5">
-      {record && advice && <DepotNotice record={record} wranglerName={wranglerName} />}
+      {record && advice && (
+        <DepotNotice record={record} wranglerName={wranglerName} />
+      )}
       <section
         className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
         data-testid="gas-fuel-read-only"
@@ -488,33 +528,36 @@ function ReadOnlyRecord({
           Only leads, co-leads and whoever plans the layout can change this.
         </p>
         {record ? (
-          <dl className="flex flex-col divide-y divide-border text-sm">
-            <div className="flex justify-between gap-3 py-2">
-              <dt className="font-medium">LPG gas</dt>
-              <dd className="text-right font-semibold">
-                {rows.length === 0
-                  ? "None"
-                  : `${rows.map((r) => `${r.count} × ${r.sizeKg} kg`).join(" + ")} · ${gasTotalKg(record)} kg`}
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3 py-2">
-              <dt className="font-medium">20 L jerry cans</dt>
-              <dd className="font-semibold">{record.jerryCans20l}</dd>
-            </div>
-            <div className="flex justify-between gap-3 py-2">
-              <dt className="font-medium">200 L barrels</dt>
-              <dd className="font-semibold">{record.barrels200l}</dd>
-            </div>
-            <div className="flex justify-between gap-3 py-2">
-              <dt className="font-medium">Fuel trailers</dt>
-              <dd className="font-semibold">{record.fuelTrailers}</dd>
-            </div>
+          <>
+            <dl className="flex flex-col divide-y divide-border text-sm">
+              <div className="flex justify-between gap-3 py-2">
+                <dt className="font-medium">LPG gas</dt>
+                <dd className="text-right font-semibold">
+                  {rows.length === 0
+                    ? "None"
+                    : `${rows.map((r) => `${r.count} × ${r.sizeKg} kg`).join(" + ")} · ${gasTotalKg(record)} kg`}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3 py-2">
+                <dt className="font-medium">20 L jerry cans</dt>
+                <dd className="font-semibold">{record.jerryCans20l}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-2">
+                <dt className="font-medium">200 L barrels</dt>
+                <dd className="font-semibold">{record.barrels200l}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-2">
+                <dt className="font-medium">Fuel trailers</dt>
+                <dd className="font-semibold">{record.fuelTrailers}</dd>
+              </div>
+            </dl>
+            {/* Outside the <dl>: a list may hold only dt/dd groups. */}
             {record.note && (
-              <p className="pt-3 text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 &ldquo;{record.note}&rdquo;
               </p>
             )}
-          </dl>
+          </>
         ) : (
           <p className="text-sm">Your camp hasn&apos;t filled this in yet.</p>
         )}

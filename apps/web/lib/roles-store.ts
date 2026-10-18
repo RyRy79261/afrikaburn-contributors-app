@@ -18,10 +18,10 @@ import {
   officerAcceptedNotification,
   officerAssignmentRequestNotification,
   officerRequirements,
+  officerTriggersFromRegistration,
   officerSlotFilled,
   outstandingOfficers,
   roleGrantsElevatedPrivileges,
-  soundLevelFromValue,
   PROJECT_ROLE_CAP,
   roleCapReached,
   roleNameConflicts,
@@ -1019,17 +1019,17 @@ export async function getOfficerStatus(
   const isRegisteredOrInFlight =
     isRegisteredStatus(status) || isInReviewStatus(status);
 
-  const triggers: OfficerTriggerInput = {
-    soundLevel: soundLevelFromValue(registration?.sound),
-    // The section 4 gates (docs/registration-safety-spec.md §"Officer status:
-    // real values instead of false"); null (not answered) reads as false. No
-    // requirement changes — `officerRequirements` ignores the three — but the
-    // surface stops asserting "no generator, no fire, no fuel" untruthfully.
-    // Never re-derived from the optional gas & fuel record.
-    hasGenerators: registration?.hasGenerator === true,
-    hasOpenFlame: registration?.hasFire === true,
-    hasFuelStorage: registration?.hasGasOrFuel === true,
-  };
+  // The section 4 gates (docs/registration-safety-spec.md §"Officer status:
+  // real values instead of false"), mapped by core — the same mapping the org
+  // status board uses. No requirement changes (`officerRequirements` ignores
+  // the three), but the surface stops asserting "no generator, no fire, no
+  // fuel" untruthfully.
+  const triggers: OfficerTriggerInput = officerTriggersFromRegistration({
+    soundRaw: registration?.sound,
+    hasGenerator: registration?.hasGenerator,
+    hasFire: registration?.hasFire,
+    hasGasOrFuel: registration?.hasGasOrFuel,
+  });
   const requirements = officerRequirements(triggers);
 
   const roles = (await listRoles(groupId)).filter(

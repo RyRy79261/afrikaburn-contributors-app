@@ -140,6 +140,7 @@ export default async function GasFuelPage({
               }
             : null
         }
+        draftSourceYear={view.draftSourceYear}
         wranglerName={view.wranglerName}
       />
     </div>
