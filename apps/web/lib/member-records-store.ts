@@ -5,8 +5,10 @@ import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { activeMembership } from "@quagga/db";
 import {
   MEMBER_RECORDS_AUDIT,
+  buildMemberNotesExport,
   canDeleteMemberNote,
   canEditMemberNote,
+  canExportMemberNotes,
   canManageMemberNotes,
   canReadMemberNotes,
   canSeeDuplicateHints,
@@ -17,7 +19,9 @@ import {
   duplicatesByUser,
   enforceKindPermissions,
   findDuplicatePairs,
+  holdsCaptainRole,
   memberRecordsAvailableForGroup,
+  memberNotesExportFilename,
   memberRecordsRefusalMessage,
   orderedUserPair,
   publicMemberName,
@@ -33,6 +37,7 @@ import {
   DeleteMemberNoteInput,
   DismissDuplicateInput,
   EditMemberNoteInput,
+  ExportMemberNotesInput,
   type GroupKind,
   type MembershipRole,
   type ProjectPermissions,
@@ -71,8 +76,10 @@ import { getMemberPermissions } from "./roles-store";
 //
 // PRIVACY. Notes are read here and nowhere else, and only for a note person of
 // the camp about someone other than themselves. The roster gets a COUNT per
-// member for note people (never text); nothing here feeds an export, stats,
-// search, the org console or a notification. Duplicate hints compare the
+// member for note people (never text); nothing here feeds a roster or CSV
+// export, stats, search, the org console or a notification. The ONE export is
+// `exportMemberNotes`: a lead's, co-lead's or captain's file of one member's
+// notes, to answer that member's POPIA s23 request (#105) — no author, audited. Duplicate hints compare the
 // names the roster shows and nothing else — no phone, ID or other hard-locked
 // field is selected by this file.
 
@@ -152,7 +159,7 @@ async function loadPermissions(
   groupId: string,
   membershipId: string,
   role: MembershipRole,
-): Promise<PermissionMembership> {
+): Promise<PermissionMembership & { holdsCaptainRole: boolean }> {
   const roles: CampRoleRow[] = await handle
     .select({
       id: schema.projectRoles.id,
@@ -176,6 +183,11 @@ async function loadPermissions(
     rolePermissions: roles
       .filter((r) => r.kind === "baseline" || heldIds.has(r.id))
       .map((r) => enforceKindPermissions(r.kind, r.permissions)),
+    // The Captain role's KIND, held with accepted consent in THIS camp — never
+    // inferred from permissions (a custom role may grant every privilege).
+    holdsCaptainRole: holdsCaptainRole(
+      roles.filter((r) => heldIds.has(r.id)).map((r) => r.kind),
+    ),
   };
 }
 
@@ -247,10 +259,13 @@ async function actorViewer(
 ): Promise<MemberNotesViewer> {
   const me = people.get(userId.toLowerCase());
   if (!me || me.archived) return { userId, membership: null };
-  return {
-    userId,
-    membership: await loadPermissions(tx, groupId, me.membershipId, me.role),
-  };
+  const { holdsCaptainRole: captain, ...membership } = await loadPermissions(
+    tx,
+    groupId,
+    me.membershipId,
+    me.role,
+  );
+  return { userId, membership, holdsCaptainRole: captain };
 }
 
 /** One `audit_events` row in the caller's transaction. `meta` holds ids
@@ -325,6 +340,10 @@ export interface ProfileMemberNotes {
   camp: RecordsCamp;
   /** The person is an archived (former) member of this camp. */
   subjectArchived: boolean;
+  /** The viewer may export these notes for the member (a structural lead,
+   * co-lead or captain: @quagga/core `canExportMemberNotes`). The export route decides
+   * again from the database on every call; this only shows the button. */
+  canExport: boolean;
   notes: MemberNoteView[];
 }
 
@@ -434,6 +453,7 @@ export async function loadProfileMemberNotes(input: {
     const viewer: MemberNotesViewer = {
       userId: input.viewerUserId,
       membership,
+      holdsCaptainRole: membership?.holdsCaptainRole === true,
     };
     if (
       !canReadMemberNotes(viewer, {
@@ -446,6 +466,10 @@ export async function loadProfileMemberNotes(input: {
     cards.push({
       camp: { id: group.id, name: group.name, slug: group.slug },
       subjectArchived: group.subjectArchivedAt !== null,
+      canExport: canExportMemberNotes(viewer, {
+        userId: input.subjectUserId,
+        inCamp: true,
+      }),
       notes: await loadNotes(group.id, input.subjectUserId, viewer),
     });
   }
@@ -775,6 +799,123 @@ export async function deleteMemberNote(
       return { ok: true };
     },
   );
+}
+
+// --- Export: a member's POPIA s23 access request (#105) ------------------------------
+
+/** Refused: the same "not found" every non-lead, stranger, erased account and
+ * unknown camp gets, so the export is no oracle for who has notes. */
+const EXPORT_NOT_FOUND = {
+  ok: false,
+  reason: "not_found",
+  error: NOT_FOUND,
+} as const;
+
+// REFUSE, DON'T PARTIAL. With no key every note would read as "could not be
+// read"; a file of placeholders is not an answer to an access request.
+const NO_KEY_EXPORT =
+  "Private notes can't be exported right now: this site's encryption key " +
+  "isn't configured, so the notes can't be read. Nothing was exported. Tell " +
+  "an organiser (PGCRYPTO_KEY is missing).";
+const WRONG_KEY_EXPORT =
+  "These notes can't be exported right now: none of them can be read with " +
+  "this site's current encryption key. Nothing was exported. Tell an " +
+  "organiser.";
+
+/** The export's result: the file, or why not. `unavailable` is the one
+ * refusal that is not "not found" — it is only reached by a lead. */
+export type MemberNotesExportResult =
+  | { ok: true; filename: string; text: string; noteCount: number }
+  | { ok: false; reason: "not_found" | "unavailable"; error: string };
+
+/**
+ * The camp's notes about one member, as a plain-text file a lead sends the
+ * member (POPIA s23; docs/member-records-spec.md §Export). Decided on EVERY
+ * call from the database: the actor's and the person's memberships are locked
+ * `FOR SHARE` (so a concurrent leave or erasure either waits or wins), the
+ * actor's permissions are loaded live, and @quagga/core `canExportMemberNotes`
+ * — a structural lead, co-lead or captain of THIS camp, about someone else
+ * in it —
+ * decides before a note is read. Every export writes ONE audit row in the
+ * same transaction: ids and a count, never the text.
+ */
+export async function exportMemberNotes(
+  viewerUserId: string,
+  raw: unknown,
+): Promise<MemberNotesExportResult> {
+  const parsed = ExportMemberNotesInput.safeParse(raw);
+  if (!parsed.success) return EXPORT_NOT_FOUND;
+  if (!isDatabaseConfigured()) return EXPORT_NOT_FOUND;
+  const camp = await findCamp(parsed.data.slug);
+  if (!camp) return EXPORT_NOT_FOUND;
+  // Postgres hands uuids back lowercase; compare like with like.
+  const subjectUserId = parsed.data.subjectUserId.toLowerCase();
+  return withTransaction(async (tx): Promise<MemberNotesExportResult> => {
+    const people = await lockPeople(tx, camp.id, [viewerUserId, subjectUserId]);
+    const viewer = await actorViewer(tx, camp.id, viewerUserId, people);
+    const subject = people.get(subjectUserId);
+    if (
+      !subject ||
+      !canExportMemberNotes(viewer, { userId: subjectUserId, inCamp: true })
+    ) {
+      return EXPORT_NOT_FOUND;
+    }
+    if (!isCryptoConfigured()) {
+      return { ok: false, reason: "unavailable", error: NO_KEY_EXPORT };
+    }
+    // No author column is selected: the file never names who wrote a note.
+    const rows = await tx
+      .select({
+        body: schema.memberNotes.body,
+        editedByUserId: schema.memberNotes.editedByUserId,
+        createdAt: schema.memberNotes.createdAt,
+        updatedAt: schema.memberNotes.updatedAt,
+      })
+      .from(schema.memberNotes)
+      .where(
+        and(
+          eq(schema.memberNotes.groupId, camp.id),
+          eq(schema.memberNotes.subjectUserId, subjectUserId),
+        ),
+      )
+      .orderBy(asc(schema.memberNotes.createdAt), asc(schema.memberNotes.id));
+    const notes = rows.map((r) => {
+      const body = decryptField(r.body);
+      return {
+        createdAt: r.createdAt,
+        editedAt: r.editedByUserId !== null ? r.updatedAt : null,
+        text: body.state === "ok" ? body.value : null,
+      };
+    });
+    // A key is set but reads NONE of the notes (a wrong or rotated key): the
+    // same as no key — a file of placeholders answers nothing. One unreadable
+    // note among readable ones is listed as such (spec §Export).
+    if (notes.length > 0 && notes.every((n) => n.text === null)) {
+      return { ok: false, reason: "unavailable", error: WRONG_KEY_EXPORT };
+    }
+    const exportedAt = new Date();
+    const text = buildMemberNotesExport({
+      campName: camp.name,
+      memberName: subject.name,
+      exportedAt,
+      notes,
+    });
+    await audit(tx, viewerUserId, MEMBER_RECORDS_AUDIT.noteExport, camp.id, {
+      groupId: camp.id,
+      subjectUserId,
+      noteCount: String(rows.length),
+    });
+    return {
+      ok: true,
+      filename: memberNotesExportFilename({
+        campSlug: camp.slug,
+        memberName: subject.name,
+        exportedAt,
+      }),
+      text,
+      noteCount: rows.length,
+    };
+  });
 }
 
 // --- Writes: duplicate hints -------------------------------------------------------

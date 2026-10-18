@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
 import { decrypt, encrypt } from "@quagga/db/crypto";
-import { MEMBER_RECORDS_AUDIT } from "@quagga/core";
+import { MEMBER_RECORDS_AUDIT, allProjectPermissions } from "@quagga/core";
 import {
   GroupKind,
   MembershipRole,
@@ -30,6 +30,7 @@ const MEMBER = MembershipRole.enum.member;
 const THEME_CAMP = GroupKind.enum.theme_camp;
 const CUSTOM = ProjectRoleKind.enum.custom;
 const BASELINE = ProjectRoleKind.enum.baseline;
+const CAPTAIN = ProjectRoleKind.enum.captain;
 
 const ALICE = "aaaaaaaa-0000-4000-8000-000000000001"; // lead
 const REN = "aaaaaaaa-0000-4000-8000-000000000002"; // welfare (member_notes)
@@ -674,6 +675,8 @@ describe("notes on a burner's profile", () => {
     expect(cards).toHaveLength(1);
     expect(cards[0]!.camp).toEqual({ id: CAMP, name: "Mad Hatters", slug: SLUG });
     expect(cards[0]!.subjectArchived).toBe(false);
+    // A structural lead: the export action shows (the route re-decides).
+    expect(cards[0]!.canExport).toBe(true);
     expect(cards[0]!.notes.map((n) => [n.authorName, n.isOwn, n.edited, n.canEdit, n.canDelete])).toEqual([
       ["Alice Hatter", true, true, true, true],
       ["Ren Notfound", false, false, false, true],
@@ -722,7 +725,25 @@ describe("notes on a burner's profile", () => {
       subjectUserId: JABU,
     });
     expect(card!.subjectArchived).toBe(true);
+    // A note-keeper who is not a lead keeps notes but cannot export them.
+    expect(card!.canExport).toBe(false);
     expect(card!.notes[0]!.authorName).toBe("Departed Burner");
+  });
+
+  it("the card offers the export to a captain of the camp, not to a custom all-privileges role", async () => {
+    for (const [holds, expected] of [[true, true], [false, false]] as const) {
+      dbMock.reset();
+      getMemberPermissions.mockResolvedValue({
+        ...perms(MEMBER, allProjectPermissions()),
+        holdsCaptainRole: holds,
+      });
+      dbMock.queue([shared()], [stored()]);
+      const [card] = await store.loadProfileMemberNotes({
+        viewerUserId: REN,
+        subjectUserId: JABU,
+      });
+      expect(card!.canExport).toBe(expected);
+    }
   });
 
   it("a plain camp-mate, or a roster reader without member_notes, gets nothing and no note is read", async () => {
@@ -1063,5 +1084,265 @@ describe("cleanup", () => {
     const [dismissals] = dbMock.writesTo(schema.memberDuplicateDismissals);
     expect(dismissals!.kind).toBe("delete");
     expect(ids(dismissals!)).toEqual([JABU, JABU]);
+  });
+});
+
+// --- Export: POPIA s23 access request (#105; Ryan, 18 Oct 2026) --------------
+
+describe("exporting a member's notes", () => {
+  const input = { slug: SLUG, subjectUserId: JABU };
+  const row = (over: Record<string, unknown> = {}) => ({
+    body: encrypt(SECRET),
+    editedByUserId: null,
+    createdAt: new Date("2026-10-03T10:00:00Z"),
+    updatedAt: new Date("2026-10-03T10:00:00Z"),
+    ...over,
+  });
+
+  it("a lead gets the file: oldest first, decrypted, no author, and ONE audit row of ids and a count", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+      [
+        row({
+          body: encrypt("Great on build week."),
+          createdAt: new Date("2026-09-01T10:00:00Z"),
+          editedByUserId: REN,
+          updatedAt: new Date("2026-09-20T10:00:00Z"),
+        }),
+        row({ body: "not-ciphertext", createdAt: new Date("2026-09-10T10:00:00Z") }),
+        row(),
+      ],
+      [],
+    );
+    const result = await store.exportMemberNotes(ALICE, input);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.noteCount).toBe(3);
+    expect(result.filename).toMatch(
+      /^member-notes-mad-hatters-jabu-\d{4}-\d{2}-\d{2}\.txt$/,
+    );
+    expect(result.text).toContain("Private notes kept by Mad Hatters");
+    expect(result.text).toContain("About: Jabu");
+    expect(result.text).toContain(
+      "Written: 1 September 2026\nLast edited: 20 September 2026\n\nGreat on build week.",
+    );
+    expect(result.text).toContain(
+      "Written: 10 September 2026\n\n[This note could not be read]",
+    );
+    expect(result.text).toContain(SECRET);
+    // Never the ciphertext, never an author.
+    expect(result.text).not.toContain("not-ciphertext");
+    expect(result.text).not.toMatch(/Ren Notfound|Alice Hatter/);
+    expect(result.text).not.toContain(REN);
+
+    // The notes query selects no author column, and reads THIS camp's notes
+    // about THIS person, inside the locked transaction.
+    const notesQuery = dbMock.queriesTouching(schema.memberNotes)[0]!;
+    expect(notesQuery.tx).toBe(true);
+    const selected = notesQuery.arg("select") as Record<string, unknown>;
+    expect(Object.keys(selected).sort()).toEqual(
+      ["body", "createdAt", "editedByUserId", "updatedAt"],
+    );
+    expect(boundStrings(notesQuery)).toEqual(
+      expect.arrayContaining([CAMP, JABU]),
+    );
+
+    const audits = auditRows();
+    expect(audits).toEqual([
+      {
+        actorId: ALICE,
+        action: MEMBER_RECORDS_AUDIT.noteExport,
+        subject: CAMP,
+        meta: { groupId: CAMP, subjectUserId: JABU, noteCount: "3" },
+      },
+    ]);
+    expect(JSON.stringify(audits)).not.toContain("night shifts");
+    expect(JSON.stringify(audits)).not.toContain("build week");
+    expect(dbMock.writesTo(schema.auditEvents)[0]!.tx).toBe(true);
+    // A read: nothing is written to the notes.
+    expect(dbMock.writesTo(schema.memberNotes)).toHaveLength(0);
+  });
+
+  it("a co-lead may export; an archived member's notes can be exported", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, ADMIN), person(JABU, MEMBER, { archivedAt: new Date() })],
+      ...rolesFor(null),
+      [row()],
+      [],
+    );
+    const result = await store.exportMemberNotes(ALICE, input);
+    expect(result.ok).toBe(true);
+  });
+
+  // Ryan, 18 Oct 2026: captains of THIS camp export too. The signal is the
+  // Captain role's KIND, held with accepted consent in this camp.
+  const CAPTAIN_ROLE = "77777777-0000-4000-8000-000000000003";
+  const withCaptainRole = (held: boolean, kind: string = CAPTAIN) => [
+    [
+      { id: BASELINE_ROLE, kind: BASELINE, permissions: {} },
+      { id: CAPTAIN_ROLE, kind, permissions: allProjectPermissions() },
+    ],
+    held ? [{ projectRoleId: CAPTAIN_ROLE }] : [],
+  ];
+
+  it("a captain of this camp (a plain member holding the Captain role) may export", async () => {
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(true),
+      [row()],
+      [],
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result.ok).toBe(true);
+    expect(auditRows()).toEqual([
+      expect.objectContaining({
+        actorId: REN,
+        action: MEMBER_RECORDS_AUDIT.noteExport,
+      }),
+    ]);
+  });
+
+  it("a CUSTOM role granting every privilege is not the Captain role: refused", async () => {
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(true, CUSTOM),
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+  });
+
+  it("the camp has a Captain role but this member does not hold it (or not accepted): refused", async () => {
+    // The assignments query only returns ACCEPTED rows; none here.
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(false),
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+  });
+
+  it("a member_notes holder who is not a lead is refused as not found: no note read, no audit", async () => {
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...rolesFor({ member_notes: true }),
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("the member themself, a plain member, a stranger and an archived lead are refused alike", async () => {
+    const cases: [string, unknown[], Record<string, unknown>][] = [
+      // The subject asks for their own notes: even as a lead of the camp.
+      [JABU, [person(JABU, LEAD)], { slug: SLUG, subjectUserId: JABU }],
+      // A plain member.
+      [LERATO, [person(LERATO, MEMBER), person(JABU, MEMBER)], input],
+      // A lead of ANOTHER camp: no membership row here at all.
+      [ALICE, [person(JABU, MEMBER)], input],
+      // A lead who has been archived out of the camp.
+      [ALICE, [person(ALICE, LEAD, { archivedAt: new Date() }), person(JABU, MEMBER)], input],
+    ];
+    for (const [actor, people, payload] of cases) {
+      dbMock.reset();
+      dbMock.queue(campRow, people, ...rolesFor(null));
+      const result = await store.exportMemberNotes(actor, payload);
+      expect(result).toMatchObject({ ok: false, reason: "not_found" });
+      expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+      expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+    }
+  });
+
+  it("someone not in the camp (left, erased, unknown) is not found, even to a lead", async () => {
+    dbMock.queue(campRow, [person(ALICE, LEAD)], ...rolesFor(null));
+    const result = await store.exportMemberNotes(ALICE, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+  });
+
+  it("the org group is never a notes camp", async () => {
+    dbMock.queue([{ ...campRow[0], kind: GroupKind.enum.org }]);
+    const result = await store.exportMemberNotes(ALICE, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    expect(dbMock.transactions).toBe(0);
+  });
+
+  it("with no encryption key, a lead is told so and gets no partial file and no audit row", async () => {
+    delete process.env.PGCRYPTO_KEY;
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+    );
+    const result = await store.exportMemberNotes(ALICE, input);
+    expect(result).toMatchObject({ ok: false, reason: "unavailable" });
+    expect(result.ok ? "" : result.error).toMatch(/encryption key/i);
+    expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  // Regression (review): a configured but WRONG key read every note as
+  // unreadable and still sent — and audited — a file of placeholders.
+  it("a key that reads none of the notes is refused like no key: no file, no audit row", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+      [row({ body: "not-ciphertext" }), row({ body: "also-not" })],
+    );
+    const result = await store.exportMemberNotes(ALICE, input);
+    expect(result).toMatchObject({ ok: false, reason: "unavailable" });
+    expect(result.ok ? "" : result.error).toMatch(/encryption key/i);
+    expect(dbMock.writesTo(schema.auditEvents)).toHaveLength(0);
+  });
+
+  it("a camp with no notes about the member still answers, with a file saying so", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+      [],
+      [],
+    );
+    const result = await store.exportMemberNotes(ALICE, input);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.noteCount).toBe(0);
+    expect(result.text).toContain("The camp keeps no notes about you.");
+    expect(auditRows()).toHaveLength(1);
+  });
+
+  it("a malformed payload is not found before anything is read", async () => {
+    for (const raw of [
+      { slug: SLUG, subjectUserId: "not-a-uuid" },
+      { slug: SLUG },
+      { slug: SLUG, subjectUserId: JABU, extra: 1 },
+      null,
+    ]) {
+      const result = await store.exportMemberNotes(ALICE, raw);
+      expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    }
+    expect(dbMock.queries).toHaveLength(0);
+  });
+
+  it("locks both people's memberships and accounts FOR SHARE before reading", async () => {
+    dbMock.queue(
+      campRow,
+      [person(ALICE, LEAD), person(JABU, MEMBER)],
+      ...rolesFor(null),
+      [],
+      [],
+    );
+    await store.exportMemberNotes(ALICE, input);
+    const lock = dbMock.queriesTouching(schema.memberships)[0]!;
+    expect(lock.tx).toBe(true);
+    expect(lock.called("for")).toBe(true);
+    expect(lock.arg("for")).toBe("share");
   });
 });

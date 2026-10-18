@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { MembershipRole, ProjectPermissions } from "@quagga/types";
 import {
   MEMBER_RECORDS_AUDIT,
+  MEMBER_RECORDS_AUDIT_ACTIONS,
   MEMBER_NOTES_AUDIENCE_NOTE,
+  MEMBER_NOTE_EXPORT_UNREADABLE,
+  buildMemberNotesExport,
   canDeleteMemberNote,
   canEditMemberNote,
+  canExportMemberNotes,
+  holdsCaptainRole,
+  memberNotesExportFilename,
+  type MemberNoteExportItem,
   canManageMemberNotes,
   canReadMemberNotes,
   canSeeDuplicateHints,
@@ -21,7 +28,10 @@ import {
   type MemberNotesViewer,
   type MemberRecordsRefusal,
 } from "../member-records";
-import type { PermissionMembership } from "../project-permissions";
+import {
+  allProjectPermissions,
+  type PermissionMembership,
+} from "../project-permissions";
 
 const LEAD = "00000000-0000-4000-8000-00000000000a";
 const COLEAD = "00000000-0000-4000-8000-00000000000b";
@@ -340,5 +350,241 @@ describe("copy", () => {
     for (const action of Object.values(MEMBER_RECORDS_AUDIT)) {
       expect(action).toMatch(/^camp\.member_/);
     }
+  });
+});
+
+// --- Export (POPIA s23 access request, #105; Ryan, 18 Oct 2026) ---------------
+
+describe("who may export a member's notes", () => {
+  // A custom role granting every privilege is NOT a captain: the captain
+  // signal is the role's KIND (holdsCaptainRole), never its permissions.
+  const everything = allProjectPermissions();
+  const allGrantsCustom = viewer(WELFARE, perms("member", everything));
+  // A captain of THIS camp (Ryan, 18 Oct 2026): a plain member who holds the
+  // camp's Captain role, so the store resolves holdsCaptainRole = true.
+  const captain: MemberNotesViewer = {
+    userId: WELFARE,
+    membership: perms("member", everything),
+    holdsCaptainRole: true,
+  };
+
+  it("the camp's structural lead and co-lead: yes", () => {
+    expect(canExportMemberNotes(lead, subject)).toBe(true);
+    expect(canExportMemberNotes(colead, subject)).toBe(true);
+  });
+
+  it("an archived member's notes can be exported (they are still kept)", () => {
+    // `inCamp` is true for an archived membership: the store found the row.
+    expect(canExportMemberNotes(lead, { userId: SUBJECT, inCamp: true })).toBe(
+      true,
+    );
+  });
+
+  it("a member_notes holder who is not a lead or captain: no — keeping notes is not answering for the camp", () => {
+    expect(canReadMemberNotes(welfare, subject)).toBe(true); // they DO keep notes
+    expect(canExportMemberNotes(welfare, subject)).toBe(false);
+    // Every privilege on a custom role is still not the Captain role.
+    expect(canExportMemberNotes(allGrantsCustom, subject)).toBe(false);
+    expect(
+      canExportMemberNotes({ ...welfare, holdsCaptainRole: false }, subject),
+    ).toBe(false);
+  });
+
+  it("a captain of THIS camp: yes (Ryan, 18 Oct 2026)", () => {
+    expect(canExportMemberNotes(captain, subject)).toBe(true);
+    // ...about an archived member too.
+    expect(canExportMemberNotes(captain, { userId: SUBJECT, inCamp: true })).toBe(
+      true,
+    );
+  });
+
+  it("a captain of ANOTHER camp, or about themself, or someone outside the camp: no", () => {
+    // A captain of camp B holds no membership in camp A: the store resolves
+    // `membership: null` here, whatever they hold elsewhere.
+    expect(
+      canExportMemberNotes(
+        { userId: WELFARE, membership: null, holdsCaptainRole: true },
+        subject,
+      ),
+    ).toBe(false);
+    expect(
+      canExportMemberNotes(captain, { userId: WELFARE, inCamp: true }),
+    ).toBe(false);
+    expect(
+      canExportMemberNotes(captain, { userId: SUBJECT, inCamp: false }),
+    ).toBe(false);
+  });
+
+  it("the captain signal is the role's kind", () => {
+    expect(holdsCaptainRole(["baseline", "captain"])).toBe(true);
+    expect(holdsCaptainRole(["baseline", "custom", "default"])).toBe(false);
+    expect(holdsCaptainRole([])).toBe(false);
+  });
+
+  it("a plain member and a roster reader: no", () => {
+    expect(canExportMemberNotes(plain, subject)).toBe(false);
+    expect(canExportMemberNotes(rosterReader, subject)).toBe(false);
+  });
+
+  it("the subject themself — even a lead — never: the member does not see notes in the app", () => {
+    expect(canExportMemberNotes(lead, { userId: LEAD, inCamp: true })).toBe(
+      false,
+    );
+    // Case does not smuggle the same id past the check.
+    expect(
+      canExportMemberNotes(lead, { userId: LEAD.toUpperCase(), inCamp: true }),
+    ).toBe(false);
+  });
+
+  it("a lead of another camp (no membership here) and org staff: no", () => {
+    // The store resolves membership per camp: a lead of camp B is `null` in
+    // camp A, as is any org account (god / org_staff hold no camp row).
+    expect(canExportMemberNotes(viewer(LEAD, null), subject)).toBe(false);
+    expect(canExportMemberNotes(stranger, subject)).toBe(false);
+    // Even if an org rank somehow appeared as a structural role in a camp,
+    // it is not a project backstop.
+    expect(canExportMemberNotes(viewer(LEAD, perms("god")), subject)).toBe(
+      false,
+    );
+    expect(
+      canExportMemberNotes(viewer(LEAD, perms("org_staff")), subject),
+    ).toBe(false);
+  });
+
+  it("someone who is not in this camp (left, erased, stranger): no", () => {
+    expect(canExportMemberNotes(lead, { userId: SUBJECT, inCamp: false })).toBe(
+      false,
+    );
+  });
+
+  it("the export is audited under its own camp-private action", () => {
+    expect(MEMBER_RECORDS_AUDIT.noteExport).toBe("camp.member_note.export");
+    // The org console's exclusion list is built from this list.
+    expect(MEMBER_RECORDS_AUDIT_ACTIONS).toContain(
+      MEMBER_RECORDS_AUDIT.noteExport,
+    );
+  });
+});
+
+describe("the export file", () => {
+  const exportedAt = new Date("2026-10-18T10:00:00Z");
+  const file = buildMemberNotesExport({
+    campName: "Mad Hatters",
+    memberName: "Jabu",
+    exportedAt,
+    // Given NEWEST first, as the card loads them: the file must reorder.
+    notes: [
+      {
+        createdAt: new Date("2026-10-12T09:00:00Z"),
+        editedAt: null,
+        text: "Asked not to be on night shifts.",
+      },
+      {
+        createdAt: new Date("2026-10-05T09:00:00Z"),
+        editedAt: null,
+        text: null,
+      },
+      {
+        createdAt: new Date("2026-09-01T09:00:00Z"),
+        editedAt: new Date("2026-09-20T09:00:00Z"),
+        text: "Great on build week.\nNeeds a lift from Cape Town.",
+      },
+    ],
+  });
+
+  it("opens with the camp, the member, the date and why the file exists", () => {
+    const lines = file.split("\n");
+    expect(lines[0]).toBe("Private notes kept by Mad Hatters");
+    expect(lines[1]).toBe("About: Jabu");
+    expect(lines[2]).toBe("Exported: 18 October 2026");
+    expect(file).toContain("section 23 of the Protection of Personal Information Act (POPIA)");
+    expect(file).toContain("The names of the people who wrote them are not included.");
+  });
+
+  it("lists every note oldest first, with written and last-edited dates", () => {
+    const first = file.indexOf("Great on build week.");
+    const second = file.indexOf(MEMBER_NOTE_EXPORT_UNREADABLE);
+    const third = file.indexOf("Asked not to be on night shifts.");
+    expect(first).toBeGreaterThan(0);
+    expect(first).toBeLessThan(second);
+    expect(second).toBeLessThan(third);
+    expect(file).toContain("--- Note 1 of 3 ---\nWritten: 1 September 2026\nLast edited: 20 September 2026\n\nGreat on build week.\nNeeds a lift from Cape Town.");
+    expect(file).toContain("--- Note 3 of 3 ---\nWritten: 12 October 2026\n\nAsked not to be on night shifts.");
+    // Only the edited note carries an edited line.
+    expect(file.match(/Last edited:/g)).toHaveLength(1);
+  });
+
+  it("an undecryptable note is listed with its date, never dropped", () => {
+    expect(MEMBER_NOTE_EXPORT_UNREADABLE).toBe("[This note could not be read]");
+    expect(file).toContain(
+      "--- Note 2 of 3 ---\nWritten: 5 October 2026\n\n[This note could not be read]",
+    );
+  });
+
+  it("carries no author — the item type has no author field to fill", () => {
+    const item: MemberNoteExportItem = {
+      createdAt: exportedAt,
+      editedAt: null,
+      text: "x",
+    };
+    expect(Object.keys(item).sort()).toEqual(["createdAt", "editedAt", "text"]);
+    // Passing an author anyway (an excess property via a widened object)
+    // does not reach the file.
+    const withAuthor = {
+      ...item,
+      authorName: "Alice Hatter",
+      authorUserId: LEAD,
+    };
+    const out = buildMemberNotesExport({
+      campName: "Mad Hatters",
+      memberName: "Jabu",
+      exportedAt,
+      notes: [withAuthor],
+    });
+    expect(out).not.toContain("Alice Hatter");
+    expect(out).not.toContain(LEAD);
+  });
+
+  it("says so when the camp keeps no notes", () => {
+    const empty = buildMemberNotesExport({
+      campName: "Mad Hatters",
+      memberName: "Jabu",
+      exportedAt,
+      notes: [],
+    });
+    expect(empty).toContain("The camp keeps no notes about you.");
+    expect(empty).not.toContain("--- Note");
+  });
+
+  it("names the file with slugs only — nothing a person typed reaches the header", () => {
+    expect(
+      memberNotesExportFilename({
+        campSlug: "mad-hatters",
+        memberName: 'Jabu "the"\r\nX-Evil: 1; filename=../../etc',
+        exportedAt,
+      }),
+    ).toBe("member-notes-mad-hatters-jabu-the-x-evil-1-filename-etc-2026-10-18.txt");
+    expect(
+      memberNotesExportFilename({
+        campSlug: "",
+        memberName: "Zoë 🔥",
+        exportedAt,
+      }),
+    ).toBe("member-notes-camp-zoe-2026-10-18.txt");
+    expect(
+      memberNotesExportFilename({
+        campSlug: "camp",
+        memberName: "🔥🔥",
+        exportedAt,
+      }),
+    ).toBe("member-notes-camp-member-2026-10-18.txt");
+    // The day is South African: 23:30 UTC is already tomorrow in Joburg.
+    expect(
+      memberNotesExportFilename({
+        campSlug: "c",
+        memberName: "m",
+        exportedAt: new Date("2026-10-18T23:30:00Z"),
+      }),
+    ).toBe("member-notes-c-m-2026-10-19.txt");
   });
 });

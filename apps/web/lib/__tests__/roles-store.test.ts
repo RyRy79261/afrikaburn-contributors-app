@@ -762,6 +762,7 @@ describe("getMemberPermissions", () => {
     expect(await getMemberPermissions(GROUP, USER)).toEqual({
       structuralRole: "member",
       rolePermissions: [BASELINE.permissions, TEAM_LEAD.permissions],
+      holdsCaptainRole: false,
     });
   });
 
@@ -773,7 +774,28 @@ describe("getMemberPermissions", () => {
     expect(await getMemberPermissions(GROUP, USER)).toEqual({
       structuralRole: "lead",
       rolePermissions: [],
+      holdsCaptainRole: false,
     });
+  });
+
+  // The member-notes export (#105; Ryan, 18 Oct 2026) admits captains: the
+  // signal is the held role's KIND, never its permissions.
+  it("reports holding the Captain role only for an ACCEPTED captain-kind assignment", async () => {
+    dbMock.queue([{ id: MEMBERSHIP, role: "member" }]);
+    queueRoles([BASELINE, TEAM_LEAD, CAPTAIN]);
+    dbMock.queue([{ projectRoleId: CAPTAIN_ID }]);
+    expect((await getMemberPermissions(GROUP, USER))?.holdsCaptainRole).toBe(
+      true,
+    );
+
+    // The camp HAS a Captain role, the member holds only Team lead.
+    dbMock.reset();
+    dbMock.queue([{ id: MEMBERSHIP, role: "member" }]);
+    queueRoles([BASELINE, TEAM_LEAD, CAPTAIN]);
+    dbMock.queue([{ projectRoleId: TEAM_LEAD_ID }]);
+    expect((await getMemberPermissions(GROUP, USER))?.holdsCaptainRole).toBe(
+      false,
+    );
   });
 });
 

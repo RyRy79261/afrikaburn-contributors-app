@@ -10,6 +10,7 @@ import {
   canDeleteRoleKind,
   canRenameRoleKind,
   enforceKindPermissions,
+  holdsCaptainRole,
   isInReviewStatus,
   isRegisteredStatus,
   isValidRoleName,
@@ -873,6 +874,9 @@ export async function respondToOfficer(
 export interface ViewerPermissionMembership {
   structuralRole: MembershipRole;
   rolePermissions: ProjectPermissions[];
+  /** Holds the camp's Captain role (its KIND, accepted consent). Read by the
+   * member-notes export (@quagga/core `canExportMemberNotes`); absent = no. */
+  holdsCaptainRole?: boolean;
 }
 
 /**
@@ -926,7 +930,13 @@ export async function getMemberPermissions(
       rolePermissions.push(enforceKindPermissions(r.kind, r.permissions));
   }
 
-  return { structuralRole: m.role, rolePermissions };
+  return {
+    structuralRole: m.role,
+    rolePermissions,
+    holdsCaptainRole: holdsCaptainRole(
+      roles.filter((r) => heldIds.has(r.id)).map((r) => r.kind),
+    ),
+  };
 }
 
 /** The baseline role id for a group (the "everyone" audience), or null. */

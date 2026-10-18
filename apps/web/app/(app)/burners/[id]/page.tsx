@@ -21,7 +21,10 @@ import { resolveMedicalNotesForViewer } from "@/lib/medical-access";
 import { loadProfileParticipation } from "@/lib/camp-stats-store";
 import { ParticipationSummary } from "@/components/stats/participation-summary";
 import { loadProfileMemberNotes } from "@/lib/member-records-store";
-import { toPrivateNoteItems } from "@/lib/member-records-view";
+import {
+  memberNotesExportHref,
+  toPrivateNoteItems,
+} from "@/lib/member-records-view";
 import { PrivateNotesCard } from "@/components/member-records/private-notes-card";
 import {
   addMemberNoteAction,
@@ -248,6 +251,11 @@ export default async function BurnerProfilePage({
             subjectName={heading}
             notes={toPrivateNoteItems(card.notes)}
             showCampName={noteCards.length > 1}
+            exportHref={
+              card.canExport
+                ? memberNotesExportHref(card.camp.slug, profile.userId)
+                : null
+            }
             actions={{
               add: addMemberNoteAction,
               edit: editMemberNoteAction,

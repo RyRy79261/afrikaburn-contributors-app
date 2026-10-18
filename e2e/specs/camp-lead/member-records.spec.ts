@@ -17,6 +17,11 @@
 //      duplicate" — to the lead and to a roster viewer without
 //      `member_notes`, who sees no "Notes" count chip. "Not the same person"
 //      hides the hint for the whole camp, and it stays hidden after reload.
+//   2b. POPIA export (#105): the lead downloads a text file of the member's
+//      notes (oldest first, no author). A note-keeper without a lead role
+//      sees the card but no export, and the route refuses them; the member
+//      and another camp's lead are refused by the route directly. A member
+//      given the camp's Captain role exports too.
 //   4. Retention: archiving keeps the notes (the card still shows them on the
 //      archived member's profile and after a restore); leaving the camp
 //      deletes them (rejoining starts from "No notes yet").
@@ -36,7 +41,8 @@
 //   privilege labels .. apps/web/components/roles/privileges.tsx
 
 import { randomBytes } from "node:crypto";
-import { type Locator, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { type Download, type Locator, type Page } from "@playwright/test";
 import { test, expect } from "../../fixtures";
 import {
   signUpBurner,
@@ -124,6 +130,35 @@ async function deleteNote(note: Locator): Promise<void> {
     });
   }).toPass({ timeout: 30_000 });
   await note.getByRole("button", { name: "Delete", exact: true }).click();
+}
+
+const EXPORT_BUTTON = "Export notes about this member";
+
+/**
+ * Click the card's export action ONCE and return the download. Callers have
+ * already driven the card's form (so it is hydrated); one click, one export,
+ * one audit row — a retried click would export twice.
+ */
+async function exportNotes(page: Page, card: Locator): Promise<Download> {
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 60_000 }),
+    card.getByRole("button", { name: EXPORT_BUTTON }).click(),
+  ]);
+  return download;
+}
+
+/** The export route answers this page's session with the not-found 404 and
+ * none of the notes. */
+async function expectExportRefused(
+  page: Page,
+  url: string,
+  secrets: readonly string[],
+): Promise<void> {
+  const res = await page.request.get(url);
+  expect(res.status()).toBe(404);
+  expect(res.headers()["content-disposition"]).toBeUndefined();
+  const body = await res.text();
+  for (const s of secrets) expect(body).not.toContain(s);
 }
 
 /** A new member joins `slug` on a fresh, single-use invite. */
@@ -321,6 +356,117 @@ test.describe("camp lead — member records", () => {
     await expect(
       rosterRow(leadPage, memberName).getByTestId("roster-note-count"),
     ).toContainText("Notes 1");
+  });
+
+  test("a lead or captain exports a member's notes for a POPIA request; nobody else can", async ({
+    makeAppPage,
+  }) => {
+    test.setTimeout(360_000);
+    const leadPage = await makeAppPage("web");
+    const memberPage = await makeAppPage("web");
+    const keeperPage = await makeAppPage("web");
+    const otherLeadPage = await makeAppPage("web");
+    const captainPage = await makeAppPage("web");
+    const leadName = uniqueUsername("export_lead");
+    const captainName = uniqueUsername("export_captain");
+    const memberName = uniqueUsername("export_jabu");
+    const keeperName = uniqueUsername("export_ren");
+    const firstText = noteBody("Great on build week");
+    const secondText = noteBody("Asked for a quiet tent spot");
+
+    await signUpBurner(leadPage, { onboard: true, username: leadName });
+    const camp = await createCamp(leadPage);
+    await signUpBurner(memberPage, { onboard: true, username: memberName });
+    await joinCamp(leadPage, memberPage, camp.slug);
+    await signUpBurner(keeperPage, { onboard: true, username: keeperName });
+    await joinCamp(leadPage, keeperPage, camp.slug);
+    await signUpBurner(captainPage, { onboard: true, username: captainName });
+    await joinCamp(leadPage, captainPage, camp.slug);
+    await signUpBurner(otherLeadPage, { onboard: true });
+    await createCamp(otherLeadPage);
+
+    const memberId = await burnerIdFromRoster(leadPage, camp.slug, memberName);
+    const exportUrl = `/camps/${camp.slug}/member-notes/${memberId}/export`;
+
+    // --- The lead writes two notes, then exports -----------------------------
+    await gotoProfile(leadPage, memberId, memberName);
+    const card = leadPage.getByTestId("private-notes");
+    await addNote(card, firstText);
+    await addNote(card, secondText);
+
+    const download = await exportNotes(leadPage, card);
+    expect(download.suggestedFilename()).toMatch(
+      /^member-notes-[a-z0-9-]+-\d{4}-\d{2}-\d{2}\.txt$/,
+    );
+    const file = await readFile(await download.path(), "utf8");
+    expect(file).toContain(`Private notes kept by ${camp.name}`);
+    expect(file).toContain(`About: ${memberName}`);
+    expect(file).toContain("section 23 of the Protection of Personal Information Act (POPIA)");
+    // Both notes, oldest first.
+    expect(file).toContain(firstText);
+    expect(file).toContain(secondText);
+    expect(file.indexOf(firstText)).toBeLessThan(file.indexOf(secondText));
+    expect(file).toContain("--- Note 2 of 2 ---");
+    // No author: the lead's name is nowhere in the file.
+    expect(file).not.toContain(leadName);
+    await expect(leadPage.getByText("Notes exported")).toBeVisible();
+
+    // --- A note-keeper who is not a lead: card yes, export no ----------------
+    const roleName = uniqueName("Welfare");
+    await createCustomRole(leadPage, camp.slug, {
+      name: roleName,
+      emoji: "🫶",
+      colorLabel: "Rust",
+      privileges: ["Can keep private member notes"],
+    });
+    await assignRoleToMember(leadPage, camp.slug, keeperName, roleName);
+    await gotoProfile(keeperPage, memberId, memberName);
+    const keeperCard = keeperPage.getByTestId("private-notes");
+    // PRESENT first: the card and the lead's note render for the keeper...
+    await expect(
+      keeperCard.getByTestId("private-note").filter({ hasText: firstText }),
+    ).toBeVisible();
+    // ...and the export action does not.
+    await expect(
+      keeperCard.getByRole("button", { name: EXPORT_BUTTON }),
+    ).toHaveCount(0);
+    // The route refuses them directly too — UI hiding is not the boundary.
+    await expectExportRefused(keeperPage, exportUrl, [firstText, secondText]);
+
+    // --- The member themself, and a lead of another camp: refused ------------
+    await expectExportRefused(memberPage, exportUrl, [firstText, secondText]);
+    await expectExportRefused(otherLeadPage, exportUrl, [firstText, secondText]);
+
+    // --- A captain of the camp (Ryan, 18 Oct 2026): may export ---------------
+    // A plain member until the lead gives them the camp's Captain role.
+    await assignRoleToMember(leadPage, camp.slug, captainName, "Captain");
+    await gotoProfile(captainPage, memberId, memberName);
+    const captainCard = captainPage.getByTestId("private-notes");
+    await expect(
+      captainCard.getByTestId("private-note").filter({ hasText: firstText }),
+    ).toBeVisible();
+    // Hydrate the card the way a person would before clicking: type into the
+    // add form (and clear it) until React holds the text.
+    const captainField = captainCard.getByLabel("Add a note");
+    await expect(async () => {
+      await captainField.fill("x");
+      await expect(
+        captainCard.getByRole("button", { name: "Add note" }),
+      ).toBeEnabled({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+    await captainField.fill("");
+    const captainDownload = await exportNotes(captainPage, captainCard);
+    const captainFile = await readFile(await captainDownload.path(), "utf8");
+    expect(captainFile).toContain(firstText);
+    expect(captainFile).toContain(secondText);
+    expect(captainFile).not.toContain(leadName);
+
+    // The lead still can, straight off the route (the refusals above are not
+    // a broken route).
+    const direct = await leadPage.request.get(exportUrl);
+    expect(direct.status()).toBe(200);
+    expect(direct.headers()["cache-control"]).toContain("no-store");
+    expect(await direct.text()).toContain(firstText);
   });
 
   test("similar names are flagged as a possible duplicate; the count chip is for note people only", async ({
