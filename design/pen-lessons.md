@@ -1801,3 +1801,18 @@ Spec: `docs/registration-safety-spec.md`. All edits through `pen interactive` fr
 - Headless exports need `brand/` next to the scratch .pen, or the logo renders as a checkerboard.
 - Problem counts per frame (Get visitor `ctx.problems`) matched the source frames exactly
   (quilt-band diamonds, unread badges): 0 new.
+
+### Follow-up 18 Oct 2026 — review fixes for #49
+
+- Each `execute` line has its own scope: a helper file such as `prelude.js` must be
+  CONCATENATED into the snippet, not sent as an earlier execute, or every helper is undefined.
+- After `Replace`, the CLI may still print "has 'fill_container' sizing but is not inside a
+  flexbox layout" for the OLD (now deleted) node id. `Get(oldId)` throws "Can't find node",
+  so the warning is stale; check the problem count on the frame instead.
+- An AppShell (`l99dum`) instance's avatar is overridden by instance path:
+  `Update("<instance>/axOeJ/b5sb0Z", {content: "ND"})`. Plain content Updates by path did
+  not break later Get visitors (unlike the descendants-slot Update above).
+- Exporting a SUBNODE (a section crop) renders it on a light background, so `$foreground`
+  text is near-invisible there. The full-frame export is the one to read for contrast.
+- Mobile touch targets: Segmented options padding [13,22] (44 px, track 52); checkbox rows
+  wrapped in a 44 px frame with gap 0; stand-alone links get `height: 44` on the `gsClL` ref.
