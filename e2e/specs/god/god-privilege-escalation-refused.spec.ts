@@ -108,8 +108,13 @@ test.describe("god privilege-escalation refused", () => {
     // the god VIEWER's own role, present on every console page.)
     await gotoAccount(orgPage, burner.email);
     await expect(rowRemoveButton(orgPage)).toBeVisible();
+    // Visible copy only — ResponsiveDataTable renders the <table> AND the
+    // mobile cards, and `.first()` alone is the display:none one at 360px.
     await expect(
-      orgPage.getByText("Org staff", { exact: true }).first(),
+      orgPage
+        .getByText("Org staff", { exact: true })
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     await expect(
       orgPage.getByText(/system owner — cannot change/i),
@@ -131,8 +136,13 @@ test.describe("god privilege-escalation refused", () => {
     // self-demote or reassign the god membership here; GOD_EMAILS is the only
     // lever. (Even the server action refuses a god target and a self target.)
     await gotoAccount(orgPage, email);
+    // Visible copy only — ResponsiveDataTable renders the <table> AND the
+    // mobile cards, and `.first()` alone is the display:none one at 360px.
     await expect(
-      orgPage.getByText(/system owner — cannot change/i).first(),
+      orgPage
+        .getByText(/system owner — cannot change/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     await expect(rowElevateButton(orgPage)).toHaveCount(0);
     await expect(rowRemoveButton(orgPage)).toHaveCount(0);

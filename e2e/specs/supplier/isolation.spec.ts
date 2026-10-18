@@ -101,7 +101,12 @@ test.describe("supplier isolation law", () => {
     // A's portal shows A's own business (the registration-step detail) and never
     // B's, on onboarding and standing alike.
     await suppliersPage.goto("/onboarding");
-    await expect(suppliersPage.getByText(a.name).first()).toBeVisible();
+    // Visible copy only: the header carries the name too, but `hidden sm:block`
+    // — display:none at 360px. The registration-step detail shows it at every
+    // width, and it is the first visible match there.
+    await expect(
+      suppliersPage.getByText(a.name).filter({ visible: true }).first(),
+    ).toBeVisible();
     await expect(suppliersPage.getByText(b.name)).toHaveCount(0);
 
     await suppliersPage.goto("/standing");

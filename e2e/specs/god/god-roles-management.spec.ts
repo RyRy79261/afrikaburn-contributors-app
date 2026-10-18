@@ -176,8 +176,14 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     // to say "permanently remove suppliers and their documents" on every
     // department's rights screen — one department's nouns describing every
     // department's power, which is the defect that prompted the CRUD rework.
+    //
+    // Visible copy only — ResponsiveDataTable renders the <table> AND the
+    // mobile cards, and `.first()` alone is the display:none one at 360px.
     await expect(
-      orgPage.getByText(/can permanently destroy records/i).first(),
+      orgPage
+        .getByText(/can permanently destroy records/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
 
     // And the live preview in the assignment dialog resolves the DRAFT, so the
@@ -205,7 +211,10 @@ test.describe("system manager · departments, roles and what deleting costs", ()
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await gotoAccount(orgPage, burner.email);
     await expect(
-      orgPage.getByText(/can permanently destroy records/i).first(),
+      orgPage
+        .getByText(/can permanently destroy records/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
   });
 

@@ -15,7 +15,7 @@ import {
   signOut,
   elevateToGod,
 } from "../../personas/factories";
-import { orgSetStanding } from "./support";
+import { orgSetStanding, standingVerdict } from "./support";
 
 test.describe("supplier standing visibility", () => {
   test("a fresh supplier sees Good standing, explained in plain language", async ({
@@ -27,8 +27,11 @@ test.describe("supplier standing visibility", () => {
     await expect(
       suppliersPage.getByRole("heading", { name: /standing with afrikaburn/i }),
     ).toBeVisible();
+    // The verdict is read from the page's own standing region, not
+    // `getByText(...).first()`: the first match is the header badge, which is
+    // `hidden sm:block` — display:none at 360px, while the hero shows it.
     await expect(
-      suppliersPage.getByText(/good standing/i).first(),
+      standingVerdict(suppliersPage).getByText(/^good standing$/i),
     ).toBeVisible();
     await expect(
       suppliersPage.getByText(/you['’]re in good standing with afrikaburn/i),
@@ -59,7 +62,11 @@ test.describe("supplier standing visibility", () => {
     // Watch.
     await orgSetStanding(orgPage, account.name, "Watch");
     await suppliersPage.goto("/standing");
-    await expect(suppliersPage.getByText(/^watch$/i).first()).toBeVisible();
+    // Scoped to the verdict: the legend below lists a "Watch" band on EVERY
+    // supplier's page, so an unscoped match would pass in good standing too.
+    await expect(
+      standingVerdict(suppliersPage).getByText(/^watch$/i),
+    ).toBeVisible();
     await expect(
       suppliersPage.getByText(/flagged your account for attention/i),
     ).toBeVisible();

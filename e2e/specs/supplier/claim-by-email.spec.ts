@@ -25,7 +25,7 @@ import { test, expect, skipUnlessMail, skipUnlessGod } from "../../fixtures";
 import { elevateToGod } from "../../personas/factories";
 import { requireMailbox } from "../../lib/mail";
 import { TEST_PASSWORD, uniqueSupplierName } from "../../lib/identity";
-import { orgAddSupplier, orgSetStanding } from "./support";
+import { orgAddSupplier, orgSetStanding, standingVerdict } from "./support";
 
 /**
  * Drive the portal /signup form with a specific (mailbox) address and click the
@@ -91,13 +91,17 @@ test.describe("supplier claim-by-email", () => {
       }),
     ).toBeVisible();
     // Attached to the org's row: its NAME shows, the typed one does not identify us.
-    await expect(suppliersPage.getByText(claimedName).first()).toBeVisible();
+    await expect(
+      suppliersPage.getByText(claimedName).filter({ visible: true }).first(),
+    ).toBeVisible();
     await expect(suppliersPage.getByText(typedName)).toHaveCount(0);
 
     // And its pre-set standing carried over — conclusive that we did not mint a
     // fresh (Good) row.
     await suppliersPage.goto("/standing");
-    await expect(suppliersPage.getByText(/^watch$/i).first()).toBeVisible();
+    await expect(
+      standingVerdict(suppliersPage).getByText(/^watch$/i),
+    ).toBeVisible();
   });
 
   test("a fresh, non-overlapping email CREATES a new supplier row", async ({
@@ -126,11 +130,13 @@ test.describe("supplier claim-by-email", () => {
         name: /your onboarding checklist/i,
       }),
     ).toBeVisible();
-    await expect(suppliersPage.getByText(typedName).first()).toBeVisible();
+    await expect(
+      suppliersPage.getByText(typedName).filter({ visible: true }).first(),
+    ).toBeVisible();
     // A fresh row starts in Good standing.
     await suppliersPage.goto("/standing");
     await expect(
-      suppliersPage.getByText(/good standing/i).first(),
+      standingVerdict(suppliersPage).getByText(/^good standing$/i),
     ).toBeVisible();
   });
 });
