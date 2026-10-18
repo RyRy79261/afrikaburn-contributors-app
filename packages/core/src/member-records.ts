@@ -12,8 +12,8 @@
 // keeps notes because people come back. Anyone else (a stranger, a member of
 // another camp, someone who left, an erased account) is refused exactly as
 // an unknown id is: "not found". A note person never reads or writes notes
-// about THEMSELVES: the member does not see notes about them (POPIA access
-// is the working group's question, #105), and a lead is a member too.
+// about THEMSELVES: the member does not see notes about them (POPIA access is
+// a lead's export, below — #105), and a lead is a member too.
 //
 // EDIT AND DELETE. The author edits and deletes their own notes while they are
 // still a note person. Structural leads and co-leads may delete any note of
@@ -28,6 +28,13 @@
 // and dismissed by, roster viewers (`view_member_details`). A dismissal is
 // stored per ordered pair per camp, so the same two people are not flagged
 // again.
+//
+// EXPORT (POPIA s23 right of access, #105; Ryan, 18 Oct 2026). A member may
+// ask the camp for the notes it keeps about them. The camp's STRUCTURAL leads
+// and co-leads answer: one member at a time, a plain-text file the lead sends
+// on. Not a `member_notes` holder alone, not a captain by that role, not the
+// member themself (they still never see notes in the app), not another camp's
+// lead, never the org. The file names no author (third-party information).
 //
 // PRIVACY. Notes never appear in the roster table (a COUNT for note people
 // only), a CSV export, stats, search, the org console or a notification.
@@ -51,6 +58,8 @@ export const MEMBER_RECORDS_AUDIT = {
   noteUpdate: "camp.member_note.update",
   noteDelete: "camp.member_note.delete",
   duplicateDismiss: "camp.member_duplicate.dismiss",
+  /** A lead exported the camp's notes about one member (POPIA s23). */
+  noteExport: "camp.member_note.export",
 } as const;
 
 /**
@@ -157,6 +166,24 @@ export function canDeleteMemberNote(
   if (note.authorUserId !== null && note.authorUserId === viewer.userId)
     return true;
   return isPermissionBackstop(m.structuralRole);
+}
+
+/**
+ * May the viewer export the camp's notes about this person, to answer a POPIA
+ * s23 access request (#105)? A STRUCTURAL lead or co-lead of THIS camp — the
+ * people who answer for the camp — about a current or archived member of it
+ * who is not themselves. The `member_notes` privilege alone is not enough:
+ * keeping notes is not answering for the camp. `null` (not a current member:
+ * another camp's lead, an org account) is always no.
+ */
+export function canExportMemberNotes(
+  viewer: MemberNotesViewer,
+  subject: MemberNoteSubject,
+): boolean {
+  const m = viewer.membership;
+  if (m === null || !isPermissionBackstop(m.structuralRole)) return false;
+  if (!subject.inCamp) return false;
+  return subject.userId.toLowerCase() !== viewer.userId.toLowerCase();
 }
 
 // --- Decisions -----------------------------------------------------------------
@@ -353,4 +380,97 @@ export function decideDismissDuplicate(input: {
   return findDuplicatePairs([a, b]).length === 1
     ? { ok: true }
     : refuse("not_a_duplicate");
+}
+
+// --- Export (POPIA s23 access request) -------------------------------------------
+
+/** One note as the export sees it. Deliberately NO author field: who wrote a
+ * note is a third party's information, and the file never carries it. */
+export interface MemberNoteExportItem {
+  createdAt: Date;
+  /** When it was last rewritten; null when never edited. */
+  editedAt: Date | null;
+  /** The decrypted text; null when it could not be decrypted. */
+  text: string | null;
+}
+
+/** What the line for a note that could not be decrypted says. Never the
+ * ciphertext, never silently dropped. */
+export const MEMBER_NOTE_EXPORT_UNREADABLE = "[This note could not be read]";
+
+function exportDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  });
+}
+
+/**
+ * The export file's text: a header (camp, member, date, why the file
+ * exists), then every note OLDEST first — the day it was written, the day it
+ * was last edited if it was, and its text (or the unreadable line). No author,
+ * no ids. Plain UTF-8 text.
+ */
+export function buildMemberNotesExport(input: {
+  campName: string;
+  memberName: string;
+  exportedAt: Date;
+  notes: readonly MemberNoteExportItem[];
+}): string {
+  const notes = [...input.notes].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+  const lines: string[] = [
+    `Private notes kept by ${input.campName}`,
+    `About: ${input.memberName}`,
+    `Exported: ${exportDate(input.exportedAt)}`,
+    "",
+    `These are the notes ${input.campName} keeps about you on the AfrikaBurn ` +
+      "Contributors App, provided under section 23 of the Protection of " +
+      "Personal Information Act (POPIA), your right of access to personal " +
+      "information held about you. The names of the people who wrote them " +
+      "are not included.",
+    "",
+  ];
+  if (notes.length === 0) {
+    lines.push("The camp keeps no notes about you.");
+  }
+  notes.forEach((note, i) => {
+    lines.push(`--- Note ${i + 1} of ${notes.length} ---`);
+    lines.push(`Written: ${exportDate(note.createdAt)}`);
+    if (note.editedAt) lines.push(`Last edited: ${exportDate(note.editedAt)}`);
+    lines.push("");
+    lines.push(note.text ?? MEMBER_NOTE_EXPORT_UNREADABLE);
+    lines.push("");
+  });
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+/** A filename-safe fragment: lowercase ASCII letters, digits and hyphens. */
+function fileSlug(value: string, fallback: string): string {
+  const slug = value
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return slug || fallback;
+}
+
+/** The download's filename: `member-notes-<camp>-<member>-<YYYY-MM-DD>.txt`,
+ * every part slugified, so no user-typed character reaches the header. */
+export function memberNotesExportFilename(input: {
+  campSlug: string;
+  memberName: string;
+  exportedAt: Date;
+}): string {
+  const day = input.exportedAt.toLocaleDateString("en-CA", {
+    timeZone: "Africa/Johannesburg",
+  });
+  const safeDay = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "export";
+  return `member-notes-${fileSlug(input.campSlug, "camp")}-${fileSlug(input.memberName, "member")}-${safeDay}.txt`;
 }

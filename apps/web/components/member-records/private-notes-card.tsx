@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Lock, NotebookPen, Pencil, Trash2 } from "lucide-react";
+import { Download, Lock, NotebookPen, Pencil, Trash2 } from "lucide-react";
 import { initialsFromName, MEMBER_NOTES_AUDIENCE_NOTE } from "@quagga/core";
 import { MEMBER_NOTE_MAX } from "@quagga/types";
 import { Button } from "@quagga/ui/components/button";
@@ -17,6 +17,9 @@ import { Textarea } from "@quagga/ui/components/textarea";
 import { toast } from "@quagga/ui/components/toast";
 import { cn } from "@quagga/ui/lib/utils";
 import {
+  EXPORT_REFUSED,
+  exportFilenameFrom,
+  exportResponseOutcome,
   settleAction,
   type PrivateNoteItemView,
 } from "@/lib/member-records-view";
@@ -29,7 +32,9 @@ import {
 // `loadProfileMemberNotes` returned a card — a plain camp-mate, the person
 // themself and the org get no card at all (frame R1b) — and every note
 // arrives with the server's `canEdit` / `canDelete` verdict. Each action
-// re-decides from the database on every call.
+// re-decides from the database on every call. The export action (#105) shows
+// only on the server's `canExport` (structural leads and co-leads); its route
+// re-decides from the database on every download.
 
 /** A member-records action's result, as the store returns it. */
 export type MemberNoteActionResult =
@@ -259,6 +264,90 @@ function NoteRow({
 }
 
 /**
+ * Fetch the export and hand it to the browser as a download. Fetched rather
+ * than linked so a refusal (no encryption key, access changed since the page
+ * loaded) is a toast with a sentence, not a browser error page or a "file"
+ * holding an error message.
+ */
+async function downloadExport(
+  href: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await fetch(href, {
+    cache: "no-store",
+    credentials: "same-origin",
+    // A redirect (the questionnaire gate, a lapsed session) must not be
+    // followed into an HTML page that would then be saved as the "file".
+    redirect: "manual",
+  });
+  const contentDisposition = res.headers.get("Content-Disposition");
+  const outcome = exportResponseOutcome({
+    status: res.status,
+    contentDisposition,
+  });
+  if (outcome !== "file") {
+    // 503 carries the server's own sentence (the encryption key); every other
+    // refusal is the same not-found.
+    return {
+      ok: false,
+      error: outcome === "unavailable" ? await res.text() : EXPORT_REFUSED,
+    };
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = exportFilenameFrom(contentDisposition);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Give the browser a moment to start the download before freeing it.
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { ok: true };
+}
+
+/** "Export notes about this member" — structural leads and co-leads only
+ * (the server's `canExport`; the route decides again on every call). */
+function ExportNotesAction({
+  href,
+  subjectName,
+}: {
+  href: string;
+  subjectName: string;
+}) {
+  const [isPending, startTransition] = React.useTransition();
+  const hintId = React.useId();
+
+  function run() {
+    startTransition(async () => {
+      const result = await settleAction(() => downloadExport(href));
+      if (result.ok) toast.success("Notes exported");
+      else toast.error(result.error);
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1 sm:items-end">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={run}
+        disabled={isPending}
+        aria-describedby={hintId}
+        className="self-start sm:self-auto"
+      >
+        <Download className="h-3.5 w-3.5" aria-hidden />
+        {isPending ? "Exporting…" : "Export notes about this member"}
+      </Button>
+      <p id={hintId} className="text-xs text-muted-foreground sm:text-right">
+        A text file to send {subjectName} if they ask for their notes. Read
+        it first: notes can mention other people.
+      </p>
+    </div>
+  );
+}
+
+/**
  * The Private notes card (frame R1): an add form with a 2,000-character
  * counter and the audience line, then the camp's notes about the person,
  * newest first, each with the edit / delete the server allowed.
@@ -269,6 +358,7 @@ export function PrivateNotesCard({
   subjectName,
   notes,
   showCampName,
+  exportHref,
   actions,
 }: {
   camp: { name: string; slug: string };
@@ -277,6 +367,9 @@ export function PrivateNotesCard({
   notes: PrivateNoteItem[];
   /** Several camps are shared: say which camp this card belongs to. */
   showCampName: boolean;
+  /** The export route, when the server said this viewer may export (a
+   * structural lead or co-lead); null hides the action. */
+  exportHref: string | null;
   actions: {
     add: MemberNoteAction;
     edit: MemberNoteAction;
@@ -312,14 +405,19 @@ export function PrivateNotesCard({
 
   return (
     <Card data-testid="private-notes">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <NotebookPen className="h-4 w-4 text-accent" aria-hidden />
-          {showCampName ? `Private notes · ${camp.name}` : "Private notes"}
-        </CardTitle>
-        <CardDescription>
-          About {subjectName}, kept by the camp. Newest first.
-        </CardDescription>
+      <CardHeader className="flex flex-col gap-3 space-y-0 pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <NotebookPen className="h-4 w-4 text-accent" aria-hidden />
+            {showCampName ? `Private notes · ${camp.name}` : "Private notes"}
+          </CardTitle>
+          <CardDescription>
+            About {subjectName}, kept by the camp. Newest first.
+          </CardDescription>
+        </div>
+        {exportHref && (
+          <ExportNotesAction href={exportHref} subjectName={subjectName} />
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <form onSubmit={add} className="flex flex-col gap-2">

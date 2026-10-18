@@ -105,6 +105,11 @@ describe("getRecentActivity", () => {
       expect(notInValues(call?.where, '"audit_events"."action"')).toEqual(
         expect.arrayContaining(Object.values(MEMBER_RECORDS_AUDIT)),
       );
+      // Named, not only via the list: the POPIA export row (#105) says a lead
+      // pulled one member's notes — camp-private like the rest.
+      expect(notInValues(call?.where, '"audit_events"."action"')).toContain(
+        "camp.member_note.export",
+      );
     }
   });
 

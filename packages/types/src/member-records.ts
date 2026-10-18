@@ -51,6 +51,16 @@ export const DeleteMemberNoteInput = z
   .strict();
 export type DeleteMemberNoteInput = z.infer<typeof DeleteMemberNoteInput>;
 
+/** Export the camp's notes about one member (a lead answering a POPIA s23
+ * access request). One member per call — never a list. */
+export const ExportMemberNotesInput = z
+  .object({
+    slug: Slug,
+    subjectUserId: z.string().uuid(),
+  })
+  .strict();
+export type ExportMemberNotesInput = z.infer<typeof ExportMemberNotesInput>;
+
 /** "Not the same person": hide one possible-duplicate pair for the camp. */
 export const DismissDuplicateInput = z
   .object({

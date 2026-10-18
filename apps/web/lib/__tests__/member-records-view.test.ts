@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ACTION_FAILED,
   duplicateHintSentence,
+  exportFilenameFrom,
+  exportResponseOutcome,
+  memberNotesExportHref,
   settleAction,
   memberNoteDateLabel,
   toPrivateNoteItems,
@@ -103,5 +106,54 @@ describe("settleAction", () => {
     await expect(settleAction(() => Promise.resolve(refused))).resolves.toBe(
       refused,
     );
+  });
+});
+
+describe("the member-notes export link (#105)", () => {
+  it("points at the camp's export route for one member, encoded", () => {
+    expect(
+      memberNotesExportHref("mad-hatters", "aaaaaaaa-0000-4000-8000-000000000003"),
+    ).toBe(
+      "/camps/mad-hatters/member-notes/aaaaaaaa-0000-4000-8000-000000000003/export",
+    );
+    expect(memberNotesExportHref("a/b?c", "x")).toBe(
+      "/camps/a%2Fb%3Fc/member-notes/x/export",
+    );
+  });
+
+  it("takes only the slugged filename shape the route sends; anything else falls back", () => {
+    expect(
+      exportFilenameFrom('attachment; filename="member-notes-mad-hatters-jabu-2026-10-18.txt"'),
+    ).toBe("member-notes-mad-hatters-jabu-2026-10-18.txt");
+    for (const header of [
+      null,
+      "attachment",
+      'attachment; filename="../../evil.txt"',
+      'attachment; filename="notes.exe"',
+    ]) {
+      expect(exportFilenameFrom(header)).toBe("member-notes.txt");
+    }
+  });
+});
+
+describe("exportResponseOutcome", () => {
+  const FILE = 'attachment; filename="member-notes-c-m-2026-10-18.txt"';
+  it("only a 200 attachment is the file", () => {
+    expect(exportResponseOutcome({ status: 200, contentDisposition: FILE })).toBe("file");
+  });
+
+  // Regression (review): the questionnaire gate redirects; a followed
+  // redirect is a 200 HTML page that was saved as the notes file and toasted
+  // as "Notes exported".
+  it("a redirect, or a 200 page that is not an attachment, is refused", () => {
+    expect(exportResponseOutcome({ status: 0, contentDisposition: null })).toBe("refused");
+    expect(exportResponseOutcome({ status: 307, contentDisposition: null })).toBe("refused");
+    expect(exportResponseOutcome({ status: 200, contentDisposition: null })).toBe("refused");
+    expect(exportResponseOutcome({ status: 200, contentDisposition: "inline" })).toBe("refused");
+  });
+
+  it("a 404 is refused; a 503 is unavailable (its sentence is shown)", () => {
+    expect(exportResponseOutcome({ status: 404, contentDisposition: null })).toBe("refused");
+    expect(exportResponseOutcome({ status: 503, contentDisposition: null })).toBe("unavailable");
   });
 });
