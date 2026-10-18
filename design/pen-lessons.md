@@ -1746,3 +1746,34 @@ Every changed frame had 0 findings. The full canvas (`--all`) gave 155 frames, 1
 **Left as data on purpose:** back links "Mad Hatters", the questionnaire title and body, "From Alice Hatter", the "· Mad Hatters" source line on notifications, "Alice Hatter moved…" and "(moved by Alice)", the recipient name in "Sent to Lerato Dlamini…" and "Jabu wants to hand you…", and the people cells.
 
 **Audit:** 15 frames, 0 findings. Exports in review-morning/ were overwritten.
+
+## Editing headless with the pen.dev CLI (18 Oct 2026) — member-notes export action
+
+Ryan's instruction: edit the canvas with the `pen` CLI, not the desktop app or the pencil MCP.
+Added the "Export notes about this member" action (#111) to the Private notes card header in
+`Ka9U0` (desktop) and `r7hFMv` (mobile 360). Frame ids unchanged.
+
+- **The CLI edits, it doesn't only export.** `pen interactive -i <in.pen> -o <out.pen>` reads one
+  tool call per stdin line: `execute({ input: <JSON-quoted JS> })` lines, then `save()`, then
+  `exit()`. Without `save()` nothing is written to `-o`. Generate the lines with
+  `json.dumps(js)` so a multi-line snippet becomes one valid JS string literal. Work on a copy in
+  /tmp and copy the result over `design/ab-initial-app.pen` only after checking it.
+- **`read_skill({ path: "execute.md" })` works through the CLI** and is the current API reference.
+  Same `execute` API as the MCP (Get visitors with `ctx.bounds`/`ctx.problems`, Replace, Copy).
+- **Saving migrates the file format.** CLI 0.3.10 wrote `"version": "2.20"` (was 2.19) and rewrote
+  every image fill `"mode": "fit"` to `"mode": "contain"` (188 lines). That is the tool's schema
+  migration, not node churn; expect it in the diff of the first CLI save. A desktop app older
+  than the CLI may not open a 2.20 file.
+- **Headless renders are immediate.** Export right after the edit painted every new node — no
+  render lag, no +50px bias (Replace into an existing frame, as before, did not trigger it).
+- **Replace re-ids the whole replaced subtree**, including the children you carried over
+  (strip `id` from `Get(node)`, wrap, `Replace`). Wrapping the card header to add a right-hand
+  column changed `b2zUO`→`l6Kf5a` (desktop) and `Gj7OF`→`pMpAr` (mobile) and their title/description
+  nodes. Grep the repo for old ids before committing; none were cited here.
+- **Check the saved file, not just the call:** valid JSON, no duplicate ids (walk every
+  `{type,id}` object), and `diff` limited to the intended subtrees plus the migration above.
+- Desktop export action: outline button `bOc9x` (padding [7,13], radius 7, `Z2mNr9` replaced by
+  [lucide `download` 14 + 12.5/500 label]) over a one-line right-aligned 12.5 muted hint, in a
+  `space_between` header row beside the title column. Mobile: stacked under the description
+  (gap 12), button padding [14,17] = 45px, hint fixed-width fill_container, left-aligned —
+  the code's `sm:` breakpoints.
