@@ -9,6 +9,7 @@ import {
   canDeleteMemberNote,
   canEditMemberNote,
   canExportMemberNotes,
+  holdsCaptainRole,
   memberNotesExportFilename,
   type MemberNoteExportItem,
   canManageMemberNotes,
@@ -27,7 +28,10 @@ import {
   type MemberNotesViewer,
   type MemberRecordsRefusal,
 } from "../member-records";
-import type { PermissionMembership } from "../project-permissions";
+import {
+  allProjectPermissions,
+  type PermissionMembership,
+} from "../project-permissions";
 
 const LEAD = "00000000-0000-4000-8000-00000000000a";
 const COLEAD = "00000000-0000-4000-8000-00000000000b";
@@ -352,14 +356,17 @@ describe("copy", () => {
 // --- Export (POPIA s23 access request, #105; Ryan, 18 Oct 2026) ---------------
 
 describe("who may export a member's notes", () => {
-  // A captain holds every privilege (member_notes included) by the role's
-  // kind — but not a STRUCTURAL lead role, so not the export.
-  const allGrants: ProjectPermissions = {
-    member_notes: true,
-    view_member_details: true,
-    assign_roles: true,
+  // A custom role granting every privilege is NOT a captain: the captain
+  // signal is the role's KIND (holdsCaptainRole), never its permissions.
+  const everything = allProjectPermissions();
+  const allGrantsCustom = viewer(WELFARE, perms("member", everything));
+  // A captain of THIS camp (Ryan, 18 Oct 2026): a plain member who holds the
+  // camp's Captain role, so the store resolves holdsCaptainRole = true.
+  const captain: MemberNotesViewer = {
+    userId: WELFARE,
+    membership: perms("member", everything),
+    holdsCaptainRole: true,
   };
-  const captain = viewer(WELFARE, perms("member", allGrants));
 
   it("the camp's structural lead and co-lead: yes", () => {
     expect(canExportMemberNotes(lead, subject)).toBe(true);
@@ -373,10 +380,45 @@ describe("who may export a member's notes", () => {
     );
   });
 
-  it("a member_notes holder who is not a lead: no — keeping notes is not answering for the camp", () => {
+  it("a member_notes holder who is not a lead or captain: no — keeping notes is not answering for the camp", () => {
     expect(canReadMemberNotes(welfare, subject)).toBe(true); // they DO keep notes
     expect(canExportMemberNotes(welfare, subject)).toBe(false);
-    expect(canExportMemberNotes(captain, subject)).toBe(false);
+    // Every privilege on a custom role is still not the Captain role.
+    expect(canExportMemberNotes(allGrantsCustom, subject)).toBe(false);
+    expect(
+      canExportMemberNotes({ ...welfare, holdsCaptainRole: false }, subject),
+    ).toBe(false);
+  });
+
+  it("a captain of THIS camp: yes (Ryan, 18 Oct 2026)", () => {
+    expect(canExportMemberNotes(captain, subject)).toBe(true);
+    // ...about an archived member too.
+    expect(canExportMemberNotes(captain, { userId: SUBJECT, inCamp: true })).toBe(
+      true,
+    );
+  });
+
+  it("a captain of ANOTHER camp, or about themself, or someone outside the camp: no", () => {
+    // A captain of camp B holds no membership in camp A: the store resolves
+    // `membership: null` here, whatever they hold elsewhere.
+    expect(
+      canExportMemberNotes(
+        { userId: WELFARE, membership: null, holdsCaptainRole: true },
+        subject,
+      ),
+    ).toBe(false);
+    expect(
+      canExportMemberNotes(captain, { userId: WELFARE, inCamp: true }),
+    ).toBe(false);
+    expect(
+      canExportMemberNotes(captain, { userId: SUBJECT, inCamp: false }),
+    ).toBe(false);
+  });
+
+  it("the captain signal is the role's kind", () => {
+    expect(holdsCaptainRole(["baseline", "captain"])).toBe(true);
+    expect(holdsCaptainRole(["baseline", "custom", "default"])).toBe(false);
+    expect(holdsCaptainRole([])).toBe(false);
   });
 
   it("a plain member and a roster reader: no", () => {

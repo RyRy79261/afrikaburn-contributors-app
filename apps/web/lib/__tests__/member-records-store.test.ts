@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { schema } from "@quagga/db";
 import { decrypt, encrypt } from "@quagga/db/crypto";
-import { MEMBER_RECORDS_AUDIT } from "@quagga/core";
+import { MEMBER_RECORDS_AUDIT, allProjectPermissions } from "@quagga/core";
 import {
   GroupKind,
   MembershipRole,
@@ -30,6 +30,7 @@ const MEMBER = MembershipRole.enum.member;
 const THEME_CAMP = GroupKind.enum.theme_camp;
 const CUSTOM = ProjectRoleKind.enum.custom;
 const BASELINE = ProjectRoleKind.enum.baseline;
+const CAPTAIN = ProjectRoleKind.enum.captain;
 
 const ALICE = "aaaaaaaa-0000-4000-8000-000000000001"; // lead
 const REN = "aaaaaaaa-0000-4000-8000-000000000002"; // welfare (member_notes)
@@ -729,6 +730,22 @@ describe("notes on a burner's profile", () => {
     expect(card!.notes[0]!.authorName).toBe("Departed Burner");
   });
 
+  it("the card offers the export to a captain of the camp, not to a custom all-privileges role", async () => {
+    for (const [holds, expected] of [[true, true], [false, false]] as const) {
+      dbMock.reset();
+      getMemberPermissions.mockResolvedValue({
+        ...perms(MEMBER, allProjectPermissions()),
+        holdsCaptainRole: holds,
+      });
+      dbMock.queue([shared()], [stored()]);
+      const [card] = await store.loadProfileMemberNotes({
+        viewerUserId: REN,
+        subjectUserId: JABU,
+      });
+      expect(card!.canExport).toBe(expected);
+    }
+  });
+
   it("a plain camp-mate, or a roster reader without member_notes, gets nothing and no note is read", async () => {
     for (const p of [perms(MEMBER), perms(MEMBER, { view_member_details: true }), null]) {
       dbMock.reset();
@@ -1157,6 +1174,57 @@ describe("exporting a member's notes", () => {
     );
     const result = await store.exportMemberNotes(ALICE, input);
     expect(result.ok).toBe(true);
+  });
+
+  // Ryan, 18 Oct 2026: captains of THIS camp export too. The signal is the
+  // Captain role's KIND, held with accepted consent in this camp.
+  const CAPTAIN_ROLE = "77777777-0000-4000-8000-000000000003";
+  const withCaptainRole = (held: boolean, kind: string = CAPTAIN) => [
+    [
+      { id: BASELINE_ROLE, kind: BASELINE, permissions: {} },
+      { id: CAPTAIN_ROLE, kind, permissions: allProjectPermissions() },
+    ],
+    held ? [{ projectRoleId: CAPTAIN_ROLE }] : [],
+  ];
+
+  it("a captain of this camp (a plain member holding the Captain role) may export", async () => {
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(true),
+      [row()],
+      [],
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result.ok).toBe(true);
+    expect(auditRows()).toEqual([
+      expect.objectContaining({
+        actorId: REN,
+        action: MEMBER_RECORDS_AUDIT.noteExport,
+      }),
+    ]);
+  });
+
+  it("a CUSTOM role granting every privilege is not the Captain role: refused", async () => {
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(true, CUSTOM),
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+    expect(dbMock.queriesTouching(schema.memberNotes)).toHaveLength(0);
+  });
+
+  it("the camp has a Captain role but this member does not hold it (or not accepted): refused", async () => {
+    // The assignments query only returns ACCEPTED rows; none here.
+    dbMock.queue(
+      campRow,
+      [person(REN, MEMBER), person(JABU, MEMBER)],
+      ...withCaptainRole(false),
+    );
+    const result = await store.exportMemberNotes(REN, input);
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
   });
 
   it("a member_notes holder who is not a lead is refused as not found: no note read, no audit", async () => {

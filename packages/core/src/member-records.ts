@@ -31,20 +31,21 @@
 //
 // EXPORT (POPIA s23 right of access, #105; Ryan, 18 Oct 2026). A member may
 // ask the camp for the notes it keeps about them. The camp's STRUCTURAL leads
-// and co-leads answer: one member at a time, a plain-text file the lead sends
-// on. Not a `member_notes` holder alone, not a captain by that role, not the
-// member themself (they still never see notes in the app), not another camp's
-// lead, never the org. The file names no author (third-party information).
+// and co-leads answer, and its captains (the Captain role's kind; Ryan, same
+// day): one member at a time, a plain-text file they send on. Not a
+// `member_notes` holder alone, not the member themself (they still never see
+// notes in the app), not another camp's lead or captain, never the org. The file names no author (third-party information).
 //
 // PRIVACY. Notes never appear in the roster table (a COUNT for note people
 // only), a CSV export, stats, search, the org console or a notification.
 // Audit rows carry ids only, never the text.
 
-import type { GroupKind } from "@quagga/types";
+import type { GroupKind, ProjectRoleKind } from "@quagga/types";
 import { isProjectKind } from "@quagga/types";
 import {
   hasProjectPermission,
   isPermissionBackstop,
+  isPermissionsLockedKind,
   type PermissionMembership,
 } from "./project-permissions";
 import { isSimilarName } from "./name-dedupe";
@@ -113,6 +114,18 @@ export interface MemberNotesViewer {
   userId: string;
   /** Null: not a current member (archived, erased or never joined). */
   membership: PermissionMembership | null;
+  /** Holds THIS camp's Captain role (kind `captain`) with accepted consent.
+   * The role's KIND, not its permissions: a custom role granting every
+   * privilege is not a captain. Absent means no. */
+  holdsCaptainRole?: boolean;
+}
+
+/** Do the role kinds a member holds (accepted, in ONE camp) include the
+ * Captain role? The same signal that locks a captain to every privilege
+ * (`isPermissionsLockedKind`). */
+export function holdsCaptainRole(kinds: Iterable<ProjectRoleKind>): boolean {
+  for (const kind of kinds) if (isPermissionsLockedKind(kind)) return true;
+  return false;
 }
 
 /** The person a note is about, as the store found them in THIS camp. */
@@ -170,18 +183,22 @@ export function canDeleteMemberNote(
 
 /**
  * May the viewer export the camp's notes about this person, to answer a POPIA
- * s23 access request (#105)? A STRUCTURAL lead or co-lead of THIS camp — the
+ * s23 access request (#105)? A STRUCTURAL lead or co-lead of THIS camp, or a
+ * CAPTAIN of it (holds the camp's Captain role; Ryan, 18 Oct 2026) — the
  * people who answer for the camp — about a current or archived member of it
  * who is not themselves. The `member_notes` privilege alone is not enough:
  * keeping notes is not answering for the camp. `null` (not a current member:
- * another camp's lead, an org account) is always no.
+ * another camp's lead or captain, an org account) is always no.
  */
 export function canExportMemberNotes(
   viewer: MemberNotesViewer,
   subject: MemberNoteSubject,
 ): boolean {
   const m = viewer.membership;
-  if (m === null || !isPermissionBackstop(m.structuralRole)) return false;
+  if (m === null) return false;
+  const answersForCamp =
+    isPermissionBackstop(m.structuralRole) || viewer.holdsCaptainRole === true;
+  if (!answersForCamp) return false;
   if (!subject.inCamp) return false;
   return subject.userId.toLowerCase() !== viewer.userId.toLowerCase();
 }

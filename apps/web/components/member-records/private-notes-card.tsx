@@ -33,7 +33,7 @@ import {
 // themself and the org get no card at all (frame R1b) — and every note
 // arrives with the server's `canEdit` / `canDelete` verdict. Each action
 // re-decides from the database on every call. The export action (#105) shows
-// only on the server's `canExport` (structural leads and co-leads); its route
+// only on the server's `canExport` (structural leads, co-leads and captains); its route
 // re-decides from the database on every download.
 
 /** A member-records action's result, as the store returns it. */
@@ -305,7 +305,8 @@ async function downloadExport(
   return { ok: true };
 }
 
-/** "Export notes about this member" — structural leads and co-leads only
+/** "Export notes about this member" — structural leads, co-leads and
+ * captains only
  * (the server's `canExport`; the route decides again on every call). */
 function ExportNotesAction({
   href,
@@ -368,7 +369,7 @@ export function PrivateNotesCard({
   /** Several camps are shared: say which camp this card belongs to. */
   showCampName: boolean;
   /** The export route, when the server said this viewer may export (a
-   * structural lead or co-lead); null hides the action. */
+   * structural lead, co-lead or captain); null hides the action. */
   exportHref: string | null;
   actions: {
     add: MemberNoteAction;

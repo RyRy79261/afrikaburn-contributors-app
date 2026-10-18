@@ -27,10 +27,12 @@ duplicate" hint on the roster.
 - **POPIA access: a lead export** (Ryan, 18 Oct 2026, #105 — built now, the
   working group confirms later). When a member asks for the notes the camp
   keeps about them (POPIA s23), **the camp's leads answer**: a structural lead
-  or co-lead of THAT camp exports the notes from the member's profile and sends
-  the file on themselves. Not a `member_notes` holder alone (keeping notes is
-  not answering for the camp), not a captain by that role, not other members,
-  not leads of other camps, never the org console. The member still never
+  or co-lead of THAT camp — **or a captain of THAT camp** (holds its Captain
+  role; Ryan, 18 Oct 2026, same day) — exports the notes from the member's
+  profile and sends the file on themselves. Not a `member_notes` holder alone
+  (keeping notes is not answering for the camp, and a custom role granting
+  every privilege is not the Captain role), not other members, not leads or
+  captains of other camps, never the org console. The member still never
   sees notes in the app. Defaults chosen with it, each easy to change: plain
   UTF-8 text, one file per member per camp; **no author names or ids** (who
   wrote a note is third-party information, the PAIA-protective default); no
@@ -78,8 +80,10 @@ duplicate" hint on the roster.
   org console, or a notification. The one export is the lead's per-member
   POPIA file (§Export).
 - `canExportMemberNotes(viewer, subject)`: a STRUCTURAL lead or co-lead of
-  this camp (`isPermissionBackstop`), about a current or archived member who
-  is not themselves. `member_notes` alone is not enough.
+  this camp (`isPermissionBackstop`), or a holder of this camp's Captain role
+  (`holdsCaptainRole` — the role's KIND, accepted consent; never inferred from
+  permissions), about a current or archived member who is not themselves.
+  `member_notes` alone is not enough.
 - Duplicate hint: within one camp, two current members whose display names
   are similar (`isSimilarName`) are both flagged "possible duplicate", shown
   only to roster viewers with `view_member_details`. Dismissing a pair hides it
@@ -90,7 +94,7 @@ duplicate" hint on the roster.
 
 - Member profile `/burners/[id]`, for note people of a shared camp: a
   **Private notes** card (list, add, edit own, delete own; leads may delete
-  any; leads and co-leads may export, §Export) with the line "Only the camp's leads and note-keepers see these. The
+  any; leads, co-leads and captains may export, §Export) with the line "Only the camp's leads and note-keepers see these. The
   member can request them under POPIA."
 - Roster: a small "Notes" count chip on a member row for note people (count
   only, never text), and a "Possible duplicate" chip with a dismiss action for
@@ -100,7 +104,8 @@ duplicate" hint on the roster.
 ## Export (POPIA s23 access request, #105)
 
 - **Where**: the member's profile, on the Private notes card — an "Export
-  notes about this member" action, for structural leads and co-leads only.
+  notes about this member" action, for structural leads, co-leads and
+  captains of the camp only.
   One member at a time; never from a list, the roster or in bulk.
 - **Route**: `GET /camps/[slug]/member-notes/[userId]/export`. Re-decides on
   every call from the database (actor and member locked `FOR SHARE`,
@@ -127,7 +132,8 @@ duplicate" hint on the roster.
   `camp.member_note.export` — actor, camp, member id and the note count;
   never text. It is a member-records action, so the org console's audit
   readers exclude it in the query like the others.
-- **Nothing automatic**: no notification, no email; the lead sends the file.
+- **Nothing automatic**: no notification, no email; whoever exports sends the
+  file.
 - Frame: R1 `Ka9U0` / `r7hFMv` still needs the export action drawn.
 
 ## Not built

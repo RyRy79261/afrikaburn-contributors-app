@@ -14,10 +14,10 @@ import { exportMemberNotes } from "@/lib/member-records-store";
 //
 // AUTHORISED HERE, ON EVERY REQUEST: `exportMemberNotes` locks the actor's and
 // the person's memberships, loads the actor's permissions live and asks
-// @quagga/core `canExportMemberNotes` (a structural lead or co-lead of THIS
-// camp, about someone else in it). Every refusal — signed out, not a member,
-// a note-keeper who is not a lead, the member themself, a lead of another
-// camp, an org account, an unknown camp or person, a malformed id — is the
+// @quagga/core `canExportMemberNotes` (a structural lead, co-lead or captain
+// of THIS camp, about someone else in it). Every refusal — signed out, not a
+// member, a note-keeper who is not a lead or captain, the member themself, a
+// lead or captain of another camp, an org account, an unknown camp or person, a malformed id — is the
 // SAME 404, so the route is no oracle for who has notes. The one other answer
 // is a 503 to a lead when the encryption key is missing: no partial file.
 //

@@ -20,7 +20,8 @@
 //   2b. POPIA export (#105): the lead downloads a text file of the member's
 //      notes (oldest first, no author). A note-keeper without a lead role
 //      sees the card but no export, and the route refuses them; the member
-//      and another camp's lead are refused by the route directly.
+//      and another camp's lead are refused by the route directly. A member
+//      given the camp's Captain role exports too.
 //   4. Retention: archiving keeps the notes (the card still shows them on the
 //      archived member's profile and after a restore); leaving the camp
 //      deletes them (rejoining starts from "No notes yet").
@@ -357,15 +358,17 @@ test.describe("camp lead — member records", () => {
     ).toContainText("Notes 1");
   });
 
-  test("a lead exports a member's notes for a POPIA request; nobody else can", async ({
+  test("a lead or captain exports a member's notes for a POPIA request; nobody else can", async ({
     makeAppPage,
   }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(360_000);
     const leadPage = await makeAppPage("web");
     const memberPage = await makeAppPage("web");
     const keeperPage = await makeAppPage("web");
     const otherLeadPage = await makeAppPage("web");
+    const captainPage = await makeAppPage("web");
     const leadName = uniqueUsername("export_lead");
+    const captainName = uniqueUsername("export_captain");
     const memberName = uniqueUsername("export_jabu");
     const keeperName = uniqueUsername("export_ren");
     const firstText = noteBody("Great on build week");
@@ -377,6 +380,8 @@ test.describe("camp lead — member records", () => {
     await joinCamp(leadPage, memberPage, camp.slug);
     await signUpBurner(keeperPage, { onboard: true, username: keeperName });
     await joinCamp(leadPage, keeperPage, camp.slug);
+    await signUpBurner(captainPage, { onboard: true, username: captainName });
+    await joinCamp(leadPage, captainPage, camp.slug);
     await signUpBurner(otherLeadPage, { onboard: true });
     await createCamp(otherLeadPage);
 
@@ -431,6 +436,30 @@ test.describe("camp lead — member records", () => {
     // --- The member themself, and a lead of another camp: refused ------------
     await expectExportRefused(memberPage, exportUrl, [firstText, secondText]);
     await expectExportRefused(otherLeadPage, exportUrl, [firstText, secondText]);
+
+    // --- A captain of the camp (Ryan, 18 Oct 2026): may export ---------------
+    // A plain member until the lead gives them the camp's Captain role.
+    await assignRoleToMember(leadPage, camp.slug, captainName, "Captain");
+    await gotoProfile(captainPage, memberId, memberName);
+    const captainCard = captainPage.getByTestId("private-notes");
+    await expect(
+      captainCard.getByTestId("private-note").filter({ hasText: firstText }),
+    ).toBeVisible();
+    // Hydrate the card the way a person would before clicking: type into the
+    // add form (and clear it) until React holds the text.
+    const captainField = captainCard.getByLabel("Add a note");
+    await expect(async () => {
+      await captainField.fill("x");
+      await expect(
+        captainCard.getByRole("button", { name: "Add note" }),
+      ).toBeEnabled({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+    await captainField.fill("");
+    const captainDownload = await exportNotes(captainPage, captainCard);
+    const captainFile = await readFile(await captainDownload.path(), "utf8");
+    expect(captainFile).toContain(firstText);
+    expect(captainFile).toContain(secondText);
+    expect(captainFile).not.toContain(leadName);
 
     // The lead still can, straight off the route (the refusals above are not
     // a broken route).
