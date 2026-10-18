@@ -1,14 +1,18 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
 import {
+  fuelDepotAdvice,
+  fuelDepotNotification,
   publicMemberName,
+  shouldSendDeferredWranglerCopy,
   shouldSendImmediateEmail,
   wranglerAssignedNotification,
 } from "@quagga/core";
+import { GasFuelRecord } from "@quagga/types";
 
 import { activeMembership } from "@quagga/db";
 import { getDb, schema, withTransaction } from "@/lib/db";
@@ -140,6 +144,77 @@ async function notifyWranglerAssigned(
   }
 }
 
+/**
+ * The DEFERRED fuel depot copy (docs/registration-safety-spec.md §"Fuel depot
+ * notice"). Form 2 runs in January and wranglers are assigned only after
+ * approval, so a camp's gas & fuel record usually goes over the limit before
+ * anyone holds it. When a wrangler is assigned and the camp's SAVED record
+ * says depot, the wrangler gets the copy the save could not send.
+ *
+ * Exactly once: `wrangler_notified_at` is claimed with a conditional UPDATE
+ * (only where it is still null), and only the save that claims it inserts.
+ * Best-effort after commit; never rolls back the assignment. In-app only —
+ * `wrangler` notifications send no immediate email.
+ */
+async function notifyDeferredFuelDepot(
+  db: ReturnType<typeof getDb>,
+  input: {
+    registrationId: string;
+    campName: string;
+    campSlug: string;
+    wranglerUserId: string;
+    wranglerChanged: boolean;
+  },
+): Promise<void> {
+  try {
+    const [row] = await db
+      .select({
+        record: schema.campGasFuelRecords.record,
+        isDraft: schema.campGasFuelRecords.isDraft,
+        wranglerNotifiedAt: schema.campGasFuelRecords.wranglerNotifiedAt,
+      })
+      .from(schema.campGasFuelRecords)
+      .where(eq(schema.campGasFuelRecords.registrationId, input.registrationId))
+      .limit(1);
+    const parsed = row ? GasFuelRecord.safeParse(row.record) : null;
+    const send = shouldSendDeferredWranglerCopy({
+      record:
+        row && parsed?.success
+          ? {
+              isDraft: row.isDraft,
+              advice: fuelDepotAdvice(parsed.data),
+              wranglerNotifiedAt: row.wranglerNotifiedAt,
+            }
+          : null,
+      wranglerChanged: input.wranglerChanged,
+    });
+    if (!send) return;
+    const claimed = await db
+      .update(schema.campGasFuelRecords)
+      .set({ wranglerNotifiedAt: new Date() })
+      .where(
+        and(
+          eq(schema.campGasFuelRecords.registrationId, input.registrationId),
+          eq(schema.campGasFuelRecords.isDraft, false),
+          isNull(schema.campGasFuelRecords.wranglerNotifiedAt),
+        ),
+      )
+      .returning({ id: schema.campGasFuelRecords.id });
+    if (claimed.length === 0) return;
+    const payload = fuelDepotNotification({
+      side: "wrangler",
+      campName: input.campName,
+      campSlug: input.campSlug,
+      registrationId: input.registrationId,
+    });
+    await insertNotifications(db, [
+      { ...payload, userId: input.wranglerUserId, origin: "system" as const },
+    ]);
+  } catch (err) {
+    console.error("[notifications] deferred fuel depot notice failed", err);
+  }
+}
+
 /** Assign (or reassign) the wrangler for an approved camp. Audited. */
 export async function assignWrangler(
   raw: z.input<typeof AssignInput>,
@@ -213,7 +288,29 @@ export async function assignWrangler(
 
     // The write and its audit row are one unit — an assignment that exists
     // without a record of who made it is the thing the trail is for.
-    await withTransaction(async (tx) => {
+    const wranglerChanged = await withTransaction(async (tx) => {
+      const [previous] = await tx
+        .select({ userId: schema.wranglerAssignments.wranglerUserId })
+        .from(schema.wranglerAssignments)
+        .where(
+          and(
+            eq(schema.wranglerAssignments.groupId, registration.groupId),
+            eq(schema.wranglerAssignments.editionId, registration.editionId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const changed = previous?.userId !== input.wranglerUserId;
+      // A NEW wrangler has not been told about the fuel depot, whatever the
+      // last one was: reset so the deferred copy reaches them too.
+      if (changed) {
+        await tx
+          .update(schema.campGasFuelRecords)
+          .set({ wranglerNotifiedAt: null })
+          .where(
+            eq(schema.campGasFuelRecords.registrationId, registration.id),
+          );
+      }
       await tx
         .insert(schema.wranglerAssignments)
         .values({
@@ -249,6 +346,15 @@ export async function assignWrangler(
           wranglerUserId: input.wranglerUserId,
         },
       });
+      return changed;
+    });
+
+    await notifyDeferredFuelDepot(db, {
+      registrationId: registration.id,
+      campName: registration.campName,
+      campSlug: registration.campSlug,
+      wranglerUserId: input.wranglerUserId,
+      wranglerChanged,
     });
 
     await notifyWranglerAssigned(db, {

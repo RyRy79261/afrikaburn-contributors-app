@@ -977,6 +977,17 @@ describe("getStatusBoard", () => {
     expect(db.calls).toEqual([]);
   });
 
+  it("reads the section 4 gates for officer triggers instead of hard-coding false (registration-safety-spec)", async () => {
+    await getStatusBoard(EDITION);
+    // The second registrations read is the officer-coverage camp read.
+    const officerRead = db
+      .recorded("select", "registrations")
+      .find((c) => c.columns?.includes("soundRaw"));
+    expect(officerRead?.columns).toEqual(
+      expect.arrayContaining(["hasGenerator", "hasFire", "hasGasOrFuel"]),
+    );
+  });
+
   it("derives the funnel, coverage and rollups from the seeded rows", async () => {
     db.seed("burner_bios", [
       { completedAt: new Date("2026-10-01T00:00:00Z") },
