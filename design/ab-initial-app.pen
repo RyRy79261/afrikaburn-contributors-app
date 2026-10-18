@@ -1,5 +1,5 @@
 {
-  "version": "2.19",
+  "version": "2.20",
   "children": [
     {
       "type": "frame",
@@ -27281,7 +27281,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -32136,7 +32136,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -34069,7 +34069,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -34496,7 +34496,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -36089,7 +36089,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -36734,7 +36734,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 }
               }
@@ -39097,7 +39097,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -39435,7 +39435,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -41510,7 +41510,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "vYaMu": {
@@ -42345,7 +42345,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 }
               }
@@ -43724,7 +43724,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 }
               }
@@ -44962,7 +44962,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -49077,7 +49077,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "brand/afrikaburn-logo-banner-282.png",
-                        "mode": "fit"
+                        "mode": "contain"
                       }
                     }
                   ]
@@ -50010,7 +50010,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -50964,7 +50964,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -53950,7 +53950,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "brand/afrikaburn-logo-banner-282.png",
-                        "mode": "fit"
+                        "mode": "contain"
                       },
                       "layout": "none"
                     }
@@ -55367,7 +55367,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -57008,7 +57008,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -59565,7 +59565,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "d7pry": {
@@ -61701,7 +61701,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "d7pry": {
@@ -62336,7 +62336,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 }
               }
@@ -64792,7 +64792,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -66991,7 +66991,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -71774,7 +71774,7 @@
                         "type": "image",
                         "enabled": true,
                         "url": "brand/afrikaburn-logo-banner-282.png",
-                        "mode": "fit"
+                        "mode": "contain"
                       },
                       "layout": "none"
                     }
@@ -73167,7 +73167,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -74689,7 +74689,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "d7pry": {
@@ -75385,7 +75385,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "d7pry": {
@@ -75865,7 +75865,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -76531,7 +76531,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -77795,7 +77795,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -78256,7 +78256,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -79143,7 +79143,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -80341,7 +80341,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -82563,7 +82563,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -83767,7 +83767,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 }
@@ -84201,7 +84201,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -84824,7 +84824,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -86463,7 +86463,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -88426,7 +88426,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -88927,7 +88927,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -89381,7 +89381,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -92330,7 +92330,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -93470,7 +93470,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -94688,7 +94688,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -96776,7 +96776,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -97687,7 +97687,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -99156,7 +99156,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -100483,7 +100483,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 }
@@ -101171,7 +101171,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -102431,7 +102431,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -104897,7 +104897,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -106111,7 +106111,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -108318,7 +108318,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -109026,7 +109026,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -111353,7 +111353,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -112046,7 +112046,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -112534,7 +112534,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -113644,7 +113644,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -115065,7 +115065,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -116628,7 +116628,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -119849,7 +119849,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -122272,7 +122272,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -124454,7 +124454,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -127023,7 +127023,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -129107,7 +129107,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -129679,7 +129679,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -131978,7 +131978,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 }
               ]
@@ -132165,7 +132165,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "d7pry": {
@@ -132727,7 +132727,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -133319,7 +133319,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -133996,7 +133996,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -134598,7 +134598,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -135049,7 +135049,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -135451,7 +135451,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -136166,7 +136166,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -136755,7 +136755,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -137291,7 +137291,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -137893,7 +137893,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -138311,7 +138311,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -138804,7 +138804,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -140987,7 +140987,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -143113,7 +143113,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -143714,7 +143714,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -144316,7 +144316,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -144848,7 +144848,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -145413,7 +145413,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               },
               "layout": "none"
             },
@@ -148628,7 +148628,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -150168,7 +150168,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -154152,7 +154152,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -158207,7 +158207,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -162594,7 +162594,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -166895,7 +166895,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -170224,7 +170224,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -175193,7 +175193,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -177234,7 +177234,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -178138,7 +178138,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -179113,7 +179113,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -179722,7 +179722,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -180258,7 +180258,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -180930,7 +180930,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -181509,7 +181509,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -182509,7 +182509,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -184396,7 +184396,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -185527,7 +185527,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -188025,7 +188025,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -188933,7 +188933,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -189882,7 +189882,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -190714,7 +190714,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -191533,7 +191533,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -192815,7 +192815,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -194039,7 +194039,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -194855,7 +194855,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -195618,7 +195618,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -196316,7 +196316,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -196996,7 +196996,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -199009,7 +199009,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -201253,7 +201253,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -202217,7 +202217,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -203149,7 +203149,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -204560,7 +204560,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -205700,7 +205700,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -207672,7 +207672,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -209570,7 +209570,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -210746,7 +210746,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -211950,7 +211950,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   },
                   "layout": "none"
                 },
@@ -213135,7 +213135,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -215396,7 +215396,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -217307,7 +217307,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -218890,7 +218890,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -220469,7 +220469,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -222295,7 +222295,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -223651,7 +223651,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -225024,7 +225024,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -226362,7 +226362,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -228021,7 +228021,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -229603,7 +229603,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -232831,7 +232831,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -236440,7 +236440,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -239135,7 +239135,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -241845,7 +241845,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 "p9ddJ": {
@@ -244695,7 +244695,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -247648,7 +247648,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -250939,7 +250939,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -254026,7 +254026,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -255372,7 +255372,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -257427,7 +257427,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -262026,7 +262026,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -265465,7 +265465,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -269403,7 +269403,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -272307,7 +272307,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -274754,7 +274754,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -277184,7 +277184,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -278873,7 +278873,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -280570,7 +280570,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -284476,7 +284476,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -286446,7 +286446,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -289776,7 +289776,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -291650,7 +291650,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -296402,7 +296402,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -299438,7 +299438,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -300194,7 +300194,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -303278,7 +303278,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -306350,7 +306350,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -308911,7 +308911,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -311505,7 +311505,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -313299,7 +313299,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -315118,7 +315118,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -318240,7 +318240,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -319911,7 +319911,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -322248,7 +322248,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -324703,7 +324703,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -328157,7 +328157,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -331507,7 +331507,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -333338,7 +333338,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -335114,7 +335114,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -336046,7 +336046,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -336884,7 +336884,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -337938,7 +337938,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -338987,7 +338987,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -340384,7 +340384,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -341807,7 +341807,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -344652,7 +344652,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -347396,7 +347396,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -348114,53 +348114,127 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "b2zUO",
+                  "id": "l6Kf5a",
                   "name": "Card Header",
                   "width": "fill_container",
-                  "layout": "vertical",
-                  "gap": 6,
+                  "gap": 16,
+                  "justifyContent": "space_between",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "FmHuQ",
-                      "name": "Title Row",
-                      "gap": 8,
-                      "alignItems": "center",
+                      "id": "KlWSI",
+                      "name": "Head Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
                       "children": [
                         {
-                          "type": "icon",
-                          "id": "CvJgd",
-                          "name": "Title Icon",
-                          "width": 16,
-                          "height": 16,
-                          "icon": "notebook-pen",
-                          "library": "lucide",
-                          "fill": "$primary"
+                          "type": "frame",
+                          "id": "oqzqh",
+                          "name": "Title Row",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "a4UGG",
+                              "name": "Title Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "notebook-pen",
+                              "library": "lucide",
+                              "fill": "$primary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "hyZgM",
+                              "name": "Card Title",
+                              "fill": "$foreground",
+                              "content": "Private notes",
+                              "fontFamily": "$font-brand",
+                              "fontSize": 16,
+                              "fontWeight": "600"
+                            }
+                          ]
                         },
                         {
                           "type": "text",
-                          "id": "dxWI6",
-                          "name": "Card Title",
-                          "fill": "$foreground",
-                          "content": "Private notes",
+                          "id": "p0EwJ5",
+                          "name": "Card Description",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "About Jabu, kept by the camp. Newest first.",
+                          "lineHeight": 1.5,
                           "fontFamily": "$font-brand",
-                          "fontSize": 16,
-                          "fontWeight": "600"
+                          "fontSize": 13.5,
+                          "fontWeight": "500"
                         }
                       ]
                     },
                     {
-                      "type": "text",
-                      "id": "r1b5s",
-                      "name": "Card Description",
-                      "fill": "$muted-foreground",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "About Jabu, kept by the camp. Newest first.",
-                      "lineHeight": 1.5,
-                      "fontFamily": "$font-brand",
-                      "fontSize": 13.5,
-                      "fontWeight": "500"
+                      "type": "frame",
+                      "id": "u9IMD",
+                      "name": "Export Action",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "id": "KPNCy",
+                          "type": "ref",
+                          "ref": "bOc9x",
+                          "name": "Export Notes Button",
+                          "padding": [
+                            7,
+                            13
+                          ],
+                          "cornerRadius": 7,
+                          "descendants": {
+                            "Z2mNr9": {
+                              "type": "frame",
+                              "id": "vgijU",
+                              "name": "Label Group",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "S6tZ8l",
+                                  "name": "Icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$foreground"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wiHtv",
+                                  "name": "Text",
+                                  "fill": "$foreground",
+                                  "content": "Export notes about this member",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "fwycO",
+                          "name": "Export Hint",
+                          "fill": "$muted-foreground",
+                          "content": "A text file to send Jabu if they ask for their notes. Read it first: notes can mention other people.",
+                          "lineHeight": 1.45,
+                          "textAlign": "right",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "500"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -350022,7 +350096,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -350893,53 +350967,128 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "Gj7OF",
+                  "id": "pMpAr",
                   "name": "Card Header",
                   "width": "fill_container",
                   "layout": "vertical",
-                  "gap": 6,
+                  "gap": 12,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "Q8PdCo",
-                      "name": "Title Row",
-                      "gap": 8,
-                      "alignItems": "center",
+                      "id": "f5dzr",
+                      "name": "Head Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
                       "children": [
                         {
-                          "type": "icon",
-                          "id": "ABuMi",
-                          "name": "Title Icon",
-                          "width": 16,
-                          "height": 16,
-                          "icon": "notebook-pen",
-                          "library": "lucide",
-                          "fill": "$primary"
+                          "type": "frame",
+                          "id": "s6wih",
+                          "name": "Title Row",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "VZWNq",
+                              "name": "Title Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "notebook-pen",
+                              "library": "lucide",
+                              "fill": "$primary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "HR0Un",
+                              "name": "Card Title",
+                              "fill": "$foreground",
+                              "content": "Private notes",
+                              "fontFamily": "$font-brand",
+                              "fontSize": 16,
+                              "fontWeight": "600"
+                            }
+                          ]
                         },
                         {
                           "type": "text",
-                          "id": "yXNj7",
-                          "name": "Card Title",
-                          "fill": "$foreground",
-                          "content": "Private notes",
+                          "id": "oRopD",
+                          "name": "Card Description",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "About Jabu, kept by the camp. Newest first.",
+                          "lineHeight": 1.5,
                           "fontFamily": "$font-brand",
-                          "fontSize": 16,
-                          "fontWeight": "600"
+                          "fontSize": 13.5,
+                          "fontWeight": "500"
                         }
                       ]
                     },
                     {
-                      "type": "text",
-                      "id": "GAFNQ",
-                      "name": "Card Description",
-                      "fill": "$muted-foreground",
-                      "textGrowth": "fixed-width",
+                      "type": "frame",
+                      "id": "S2dXEQ",
+                      "name": "Export Action",
                       "width": "fill_container",
-                      "content": "About Jabu, kept by the camp. Newest first.",
-                      "lineHeight": 1.5,
-                      "fontFamily": "$font-brand",
-                      "fontSize": 13.5,
-                      "fontWeight": "500"
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "id": "CHJkv",
+                          "type": "ref",
+                          "ref": "bOc9x",
+                          "name": "Export Notes Button",
+                          "padding": [
+                            14,
+                            17
+                          ],
+                          "cornerRadius": 7,
+                          "descendants": {
+                            "Z2mNr9": {
+                              "type": "frame",
+                              "id": "YbH8t",
+                              "name": "Label Group",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "b86BD",
+                                  "name": "Icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$foreground"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "iCeK0",
+                                  "name": "Text",
+                                  "fill": "$foreground",
+                                  "content": "Export notes about this member",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "nhgTI",
+                          "name": "Export Hint",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "A text file to send Jabu if they ask for their notes. Read it first: notes can mention other people.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "500"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -352628,7 +352777,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -353977,7 +354126,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
@@ -355383,7 +355532,7 @@
                 "type": "image",
                 "enabled": true,
                 "url": "brand/afrikaburn-logo-banner-282.png",
-                "mode": "fit"
+                "mode": "contain"
               }
             },
             "PO6BC": {
@@ -357899,7 +358048,7 @@
                     "type": "image",
                     "enabled": true,
                     "url": "brand/afrikaburn-logo-banner-282.png",
-                    "mode": "fit"
+                    "mode": "contain"
                   }
                 },
                 {
