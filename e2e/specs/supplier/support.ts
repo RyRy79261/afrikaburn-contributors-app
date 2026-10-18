@@ -26,6 +26,17 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
+ * The supplier's own standing verdict on /standing — the hero region. Read the
+ * verdict HERE, never with `getByText(...).first()`: the first match is the
+ * header badge, which is `hidden sm:block` (display:none at 360px), and the
+ * legend further down names every band ("Good", "Watch", "Suspended") on every
+ * supplier's page, so an unscoped `/^watch$/` passes in good standing too.
+ */
+export function standingVerdict(page: Page) {
+  return page.getByRole("region", { name: /your current standing/i });
+}
+
+/**
  * The one VISIBLE row/card for a supplier, by its (unique-per-worker) business
  * name. The responsive table keeps the desktop `<tr>` in the DOM even at 360px
  * (it is `display:none`, not removed) while ALSO rendering the mobile `<li>`, so

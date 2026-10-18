@@ -92,35 +92,40 @@ export default async function StandingPage() {
         description="This is how AfrikaBurn's Supplier Team currently sees your account. Standing affects whether creative projects can select you."
       />
 
-      {/* Standing hero — the supplier's own verdict, big and plain. */}
-      <Card className={cn("border", meta.ring)}>
-        <CardHeader className="flex-row items-center gap-4 space-y-0">
-          <span
-            className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
-              meta.text,
-            )}
-          >
-            {meta.icon}
-          </span>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={cn(
-                  "text-lg font-semibold uppercase tracking-wide",
-                  meta.text,
-                )}
-              >
-                {standingLabel(standing)}
-              </span>
-              <Badge variant={tone}>{meta.badge}</Badge>
+      {/* Standing hero — the supplier's own verdict, big and plain. A named
+          region, because it is the ONLY place the verdict shows at every
+          width: the header badge is `sm:` and up, and the legend below lists
+          every band whatever the supplier's own one is. */}
+      <section aria-label="Your current standing">
+        <Card className={cn("border", meta.ring)}>
+          <CardHeader className="flex-row items-center gap-4 space-y-0">
+            <span
+              className={cn(
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+                meta.text,
+              )}
+            >
+              {meta.icon}
+            </span>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    "text-lg font-semibold uppercase tracking-wide",
+                    meta.text,
+                  )}
+                >
+                  {standingLabel(standing)}
+                </span>
+                <Badge variant={tone}>{meta.badge}</Badge>
+              </div>
+              <p className="text-sm leading-relaxed text-foreground">
+                {standingDescription(standing)}
+              </p>
             </div>
-            <p className="text-sm leading-relaxed text-foreground">
-              {standingDescription(standing)}
-            </p>
-          </div>
-        </CardHeader>
-      </Card>
+          </CardHeader>
+        </Card>
+      </section>
 
       {/* What each standing means — the legend, with "you're here" on the
           band matching the supplier's current tone. */}
