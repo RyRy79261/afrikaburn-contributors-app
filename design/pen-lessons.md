@@ -1746,3 +1746,32 @@ Every changed frame had 0 findings. The full canvas (`--all`) gave 155 frames, 1
 **Left as data on purpose:** back links "Mad Hatters", the questionnaire title and body, "From Alice Hatter", the "· Mad Hatters" source line on notifications, "Alice Hatter moved…" and "(moved by Alice)", the recipient name in "Sent to Lerato Dlamini…" and "Jabu wants to hand you…", and the people cells.
 
 **Audit:** 15 frames, 0 findings. Exports in review-morning/ were overwritten.
+
+## Layout editor reference frames, epic #62 (18 Oct 2026, headless `pen` CLI)
+
+v1 was already built from L1–L3 (#99). These four pairs were copied from those frames and from `PRDdG`
+(no redrawn components), then changed to match decisions the earlier frames contradicted. Spec:
+`docs/layout-editor-spec.md`. PNGs: `/home/ryan/quagga-board/review-layout-editor/`.
+
+| Frame | Desktop | Mobile 360 | x (desktop / mobile), y |
+|-------|---------|------------|-------------------------|
+| Layout Editor · Main view + plan data proposal | **XoCoT** | **oOWQE** | 145052 / 146452, 5260 |
+| Layout Editor · Inside a Bedouin | **B4UJOS** | **ATxMF** | 147072 / 148472, 5260 |
+| Layout Editor · First time, size the plot | **Nghfo** | **uSO9E** | 149092 / 150492, 5260 |
+| Org Review · Camp layout snapshot (section 4) | **u2nN9j** | **M3Koy** | 48480 / 49880, 8660 |
+
+Next free slots: participant x=151112, org x=50500.
+
+- "Plan data (.json)" toolbar button is a **proposal** (spec decision 16 left JSON out). Lucide has no
+  `file-json` in this icon set; `braces` is used.
+- Phones show no Warnings card (the build gives phones none); object rows are 44 px.
+- Org snapshot has no warning count (decision 14 Oct); the org's mobile title block is built from
+  `PbwN3` (Breadcrumb), `gacCS` (status badge) and copies of `iWA43` and `UN0sb`.
+- A textarea instance's placeholder (`t8imVt` → `e9lznW`) is not a text node you can find by content;
+  re-list the instance's whole `descendants` map in one `Update`.
+- `Copy(frame, document)` + `Delete`/`Update` by name inside the copy is the fastest way to derive a page
+  from an existing one headlessly. Every copied frame reported the same `partially clipped` items as its
+  source (quilt diamonds, bell badge) and nothing new.
+- `design/qa/audit.py` needs the desktop app's MCP bridge (`penctl.py`), so it was **not run**; the
+  checks used were `ctx.problems` over each frame, a duplicate-id walk of the saved JSON, and a diff
+  proving existing frames are unchanged apart from the CLI's `fit`→`contain` format migration.

@@ -30,7 +30,7 @@ v1; leads + co-leads + a `manage_layout` privilege edit, all current members
 view read-only, never public; tents carry a free-text label only; the org sees
 the snapshot pinned at submit; next year is a one-click "Start from last
 year's layout"; 360 is view-only. The canvas library is the engineer's call
-(react-konva, chosen on the research in the library evaluation). The rest of
+(react-konva; the comparison is in [`layout-editor-spec.md`](layout-editor-spec.md#library-choice)). The rest of
 the list below are the recommended defaults, taken as decided.
 
 Also decided on the frames (14 Oct): **warnings are shown to editors only**
@@ -49,7 +49,7 @@ answered.
 1. **Canvas library.** Use react-konva for the editor and plain server-rendered
    SVG for every read-only view. This overrides the SVG-only recommendation in
    gis-placement-spec §G. **Recommended: yes** (see
-   `layout-editor-library-eval.md`).
+   [`layout-editor-spec.md` § Library choice](layout-editor-spec.md#library-choice)).
 2. **Where the geometry code lives.** The spec planned a separate
    `@quagga/geo` leaf package for polygon maths (§D.1) and `@quagga/core` for
    policy. **Recommended: follow the spec.** v1 needs only a little geometry:
