@@ -278,7 +278,11 @@ test.describe("camp lead — registration safety (section 4)", () => {
       webPage.getByRole("heading", { name: "Add to the plan" }),
     ).toBeVisible();
 
-    const card = webPage.getByTestId("extinguishers-card");
+    // The page also holds the 360 view-only plan (hidden here), with its own
+    // card: the editor's is the visible one.
+    const card = webPage
+      .getByTestId("extinguishers-card")
+      .filter({ visible: true });
     await expect(card).toContainText("0 × 4.5 kg DCP");
     // A 12 × 8 m Bedouin is 96 m²: one started 100 m², two extinguishers.
     await webPage.getByRole("button", { name: /^Add Bedouin,/ }).click();
