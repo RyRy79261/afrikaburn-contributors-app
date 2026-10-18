@@ -187,11 +187,12 @@ longer both claim water and gas.
 
 - For every **covered structure** in the layout (catalog shelter entries,
   which are `nestable`: Bedouin, stretch tent, dome, gazebo, shade): 2 ×
-  4.5 kg DCP extinguishers and 2 buckets of sand for each 100 m², or part of
-  100 m², of that structure's footprint (`objectFootprint`):
-  `2 × ceil(area / 100)`. A 150 m² stretch tent needs 4. Source: the Theme
-  Camp Safety Checklist ("2 × 4.5 kg DCP and 2 buckets of sand per 100 m² of
-  tent"). Private tents (`role: "tent"`) are not counted (open point 1).
+  4.5 kg DCP extinguishers for each 100 m², or part of 100 m², of that
+  structure's footprint (`objectFootprint`): `2 × ceil(area / 100)`. A 150 m²
+  stretch tent needs 4. Source: the Theme Camp Safety Checklist ("2 × 4.5 kg
+  DCP … per 100 m² of tent"). **No buckets of sand** (Ryan, 18 Oct 2026): the
+  checklist also lists them, but the app must never ask for, count or suggest
+  sand buckets. Private tents (`role: "tent"`) are not counted (open point 1).
 - For every `generator` object: 1 × 1.5 kg extinguisher (DCP or CO₂) close
   by, as its own row. Source: Quaggapedia Generator policy ("All generators
   should have a minimum 1.5kg fire extinguisher close by"). Open point 1b.
