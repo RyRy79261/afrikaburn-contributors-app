@@ -1750,28 +1750,42 @@ Every changed frame had 0 findings. The full canvas (`--all`) gave 155 frames, 1
 ## Layout editor reference frames, epic #62 (18 Oct 2026, headless `pen` CLI)
 
 v1 was already built from L1–L3 (#99). These four pairs were copied from those frames and from `PRDdG`
-(no redrawn components), then changed to match decisions the earlier frames contradicted. Spec:
-`docs/layout-editor-spec.md`. PNGs: `/home/ryan/quagga-board/review-layout-editor/`.
+(no redrawn components) and match the build string for string, except the labelled proposals in
+`docs/layout-editor-spec.md` §"Proposals for Ryan". PNGs: `/home/ryan/quagga-board/review-layout-editor/`.
 
 | Frame | Desktop | Mobile 360 | x (desktop / mobile), y |
 |-------|---------|------------|-------------------------|
-| Layout Editor · Main view + plan data proposal | **XoCoT** | **oOWQE** | 145052 / 146452, 5260 |
+| Layout Editor · Main view (state ④ = plan-data proposal) | **XoCoT** | **oOWQE** | 145052 / 146452, 5260 |
 | Layout Editor · Inside a Bedouin | **B4UJOS** | **ATxMF** | 147072 / 148472, 5260 |
 | Layout Editor · First time, size the plot | **Nghfo** | **uSO9E** | 149092 / 150492, 5260 |
 | Org Review · Camp layout snapshot (section 4) | **u2nN9j** | **M3Koy** | 48480 / 49880, 8660 |
 
 Next free slots: participant x=151112, org x=50500.
 
-- "Plan data (.json)" toolbar button is a **proposal** (spec decision 16 left JSON out). Lucide has no
-  `file-json` in this icon set; `braces` is used.
-- Phones show no Warnings card (the build gives phones none); object rows are 44 px.
-- Org snapshot has no warning count (decision 14 Oct); the org's mobile title block is built from
-  `PbwN3` (Breadcrumb), `gacCS` (status badge) and copies of `iWA43` and `UN0sb`.
+- **An editor on a phone sees warnings.** `layout-read-only.tsx` renders the Warnings card (count, one item per
+  warning, "Inside X" for nested ones, footer "Shown to leads and layout editors. Advice only.") and apricot
+  outlines on the compact plan for editors at any width; plain members see neither. Phone order is header,
+  plan, warnings, object list, then Download PNG / Print plan (`order-last`). An earlier draft of these frames
+  dropped the card on the false belief that the build gives phones none — read the component before
+  "matching the build".
+- **The org snapshot has no warnings at all** — no count and no outlines. Every object draws in its plain
+  tone (shelter = `$primary` 1.25 px); the fire pit keeps only its red safety halo, which the build draws for
+  every object with a safety zone.
+- **Proposals live in a labelled state card, never in the canonical toolbar.** The JSON download is drawn
+  only as `XoCoT` state ④ ("PROPOSAL, NOT BUILT"), so a later frame-vs-build review does not log a missing
+  button.
+- Lucide has no `file-json` in this icon set; `braces` exists, `download` is used on the proposal button.
+- The org's mobile title block is built from `PbwN3` (Breadcrumb), `gacCS` (status badge) and copies of
+  `iWA43` and `UN0sb`. A text-only control in a mobile thread (Resolve) needs padding `[13,8]` to reach 44 px.
 - A textarea instance's placeholder (`t8imVt` → `e9lznW`) is not a text node you can find by content;
-  re-list the instance's whole `descendants` map in one `Update`.
+  re-list the instance's whole `descendants` map in one `Update`. The same holds for `UIcOu` field hints
+  (`Tk86T`).
 - `Copy(frame, document)` + `Delete`/`Update` by name inside the copy is the fastest way to derive a page
   from an existing one headlessly. Every copied frame reported the same `partially clipped` items as its
   source (quilt diamonds, bell badge) and nothing new.
-- `design/qa/audit.py` needs the desktop app's MCP bridge (`penctl.py`), so it was **not run**; the
-  checks used were `ctx.problems` over each frame, a duplicate-id walk of the saved JSON, and a diff
-  proving existing frames are unchanged apart from the CLI's `fit`→`contain` format migration.
+- **`design/qa/audit.py` runs headlessly** with a stand-in `penctl` that sends each `execute` through
+  `pen interactive -i <file>`. Two traps: the CLI caps one execute's printed output at ~64 kB, so the
+  audit's single `MARK+JSON` print must be paged across several `execute` calls (globals persist between
+  them); and `PEN_FILE` must be set because there is no `get_app_state`. Prove it can fail before trusting
+  a zero: a probe raw-hex fill on one node produced `[STYLE] RAW-HEX`. Result for the 8 frames: 0 findings.
+  Note TOUCH-TARGET matches only names containing button/cta/btn — measure text-only controls yourself.

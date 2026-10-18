@@ -360683,7 +360683,7 @@
       "id": "XoCoT",
       "x": 145052,
       "y": 5260,
-      "name": "Layout Editor · Main view + plan data proposal — /camps/[slug]/layout · Dark",
+      "name": "Layout Editor · Main view (state ④ = plan-data proposal) — /camps/[slug]/layout · Dark",
       "theme": {
         "mode": "dark"
       },
@@ -361259,49 +361259,6 @@
                           "name": "Text",
                           "fill": "$foreground",
                           "content": "Print plan",
-                          "fontFamily": "$font-brand",
-                          "fontSize": 12.5,
-                          "fontWeight": "600"
-                        }
-                      ]
-                    }
-                  }
-                },
-                {
-                  "id": "vUjkH",
-                  "type": "ref",
-                  "ref": "bOc9x",
-                  "name": "Button Plan data (.json)",
-                  "padding": [
-                    7,
-                    13
-                  ],
-                  "cornerRadius": 7,
-                  "descendants": {
-                    "Z2mNr9": {
-                      "type": "frame",
-                      "id": "z29uPw",
-                      "name": "Label Group",
-                      "gap": 6,
-                      "justifyContent": "center",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon",
-                          "id": "A7YjfK",
-                          "name": "Icon",
-                          "width": 15,
-                          "height": 15,
-                          "icon": "braces",
-                          "library": "lucide",
-                          "fill": "$foreground"
-                        },
-                        {
-                          "type": "text",
-                          "id": "cYTet",
-                          "name": "Text",
-                          "fill": "$foreground",
-                          "content": "Plan data (.json)",
                           "fontFamily": "$font-brand",
                           "fontSize": 12.5,
                           "fontWeight": "600"
@@ -363834,7 +363791,7 @@
                               "fill": "$foreground"
                             },
                             "Tk86T": {
-                              "content": "Free text. All camp members see it."
+                              "content": "Free text. Your camp's members, and AfrikaBurn once you submit, see it. Don't add contact or medical details."
                             }
                           }
                         },
@@ -364529,7 +364486,7 @@
                       "fill": "$primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "④ PLAN DATA (.json) — proposal only: spec decision 16 left it out of v1, it ships only if Ryan says yes",
+                      "content": "④ PROPOSAL, NOT BUILT — a third download beside Download PNG and Print plan. Spec decision 16 left it out of v1; drawn here only until Ryan answers open question 1.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-brand",
                       "fontSize": 11,
@@ -364539,7 +364496,7 @@
                     {
                       "type": "frame",
                       "id": "MARvY",
-                      "name": "Save State — saving",
+                      "name": "Proposal — plan data download",
                       "width": "fill_container",
                       "fill": "$card",
                       "cornerRadius": 12,
@@ -364550,39 +364507,47 @@
                       "padding": 14,
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "ifs5S",
-                          "name": "Chip",
-                          "fill": "$muted",
-                          "cornerRadius": 999,
-                          "gap": 6,
+                          "id": "CzuDD",
+                          "type": "ref",
+                          "ref": "bOc9x",
+                          "name": "Button Download plan data (.json) — proposal",
                           "padding": [
-                            5,
-                            10
+                            7,
+                            13
                           ],
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "icon",
-                              "id": "TZ4iq",
-                              "name": "Icon refresh-cw",
-                              "width": 14,
-                              "height": 14,
-                              "icon": "braces",
-                              "library": "lucide",
-                              "fill": "$muted-foreground"
-                            },
-                            {
-                              "type": "text",
-                              "id": "fHmwc",
-                              "name": "Chip Text",
-                              "fill": "$muted-foreground",
-                              "content": "Plan data (.json)",
-                              "fontFamily": "$font-brand",
-                              "fontSize": 12.5,
-                              "fontWeight": "700"
+                          "cornerRadius": 7,
+                          "descendants": {
+                            "Z2mNr9": {
+                              "type": "frame",
+                              "id": "j2xuKO",
+                              "name": "Label Group",
+                              "gap": 6,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "JYgxq",
+                                  "name": "Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$foreground"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "J9pOP",
+                                  "name": "Text",
+                                  "fill": "$foreground",
+                                  "content": "Download plan data (.json)",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                }
+                              ]
                             }
-                          ]
+                          }
                         },
                         {
                           "type": "text",
@@ -364949,7 +364914,7 @@
                       "fill": "$muted-foreground",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "AfrikaBurn 2027 · plot 40 m × 30 m · 1,200 m²",
+                      "content": "AfrikaBurn 2027 · view-only on a phone.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-brand",
                       "fontSize": 13,
@@ -365631,147 +365596,180 @@
             },
             {
               "type": "frame",
-              "id": "PjmZj",
-              "name": "Actions",
+              "id": "DLa4p",
+              "name": "Card — Warnings",
               "width": "fill_container",
+              "fill": "$card",
+              "cornerRadius": 12,
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
               "gap": 10,
+              "padding": 16,
               "children": [
                 {
-                  "id": "c7vFJZ",
-                  "type": "ref",
-                  "ref": "bOc9x",
-                  "name": "Button Download PNG",
-                  "padding": [
-                    13,
-                    10
-                  ],
-                  "cornerRadius": 7,
-                  "width": "fill_container",
-                  "height": 44,
-                  "descendants": {
-                    "Z2mNr9": {
-                      "type": "frame",
-                      "id": "oSfnX",
-                      "name": "Label Group",
-                      "gap": 6,
-                      "justifyContent": "center",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon",
-                          "id": "OZc5K",
-                          "name": "Icon",
-                          "width": 15,
-                          "height": 15,
-                          "icon": "image-down",
-                          "library": "lucide",
-                          "fill": "$foreground"
-                        },
-                        {
-                          "type": "text",
-                          "id": "oVMAH",
-                          "name": "Text",
-                          "fill": "$foreground",
-                          "content": "Download PNG",
-                          "fontFamily": "$font-brand",
-                          "fontSize": 12.5,
-                          "fontWeight": "600"
-                        }
-                      ]
-                    }
-                  }
-                },
-                {
-                  "id": "k5a1QQ",
-                  "type": "ref",
-                  "ref": "bOc9x",
-                  "name": "Button Print plan",
-                  "padding": [
-                    13,
-                    10
-                  ],
-                  "cornerRadius": 7,
-                  "width": "fill_container",
-                  "height": 44,
-                  "descendants": {
-                    "Z2mNr9": {
-                      "type": "frame",
-                      "id": "SndHp",
-                      "name": "Label Group",
-                      "gap": 6,
-                      "justifyContent": "center",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon",
-                          "id": "Rq3Pp",
-                          "name": "Icon",
-                          "width": 15,
-                          "height": 15,
-                          "icon": "printer",
-                          "library": "lucide",
-                          "fill": "$foreground"
-                        },
-                        {
-                          "type": "text",
-                          "id": "F9nFVJ",
-                          "name": "Text",
-                          "fill": "$foreground",
-                          "content": "Print plan",
-                          "fontFamily": "$font-brand",
-                          "fontSize": 12.5,
-                          "fontWeight": "600"
-                        }
-                      ]
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              "id": "r3YwHK",
-              "type": "ref",
-              "ref": "bOc9x",
-              "name": "Button Download plan data (.json)",
-              "padding": [
-                14,
-                13
-              ],
-              "cornerRadius": 7,
-              "width": "fill_container",
-              "height": 44,
-              "descendants": {
-                "Z2mNr9": {
                   "type": "frame",
-                  "id": "UFQzf",
-                  "name": "Label Group",
-                  "gap": 6,
-                  "justifyContent": "center",
+                  "id": "o5eEkQ",
+                  "name": "Card Head",
+                  "width": "fill_container",
+                  "gap": 8,
                   "alignItems": "center",
                   "children": [
                     {
                       "type": "icon",
-                      "id": "r97R4",
-                      "name": "Icon",
-                      "width": 15,
-                      "height": 15,
-                      "icon": "braces",
+                      "id": "TIv6L",
+                      "name": "Icon triangle-alert",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "triangle-alert",
                       "library": "lucide",
-                      "fill": "$foreground"
+                      "fill": "$warning"
                     },
                     {
                       "type": "text",
-                      "id": "sjSEE",
-                      "name": "Text",
+                      "id": "D8a1c",
+                      "name": "Card Title",
                       "fill": "$foreground",
-                      "content": "Download plan data (.json)",
+                      "content": "Warnings",
                       "fontFamily": "$font-brand",
-                      "fontSize": 12.5,
+                      "fontSize": 15,
                       "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QdA3k",
+                      "name": "Count",
+                      "fill": "#F4B67233",
+                      "cornerRadius": 999,
+                      "padding": [
+                        1,
+                        7
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "B8iVB",
+                          "name": "Count Text",
+                          "fill": "$warning",
+                          "content": "2",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AYgqx",
+                  "name": "Warning — Kitchen overlaps Shade 2 by 2.0 × 3.0 m",
+                  "width": "fill_container",
+                  "fill": "$muted",
+                  "cornerRadius": 8,
+                  "gap": 10,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FKq4K",
+                      "name": "Warning Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "j8Hvg",
+                          "name": "Message",
+                          "fill": "$foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Kitchen overlaps Shade 2 by 2.0 × 3.0 m",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qgsR7",
+                          "name": "Detail",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Tap to show them on the plan.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XTfua",
+                  "name": "Warning — Fire pit is 1.2 m from the plot edge",
+                  "width": "fill_container",
+                  "fill": "$muted",
+                  "cornerRadius": 8,
+                  "gap": 10,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w0Fq8",
+                      "name": "Warning Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p1sMPC",
+                          "name": "Message",
+                          "fill": "$foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Fire pit is 1.2 m from the plot edge",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "P0nMo",
+                          "name": "Detail",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Its 3 m safety zone crosses the edge.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Ka5AW",
+                  "name": "Warnings Note",
+                  "fill": "$muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Shown to leads and layout editors. Advice only.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-brand",
+                  "fontSize": 12,
+                  "fontWeight": "500"
                 }
-              }
+              ]
             },
             {
               "type": "frame",
@@ -366658,6 +366656,105 @@
                   "fontWeight": "500"
                 }
               ]
+            },
+            {
+              "type": "frame",
+              "id": "PjmZj",
+              "name": "Actions",
+              "width": "fill_container",
+              "gap": 10,
+              "children": [
+                {
+                  "id": "c7vFJZ",
+                  "type": "ref",
+                  "ref": "bOc9x",
+                  "name": "Button Download PNG",
+                  "padding": [
+                    13,
+                    10
+                  ],
+                  "cornerRadius": 7,
+                  "width": "fill_container",
+                  "height": 44,
+                  "descendants": {
+                    "Z2mNr9": {
+                      "type": "frame",
+                      "id": "oSfnX",
+                      "name": "Label Group",
+                      "gap": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "OZc5K",
+                          "name": "Icon",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "image-down",
+                          "library": "lucide",
+                          "fill": "$foreground"
+                        },
+                        {
+                          "type": "text",
+                          "id": "oVMAH",
+                          "name": "Text",
+                          "fill": "$foreground",
+                          "content": "Download PNG",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "k5a1QQ",
+                  "type": "ref",
+                  "ref": "bOc9x",
+                  "name": "Button Print plan",
+                  "padding": [
+                    13,
+                    10
+                  ],
+                  "cornerRadius": 7,
+                  "width": "fill_container",
+                  "height": 44,
+                  "descendants": {
+                    "Z2mNr9": {
+                      "type": "frame",
+                      "id": "SndHp",
+                      "name": "Label Group",
+                      "gap": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Rq3Pp",
+                          "name": "Icon",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "printer",
+                          "library": "lucide",
+                          "fill": "$foreground"
+                        },
+                        {
+                          "type": "text",
+                          "id": "F9nFVJ",
+                          "name": "Text",
+                          "fill": "$foreground",
+                          "content": "Print plan",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           ]
         }
@@ -367244,49 +367341,6 @@
                           "name": "Text",
                           "fill": "$foreground",
                           "content": "Print plan",
-                          "fontFamily": "$font-brand",
-                          "fontSize": 12.5,
-                          "fontWeight": "600"
-                        }
-                      ]
-                    }
-                  }
-                },
-                {
-                  "id": "l6Js8",
-                  "type": "ref",
-                  "ref": "bOc9x",
-                  "name": "Button Plan data (.json)",
-                  "padding": [
-                    7,
-                    13
-                  ],
-                  "cornerRadius": 7,
-                  "descendants": {
-                    "Z2mNr9": {
-                      "type": "frame",
-                      "id": "iXni4",
-                      "name": "Label Group",
-                      "gap": 6,
-                      "justifyContent": "center",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon",
-                          "id": "lg94K",
-                          "name": "Icon",
-                          "width": 15,
-                          "height": 15,
-                          "icon": "braces",
-                          "library": "lucide",
-                          "fill": "$foreground"
-                        },
-                        {
-                          "type": "text",
-                          "id": "yokFw",
-                          "name": "Text",
-                          "fill": "$foreground",
-                          "content": "Plan data (.json)",
                           "fontFamily": "$font-brand",
                           "fontSize": 12.5,
                           "fontWeight": "600"
@@ -369623,7 +369677,7 @@
                               "fill": "$foreground"
                             },
                             "Tk86T": {
-                              "content": "Free text, not linked to anyone. Every member of the camp sees it."
+                              "content": "Free text. Your camp's members, and AfrikaBurn once you submit, see it. Don't add contact or medical details."
                             }
                           }
                         },
@@ -370271,7 +370325,7 @@
                       "fill": "$muted-foreground",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Covered area 12 m × 8 m · 96 m² · 7 tents",
+                      "content": "Covered area 12 m × 8 m · 96 m² · 22 inside",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-brand",
                       "fontSize": 13,
@@ -371098,6 +371152,183 @@
             },
             {
               "type": "frame",
+              "id": "zkAFs",
+              "name": "Card — Warnings",
+              "width": "fill_container",
+              "fill": "$card",
+              "cornerRadius": 12,
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 10,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "alpSB",
+                  "name": "Card Head",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "H1CVS",
+                      "name": "Icon triangle-alert",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "triangle-alert",
+                      "library": "lucide",
+                      "fill": "$warning"
+                    },
+                    {
+                      "type": "text",
+                      "id": "CwbvE",
+                      "name": "Card Title",
+                      "fill": "$foreground",
+                      "content": "Warnings",
+                      "fontFamily": "$font-brand",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "K3npO",
+                      "name": "Count",
+                      "fill": "#F4B67233",
+                      "cornerRadius": 999,
+                      "padding": [
+                        1,
+                        7
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "vSntp",
+                          "name": "Count Text",
+                          "fill": "$warning",
+                          "content": "2",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 11,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qPmcc",
+                  "name": "Warning — Tent 3 sits on a support pole",
+                  "width": "fill_container",
+                  "fill": "$muted",
+                  "cornerRadius": 8,
+                  "gap": 10,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ugeUd",
+                      "name": "Warning Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NWtBM",
+                          "name": "Message",
+                          "fill": "$foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Tent 3 sits on a support pole",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "e7dvQt",
+                          "name": "Detail",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The pole at 4.0 m, 4.0 m is under the tent.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ugiDN",
+                  "name": "Warning — Tent 5 blocks the walkway by 0.6 m",
+                  "width": "fill_container",
+                  "fill": "$muted",
+                  "cornerRadius": 8,
+                  "gap": 10,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ZbAfg",
+                      "name": "Warning Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "B1pcJL",
+                          "name": "Message",
+                          "fill": "$foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Tent 5 blocks the walkway by 0.6 m",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YiqoV",
+                          "name": "Detail",
+                          "fill": "$muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Keep the walkway clear to the entrance.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "G3SQeA",
+                  "name": "Warnings Note",
+                  "fill": "$muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Shown to leads and layout editors. Advice only.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-brand",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "m32tt",
               "name": "Card — Inside",
               "width": "fill_container",
@@ -371739,6 +371970,105 @@
               "fontFamily": "$font-brand",
               "fontSize": 12.5,
               "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "lZPju",
+              "name": "Actions",
+              "width": "fill_container",
+              "gap": 10,
+              "children": [
+                {
+                  "id": "bACXZ",
+                  "type": "ref",
+                  "ref": "bOc9x",
+                  "name": "Button Download PNG",
+                  "padding": [
+                    13,
+                    10
+                  ],
+                  "cornerRadius": 7,
+                  "width": "fill_container",
+                  "height": 44,
+                  "descendants": {
+                    "Z2mNr9": {
+                      "type": "frame",
+                      "id": "rrsAc",
+                      "name": "Label Group",
+                      "gap": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "f7MH9u",
+                          "name": "Icon",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "image-down",
+                          "library": "lucide",
+                          "fill": "$foreground"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zHp6x",
+                          "name": "Text",
+                          "fill": "$foreground",
+                          "content": "Download PNG",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "H8pdNZ",
+                  "type": "ref",
+                  "ref": "bOc9x",
+                  "name": "Button Print plan",
+                  "padding": [
+                    13,
+                    10
+                  ],
+                  "cornerRadius": 7,
+                  "width": "fill_container",
+                  "height": 44,
+                  "descendants": {
+                    "Z2mNr9": {
+                      "type": "frame",
+                      "id": "qtngU",
+                      "name": "Label Group",
+                      "gap": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "A0FEuB",
+                          "name": "Icon",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "printer",
+                          "library": "lucide",
+                          "fill": "$foreground"
+                        },
+                        {
+                          "type": "text",
+                          "id": "D1zRw",
+                          "name": "Text",
+                          "fill": "$foreground",
+                          "content": "Print plan",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           ]
         }
@@ -371918,7 +372248,7 @@
                           "fill": "$muted-foreground",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "AfrikaBurn 2027 · plan your camp at home, to scale in metres, before the event. On site you work from the printed plan.",
+                          "content": "AfrikaBurn 2027 · your camp drawn to scale, in metres.",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-brand",
                           "fontSize": 14,
@@ -372258,22 +372588,559 @@
                                       "fontWeight": "500"
                                     }
                                   ]
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "Bj1RI",
-                                  "name": "Sizing Help",
-                                  "fill": "$muted-foreground",
-                                  "textGrowth": "fixed-width",
-                                  "width": "fill_container",
-                                  "content": "Use the size you are asking AfrikaBurn for. Not sure yet? Measure your biggest shade first: the plot must fit it with room for guy ropes.",
-                                  "fontFamily": "$font-brand",
-                                  "fontSize": 12.5,
-                                  "fontWeight": "normal"
                                 }
                               ]
                             }
                           ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "v626G",
+              "name": "Other States",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                24,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "D9qGbi",
+                  "name": "Section Label",
+                  "fill": "$muted-foreground",
+                  "content": "OTHER STATES",
+                  "fontFamily": "$font-brand",
+                  "fontSize": 11,
+                  "fontWeight": "600",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "frame",
+                  "id": "scU7L",
+                  "name": "State — no last year's plan",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "o7qUV",
+                      "name": "State Caption",
+                      "fill": "$primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "① NO PLAN LAST YEAR — only the empty-plot tile, in the left column",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-brand",
+                      "fontSize": 11,
+                      "fontWeight": "600",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vW9oV",
+                      "name": "Empty State",
+                      "width": "fill_container",
+                      "fill": "$card",
+                      "cornerRadius": 12,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 18,
+                      "padding": 24,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Lax7M",
+                          "name": "Empty Head",
+                          "width": "fill_container",
+                          "gap": 14,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "h7CBF",
+                              "name": "Icon Circle",
+                              "width": 44,
+                              "height": 44,
+                              "fill": "#2D769626",
+                              "cornerRadius": 999,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "j1Fome",
+                                  "name": "Icon layout-grid",
+                                  "width": 20,
+                                  "height": 20,
+                                  "icon": "layout-grid",
+                                  "library": "lucide",
+                                  "fill": "$primary"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "AEhlB",
+                              "name": "Empty Text",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "b5X3l",
+                                  "name": "Empty Title",
+                                  "fill": "$foreground",
+                                  "content": "No layout for AfrikaBurn 2027 yet",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 17,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "K1hs36",
+                                  "name": "Empty Body",
+                                  "fill": "$muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Draw your camp to scale, in metres. AfrikaBurn sees the plan you send with your registration.",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 13.5,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "p8mMUr",
+                          "name": "Options",
+                          "width": "fill_container",
+                          "gap": 16,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "nWOpl",
+                              "name": "Option — empty plot",
+                              "width": 480,
+                              "cornerRadius": 10,
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 12,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "S4vfx",
+                                  "name": "Option Title",
+                                  "fill": "$foreground",
+                                  "content": "Start with an empty plot",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 14,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "jgGFt",
+                                  "name": "Field Row",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "children": [
+                                    {
+                                      "id": "ZS3Em",
+                                      "type": "ref",
+                                      "ref": "UIcOu",
+                                      "name": "Field Width",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "descendants": {
+                                        "eO4OD": {
+                                          "content": "Width"
+                                        },
+                                        "piinX": {
+                                          "content": "40 m",
+                                          "fill": "$foreground"
+                                        },
+                                        "Tk86T": {
+                                          "enabled": false
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "TcpbD",
+                                      "type": "ref",
+                                      "ref": "UIcOu",
+                                      "name": "Field Depth",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "descendants": {
+                                        "eO4OD": {
+                                          "content": "Depth"
+                                        },
+                                        "piinX": {
+                                          "content": "30 m",
+                                          "fill": "$foreground"
+                                        },
+                                        "Tk86T": {
+                                          "enabled": false
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Gk9PY",
+                                  "name": "Option Foot",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "Jh1OV",
+                                      "type": "ref",
+                                      "ref": "bOc9x",
+                                      "name": "Button Create the plot",
+                                      "padding": [
+                                        7,
+                                        13
+                                      ],
+                                      "cornerRadius": 7,
+                                      "descendants": {
+                                        "Z2mNr9": {
+                                          "type": "frame",
+                                          "id": "hbiUu",
+                                          "name": "Label Group",
+                                          "gap": 6,
+                                          "justifyContent": "center",
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "icon",
+                                              "id": "QvPgl",
+                                              "name": "Icon",
+                                              "width": 15,
+                                              "height": 15,
+                                              "icon": "plus",
+                                              "library": "lucide",
+                                              "fill": "$foreground"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "z3S1BN",
+                                              "name": "Text",
+                                              "fill": "$foreground",
+                                              "content": "Create the plot",
+                                              "fontFamily": "$font-brand",
+                                              "fontSize": 12.5,
+                                              "fontWeight": "600"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Nan2D",
+                                      "name": "Help",
+                                      "fill": "$muted-foreground",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "You can change the size later.",
+                                      "lineHeight": 1.45,
+                                      "fontFamily": "$font-brand",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AJxWG",
+                  "name": "State — size out of range",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HmNSY",
+                      "name": "State Caption",
+                      "fill": "$primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "② SIZE OUT OF RANGE — the error sits under the card (role=alert)",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-brand",
+                      "fontSize": 11,
+                      "fontWeight": "600",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VMzdF",
+                      "name": "Empty State",
+                      "width": "fill_container",
+                      "fill": "$card",
+                      "cornerRadius": 12,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 18,
+                      "padding": 24,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "S2Cng",
+                          "name": "Empty Head",
+                          "width": "fill_container",
+                          "gap": 14,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "m95pmj",
+                              "name": "Icon Circle",
+                              "width": 44,
+                              "height": 44,
+                              "fill": "#2D769626",
+                              "cornerRadius": 999,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "hAFri",
+                                  "name": "Icon layout-grid",
+                                  "width": 20,
+                                  "height": 20,
+                                  "icon": "layout-grid",
+                                  "library": "lucide",
+                                  "fill": "$primary"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "sJNaG",
+                              "name": "Empty Text",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "nPi9u",
+                                  "name": "Empty Title",
+                                  "fill": "$foreground",
+                                  "content": "No layout for AfrikaBurn 2027 yet",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 17,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "kfTvW",
+                                  "name": "Empty Body",
+                                  "fill": "$muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Draw your camp to scale, in metres. AfrikaBurn sees the plan you send with your registration.",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 13.5,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AxC6o",
+                          "name": "Options",
+                          "width": "fill_container",
+                          "gap": 16,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "gwjX0",
+                              "name": "Option — empty plot",
+                              "width": 480,
+                              "cornerRadius": 10,
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "vertical",
+                              "gap": 12,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "tdR3x",
+                                  "name": "Option Title",
+                                  "fill": "$foreground",
+                                  "content": "Start with an empty plot",
+                                  "fontFamily": "$font-brand",
+                                  "fontSize": 14,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "I28Of",
+                                  "name": "Field Row",
+                                  "width": "fill_container",
+                                  "gap": 10,
+                                  "children": [
+                                    {
+                                      "id": "ZnOZb",
+                                      "type": "ref",
+                                      "ref": "UIcOu",
+                                      "name": "Field Width",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "descendants": {
+                                        "eO4OD": {
+                                          "content": "Width"
+                                        },
+                                        "piinX": {
+                                          "content": "600 m",
+                                          "fill": "$foreground"
+                                        },
+                                        "Tk86T": {
+                                          "enabled": false
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "yXEon",
+                                      "type": "ref",
+                                      "ref": "UIcOu",
+                                      "name": "Field Depth",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "descendants": {
+                                        "eO4OD": {
+                                          "content": "Depth"
+                                        },
+                                        "piinX": {
+                                          "content": "30 m",
+                                          "fill": "$foreground"
+                                        },
+                                        "Tk86T": {
+                                          "enabled": false
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "fAjzX",
+                                  "name": "Option Foot",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "Bb6hj",
+                                      "type": "ref",
+                                      "ref": "bOc9x",
+                                      "name": "Button Create the plot",
+                                      "padding": [
+                                        7,
+                                        13
+                                      ],
+                                      "cornerRadius": 7,
+                                      "descendants": {
+                                        "Z2mNr9": {
+                                          "type": "frame",
+                                          "id": "cE8e0",
+                                          "name": "Label Group",
+                                          "gap": 6,
+                                          "justifyContent": "center",
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "icon",
+                                              "id": "E8s6Q2",
+                                              "name": "Icon",
+                                              "width": 15,
+                                              "height": 15,
+                                              "icon": "plus",
+                                              "library": "lucide",
+                                              "fill": "$foreground"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "IYwKY",
+                                              "name": "Text",
+                                              "fill": "$foreground",
+                                              "content": "Create the plot",
+                                              "fontFamily": "$font-brand",
+                                              "fontSize": 12.5,
+                                              "fontWeight": "600"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "F3Cfv",
+                                      "name": "Help",
+                                      "fill": "$muted-foreground",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "You can change the size later.",
+                                      "lineHeight": 1.45,
+                                      "fontFamily": "$font-brand",
+                                      "fontSize": 12,
+                                      "fontWeight": "500"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "rO1vF",
+                          "name": "Error",
+                          "fill": "$destructive",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "A plot is between 0.1 m and 500 m on each side.",
+                          "fontFamily": "$font-brand",
+                          "fontSize": 13,
+                          "fontWeight": "600"
                         }
                       ]
                     }
@@ -372627,7 +373494,7 @@
                       "fill": "$muted-foreground",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "AfrikaBurn 2027 · plan at home, to scale, before the event.",
+                      "content": "AfrikaBurn 2027 · your camp drawn to scale, in metres.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-brand",
                       "fontSize": 13,
@@ -372758,6 +373625,65 @@
                               "fontWeight": "500"
                             }
                           ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r1pHRR",
+                  "name": "State — no last year's plan",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "j5wKWD",
+                      "name": "State Caption",
+                      "fill": "$primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "① NO PLAN LAST YEAR — the notice changes",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-brand",
+                      "fontSize": 11,
+                      "fontWeight": "600",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EnSUP",
+                      "name": "View-only Notice",
+                      "width": "fill_container",
+                      "fill": "$muted",
+                      "cornerRadius": 10,
+                      "gap": 10,
+                      "padding": 12,
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "G0QL9W",
+                          "name": "Icon monitor",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "monitor",
+                          "library": "lucide",
+                          "fill": "$primary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "grN8T",
+                          "name": "Notice Text",
+                          "fill": "$foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Start from an empty plot on a tablet or computer.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-brand",
+                          "fontSize": 12.5,
+                          "fontWeight": "500"
                         }
                       ]
                     }
@@ -373677,16 +374603,12 @@
                                       "height": 65,
                                       "fill": "#2D769638",
                                       "cornerRadius": 3.25,
-                                      "stroke": "$warning",
-                                      "strokeWidth": 2,
+                                      "stroke": "$primary",
+                                      "strokeWidth": 1.25,
                                       "layout": "vertical",
                                       "gap": 1,
-                                      "padding": [
-                                        2.6,
-                                        3.25
-                                      ],
-                                      "justifyContent": "end",
-                                      "alignItems": "end",
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
                                       "children": [
                                         {
                                           "type": "text",
@@ -373741,8 +374663,8 @@
                                       "height": 39,
                                       "fill": "#C244384D",
                                       "cornerRadius": 19.5,
-                                      "stroke": "$warning",
-                                      "strokeWidth": 2,
+                                      "stroke": "$destructive",
+                                      "strokeWidth": 1.25,
                                       "layout": "vertical",
                                       "gap": 1,
                                       "justifyContent": "center",
@@ -373982,7 +374904,7 @@
                                   "fill": "$muted-foreground",
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
-                                  "content": "Version 12, pinned when Alice Hatter submitted. The camp may have changed its plan since: you see changes when they resubmit.",
+                                  "content": "Version 12, pinned when the camp submitted. The camp may have changed its plan since: you see changes when they resubmit.",
                                   "lineHeight": 1.45,
                                   "fontFamily": "$font-brand",
                                   "fontSize": 12.5,
@@ -375275,8 +376197,8 @@
                           "height": 29,
                           "fill": "#2D769638",
                           "cornerRadius": 1.45,
-                          "stroke": "$warning",
-                          "strokeWidth": 2,
+                          "stroke": "$primary",
+                          "strokeWidth": 1.25,
                           "layout": "vertical",
                           "gap": 1,
                           "padding": 2,
@@ -375333,8 +376255,8 @@
                           "height": 17.4,
                           "fill": "#C244384D",
                           "cornerRadius": 8.7,
-                          "stroke": "$warning",
-                          "strokeWidth": 2,
+                          "stroke": "$destructive",
+                          "strokeWidth": 1.25,
                           "layout": "vertical",
                           "gap": 1,
                           "justifyContent": "center",
@@ -375518,7 +376440,7 @@
                   "fill": "$muted-foreground",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Version 12, pinned when Alice Hatter submitted. You see later changes when the camp resubmits.",
+                  "content": "Version 12, pinned when the camp submitted. The camp may have changed its plan since: you see changes when they resubmit.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-brand",
                   "fontSize": 12.5,
@@ -375596,6 +376518,10 @@
                           "id": "GOy2s",
                           "name": "Resolve",
                           "gap": 5,
+                          "padding": [
+                            13,
+                            8
+                          ],
                           "alignItems": "center",
                           "children": [
                             {
@@ -375962,6 +376888,141 @@
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
                       "content": "Every decision is logged to the audit trail.",
+                      "fontFamily": "Montserrat",
+                      "fontSize": 11.5,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "gyT3L",
+              "name": "Assign Wrangler",
+              "width": "fill_container",
+              "fill": "$card",
+              "cornerRadius": 8,
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "U7jPMY",
+                  "name": "Head",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "O8414",
+                      "name": "Kicker",
+                      "fill": "$muted-foreground",
+                      "content": "AFTER APPROVAL",
+                      "fontFamily": "Montserrat",
+                      "fontSize": 10.5,
+                      "fontWeight": "700",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "dYi3d",
+                      "name": "Title",
+                      "fill": "$foreground",
+                      "content": "Assign a wrangler",
+                      "fontFamily": "Montserrat",
+                      "fontSize": 16,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.2
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "tBPag",
+                  "name": "Body",
+                  "fill": "$muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "A wrangler shepherds the camp through build week and check-in. You can assign one once this registration is approved.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "Montserrat",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "frame",
+                  "id": "YyQIt",
+                  "name": "Assign (disabled)",
+                  "opacity": 0.55,
+                  "width": "fill_container",
+                  "height": 44,
+                  "fill": "$muted",
+                  "cornerRadius": 8,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    17
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Y2rpT",
+                      "name": "Ico",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "user-plus",
+                      "library": "lucide",
+                      "fill": "$muted-foreground"
+                    },
+                    {
+                      "type": "text",
+                      "id": "TvyHP",
+                      "name": "Label",
+                      "fill": "$muted-foreground",
+                      "content": "Assign wrangler",
+                      "fontFamily": "Montserrat",
+                      "fontSize": 14,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.3
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "h33e8m",
+                  "name": "Note",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "UkoEZ",
+                      "name": "Lock",
+                      "width": 13,
+                      "height": 13,
+                      "icon": "lock",
+                      "library": "lucide",
+                      "fill": "$muted-foreground"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Yny50",
+                      "name": "Txt",
+                      "fill": "$muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Unlocks after approval — handled by the theme-camp leads team.",
+                      "lineHeight": 1.4,
                       "fontFamily": "Montserrat",
                       "fontSize": 11.5,
                       "fontWeight": "500"
