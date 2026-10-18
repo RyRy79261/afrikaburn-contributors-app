@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { GasFuelRecord, LayoutDocument } from "@quagga/types";
+import { fuelDepotReasons } from "@quagga/core";
 import {
   NOT_ANSWERED,
   placeSafetyReviewFields,
@@ -81,9 +82,28 @@ describe("safetyReviewFields", () => {
     expect(f["Extinguishers (from the pinned layout)"]!.value).toMatch(
       /^6 × 4\.5 kg DCP and 1 × 1\.5 kg by the generator/,
     );
+    expect(f["Extinguishers (from the pinned layout)"]!.value).toContain(
+      "— 2 × 4.5 kg DCP for each 100 m², or part of 100 m²",
+    );
     expect(f["Structures (from the pinned layout)"]!.value).toBe(
       "Bedouin tent 12 × 8 m, Stretch tent 15 × 10 m and a generator.",
     );
+  });
+
+  it("a pinned layout with a generator and no structures names only the small one", () => {
+    const layout = pinned();
+    const generatorOnly: LayoutDocument = {
+      ...layout,
+      plot: {
+        ...layout.plot,
+        objects: layout.plot.objects.filter((o) => o.catalogKey === "generator"),
+      },
+    };
+    const f = byLabel(safetyReviewFields(input({ pinnedLayout: generatorOnly })));
+    expect(f["Extinguishers (from the pinned layout)"]!.value).toMatch(
+      /^1 × 1\.5 kg by the generator — /,
+    );
+    expect(f["Extinguishers (from the pinned layout)"]!.value).not.toMatch(/0 × 4\.5 kg/);
   });
 
   it("an unanswered gate reads 'Not answered yet (Form 2)', never No", () => {
@@ -119,6 +139,35 @@ describe("safetyReviewFields", () => {
       ),
     );
     expect(f["Fuel depot"]!.value).toMatch(/^3 × 20 L jerry cans\./);
+  });
+
+  it("Fuel depot agrees with the camp's warning, item for item", () => {
+    // The camp sees fuelDepotReasons; the org must name exactly those items,
+    // no more (2 × 20 L, 27 kg stay in camp) and no fewer.
+    const records: GasFuelRecord[] = [
+      OVER,
+      { ...OVER, lpg: [{ sizeKg: 9, count: 3 }], jerryCans20l: 3, barrels200l: 0 },
+      { ...OVER, lpg: [{ sizeKg: 48, count: 1 }], jerryCans20l: 2, barrels200l: 2, fuelTrailers: 1 },
+      { ...OVER, lpg: [{ sizeKg: 48, count: 3 }], jerryCans20l: 4, barrels200l: 0, fuelTrailers: 2 },
+    ];
+    for (const record of records) {
+      const f = byLabel(
+        safetyReviewFields(
+          input({
+            gasFuel: {
+              record,
+              updatedAt: new Date("2027-01-14T10:00:00Z"),
+              campNotifiedAt: null,
+              wranglerNotifiedAt: null,
+            },
+          }),
+        ),
+      );
+      const named = f["Fuel depot"]!.value.split(". ")[0]!.split(/, | and /);
+      const reasons = fuelDepotReasons(record);
+      expect(named).toHaveLength(reasons.length);
+      named.forEach((what, n) => expect(reasons[n]!.startsWith(what)).toBe(true));
+    }
   });
 
   it("Fuel depot: over the limit, with when each side was told", () => {

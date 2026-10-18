@@ -195,6 +195,13 @@ describe("extinguisherEstimate", () => {
     expect(describeExtinguishers(e)).toBe("0 × 4.5 kg DCP");
   });
 
+  it("a generator and no structures describes only the small extinguisher", () => {
+    // Never "0 × 4.5 kg DCP and 1 × 1.5 kg by the generator" (CodeRabbit, #117).
+    const e = extinguisherEstimate(doc([obj("generator", 2, 1.5)]), LAYOUT_CATALOG_2027);
+    expect(e).toMatchObject({ units: 0, generatorUnits: 1 });
+    expect(describeExtinguishers(e)).toBe("1 × 1.5 kg by the generator");
+  });
+
   it("ignores keys this edition does not offer", () => {
     const e = extinguisherEstimate(doc([obj("bonfire", 10, 10)]), LAYOUT_CATALOG_2027);
     expect(e.rows).toEqual([]);

@@ -33,14 +33,19 @@ export function ExtinguishersCard({
         Fire extinguishers
       </h2>
       <p className="text-sm font-semibold" data-testid="extinguishers-total">
-        {estimate.units} × {EXTINGUISHER_SIZE}
-        {estimate.generatorUnits > 0
-          ? ` + ${estimate.generatorUnits} × ${GENERATOR_EXTINGUISHER_SIZE}`
-          : ""}
+        {/* A generator and no structures: "1 × 1.5 kg", never "0 × 4.5 kg
+            DCP + 1 × 1.5 kg". */}
+        {estimate.units === 0 && estimate.generatorUnits > 0
+          ? `${estimate.generatorUnits} × ${GENERATOR_EXTINGUISHER_SIZE}`
+          : `${estimate.units} × ${EXTINGUISHER_SIZE}${
+              estimate.generatorUnits > 0
+                ? ` + ${estimate.generatorUnits} × ${GENERATOR_EXTINGUISHER_SIZE}`
+                : ""
+            }`}
       </p>
       <p className="text-xs text-muted-foreground">
-        2 of each for each 100 m², or part of 100 m², of every tent or shade
-        structure (a 150 m² tent needs 4)
+        2 × {EXTINGUISHER_SIZE} for each 100 m², or part of 100 m², of every
+        tent or shade structure (a 150 m² tent needs 4)
         {estimate.generators > 0
           ? `, and a ${GENERATOR_EXTINGUISHER_SIZE} one close by every generator`
           : ""}

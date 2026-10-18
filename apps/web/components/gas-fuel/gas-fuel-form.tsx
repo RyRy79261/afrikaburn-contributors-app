@@ -69,17 +69,19 @@ interface Props {
   wranglerName: string | null;
 }
 
-let rowKey = 0;
-const nextKey = () => ++rowKey;
-
+// DOM ids come from React.useId() and row keys from THIS form: the first rows
+// are keyed by position, added rows by a per-form counter. A module-level
+// counter kept counting across every server render, so the server's
+// "lpg-size-7" met the client's "lpg-size-1": a hydration mismatch, and two
+// forms could share an id.
 function toRows(record: GasFuelRecord | null): DraftRow[] {
-  const rows = (record?.lpg ?? []).map((r) => ({
-    key: nextKey(),
+  const rows = (record?.lpg ?? []).map((r, i) => ({
+    key: i,
     sizeKg: r.sizeKg,
     count: r.count,
   }));
   // A first-time camp sees one blank bottle row (frame state 3).
-  return rows.length > 0 ? rows : [{ key: nextKey(), sizeKg: null, count: 0 }];
+  return rows.length > 0 ? rows : [{ key: 0, sizeKg: null, count: 0 }];
 }
 
 /** A non-negative whole number from an input, clamped; "" is 0. */
@@ -111,7 +113,12 @@ function toRecord(
 export function GasFuelForm(props: Props) {
   const router = useRouter();
   const initial = props.stored?.record ?? null;
+  const uid = React.useId();
   const [rows, setRows] = React.useState<DraftRow[]>(() => toRows(initial));
+  // Next key for an added row: past every key toRows handed out. Read only in
+  // event handlers, never during render.
+  const keyCounter = React.useRef(rows.length);
+  const nextKey = () => keyCounter.current++;
   const [jerry, setJerry] = React.useState(initial?.jerryCans20l ?? 0);
   const [barrels, setBarrels] = React.useState(initial?.barrels200l ?? 0);
   const [trailers, setTrailers] = React.useState(initial?.fuelTrailers ?? 0);
@@ -263,7 +270,7 @@ export function GasFuelForm(props: Props) {
               <div className="flex min-w-0 flex-col gap-1.5">
                 <label
                   className="text-xs text-muted-foreground"
-                  htmlFor={`lpg-size-${row.key}`}
+                  htmlFor={`${uid}-lpg-size-${row.key}`}
                 >
                   Bottle size
                 </label>
@@ -278,7 +285,7 @@ export function GasFuelForm(props: Props) {
                   }
                 >
                   <SelectTrigger
-                    id={`lpg-size-${row.key}`}
+                    id={`${uid}-lpg-size-${row.key}`}
                     className="h-11 w-full text-left sm:h-10"
                   >
                     <SelectValue placeholder="Choose a size" />
@@ -295,12 +302,12 @@ export function GasFuelForm(props: Props) {
               <div className="flex flex-col gap-1.5">
                 <label
                   className="text-xs text-muted-foreground"
-                  htmlFor={`lpg-count-${row.key}`}
+                  htmlFor={`${uid}-lpg-count-${row.key}`}
                 >
                   How many
                 </label>
                 <Input
-                  id={`lpg-count-${row.key}`}
+                  id={`${uid}-lpg-count-${row.key}`}
                   type="number"
                   inputMode="numeric"
                   min={0}
@@ -371,21 +378,21 @@ export function GasFuelForm(props: Props) {
           </p>
         </div>
         <CountRow
-          id="jerry-cans"
+          id={`${uid}-jerry-cans`}
           label="20 L jerry cans"
           hint="Up to 2 stay in your camp. More go to the fuel depot."
           value={jerry}
           onChange={setJerry}
         />
         <CountRow
-          id="barrels"
+          id={`${uid}-barrels`}
           label="200 L barrels"
           hint="Always go to the fuel depot. Bring a drum pump."
           value={barrels}
           onChange={setBarrels}
         />
         <CountRow
-          id="trailers"
+          id={`${uid}-trailers`}
           label="Fuel trailers"
           hint="Always go to the fuel depot, with 2 × 4.5 kg DCP extinguishers each."
           value={trailers}
@@ -403,11 +410,11 @@ export function GasFuelForm(props: Props) {
       </section>
 
       <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 sm:p-5">
-        <label htmlFor="gas-fuel-note" className="text-sm font-medium">
+        <label htmlFor={`${uid}-note`} className="text-sm font-medium">
           Anything your wrangler should know
         </label>
         <Textarea
-          id="gas-fuel-note"
+          id={`${uid}-note`}
           rows={3}
           maxLength={GAS_FUEL_NOTE_MAX}
           value={note}

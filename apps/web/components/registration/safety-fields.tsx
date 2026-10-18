@@ -176,6 +176,28 @@ function trim(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 
+/** The guidance heading. A layout with a generator and no structures reads
+ * "Have a small extinguisher by the generator", never "Have 0 fire
+ * extinguishers and …". */
+export function extinguisherHeading(
+  estimate: ExtinguisherEstimate | null,
+): string {
+  if (!estimate) return "Fire extinguishers: worked out from your layout";
+  const { units, generatorUnits } = estimate;
+  if (units === 0 && generatorUnits === 0) {
+    return "No tent or shade structures or generators on your layout yet";
+  }
+  const small =
+    generatorUnits === 0
+      ? ""
+      : generatorUnits === 1
+        ? "a small extinguisher by the generator"
+        : `${generatorUnits} small extinguishers, one by each generator`;
+  if (units === 0) return `Have ${small}`;
+  const big = `${units} fire extinguisher${units === 1 ? "" : "s"}`;
+  return small ? `Have ${big} and ${small}` : `Have ${big}`;
+}
+
 /** The extinguisher guidance under the layout summary in section 4. With no
  * layout, the rule as text, no number, and a way to the layout. */
 export function ExtinguisherGuidance({
@@ -185,17 +207,7 @@ export function ExtinguisherGuidance({
   slug: string;
   estimate: ExtinguisherEstimate | null;
 }) {
-  const heading = estimate
-    ? estimate.units === 0 && estimate.generatorUnits === 0
-      ? "No tent or shade structures or generators on your layout yet"
-      : `Have ${estimate.units} fire extinguisher${estimate.units === 1 ? "" : "s"}${
-          estimate.generatorUnits > 0
-            ? estimate.generatorUnits === 1
-              ? " and a small extinguisher by the generator"
-              : ` and ${estimate.generatorUnits} small extinguishers, one by each generator`
-            : ""
-        }`
-    : "Fire extinguishers: worked out from your layout";
+  const heading = extinguisherHeading(estimate);
   return (
     <section
       aria-labelledby="s4-extinguishers-heading"

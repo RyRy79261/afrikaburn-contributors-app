@@ -3,12 +3,11 @@ import {
   describeExtinguishers,
   describeGasFuelRecord,
   describeWaterEstimate,
+  EXTINGUISHER_SIZE,
   extinguisherEstimate,
   formatLitres,
-  FUEL_DEPOT_GAS_KG,
-  FUEL_DEPOT_JERRY_CANS,
   fuelDepotAdvice,
-  gasTotalKg,
+  fuelDepotItems,
   getLayoutCatalog,
   waterEstimateLitres,
 } from "@quagga/core";
@@ -74,25 +73,11 @@ function andList(parts: readonly string[]): string {
 }
 
 /** "96 kg of gas and a 200 L barrel" — ONLY what puts a record over, in words
- * (frame LN9Ap): 2 × 20 L jerry cans stay in camp, so they are not named. */
+ * (frame LN9Ap): 2 × 20 L jerry cans stay in camp, so they are not named.
+ * Built from @quagga/core `fuelDepotItems`, the same list the camp's warning
+ * reads, so the org and the camp always agree on what is over. */
 function overWhat(r: GasFuelRecord): string {
-  const parts: string[] = [];
-  const gas = gasTotalKg(r);
-  if (gas > FUEL_DEPOT_GAS_KG) parts.push(`${gas} kg of gas`);
-  if (r.jerryCans20l > FUEL_DEPOT_JERRY_CANS) {
-    parts.push(`${r.jerryCans20l} × 20 L jerry can${r.jerryCans20l === 1 ? "" : "s"}`);
-  }
-  if (r.barrels200l > 0) {
-    parts.push(
-      r.barrels200l === 1 ? "a 200 L barrel" : `${r.barrels200l} × 200 L barrels`,
-    );
-  }
-  if (r.fuelTrailers > 0) {
-    parts.push(
-      r.fuelTrailers === 1 ? "a fuel trailer" : `${r.fuelTrailers} fuel trailers`,
-    );
-  }
-  return andList(parts);
+  return andList(fuelDepotItems(r).map((i) => i.what));
 }
 
 export const WATER_ESTIMATE_LABEL = "Water estimate";
@@ -185,7 +170,7 @@ export function safetyReviewFields(i: SafetyReviewInput): SafetyReviewField[] {
     );
     out.push({
       label: "Extinguishers (from the pinned layout)",
-      value: `${describeExtinguishers(e)} — 2 for each 100 m², or part of 100 m², of every tent or shade structure. Serviced extinguishers are checked on site.`,
+      value: `${describeExtinguishers(e)} — 2 × ${EXTINGUISHER_SIZE} for each 100 m², or part of 100 m², of every tent or shade structure. Serviced extinguishers are checked on site.`,
       wide: true,
     });
     const structures = e.rows

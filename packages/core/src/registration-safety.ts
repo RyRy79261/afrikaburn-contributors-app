@@ -242,7 +242,9 @@ export function describeExtinguishers(e: ExtinguisherEstimate): string {
   const big = `${e.units} × ${EXTINGUISHER_SIZE}`;
   if (e.generatorUnits === 0) return big;
   const by = e.generators === 1 ? "the generator" : "each generator";
-  return `${big} and ${e.generatorUnits} × ${GENERATOR_EXTINGUISHER_SIZE} by ${by}`;
+  const small = `${e.generatorUnits} × ${GENERATOR_EXTINGUISHER_SIZE} by ${by}`;
+  // A generator and no structures: never "0 × 4.5 kg DCP and …".
+  return e.units === 0 ? small : `${big} and ${small}`;
 }
 
 // --- The three gates (section 4) ------------------------------------------------
@@ -363,47 +365,61 @@ export function gasTotalKg(record: Pick<GasFuelRecord, "lpg">): number {
   return Math.round(kg * 10) / 10;
 }
 
+/** One thing that sends a record to the fuel depot: `what` names it ("96 kg
+ * of gas", "a 200 L barrel"), `reason` says why. The ONE source for the inline
+ * warning, the record page and the org review's Fuel depot field, so the camp
+ * and the org can never disagree about what is over. */
+export interface FuelDepotItem {
+  what: string;
+  reason: string;
+}
+
+/** Everything over a limit, in the record's order. Empty within limits. */
+export function fuelDepotItems(record: GasFuelRecord): FuelDepotItem[] {
+  const out: FuelDepotItem[] = [];
+  const gas = gasTotalKg(record);
+  if (gas > FUEL_DEPOT_GAS_KG) {
+    const what = `${gas} kg of gas`;
+    out.push({ what, reason: `${what} is over ${FUEL_DEPOT_GAS_KG} kg` });
+  }
+  if (record.jerryCans20l > FUEL_DEPOT_JERRY_CANS) {
+    const what = `${record.jerryCans20l} × 20 L jerry cans`;
+    out.push({
+      what,
+      reason: `${what} is more than ${FUEL_DEPOT_JERRY_CANS} × 20 L`,
+    });
+  }
+  if (record.barrels200l > 0) {
+    const one = record.barrels200l === 1;
+    const what = one ? "a 200 L barrel" : `${record.barrels200l} × 200 L barrels`;
+    out.push({
+      what,
+      reason: `${what} always ${one ? "goes" : "go"} to the depot`,
+    });
+  }
+  if (record.fuelTrailers > 0) {
+    const one = record.fuelTrailers === 1;
+    const what = one ? "a fuel trailer" : `${record.fuelTrailers} fuel trailers`;
+    out.push({
+      what,
+      reason: `${what} always ${one ? "goes" : "go"} to the depot`,
+    });
+  }
+  return out;
+}
+
 /**
  * Does this record go to the fuel depot? True when gas > 90 kg, jerry cans
  * > 2 (more than 2 × 20 L), or any 200 L barrel, or any fuel trailer.
  */
 export function fuelDepotAdvice(record: GasFuelRecord): boolean {
-  return (
-    gasTotalKg(record) > FUEL_DEPOT_GAS_KG ||
-    record.jerryCans20l > FUEL_DEPOT_JERRY_CANS ||
-    record.barrels200l > 0 ||
-    record.fuelTrailers > 0
-  );
+  return fuelDepotItems(record).length > 0;
 }
 
 /** The reasons, in words, for the inline warning ("96 kg of gas is over
  * 90 kg, and a 200 L barrel always goes to the depot"). Empty within limits. */
 export function fuelDepotReasons(record: GasFuelRecord): string[] {
-  const out: string[] = [];
-  const gas = gasTotalKg(record);
-  if (gas > FUEL_DEPOT_GAS_KG) {
-    out.push(`${gas} kg of gas is over ${FUEL_DEPOT_GAS_KG} kg`);
-  }
-  if (record.jerryCans20l > FUEL_DEPOT_JERRY_CANS) {
-    out.push(
-      `${record.jerryCans20l} × 20 L jerry cans is more than ${FUEL_DEPOT_JERRY_CANS} × 20 L`,
-    );
-  }
-  if (record.barrels200l > 0) {
-    out.push(
-      record.barrels200l === 1
-        ? "a 200 L barrel always goes to the depot"
-        : `${record.barrels200l} × 200 L barrels always go to the depot`,
-    );
-  }
-  if (record.fuelTrailers > 0) {
-    out.push(
-      record.fuelTrailers === 1
-        ? "a fuel trailer always goes to the depot"
-        : `${record.fuelTrailers} fuel trailers always go to the depot`,
-    );
-  }
-  return out;
+  return fuelDepotItems(record).map((i) => i.reason);
 }
 
 /** "2 × 48 kg gas (96 kg) · 2 × 20 L jerry cans · 1 × 200 L barrel · no fuel
