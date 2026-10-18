@@ -4,6 +4,7 @@ import type {
   SectionKey,
 } from "@quagga/types";
 import {
+  FIRE_KIND_LABELS,
   PROJECT_ADMIN_ROLES,
   SECTION_LABELS,
   formForSection,
@@ -315,6 +316,27 @@ export function diffRegistrations(
       carried: !NON_CARRIED_FIELDS.includes(field),
     };
   });
+}
+
+/**
+ * A stored answer as a person should read it in the diff. Most fields are
+ * already words; the fire kinds are STORAGE KEYS (`braai_brazier`), a mirror
+ * contract (docs/registration-safety-spec.md), so they become the labels the
+ * form showed. An unknown key is kept as it is rather than dropped. Both apps'
+ * diffs render through this, so camp and reviewer read the same words.
+ */
+export function displayValueForField(
+  field: CarryForwardField,
+  value: unknown,
+): unknown {
+  if (field === "s4FireKinds" && Array.isArray(value)) {
+    return value.map((key) =>
+      typeof key === "string" && key in FIRE_KIND_LABELS
+        ? FIRE_KIND_LABELS[key as keyof typeof FIRE_KIND_LABELS]
+        : key,
+    );
+  }
+  return value;
 }
 
 /** Just the fields that moved — what a reviewer actually wants to read. */

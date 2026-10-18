@@ -98,6 +98,27 @@ export function soundLevelFromValue(value: string | null | undefined): number {
 }
 
 /**
+ * A registration row's officer triggers — the ONE mapping both apps use (the
+ * camp's officer status and the org status board), so neither can quietly go
+ * back to hard-coding "no generator, no fire, no fuel". The section 4 gates
+ * (docs/registration-safety-spec.md); null (not answered) reads as false.
+ * Never re-derived from the optional gas & fuel record.
+ */
+export function officerTriggersFromRegistration(row: {
+  soundRaw: string | null | undefined;
+  hasGenerator: boolean | null | undefined;
+  hasFire: boolean | null | undefined;
+  hasGasOrFuel: boolean | null | undefined;
+}): OfficerTriggerInput {
+  return {
+    soundLevel: soundLevelFromValue(row.soundRaw),
+    hasGenerators: row.hasGenerator === true,
+    hasOpenFlame: row.hasFire === true,
+    hasFuelStorage: row.hasGasOrFuel === true,
+  };
+}
+
+/**
  * Evaluate the trigger condition for every catalog officer. Returns a full map
  * (all 5 keys). Requirement rules (questionnaire-spec table):
  *   - lnt_officer        → always REQUIRED (supersedes the contact-only LNT lead)
