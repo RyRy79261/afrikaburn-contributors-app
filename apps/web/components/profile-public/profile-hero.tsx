@@ -54,7 +54,9 @@ export function ProfileHero({
             </span>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {/* A username is up to 20 unbroken characters; at 360 that is
+                wider than the card, so it may wrap anywhere. */}
+            <h1 className="text-2xl font-semibold tracking-tight wrap-anywhere sm:text-3xl">
               {displayName}
             </h1>
             {(homeCity || burnsLabel) && (
