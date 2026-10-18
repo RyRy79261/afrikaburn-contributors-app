@@ -4,7 +4,7 @@ import { ArrowLeft, GitCompare, History } from "lucide-react";
 import type { LayoutDocument } from "@quagga/types";
 import {
   canViewCampRegistration,
-  describeGasFuelRecord,
+  briefGasFuelSummary,
   extinguisherEstimate,
   fuelDepotAdvice,
   getLayoutCatalog,
@@ -288,7 +288,7 @@ export default async function RegistrationPage({
         : null,
       gasFuel: {
         savedSummary: savedGasFuel
-          ? describeGasFuelRecord(savedGasFuel.record)
+          ? briefGasFuelSummary(savedGasFuel.record)
           : null,
         advice: savedGasFuel ? fuelDepotAdvice(savedGasFuel.record) : false,
         wranglerName: wrangler?.name ?? null,

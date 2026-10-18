@@ -12,6 +12,7 @@ import {
   decideGasFuelSave,
   decideStartGasFuelFromLastYear,
   describeExtinguishers,
+  briefGasFuelSummary,
   describeGasFuelRecord,
   describeWaterEstimate,
   emptyGasFuelRecord,
@@ -380,6 +381,23 @@ describe("the gas & fuel record", () => {
     ).toBe(
       "2 × 48 kg gas (96 kg) · 2 × 20 L jerry cans · 1 × 200 L barrel · no fuel trailers",
     );
+  });
+
+  it("has a short form for section 4's card (frame GFtHX state 5)", () => {
+    expect(
+      briefGasFuelSummary(
+        record({
+          lpg: [{ sizeKg: 48, count: 2 }],
+          jerryCans20l: 2,
+          barrels200l: 1,
+          note: "secret",
+        }),
+      ),
+    ).toBe("96 kg of gas · 2 × 20 L · 1 × 200 L barrel");
+    expect(briefGasFuelSummary(record({ barrels200l: 2, fuelTrailers: 1 }))).toBe(
+      "2 × 200 L barrels · 1 fuel trailer",
+    );
+    expect(briefGasFuelSummary(record({}))).toBe("no gas or fuel");
   });
 
   it("drops empty bottle rows and trims the note on save", () => {

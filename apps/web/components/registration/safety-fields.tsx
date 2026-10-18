@@ -1,14 +1,16 @@
+import * as React from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
   CircleCheck,
+  CircleDashed,
   Droplets,
   ExternalLink,
   FireExtinguisher,
   Fuel,
-  LayoutGrid,
+  PencilRuler,
 } from "lucide-react";
 import {
   describeWaterEstimate,
@@ -23,12 +25,24 @@ import {
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
 import { Badge } from "@quagga/ui/components/badge";
+import { Checkbox } from "@quagga/ui/components/checkbox";
+import { Labeled } from "./field-kit";
 
 // The derived read-outs and links section 4 shows around the safety gates
 // (docs/registration-safety-spec.md; frames GFtHX / sSl0w). Nothing here is a
 // question: the water guide and the extinguisher count are worked out, the
 // policies are plain links (never a read-check), and the gas & fuel record is
 // an optional camp record linked from here.
+
+/** The "Optional" chip of the gas & fuel record (frames GFtHX / T7rUD). */
+export function OptionalBadge() {
+  return (
+    <Badge variant="outline">
+      <CircleDashed className="h-3 w-3" aria-hidden />
+      Optional
+    </Badge>
+  );
+}
 
 /** A policy as a plain link, opened in a new tab. Never tracked. */
 export function PolicyLink({ policy }: { policy: SafetyPolicyKey }) {
@@ -38,12 +52,67 @@ export function PolicyLink({ policy }: { policy: SafetyPolicyKey }) {
       href={p.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline"
+      // A 44 px target at 360 (frames sSl0w / qjdpW); inline on desktop.
+      className="inline-flex min-h-11 w-fit items-center gap-1 text-sm text-accent hover:underline sm:min-h-0"
     >
       {p.label}
       <ExternalLink className="h-3.5 w-3.5" aria-hidden />
       <span className="sr-only"> (opens in a new tab)</span>
     </a>
+  );
+}
+
+/**
+ * G2a, "Which kinds of fire?" — ticked boxes, two columns on desktop and one
+ * at 360, each row a 44 px target there (frames GFtHX / sSl0w). The labelled
+ * group is what the e2e and assistive tech find.
+ */
+export function FireKindsField({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { value: string; label: string }[];
+  value: readonly string[];
+  onChange: (v: string[]) => void;
+}) {
+  const labelId = React.useId();
+  return (
+    <Labeled
+      label="Which kinds of fire?"
+      labelId={labelId}
+      hint="Tick every kind you'll have."
+      required
+    >
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        // Column-first on desktop, as the frame lists them.
+        className="grid grid-cols-1 gap-x-6 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-4"
+      >
+        {options.map((opt) => {
+          const on = value.includes(opt.value);
+          return (
+            <label
+              key={opt.value}
+              className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-8"
+            >
+              <Checkbox
+                checked={on}
+                onChange={() =>
+                  onChange(
+                    on
+                      ? value.filter((v) => v !== opt.value)
+                      : [...value, opt.value],
+                  )
+                }
+              />
+              {opt.label}
+            </label>
+          );
+        })}
+      </div>
+    </Labeled>
   );
 }
 
@@ -130,7 +199,7 @@ export function ExtinguisherGuidance({
   return (
     <section
       aria-labelledby="s4-extinguishers-heading"
-      className="flex flex-col gap-3 rounded-lg border border-border p-4"
+      className="flex flex-col gap-3 rounded-lg bg-muted/50 p-4"
       data-testid="s4-extinguishers"
     >
       <div className="flex items-start gap-3">
@@ -166,16 +235,23 @@ export function ExtinguisherGuidance({
         </ul>
       )}
       {!estimate && (
-        <Button asChild variant="outline" size="sm" className="w-fit">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="h-11 w-fit sm:h-9"
+        >
           <Link href={`/camps/${slug}/layout`}>
-            <LayoutGrid aria-hidden />
+            <PencilRuler aria-hidden />
             Open layout
           </Link>
         </Button>
       )}
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
         <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-        {EXTINGUISHER_SERVICE_NOTE} Nothing to upload here.
+        {/* "…on site — nothing to upload here." (frame GFtHX). */}
+        {EXTINGUISHER_SERVICE_NOTE.replace(/\.$/, "")} — nothing to upload
+        here.
       </p>
     </section>
   );
@@ -204,13 +280,14 @@ export function GasFuelRecordCard({
         className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-start"
         data-testid="s4-gas-fuel-card"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
+        {/* The icon tile is desktop-only (frame sSl0w drops it at 360). */}
+        <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary sm:flex">
           <Fuel className="h-4 w-4" aria-hidden />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
             Gas &amp; fuel record
-            <Badge variant="outline">Optional</Badge>
+            <OptionalBadge />
           </p>
           <p className="text-xs text-muted-foreground">
             Bottle sizes, jerry cans, barrels and trailers. Not part of this
@@ -220,7 +297,12 @@ export function GasFuelRecordCard({
             {gasFuel.savedSummary ? `Saved · ${gasFuel.savedSummary}` : "Not started"}
           </p>
         </div>
-        <Button asChild variant="outline" size="sm" className="w-fit shrink-0">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="h-11 w-fit shrink-0 sm:h-9"
+        >
           <Link href={`/camps/${slug}/gas-fuel`}>
             <ArrowRight aria-hidden />
             Open record

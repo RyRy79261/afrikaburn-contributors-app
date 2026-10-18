@@ -427,6 +427,27 @@ export function describeGasFuelRecord(record: GasFuelRecord): string {
   ].join(" · ");
 }
 
+/** The short line section 4's record card shows (frame GFtHX state 5):
+ * "96 kg of gas · 2 × 20 L · 1 × 200 L barrel". Only what the camp brings;
+ * no note. */
+export function briefGasFuelSummary(record: GasFuelRecord): string {
+  const parts: string[] = [];
+  const gas = gasTotalKg(record);
+  if (gas > 0) parts.push(`${gas} kg of gas`);
+  if (record.jerryCans20l > 0) parts.push(`${record.jerryCans20l} × 20 L`);
+  if (record.barrels200l > 0) {
+    parts.push(
+      `${record.barrels200l} × 200 L barrel${record.barrels200l === 1 ? "" : "s"}`,
+    );
+  }
+  if (record.fuelTrailers > 0) {
+    parts.push(
+      `${record.fuelTrailers} fuel trailer${record.fuelTrailers === 1 ? "" : "s"}`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" · ") : "no gas or fuel";
+}
+
 /** A record with empty bottle rows (no size chosen, or zero) dropped — what is
  * stored. */
 export function tidyGasFuelRecord(record: GasFuelRecord): GasFuelRecord {

@@ -85,7 +85,11 @@ function toFieldSpec(f: SafetyReviewField): FieldSpec {
     wide: f.wide,
     value: (
       <span className="flex flex-col items-start gap-1">
-        <Badge variant={f.chip.tone === "warning" ? "warning" : "success"}>
+        <Badge
+          variant={f.chip.tone === "warning" ? "warning" : "success"}
+          // "Over the limit", sentence case (frame LN9Ap).
+          className="normal-case tracking-normal"
+        >
           {f.chip.tone === "warning" && (
             <AlertTriangle className="h-3 w-3" aria-hidden />
           )}

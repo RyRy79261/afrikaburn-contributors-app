@@ -633,8 +633,8 @@ export async function answerSafetyGates(
     for (const kind of input.fireKinds ?? ["Braai or brazier (raised)"]) {
       await page
         .getByRole("group", { name: /which kinds of fire/i })
-        .getByRole("button", { name: kind, exact: true })
-        .click();
+        .getByRole("checkbox", { name: kind, exact: true })
+        .check();
     }
   }
   await answer(/will you bring lpg gas or liquid fuel/i, input.hasGasOrFuel ?? false);

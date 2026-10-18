@@ -82,7 +82,7 @@ describe("safetyReviewFields", () => {
       /^6 × 4\.5 kg DCP and 1 × 1\.5 kg by the generator/,
     );
     expect(f["Structures (from the pinned layout)"]!.value).toBe(
-      "Bedouin tent 12 × 8 m, Stretch tent 15 × 10 m, a generator",
+      "Bedouin tent 12 × 8 m, Stretch tent 15 × 10 m and a generator.",
     );
   });
 
@@ -104,10 +104,28 @@ describe("safetyReviewFields", () => {
     expect(f["Gas or fuel"]!.value).toBe("No");
   });
 
+  it("Fuel depot names only what is over the limit", () => {
+    const f = byLabel(
+      safetyReviewFields(
+        input({
+          gasFuel: {
+            // 27 kg of gas and 2 × 20 L stay in camp; 3 jerry cans do not.
+            record: { ...OVER, lpg: [{ sizeKg: 9, count: 3 }], jerryCans20l: 3, barrels200l: 0 },
+            updatedAt: new Date("2027-01-14T10:00:00Z"),
+            campNotifiedAt: null,
+            wranglerNotifiedAt: null,
+          },
+        }),
+      ),
+    );
+    expect(f["Fuel depot"]!.value).toMatch(/^3 × 20 L jerry cans\./);
+  });
+
   it("Fuel depot: over the limit, with when each side was told", () => {
     const f = byLabel(safetyReviewFields(input()));
     expect(f["Fuel depot"]!.chip).toEqual({ tone: "warning", text: "Over the limit" });
-    expect(f["Fuel depot"]!.value).toMatch(/^96 kg of gas, 2 × 20 L jerry cans and a 200 L barrel\./);
+    // Only what is OVER: 2 × 20 L jerry cans stay in camp (frame LN9Ap).
+    expect(f["Fuel depot"]!.value).toMatch(/^96 kg of gas and a 200 L barrel\./);
     expect(f["Fuel depot"]!.value).toMatch(/Wrangler not told yet: none assigned/);
 
     const told = byLabel(

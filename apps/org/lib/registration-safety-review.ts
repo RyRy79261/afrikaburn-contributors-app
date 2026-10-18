@@ -5,6 +5,8 @@ import {
   describeWaterEstimate,
   extinguisherEstimate,
   formatLitres,
+  FUEL_DEPOT_GAS_KG,
+  FUEL_DEPOT_JERRY_CANS,
   fuelDepotAdvice,
   gasTotalKg,
   getLayoutCatalog,
@@ -64,12 +66,20 @@ function gate(v: boolean | null): string {
   return v === null ? NOT_ANSWERED : v ? "Yes" : "No";
 }
 
-/** "96 kg of gas and a 200 L barrel" — what puts a record over, in words. */
+/** "a, b and c". */
+function andList(parts: readonly string[]): string {
+  return parts.length <= 1
+    ? (parts[0] ?? "")
+    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** "96 kg of gas and a 200 L barrel" — ONLY what puts a record over, in words
+ * (frame LN9Ap): 2 × 20 L jerry cans stay in camp, so they are not named. */
 function overWhat(r: GasFuelRecord): string {
   const parts: string[] = [];
   const gas = gasTotalKg(r);
-  if (gas > 0) parts.push(`${gas} kg of gas`);
-  if (r.jerryCans20l > 0) {
+  if (gas > FUEL_DEPOT_GAS_KG) parts.push(`${gas} kg of gas`);
+  if (r.jerryCans20l > FUEL_DEPOT_JERRY_CANS) {
     parts.push(`${r.jerryCans20l} × 20 L jerry can${r.jerryCans20l === 1 ? "" : "s"}`);
   }
   if (r.barrels200l > 0) {
@@ -82,9 +92,7 @@ function overWhat(r: GasFuelRecord): string {
       r.fuelTrailers === 1 ? "a fuel trailer" : `${r.fuelTrailers} fuel trailers`,
     );
   }
-  return parts.length <= 1
-    ? (parts[0] ?? "")
-    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return andList(parts);
 }
 
 export const WATER_ESTIMATE_LABEL = "Water estimate";
@@ -195,7 +203,7 @@ export function safetyReviewFields(i: SafetyReviewInput): SafetyReviewField[] {
       label: "Structures (from the pinned layout)",
       value:
         structures.length > 0
-          ? structures.join(", ")
+          ? `${andList(structures)}.`
           : "No tent or shade structures or generators",
       wide: true,
     });

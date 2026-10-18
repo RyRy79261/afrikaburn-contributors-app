@@ -16,6 +16,7 @@ import {
   FIRE_KINDS,
   SECTION_KEYS,
   SECTION_LABELS,
+  type FireKind,
   type SectionKey,
 } from "@quagga/types";
 import {
@@ -62,13 +63,14 @@ import { SectionReplyThread } from "./section-reply-thread";
 import { withdrawConsequence } from "./withdraw-registration";
 import {
   ExtinguisherGuidance,
+  FireKindsField,
   GasFuelRecordCard,
   PolicyLink,
   SafetyChecklistFooter,
   WaterEstimateBox,
   type WizardGasFuel,
 } from "./safety-fields";
-import { LayoutGrid } from "lucide-react";
+import { CircleDashed, Map as MapIcon } from "lucide-react";
 
 /** Section 4's safety context (docs/registration-safety-spec.md), all worked
  * out on the server from the live layout and the saved gas & fuel record. */
@@ -104,17 +106,34 @@ function SuggestedNote({ what }: { what: string }) {
       className="flex items-start gap-2 text-xs text-muted-foreground"
       data-testid="s4-suggested"
     >
-      <LayoutGrid className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+      <MapIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
       Filled in from your layout, which has {what}. It counts once you save;
       change it if that&apos;s wrong.
     </p>
   );
 }
 
+/** G2a's tick list in the order frames GFtHX / sSl0w draw it (open fire
+ * first, then gas, performance, other). Display only: the stored keys keep
+ * the schema's order. A Record, so a new kind cannot be left out. */
+const FIRE_KIND_FORM_RANK: Record<FireKind, number> = {
+  braai_brazier: 0,
+  fire_pit: 1,
+  burn_barrel: 2,
+  flame_effect: 3,
+  gas_cooking_heating: 4,
+  fire_performance: 5,
+  other: 6,
+};
+const FIRE_KIND_FORM_ORDER: readonly FireKind[] = [...FIRE_KINDS].sort(
+  (a, b) => FIRE_KIND_FORM_RANK[a] - FIRE_KIND_FORM_RANK[b],
+);
+
 /** "Not answered yet" under an unanswered gate. */
 function UnansweredNote() {
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="flex items-start gap-2 text-xs text-muted-foreground">
+      <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
       Not answered yet. Answer it to finish this section.
     </p>
   );
@@ -1148,7 +1167,8 @@ function SafetyGates({
   return (
     <section
       aria-labelledby="s4-safety-heading"
-      className="flex flex-col gap-5 border-t border-border pt-5"
+      // A rule between each gate, as in frame GFtHX.
+      className="flex flex-col divide-y divide-border border-t border-border [&>*]:py-5 [&>*:last-child]:pb-0"
       data-testid="s4-safety"
     >
       <div>
@@ -1193,13 +1213,11 @@ function SafetyGates({
         ) : values.s4HasFire === null ? (
           <UnansweredNote />
         ) : null}
-        {fire === true && (
-          <div className="ml-1 border-l-2 border-primary/50 pl-4">
-            <CheckGroup
-              label="Which kinds of fire?"
-              required
-              hint="Tick every kind you'll have."
-              options={FIRE_KINDS.map((k) => ({
+        {fire === true ? (
+          // The policy link sits inside the follow-up (frame GFtHX).
+          <div className="ml-1 flex flex-col gap-2 border-l-2 border-primary/50 pl-4">
+            <FireKindsField
+              options={FIRE_KIND_FORM_ORDER.map((k) => ({
                 value: k,
                 label: FIRE_KIND_LABELS[k],
               }))}
@@ -1208,9 +1226,11 @@ function SafetyGates({
                 onChange({ s4HasFire: true, s4FireKinds: kinds })
               }
             />
+            <PolicyLink policy="fire" />
           </div>
+        ) : (
+          <PolicyLink policy="fire" />
         )}
-        <PolicyLink policy="fire" />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -1226,12 +1246,14 @@ function SafetyGates({
         ) : values.s4HasGasOrFuel === null ? (
           <UnansweredNote />
         ) : null}
-        {gas === true && (
-          <div className="ml-1 border-l-2 border-primary/50 pl-4">
+        {gas === true ? (
+          <div className="ml-1 flex flex-col gap-2 border-l-2 border-primary/50 pl-4">
             <GasFuelRecordCard slug={slug} gasFuel={safety.gasFuel} />
+            <PolicyLink policy="gasFuel" />
           </div>
+        ) : (
+          <PolicyLink policy="gasFuel" />
         )}
-        <PolicyLink policy="gasFuel" />
       </div>
 
       <SafetyChecklistFooter />

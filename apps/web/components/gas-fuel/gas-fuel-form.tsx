@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  BookOpen,
   Check,
   CircleCheck,
   Copy,
@@ -172,7 +173,7 @@ export function GasFuelForm(props: Props) {
 
       {offer && (
         <section
-          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:p-5"
           data-testid="gas-fuel-carry-offer"
         >
           <div className="flex items-start gap-3">
@@ -181,7 +182,7 @@ export function GasFuelForm(props: Props) {
               aria-hidden
             />
             <div>
-              <h2 className="text-sm font-semibold">
+              <h2 className="text-sm font-semibold normal-case tracking-normal">
                 Start from your {offer.editionYear} record?
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -191,7 +192,13 @@ export function GasFuelForm(props: Props) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" disabled={pending} onClick={carry}>
+            <Button
+              type="button"
+              size="sm"
+              className="h-11 sm:h-9"
+              disabled={pending}
+              onClick={carry}
+            >
               <Copy aria-hidden />
               Start from {offer.editionYear}
             </Button>
@@ -199,6 +206,7 @@ export function GasFuelForm(props: Props) {
               type="button"
               size="sm"
               variant="outline"
+              className="h-11 sm:h-9"
               disabled={pending}
               onClick={() => setOfferDismissed(true)}
             >
@@ -219,7 +227,7 @@ export function GasFuelForm(props: Props) {
             aria-hidden
           />
           <div>
-            <p className="text-sm font-medium">
+            <p className="text-sm font-semibold">
               {props.draftSourceYear !== null
                 ? `Draft from your ${props.draftSourceYear} record`
                 : "Draft from your previous record"}
@@ -233,9 +241,11 @@ export function GasFuelForm(props: Props) {
         </div>
       )}
 
-      <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+      <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">
         <div>
-          <h2 className="text-lg font-semibold">LPG gas</h2>
+          <h2 className="text-lg font-semibold normal-case tracking-normal">
+            LPG gas
+          </h2>
           <p className="text-sm text-muted-foreground">
             One row for each bottle size.
           </p>
@@ -247,7 +257,7 @@ export function GasFuelForm(props: Props) {
               // One row at every width (frame qjdpW): the size fills, the
               // count and delete keep their size, and the per-row subtotal
               // is dropped below sm — the Total line already sums it.
-              className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-end gap-3 sm:grid-cols-[9rem_6rem_1fr_auto]"
+              className="grid grid-cols-[minmax(0,1fr)_4.5rem_auto] items-end gap-2 sm:grid-cols-[9rem_6rem_1fr_auto] sm:gap-3"
               data-testid="gas-fuel-bottle-row"
             >
               <div className="flex min-w-0 flex-col gap-1.5">
@@ -267,7 +277,10 @@ export function GasFuelForm(props: Props) {
                     )
                   }
                 >
-                  <SelectTrigger id={`lpg-size-${row.key}`} className="w-full">
+                  <SelectTrigger
+                    id={`lpg-size-${row.key}`}
+                    className="h-11 w-full text-left sm:h-10"
+                  >
                     <SelectValue placeholder="Choose a size" />
                   </SelectTrigger>
                   <SelectContent>
@@ -291,7 +304,7 @@ export function GasFuelForm(props: Props) {
                   type="number"
                   inputMode="numeric"
                   min={0}
-                  className="w-full"
+                  className="h-11 w-full sm:h-10"
                   value={String(row.count)}
                   onChange={(e) =>
                     setRows((rs) =>
@@ -311,7 +324,7 @@ export function GasFuelForm(props: Props) {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="justify-self-end"
+                className="h-11 w-11 justify-self-end sm:h-10 sm:w-10"
                 aria-label={`Remove bottle row ${i + 1}`}
                 onClick={() =>
                   setRows((rs) =>
@@ -330,7 +343,7 @@ export function GasFuelForm(props: Props) {
           type="button"
           variant="outline"
           size="sm"
-          className="w-fit"
+          className="h-11 w-fit sm:h-9"
           onClick={() =>
             setRows((rs) => [...rs, { key: nextKey(), sizeKg: null, count: 0 }])
           }
@@ -348,9 +361,11 @@ export function GasFuelForm(props: Props) {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:p-5">
         <div>
-          <h2 className="text-lg font-semibold">Liquid fuel</h2>
+          <h2 className="text-lg font-semibold normal-case tracking-normal">
+            Liquid fuel
+          </h2>
           <p className="text-sm text-muted-foreground">
             Petrol, diesel or paraffin.
           </p>
@@ -379,7 +394,7 @@ export function GasFuelForm(props: Props) {
         {props.stored === null && (
           // Frame T7rUD state 3, reworded: this form saves only on the button.
           <p
-            className="border-t border-border pt-3 text-xs text-muted-foreground"
+            className="text-xs text-muted-foreground"
             data-testid="gas-fuel-empty-hint"
           >
             Nothing is saved until you press Save record. No fuel depot notice.
@@ -387,7 +402,7 @@ export function GasFuelForm(props: Props) {
         )}
       </section>
 
-      <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
+      <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 sm:p-5">
         <label htmlFor="gas-fuel-note" className="text-sm font-medium">
           Anything your wrangler should know
         </label>
@@ -401,7 +416,12 @@ export function GasFuelForm(props: Props) {
       </section>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={save} disabled={pending}>
+        <Button
+          type="button"
+          className="h-11 sm:h-10"
+          onClick={save}
+          disabled={pending}
+        >
           {pending ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           ) : (
@@ -413,7 +433,7 @@ export function GasFuelForm(props: Props) {
           Next year this comes across as a draft for you to check.
         </span>
       </div>
-      <PolicyLink policy="gasFuel" />
+      <RecordPolicyLink />
     </div>
   );
 }
@@ -444,7 +464,7 @@ function CountRow({
         type="number"
         inputMode="numeric"
         min={0}
-        className="w-24 shrink-0"
+        className="h-11 w-24 shrink-0 sm:h-10"
         value={String(value)}
         onChange={(e) => onChange(wholeNumber(e.target.value))}
       />
@@ -490,7 +510,7 @@ function DepotNotice({
 function WithinLimits() {
   return (
     <p
-      className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm text-muted-foreground"
+      className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm"
       data-testid="gas-fuel-within-limits"
     >
       <CircleCheck
@@ -520,7 +540,7 @@ function ReadOnlyRecord({
         <DepotNotice record={record} wranglerName={wranglerName} />
       )}
       <section
-        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
+        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:p-5"
         data-testid="gas-fuel-read-only"
       >
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -562,7 +582,17 @@ function ReadOnlyRecord({
           <p className="text-sm">Your camp hasn&apos;t filled this in yet.</p>
         )}
       </section>
-      <PolicyLink policy="gasFuel" />
+      <RecordPolicyLink />
     </div>
+  );
+}
+
+/** The policy under the record, with the book glyph of frame T7rUD. */
+function RecordPolicyLink() {
+  return (
+    <p className="flex items-center gap-2">
+      <BookOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <PolicyLink policy="gasFuel" />
+    </p>
   );
 }

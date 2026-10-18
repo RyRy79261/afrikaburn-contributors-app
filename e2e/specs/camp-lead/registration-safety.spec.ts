@@ -97,18 +97,15 @@ test.describe("camp lead — registration safety (section 4)", () => {
     const kinds = gate(webPage, /which kinds of fire/i);
     await expect(kinds).toBeVisible();
     if (test.info().project.name === "mobile-360") {
-      // 44 px touch targets at 360 (frame sSl0w): the gate's Yes/No and the
-      // fire-kind chips.
+      // 44 px touch targets at 360 (frame sSl0w): the gate's Yes/No and each
+      // fire-kind row (the whole row is the checkbox's label).
       const yes = gate(webPage, /will you bring a generator/i).getByRole(
         "button",
         { name: "Yes", exact: true },
       );
-      const chip = kinds.getByRole("button", {
-        name: "Braai or brazier (raised)",
-        exact: true,
-      });
+      const row = kinds.locator("label", { hasText: "Braai or brazier (raised)" });
       expect((await yes.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     await gate(webPage, /will you bring lpg gas or liquid fuel/i)
       .getByRole("button", { name: "Yes", exact: true })
@@ -121,8 +118,8 @@ test.describe("camp lead — registration safety (section 4)", () => {
       webPage.getByText("Required fields are marked with *."),
     ).toBeVisible();
     await kinds
-      .getByRole("button", { name: "Braai or brazier (raised)", exact: true })
-      .click();
+      .getByRole("checkbox", { name: "Braai or brazier (raised)", exact: true })
+      .check();
     await expect(webPage.getByText("All required fields complete.")).toBeVisible();
     await expect(webPage.getByText(/saved just now/i)).toBeVisible({
       timeout: 15_000,
@@ -137,11 +134,11 @@ test.describe("camp lead — registration safety (section 4)", () => {
       }),
     ).toHaveAttribute("aria-pressed", "true");
     await expect(
-      gate(webPage, /which kinds of fire/i).getByRole("button", {
+      gate(webPage, /which kinds of fire/i).getByRole("checkbox", {
         name: "Braai or brazier (raised)",
         exact: true,
       }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toBeChecked();
     await expect(webPage.getByText("All required fields complete.")).toBeVisible();
 
     // No to fire hides the kinds, and they are cleared on the server.
@@ -161,11 +158,11 @@ test.describe("camp lead — registration safety (section 4)", () => {
     // incomplete again until one is ticked.
     await expect(gate(webPage, /which kinds of fire/i)).toBeVisible();
     await expect(
-      gate(webPage, /which kinds of fire/i).getByRole("button", {
+      gate(webPage, /which kinds of fire/i).getByRole("checkbox", {
         name: "Braai or brazier (raised)",
         exact: true,
       }),
-    ).toHaveAttribute("aria-pressed", "false");
+    ).not.toBeChecked();
     await expect(
       webPage.getByText("Required fields are marked with *."),
     ).toBeVisible();
@@ -252,8 +249,9 @@ test.describe("camp lead — registration safety (section 4)", () => {
     await gate(webPage, /will you bring lpg gas or liquid fuel/i)
       .getByRole("button", { name: "Yes", exact: true })
       .click();
+    // The card's short line (frame GFtHX state 5).
     await expect(webPage.getByTestId("s4-gas-fuel-card")).toContainText(
-      "Saved · 2 × 48 kg gas (96 kg)",
+      "Saved · 96 kg of gas · 1 × 20 L · 1 × 200 L barrel",
     );
     await expect(webPage.getByTestId("s4-depot-line")).toContainText(
       "Over the fuel depot limit",

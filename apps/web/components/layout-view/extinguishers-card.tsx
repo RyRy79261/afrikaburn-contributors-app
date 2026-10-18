@@ -27,7 +27,7 @@ export function ExtinguishersCard({
     >
       <h2
         id={`extinguishers-${mode}`}
-        className="flex items-center gap-2 text-sm font-semibold"
+        className="flex items-center gap-2 text-sm font-semibold normal-case tracking-normal"
       >
         <FireExtinguisher className="h-4 w-4 text-warning" aria-hidden />
         Fire extinguishers

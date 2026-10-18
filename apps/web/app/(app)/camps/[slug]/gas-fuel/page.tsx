@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { ArrowLeft, ArrowRight, Fuel } from "lucide-react";
+import { ArrowLeft, ArrowRight, Cloud } from "lucide-react";
 import { canViewCampRegistration, describeGasFuelRecord } from "@quagga/core";
-import { Badge } from "@quagga/ui/components/badge";
 import { Button } from "@quagga/ui/components/button";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { enforceGate, getCurrentCampUser } from "@/lib/session";
@@ -12,6 +11,7 @@ import { getActiveEdition } from "@/lib/edition";
 import { loadGasFuelAccess, loadGasFuelPage } from "@/lib/gas-fuel-store";
 import { PreviewNotice } from "@/components/preview-notice";
 import { GasFuelForm } from "@/components/gas-fuel/gas-fuel-form";
+import { OptionalBadge } from "@/components/registration/safety-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -71,9 +71,11 @@ export default async function GasFuelPage({
       <p className="text-xs uppercase tracking-wide text-muted-foreground">
         {activeEdition.name} · Camp record
       </p>
-      <h1 className="flex flex-wrap items-center gap-3 text-2xl font-semibold tracking-tight">
+      {/* Sentence case, as frame T7rUD draws it (the global h1 rule would
+          upper-case it). */}
+      <h1 className="flex flex-wrap items-center gap-3 text-3xl font-bold normal-case tracking-tight sm:text-4xl">
         Gas &amp; fuel record
-        <Badge variant="outline">Optional</Badge>
+        <OptionalBadge />
       </h1>
       <p className="max-w-prose text-sm text-muted-foreground">
         What your camp is bringing that burns: gas bottles, jerry cans, barrels
@@ -84,7 +86,7 @@ export default async function GasFuelPage({
       </p>
       {view.stored && !view.stored.isDraft && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Fuel className="h-3.5 w-3.5" aria-hidden />
+          <Cloud className="h-3.5 w-3.5 text-success" aria-hidden />
           Saved {dateFmt.format(view.stored.updatedAt)}
           {view.stored.updatedByName ? ` by ${view.stored.updatedByName}` : ""}
         </p>
