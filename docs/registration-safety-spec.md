@@ -3,7 +3,7 @@
 | Field                  | Value                                                                                                                                       |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Category**           | Engineering Spec                                                                                                                            |
-| **Doc status**         | Active — decisions taken 18 Oct 2026; frames drawn; not built                                                                               |
+| **Doc status**         | Active — decisions taken 18 Oct 2026; frames drawn; built (epic #49)                                                                        |
 | **Normative language** | Descriptive only                                                                                                                            |
 | **Requirement IDs**    | Partial — App Spec §14 `REG-013`, `REG-015`, `REG-016`, `REG-017`, `REG-021`; §15 `PREVYR-006`, `PREVYR-007` (partly); out: `REG-020`, `PREVYR-017`, `PREVYR-019`–`PREVYR-021` |
 | **Owner / Updated**    | Ryan, 2026-10-18 (epic #49)                                                                                                                 |
