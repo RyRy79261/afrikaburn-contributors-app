@@ -33,6 +33,7 @@ import {
   joinByInvite,
   submitRegistration,
   elevateToGod,
+  answerSafetyGates,
 } from "../../personas/factories";
 import { expectServerNotFound } from "../camp-member/support";
 import { openRegistrationInConsole } from "./support";
@@ -309,6 +310,12 @@ test.describe("camp layout — registration section 4", () => {
     const dims = webPage.getByLabel(/camp area dimensions \(optional\)/i);
     await expect(dims).toBeVisible();
     await expect(dims).toHaveValue("");
+    // The three safety gates are section 4's too (registration-safety-spec):
+    // a layout answers the dimensions, never the gates.
+    await expect(
+      webPage.getByText("Required fields are marked with *."),
+    ).toBeVisible();
+    await answerSafetyGates(webPage);
     await expect(
       webPage.getByText("All required fields complete."),
     ).toBeVisible();
