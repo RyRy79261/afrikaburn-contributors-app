@@ -49,7 +49,7 @@ answered.
 1. **Canvas library.** Use react-konva for the editor and plain server-rendered
    SVG for every read-only view. This overrides the SVG-only recommendation in
    gis-placement-spec §G. **Recommended: yes.** Konva and react-konva are MIT,
-   released monthly, peer on React 19, and have the built-in Transformer for
+   actively maintained (both last released 15 Oct 2026), peer on React 19, and have the built-in Transformer for
    resize and rotate handles. tldraw needs a licence key in production, and
    Fabric.js and Excalidraw fit a metre-based document less well. (The
    evaluation note this once linked was never committed; checked again on npm
