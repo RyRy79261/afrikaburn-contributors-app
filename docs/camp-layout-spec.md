@@ -5,7 +5,7 @@
 | **Category**           | Engineering Spec                                                                                                                                                       |
 | **Doc status**         | Active — decisions taken 14 Oct 2026; frames next                                                                                                                            |
 | **Normative language** | Descriptive only                                                                                                                                                       |
-| **Requirement IDs**    | Partial — App Spec §11 `LAYOUT-001`–`LAYOUT-039`, `LAYOUT-043`; §12 `TENT-001`–`TENT-010`, `TENT-013`, `TENT-014`, `TENT-016`–`TENT-027`, `TENT-029`; §13 `ERF-002`, `ERF-021` (via section reviews) |
+| **Requirement IDs**    | Partial — App Spec §11 `LAYOUT-001`–`LAYOUT-039`, `LAYOUT-043`; §12 `TENT-001`–`TENT-010`, `TENT-013`, `TENT-014`, `TENT-016`–`TENT-027`, `TENT-029`; §13 `ERF-002` |
 | **Owner / Updated**    | Ryan, 2026-10-13 (epic #62)                                                                                                                                            |
 
 Camps draw their layout on paper, or in a drawing app, and upload a picture of
@@ -48,8 +48,12 @@ answered.
 
 1. **Canvas library.** Use react-konva for the editor and plain server-rendered
    SVG for every read-only view. This overrides the SVG-only recommendation in
-   gis-placement-spec §G. **Recommended: yes** (see
-   `layout-editor-library-eval.md`).
+   gis-placement-spec §G. **Recommended: yes.** Konva and react-konva are MIT,
+   actively maintained (both last released 15 Oct 2026), peer on React 19, and have the built-in Transformer for
+   resize and rotate handles. tldraw needs a licence key in production, and
+   Fabric.js and Excalidraw fit a metre-based document less well. (The
+   evaluation note this once linked was never committed; checked again on npm
+   18 Oct 2026.)
 2. **Where the geometry code lives.** The spec planned a separate
    `@quagga/geo` leaf package for polygon maths (§D.1) and `@quagga/core` for
    policy. **Recommended: follow the spec.** v1 needs only a little geometry:
@@ -269,7 +273,9 @@ type LayoutDocument = { schemaVersion: 1; plot: LayoutArea };
   then, build against a local sample fixture.
 - **Erf anchoring, neighbours, fit-checking against an erf** (`ERF-001`,
   `ERF-003`–`011`), the suggestion engine (`ERF-012`–`017`), and the propose and
-  approve loop (`ERF-018`–`020`, `ERF-022`, `ERF-023`).
+  approve loop (`ERF-018`–`023`: the camp's answer to a layout AfrikaBurn
+  proposes). Org comments on section 4 are the registration's section-review
+  thread, not `ERF-021`.
 - **Auto-arrange and capacity estimate** (`TENT-011`, `TENT-015`), and spacing as
   a rule rather than a halo (`TENT-012`). Emergency access adequacy
   (`TENT-028`) beyond "a walkway is blocked".

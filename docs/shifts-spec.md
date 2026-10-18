@@ -6,7 +6,7 @@
 | **Doc status**         | Active                                                                                                    |
 | **Normative language** | Descriptive only                                                                                          |
 | **Requirement IDs**    | Partial — App Spec §6 `SHIFT-001`–`SHIFT-013`, `SHIFT-017`–`SHIFT-022`, `SHIFT-025`, `SHIFT-026`          |
-| **Owner / Updated**    | Ryan, 2026-10-01 (epic #57)                                                                                |
+| **Owner / Updated**    | Ryan, 2026-10-18 (epic #57, closed)                                                                        |
 
 Camp leads run kitchen, tea bar, sound, meal and MOOP rotas in spreadsheets.
 This puts them on the camp, in `apps/web` ([Decision 007](decisions/decision-007-application-boundary.md)).
@@ -95,10 +95,10 @@ No email, no reminders (see below).
 
 ## Not built
 
-- Attendance, late cancellations, no-shows (`SHIFT-014`–`016`) — need their own
-  privacy / "watching staff" review.
-- Scheduled reminders and email (`SHIFT-024`, `SHIFT-027`). The canvas's
-  Reminder select is deliberately absent: nothing would send it.
+- **Out of scope (Ryan, 18 Oct 2026):** attendance, late cancellations and
+  no-shows (`SHIFT-014`–`016`), and scheduled reminders and email (`SHIFT-024`,
+  `SHIFT-027`). They are used during the event, and there is no reception on
+  site. The canvas's Reminder select is deliberately absent. Epic #57 is closed.
 - WhatsApp / SMS (`SHIFT-028`, `SHIFT-029`), offline, village-wide shifts
   (`SHIFT-011`), a named shift lead (`SHIFT-006`), compulsory shifts
   (`SHIFT-009`), lead approval of swaps (`SHIFT-023`, decided against).
