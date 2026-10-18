@@ -133,3 +133,166 @@ export async function demoteVisibleRow(page: Page): Promise<void> {
     .click();
   await expect(dialog).toBeHidden();
 }
+
+// --- Department domain ownership: leave it as it was found -----------------
+//
+// A domain has ONE owner (`org_department_domains.domain` is the primary key),
+// so a spec that gives its own fresh department "the supplier repository"
+// TAKES it from the seeded Suppliers department — and deleting that fresh
+// department afterwards leaves the domain owned by NOBODY, not handed back.
+// Measured 18 Oct 2026 on the local stack: one run of
+// department-domain-scoping.spec.ts took the department-domain rows from four
+// (registrations + camp_categories under Theme camps, suppliers +
+// supplier_documents under Suppliers) to two. Every later spec on that
+// database then ran against a console where no department owned suppliers or
+// registrations.
+//
+// So a spec that moves ownership snapshots it first and restores it in an
+// afterEach — through the console, like everything else here (no DB back
+// doors), and on a page of its own, so a test that died mid-dialog on ITS page
+// cannot wedge the restore. Call both while holding the "department-domains"
+// lock: afterEach hooks run before fixture teardown, so the lock is still held
+// when the restore writes.
+//
+// WHAT IS SNAPSHOTTED: the PERMANENT departments (the seeded pair) only. They
+// are where ownership lives between runs, and they cannot disappear mid-read.
+// Other specs (god-roles-management) create and delete throwaway departments
+// WITHOUT the lock — they move no domains — so reading or deleting "every
+// department not in the snapshot" would race them. The restore deletes only
+// the departments its caller says are its own.
+
+/** What each permanent department owns: its name → domain label → ticked. */
+export type DepartmentDomainSnapshot = Map<string, Map<string, boolean>>;
+
+const PERMANENT_DELETE = /^Delete (.+) — permanent, cannot be deleted$/;
+const OWNS_BUTTON = /^Choose what (.+) owns$/;
+
+async function gotoRolesPanel(page: Page): Promise<void> {
+  await page.goto("/system/roles");
+  // Something PRESENT before the list is read: an unrendered page has no
+  // department buttons, and an empty snapshot would restore nothing.
+  await expect(page.getByLabel(/new department/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: PERMANENT_DELETE }).first(),
+  ).toBeVisible();
+}
+
+/** The name `pattern` captures from every matching button's aria-label. */
+async function namesFromButtons(
+  page: Page,
+  pattern: RegExp,
+): Promise<string[]> {
+  const labels = await page
+    .getByRole("button", { name: pattern })
+    .evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""));
+  return labels.flatMap((label) => {
+    const match = pattern.exec(label);
+    return match?.[1] ? [match[1]] : [];
+  });
+}
+
+/** Open one department's "what it owns" dialog and return its checkboxes. */
+async function openOwnsDialog(
+  page: Page,
+  name: string,
+): Promise<{ dialog: Locator; boxes: Array<{ label: string; box: Locator }> }> {
+  await page.getByRole("button", { name: `Choose what ${name} owns` }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("heading", { name: `What does ${name} own?` }),
+  ).toBeVisible();
+  const boxes: Array<{ label: string; box: Locator }> = [];
+  for (const row of await dialog.locator("fieldset label").all()) {
+    const label = (await row.innerText()).split("\n")[0]?.trim() ?? "";
+    boxes.push({ label, box: row.getByRole("checkbox") });
+  }
+  expect(boxes.length, `no domain checkboxes for ${name}`).toBeGreaterThan(0);
+  return { dialog, boxes };
+}
+
+/** Read what every permanent department owns right now. */
+export async function snapshotDepartmentDomains(
+  page: Page,
+): Promise<DepartmentDomainSnapshot> {
+  await gotoRolesPanel(page);
+  const snapshot: DepartmentDomainSnapshot = new Map();
+  for (const name of await namesFromButtons(page, PERMANENT_DELETE)) {
+    const { dialog, boxes } = await openOwnsDialog(page, name);
+    const owned = new Map<string, boolean>();
+    for (const { label, box } of boxes) owned.set(label, await box.isChecked());
+    snapshot.set(name, owned);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+  }
+  expect(snapshot.size, "no departments on /system/roles").toBeGreaterThan(0);
+  return snapshot;
+}
+
+/** Plain arrays, so a mismatch prints as a readable diff. */
+function snapshotRows(
+  snapshot: DepartmentDomainSnapshot,
+): Array<[string, string[]]> {
+  return [...snapshot].map(([name, owned]) => [
+    name,
+    [...owned].filter(([, ticked]) => ticked).map(([label]) => label),
+  ]);
+}
+
+/**
+ * Put ownership back as `before` recorded it. First delete the caller's own
+ * departments that are still there (a test that failed midway never reached
+ * its cleanup; deleting one releases what it took), then re-tick each
+ * permanent department's domains — ticking takes a domain from whoever holds
+ * it. Saves only a department that differs, so a clean run writes nothing.
+ * Ends by re-reading and asserting the result matches the snapshot.
+ */
+export async function restoreDepartmentDomains(
+  page: Page,
+  before: DepartmentDomainSnapshot,
+  isOwnDepartment: (name: string) => boolean,
+): Promise<void> {
+  // Retried from a fresh render: a test's own cleanup can still be in flight
+  // when this starts. Seen once (18 Oct 2026): the confirm for a department
+  // the test had just deleted itself stayed open, its delete refused. A fresh
+  // read settles it — gone is gone, and anything still listed is deleted.
+  await expect(async () => {
+    await gotoRolesPanel(page);
+    const leftovers = (await namesFromButtons(page, OWNS_BUTTON)).filter(
+      (name) => isOwnDepartment(name) && !before.has(name),
+    );
+    for (const name of leftovers) {
+      await page
+        .getByRole("button", { name: `Delete ${name}`, exact: true })
+        .click();
+      const confirm = page.getByRole("dialog");
+      await confirm
+        .getByRole("button", { name: /delete department and its roles/i })
+        .click();
+      // The dialog closes only on the action's success path (roles-manager
+      // `run`); an error keeps it open and this attempt is retried.
+      await expect(confirm).toBeHidden({ timeout: 10_000 });
+    }
+  }).toPass({ timeout: 60_000 });
+  await gotoRolesPanel(page);
+
+  for (const [name, owned] of before) {
+    const { dialog, boxes } = await openOwnsDialog(page, name);
+    let changed = false;
+    for (const { label, box } of boxes) {
+      const want = owned.get(label) ?? false;
+      if ((await box.isChecked()) === want) continue;
+      changed = true;
+      await box.setChecked(want);
+    }
+    await dialog
+      .getByRole("button", { name: changed ? /save what it owns/i : "Cancel" })
+      .click();
+    await expect(dialog).toBeHidden();
+  }
+
+  const after = await snapshotDepartmentDomains(page);
+  expect(
+    snapshotRows(after),
+    "department domain ownership was not restored",
+  ).toEqual(snapshotRows(before));
+}
