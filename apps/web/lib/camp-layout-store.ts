@@ -116,7 +116,7 @@ export interface LayoutAccess {
 }
 
 /** The group with this slug, any kind, or null. */
-async function findCamp(
+export async function findCamp(
   slug: string,
 ): Promise<(LayoutCamp & { kind: GroupKind }) | null> {
   const [group] = await db()
@@ -330,7 +330,7 @@ async function findLayoutSource(
 
 // --- Writes ------------------------------------------------------------------------
 
-interface LayoutActor {
+export interface LayoutActor {
   userId: string;
   permissions: PermissionMembership;
 }
@@ -371,7 +371,7 @@ async function loadRolePermissions(
  * first is what this sees — and their permissions as of now. Null when not a
  * current member, erased, or the camp is not a theme camp.
  */
-async function lockLayoutActor(
+export async function lockLayoutActor(
   tx: Tx,
   groupId: string,
   userId: string,

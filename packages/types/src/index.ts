@@ -15,3 +15,4 @@ export * from "./camp-layout";
 export * from "./camp-meetings";
 export * from "./camp-teams";
 export * from "./member-records";
+export * from "./registration-safety";

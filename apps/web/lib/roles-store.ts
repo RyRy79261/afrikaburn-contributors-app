@@ -18,14 +18,15 @@ import {
   officerAcceptedNotification,
   officerAssignmentRequestNotification,
   officerRequirements,
+  officerTriggersFromRegistration,
   officerSlotFilled,
   outstandingOfficers,
   roleGrantsElevatedPrivileges,
-  soundLevelFromValue,
   PROJECT_ROLE_CAP,
   roleCapReached,
   roleNameConflicts,
   type OfficerRequirement,
+  type OfficerTriggerInput,
   type OutstandingOfficers,
 } from "@quagga/core";
 import type {
@@ -969,6 +970,9 @@ export interface OfficerStatus {
   isRegisteredOrInFlight: boolean;
   outstanding: OutstandingOfficers;
   officers: OfficerRoleView[];
+  /** The registration signals the requirements were read from — the
+   * section 4 gates and the sound level. */
+  triggers: OfficerTriggerInput;
 }
 
 /**
@@ -984,6 +988,9 @@ export async function getOfficerStatus(
     .select({
       status: schema.registrations.status,
       sound: schema.registrations.s5AmplifiedMusic,
+      hasGenerator: schema.registrations.s4HasGenerator,
+      hasFire: schema.registrations.s4HasFire,
+      hasGasOrFuel: schema.registrations.s4HasGasOrFuel,
     })
     .from(schema.registrations)
     .where(
@@ -1012,15 +1019,17 @@ export async function getOfficerStatus(
   const isRegisteredOrInFlight =
     isRegisteredStatus(status) || isInReviewStatus(status);
 
-  const triggers = {
-    soundLevel: soundLevelFromValue(registration?.sound),
-    // No dedicated generator/open-flame/fuel columns exist in the frozen
-    // registration schema, so these default false; the pure trigger logic still
-    // supports them for when those fields land.
-    hasGenerators: false,
-    hasOpenFlame: false,
-    hasFuelStorage: false,
-  };
+  // The section 4 gates (docs/registration-safety-spec.md §"Officer status:
+  // real values instead of false"), mapped by core — the same mapping the org
+  // status board uses. No requirement changes (`officerRequirements` ignores
+  // the three), but the surface stops asserting "no generator, no fire, no
+  // fuel" untruthfully.
+  const triggers: OfficerTriggerInput = officerTriggersFromRegistration({
+    soundRaw: registration?.sound,
+    hasGenerator: registration?.hasGenerator,
+    hasFire: registration?.hasFire,
+    hasGasOrFuel: registration?.hasGasOrFuel,
+  });
   const requirements = officerRequirements(triggers);
 
   const roles = (await listRoles(groupId)).filter(
@@ -1059,7 +1068,7 @@ export async function getOfficerStatus(
     assignedKeys,
   });
 
-  return { isRegisteredOrInFlight, outstanding, officers };
+  return { isRegisteredOrInFlight, outstanding, officers, triggers };
 }
 
 /** Membership ids in a group that hold ANY of the given role ids (ACCEPTED). */

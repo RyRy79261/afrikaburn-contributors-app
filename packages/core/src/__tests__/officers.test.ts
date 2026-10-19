@@ -6,6 +6,7 @@ import {
   requiredOfficerKeys,
   outstandingOfficers,
   soundLevelFromValue,
+  officerTriggersFromRegistration,
   officerContactVisibleToOrg,
   officerConsentCopy,
   officerSlotFilled,
@@ -175,5 +176,56 @@ describe("officer consent + org visibility", () => {
     expect(
       officerContactVisibleToOrg({ isOfficer: false, consent: "accepted" }),
     ).toBe(false);
+  });
+});
+
+describe("officerTriggersFromRegistration — the section 4 gates, one mapping", () => {
+  it("true reads true, for each gate on its own", () => {
+    const none = { soundRaw: null, hasGenerator: false, hasFire: false, hasGasOrFuel: false };
+    expect(officerTriggersFromRegistration({ ...none, hasGenerator: true })).toEqual({
+      soundLevel: 0,
+      hasGenerators: true,
+      hasOpenFlame: false,
+      hasFuelStorage: false,
+    });
+    expect(officerTriggersFromRegistration({ ...none, hasFire: true })).toMatchObject({
+      hasGenerators: false,
+      hasOpenFlame: true,
+      hasFuelStorage: false,
+    });
+    expect(officerTriggersFromRegistration({ ...none, hasGasOrFuel: true })).toMatchObject({
+      hasGenerators: false,
+      hasOpenFlame: false,
+      hasFuelStorage: true,
+    });
+  });
+
+  it("false, null and missing (not answered) read false", () => {
+    for (const v of [false, null, undefined]) {
+      expect(
+        officerTriggersFromRegistration({
+          soundRaw: undefined,
+          hasGenerator: v,
+          hasFire: v,
+          hasGasOrFuel: v,
+        }),
+      ).toEqual({
+        soundLevel: 0,
+        hasGenerators: false,
+        hasOpenFlame: false,
+        hasFuelStorage: false,
+      });
+    }
+  });
+
+  it("reads the sound level from the stored answer", () => {
+    expect(
+      officerTriggersFromRegistration({
+        soundRaw: "3 — Loud",
+        hasGenerator: null,
+        hasFire: null,
+        hasGasOrFuel: null,
+      }).soundLevel,
+    ).toBe(3);
   });
 });

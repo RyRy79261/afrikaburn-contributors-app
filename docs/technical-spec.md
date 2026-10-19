@@ -326,7 +326,7 @@ artifact. When map data exists, that pattern is reusable rather than rebuilt.
 
 ## 14. Annual registration and placement submission ✅
 
-**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-014, REG-018, REG-021, REG-022–REG-028, REG-029 · 🚧 REG-006, REG-013, REG-015, REG-020 · ❌ REG-003, REG-008, REG-009, REG-010, REG-016, REG-017, REG-019, REG-030 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029 "placement allocated" is derived from the staff-assigned erf and shown to the camp's members (epic #48); REG-030 "final layout approved" waits on the layout tool, §11/§13)*
+**Requirement IDs:** ✅ REG-001, REG-002, REG-004, REG-005, REG-007, REG-011, REG-012, REG-013, REG-014, REG-015, REG-016, REG-017, REG-018, REG-021, REG-022–REG-028, REG-029 · 🚧 REG-006 · ❌ REG-003, REG-008, REG-009, REG-010, REG-019, REG-030 · out by decision: REG-020 *(App Spec §14 — the review-loop states REG-022–028 are fully built; REG-029 "placement allocated" is derived from the staff-assigned erf and shown to the camp's members (epic #48); REG-030 "final layout approved" waits on the layout tool, §11/§13. REG-013/015/016/017/020/021 per [registration-safety-spec.md](registration-safety-spec.md) §"Requirement IDs")*
 
 Built, and the most complete part of the platform.
 
@@ -351,12 +351,25 @@ withdrawn registration returns a **draft, never the approval** — an approval
 restored without re-review would hand back a placement nobody looked at.
 Feedback is per-section and two-way, and every decision is audited.
 
+**Power, fire, gas, fuel and water**
+([registration-safety-spec.md](registration-safety-spec.md), epic #49) are three
+yes/no gates in section 4 (Form 2) — a generator (REG-013), any fire and which
+kinds (REG-015), LPG gas or liquid fuel (REG-016) — mirrored into four
+`registrations` columns that officer status and the org review read. Everything
+else is derived, never asked: a rough water guide (5 L a person a day,
+REG-017 — not a water order), the extinguishers the camp's layout implies (2 ×
+4.5 kg DCP per started 100 m² of every tent or shade structure, and 1.5 kg by
+every generator), and whether the camp's OPTIONAL gas & fuel record goes to the
+fuel depot, which tells the camp's leads and its wrangler once, in-app. The
+policies are links only (REG-021, no read-check). Safety-document upload for
+theme camps (REG-020) is out by decision: sign-off happens on site, in person.
+
 Not built, because they depend on unbuilt modules: camper list, budget, build
 and strike plans, WAP and ticket requirements as structured submission artifacts.
 
 ## 15. Previous-year submissions 🚧
 
-**Requirement IDs:** ✅ PREVYR-001, PREVYR-010, PREVYR-011, PREVYR-014 · 🚧 PREVYR-012 · ❌ the remainder of PREVYR-002–PREVYR-025 *(App Spec §15; PREVYR-015 start-from-template is deliberately out of scope for now)*
+**Requirement IDs:** ✅ PREVYR-001, PREVYR-010, PREVYR-011, PREVYR-014 · 🚧 PREVYR-006, PREVYR-007, PREVYR-012 · out by decision: PREVYR-017, PREVYR-019–PREVYR-021 · ❌ the remainder of PREVYR-002–PREVYR-025 *(App Spec §15; PREVYR-015 start-from-template is deliberately out of scope for now. PREVYR-006/007 are partly met by the gas & fuel record's draft carry-forward — the layout already carries forward — and certificates are out by decision, [registration-safety-spec.md](registration-safety-spec.md))*
 
 **Built:** everything is stored per edition, so previous years exist and are
 intact. On top of that (roadmap R1 + epic #50):

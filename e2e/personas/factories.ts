@@ -575,6 +575,23 @@ export interface RegistrationInput {
    * once submitted — so there is no adding them afterwards.
    */
   layoutUrls?: string[];
+  /**
+   * The section 4 safety gates (docs/registration-safety-spec.md). Default
+   * No to all three, so the section completes without a fire follow-up.
+   * `fireKinds` are the visible LABELS to tick when `hasFire` is true.
+   */
+  hasGenerator?: boolean;
+  hasFire?: boolean;
+  fireKinds?: string[];
+  hasGasOrFuel?: boolean;
+  /**
+   * Leave section 4's safety gates UNANSWERED, so section 4 stays in
+   * progress. Submit must still open: the gates are Form 2 and never required
+   * for submit (registration-safety-spec; frame GFtHX).
+   */
+  skipSafetyGates?: boolean;
+  /** Runs once every section is filled, just before Submit is clicked. */
+  beforeSubmit?: (page: Page) => Promise<void>;
   soundPlan?: string;
   feeStructure?: string;
 }
@@ -596,6 +613,33 @@ async function goToSection(page: Page, label: string): Promise<void> {
  * Completeness mirrors packages/core registration-sections.ts SECTION_PREDICATES
  * exactly, so the client submit gate opens and the server accepts.
  */
+/** Answer section 4's three safety gates (and the fire kinds) by their
+ * labelled groups — there are three Yes/No pairs on the section. */
+export async function answerSafetyGates(
+  page: Page,
+  input: Pick<
+    RegistrationInput,
+    "hasGenerator" | "hasFire" | "fireKinds" | "hasGasOrFuel"
+  > = {},
+): Promise<void> {
+  const answer = async (label: RegExp, yes: boolean) =>
+    page
+      .getByRole("group", { name: label })
+      .getByRole("button", { name: yes ? "Yes" : "No", exact: true })
+      .click();
+  await answer(/will you bring a generator/i, input.hasGenerator ?? false);
+  await answer(/will your camp have any fire/i, input.hasFire ?? false);
+  if (input.hasFire) {
+    for (const kind of input.fireKinds ?? ["Braai or brazier (raised)"]) {
+      await page
+        .getByRole("group", { name: /which kinds of fire/i })
+        .getByRole("checkbox", { name: kind, exact: true })
+        .check();
+    }
+  }
+  await answer(/will you bring lpg gas or liquid fuel/i, input.hasGasOrFuel ?? false);
+}
+
 export async function submitRegistration(
   page: Page,
   slug: string,
@@ -656,6 +700,7 @@ export async function submitRegistration(
   await page
     .getByLabel(/camp area dimensions/i)
     .fill(input.areaDimensions ?? "20m x 15m");
+  if (!input.skipSafetyGates) await answerSafetyGates(page, input);
   for (const [i, layoutUrl] of (input.layoutUrls ?? []).entries()) {
     await page.getByLabel("Paste a URL").fill(layoutUrl);
     await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -698,8 +743,10 @@ export async function submitRegistration(
     timeout: 15_000,
   });
 
-  // Submit — the gate opens only when the client sees all six sections complete;
-  // handleSubmit force-saves the draft before the server re-checks completeness.
+  // Submit — the gate opens once the client sees the Form 1 sections complete
+  // (the server's `isSubmittable`); handleSubmit force-saves the draft before
+  // the server re-checks completeness.
+  if (input.beforeSubmit) await input.beforeSubmit(page);
   const submit = page.getByRole("button", { name: /submit registration/i });
   await expect(submit).toBeEnabled();
   await submit.click();

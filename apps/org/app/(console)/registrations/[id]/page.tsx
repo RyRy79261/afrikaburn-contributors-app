@@ -67,6 +67,39 @@ import {
 import { RegistrationChanges } from "@quagga/ui/components/registration-changes";
 import { SupplierStandingBadge } from "@/components/status-badges";
 import { yesNo, type FieldSpec } from "@/components/field-list";
+import { Badge } from "@quagga/ui/components/badge";
+import { AlertTriangle } from "lucide-react";
+import { getSavedGasFuelForReview } from "@/lib/gas-fuel";
+import {
+  placeSafetyReviewFields,
+  safetyReviewFields,
+  type SafetyReviewField,
+} from "@/lib/registration-safety-review";
+
+/** A safety field as the review's field list renders it: the Fuel depot
+ * chip above its line. */
+function toFieldSpec(f: SafetyReviewField): FieldSpec {
+  if (!f.chip) return { label: f.label, value: f.value, wide: f.wide };
+  return {
+    label: f.label,
+    wide: f.wide,
+    value: (
+      <span className="flex flex-col items-start gap-1">
+        <Badge
+          variant={f.chip.tone === "warning" ? "warning" : "success"}
+          // "Over the limit", sentence case (frame LN9Ap).
+          className="normal-case tracking-normal"
+        >
+          {f.chip.tone === "warning" && (
+            <AlertTriangle className="h-3 w-3" aria-hidden />
+          )}
+          {f.chip.text}
+        </Badge>
+        <span>{f.value}</span>
+      </span>
+    ),
+  };
+}
 import {
   RegistrationReview,
   type ReviewSectionView,
@@ -203,7 +236,7 @@ export default async function RegistrationDetailPage({
   // Placement and payment share the decision capability (both are the
   // registrations domain), so they reuse `decisionRefusal` rather than resolving
   // the same question a third time.
-  const [placement, comparison, layoutSnapshot] = await Promise.all([
+  const [placement, comparison, layoutSnapshot, gasFuel] = await Promise.all([
     getPlacementContext({
       registrationId: registration.id,
       editionId: detail.edition.id,
@@ -214,11 +247,23 @@ export default async function RegistrationDetailPage({
     // 10) — section 4, under the section's own review thread. Never the
     // working document, never its warnings.
     getLayoutSnapshotForReview(registration.id, detail.edition.year, actor),
+    // The camp's SAVED gas & fuel record, read live (registration-safety-spec
+    // §"Org review": a camp record, not part of the submission). Drafts never.
+    getSavedGasFuelForReview(registration.id, actor),
   ]);
+  const safetyFields = safetyReviewFields({
+    registration,
+    edition: detail.edition,
+    // Extinguishers and Structures from the PINNED snapshot only.
+    pinnedLayout: layoutSnapshot?.document ?? null,
+    gasFuel,
+    wranglerAssigned: Boolean(wrangler?.wranglerUserId),
+  });
   const fieldsBySection = buildSectionFields(
     detail,
     OPERATING_HOURS_LABELS,
     layoutSnapshot,
+    safetyFields.map(toFieldSpec),
   );
   const sections: ReviewSectionView[] = SECTION_KEYS.map((key) => ({
     key,
@@ -430,8 +475,10 @@ function buildSectionFields(
   detail: RegistrationDetail,
   hoursLabels: Record<string, string>,
   layoutSnapshot: LayoutSnapshotForReview | null,
+  safetyFields: FieldSpec[],
 ): Record<(typeof SECTION_KEYS)[number], FieldSpec[]> {
   const r = detail.registration;
+  const safety = placeSafetyReviewFields(safetyFields);
   const layoutLinks =
     r.s4LayoutUploadUrls.length > 0 ? (
       <span className="flex flex-col gap-1">
@@ -514,6 +561,7 @@ function buildSectionFields(
     ],
     size_logistics: [
       { label: "Expected population", value: r.s4ExpectedPopulation ?? "—" },
+      ...safety.besidePopulation,
       { label: "First arrival", value: formatDate(r.s4FirstArrivalDate) },
       // The OLD form's count only, and only when one was given (docs/wap-spec.md,
       // "The old registration-form field") — the requests live in the Passes tab.
@@ -526,6 +574,7 @@ function buildSectionFields(
           ]
         : []),
       { label: "Area dimensions", value: r.s4AreaDimensions },
+      ...safety.afterSize,
       ...(layoutSnapshot
         ? [
             {

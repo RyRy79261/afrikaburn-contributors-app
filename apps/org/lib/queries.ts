@@ -31,6 +31,7 @@ import {
   canReadPersonalInformationIn,
   countCategoryUsage,
   deriveOfficerCoverage,
+  officerTriggersFromRegistration,
   deriveQuestionnaireCompletion,
   deriveRegistrationFunnel,
   deriveStatusBoardKpis,
@@ -44,7 +45,6 @@ import {
   orgRankFromRole,
   publicMemberName,
   sanitizeOrgPermissions,
-  soundLevelFromValue,
   summarizeOrgActor,
   systemManagerRefusal,
   type OfficerCoverage,
@@ -982,7 +982,8 @@ export interface RegistrationDetail {
     description: string | null;
     joinability: string;
   };
-  edition: { id: string; name: string; year: number };
+  /** `endDate` (ISO date) is null only for the "Unknown edition" fallback. */
+  edition: { id: string; name: string; year: number; endDate: string | null };
   reviews: SectionReviewRow[];
   supplierDeclarations: SupplierDeclarationRow[];
   decidedByEmail: string | null;
@@ -1085,6 +1086,7 @@ export async function getRegistrationDetail(
       id: schema.editions.id,
       name: schema.editions.name,
       year: schema.editions.year,
+      endDate: schema.editions.endDate,
     })
     .from(schema.editions)
     .where(eq(schema.editions.id, registration.editionId))
@@ -1160,6 +1162,7 @@ export async function getRegistrationDetail(
       id: registration.editionId,
       name: "Unknown edition",
       year: 0,
+      endDate: null,
     },
     reviews: reviews.map((r) => ({
       id: r.id,
@@ -1797,6 +1800,9 @@ export async function getStatusBoard(
       groupId: schema.registrations.groupId,
       status: schema.registrations.status,
       soundRaw: schema.registrations.s5AmplifiedMusic,
+      hasGenerator: schema.registrations.s4HasGenerator,
+      hasFire: schema.registrations.s4HasFire,
+      hasGasOrFuel: schema.registrations.s4HasGasOrFuel,
     })
     .from(schema.registrations)
     .innerJoin(
@@ -1843,12 +1849,8 @@ export async function getStatusBoard(
     .filter((r) => inFlight.has(r.status))
     .map((r) => ({
       isRegisteredOrInFlight: true,
-      triggers: {
-        soundLevel: soundLevelFromValue(r.soundRaw),
-        hasGenerators: false,
-        hasOpenFlame: false,
-        hasFuelStorage: false,
-      },
+      // The section 4 gates (registration-safety-spec), mapped by core.
+      triggers: officerTriggersFromRegistration(r),
       assignedKeys: assignedByGroup.get(r.groupId) ?? new Set<OfficerKey>(),
     }));
 

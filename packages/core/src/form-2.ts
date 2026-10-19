@@ -1,4 +1,5 @@
 import type { QuestionnaireResponses } from "@quagga/types";
+import { FIRE_KINDS } from "@quagga/types";
 
 // FORM 2 → THE REGISTRATION ROW (roadmap M4-20).
 //
@@ -37,6 +38,12 @@ export interface Form2Columns {
   s4FirstArrivalDate: string | null;
   s4AreaDimensions: string | null;
   s4LayoutUploadUrls: string[] | null;
+  // The safety gates (docs/registration-safety-spec.md). Mirrored because
+  // officer status reads the three flags and the org review reads all four.
+  s4HasGenerator: boolean | null;
+  s4HasFire: boolean | null;
+  s4FireKinds: string[] | null;
+  s4HasGasOrFuel: boolean | null;
   s5AmplifiedMusic: string | null;
   s5SoundPlan: string | null;
   s5PlacementFirstChoice: string | null;
@@ -44,7 +51,20 @@ export interface Form2Columns {
 }
 
 /** How each column is filled, so coercion is declared once rather than inline. */
-type ColumnKind = "number" | "text" | "urls";
+type ColumnKind = "number" | "text" | "urls" | "boolean" | "list";
+
+/**
+ * The option values a yes/no gate must use. THE CONTRACT parses VALUES, never
+ * labels — so AfrikaBurn may label them "Ja"/"Nee" in the console builder, but
+ * the values stay `yes` and `no`.
+ */
+export const FORM_2_GATE_VALUES = { yes: "yes", no: "no" } as const;
+
+/** The allowed keys of each `list` column. `fire_kinds` option values must be
+ * exactly these keys. */
+const LIST_VOCABULARY: Partial<Record<keyof Form2Columns, readonly string[]>> = {
+  s4FireKinds: FIRE_KINDS,
+};
 
 /**
  * THE CONTRACT between the Form-2 questionnaire and the registration row.
@@ -60,6 +80,10 @@ export const FORM_2_FIELD_MAP: Readonly<
   first_arrival_date: { column: "s4FirstArrivalDate", kind: "text" },
   area_dimensions: { column: "s4AreaDimensions", kind: "text" },
   layout_diagram: { column: "s4LayoutUploadUrls", kind: "urls" },
+  has_generator: { column: "s4HasGenerator", kind: "boolean" },
+  has_fire: { column: "s4HasFire", kind: "boolean" },
+  fire_kinds: { column: "s4FireKinds", kind: "list" },
+  has_gas_or_fuel: { column: "s4HasGasOrFuel", kind: "boolean" },
   amplified_music: { column: "s5AmplifiedMusic", kind: "text" },
   sound_plan: { column: "s5SoundPlan", kind: "text" },
   placement_first_choice: { column: "s5PlacementFirstChoice", kind: "text" },
@@ -86,6 +110,21 @@ export interface Form2MappingResult {
    * difference between "the camp did not say" and "we lost what they said".
    */
   unfilled: (keyof Form2Columns)[];
+  /**
+   * Answers to a KNOWN question whose value the mirror could not parse: a gate
+   * answered with something other than `yes`/`no`, or a fire kind that is not
+   * one of the stable keys. Usually an option VALUE edited in the console
+   * builder. One entry per unparseable value.
+   */
+  invalid: { questionId: string; value: unknown }[];
+}
+
+/** `yes` → true, `no` → false, anything else → undefined. */
+function yesNo(value: unknown): boolean | undefined {
+  const v = Array.isArray(value) && value.length === 1 ? value[0] : value;
+  if (v === FORM_2_GATE_VALUES.yes) return true;
+  if (v === FORM_2_GATE_VALUES.no) return false;
+  return undefined;
 }
 
 /** A trimmed non-empty string, or null. */
@@ -139,6 +178,7 @@ export function mapForm2Answers(
 ): Form2MappingResult {
   const columns: Partial<Form2Columns> = {};
   const unmapped: string[] = [];
+  const invalid: Form2MappingResult["invalid"] = [];
 
   for (const [questionId, value] of Object.entries(responses)) {
     const field = FORM_2_FIELD_MAP[questionId];
@@ -157,6 +197,33 @@ export function mapForm2Answers(
         if (u !== null) columns.s4LayoutUploadUrls = u;
         break;
       }
+      case "boolean": {
+        if (value === null || value === undefined || value === "") break;
+        const b = yesNo(value);
+        if (b === undefined) invalid.push({ questionId, value });
+        else (columns as Record<string, unknown>)[field.column] = b;
+        break;
+      }
+      case "list": {
+        const raw = Array.isArray(value)
+          ? value
+          : value === null || value === undefined || value === ""
+            ? []
+            : [value];
+        const allowed = new Set(LIST_VOCABULARY[field.column] ?? []);
+        const kept: string[] = [];
+        for (const v of raw) {
+          if (typeof v === "string" && allowed.has(v)) {
+            if (!kept.includes(v)) kept.push(v);
+          } else {
+            invalid.push({ questionId, value: v });
+          }
+        }
+        if (kept.length > 0) {
+          (columns as Record<string, unknown>)[field.column] = kept;
+        }
+        break;
+      }
       case "text": {
         const t = text(value);
         if (t !== null) {
@@ -169,9 +236,15 @@ export function mapForm2Answers(
     }
   }
 
+  // Answering "no" to fire clears the kinds, exactly as the wizard does.
+  if (columns.s4HasFire === false) columns.s4FireKinds = [];
+
   const unfilled = FORM_2_COLUMNS.filter(
-    (column) => columns[column] === undefined,
+    (column) =>
+      columns[column] === undefined &&
+      // No fire kinds is the right answer when there is no fire.
+      !(column === "s4FireKinds" && columns.s4HasFire === false),
   );
 
-  return { columns, unmapped: unmapped.sort(), unfilled };
+  return { columns, unmapped: unmapped.sort(), unfilled, invalid };
 }

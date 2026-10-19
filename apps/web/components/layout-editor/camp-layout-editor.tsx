@@ -47,6 +47,7 @@ import {
   boundaryRing,
   type LayoutCatalogEntry,
   type LayoutWarning,
+  extinguisherEstimate,
 } from "@quagga/core";
 import { footprintRing, inflate, SNAP_LENGTH_M, type Vec } from "@quagga/geo";
 import type { LayoutDocument, LayoutObject } from "@quagga/types";
@@ -84,6 +85,7 @@ import {
   MetreField,
 } from "./editor-panels";
 import { LayoutMiniMap } from "./mini-map";
+import { ExtinguishersCard } from "@/components/layout-view/extinguishers-card";
 
 // The camp layout editor (docs/camp-layout-spec.md §Surfaces; frames L1
 // f3jmCq, L2 LcZsE). Editors only — the page decides that on the server, and
@@ -430,6 +432,11 @@ export function CampLayoutEditor({
   // --- Derived ----------------------------------------------------------------------
 
   const warnings = useMemo(() => layoutWarnings(doc, catalog), [doc, catalog]);
+  // Recomputed as the camp draws (registration-safety-spec, frame qi8us).
+  const extinguishers = useMemo(
+    () => extinguisherEstimate(doc, catalog),
+    [doc, catalog],
+  );
   const warnedIds = useMemo(() => {
     const s = new Set<string>();
     for (const w of warnings) {
@@ -961,6 +968,7 @@ export function CampLayoutEditor({
             }
             canDuplicate={canAddObject(doc)}
           />
+          <ExtinguishersCard estimate={extinguishers} mode="editor" />
           <LayoutWarningsPanel
             warnings={warnings}
             areaName={(id) => {

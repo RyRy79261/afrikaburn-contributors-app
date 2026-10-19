@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, GitCompare, History } from "lucide-react";
+import type { LayoutDocument } from "@quagga/types";
 import {
   canViewCampRegistration,
+  briefGasFuelSummary,
+  extinguisherEstimate,
+  fuelDepotAdvice,
+  getLayoutCatalog,
+  suggestGatesFromLayout,
   formatPlotSize,
   pastSubmittedRegistrations,
   selectComparisonPrior,
 } from "@quagga/core";
 import { PreviewNotice } from "@/components/preview-notice";
-import { RegistrationWizard } from "@/components/registration/registration-wizard";
+import {
+  RegistrationWizard,
+  type WizardSafety,
+} from "@/components/registration/registration-wizard";
+import { findCampWrangler, getSavedGasFuelRecord } from "@/lib/gas-fuel-store";
 import { RegistrationSummary } from "@/components/registration/registration-summary";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getCurrentCampUser, enforceGate } from "@/lib/session";
@@ -58,6 +68,10 @@ function emptyValues(description: string | null): RegistrationValues {
     s4FirstArrivalDate: null,
     s4AreaDimensions: null,
     s4LayoutUploadUrls: [],
+    s4HasGenerator: null,
+    s4HasFire: null,
+    s4FireKinds: [],
+    s4HasGasOrFuel: null,
     s5AmplifiedMusic: null,
     s5SoundPlan: null,
     s5PlacementFirstChoice: null,
@@ -207,6 +221,10 @@ export default async function RegistrationPage({
           s4FirstArrivalDate: registration.s4FirstArrivalDate,
           s4AreaDimensions: registration.s4AreaDimensions,
           s4LayoutUploadUrls: registration.s4LayoutUploadUrls,
+          s4HasGenerator: registration.s4HasGenerator,
+          s4HasFire: registration.s4HasFire,
+          s4FireKinds: registration.s4FireKinds ?? [],
+          s4HasGasOrFuel: registration.s4HasGasOrFuel,
           s5AmplifiedMusic: registration.s5AmplifiedMusic,
           s5SoundPlan: registration.s5SoundPlan,
           s5PlacementFirstChoice: registration.s5PlacementFirstChoice,
@@ -228,11 +246,13 @@ export default async function RegistrationPage({
     // layout page takes.
     const layoutAccess = await loadLayoutAccess(slug, campUser.id);
     let layout: WizardLayout | null = null;
+    let liveLayout: LayoutDocument | null = null;
     if (layoutAccess) {
       const view = await loadCampLayout(layoutAccess, {
         id: context.editionId,
         year: context.editionYear,
       });
+      liveLayout = view.layout?.document ?? null;
       layout = {
         plotSize: view.summary ? formatPlotSize(view.summary) : null,
         lastYear:
@@ -246,6 +266,34 @@ export default async function RegistrationPage({
         canStart: view.registration !== null,
       };
     }
+
+    // Section 4's safety context (docs/registration-safety-spec.md): the gate
+    // suggestions and the extinguishers from the LIVE layout (camp surfaces
+    // read the working plan; the org reads the pinned one), and the SAVED gas
+    // & fuel record — never a draft.
+    const [savedGasFuel, wrangler] = registration
+      ? await Promise.all([
+          getSavedGasFuelRecord(registration.id),
+          findCampWrangler(context.group.id, context.editionId),
+        ])
+      : [null, null];
+    const safety: WizardSafety = {
+      editionEndDate: edition.endDate,
+      suggestions: suggestGatesFromLayout(liveLayout),
+      extinguishers: liveLayout
+        ? extinguisherEstimate(
+            liveLayout,
+            getLayoutCatalog(context.editionYear),
+          )
+        : null,
+      gasFuel: {
+        savedSummary: savedGasFuel
+          ? briefGasFuelSummary(savedGasFuel.record)
+          : null,
+        advice: savedGasFuel ? fuelDepotAdvice(savedGasFuel.record) : false,
+        wranglerName: wrangler?.name ?? null,
+      },
+    };
 
     // The carry-forward offer, only while it is still an offer: once this
     // year's draft has been seeded there is nothing to bring across, and a
@@ -279,6 +327,7 @@ export default async function RegistrationPage({
           viewerUserId={campUser.id}
           blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
           layout={layout}
+          safety={safety}
           saveAction={saveRegistrationDraftAction}
           submitAction={submitRegistrationAction}
           withdrawAction={withdrawRegistrationAction}

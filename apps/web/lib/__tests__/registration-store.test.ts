@@ -73,6 +73,10 @@ function values(overrides: Record<string, unknown> = {}) {
     s4FirstArrivalDate: null,
     s4AreaDimensions: null,
     s4LayoutUploadUrls: [],
+    s4HasGenerator: null,
+    s4HasFire: null,
+    s4FireKinds: [],
+    s4HasGasOrFuel: null,
     s5AmplifiedMusic: null,
     s5SoundPlan: null,
     s5PlacementFirstChoice: null,
@@ -277,6 +281,10 @@ describe("applyCampAction — a submit pins the camp layout", () => {
           s4ExpectedPopulation: 45,
           s4FirstArrivalDate: "2027-04-24",
           s4AreaDimensions: null,
+          s4HasGenerator: false,
+          s4HasFire: false,
+          s4FireKinds: [],
+          s4HasGasOrFuel: false,
         }),
       ],
       [{ id: REGISTRATION }],
@@ -436,7 +444,13 @@ describe("saveRegistrationDraft", () => {
   });
 
   it("a drawn layout makes the area dimensions optional (layout spec decision 11)", async () => {
-    const s4 = { s4ExpectedPopulation: 45, s4FirstArrivalDate: "2027-04-24" };
+    const s4 = {
+      s4ExpectedPopulation: 45,
+      s4FirstArrivalDate: "2027-04-24",
+      s4HasGenerator: false,
+      s4HasFire: false,
+      s4HasGasOrFuel: false,
+    };
     // No layout: blank dimensions leave section 4 incomplete.
     dbMock.queue([registration()], /* no layout */ [], [], [], []);
     const without = await saveRegistrationDraft({
@@ -465,6 +479,82 @@ describe("saveRegistrationDraft", () => {
     };
     expect(set.completedSections).toContain("size_logistics");
     expect(set.s4AreaDimensions).toBeNull();
+  });
+
+  it("section 4 needs the three safety gates (registration-safety-spec)", async () => {
+    const s4 = {
+      s4ExpectedPopulation: 45,
+      s4FirstArrivalDate: "2027-04-24",
+      s4AreaDimensions: "30m x 25m",
+    };
+    // Everything but the gates: in progress.
+    dbMock.queue([registration()], /* no layout */ [], [], [], []);
+    const without = await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values(s4),
+    });
+    if (!without.ok) throw new Error("expected a successful save");
+    expect(without.completedSections).not.toContain("size_logistics");
+
+    // Fire yes with no kind: still in progress.
+    dbMock.reset();
+    dbMock.queue([registration()], [], [], [], []);
+    const noKinds = await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values({
+        ...s4,
+        s4HasGenerator: true,
+        s4HasFire: true,
+        s4FireKinds: [],
+        s4HasGasOrFuel: true,
+      }),
+    });
+    if (!noKinds.ok) throw new Error("expected a successful save");
+    expect(noKinds.completedSections).not.toContain("size_logistics");
+
+    // All three answered, a kind ticked: complete, and the columns written.
+    dbMock.reset();
+    dbMock.queue([registration()], [], [], []);
+    const done = await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values({
+        ...s4,
+        s4HasGenerator: true,
+        s4HasFire: true,
+        s4FireKinds: ["braai_brazier"],
+        s4HasGasOrFuel: false,
+      }),
+    });
+    if (!done.ok) throw new Error("expected a successful save");
+    expect(done.completedSections).toContain("size_logistics");
+    const set = dbMock.writesTo(schema.registrations)[0]!.arg("set") as Record<
+      string,
+      unknown
+    >;
+    expect(set).toMatchObject({
+      s4HasGenerator: true,
+      s4HasFire: true,
+      s4FireKinds: ["braai_brazier"],
+      s4HasGasOrFuel: false,
+    });
+  });
+
+  it("answering fire No clears the kinds it had", async () => {
+    dbMock.queue([registration()], [], [], [], []);
+    await saveRegistrationDraft({
+      group: { id: GROUP, name: "Mad Hatters" },
+      editionId: EDITION,
+      values: values({ s4HasFire: false, s4FireKinds: ["fire_pit"] }),
+    });
+    const set = dbMock.writesTo(schema.registrations)[0]!.arg("set") as Record<
+      string,
+      unknown
+    >;
+    expect(set.s4HasFire).toBe(false);
+    expect(set.s4FireKinds).toEqual([]);
   });
 
   it("throws rather than half-saving when the insert returns no row", async () => {

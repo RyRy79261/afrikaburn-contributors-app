@@ -104,14 +104,14 @@ test.describe("camp lead — registration wizard", () => {
     // Nothing filled: the gate is explicitly locked and the meter reads 0 of 6.
     await expect(submit).toBeDisabled();
     await expect(
-      webPage.getByText(/submit opens once all six sections are complete/i),
+      webPage.getByText(/submit opens once the form 1 sections are complete/i),
     ).toBeVisible();
     await expect(webPage.getByText(/0 of 6 sections complete/i)).toBeVisible();
     await expect(webPage.getByText(/still needed/i)).toBeVisible();
 
     // Complete ONE section (identity = description + contact email). The meter
-    // advances to 1 of 6 — but the submit gate is STILL refused, because five
-    // sections remain. Partial completeness never opens the action.
+    // advances to 1 of 6 — but the submit gate is STILL refused, because three
+    // Form 1 sections remain. Partial completeness never opens the action.
     await webPage
       .getByLabel(/camp description/i)
       .fill("A tea house on the playa.");

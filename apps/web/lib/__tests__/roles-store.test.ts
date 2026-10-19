@@ -884,6 +884,46 @@ describe("getOfficerStatus", () => {
     expect(status.outstanding.outstanding).not.toContain("fire_safety_officer");
   });
 
+  it("reports the section 4 gates as the triggers instead of a hard-coded false (registration-safety-spec)", async () => {
+    dbMock.queue([
+      {
+        status: "submitted",
+        sound: null,
+        hasGenerator: true,
+        hasFire: true,
+        hasGasOrFuel: false,
+      },
+    ]);
+    queueRoles();
+    dbMock.queue([]);
+    const status = await getOfficerStatus(GROUP, EDITION);
+    expect(status.triggers).toMatchObject({
+      hasGenerators: true,
+      hasOpenFlame: true,
+      hasFuelStorage: false,
+    });
+
+    // Not answered reads as false.
+    dbMock.reset();
+    dbMock.queue([
+      {
+        status: "submitted",
+        sound: null,
+        hasGenerator: null,
+        hasFire: null,
+        hasGasOrFuel: true,
+      },
+    ]);
+    queueRoles();
+    dbMock.queue([]);
+    const unanswered = await getOfficerStatus(GROUP, EDITION);
+    expect(unanswered.triggers).toMatchObject({
+      hasGenerators: false,
+      hasOpenFlame: false,
+      hasFuelStorage: true,
+    });
+  });
+
   it("is not applicable for a camp with no registration at all", async () => {
     dbMock.queue([]);
     queueRoles();

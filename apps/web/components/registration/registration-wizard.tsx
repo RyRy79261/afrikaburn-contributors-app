@@ -11,12 +11,26 @@ import {
   MessageSquareWarning,
   Send,
 } from "lucide-react";
-import { SECTION_KEYS, SECTION_LABELS, type SectionKey } from "@quagga/types";
 import {
+  FIRE_KIND_LABELS,
+  FIRE_KINDS,
+  SECTION_KEYS,
+  SECTION_LABELS,
+  type FireKind,
+  type SectionKey,
+} from "@quagga/types";
+import {
+  adoptGateSuggestions,
   completedSectionsFor,
   getPlacementZones,
   isSectionComplete,
+  isSubmittable,
+  missingSections,
+  normalizeFireAnswer,
   SOUND_SCALE,
+  waterEstimateLitres,
+  type ExtinguisherEstimate,
+  type GateSuggestions,
   type RegistrationSectionData,
 } from "@quagga/core";
 import { Button } from "@quagga/ui/components/button";
@@ -47,6 +61,83 @@ import { LayoutSectionCard, type WizardLayout } from "./layout-section-card";
 import { SupplierPicker } from "./supplier-picker";
 import { SectionReplyThread } from "./section-reply-thread";
 import { withdrawConsequence } from "./withdraw-registration";
+import {
+  ExtinguisherGuidance,
+  FireKindsField,
+  GasFuelRecordCard,
+  PolicyLink,
+  SafetyChecklistFooter,
+  WaterEstimateBox,
+  type WizardGasFuel,
+} from "./safety-fields";
+import { CircleDashed, Map as MapIcon } from "lucide-react";
+
+/** Section 4's safety context (docs/registration-safety-spec.md), all worked
+ * out on the server from the live layout and the saved gas & fuel record. */
+export interface WizardSafety {
+  /** The edition's last day, for the water guide. */
+  editionEndDate: string;
+  /** What the LIVE layout suggests for each gate. Never an answer. */
+  suggestions: GateSuggestions;
+  /** From the live layout; null when no layout is drawn. */
+  extinguishers: ExtinguisherEstimate | null;
+  gasFuel: WizardGasFuel;
+}
+
+/** "Sat 24 April" from an ISO date, in UTC so the server and the browser
+ * agree. */
+function dayLabel(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
+/** "Suggested from your layout …" — the prefill is a suggestion, not an
+ * answer, until the camp saves section 4. */
+function SuggestedNote({ what }: { what: string }) {
+  return (
+    <p
+      className="flex items-start gap-2 text-xs text-muted-foreground"
+      data-testid="s4-suggested"
+    >
+      <MapIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+      Filled in from your layout, which has {what}. It counts once you save;
+      change it if that&apos;s wrong.
+    </p>
+  );
+}
+
+/** G2a's tick list in the order frames GFtHX / sSl0w draw it (open fire
+ * first, then gas, performance, other). Display only: the stored keys keep
+ * the schema's order. A Record, so a new kind cannot be left out. */
+const FIRE_KIND_FORM_RANK: Record<FireKind, number> = {
+  braai_brazier: 0,
+  fire_pit: 1,
+  burn_barrel: 2,
+  flame_effect: 3,
+  gas_cooking_heating: 4,
+  fire_performance: 5,
+  other: 6,
+};
+const FIRE_KIND_FORM_ORDER: readonly FireKind[] = [...FIRE_KINDS].sort(
+  (a, b) => FIRE_KIND_FORM_RANK[a] - FIRE_KIND_FORM_RANK[b],
+);
+
+/** "Not answered yet" under an unanswered gate. */
+function UnansweredNote() {
+  return (
+    <p className="flex items-start gap-2 text-xs text-muted-foreground">
+      <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+      Not answered yet. Answer it to finish this section.
+    </p>
+  );
+}
 
 const OPERATING_HOURS = [
   { value: "morning", label: "Morning" },
@@ -87,6 +178,8 @@ interface WizardProps {
   /** Section 4's camp layout (docs/camp-layout-spec.md decisions 11, 12), or
    * null where layouts do not apply. */
   layout: WizardLayout | null;
+  /** Section 4's safety context, or null where it does not apply. */
+  safety: WizardSafety | null;
   saveAction: (
     slug: string,
     values: RegistrationValues,
@@ -116,6 +209,10 @@ function toSectionData(
     s4ExpectedPopulation: v.s4ExpectedPopulation,
     s4FirstArrivalDate: v.s4FirstArrivalDate,
     s4AreaDimensions: v.s4AreaDimensions,
+    s4HasGenerator: v.s4HasGenerator,
+    s4HasFire: v.s4HasFire,
+    s4FireKinds: v.s4FireKinds,
+    s4HasGasOrFuel: v.s4HasGasOrFuel,
     s5AmplifiedMusic: v.s5AmplifiedMusic,
     s5SoundPlan: v.s5SoundPlan,
     s5PlacementFirstChoice: v.s5PlacementFirstChoice,
@@ -173,8 +270,12 @@ export function RegistrationWizard(props: WizardProps) {
       ),
     [props.campName, values, hasLayout],
   );
-  const allComplete = completed.size === SECTION_KEYS.length;
-  const missing = SECTION_KEYS.filter((k) => !completed.has(k));
+  // THE SERVER'S GATE, not a stricter one: submit needs the FORM 1 sections
+  // (@quagga/core `isSubmittable`). Form 2's sections — section 4's safety
+  // gates included — are never required for submit
+  // (docs/registration-safety-spec.md; frame GFtHX).
+  const allComplete = isSubmittable([...completed]);
+  const missing = missingSections([...completed]);
 
   /**
    * Flush the draft to the server. Resolves TRUE only once the server holds
@@ -245,6 +346,50 @@ export function RegistrationWizard(props: WizardProps) {
 
   // Immediate flush on blur.
   const commit = React.useCallback(() => void saveNow(), [saveNow]);
+
+  const suggestions = props.safety?.suggestions ?? null;
+  /**
+   * An edit in section 4. The first one also takes the layout's unsaved gate
+   * suggestions as answers — "nothing is written to s4_has_* until the camp
+   * saves the section" (spec §"Prefill from the layout"): touching section 4
+   * is what saves it. A saved answer is never overwritten by the layout.
+   */
+  const updateS4 = React.useCallback(
+    (patch: Partial<RegistrationValues>) => {
+      const current = valuesRef.current;
+      const adopted = suggestions
+        ? adoptGateSuggestions(
+            {
+              s4HasGenerator: current.s4HasGenerator,
+              s4HasFire: current.s4HasFire,
+              s4FireKinds: current.s4FireKinds,
+              s4HasGasOrFuel: current.s4HasGasOrFuel,
+            },
+            suggestions,
+          )
+        : null;
+      const merged: Partial<RegistrationValues> = {
+        ...(adopted
+          ? {
+              s4HasGenerator: adopted.s4HasGenerator,
+              s4HasFire: adopted.s4HasFire,
+              s4FireKinds: [...(adopted.s4FireKinds ?? [])],
+              s4HasGasOrFuel: adopted.s4HasGasOrFuel,
+            }
+          : {}),
+        ...patch,
+      };
+      // Answering G2 = No clears the kinds.
+      if (merged.s4HasFire !== undefined) {
+        merged.s4FireKinds = normalizeFireAnswer(
+          merged.s4HasFire,
+          merged.s4FireKinds ?? current.s4FireKinds,
+        );
+      }
+      update(merged);
+    },
+    [suggestions, update],
+  );
 
   // Periodic safety-net autosave + flush on unmount.
   React.useEffect(() => {
@@ -632,9 +777,22 @@ export function RegistrationWizard(props: WizardProps) {
                     required
                     hint="Roughly how many campers, e.g. 45."
                     value={values.s4ExpectedPopulation}
-                    onChange={(v) => update({ s4ExpectedPopulation: v })}
+                    onChange={(v) => updateS4({ s4ExpectedPopulation: v })}
                     onCommit={commit}
                   />
+                  {props.safety && (
+                    <div className="sm:col-span-2">
+                      <WaterEstimateBox
+                        estimate={waterEstimateLitres({
+                          population: values.s4ExpectedPopulation,
+                          firstArrivalDate: values.s4FirstArrivalDate,
+                          editionEndDate: props.safety.editionEndDate,
+                        })}
+                        arrivalLabel={dayLabel(values.s4FirstArrivalDate)}
+                        endLabel={dayLabel(props.safety.editionEndDate) ?? ""}
+                      />
+                    </div>
+                  )}
                   <TextField
                     id="s4-arrival"
                     label="First arrival date"
@@ -642,7 +800,7 @@ export function RegistrationWizard(props: WizardProps) {
                     type="date"
                     hint="When your first member arrives on site."
                     value={values.s4FirstArrivalDate}
-                    onChange={(v) => update({ s4FirstArrivalDate: v })}
+                    onChange={(v) => updateS4({ s4FirstArrivalDate: v })}
                     onCommit={commit}
                   />
                   <TextField
@@ -660,7 +818,7 @@ export function RegistrationWizard(props: WizardProps) {
                         : "Width x depth in metres."
                     }
                     value={values.s4AreaDimensions}
-                    onChange={(v) => update({ s4AreaDimensions: v })}
+                    onChange={(v) => updateS4({ s4AreaDimensions: v })}
                     onCommit={commit}
                   />
                 </div>
@@ -670,12 +828,29 @@ export function RegistrationWizard(props: WizardProps) {
                     layout={{ ...props.layout, canStart: rowExists }}
                   />
                 )}
+                {props.layout && props.safety && (
+                  <ExtinguisherGuidance
+                    slug={props.slug}
+                    estimate={props.safety.extinguishers}
+                  />
+                )}
                 <LayoutUploads
                   urls={values.s4LayoutUploadUrls}
                   blobConfigured={props.blobConfigured}
-                  onChange={(urls) => update({ s4LayoutUploadUrls: urls })}
+                  onChange={(urls) => updateS4({ s4LayoutUploadUrls: urls })}
                   onCommit={commit}
                 />
+                {props.safety && (
+                  <SafetyGates
+                    slug={props.slug}
+                    values={values}
+                    safety={props.safety}
+                    onChange={(patch) => {
+                      updateS4(patch);
+                      setTimeout(commit, 0);
+                    }}
+                  />
+                )}
               </>
             )}
 
@@ -859,14 +1034,14 @@ export function RegistrationWizard(props: WizardProps) {
         </div>
       </div>
 
-      {/* Submit area (canvas `kDSa7`) — the gate stays locked until all six
-          sections are complete. */}
+      {/* Submit area (canvas `kDSa7`) — the gate stays locked until the
+          Form 1 sections are complete. */}
       <div className="flex flex-col gap-4 border-t border-border pt-6">
         {!allComplete && (
           <>
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Lock className="h-4 w-4 shrink-0" aria-hidden />
-              Submit opens once all six sections are complete
+              Submit opens once the Form 1 sections are complete
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -962,5 +1137,126 @@ function SaveStatus({
       {icon}
       <span>{text}</span>
     </div>
+  );
+}
+
+/**
+ * G1–G3 and the fire follow-up (docs/registration-safety-spec.md §"The three
+ * gates"). A gate shows the layout's suggestion as selected, marked as such,
+ * until the camp saves an answer; an unsaved gate is unanswered for
+ * completeness.
+ */
+function SafetyGates({
+  slug,
+  values,
+  safety,
+  onChange,
+}: {
+  slug: string;
+  values: RegistrationValues;
+  safety: WizardSafety;
+  onChange: (patch: Partial<RegistrationValues>) => void;
+}) {
+  const s = safety.suggestions;
+  const generator = values.s4HasGenerator ?? (s.generator ? true : null);
+  const fire = values.s4HasFire ?? (s.fire ? true : null);
+  const gas = values.s4HasGasOrFuel ?? (s.gas ? true : null);
+  const fireKinds =
+    values.s4HasFire === null && s.fire ? s.fireKinds : values.s4FireKinds;
+
+  return (
+    <section
+      aria-labelledby="s4-safety-heading"
+      // A rule between each gate, as in frame GFtHX.
+      className="flex flex-col divide-y divide-border border-t border-border [&>*]:py-5 [&>*:last-child]:pb-0"
+      data-testid="s4-safety"
+    >
+      <div>
+        <p
+          id="s4-safety-heading"
+          className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        >
+          Power, fire &amp; fuel
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Three yes-or-no questions. If you have fire, we&apos;ll also ask what
+          kind.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <YesNoField
+          label="Will you bring a generator?"
+          required
+          hint="A generator needs fuel and is a sound and fire risk, so we only ask whether you have one — no size or fuel estimate."
+          value={generator}
+          onChange={(v) => onChange({ s4HasGenerator: v })}
+        />
+        {values.s4HasGenerator === null && s.generator ? (
+          <SuggestedNote what="a generator" />
+        ) : values.s4HasGenerator === null ? (
+          <UnansweredNote />
+        ) : null}
+        <PolicyLink policy="generator" />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <YesNoField
+          label="Will your camp have any fire?"
+          required
+          hint="Braai, brazier, burn barrel, fire pit, gas cooking or heating, flame effects or fire performance."
+          value={fire}
+          onChange={(v) => onChange({ s4HasFire: v })}
+        />
+        {values.s4HasFire === null && s.fire ? (
+          <SuggestedNote what="a fire pit" />
+        ) : values.s4HasFire === null ? (
+          <UnansweredNote />
+        ) : null}
+        {fire === true ? (
+          // The policy link sits inside the follow-up (frame GFtHX).
+          <div className="ml-1 flex flex-col gap-2 border-l-2 border-primary/50 pl-4">
+            <FireKindsField
+              options={FIRE_KIND_FORM_ORDER.map((k) => ({
+                value: k,
+                label: FIRE_KIND_LABELS[k],
+              }))}
+              value={[...(fireKinds ?? [])]}
+              onChange={(kinds) =>
+                onChange({ s4HasFire: true, s4FireKinds: kinds })
+              }
+            />
+            <PolicyLink policy="fire" />
+          </div>
+        ) : (
+          <PolicyLink policy="fire" />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <YesNoField
+          label="Will you bring LPG gas or liquid fuel?"
+          required
+          hint="Gas bottles, or petrol, diesel or paraffin — for cooking, heating or a generator."
+          value={gas}
+          onChange={(v) => onChange({ s4HasGasOrFuel: v })}
+        />
+        {values.s4HasGasOrFuel === null && s.gas ? (
+          <SuggestedNote what="gas storage" />
+        ) : values.s4HasGasOrFuel === null ? (
+          <UnansweredNote />
+        ) : null}
+        {gas === true ? (
+          <div className="ml-1 flex flex-col gap-2 border-l-2 border-primary/50 pl-4">
+            <GasFuelRecordCard slug={slug} gasFuel={safety.gasFuel} />
+            <PolicyLink policy="gasFuel" />
+          </div>
+        ) : (
+          <PolicyLink policy="gasFuel" />
+        )}
+      </div>
+
+      <SafetyChecklistFooter />
+    </section>
   );
 }
