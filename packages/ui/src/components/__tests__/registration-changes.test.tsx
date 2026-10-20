@@ -88,4 +88,27 @@ describe("RegistrationChanges", () => {
       screen.getByText("Nothing differs from your 2026 registration."),
     ).toBeDefined();
   });
+
+  it("shows fire kinds as the labels the form used, never storage keys", () => {
+    render(
+      <RegistrationChanges
+        priorYear={2026}
+        currentYear={2027}
+        changes={changedFields(
+          { s4FireKinds: ["braai_brazier"] },
+          { s4FireKinds: ["braai_brazier", "gas_cooking_heating", "mystery"] },
+        )}
+        basis="previous_edition"
+        audience="reviewer"
+      />,
+    );
+    expect(screen.getByText("Kinds of fire")).toBeDefined();
+    expect(screen.getByText("Braai or brazier (raised)")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Braai or brazier (raised), Gas cooking or heating, mystery",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText(/braai_brazier/)).toBeNull();
+  });
 });

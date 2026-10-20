@@ -72,9 +72,14 @@ export type OfficerRequirement = "required" | "recommended";
 export interface OfficerTriggerInput {
   /** Amplified-sound level 0–4 (0 = none). Derive with `soundLevelFromValue`. */
   soundLevel: number;
-  /** Declared generators / open-flame gifting / large fuel or gas storage. */
+  /** G1: the camp brings a generator (`s4_has_generator`). */
   hasGenerators: boolean;
+  /** G2: the camp has ANY fire, of any kind (`s4_has_fire`) — not only
+   * open-flame gifting. */
   hasOpenFlame: boolean;
+  /** G3: the camp brings ANY LPG gas or liquid fuel (`s4_has_gas_or_fuel`)
+   * — not only large storage. Never re-derived from the optional gas & fuel
+   * record. (docs/registration-safety-spec.md) */
   hasFuelStorage: boolean;
 }
 
@@ -90,6 +95,27 @@ export function soundLevelFromValue(value: string | null | undefined): number {
   if (digit) return Number(digit[0]);
   const idx = SOUND_SCALE_VALUES.indexOf(text);
   return idx > 0 ? idx : 0;
+}
+
+/**
+ * A registration row's officer triggers — the ONE mapping both apps use (the
+ * camp's officer status and the org status board), so neither can quietly go
+ * back to hard-coding "no generator, no fire, no fuel". The section 4 gates
+ * (docs/registration-safety-spec.md); null (not answered) reads as false.
+ * Never re-derived from the optional gas & fuel record.
+ */
+export function officerTriggersFromRegistration(row: {
+  soundRaw: string | null | undefined;
+  hasGenerator: boolean | null | undefined;
+  hasFire: boolean | null | undefined;
+  hasGasOrFuel: boolean | null | undefined;
+}): OfficerTriggerInput {
+  return {
+    soundLevel: soundLevelFromValue(row.soundRaw),
+    hasGenerators: row.hasGenerator === true,
+    hasOpenFlame: row.hasFire === true,
+    hasFuelStorage: row.hasGasOrFuel === true,
+  };
 }
 
 /**

@@ -68,6 +68,11 @@ import { MoneyTile } from "@/components/money/money-tile";
 import { loadCampLayout, loadLayoutAccess } from "@/lib/camp-layout-store";
 import { layoutTileView } from "@/lib/layout-view";
 import { LayoutTile } from "@/components/layout-view/layout-tile";
+import { GasFuelTile } from "@/components/gas-fuel/gas-fuel-tile";
+import {
+  getGasFuelTileSummary,
+  loadGasFuelAccess,
+} from "@/lib/gas-fuel-store";
 import {
   getNextCampMeeting,
   loadMeetingsAccess,
@@ -205,6 +210,7 @@ export default async function CampPage({
     layoutTile,
     meetingsTile,
     teamsView,
+    gasFuelTile,
   ] = await Promise.all([
     isAdmin ? listInvites(camp.id) : [],
     isMember ? listRoles(camp.id) : [],
@@ -321,6 +327,20 @@ export default async function CampPage({
     // re-checks current membership and returns null for anyone else.
     campUser && isMember
       ? listCampTeams({ slug: camp.slug, viewerUserId: campUser.id })
+      : null,
+    // The gas & fuel record (docs/registration-safety-spec.md): the tile, for
+    // current members of a theme camp — `loadGasFuelAccess` re-checks both.
+    // Never a draft; never public.
+    campUser && isMember
+      ? loadGasFuelAccess(camp.slug, campUser.id).then((access) =>
+          access
+            ? getGasFuelTileSummary(access, {
+                id: edition.id,
+                year: edition.year,
+                endDate: edition.endDate,
+              })
+            : null,
+        )
       : null,
   ]);
   const ownPassLine = ownPass
@@ -825,7 +845,7 @@ export default async function CampPage({
               icon={<MapPin className="h-4 w-4" />}
             />
             <DisabledHintTile
-              title="Water / Ice / Gas"
+              title="Water, ice & gas orders"
               hint="Pending AfrikaBurn input — separate delivery apps."
               tag="Pending AB"
               icon={<Droplets className="h-4 w-4" />}
@@ -878,6 +898,10 @@ export default async function CampPage({
             */}
             {moneySummary && (
               <MoneyTile slug={camp.slug} summary={moneySummary} />
+            )}
+            {/* Gas & fuel record (registration-safety-spec) — members only. */}
+            {gasFuelTile && (
+              <GasFuelTile slug={camp.slug} summary={gasFuelTile} />
             )}
             {/* Camp layout (docs/camp-layout-spec.md) — members only. */}
             {layoutTile && (

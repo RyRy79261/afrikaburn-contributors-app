@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { fakeDb, type FakeDb } from "./support/fake-db";
+import { fakeDb, whereParams, type FakeDb } from "./support/fake-db";
 
 /**
  * A wrangler is AfrikaBurn's "dusty guardian angel" for one approved theme camp,
@@ -204,6 +204,114 @@ describe("assignWrangler", () => {
     ).resolves.toEqual({ ok: true });
     expect(db.recorded("insert", "wrangler_assignments")).toHaveLength(1);
     error.mockRestore();
+  });
+});
+
+describe("assignWrangler — the deferred fuel depot copy (registration-safety-spec)", () => {
+  const OVER = {
+    lpg: [{ sizeKg: 48, count: 2 }],
+    jerryCans20l: 2,
+    barrels200l: 1,
+    fuelTrailers: 0,
+    note: "",
+  };
+  const WITHIN = { ...OVER, lpg: [{ sizeKg: 9, count: 2 }], barrels200l: 0 };
+
+  type Row = { userId: string; link: string; linkApp: string; title: string };
+  const depotCopies = () =>
+    db
+      .recorded("insert", "notifications")
+      .flatMap((w) => w.values as Row[])
+      .filter((r) => r.link === `/registrations/${REG_ID}`);
+
+  it("tells the new wrangler when the camp's saved record is over the limit", async () => {
+    db.seed("camp_gas_fuel_records", [
+      [{ record: OVER, isDraft: false, wranglerNotifiedAt: null }],
+      [{ id: "rec-1" }],
+    ]);
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    const copies = depotCopies();
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatchObject({
+      userId: WRANGLER_ID,
+      linkApp: "org",
+      title:
+        "Mad Hatters is over the fuel depot limit — talk to them about how the fuel depot works",
+    });
+    // Claimed exactly once, with a conditional update.
+    const claims = db
+      .recorded("update", "camp_gas_fuel_records")
+      .filter((c) => (c.values as { wranglerNotifiedAt: unknown }).wranglerNotifiedAt instanceof Date);
+    expect(claims).toHaveLength(1);
+  });
+
+  it("a reassignment resets the column so the new wrangler is told too", async () => {
+    db.seed("wrangler_assignments", [{ userId: "someone-else" }]);
+    db.seed("camp_gas_fuel_records", [
+      [{ record: OVER, isDraft: false, wranglerNotifiedAt: new Date() }],
+      [{ id: "rec-1" }],
+    ]);
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    const resets = db
+      .recorded("update", "camp_gas_fuel_records")
+      .filter((c) => (c.values as { wranglerNotifiedAt: unknown }).wranglerNotifiedAt === null);
+    expect(resets).toHaveLength(1);
+    expect(depotCopies()).toHaveLength(1);
+  });
+
+  it("re-assigning the same wrangler who was already told sends nothing", async () => {
+    db.seed("wrangler_assignments", [{ userId: WRANGLER_ID }]);
+    db.seed("camp_gas_fuel_records", [
+      [{ record: OVER, isDraft: false, wranglerNotifiedAt: new Date() }],
+    ]);
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    expect(depotCopies()).toHaveLength(0);
+  });
+
+  it("never for a draft, a record within the limits, or no record", async () => {
+    for (const rows of [
+      [[{ record: OVER, isDraft: true, wranglerNotifiedAt: null }]],
+      [[{ record: WITHIN, isDraft: false, wranglerNotifiedAt: null }]],
+      [[]],
+    ]) {
+      db = fakeDb();
+      db.seed("registrations", [APPROVED_CAMP]);
+      db.seed("memberships", [
+        [{ userId: WRANGLER_ID, username: "alice", sanitizedAt: null }],
+        [{ userId: "lead-1" }],
+      ]);
+      db.seed("camp_gas_fuel_records", rows);
+      await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+      expect(depotCopies()).toHaveLength(0);
+    }
+  });
+
+  it("locks the registration row before writing, as a gas & fuel save does", async () => {
+    // Without the lock a save and an assignment interleave and the wrangler
+    // is never told: the save sees no wrangler, the assignment commits, and
+    // the deferred check reads the record from before the save.
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    const lockIndex = db.calls.findIndex(
+      (c) =>
+        c.op === "select" &&
+        c.table === "registrations" &&
+        c.methods.includes("for"),
+    );
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(whereParams(db.calls[lockIndex]!.where)).toEqual([REG_ID]);
+    const writeIndex = db.calls.findIndex(
+      (c) => c.op === "insert" && c.table === "wrangler_assignments",
+    );
+    expect(lockIndex).toBeLessThan(writeIndex);
+  });
+
+  it("sends nothing when another request claimed the column first", async () => {
+    db.seed("camp_gas_fuel_records", [
+      [{ record: OVER, isDraft: false, wranglerNotifiedAt: null }],
+      /* the conditional update matched no row */ [],
+    ]);
+    await assignWrangler({ registrationId: REG_ID, wranglerUserId: WRANGLER_ID });
+    expect(depotCopies()).toHaveLength(0);
   });
 });
 

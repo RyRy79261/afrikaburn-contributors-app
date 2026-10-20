@@ -18,6 +18,10 @@ function fullAnswers() {
     first_arrival_date: "2027-04-22",
     area_dimensions: "20m x 15m",
     layout_diagram: ["https://blob.example/layout.png"],
+    has_generator: "yes",
+    has_fire: "yes",
+    fire_kinds: ["braai_brazier", "gas_cooking_heating"],
+    has_gas_or_fuel: "no",
     amplified_music: "Level 1 — Car stereo",
     sound_plan: "Low background music, off during quiet hours.",
     placement_first_choice: "Binnekring — back line",
@@ -34,6 +38,10 @@ describe("mapForm2Answers", () => {
       s4FirstArrivalDate: "2027-04-22",
       s4AreaDimensions: "20m x 15m",
       s4LayoutUploadUrls: ["https://blob.example/layout.png"],
+      s4HasGenerator: true,
+      s4HasFire: true,
+      s4FireKinds: ["braai_brazier", "gas_cooking_heating"],
+      s4HasGasOrFuel: false,
       s5AmplifiedMusic: "Level 1 — Car stereo",
       s5SoundPlan: "Low background music, off during quiet hours.",
       s5PlacementFirstChoice: "Binnekring — back line",
@@ -174,5 +182,63 @@ describe("mapForm2Answers", () => {
         .sort(),
     );
     expect(new Set(FORM_2_COLUMNS).size).toBe(FORM_2_COLUMNS.length);
+  });
+});
+
+describe("mapForm2Answers — the safety gates (registration-safety-spec)", () => {
+  it("parses the contract VALUES yes/no, not labels", () => {
+    const { columns, invalid } = mapForm2Answers({
+      has_generator: "no",
+      has_fire: ["yes"],
+      fire_kinds: ["fire_pit"],
+      has_gas_or_fuel: "yes",
+    });
+    expect(columns.s4HasGenerator).toBe(false);
+    expect(columns.s4HasFire).toBe(true);
+    expect(columns.s4FireKinds).toEqual(["fire_pit"]);
+    expect(columns.s4HasGasOrFuel).toBe(true);
+    expect(invalid).toEqual([]);
+  });
+
+  it("reports an unknown gate value as invalid and fills nothing", () => {
+    // A label pasted where the value belongs: "Ja" is a fine LABEL, never a value.
+    const { columns, invalid, unfilled } = mapForm2Answers({
+      has_generator: "Ja",
+    });
+    expect(columns.s4HasGenerator).toBeUndefined();
+    expect(invalid).toEqual([{ questionId: "has_generator", value: "Ja" }]);
+    expect(unfilled).toContain("s4HasGenerator");
+  });
+
+  it("keeps known fire kinds and reports an unknown one", () => {
+    const { columns, invalid } = mapForm2Answers({
+      has_fire: "yes",
+      fire_kinds: ["fire_pit", "bonfire", "fire_pit"],
+    });
+    expect(columns.s4FireKinds).toEqual(["fire_pit"]);
+    expect(invalid).toEqual([{ questionId: "fire_kinds", value: "bonfire" }]);
+  });
+
+  it("clears the kinds when fire is no, and does not report them unfilled", () => {
+    const { columns, unfilled } = mapForm2Answers({
+      has_fire: "no",
+      fire_kinds: ["fire_pit"],
+    });
+    expect(columns.s4HasFire).toBe(false);
+    expect(columns.s4FireKinds).toEqual([]);
+    expect(unfilled).not.toContain("s4FireKinds");
+  });
+
+  it("an unanswered gate is unfilled, not invalid", () => {
+    const { invalid, unfilled } = mapForm2Answers({ has_generator: "" });
+    expect(invalid).toEqual([]);
+    expect(unfilled).toContain("s4HasGenerator");
+  });
+
+  it("maps the four contract question ids", () => {
+    expect(FORM_2_FIELD_MAP.has_generator?.column).toBe("s4HasGenerator");
+    expect(FORM_2_FIELD_MAP.has_fire?.column).toBe("s4HasFire");
+    expect(FORM_2_FIELD_MAP.fire_kinds?.column).toBe("s4FireKinds");
+    expect(FORM_2_FIELD_MAP.has_gas_or_fuel?.column).toBe("s4HasGasOrFuel");
   });
 });

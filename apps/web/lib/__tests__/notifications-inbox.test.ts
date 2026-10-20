@@ -28,6 +28,7 @@ const { getBulletinForCurrentUser, getPinnedBulletinsForCurrentUser } =
   await import("../bulletins");
 const { markNotificationRead, markAllNotificationsRead } =
   await import("../notifications-actions");
+const { toRowItem } = await import("@/components/notifications/format");
 
 const USER = "cccccccc-0000-0000-0000-000000000001";
 const CAMP_USER = {
@@ -147,6 +148,32 @@ describe("the inbox reads — a link for another app is a guaranteed 404", () =>
     dbMock.queue([row({ linkApp: "suppliers", link: "/onboarding" })]);
 
     expect((await recentNotifications())[0]!.link).toBeNull();
+  });
+
+  it("both reads carry the sender, so a system notice is not credited to AfrikaBurn", async () => {
+    // The fuel depot notice is kind `wrangler` (an AfrikaBurn-only kind) but
+    // written with origin `system`; without the origin the meta line read
+    // "Just now · AfrikaBurn" (registration-safety-spec, frame T7rUD state 7).
+    const depot = {
+      kind: "wrangler",
+      origin: "system",
+      linkApp: "web",
+      link: "/camps/karoo-kombuis/gas-fuel",
+    };
+    dbMock.queue([row({ id: "n-sys", ...depot }), row({ id: "n-org", origin: "org" })]);
+    const items = (await listNotificationGroups()).flatMap((g) => g.items);
+    expect(items.find((i) => i.id === "n-sys")!.origin).toBe("system");
+    expect(items.find((i) => i.id === "n-org")!.origin).toBe("org");
+    const now = new Date("2026-08-04T09:00:30Z");
+    expect(toRowItem(items.find((i) => i.id === "n-sys")!, now).meta).toBe(
+      "Just now",
+    );
+    expect(toRowItem(items.find((i) => i.id === "n-org")!, now).meta).toBe(
+      "Just now · AfrikaBurn",
+    );
+
+    dbMock.queue([row(depot)]);
+    expect((await recentNotifications())[0]!.origin).toBe("system");
   });
 
   it("every read returns the empty result signed out and env-less, so the chrome renders", async () => {

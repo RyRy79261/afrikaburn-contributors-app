@@ -51,6 +51,10 @@ export interface NotificationView {
   bulletinId: string | null;
   createdAt: Date;
   readAt: Date | null;
+  /** Who sent it (`notifications.origin`) — the meta line's source half
+   * (`sourceLabel`): `org` credits AfrikaBurn, `camp`/`system` show the time
+   * alone, null falls back to the kind. */
+  origin: string | null;
 }
 
 /**
@@ -89,6 +93,7 @@ export async function listNotificationGroups(
       bulletinId: r.bulletinId,
       createdAt: r.createdAt,
       readAt: r.readAt,
+      origin: r.origin ?? null,
     })),
   );
 }
@@ -118,6 +123,7 @@ export async function recentNotifications(
     bulletinId: r.bulletinId,
     createdAt: r.createdAt,
     readAt: r.readAt,
+    origin: r.origin ?? null,
   }));
 }
 

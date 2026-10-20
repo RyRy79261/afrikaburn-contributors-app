@@ -46,8 +46,8 @@ function templateQuestionIds(): string[] {
     [...block.matchAll(/^\s*id: "([a-z0-9_]+)",$/gm)]
       .map((m) => m[1]!)
       // Page ids sit at the same nesting as question ids in the literal; the
-      // mirror only knows about questions, and the two page ids are not columns.
-      .filter((id) => id !== "size" && id !== "sound_placement")
+      // mirror only knows about questions, and the page ids are not columns.
+      .filter((id) => !["size", "fire", "sound_placement"].includes(id))
   );
 }
 
@@ -77,5 +77,48 @@ describe("the Form 2 template and the mirror agree", () => {
     // officer and nothing on any screen says why.
     expect(FORM_2_FIELD_MAP.amplified_music?.column).toBe("s5AmplifiedMusic");
     expect(templateQuestionIds()).toContain("amplified_music");
+  });
+});
+
+describe("the safety gates (registration-safety-spec)", () => {
+  const src = () => {
+    const all = seedSource();
+    const start = all.indexOf("const form2: Questionnaire =");
+    return all.slice(start, all.indexOf("org-theme-camp-form-2", start));
+  };
+
+  it("asks the four contract question ids", () => {
+    expect(templateQuestionIds()).toEqual(
+      expect.arrayContaining([
+        "has_generator",
+        "has_fire",
+        "fire_kinds",
+        "has_gas_or_fuel",
+      ]),
+    );
+  });
+
+  it("uses the contract option VALUES yes/no for each gate", () => {
+    for (const id of ["has_generator", "has_fire", "has_gas_or_fuel"]) {
+      const at = src().indexOf(`id: "${id}"`);
+      const block = src().slice(at, src().indexOf("],", at));
+      expect(block, id).toContain('value: "yes"');
+      expect(block, id).toContain('value: "no"');
+    }
+  });
+
+  it("branches Yes on fire to the fire-kinds page and No past it", () => {
+    const at = src().indexOf('id: "has_fire"');
+    const block = src().slice(at, src().indexOf("],", at));
+    expect(block).toContain('{ value: "yes", label: "Yes", goTo: "fire" }');
+    expect(block).toContain(
+      '{ value: "no", label: "No", goTo: "sound_placement" }',
+    );
+  });
+
+  it("offers fire kinds from the stable keys, not a hand-written list", () => {
+    const at = src().indexOf('id: "fire_kinds"');
+    const block = src().slice(at, src().indexOf("],", at) + 200);
+    expect(block).toContain("FIRE_KINDS.map");
   });
 });

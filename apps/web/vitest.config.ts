@@ -5,9 +5,15 @@ import { defineConfig } from "vitest/config";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  // The app's tsconfig sets `jsx: "preserve"` for Next.js; the component
+  // render tests under components/ need a JSX runtime named here (the same
+  // key apps/org uses — Vite 8 ignores `esbuild.jsx`).
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     environment: "node",
-    include: ["lib/**/__tests__/**/*.test.ts"],
+    // lib/ is the server logic; components/ holds the few render checks that
+    // a browser cannot pin cheaply (SSR determinism, ids).
+    include: ["lib/**/__tests__/**/*.test.ts", "components/**/__tests__/**/*.test.ts"],
     coverage: {
       provider: "v8",
       // `json-summary` is what CI's PR comment reads; `text` is what you see

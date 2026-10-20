@@ -1,5 +1,9 @@
 import { ArrowRight, Minus, Plus, PencilLine } from "lucide-react";
-import type { ComparisonBasis, FieldChange } from "@quagga/core";
+import {
+  displayValueForField,
+  type ComparisonBasis,
+  type FieldChange,
+} from "@quagga/core";
 import {
   Card,
   CardContent,
@@ -153,7 +157,7 @@ export function RegistrationChanges({
                     <div className="mt-2 grid gap-2 text-sm sm:grid-cols-[1fr_auto_1fr] sm:items-start">
                       <p className="whitespace-pre-wrap break-words text-muted-foreground line-through decoration-muted-foreground/40">
                         <span className="sr-only">{priorYear}: </span>
-                        {displayAnswer(change.prior)}
+                        {displayAnswer(displayValueForField(change.field, change.prior))}
                       </p>
                       <ArrowRight
                         className="hidden h-4 w-4 shrink-0 self-center text-muted-foreground sm:block"
@@ -161,7 +165,9 @@ export function RegistrationChanges({
                       />
                       <p className="whitespace-pre-wrap break-words">
                         <span className="sr-only">{currentYear}: </span>
-                        {displayAnswer(change.current)}
+                        {displayAnswer(
+                          displayValueForField(change.field, change.current),
+                        )}
                       </p>
                     </div>
                   </li>

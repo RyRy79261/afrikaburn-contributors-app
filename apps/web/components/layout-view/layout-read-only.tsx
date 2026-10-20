@@ -12,6 +12,7 @@ import {
   formatPlotSize,
   getLayoutCatalog,
   layoutObjectName,
+  extinguisherEstimate,
   plotSummary,
   type LayoutWarning,
 } from "@quagga/core";
@@ -22,6 +23,7 @@ import { lastEditedLine, layoutPath, layoutPrintPath } from "@/lib/layout-view";
 import { DownloadPlanButton, PrintPlanLink } from "./plan-actions";
 import { PlanViewport } from "./plan-viewport";
 import { LayoutObjectList } from "./layout-object-list";
+import { ExtinguishersCard } from "./extinguishers-card";
 
 // THE READ-ONLY PLAN PAGE BODY (docs/camp-layout-spec.md §Surfaces; frame L3
 // QZeG7 desktop, t7aOZ3 at 360). Plain members get this at every width, and
@@ -275,6 +277,17 @@ export function LayoutReadOnly({
           </p>
         )}
       </section>
+
+      {/* The extinguishers the plan implies (registration-safety-spec,
+          frame fyfiX) — the whole camp only; view-only here. */}
+      {!child && (
+        <div className="self-start md:col-start-2">
+          <ExtinguishersCard
+            estimate={extinguisherEstimate(doc, catalog)}
+            mode="view"
+          />
+        </div>
+      )}
     </div>
   );
 }

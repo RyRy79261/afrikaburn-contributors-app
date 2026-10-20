@@ -145,11 +145,10 @@ export function toRowItem(
     createdAt: Date;
     readAt: Date | null;
     /**
-     * Who sent it (`notifications.origin`). OPTIONAL because the reads that
-     * feed this — `listNotificationGroups` / `recentNotifications` in
-     * apps/web/lib/notifications.ts — do not project the column into their
-     * `NotificationView` yet. Until they do, `sourceLabel` falls back to the
-     * kind, which is now the honest fallback rather than a guess.
+     * Who sent it (`notifications.origin`), projected by
+     * `listNotificationGroups` / `recentNotifications` in
+     * apps/web/lib/notifications.ts. Optional for callers that build a view by
+     * hand; absent, `sourceLabel` falls back to the kind.
      */
     origin?: string | null;
   },

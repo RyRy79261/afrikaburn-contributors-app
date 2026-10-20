@@ -5,6 +5,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { canReplyToSectionReview } from "@quagga/core";
 import {
+  FIRE_KINDS,
+  FireKind,
   OperatingHours,
   PROJECT_ADMIN_ROLES,
   type MembershipRole,
@@ -79,6 +81,10 @@ const VALUE_LABELS: Record<string, string> = {
   s4FirstArrivalDate: "First arrival date",
   s4AreaDimensions: "Camp area dimensions",
   s4LayoutUploadUrls: "Layout sketches / plans",
+  s4HasGenerator: "Will you bring a generator?",
+  s4HasFire: "Will your camp have any fire?",
+  s4FireKinds: "Which kinds of fire?",
+  s4HasGasOrFuel: "Will you bring LPG gas or liquid fuel?",
   s5AmplifiedMusic: "Sound level (SOOP)",
   s5SoundPlan: "Sound plan",
   s5PlacementFirstChoice: "Placement — first choice",
@@ -141,6 +147,20 @@ const RegistrationValuesSchema = z.object({
   s4FirstArrivalDate: nullableText(40),
   s4AreaDimensions: nullableText(200),
   s4LayoutUploadUrls: z.array(z.string().url().max(2000)).max(4).default([]),
+  s4HasGenerator: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
+  s4HasFire: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
+  // Only the stable keys; anything else is refused at the boundary.
+  s4FireKinds: z.array(FireKind).max(FIRE_KINDS.length).default([]),
+  s4HasGasOrFuel: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? null),
   s5AmplifiedMusic: nullableText(200),
   s5SoundPlan: nullableText(8000),
   s5PlacementFirstChoice: nullableText(200),

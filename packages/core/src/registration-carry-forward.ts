@@ -4,6 +4,7 @@ import type {
   SectionKey,
 } from "@quagga/types";
 import {
+  FIRE_KIND_LABELS,
   PROJECT_ADMIN_ROLES,
   SECTION_LABELS,
   formForSection,
@@ -75,6 +76,10 @@ export interface CarryForwardFields {
   s4WorkAccessPasses?: number | null;
   s4AreaDimensions?: string | null;
   s4LayoutUploadUrls?: readonly string[] | null;
+  s4HasGenerator?: boolean | null;
+  s4HasFire?: boolean | null;
+  s4FireKinds?: readonly string[] | null;
+  s4HasGasOrFuel?: boolean | null;
   s5AmplifiedMusic?: string | null;
   s5SoundPlan?: string | null;
   s5PlacementFirstChoice?: string | null;
@@ -110,6 +115,10 @@ const FIELD_SECTION: Record<CarryForwardField, SectionKey> = {
   s4WorkAccessPasses: "size_logistics",
   s4AreaDimensions: "size_logistics",
   s4LayoutUploadUrls: "size_logistics",
+  s4HasGenerator: "size_logistics",
+  s4HasFire: "size_logistics",
+  s4FireKinds: "size_logistics",
+  s4HasGasOrFuel: "size_logistics",
   s5AmplifiedMusic: "sound_placement",
   s5SoundPlan: "sound_placement",
   s5PlacementFirstChoice: "sound_placement",
@@ -143,6 +152,10 @@ const FIELD_LABELS: Record<CarryForwardField, string> = {
   s4WorkAccessPasses: "Work Access Passes",
   s4AreaDimensions: "Area dimensions",
   s4LayoutUploadUrls: "Layout uploads",
+  s4HasGenerator: "Generator",
+  s4HasFire: "Fire",
+  s4FireKinds: "Kinds of fire",
+  s4HasGasOrFuel: "Gas or fuel",
   s5AmplifiedMusic: "Amplified sound level",
   s5SoundPlan: "Sound plan",
   s5PlacementFirstChoice: "Placement — first choice",
@@ -303,6 +316,27 @@ export function diffRegistrations(
       carried: !NON_CARRIED_FIELDS.includes(field),
     };
   });
+}
+
+/**
+ * A stored answer as a person should read it in the diff. Most fields are
+ * already words; the fire kinds are STORAGE KEYS (`braai_brazier`), a mirror
+ * contract (docs/registration-safety-spec.md), so they become the labels the
+ * form showed. An unknown key is kept as it is rather than dropped. Both apps'
+ * diffs render through this, so camp and reviewer read the same words.
+ */
+export function displayValueForField(
+  field: CarryForwardField,
+  value: unknown,
+): unknown {
+  if (field === "s4FireKinds" && Array.isArray(value)) {
+    return value.map((key) =>
+      typeof key === "string" && key in FIRE_KIND_LABELS
+        ? FIRE_KIND_LABELS[key as keyof typeof FIRE_KIND_LABELS]
+        : key,
+    );
+  }
+  return value;
 }
 
 /** Just the fields that moved — what a reviewer actually wants to read. */
