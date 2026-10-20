@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { schema } from "@quagga/db";
-import { dbMock } from "@/test/db-mock";
+import { boundStrings, dbMock, type RecordedQuery } from "@/test/db-mock";
 
 vi.mock("@/lib/db", async () => (await import("@/test/db-mock")).dbModuleMock());
 vi.mock("@/lib/config", () => ({ isDatabaseConfigured: () => true }));
@@ -194,6 +194,100 @@ describe("sweepExpiredIdDocuments", () => {
     const result = await sweepExpiredIdDocuments(NOW, 500, 3650);
 
     expect(result.identified).toBe(0);
+    expect(dbMock.writesTo(schema.burnerBios)).toHaveLength(0);
+  });
+});
+
+// THE STALL THIS GUARDS (regression). The bio SELECT used to carry only "holds
+// an ID" plus `.limit(500)`, with no edition filter and no order; the expiry
+// rule ran afterwards, in JS. Carry-forward copies ID ciphertext into every new
+// edition's bio, so once more than 500 LIVE-edition rows hold an ID, Postgres
+// may hand back 500 rows that are all current: 0 purged, HTTP 200, every day,
+// and the expired backlog never drains.
+//
+// The db-mock answers whatever is queued, whatever the WHERE says, so it cannot
+// play "600 current rows crowd out 3 expired ones" behaviourally. These assert
+// the query instead: the edition filter is IN the SQL the limit applies to, it
+// names only expired editions, and no bio is read when none has expired.
+// Checked against the old code: every case below went red.
+describe("the batch limit only ever counts purgeable rows", () => {
+  beforeEach(() => dbMock.reset());
+
+  /** The SELECT that reads burner_bios. */
+  function bioSelect(): RecordedQuery | undefined {
+    return dbMock
+      .queriesTouching(schema.burnerBios)
+      .find((q) => q.kind === "select");
+  }
+
+  /** Does any SQL object in the chain reference this exact column? */
+  function referencesColumn(query: RecordedQuery, column: object): boolean {
+    const seen = new WeakSet<object>();
+    const walk = (value: unknown, depth: number): boolean => {
+      if (depth > 16 || typeof value !== "object" || value === null) return false;
+      if (seen.has(value)) return false;
+      seen.add(value);
+      const chunks = (value as { queryChunks?: unknown[] }).queryChunks;
+      if (Array.isArray(chunks) && chunks.includes(column)) return true;
+      return Object.values(value).some((inner) => walk(inner, depth + 1));
+    };
+    return query.calls
+      .filter((c) => c.method === "where")
+      .some((c) => walk(c.args, 0));
+  }
+
+  it("filters bios to expired editions in SQL, before the limit", async () => {
+    // More than `limit` current-edition bios hold an ID; one expired bio does.
+    // Whatever Postgres returns, the WHERE must already exclude the current
+    // edition, or the limit fills with rows the sweep then throws away.
+    dbMock.queue(
+      EDITIONS,
+      [{ id: BIO_A, editionId: EXPIRED_EDITION, hasSaId: true, hasPassport: false }],
+      [],
+      [],
+    );
+
+    const result = await sweepExpiredIdDocuments(NOW, 2);
+
+    const select = bioSelect();
+    expect(select, "the sweep read burner_bios").toBeDefined();
+    expect(
+      referencesColumn(select!, schema.burnerBios.editionId),
+      "the bio WHERE filters on edition_id",
+    ).toBe(true);
+    const params = boundStrings(select!);
+    expect(params, "the expired edition is in the filter").toContain(EXPIRED_EDITION);
+    expect(params, "a current edition is never in the filter").not.toContain(
+      CURRENT_EDITION,
+    );
+    expect(select!.arg("limit")).toBe(2);
+    expect(select!.called("orderBy"), "batches are deterministic").toBe(true);
+    expect(result.purged).toBe(1);
+  });
+
+  it("reads no bio at all when no edition has expired", async () => {
+    dbMock.queue([{ id: CURRENT_EDITION, endDate: "2027-04-30", isActive: true }]);
+
+    const result = await sweepExpiredIdDocuments(NOW);
+
+    expect(bioSelect(), "no bio SELECT is issued").toBeUndefined();
+    expect(result.identified).toBe(0);
+  });
+
+  it("never purges the active edition, even with a past end date", async () => {
+    // A wrong end_date on the live edition must not erase current IDs: the
+    // erasure cannot be undone, so `is_active` overrides the date.
+    dbMock.queue(
+      [{ id: EXPIRED_EDITION, endDate: "2026-05-03", isActive: true }],
+      [{ id: BIO_A, editionId: EXPIRED_EDITION, hasSaId: true, hasPassport: false }],
+      [],
+      [],
+    );
+
+    const result = await sweepExpiredIdDocuments(NOW);
+
+    expect(bioSelect(), "no bio SELECT is issued").toBeUndefined();
+    expect(result.purged).toBe(0);
     expect(dbMock.writesTo(schema.burnerBios)).toHaveLength(0);
   });
 });
