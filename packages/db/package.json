@@ -32,12 +32,12 @@
   "devDependencies": {
     "@quagga/eslint-config": "workspace:*",
     "@quagga/typescript-config": "workspace:*",
-    "@types/node": "^26.6.5",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "^5.1.0",
     "drizzle-kit": "^0.31.11",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
